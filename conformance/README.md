@@ -48,7 +48,9 @@ derivatives, traversal, absolute paths, and backslashes. The positive package
 also fixes boundary-safe words such as `apiKeysight`, `privateerKeys`, and
 `managerialIds`. Filesystem-only symlink, executable-bit, and device/pipe cases
 are covered by library tests. Unit tests additionally prove linear admission of
-a shared-reference DAG and fail-closed schema proof depth/operation limits.
+a shared-reference DAG, fail-closed schema proof depth/operation limits, the
+16,384-evaluation fixture-validation budget through the real directory
+verifier, and the 32-fixture Form Definition limit.
 
 Run it with:
 

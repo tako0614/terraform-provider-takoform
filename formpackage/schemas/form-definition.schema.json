@@ -89,6 +89,7 @@
     },
     "conformanceFixtures": {
       "type": "array",
+      "maxItems": 32,
       "uniqueItems": true,
       "items": {
         "type": "object",

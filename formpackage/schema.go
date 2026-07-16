@@ -14,14 +14,16 @@ import (
 )
 
 const (
-	formRefSchemaID        = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
-	formDefinitionSchemaID = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
-	packageIndexSchemaID   = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
-	portableMapKeyPattern  = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
-	portableMapPolicyKey   = "x-takoform-fieldPolicy"
-	portableMapPolicyValue = "portable-data-only-v1"
-	maxSchemaProofDepth    = 64
-	maxSchemaProofOps      = 4096
+	formRefSchemaID         = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
+	formDefinitionSchemaID  = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
+	packageIndexSchemaID    = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
+	portableMapKeyPattern   = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
+	portableMapPolicyKey    = "x-takoform-fieldPolicy"
+	portableMapPolicyValue  = "portable-data-only-v1"
+	maxSchemaProofDepth     = 64
+	maxSchemaProofOps       = 4096
+	maxSchemaValidationWork = 16384
+	maxConformanceFixtures  = 32
 )
 
 //go:embed schemas/*.schema.json
@@ -141,36 +143,48 @@ func ValidateFormRef(raw []byte) (FormRef, error) {
 	return validateFormRef(raw)
 }
 
-func validateDefinition(raw []byte) (FormDefinition, any, error) {
+type compiledDefinitionSchemas struct {
+	desired  *jsonschema.Schema
+	observed *jsonschema.Schema
+}
+
+func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDefinitionSchemas, error) {
 	schemas, err := loadSchemas()
 	if err != nil {
-		return FormDefinition{}, nil, err
+		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
 	var definition FormDefinition
 	var value any
 	if err := validateDocumentWithValue(raw, schemas.definition, &definition, &value); err != nil {
-		return FormDefinition{}, nil, fmt.Errorf("Form Definition: %w", err)
+		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition: %w", err)
 	}
 	if err := rejectForbiddenContent(value, "$"); err != nil {
-		return FormDefinition{}, nil, fmt.Errorf("Form Definition content policy: %w", err)
+		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition content policy: %w", err)
 	}
-	if _, err := compileInlineSchema(definition.DesiredSchema, "desiredSchema"); err != nil {
-		return FormDefinition{}, nil, err
+	desired, err := compileInlineSchema(definition.DesiredSchema, "desiredSchema")
+	if err != nil {
+		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
-	if _, err := compileInlineSchema(definition.ObservedSchema, "observedSchema"); err != nil {
-		return FormDefinition{}, nil, err
+	observed, err := compileInlineSchema(definition.ObservedSchema, "observedSchema")
+	if err != nil {
+		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
 	for index, descriptor := range definition.Interfaces {
 		if descriptor.DocumentSchema != nil {
 			if _, err := compileInlineSchema(descriptor.DocumentSchema, fmt.Sprintf("interfaces[%d].documentSchema", index)); err != nil {
-				return FormDefinition{}, nil, err
+				return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 			}
 		}
 	}
 	if err := validateDefinitionSemantics(definition); err != nil {
-		return FormDefinition{}, nil, err
+		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
-	return definition, value, nil
+	return definition, value, compiledDefinitionSchemas{desired: desired, observed: observed}, nil
+}
+
+func validateDefinition(raw []byte) (FormDefinition, any, error) {
+	definition, value, _, err := validateDefinitionWithSchemas(raw)
+	return definition, value, err
 }
 
 // ValidateDefinition validates the Draft 2020-12 Form Definition, its inline
@@ -288,8 +302,21 @@ func validatePortableSchemaStructure(value any, location string) error {
 		root: value,
 		memo: make(map[string]schemaProofMemo),
 	}
-	_, err := validator.validate(value, location, "#", 0)
-	return err
+	if _, err := validator.validate(value, location, "#", 0); err != nil {
+		return err
+	}
+	estimator := schemaValidationWorkEstimator{
+		root: value,
+		memo: make(map[string]schemaValidationWorkMemo),
+	}
+	work, err := estimator.estimate(value, "#")
+	if err != nil {
+		return fmt.Errorf("%s runtime validation work: %w", location, err)
+	}
+	if work > maxSchemaValidationWork {
+		return fmt.Errorf("%s worst-case fixture validation work exceeds %d schema evaluations", location, maxSchemaValidationWork)
+	}
+	return nil
 }
 
 func (validator *portableSchemaValidator) validate(value any, location, pointer string, depth int) (schemaProofResult, error) {
@@ -508,6 +535,121 @@ func appendSchemaPointer(pointer string, tokens ...string) string {
 	return result.String()
 }
 
+type schemaValidationWorkMemo struct {
+	state schemaProofState
+	work  uint64
+}
+
+type schemaValidationWorkEstimator struct {
+	root any
+	memo map[string]schemaValidationWorkMemo
+}
+
+// estimate computes a conservative upper bound for one validation pass. It
+// intentionally expands the cost of every local $ref occurrence even though
+// target analysis is memoized: the JSON Schema evaluator may revisit a shared
+// target for every edge in an allOf/anyOf/oneOf DAG. Definitions themselves do
+// not execute unless referenced.
+func (estimator *schemaValidationWorkEstimator) estimate(value any, pointer string) (uint64, error) {
+	if memo, present := estimator.memo[pointer]; present {
+		if memo.state == proofVisiting {
+			return 0, fmt.Errorf("cyclic schema reference at %s", pointer)
+		}
+		return memo.work, nil
+	}
+	estimator.memo[pointer] = schemaValidationWorkMemo{state: proofVisiting}
+	if _, ok := value.(bool); ok {
+		estimator.memo[pointer] = schemaValidationWorkMemo{state: proofDone, work: 1}
+		return 1, nil
+	}
+	schema, ok := value.(map[string]any)
+	if !ok {
+		return 0, fmt.Errorf("schema node %s is not an object or boolean", pointer)
+	}
+
+	work := uint64(1)
+	addChild := func(child any, childPointer string) error {
+		childWork, err := estimator.estimate(child, childPointer)
+		if err != nil {
+			return err
+		}
+		work = saturatingSchemaWorkAdd(work, childWork)
+		return nil
+	}
+
+	for _, keyword := range []string{"properties", "dependentSchemas"} {
+		children, present, err := schemaObjectKeyword(schema, keyword, pointer)
+		if err != nil {
+			return 0, err
+		}
+		if !present {
+			continue
+		}
+		for name, child := range children {
+			if err := addChild(child, appendSchemaPointer(pointer, keyword, name)); err != nil {
+				return 0, err
+			}
+			if work > maxSchemaValidationWork {
+				break
+			}
+		}
+	}
+	for _, keyword := range []string{"additionalProperties", "items", "contains", "contentSchema", "unevaluatedItems", "unevaluatedProperties", "propertyNames", "not", "if", "then", "else"} {
+		child, present := schema[keyword]
+		if !present {
+			continue
+		}
+		if err := addChild(child, appendSchemaPointer(pointer, keyword)); err != nil {
+			return 0, err
+		}
+		if work > maxSchemaValidationWork {
+			break
+		}
+	}
+	for _, keyword := range []string{"allOf", "anyOf", "oneOf", "prefixItems"} {
+		children, present := schema[keyword]
+		if !present {
+			continue
+		}
+		array, ok := children.([]any)
+		if !ok {
+			return 0, fmt.Errorf("schema node %s/%s is not an array", pointer, keyword)
+		}
+		for index, child := range array {
+			if err := addChild(child, appendSchemaPointer(pointer, keyword, strconv.Itoa(index))); err != nil {
+				return 0, err
+			}
+			if work > maxSchemaValidationWork {
+				break
+			}
+		}
+	}
+	if reference, present := schema["$ref"]; present {
+		text, ok := reference.(string)
+		if !ok {
+			return 0, fmt.Errorf("schema node %s/$ref is not a string", pointer)
+		}
+		target, targetPointer, err := resolveLocalSchemaReference(estimator.root, text)
+		if err != nil {
+			return 0, err
+		}
+		if err := addChild(target, targetPointer); err != nil {
+			return 0, err
+		}
+	}
+
+	estimator.memo[pointer] = schemaValidationWorkMemo{state: proofDone, work: work}
+	return work, nil
+}
+
+func saturatingSchemaWorkAdd(left, right uint64) uint64 {
+	limit := uint64(maxSchemaValidationWork) + 1
+	if left >= limit || right >= limit || left > limit-right {
+		return limit
+	}
+	return left + right
+}
+
 func validateExplicitObjectClosure(schema map[string]any, hasProperties bool, location string) error {
 	additional, present := schema["additionalProperties"]
 	switch typed := additional.(type) {
@@ -703,6 +845,9 @@ func validateDependentRequiredNames(value any, location string) error {
 }
 
 func validateDefinitionSemantics(definition FormDefinition) error {
+	if len(definition.ConformanceFixtures) > maxConformanceFixtures {
+		return fmt.Errorf("Form Definition has %d conformance fixtures; maximum is %d", len(definition.ConformanceFixtures), maxConformanceFixtures)
+	}
 	interfaces := map[string]struct{}{}
 	for _, descriptor := range definition.Interfaces {
 		key := descriptor.Name + "@" + descriptor.Version

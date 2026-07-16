@@ -229,6 +229,23 @@ func TestPortableSchemaAllowsProvablyNonObjectCompositionAndClosedReference(t *t
 
 func TestPortableSchemaProofMemoizesSmallSharedDAG(t *testing.T) {
 	t.Parallel()
+	schema := sharedReferenceDAGSchema(10)
+	if err := validatePortableSchemaStructure(schema, "desiredSchema"); err != nil {
+		t.Fatalf("bounded shared reference DAG rejected: %v", err)
+	}
+
+	// Inspect proof work separately: admission caches shared targets even though
+	// runtime validation cost is conservatively expanded per reference edge.
+	validator := portableSchemaValidator{root: schema, memo: make(map[string]schemaProofMemo)}
+	if _, err := validator.validate(schema, "desiredSchema", "#", 0); err != nil {
+		t.Fatalf("shared reference DAG rejected: %v", err)
+	}
+	if validator.operations > 100 {
+		t.Fatalf("shared reference DAG used %d proof operations, want linear cached proof", validator.operations)
+	}
+}
+
+func sharedReferenceDAGSchema(levels int) map[string]any {
 	leaf := map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
@@ -237,7 +254,7 @@ func TestPortableSchemaProofMemoizesSmallSharedDAG(t *testing.T) {
 		},
 	}
 	definitions := map[string]any{"Node0": leaf}
-	for level := 1; level <= 14; level++ {
+	for level := 1; level <= levels; level++ {
 		reference := fmt.Sprintf("#/$defs/Node%d", level-1)
 		definitions[fmt.Sprintf("Node%d", level)] = map[string]any{
 			"allOf": []any{
@@ -247,19 +264,26 @@ func TestPortableSchemaProofMemoizesSmallSharedDAG(t *testing.T) {
 		}
 	}
 	schema := map[string]any{
+		"$schema":              "https://json-schema.org/draft/2020-12/schema",
 		"type":                 "object",
 		"additionalProperties": false,
 		"$defs":                definitions,
 		"properties": map[string]any{
-			"config": map[string]any{"$ref": "#/$defs/Node14"},
+			"config": map[string]any{"$ref": fmt.Sprintf("#/$defs/Node%d", levels)},
+			"name":   map[string]any{"type": "string"},
 		},
 	}
-	validator := portableSchemaValidator{root: schema, memo: make(map[string]schemaProofMemo)}
-	if _, err := validator.validate(schema, "desiredSchema", "#", 0); err != nil {
-		t.Fatalf("shared reference DAG rejected: %v", err)
-	}
-	if validator.operations > 100 {
-		t.Fatalf("shared reference DAG used %d proof operations, want linear cached proof", validator.operations)
+	return schema
+}
+
+func TestVerifyDirectoryRejectsSharedRefDAGAboveRuntimeValidationBudget(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, func(definition map[string]any) {
+		definition["desiredSchema"] = sharedReferenceDAGSchema(12)
+	})
+	_, err := VerifyDirectory(root)
+	if err == nil || !strings.Contains(err.Error(), "worst-case fixture validation work") {
+		t.Fatalf("VerifyDirectory error = %v, want runtime validation work limit", err)
 	}
 }
 
@@ -604,6 +628,36 @@ func TestVerifyDirectoryRejectsDuplicateSemanticFixtureName(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "duplicate conformance fixture name") {
 		t.Fatalf("VerifyDirectory error = %v, want semantic duplicate failure", err)
 	}
+}
+
+func TestConformanceFixtureCountIsBounded(t *testing.T) {
+	t.Parallel()
+	makeFixtures := func(count int) []any {
+		fixtures := make([]any, 0, count)
+		for index := 0; index < count; index++ {
+			fixtures = append(fixtures, map[string]any{
+				"name":        fmt.Sprintf("case-%02d", index),
+				"desiredPath": "fixtures/desired.json",
+			})
+		}
+		return fixtures
+	}
+	t.Run("maximum accepted", func(t *testing.T) {
+		root := makeValidPackage(t, func(definition map[string]any) {
+			definition["conformanceFixtures"] = makeFixtures(maxConformanceFixtures)
+		})
+		if _, err := VerifyDirectory(root); err != nil {
+			t.Fatalf("maximum fixture count rejected: %v", err)
+		}
+	})
+	t.Run("over maximum rejected", func(t *testing.T) {
+		root := makeValidPackage(t, func(definition map[string]any) {
+			definition["conformanceFixtures"] = makeFixtures(maxConformanceFixtures + 1)
+		})
+		if _, err := VerifyDirectory(root); err == nil {
+			t.Fatal("over-limit fixture count unexpectedly accepted")
+		}
+	})
 }
 
 func TestReadBoundedRegularFileRejectsPostInventoryReplacement(t *testing.T) {
