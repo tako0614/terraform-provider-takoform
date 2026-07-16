@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "status": "decision-approved-implementation-in-progress",
   "provider": {
-    "status": "implemented-external-registration-and-install-proof-pending",
+    "status": "implemented-registry-key-registered-first-install-proof-pending",
     "artifactDigest": "sha256",
     "releaseTagPattern": "v*",
     "signature": {

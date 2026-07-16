@@ -50,9 +50,13 @@ The approved provider signing fingerprint is
 `3510E75E05BBCC303B92D77934FC18AC897FB709`; its public key is pinned under
 `release/keys/`. The private key and passphrase remain outside every repository
 and are available to Actions only as `GPG_PRIVATE_KEY` and `PASSPHRASE`.
-Terraform Registry public-key registration and first real Registry/network-
-mirror install still require maintainer OAuth interaction. Existing version
-paths must never be overwritten; corrections use a new semver.
+The HCP organization `takoform` has claimed the public Terraform Registry
+namespace `tako0614`; its GitHub App installation is limited to
+`tako0614/terraform-provider-takoform`. Registry key ID `34FC18AC897FB709` is
+registered and matches the full pinned fingerprint above. The first real
+Registry and OpenTofu/network-mirror install proof remains pending and requires
+an explicitly authorized first publication. Existing version paths must never
+be overwritten; corrections use a new semver.
 
 Key rotation is additive and review-gated: create a distinct repo-external key,
 change the pinned fingerprint/public key in one reviewed commit, register that
