@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/host-discovery.schema.json",
+  "title": "Takoform host discovery",
+  "type": "object",
+  "required": ["api_versions", "features", "endpoints"],
+  "properties": {
+    "api_versions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "contains": {
+        "const": "forms.takoform.com/v1alpha1"
+      }
+    },
+    "features": {
+      "type": "object",
+      "required": ["service_forms"],
+      "properties": {
+        "service_forms": {
+          "const": true
+        }
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "endpoints": {
+      "type": "object",
+      "properties": {
+        "api": {
+          "type": "string",
+          "format": "uri"
+        },
+        "capabilities": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}
