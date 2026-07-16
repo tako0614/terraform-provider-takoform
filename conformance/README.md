@@ -21,16 +21,21 @@ go run ./cmd/conformance verify
 behavior as deterministic offline evidence. It contains JSON Schemas and
 fixtures for the provider schema, desired and observed Resource envelopes,
 sanitized output projection, provider import IDs, provider/API errors, and host
-discovery. `cmd/conformance` rejects file or per-kind digest drift, an incomplete
-kind set, malformed evidence, publication-ready claims, and portable-standard
-claims.
+discovery. The discovery dependency schema is vendored into the same evidence
+set. `cmd/conformance` uses the pinned Draft 2020-12 implementation to compile
+every schema and validate every fixture without network or parent-directory
+resolution. It rejects unknown or escaping references, file or per-kind digest
+drift, an incomplete kind set, malformed evidence, publication-ready claims,
+and portable-standard claims.
 
 The case digest uses Go `encoding/json` normalization only to detect fixture
 drift. It is not a portable canonical serialization algorithm and is not a
 definition identity. This evidence is neither a signed package nor a standard
 form release. The actual provider and HTTP client parity tests consume these
 fixtures so checked-in evidence cannot drift away from the current executable
-wire/default/validation behavior.
+wire behavior. Provider parity fingerprints validator allow-lists/configuration,
+default behavior, and concrete plan-modifier semantics in addition to attribute
+types and flags, and invokes every real resource `ImportState` handler.
 
 ## Not implemented yet
 

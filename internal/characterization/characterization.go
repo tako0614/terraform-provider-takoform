@@ -59,6 +59,7 @@ var SchemaFiles = map[string]string{
 	"import":         "schemas/import.schema.json",
 	"error":          "schemas/error.schema.json",
 	"discovery":      "schemas/discovery.schema.json",
+	"hostDiscovery":  "schemas/host-discovery.schema.json",
 }
 
 const DiscoveryFile = "fixtures/discovery.json"
@@ -105,15 +106,24 @@ type ProviderSchemaCase struct {
 }
 
 type AttributeCase struct {
-	Name          string          `json:"name"`
-	Type          string          `json:"type"`
-	Required      bool            `json:"required"`
-	Optional      bool            `json:"optional"`
-	Computed      bool            `json:"computed"`
-	Default       *string         `json:"default,omitempty"`
-	Validators    int             `json:"validators"`
-	PlanModifiers int             `json:"planModifiers"`
-	Attributes    []AttributeCase `json:"attributes,omitempty"`
+	Name                  string          `json:"name"`
+	Type                  string          `json:"type"`
+	Required              bool            `json:"required"`
+	Optional              bool            `json:"optional"`
+	Computed              bool            `json:"computed"`
+	Default               *string         `json:"default,omitempty"`
+	DefaultSemantic       *SemanticCase   `json:"defaultSemantic,omitempty"`
+	Validators            int             `json:"validators"`
+	PlanModifiers         int             `json:"planModifiers"`
+	ValidatorSemantics    []SemanticCase  `json:"validatorSemantics,omitempty"`
+	PlanModifierSemantics []SemanticCase  `json:"planModifierSemantics,omitempty"`
+	Attributes            []AttributeCase `json:"attributes,omitempty"`
+}
+
+type SemanticCase struct {
+	Type        string `json:"type"`
+	Config      string `json:"config"`
+	Description string `json:"description"`
 }
 
 type OutputCase struct {
@@ -234,10 +244,8 @@ func Verify(root string) (VerificationReport, error) {
 		}
 	}
 
-	for _, path := range SchemaFiles {
-		if err := verifySchema(filepath.Join(root, path)); err != nil {
-			return VerificationReport{}, err
-		}
+	if err := validateEvidenceSchemas(root); err != nil {
+		return VerificationReport{}, err
 	}
 
 	schemaCases, err := LoadCases[ProviderSchemaCase](root, "providerSchema")
@@ -515,20 +523,6 @@ func expectedEvidenceFiles() []string {
 	return files
 }
 
-func verifySchema(path string) error {
-	var schema map[string]any
-	if err := decodeStrict(path, &schema); err != nil {
-		return err
-	}
-	if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
-		return fmt.Errorf("%s is not JSON Schema draft 2020-12", path)
-	}
-	if !strings.Contains(strings.ToLower(fmt.Sprint(schema["title"])), "compatibility candidate") {
-		return fmt.Errorf("%s title must identify compatibility candidate scope", path)
-	}
-	return nil
-}
-
 func containsAuthorityClaim(raw []byte) bool {
 	lower := strings.ToLower(string(raw))
 	for _, forbidden := range []string{"formref", "form package", "formpackage", "schemadigest", "standard v1"} {
@@ -610,7 +604,37 @@ func validateSchemaCases(cases []ProviderSchemaCase) error {
 			if attribute.Name <= last || attribute.Type == "" || (!attribute.Required && !attribute.Optional && !attribute.Computed) {
 				return fmt.Errorf("%s has invalid or unsorted provider attribute %q", item.Kind, attribute.Name)
 			}
+			if err := validateAttributeSemantics(item.Kind, attribute); err != nil {
+				return err
+			}
 			last = attribute.Name
+		}
+	}
+	return nil
+}
+
+func validateAttributeSemantics(kind string, attribute AttributeCase) error {
+	if attribute.Validators != len(attribute.ValidatorSemantics) {
+		return fmt.Errorf("%s attribute %s has %d validators but %d semantic fingerprints", kind, attribute.Name, attribute.Validators, len(attribute.ValidatorSemantics))
+	}
+	if attribute.PlanModifiers != len(attribute.PlanModifierSemantics) {
+		return fmt.Errorf("%s attribute %s has %d plan modifiers but %d semantic fingerprints", kind, attribute.Name, attribute.PlanModifiers, len(attribute.PlanModifierSemantics))
+	}
+	if (attribute.Default == nil) != (attribute.DefaultSemantic == nil) {
+		return fmt.Errorf("%s attribute %s has incomplete default semantics", kind, attribute.Name)
+	}
+	semantics := append(append([]SemanticCase{}, attribute.ValidatorSemantics...), attribute.PlanModifierSemantics...)
+	if attribute.DefaultSemantic != nil {
+		semantics = append(semantics, *attribute.DefaultSemantic)
+	}
+	for _, semantic := range semantics {
+		if semantic.Type == "" || semantic.Config == "" || semantic.Description == "" {
+			return fmt.Errorf("%s attribute %s has incomplete semantic fingerprint", kind, attribute.Name)
+		}
+	}
+	for _, nested := range attribute.Attributes {
+		if err := validateAttributeSemantics(kind, nested); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -37,9 +37,22 @@
         "optional": { "type": "boolean" },
         "computed": { "type": "boolean" },
         "default": { "type": "string" },
+        "defaultSemantic": { "$ref": "#/$defs/semantic" },
         "validators": { "type": "integer", "minimum": 0 },
         "planModifiers": { "type": "integer", "minimum": 0 },
+        "validatorSemantics": { "type": "array", "items": { "$ref": "#/$defs/semantic" } },
+        "planModifierSemantics": { "type": "array", "items": { "$ref": "#/$defs/semantic" } },
         "attributes": { "type": "array", "items": { "$ref": "#/$defs/attribute" } }
+      },
+      "additionalProperties": false
+    },
+    "semantic": {
+      "type": "object",
+      "required": ["type", "config", "description"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "config": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     }
