@@ -172,7 +172,7 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 		return VerificationReport{}, fmt.Errorf("definitionPath %q has media type %q, want %q", index.DefinitionPath, definitionFile.MediaType, DefinitionMediaType)
 	}
 	definitionRaw := payloads[index.DefinitionPath]
-	definition, _, err := validateDefinition(definitionRaw)
+	definition, _, definitionSchemas, err := validateDefinitionWithSchemas(definitionRaw)
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -206,19 +206,11 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 				return VerificationReport{}, fmt.Errorf("conformance fixture %q payload %q must use application/json", fixture.Name, fixturePath)
 			}
 		}
-		desiredSchema, err := compileInlineSchema(definition.DesiredSchema, "desiredSchema")
-		if err != nil {
-			return VerificationReport{}, err
-		}
-		if err := validateFixtureAgainstSchema(desiredSchema, payloads[fixture.DesiredPath], fixture.Name+" desired"); err != nil {
+		if err := validateFixtureAgainstSchema(definitionSchemas.desired, payloads[fixture.DesiredPath], fixture.Name+" desired"); err != nil {
 			return VerificationReport{}, err
 		}
 		if fixture.ObservedPath != "" {
-			observedSchema, err := compileInlineSchema(definition.ObservedSchema, "observedSchema")
-			if err != nil {
-				return VerificationReport{}, err
-			}
-			if err := validateFixtureAgainstSchema(observedSchema, payloads[fixture.ObservedPath], fixture.Name+" observed"); err != nil {
+			if err := validateFixtureAgainstSchema(definitionSchemas.observed, payloads[fixture.ObservedPath], fixture.Name+" observed"); err != nil {
 				return VerificationReport{}, err
 			}
 		}

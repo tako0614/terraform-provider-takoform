@@ -49,11 +49,19 @@ content. It rejects:
   including boundary-delimited singular and plural sensitive field forms;
 - portable-schema object admission that cannot be proven closed, cyclic or
   non-local references, and proofs exceeding 64 graph edges or the combined
-  4096 schema-node/local-reference operation budget.
+  4096 schema-node/local-reference operation budget;
+- portable schemas whose saturating worst-case validation-work estimate exceeds
+  16,384 schema evaluations, including repeated expansion through shared local
+  `$ref` DAG edges; and
+- Form Definitions with more than 32 conformance fixtures.
 
 Local `$ref` targets are admitted once per canonical JSON Pointer with explicit
 `visiting`/`done` states. Shared acyclic schema graphs therefore cost linear
-proof work, while cycles and resource-exhaustion inputs fail closed.
+proof work. The separate validation-work estimate still charges every local
+reference occurrence because a fixture validator may revisit the same target
+through every branch. Desired and observed schemas are each compiled once
+before the bounded fixture loop. Cycles and resource-exhaustion inputs fail
+closed.
 
 Allowed payload media types are the Form Definition type, JSON Schema, generic
 JSON fixture data, Markdown, and plain text. The verifier limits index, file,
