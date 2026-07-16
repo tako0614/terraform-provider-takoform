@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "positive": [
+    {
+      "name": "closed-example-store-package",
+      "path": "positive/example-store",
+      "kind": "ExampleStore"
+    }
+  ],
+  "negative": [
+    {
+      "name": "duplicate-object-name",
+      "operation": "canonicalize",
+      "path": "negative/duplicate-object-name.json",
+      "wantError": "duplicate object name"
+    },
+    {
+      "name": "unpaired-surrogate",
+      "operation": "canonicalize",
+      "path": "negative/unpaired-surrogate.json",
+      "wantError": "unpaired high surrogate"
+    },
+    {
+      "name": "negative-zero",
+      "operation": "canonicalize",
+      "path": "negative/negative-zero.json",
+      "wantError": "negative zero"
+    },
+    {
+      "name": "credential-field",
+      "operation": "content-policy",
+      "path": "negative/credential-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "operator-field",
+      "operation": "content-policy",
+      "path": "negative/operator-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "target-capacity-field",
+      "operation": "content-policy",
+      "path": "negative/target-capacity-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "commercial-field",
+      "operation": "content-policy",
+      "path": "negative/commercial-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "executable-field",
+      "operation": "content-policy",
+      "path": "negative/executable-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "parent-traversal",
+      "operation": "package-path",
+      "value": "../definition.json",
+      "wantError": "traversal"
+    },
+    {
+      "name": "absolute-path",
+      "operation": "package-path",
+      "value": "/definition.json",
+      "wantError": "absolute"
+    },
+    {
+      "name": "backslash-path",
+      "operation": "package-path",
+      "value": "forms\\definition.json",
+      "wantError": "backslash"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "decision-approved-implementation-pending",
+  "status": "decision-approved-implementation-in-progress",
   "provider": {
     "status": "implemented-external-registration-and-install-proof-pending",
     "artifactDigest": "sha256",
@@ -22,7 +22,7 @@
     }
   },
   "formPackage": {
-    "status": "contract-approved-implementation-pending",
+    "status": "local-data-contract-and-verifier-implemented-signing-and-distribution-pending",
     "canonicalization": {
       "format": "RFC8785",
       "encoding": "UTF-8 I-JSON",

@@ -112,7 +112,7 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	var release releaseDescriptor
 	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
 
-	if profile.SchemaVersion != 1 || profile.Status != "decision-approved-implementation-pending" {
+	if profile.SchemaVersion != 1 || profile.Status != "decision-approved-implementation-in-progress" {
 		t.Fatalf("unexpected trust profile identity: version=%d status=%q", profile.SchemaVersion, profile.Status)
 	}
 	if profile.Provider.Status != "implemented-external-registration-and-install-proof-pending" ||
@@ -136,7 +136,7 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	}
 
 	packageTrust := profile.FormPackage
-	if packageTrust.Status != "contract-approved-implementation-pending" ||
+	if packageTrust.Status != "local-data-contract-and-verifier-implemented-signing-and-distribution-pending" ||
 		packageTrust.Canonicalization.Format != "RFC8785" ||
 		packageTrust.Canonicalization.Encoding != "UTF-8 I-JSON" ||
 		packageTrust.Identity.Digest != "sha256" ||

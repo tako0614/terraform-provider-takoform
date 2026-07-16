@@ -47,16 +47,33 @@ resource "takoform_object_bucket" "assets" {
 
 The provider deliberately has no target-pool, backend, credential, pricing, quota, billing, or operator-policy resources. It discovers `features.service_forms` and the supported form kinds from the configured host. Backend placement and credentials remain host responsibilities; computed fields only report sanitized resolution evidence.
 
-See [the portable specification status](spec/README.md), [form inventory](forms/README.md), [conformance status](conformance/README.md), [provider documentation](docs/index.md), and [examples](examples/resources/).
+See [the portable specification status](spec/README.md), [Form Package contract](spec/form-package/README.md), [form inventory](forms/README.md), [conformance status](conformance/README.md), [provider documentation](docs/index.md), and [examples](examples/resources/).
+
+The repository also contains a data-only Form Package library and CLI. It
+implements strict UTF-8 I-JSON validation, RFC 8785 canonicalization, exact
+FormRef/package-index identity, and closed local-directory verification without
+network access or code execution:
+
+```console
+go run ./cmd/form-package conformance
+go run ./cmd/form-package verify conformance/form-package-v1/positive/example-store
+```
+
+This does not make packages publishable: Sigstore, remote distribution,
+activation, and revocation operations are deliberately still pending.
 
 ## Development
 
-Go 1.23 or later is required.
+Go 1.25 or later is required. Release builds are pinned to Go 1.26.5 or a
+newer patched toolchain declared by the release descriptor.
 
 ```console
 gofmt -w .
 go vet ./...
 go test ./...
+go run ./cmd/conformance verify
+go run ./cmd/form-package conformance
+go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 ```
 
 Provider releases use the fail-closed signed `v*` tag workflow documented in

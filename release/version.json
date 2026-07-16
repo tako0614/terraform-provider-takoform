@@ -5,7 +5,7 @@
   "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
   "providerAddress": "registry.terraform.io/tako0614/takoform",
   "goModule": "github.com/tako0614/terraform-provider-takoform",
-  "goVersion": "go1.26.0",
+  "goVersion": "go1.26.5",
   "signingFingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709",
   "publicKeyPath": "release/keys/provider-signing-key.asc",
   "platforms": [
