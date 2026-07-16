@@ -66,6 +66,23 @@ func TestVerifyDirectoryAcceptsClosedDataOnlyPackage(t *testing.T) {
 	}
 }
 
+func TestValidateDefinitionAllowsDescriptionsWithoutSubstringFalsePositive(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, func(definition map[string]any) {
+		definition["description"] = "Authorization and billing may be discussed as prose, but are never portable fields."
+		desired := definition["desiredSchema"].(map[string]any)
+		desired["description"] = "A descriptive schema is data, not a script."
+		properties := desired["properties"].(map[string]any)
+		properties["description"] = map[string]any{
+			"type":        "string",
+			"description": "Human-readable service description.",
+		}
+	})
+	if _, err := VerifyDirectory(root); err != nil {
+		t.Fatalf("description was rejected by the field policy: %v", err)
+	}
+}
+
 func TestVerifyDirectoryRejectsForbiddenDefinitionFields(t *testing.T) {
 	t.Parallel()
 	for _, field := range []string{
@@ -78,6 +95,19 @@ func TestVerifyDirectoryRejectsForbiddenDefinitionFields(t *testing.T) {
 		"validationCode",
 		"adapterScript",
 		"code",
+		"authorization",
+		"bearer",
+		"oauthClient",
+		"sessionCookie",
+		"invoice",
+		"paymentMethod",
+		"currency",
+		"taxCode",
+		"serviceOffering",
+		"managerId",
+		"region",
+		"myAuthorization",
+		"oauth_client",
 	} {
 		field := field
 		t.Run(field, func(t *testing.T) {
@@ -92,6 +122,91 @@ func TestVerifyDirectoryRejectsForbiddenDefinitionFields(t *testing.T) {
 				t.Fatalf("VerifyDirectory error = %v, want forbidden field", err)
 			}
 		})
+	}
+}
+
+func TestPortableObjectSchemasAreClosedWithReviewedTypedMapEscape(t *testing.T) {
+	t.Parallel()
+	portableMap := func() map[string]any {
+		return map[string]any{
+			"type": "object",
+			"propertyNames": map[string]any{
+				"type":               "string",
+				"pattern":            portableMapKeyPattern,
+				portableMapPolicyKey: portableMapPolicyValue,
+			},
+			"additionalProperties": map[string]any{"type": "string"},
+		}
+	}
+
+	t.Run("typed map", func(t *testing.T) {
+		root := makeValidPackage(t, func(definition map[string]any) {
+			desired := definition["desiredSchema"].(map[string]any)
+			desired["properties"].(map[string]any)["labels"] = portableMap()
+		})
+		if _, err := VerifyDirectory(root); err != nil {
+			t.Fatalf("reviewed typed map rejected: %v", err)
+		}
+	})
+
+	for _, test := range []struct {
+		name   string
+		mutate func(map[string]any)
+		want   string
+	}{
+		{name: "open object omitted", mutate: func(schema map[string]any) { delete(schema, "additionalProperties") }, want: "must set additionalProperties"},
+		{name: "open object true", mutate: func(schema map[string]any) { schema["additionalProperties"] = true }, want: "must set additionalProperties"},
+		{name: "map missing property names", mutate: func(schema map[string]any) { delete(schema, "propertyNames") }, want: "map-key policy"},
+		{name: "map missing marker", mutate: func(schema map[string]any) { delete(schema["propertyNames"].(map[string]any), portableMapPolicyKey) }, want: "must be exactly"},
+		{name: "map permissive pattern", mutate: func(schema map[string]any) { schema["propertyNames"].(map[string]any)["pattern"] = ".*" }, want: "must be exactly"},
+		{name: "pattern properties", mutate: func(schema map[string]any) {
+			schema["patternProperties"] = map[string]any{".*": map[string]any{"type": "string"}}
+		}, want: "patternProperties is forbidden"},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			root := makeValidPackage(t, func(definition map[string]any) {
+				desired := definition["desiredSchema"].(map[string]any)
+				if strings.HasPrefix(test.name, "open object") {
+					test.mutate(desired)
+					return
+				}
+				candidate := portableMap()
+				test.mutate(candidate)
+				desired["properties"].(map[string]any)["labels"] = candidate
+			})
+			_, err := VerifyDirectory(root)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("VerifyDirectory error = %v, want containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestTypedMapFixtureStillRejectsForbiddenRuntimeKey(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, func(definition map[string]any) {
+		desired := definition["desiredSchema"].(map[string]any)
+		desired["properties"].(map[string]any)["labels"] = map[string]any{
+			"type": "object",
+			"propertyNames": map[string]any{
+				"type":               "string",
+				"pattern":            portableMapKeyPattern,
+				portableMapPolicyKey: portableMapPolicyValue,
+			},
+			"additionalProperties": map[string]any{"type": "string"},
+		}
+	})
+	invalid := []byte(`{"labels":{"authorization":"not portable"},"name":"example"}`)
+	writeFixtureFile(t, filepath.Join(root, "fixtures", "desired.json"), invalid, 0o644)
+	mutateIndex(t, root, func(index map[string]any) {
+		files := index["files"].([]any)
+		files[2] = fileEntry("fixtures/desired.json", "application/json", invalid)
+	})
+	_, err := VerifyDirectory(root)
+	if err == nil || !strings.Contains(err.Error(), "forbidden field") {
+		t.Fatalf("VerifyDirectory error = %v, want forbidden typed-map key", err)
 	}
 }
 
@@ -293,7 +408,12 @@ func TestReadBoundedRegularFileRejectsPostInventoryReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeFixtureFile(t, filePath, []byte(`{"replacement":true}`), 0o644)
-	_, err = readBoundedRegularFile(filePath, maxPayloadBytes, files["definition.json"])
+	rootHandle, _, err := openStablePackageRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rootHandle.Close()
+	_, err = readBoundedRegularFile(rootHandle, root, "definition.json", maxPayloadBytes, files["definition.json"])
 	if err == nil || !strings.Contains(err.Error(), "identity changed") {
 		t.Fatalf("readBoundedRegularFile error = %v, want identity fence", err)
 	}
@@ -333,7 +453,7 @@ func makeValidPackage(t *testing.T, mutateDefinition func(map[string]any)) strin
 			"type":                 "object",
 			"additionalProperties": false,
 			"properties": map[string]any{
-				"name": map[string]any{"type": "string"},
+				"name": map[string]any{"type": "string", "description": "Portable display name."},
 			},
 		},
 		"observedSchema": map[string]any{

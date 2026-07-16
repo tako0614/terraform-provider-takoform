@@ -42,6 +42,28 @@ All JSON Schema references are document-local fragments. Network and
 package-path `$ref`/`$dynamicRef` values are rejected, so schema validation
 cannot fetch another resource.
 
+Object schemas are closed by default and must set
+`"additionalProperties": false`. A pure typed map is the only open-key
+escape. It must explicitly use `"type": "object"`, must not mix fixed or
+dependent properties, must reject `patternProperties`, and must use a schema
+for `additionalProperties` plus this exact key policy:
+
+```json
+{
+  "propertyNames": {
+    "type": "string",
+    "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+    "x-takoform-fieldPolicy": "portable-data-only-v1"
+  }
+}
+```
+
+The marker is a host conformance requirement, not an annotation to ignore:
+map keys are checked with the same portable data-only forbidden-field policy
+as declared fields. `additionalProperties: true`, an omitted
+`additionalProperties`, a permissive or unmarked `propertyNames`, and
+`patternProperties` are rejected.
+
 ## Hard boundary
 
 Definitions and every JSON payload are recursively checked for credential,
@@ -51,6 +73,14 @@ command, script, source/adapter/validation/runtime code, WebAssembly, and plugin
 fields. This policy is intentionally fail-closed. A host-owned implementation,
 placement, commercial configuration, or executable extension is not portable
 Form Definition data.
+
+The check is structural: normalized exact names and exact camelCase,
+snake_case, or kebab-case tokens are compared with a reviewed forbidden
+vocabulary. It does not use substring matching. Standard schema keys such as
+`description`, and prose values that discuss authentication or billing, remain
+valid; fields such as `authorization`, `oauthClient`, `sessionCookie`,
+`invoice`, `paymentMethod`, `currency`, `taxCode`, `serviceOffering`,
+`managerId`, and `region` do not.
 
 This contract does not standardize the provider's ten characterization kinds.
 Each kind remains a compatibility candidate until its own one-definition
