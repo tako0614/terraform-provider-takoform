@@ -38,9 +38,15 @@ A definition contains:
 - optional non-secret Interface document schemas;
 - optional references to data-only conformance payloads in the same package.
 
-All JSON Schema references are document-local fragments. Network and
-package-path `$ref`/`$dynamicRef` values are rejected, so schema validation
-cannot fetch another resource.
+JSON Schema `$ref` values are limited to the document root (`#`) or a
+document-local JSON Pointer (`#/...`). The closure proof resolves the target
+and rejects missing or cyclic pointers. Anchor, dynamic, network, and package
+path references are rejected, including every `$dynamicRef`, so validation
+cannot fetch another resource or change resolution scope at runtime.
+Inline `$id`, `$anchor`, `$dynamicAnchor`, `$recursiveAnchor`, and
+`$recursiveRef` are also rejected, as is `$vocabulary`; any nested `$schema`
+must still name Draft 2020-12. These limits keep the verifier's JSON Pointer
+proof and the compiler aligned on one resolution base and one dialect.
 
 Object schemas are closed by default and must set
 `"additionalProperties": false`. A pure typed map is the only open-key
@@ -64,6 +70,18 @@ as declared fields. `additionalProperties: true`, an omitted
 `additionalProperties`, a permissive or unmarked `propertyNames`, and
 `patternProperties` are rejected.
 
+This rule applies at every nested schema node, not only at the desired or
+observed root. Boolean `false` is safe because it accepts no value; boolean
+`true`, `{}`, an implicit schema such as `{"not":{"type":"string"}}`, and
+object keywords such as `minProperties` without an explicit closed
+`type: object` are rejected because each can admit arbitrary objects.
+`allOf`/`anyOf`/`oneOf` and local `$ref` remain usable only when every relevant
+branch or resolved target proves that objects are excluded or closed. A
+non-object `type` is the normal proof for primitive and array schemas.
+Arrays must additionally declare `items` (a safe schema or `false`) so omitted
+item constraints cannot reintroduce arbitrary nested objects; tuple
+`prefixItems` do not remove that requirement for trailing items.
+
 ## Hard boundary
 
 Definitions and every JSON payload are recursively checked for credential,
@@ -74,13 +92,17 @@ fields. This policy is intentionally fail-closed. A host-owned implementation,
 placement, commercial configuration, or executable extension is not portable
 Form Definition data.
 
-The check is structural: normalized exact names and exact camelCase,
-snake_case, or kebab-case tokens are compared with a reviewed forbidden
-vocabulary. It does not use substring matching. Standard schema keys such as
-`description`, and prose values that discuss authentication or billing, remain
-valid; fields such as `authorization`, `oauthClient`, `sessionCookie`,
-`invoice`, `paymentMethod`, `currency`, `taxCode`, `serviceOffering`,
-`managerId`, and `region` do not.
+The check is structural: normalized exact names, exact camelCase, snake_case,
+or kebab-case tokens, and reviewed token sequences such as `api` + `key`,
+`private` + `key`, `service` + `offering`, and `manager` + `identifier` are
+compared with a forbidden vocabulary. Glued lowercase spellings are limited by
+exact reviewed compound-base and qualifier pairs such as `apikey` +
+`material`; the policy does not use arbitrary substring matching.
+Standard schema keys such as `description`, and prose values that discuss
+authentication, API keys, service offerings, or billing, remain valid; fields
+such as `authorization`, `oauthClient`, `sessionCookie`, `apiKeyValue`,
+`privateKeyPem`, `invoice`, `paymentMethod`, `currency`, `taxCode`,
+`serviceOfferingId`, `managerIdentifier`, and `region` do not.
 
 This contract does not standardize the provider's ten characterization kinds.
 Each kind remains a compatibility candidate until its own one-definition

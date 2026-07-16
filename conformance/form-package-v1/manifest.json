@@ -123,6 +123,72 @@
       "wantError": "forbidden field"
     },
     {
+      "name": "api-key-value-field",
+      "operation": "content-policy",
+      "path": "negative/api-key-value-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "private-key-pem-field",
+      "operation": "content-policy",
+      "path": "negative/private-key-pem-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "ssh-private-key-field",
+      "operation": "content-policy",
+      "path": "negative/ssh-private-key-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "service-offering-id-field",
+      "operation": "content-policy",
+      "path": "negative/service-offering-id-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "manager-identifier-field",
+      "operation": "content-policy",
+      "path": "negative/manager-identifier-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "backend-manager-label-field",
+      "operation": "content-policy",
+      "path": "negative/backend-manager-label-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "schema-config-true",
+      "operation": "schema-policy",
+      "path": "negative/schema-config-true.json",
+      "wantError": "boolean true"
+    },
+    {
+      "name": "schema-config-empty",
+      "operation": "schema-policy",
+      "path": "negative/schema-config-empty.json",
+      "wantError": "arbitrary object"
+    },
+    {
+      "name": "schema-config-not-string",
+      "operation": "schema-policy",
+      "path": "negative/schema-config-not-string.json",
+      "wantError": "arbitrary object"
+    },
+    {
+      "name": "schema-config-min-properties",
+      "operation": "schema-policy",
+      "path": "negative/schema-config-min-properties.json",
+      "wantError": "without explicit type=object"
+    },
+    {
+      "name": "schema-config-array-open",
+      "operation": "schema-policy",
+      "path": "negative/schema-config-array-open.json",
+      "wantError": "must declare items"
+    },
+    {
       "name": "parent-traversal",
       "operation": "package-path",
       "value": "../definition.json",
