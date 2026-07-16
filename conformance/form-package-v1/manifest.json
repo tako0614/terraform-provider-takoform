@@ -57,6 +57,72 @@
       "wantError": "forbidden field"
     },
     {
+      "name": "authorization-field",
+      "operation": "content-policy",
+      "path": "negative/authorization-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "bearer-field",
+      "operation": "content-policy",
+      "path": "negative/bearer-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "oauth-client-field",
+      "operation": "content-policy",
+      "path": "negative/oauth-client-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "session-cookie-field",
+      "operation": "content-policy",
+      "path": "negative/session-cookie-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "invoice-field",
+      "operation": "content-policy",
+      "path": "negative/invoice-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "payment-method-field",
+      "operation": "content-policy",
+      "path": "negative/payment-method-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "currency-field",
+      "operation": "content-policy",
+      "path": "negative/currency-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "tax-code-field",
+      "operation": "content-policy",
+      "path": "negative/tax-code-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "service-offering-field",
+      "operation": "content-policy",
+      "path": "negative/service-offering-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "manager-id-field",
+      "operation": "content-policy",
+      "path": "negative/manager-id-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "region-field",
+      "operation": "content-policy",
+      "path": "negative/region-field.json",
+      "wantError": "forbidden field"
+    },
+    {
       "name": "parent-traversal",
       "operation": "package-path",
       "value": "../definition.json",

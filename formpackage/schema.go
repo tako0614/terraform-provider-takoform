@@ -16,6 +16,9 @@ const (
 	formRefSchemaID        = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
 	formDefinitionSchemaID = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
 	packageIndexSchemaID   = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
+	portableMapKeyPattern  = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
+	portableMapPolicyKey   = "x-takoform-fieldPolicy"
+	portableMapPolicyValue = "portable-data-only-v1"
 )
 
 //go:embed schemas/*.schema.json
@@ -221,6 +224,9 @@ func validateDocumentWithValue(raw []byte, schema *jsonschema.Schema, destinatio
 }
 
 func compileInlineSchema(value map[string]any, field string) (*jsonschema.Schema, error) {
+	if err := validatePortableSchemaStructure(value, field); err != nil {
+		return nil, err
+	}
 	if err := verifyFragmentOnlyReferences(value, field); err != nil {
 		return nil, err
 	}
@@ -237,6 +243,203 @@ func compileInlineSchema(value map[string]any, field string) (*jsonschema.Schema
 		return nil, fmt.Errorf("%s compile Draft 2020-12 schema: %w", field, err)
 	}
 	return compiled, nil
+}
+
+// validatePortableSchemaStructure keeps objects closed by default. A pure
+// typed map is the only escape: it must have the exact reviewed propertyNames
+// policy and a schema-valued additionalProperties. Runtime hosts enforce the
+// same field-name policy represented by portableMapPolicyValue.
+func validatePortableSchemaStructure(value any, location string) error {
+	schema, ok := value.(map[string]any)
+	if !ok {
+		if _, booleanSchema := value.(bool); booleanSchema {
+			return nil
+		}
+		return fmt.Errorf("%s must be a JSON Schema object or boolean", location)
+	}
+
+	if _, present := schema["patternProperties"]; present {
+		return fmt.Errorf("%s patternProperties is forbidden; use the reviewed typed-map escape", location)
+	}
+
+	properties, hasProperties, err := schemaObjectKeyword(schema, "properties", location)
+	if err != nil {
+		return err
+	}
+	if hasProperties {
+		for name := range properties {
+			if isForbiddenFieldName(name) {
+				return fmt.Errorf("forbidden field %q at %s.properties", name, location)
+			}
+		}
+	}
+	if err := validateSchemaFieldNameArray(schema["required"], location+".required"); err != nil {
+		return err
+	}
+	if err := validateDependentRequiredNames(schema["dependentRequired"], location+".dependentRequired"); err != nil {
+		return err
+	}
+
+	if schemaDescribesObject(schema) {
+		additional, present := schema["additionalProperties"]
+		switch typed := additional.(type) {
+		case bool:
+			if !present || typed {
+				return fmt.Errorf("%s object schema must set additionalProperties to false or use the reviewed typed-map escape", location)
+			}
+		case map[string]any:
+			if !schemaTypeIncludes(schema["type"], "object") {
+				return fmt.Errorf("%s typed map must explicitly set type to object", location)
+			}
+			if hasProperties || schema["required"] != nil || schema["dependentRequired"] != nil || schema["dependentSchemas"] != nil || schema["unevaluatedProperties"] != nil {
+				return fmt.Errorf("%s typed map must be a pure map without fixed or dependent properties", location)
+			}
+			if err := validatePortableMapPropertyNames(schema["propertyNames"], location+".propertyNames"); err != nil {
+				return err
+			}
+			if err := validatePortableSchemaStructure(typed, location+".additionalProperties"); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("%s object schema must set additionalProperties to false or a typed schema", location)
+		}
+	}
+
+	for _, keyword := range []string{"$defs", "definitions", "properties", "dependentSchemas"} {
+		children, present, err := schemaObjectKeyword(schema, keyword, location)
+		if err != nil {
+			return err
+		}
+		if !present {
+			continue
+		}
+		for name, child := range children {
+			if err := validatePortableSchemaStructure(child, location+"."+keyword+"."+name); err != nil {
+				return err
+			}
+		}
+	}
+	for _, keyword := range []string{"items", "contains", "contentSchema", "unevaluatedItems", "unevaluatedProperties", "propertyNames", "not", "if", "then", "else"} {
+		child, present := schema[keyword]
+		if !present {
+			continue
+		}
+		if keyword == "propertyNames" && isPortableMapSchema(schema) {
+			continue
+		}
+		if err := validatePortableSchemaStructure(child, location+"."+keyword); err != nil {
+			return err
+		}
+	}
+	for _, keyword := range []string{"allOf", "anyOf", "oneOf", "prefixItems"} {
+		children, present := schema[keyword]
+		if !present {
+			continue
+		}
+		array, ok := children.([]any)
+		if !ok {
+			return fmt.Errorf("%s.%s must be an array of schemas", location, keyword)
+		}
+		for index, child := range array {
+			if err := validatePortableSchemaStructure(child, fmt.Sprintf("%s.%s[%d]", location, keyword, index)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func schemaObjectKeyword(schema map[string]any, keyword, location string) (map[string]any, bool, error) {
+	value, present := schema[keyword]
+	if !present {
+		return nil, false, nil
+	}
+	object, ok := value.(map[string]any)
+	if !ok {
+		return nil, true, fmt.Errorf("%s.%s must be an object", location, keyword)
+	}
+	return object, true, nil
+}
+
+func schemaDescribesObject(schema map[string]any) bool {
+	if schemaTypeIncludes(schema["type"], "object") {
+		return true
+	}
+	for _, keyword := range []string{"properties", "required", "additionalProperties", "unevaluatedProperties", "propertyNames", "dependentRequired", "dependentSchemas"} {
+		if _, present := schema[keyword]; present {
+			return true
+		}
+	}
+	return false
+}
+
+func schemaTypeIncludes(value any, wanted string) bool {
+	switch typed := value.(type) {
+	case string:
+		return typed == wanted
+	case []any:
+		for _, candidate := range typed {
+			if candidate == wanted {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isPortableMapSchema(schema map[string]any) bool {
+	_, ok := schema["additionalProperties"].(map[string]any)
+	return ok
+}
+
+func validatePortableMapPropertyNames(value any, location string) error {
+	propertyNames, ok := value.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s must declare the reviewed portable map-key policy", location)
+	}
+	if len(propertyNames) != 3 || propertyNames["type"] != "string" || propertyNames["pattern"] != portableMapKeyPattern || propertyNames[portableMapPolicyKey] != portableMapPolicyValue {
+		return fmt.Errorf("%s must be exactly type=string, pattern=%q, and %s=%q", location, portableMapKeyPattern, portableMapPolicyKey, portableMapPolicyValue)
+	}
+	return nil
+}
+
+func validateSchemaFieldNameArray(value any, location string) error {
+	if value == nil {
+		return nil
+	}
+	values, ok := value.([]any)
+	if !ok {
+		return fmt.Errorf("%s must be an array", location)
+	}
+	for _, value := range values {
+		name, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("%s entries must be strings", location)
+		}
+		if isForbiddenFieldName(name) {
+			return fmt.Errorf("forbidden field %q at %s", name, location)
+		}
+	}
+	return nil
+}
+
+func validateDependentRequiredNames(value any, location string) error {
+	if value == nil {
+		return nil
+	}
+	dependencies, ok := value.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s must be an object", location)
+	}
+	for name, required := range dependencies {
+		if isForbiddenFieldName(name) {
+			return fmt.Errorf("forbidden field %q at %s", name, location)
+		}
+		if err := validateSchemaFieldNameArray(required, location+"."+name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateDefinitionSemantics(definition FormDefinition) error {

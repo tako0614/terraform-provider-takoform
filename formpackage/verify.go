@@ -38,7 +38,10 @@ var executableExtensions = map[string]struct{}{
 
 // VerifyDirectory verifies a complete local Form Package without network I/O
 // or code execution. The directory must contain package-index.json plus exactly
-// the regular, non-executable payload files listed by that index.
+// the regular, non-executable payload files listed by that index. Supported Unix
+// systems open payloads relative to a held root descriptor without following
+// symlinks. Other systems require an immutable staging directory while this
+// function runs; metadata fences are defense in depth, not an atomic snapshot.
 func VerifyDirectory(root string) (VerificationReport, error) {
 	rootHandle, rootInfo, err := openStablePackageRoot(root)
 	if err != nil {
@@ -53,8 +56,7 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 	if err := assertPackageRootStable(root, rootHandle, rootInfo); err != nil {
 		return VerificationReport{}, err
 	}
-	indexPath := filepath.Join(root, PackageIndexFilename)
-	indexRaw, err := readBoundedRegularFile(indexPath, maxIndexBytes, actualFiles[PackageIndexFilename])
+	indexRaw, err := readBoundedRegularFile(rootHandle, root, PackageIndexFilename, maxIndexBytes, actualFiles[PackageIndexFilename])
 	if err != nil {
 		return VerificationReport{}, fmt.Errorf("read %s: %w", PackageIndexFilename, err)
 	}
@@ -128,7 +130,6 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 
 	payloads := make(map[string][]byte, len(index.Files))
 	for _, file := range index.Files {
-		fullPath := filepath.Join(root, filepath.FromSlash(file.Path))
 		limit := int64(maxPayloadBytes)
 		if isJSONMediaType(file.MediaType) {
 			limit = maxJSONPayloadBytes
@@ -136,7 +137,7 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 		if file.MediaType == DefinitionMediaType {
 			limit = maxDefinitionBytes
 		}
-		raw, err := readBoundedRegularFile(fullPath, limit, actualFiles[file.Path])
+		raw, err := readBoundedRegularFile(rootHandle, root, file.Path, limit, actualFiles[file.Path])
 		if err != nil {
 			return VerificationReport{}, fmt.Errorf("read payload %q: %w", file.Path, err)
 		}
@@ -344,10 +345,14 @@ func validateMediaType(filePath, mediaType string) error {
 	return nil
 }
 
-func readBoundedRegularFile(filePath string, maximum int64, inventoried fs.FileInfo) ([]byte, error) {
+func readBoundedRegularFile(rootHandle *os.File, root, relative string, maximum int64, inventoried fs.FileInfo) ([]byte, error) {
 	if inventoried == nil {
 		return nil, fmt.Errorf("file was not present in the package inventory")
 	}
+	if err := validatePackagePath(relative); err != nil {
+		return nil, err
+	}
+	filePath := filepath.Join(root, filepath.FromSlash(relative))
 	before, err := os.Lstat(filePath)
 	if err != nil {
 		return nil, err
@@ -364,7 +369,7 @@ func readBoundedRegularFile(filePath string, maximum int64, inventoried fs.FileI
 	if before.Size() > maximum {
 		return nil, fmt.Errorf("file is %d bytes; maximum is %d", before.Size(), maximum)
 	}
-	handle, err := os.Open(filePath)
+	handle, err := secureOpenRelative(rootHandle, root, relative)
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +412,7 @@ func openStablePackageRoot(root string) (*os.File, fs.FileInfo, error) {
 	if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
 		return nil, nil, fmt.Errorf("package root must be a real directory")
 	}
-	handle, err := os.Open(root)
+	handle, err := secureOpenPackageRoot(root)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open package root: %w", err)
 	}

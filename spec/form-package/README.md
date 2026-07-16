@@ -51,6 +51,21 @@ Allowed payload media types are the Form Definition type, JSON Schema, generic
 JSON fixture data, Markdown, and plain text. The verifier limits index, file,
 and file-count sizes before reading content.
 
+On Darwin, DragonFly BSD, FreeBSD, Linux, NetBSD, and OpenBSD, the verifier
+holds the package root directory descriptor and resolves every payload path
+component relative to it. Intermediate components are opened as directories
+with `O_NOFOLLOW`; the final component uses `O_NOFOLLOW | O_NONBLOCK` and is
+then required to be the same inventoried regular, non-executable file. This
+contains payload reads beneath the held root and avoids blocking on a file
+swapped to a pipe. Inventory and final metadata fences detect ordinary
+mutation, but the verifier does not claim to create an atomic filesystem
+snapshot against a malicious concurrent writer.
+
+On other operating systems, callers must copy or extract into an immutable,
+private staging directory, close the writer, and only then call the verifier.
+The pathname, identity, and metadata fences on those systems are defense in
+depth and do not replace that immutable-staging precondition.
+
 ```console
 go run ./cmd/form-package verify PATH
 go run ./cmd/form-package canonicalize FILE.json
