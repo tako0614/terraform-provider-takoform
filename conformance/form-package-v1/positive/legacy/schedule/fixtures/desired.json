@@ -1,0 +1,12 @@
+{
+  "name": "nightly",
+  "cron": "0 0 * * *",
+  "timezone": "UTC",
+  "connections": {
+    "workflow": {
+      "resource": "DurableWorkflow/ingest",
+      "permissions": ["invoke"],
+      "projection": "schedule_trigger"
+    }
+  }
+}

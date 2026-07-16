@@ -1,0 +1,38 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "ObjectBucket",
+  "definitionVersion": "0.0.0-legacy.1",
+  "title": "Legacy Object Bucket",
+  "description": "Compatibility candidate for provider-neutral object storage intent. Concrete placement and access credentials remain host responsibilities.",
+  "status": "compatibility-candidate",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*" },
+      "storageClass": {
+        "type": "string",
+        "enum": ["standard", "infrequent_access"],
+        "default": "standard"
+      },
+      "interfaces": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": { "type": "string", "pattern": "^\\S+$" }
+      }
+    }
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "immutableFields": ["/name"],
+  "lifecycleCapabilities": ["create", "update", "observe", "delete", "import"],
+  "conformanceFixtures": [
+    { "name": "legacy-current", "desiredPath": "fixtures/desired.json" }
+  ]
+}

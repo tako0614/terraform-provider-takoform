@@ -1,0 +1,4 @@
+{
+  "name": "jobs",
+  "delivery": { "maxRetries": 5, "maxBatchSize": 10 }
+}

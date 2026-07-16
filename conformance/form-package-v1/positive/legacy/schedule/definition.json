@@ -1,0 +1,66 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "Schedule",
+  "definitionVersion": "0.0.0-legacy.1",
+  "title": "Legacy Schedule",
+  "description": "Compatibility candidate for a portable five-field cron schedule with exactly one invokable resource connection.",
+  "status": "compatibility-candidate",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name", "cron", "connections"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*" },
+      "cron": {
+        "type": "string",
+        "pattern": "^[0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)?$"
+      },
+      "timezone": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._:/+-]{0,127}$",
+        "default": "UTC"
+      },
+      "connections": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 1,
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "additionalProperties": { "$ref": "#/$defs/scheduleConnection" }
+      }
+    },
+    "$defs": {
+      "scheduleConnection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["resource", "permissions", "projection"],
+        "properties": {
+          "resource": { "type": "string", "pattern": "^\\S+$" },
+          "permissions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "contains": { "const": "invoke", "type": "string" },
+            "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$" }
+          },
+          "projection": { "const": "schedule_trigger", "type": "string" }
+        }
+      }
+    }
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "immutableFields": ["/name"],
+  "lifecycleCapabilities": ["create", "update", "observe", "delete", "import"],
+  "conformanceFixtures": [
+    { "name": "legacy-current", "desiredPath": "fixtures/desired.json" }
+  ]
+}
