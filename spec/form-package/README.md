@@ -45,7 +45,15 @@ content. It rejects:
 - absolute, traversal, backslash, volume/URI-like, or non-canonical paths;
 - symlinks, executable mode bits, executable-code extensions, devices,
   sockets, and pipes;
-- non-UTF-8/NUL text and all forbidden Form Definition content classes.
+- non-UTF-8/NUL text and all forbidden Form Definition content classes,
+  including boundary-delimited singular and plural sensitive field forms;
+- portable-schema object admission that cannot be proven closed, cyclic or
+  non-local references, and proofs exceeding 64 graph edges or the combined
+  4096 schema-node/local-reference operation budget.
+
+Local `$ref` targets are admitted once per canonical JSON Pointer with explicit
+`visiting`/`done` states. Shared acyclic schema graphs therefore cost linear
+proof work, while cycles and resource-exhaustion inputs fail closed.
 
 Allowed payload media types are the Form Definition type, JSON Schema, generic
 JSON fixture data, Markdown, and plain text. The verifier limits index, file,
