@@ -40,19 +40,27 @@ types and flags, and invokes every real resource `ImportState` handler.
 ## Data-only Form Package v1 corpus
 
 [`form-package-v1/`](form-package-v1/) is a separate corpus for the portable
-package layer. It includes one valid closed ExampleStore package and negative
-fixtures for duplicate names, invalid Unicode scalar sequences, negative zero,
-credentials, operator fields, target/capacity, price/billing/SKU, executable
-code fields, plural API/private/SSH/signing key and manager identifier
-derivatives, traversal, absolute paths, and backslashes. The positive package
-also fixes boundary-safe words such as `apiKeysight`, `privateerKeys`, and
-`managerialIds`. Filesystem-only symlink, executable-bit, and device/pipe cases
-are covered by library tests. Unit tests additionally prove linear admission of
-a shared-reference DAG, fail-closed schema proof depth/operation limits, the
-16,384-evaluation fixture-validation budget through the real directory
-verifier, cardinality amplification through `items`, `contains`,
-`additionalProperties`, and `propertyNames`, embedded content transformation
-rejection, and the 32-fixture Form Definition limit.
+package layer. It includes one valid closed ExampleStore package plus ten
+independent `0.0.0-legacy.1` compatibility packages for the current typed
+provider inventory. Each legacy package has one exact FormRef, one definition,
+one positive desired fixture, closed desired/observed schemas, and no host
+authority fields. Tests pin every package/schema digest, reject an unknown host
+extension and one kind-specific invalid fixture, and cross-check the exact
+machine-readable set in
+[`../forms/legacy-package-set.json`](../forms/legacy-package-set.json).
+
+The same corpus contains negative fixtures for duplicate names, invalid Unicode
+scalar sequences, negative zero, credentials, operator fields, target/capacity,
+price/billing/SKU, executable code fields, plural API/private/SSH/signing key
+and manager identifier derivatives, traversal, absolute paths, and backslashes.
+The ExampleStore package also fixes boundary-safe words such as `apiKeysight`,
+`privateerKeys`, and `managerialIds`. Filesystem-only symlink, executable-bit,
+and device/pipe cases are covered by library tests. Unit tests additionally
+prove linear admission of a shared-reference DAG, fail-closed schema proof
+depth/operation limits, the 16,384-evaluation fixture-validation budget through
+the real directory verifier, cardinality amplification through `items`,
+`contains`, `additionalProperties`, and `propertyNames`, embedded content
+transformation rejection, and the 32-fixture Form Definition limit.
 
 Run it with:
 
@@ -60,6 +68,7 @@ Run it with:
 go run ./cmd/form-package conformance
 ```
 
+The current manifest result is 11 positive packages and 43 negative cases.
 Passing this corpus proves the local data contract only. It is not signature,
 publisher, remote-install, host-activation, retention/revocation, lifecycle
 idempotency, or cross-host/kind-standardization evidence. Those later trust and

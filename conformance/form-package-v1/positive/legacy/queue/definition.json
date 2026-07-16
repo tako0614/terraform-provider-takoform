@@ -1,0 +1,36 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "Queue",
+  "definitionVersion": "0.0.0-legacy.1",
+  "title": "Legacy Queue",
+  "description": "Compatibility candidate for asynchronous delivery preferences. Delivery limits remain adapter capabilities rather than placement instructions.",
+  "status": "compatibility-candidate",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*" },
+      "delivery": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "maxRetries": { "type": "integer", "minimum": 0 },
+          "maxBatchSize": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "immutableFields": ["/name"],
+  "lifecycleCapabilities": ["create", "update", "observe", "delete", "import"],
+  "conformanceFixtures": [
+    { "name": "legacy-current", "desiredPath": "fixtures/desired.json" }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "KVStore",
+  "definitionVersion": "0.0.0-legacy.1",
+  "title": "Legacy Key Value Store",
+  "description": "Compatibility candidate for small key/value storage with an optional consistency preference.",
+  "status": "compatibility-candidate",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*" },
+      "consistency": { "type": "string", "enum": ["eventual", "strong"] }
+    }
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "immutableFields": ["/name"],
+  "lifecycleCapabilities": ["create", "update", "observe", "delete", "import"],
+  "conformanceFixtures": [
+    { "name": "legacy-current", "desiredPath": "fixtures/desired.json" }
+  ]
+}

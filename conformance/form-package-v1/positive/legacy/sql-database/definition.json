@@ -1,0 +1,34 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "SQLDatabase",
+  "definitionVersion": "0.0.0-legacy.1",
+  "title": "Legacy SQL Database",
+  "description": "Compatibility candidate for SQL storage. Engine remains an open capability token resolved by the host.",
+  "status": "compatibility-candidate",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*" },
+      "engine": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "default": "sqlite"
+      },
+      "migrationsPath": { "type": "string", "minLength": 1 }
+    }
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "immutableFields": ["/name"],
+  "lifecycleCapabilities": ["create", "update", "observe", "delete", "import"],
+  "conformanceFixtures": [
+    { "name": "legacy-current", "desiredPath": "fixtures/desired.json" }
+  ]
+}

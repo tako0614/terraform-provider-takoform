@@ -1,0 +1,14 @@
+{
+  "name": "agent",
+  "image": "ghcr.io/example/agent:1.0.0",
+  "ports": [8080],
+  "publicHttp": true,
+  "environment": { "LOG_LEVEL": "info" },
+  "connections": {
+    "DATABASE": {
+      "resource": "SQLDatabase/main",
+      "permissions": ["read", "write"],
+      "projection": "environment"
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "ContainerService",
+  "definitionVersion": "0.0.0-legacy.1",
+  "title": "Legacy Container Service",
+  "description": "Compatibility candidate for an OCI container service. Environment values are explicitly non-secret portable data.",
+  "status": "compatibility-candidate",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name", "image"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*" },
+      "image": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+      "ports": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      },
+      "publicHttp": { "type": "boolean" },
+      "environment": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "additionalProperties": { "type": "string" }
+      },
+      "connections": { "$ref": "#/$defs/connections" }
+    },
+    "$defs": {
+      "connections": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "additionalProperties": { "$ref": "#/$defs/connection" }
+      },
+      "connection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["resource", "permissions", "projection"],
+        "properties": {
+          "resource": { "type": "string", "pattern": "^\\S+$" },
+          "permissions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$" }
+          },
+          "projection": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$" }
+        }
+      }
+    }
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "immutableFields": ["/name"],
+  "lifecycleCapabilities": ["create", "update", "observe", "delete", "import"],
+  "conformanceFixtures": [
+    { "name": "legacy-current", "desiredPath": "fixtures/desired.json" }
+  ]
+}

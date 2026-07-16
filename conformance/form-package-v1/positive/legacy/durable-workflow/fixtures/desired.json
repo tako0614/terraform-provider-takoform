@@ -1,0 +1,16 @@
+{
+  "name": "ingest",
+  "source": {
+    "artifactRef": "artifact:workflow:ingest",
+    "artifactSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "entrypoint": "IngestWorkflow",
+  "retry": { "maxAttempts": 3, "initialBackoffSeconds": 5 },
+  "connections": {
+    "JOBS": {
+      "resource": "Queue/jobs",
+      "permissions": ["consume"],
+      "projection": "binding"
+    }
+  }
+}

@@ -5,6 +5,56 @@
       "name": "closed-example-store-package",
       "path": "positive/example-store",
       "kind": "ExampleStore"
+    },
+    {
+      "name": "legacy-edge-worker-package",
+      "path": "positive/legacy/edge-worker",
+      "kind": "EdgeWorker"
+    },
+    {
+      "name": "legacy-object-bucket-package",
+      "path": "positive/legacy/object-bucket",
+      "kind": "ObjectBucket"
+    },
+    {
+      "name": "legacy-kv-store-package",
+      "path": "positive/legacy/kv-store",
+      "kind": "KVStore"
+    },
+    {
+      "name": "legacy-queue-package",
+      "path": "positive/legacy/queue",
+      "kind": "Queue"
+    },
+    {
+      "name": "legacy-sql-database-package",
+      "path": "positive/legacy/sql-database",
+      "kind": "SQLDatabase"
+    },
+    {
+      "name": "legacy-container-service-package",
+      "path": "positive/legacy/container-service",
+      "kind": "ContainerService"
+    },
+    {
+      "name": "legacy-vector-index-package",
+      "path": "positive/legacy/vector-index",
+      "kind": "VectorIndex"
+    },
+    {
+      "name": "legacy-durable-workflow-package",
+      "path": "positive/legacy/durable-workflow",
+      "kind": "DurableWorkflow"
+    },
+    {
+      "name": "legacy-stateful-actor-namespace-package",
+      "path": "positive/legacy/stateful-actor-namespace",
+      "kind": "StatefulActorNamespace"
+    },
+    {
+      "name": "legacy-schedule-package",
+      "path": "positive/legacy/schedule",
+      "kind": "Schedule"
     }
   ],
   "negative": [

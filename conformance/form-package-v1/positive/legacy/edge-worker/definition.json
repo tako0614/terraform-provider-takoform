@@ -1,0 +1,93 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "EdgeWorker",
+  "definitionVersion": "0.0.0-legacy.1",
+  "title": "Legacy Edge Worker",
+  "description": "Compatibility candidate extracted from the pre-standard Takosumi EdgeWorker desired spec. It carries only portable artifact intent and non-secret resource references.",
+  "status": "compatibility-candidate",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name", "source"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*" },
+      "source": { "$ref": "#/$defs/artifactSource" },
+      "compatibilityDate": { "type": "string", "minLength": 1 },
+      "compatibilityFlags": { "$ref": "#/$defs/capabilityValues" },
+      "profiles": { "$ref": "#/$defs/capabilityValues" },
+      "connections": { "$ref": "#/$defs/connections" }
+    },
+    "$defs": {
+      "artifactSource": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifactPath"],
+            "properties": { "artifactPath": { "type": "string", "minLength": 1 } }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifactUrl", "artifactSha256"],
+            "properties": {
+              "artifactUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+              "artifactSha256": { "$ref": "#/$defs/sha256" }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifactRef", "artifactSha256"],
+            "properties": {
+              "artifactRef": { "type": "string", "minLength": 1 },
+              "artifactSha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        ]
+      },
+      "sha256": { "type": "string", "pattern": "^(sha256:)?[A-Fa-f0-9]{64}$" },
+      "capabilityValues": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": { "type": "string", "pattern": "^\\S+$" }
+      },
+      "connections": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "additionalProperties": { "$ref": "#/$defs/connection" }
+      },
+      "connection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["resource", "permissions", "projection"],
+        "properties": {
+          "resource": { "type": "string", "pattern": "^\\S+$" },
+          "permissions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$" }
+          },
+          "projection": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$" }
+        }
+      }
+    }
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "immutableFields": ["/name"],
+  "lifecycleCapabilities": ["create", "update", "observe", "delete", "import"],
+  "conformanceFixtures": [
+    { "name": "legacy-current", "desiredPath": "fixtures/desired.json" }
+  ]
+}

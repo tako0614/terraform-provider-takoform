@@ -1,0 +1,13 @@
+{
+  "name": "rooms",
+  "className": "RoomActor",
+  "storageProfile": "durable_sqlite",
+  "migrationTag": "v1",
+  "connections": {
+    "DATABASE": {
+      "resource": "SQLDatabase/main",
+      "permissions": ["read", "write"],
+      "projection": "storage"
+    }
+  }
+}
