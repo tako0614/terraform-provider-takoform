@@ -69,7 +69,7 @@ func TestVerifyDirectoryAcceptsClosedDataOnlyPackage(t *testing.T) {
 func TestValidateDefinitionAllowsDescriptionsWithoutSubstringFalsePositive(t *testing.T) {
 	t.Parallel()
 	root := makeValidPackage(t, func(definition map[string]any) {
-		definition["description"] = "Authorization and billing may be discussed as prose, but are never portable fields."
+		definition["description"] = "Authorization, billing, API key, private key, service offering, and manager identifier may be discussed as prose, but are never portable fields."
 		desired := definition["desiredSchema"].(map[string]any)
 		desired["description"] = "A descriptive schema is data, not a script."
 		properties := desired["properties"].(map[string]any)
@@ -77,6 +77,10 @@ func TestValidateDefinitionAllowsDescriptionsWithoutSubstringFalsePositive(t *te
 			"type":        "string",
 			"description": "Human-readable service description.",
 		}
+		properties["apiVersion"] = map[string]any{"type": "string"}
+		properties["monkeyCount"] = map[string]any{"type": "integer"}
+		properties["serviceDescription"] = map[string]any{"type": "string"}
+		properties["managerialNote"] = map[string]any{"type": "string"}
 	})
 	if _, err := VerifyDirectory(root); err != nil {
 		t.Fatalf("description was rejected by the field policy: %v", err)
@@ -108,6 +112,22 @@ func TestVerifyDirectoryRejectsForbiddenDefinitionFields(t *testing.T) {
 		"region",
 		"myAuthorization",
 		"oauth_client",
+		"apiKeyValue",
+		"privateKeyPem",
+		"sshPrivateKey",
+		"serviceOfferingId",
+		"managerIdentifier",
+		"backendManagerLabel",
+		"apikeyvalue",
+		"privatekeypem",
+		"sshprivatekey",
+		"serviceofferingid",
+		"manageridentifier",
+		"apikeymaterial",
+		"privatekeyfingerprint",
+		"sshprivatekeypath",
+		"serviceofferingname",
+		"manageridentifiervalue",
 	} {
 		field := field
 		t.Run(field, func(t *testing.T) {
@@ -123,6 +143,102 @@ func TestVerifyDirectoryRejectsForbiddenDefinitionFields(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPortableSchemaRejectsEveryOpenObjectAdmissionBypass(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name      string
+		candidate any
+		want      string
+	}{
+		{name: "boolean true", candidate: true, want: "boolean true"},
+		{name: "empty schema", candidate: map[string]any{}, want: "arbitrary object"},
+		{name: "not string", candidate: map[string]any{"not": map[string]any{"type": "string"}}, want: "arbitrary object"},
+		{name: "implicit minProperties", candidate: map[string]any{"minProperties": 1}, want: "without explicit type=object"},
+		{name: "open anyOf branch", candidate: map[string]any{"anyOf": []any{map[string]any{"type": "string"}, map[string]any{}}}, want: "arbitrary object"},
+		{name: "array without items", candidate: map[string]any{"type": "array"}, want: "must declare items"},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			root := makeValidPackage(t, func(definition map[string]any) {
+				desired := definition["desiredSchema"].(map[string]any)
+				desired["properties"].(map[string]any)["config"] = test.candidate
+			})
+			_, err := VerifyDirectory(root)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("VerifyDirectory error = %v, want containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestPortableSchemaAllowsProvablyNonObjectCompositionAndClosedReference(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, func(definition map[string]any) {
+		desired := definition["desiredSchema"].(map[string]any)
+		desired["$defs"] = map[string]any{
+			"ClosedConfig": map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]any{
+					"enabled": map[string]any{"type": "boolean"},
+				},
+			},
+		}
+		properties := desired["properties"].(map[string]any)
+		properties["mode"] = map[string]any{
+			"anyOf": []any{
+				map[string]any{"type": "string"},
+				map[string]any{"type": "null"},
+			},
+		}
+		properties["config"] = map[string]any{"$ref": "#/$defs/ClosedConfig"}
+		properties["disabled"] = false
+		properties["tags"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+	})
+	if _, err := VerifyDirectory(root); err != nil {
+		t.Fatalf("provably closed schema composition rejected: %v", err)
+	}
+}
+
+func TestPortableSchemaRejectsUnprovenReferenceResolution(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name      string
+		candidate map[string]any
+		want      string
+	}{
+		{name: "anchor ref", candidate: map[string]any{"$ref": "#named"}, want: "document-local fragment"},
+		{name: "dynamic ref", candidate: map[string]any{"$dynamicRef": "#/$defs/Value"}, want: "dynamic resolution"},
+		{name: "alternate id", candidate: map[string]any{"$id": "nested", "type": "string"}, want: "resolution scopes"},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			root := makeValidPackage(t, func(definition map[string]any) {
+				desired := definition["desiredSchema"].(map[string]any)
+				desired["properties"].(map[string]any)["config"] = test.candidate
+			})
+			_, err := VerifyDirectory(root)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("VerifyDirectory error = %v, want containing %q", err, test.want)
+			}
+		})
+	}
+	t.Run("cyclic ref", func(t *testing.T) {
+		t.Parallel()
+		root := makeValidPackage(t, func(definition map[string]any) {
+			desired := definition["desiredSchema"].(map[string]any)
+			desired["$defs"] = map[string]any{"Loop": map[string]any{"$ref": "#/$defs/Loop"}}
+			desired["properties"].(map[string]any)["config"] = map[string]any{"$ref": "#/$defs/Loop"}
+		})
+		_, err := VerifyDirectory(root)
+		if err == nil || !strings.Contains(err.Error(), "cyclic schema references") {
+			t.Fatalf("VerifyDirectory error = %v, want cyclic reference failure", err)
+		}
+	})
 }
 
 func TestPortableObjectSchemasAreClosedWithReviewedTypedMapEscape(t *testing.T) {

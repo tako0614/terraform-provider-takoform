@@ -15,6 +15,7 @@ var forbiddenNormalizedFields = stringSet(
 	"credential", "credentials", "credentialid", "credentialids", "credentialref", "credentialrefs", "credentialname", "credentialvalue",
 	"secret", "secrets", "secretid", "secretids", "secretref", "secretrefs", "secretname", "secretvalue",
 	"password", "passwords", "passphrase", "privatekey", "privatekeyid", "privatekeyref", "apikey", "apikeyid", "apikeyref",
+	"apikeyvalue", "privatekeypem", "sshprivatekey",
 	"token", "tokens", "tokenid", "tokenref", "accesstoken", "refreshtoken", "idtoken", "bearertoken",
 	"authorization", "authorizationheader", "authheader", "bearer", "oauth", "oauthclient", "oauthclientid", "oauthclientsecret", "oidcclientsecret",
 	"sessioncookie", "sessiontoken", "cookie", "cookies", "connectionstring", "signingkey", "sshkey",
@@ -22,7 +23,7 @@ var forbiddenNormalizedFields = stringSet(
 	// Operator, backend, account, placement, and live capacity authority.
 	"operator", "operators", "operatorid", "operatorpolicy", "account", "accounts", "accountid",
 	"target", "targets", "targetid", "targetpool", "targetpoolid", "poolid",
-	"capacity", "activecapacity", "regioncapacity", "backendmanager", "managerid",
+	"capacity", "activecapacity", "regioncapacity", "backendmanager", "managerid", "manageridentifier",
 	"provider", "providerid", "providername", "providerconfig", "backend", "backendid",
 	"implementationid", "selectedimplementation", "region", "regions", "regionid", "zone", "zones", "zoneid", "placement",
 
@@ -32,7 +33,7 @@ var forbiddenNormalizedFields = stringSet(
 	"payment", "payments", "paymentid", "paymentmethod", "paymentmethods",
 	"currency", "currencies", "currencycode", "tax", "taxes", "taxcode", "taxrate",
 	"quota", "quotas", "sla", "slapolicy", "servicelevelagreement", "supportpolicy",
-	"serviceoffering", "serviceofferings", "subscription", "subscriptions", "entitlement", "entitlements",
+	"serviceoffering", "serviceofferings", "serviceofferingid", "subscription", "subscriptions", "entitlement", "entitlements",
 
 	// Executable or host-extension material.
 	"binary", "code", "exec", "executable", "command", "commands", "script", "scripts",
@@ -45,6 +46,39 @@ var forbiddenFieldTokens = stringSet(
 	"operator", "account", "target", "capacity", "provider", "backend", "implementation", "region", "zone", "placement",
 	"price", "pricing", "sku", "billing", "invoice", "payment", "currency", "tax", "quota", "sla", "subscription", "entitlement",
 	"binary", "code", "exec", "executable", "command", "script", "bytecode", "wasm", "plugin",
+)
+
+// Some sensitive concepts are compounds whose individual words are useful in
+// portable schemas. Match reviewed boundary-delimited token sequences instead
+// of unsafe substrings: "apiKeyValue" is forbidden, while "description" and
+// prose containing "API key" are unaffected because only field names enter
+// this function.
+var forbiddenFieldTokenSequences = [][]string{
+	{"api", "key"},
+	{"private", "key"},
+	{"ssh", "key"},
+	{"signing", "key"},
+	{"service", "offering"},
+	{"backend", "manager"},
+	{"manager", "id"},
+	{"manager", "identifier"},
+}
+
+var forbiddenNormalizedCompoundBases = []string{
+	"apikey",
+	"privatekey",
+	"sshprivatekey",
+	"signingkey",
+	"serviceoffering",
+	"backendmanager",
+	"managerid",
+	"manageridentifier",
+}
+
+var forbiddenCompoundQualifiers = stringSet(
+	"id", "ids", "identifier", "identifiers", "ref", "refs", "name", "names",
+	"value", "values", "pem", "material", "fingerprint", "header", "path", "file",
+	"config", "configuration", "label", "labels",
 )
 
 func rejectForbiddenContent(value any, location string) error {
@@ -69,11 +103,45 @@ func rejectForbiddenContent(value any, location string) error {
 }
 
 func isForbiddenFieldName(value string) bool {
-	if _, forbidden := forbiddenNormalizedFields[normalizeFieldName(value)]; forbidden {
+	normalized := normalizeFieldName(value)
+	if _, forbidden := forbiddenNormalizedFields[normalized]; forbidden {
 		return true
 	}
-	for _, token := range splitFieldNameTokens(value) {
+	for _, base := range forbiddenNormalizedCompoundBases {
+		if !strings.HasPrefix(normalized, base) {
+			continue
+		}
+		if _, forbidden := forbiddenCompoundQualifiers[strings.TrimPrefix(normalized, base)]; forbidden {
+			return true
+		}
+	}
+	tokens := splitFieldNameTokens(value)
+	for _, token := range tokens {
 		if _, forbidden := forbiddenFieldTokens[token]; forbidden {
+			return true
+		}
+	}
+	for _, sequence := range forbiddenFieldTokenSequences {
+		if containsTokenSequence(tokens, sequence) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsTokenSequence(tokens, sequence []string) bool {
+	if len(sequence) == 0 || len(tokens) < len(sequence) {
+		return false
+	}
+	for start := 0; start <= len(tokens)-len(sequence); start++ {
+		matched := true
+		for offset := range sequence {
+			if tokens[start+offset] != sequence[offset] {
+				matched = false
+				break
+			}
+		}
+		if matched {
 			return true
 		}
 	}

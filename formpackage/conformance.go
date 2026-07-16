@@ -99,6 +99,24 @@ func VerifyConformance(root string) (ConformanceReport, error) {
 					testErr = rejectForbiddenContent(value, "$")
 				}
 			}
+		case "schema-policy":
+			input, err := readConformanceInput(root, test.Path)
+			if err != nil {
+				return ConformanceReport{}, err
+			}
+			if _, err := Canonicalize(input); err != nil {
+				testErr = err
+			} else {
+				var value any
+				if err := json.Unmarshal(input, &value); err != nil {
+					testErr = err
+				} else {
+					testErr = verifyFragmentOnlyReferences(value, "schema")
+					if testErr == nil {
+						testErr = validatePortableSchemaStructure(value, "schema")
+					}
+				}
+			}
 		case "package-path":
 			testErr = validatePackagePath(test.Value)
 		default:
