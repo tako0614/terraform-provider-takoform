@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/conformance/compatibility-candidate-v1/observed.schema.json",
+  "title": "Takoform compatibility candidate observed fixtures",
+  "type": "object",
+  "required": ["format", "classification", "cases"],
+  "properties": {
+    "format": { "const": "takoform.compatibility-candidate.observed@v1" },
+    "classification": { "const": "compatibility-candidate" },
+    "cases": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["kind", "resourceType", "resource"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "resourceType": { "type": "string", "pattern": "^takoform_[a-z_]+$" },
+          "resource": {
+            "allOf": [
+              { "$ref": "desired.schema.json#/$defs/resource" },
+              {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": {
+                    "type": "object",
+                    "required": ["phase", "observedGeneration", "resolution", "outputs", "conditions"],
+                    "properties": {
+                      "phase": { "type": "string" },
+                      "observedGeneration": { "type": "integer", "minimum": 0 },
+                      "resolution": { "type": "object" },
+                      "outputs": { "type": "object" },
+                      "conditions": { "type": "array" }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

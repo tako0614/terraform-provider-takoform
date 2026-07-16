@@ -12,10 +12,33 @@ Run:
 go test ./...
 go vet ./...
 tofu fmt -check -recursive examples
+go run ./cmd/conformance verify
 ```
+
+## Phase 0/1 golden characterization
+
+`compatibility-candidate-v1/` freezes the current ten-kind provider/client
+behavior as deterministic offline evidence. It contains JSON Schemas and
+fixtures for the provider schema, desired and observed Resource envelopes,
+sanitized output projection, provider import IDs, provider/API errors, and host
+discovery. `cmd/conformance` rejects file or per-kind digest drift, an incomplete
+kind set, malformed evidence, publication-ready claims, and portable-standard
+claims.
+
+The case digest uses Go `encoding/json` normalization only to detect fixture
+drift. It is not a portable canonical serialization algorithm and is not a
+definition identity. This evidence is neither a signed package nor a standard
+form release. The actual provider and HTTP client parity tests consume these
+fixtures so checked-in evidence cannot drift away from the current executable
+wire/default/validation behavior.
 
 ## Not implemented yet
 
-A portable conformance runner and golden cross-language fixtures do not yet exist. The next contract phase must add positive and negative fixtures for host discovery, exact FormRef/digest pinning, desired and observed schemas, provider-schema parity, unavailable and unauthorized forms, stale versions, digest mismatch, secret rejection, lifecycle idempotency, import/observe behavior, and package retention/revocation.
+A portable conformance runner and cross-language canonicalization do not yet
+exist. The candidate evidence above characterizes only the current provider and
+client implementation. A later contract phase must separately define and test
+signed-package identity, unavailable and unauthorized definitions, stale
+versions, digest mismatch, secret rejection, lifecycle idempotency, and package
+retention/revocation before any portable contract can be claimed.
 
 No empty directory or README in this scaffold should be interpreted as signed-package, provenance, or cross-host conformance evidence.

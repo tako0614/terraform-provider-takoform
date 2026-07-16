@@ -1,0 +1,28 @@
+{
+  "format": "takoform.compatibility-candidate.discovery@v1",
+  "classification": "compatibility-candidate",
+  "host": {
+    "api_versions": ["forms.takoform.com/v1alpha1"],
+    "features": { "service_forms": true },
+    "endpoints": { "capabilities": "https://host.example.test/v1/capabilities" }
+  },
+  "capabilities": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "resources": {
+      "EdgeWorker": true,
+      "ObjectBucket": true,
+      "KVStore": true,
+      "Queue": true,
+      "SQLDatabase": true,
+      "ContainerService": true,
+      "VectorIndex": true,
+      "DurableWorkflow": true,
+      "StatefulActorNamespace": true,
+      "Schedule": true
+    },
+    "adapters": {},
+    "compat": {},
+    "identity": {},
+    "commercial": {}
+  }
+}

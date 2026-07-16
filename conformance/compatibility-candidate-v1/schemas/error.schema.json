@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/conformance/compatibility-candidate-v1/error.schema.json",
+  "title": "Takoform compatibility candidate error fixtures",
+  "type": "object",
+  "required": ["format", "classification", "cases"],
+  "properties": {
+    "format": { "const": "takoform.compatibility-candidate.error@v1" },
+    "classification": { "const": "compatibility-candidate" },
+    "cases": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["kind", "resourceType", "scenario", "expected", "api"],
+        "properties": {
+          "kind": { "type": "string" },
+          "resourceType": { "type": "string" },
+          "scenario": { "type": "string", "minLength": 1 },
+          "expected": {
+            "type": "object",
+            "required": ["summary", "path"],
+            "properties": { "summary": { "type": "string" }, "path": { "type": "string" } },
+            "additionalProperties": false
+          },
+          "api": {
+            "type": "object",
+            "required": ["status", "body", "code", "message", "requestId"],
+            "properties": {
+              "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+              "body": { "type": "object" },
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "requestId": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
