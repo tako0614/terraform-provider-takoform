@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: terraform-provider-takoform
+Source: https://github.com/tako0614/terraform-provider-takoform
+
+Files: *
+Copyright: 2026 Takoform contributors
+License: MIT
