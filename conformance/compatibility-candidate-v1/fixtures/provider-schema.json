@@ -3,201 +3,1850 @@
   "classification": "compatibility-candidate",
   "cases": [
     {
-      "kind": "EdgeWorker", "resourceType": "takoform_edge_worker",
+      "kind": "EdgeWorker",
+      "resourceType": "takoform_edge_worker",
       "attributes": [
-        { "name": "artifact_path", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "artifact_ref", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "artifact_sha256", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "artifact_url", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "compatibility_date", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "compatibility_flags", "type": "set<string>", "required": false, "optional": true, "computed": false, "validators": 1, "planModifiers": 0 },
-        { "name": "connections", "type": "list<object>", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0, "attributes": [
-          { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "permissions", "type": "set<string>", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "projection", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "resource", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 }
-        ] },
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "profiles", "type": "set<string>", "required": false, "optional": true, "computed": false, "validators": 1, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 }
+        {
+          "name": "artifact_path",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "artifact_ref",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "artifact_sha256",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "artifact_url",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "compatibility_date",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "compatibility_flags",
+          "type": "set\u003cstring\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.setStringsNonEmptyValidator",
+              "config": "provider.setStringsNonEmptyValidator{minItems:0}",
+              "description": "each value must be a non-empty token without whitespace"
+            }
+          ]
+        },
+        {
+          "name": "connections",
+          "type": "list\u003cobject\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0,
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "permissions",
+              "type": "set\u003cstring\u003e",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.setStringsTokenValidator",
+                  "config": "provider.setStringsTokenValidator{minItems:1}",
+                  "description": "at least 1 non-empty token(s) without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "projection",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "resource",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "profiles",
+          "type": "set\u003cstring\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.setStringsNonEmptyValidator",
+              "config": "provider.setStringsNonEmptyValidator{minItems:0}",
+              "description": "each value must be a non-empty token without whitespace"
+            }
+          ]
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        }
       ]
     },
     {
-      "kind": "ObjectBucket", "resourceType": "takoform_object_bucket",
+      "kind": "ObjectBucket",
+      "resourceType": "takoform_object_bucket",
       "attributes": [
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "interfaces", "type": "set<string>", "required": false, "optional": true, "computed": false, "validators": 1, "planModifiers": 0 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "storage_class", "type": "string", "required": false, "optional": true, "computed": true, "default": "standard", "validators": 1, "planModifiers": 0 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 }
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "interfaces",
+          "type": "set\u003cstring\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.setStringsNonEmptyValidator",
+              "config": "provider.setStringsNonEmptyValidator{minItems:0}",
+              "description": "each value must be a non-empty token without whitespace"
+            }
+          ]
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "storage_class",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "default": "standard",
+          "defaultSemantic": {
+            "type": "stringdefault.staticStringDefault",
+            "config": "stringdefault.staticStringDefault{defaultVal:\"standard\"}",
+            "description": "value defaults to standard"
+          },
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.stringOneOfValidator",
+              "config": "provider.stringOneOfValidator{allowed:[]string{\"standard\", \"infrequent_access\"}}",
+              "description": "value must be one of: standard, infrequent_access"
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        }
       ]
     },
     {
-      "kind": "KVStore", "resourceType": "takoform_kv_store",
+      "kind": "KVStore",
+      "resourceType": "takoform_kv_store",
       "attributes": [
-        { "name": "consistency", "type": "string", "required": false, "optional": true, "computed": false, "validators": 1, "planModifiers": 0 },
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 }
+        {
+          "name": "consistency",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.stringOneOfValidator",
+              "config": "provider.stringOneOfValidator{allowed:[]string{\"eventual\", \"strong\"}}",
+              "description": "value must be one of: eventual, strong"
+            }
+          ]
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        }
       ]
     },
     {
-      "kind": "Queue", "resourceType": "takoform_queue",
+      "kind": "Queue",
+      "resourceType": "takoform_queue",
       "attributes": [
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "max_batch_size", "type": "int64", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "max_retries", "type": "int64", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 }
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "max_batch_size",
+          "type": "int64",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "max_retries",
+          "type": "int64",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        }
       ]
     },
     {
-      "kind": "SQLDatabase", "resourceType": "takoform_sql_database",
+      "kind": "SQLDatabase",
+      "resourceType": "takoform_sql_database",
       "attributes": [
-        { "name": "engine", "type": "string", "required": false, "optional": true, "computed": false, "validators": 1, "planModifiers": 0 },
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "migrations_path", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 }
+        {
+          "name": "engine",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.stringTokenValidator",
+              "config": "provider.stringTokenValidator{}",
+              "description": "value must be a non-empty token without whitespace"
+            }
+          ]
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "migrations_path",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        }
       ]
     },
     {
-      "kind": "ContainerService", "resourceType": "takoform_container_service",
+      "kind": "ContainerService",
+      "resourceType": "takoform_container_service",
       "attributes": [
-        { "name": "connections", "type": "list<object>", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0, "attributes": [
-          { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "permissions", "type": "set<string>", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "projection", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "resource", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 }
-        ] },
-        { "name": "environment", "type": "map<string>", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "image", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "ports", "type": "set<int64>", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "public_http", "type": "bool", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 }
+        {
+          "name": "connections",
+          "type": "list\u003cobject\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0,
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "permissions",
+              "type": "set\u003cstring\u003e",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.setStringsTokenValidator",
+                  "config": "provider.setStringsTokenValidator{minItems:1}",
+                  "description": "at least 1 non-empty token(s) without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "projection",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "resource",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "environment",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "image",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "ports",
+          "type": "set\u003cint64\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "public_http",
+          "type": "bool",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        }
       ]
     },
     {
-      "kind": "VectorIndex", "resourceType": "takoform_vector_index",
+      "kind": "VectorIndex",
+      "resourceType": "takoform_vector_index",
       "attributes": [
-        { "name": "connections", "type": "list<object>", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0, "attributes": [
-          { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "permissions", "type": "set<string>", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "projection", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "resource", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 }
-        ] },
-        { "name": "dimensions", "type": "int64", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "metric", "type": "string", "required": false, "optional": true, "computed": false, "validators": 1, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 }
+        {
+          "name": "connections",
+          "type": "list\u003cobject\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0,
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "permissions",
+              "type": "set\u003cstring\u003e",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.setStringsTokenValidator",
+                  "config": "provider.setStringsTokenValidator{minItems:1}",
+                  "description": "at least 1 non-empty token(s) without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "projection",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "resource",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "dimensions",
+          "type": "int64",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "metric",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.stringTokenValidator",
+              "config": "provider.stringTokenValidator{}",
+              "description": "value must be a non-empty token without whitespace"
+            }
+          ]
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        }
       ]
     },
     {
-      "kind": "DurableWorkflow", "resourceType": "takoform_durable_workflow",
+      "kind": "DurableWorkflow",
+      "resourceType": "takoform_durable_workflow",
       "attributes": [
-        { "name": "artifact_path", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "artifact_ref", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "artifact_sha256", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "artifact_url", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "connections", "type": "list<object>", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0, "attributes": [
-          { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "permissions", "type": "set<string>", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "projection", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "resource", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 }
-        ] },
-        { "name": "entrypoint", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "initial_backoff_seconds", "type": "int64", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "max_attempts", "type": "int64", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 }
+        {
+          "name": "artifact_path",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "artifact_ref",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "artifact_sha256",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "artifact_url",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "connections",
+          "type": "list\u003cobject\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0,
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "permissions",
+              "type": "set\u003cstring\u003e",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.setStringsTokenValidator",
+                  "config": "provider.setStringsTokenValidator{minItems:1}",
+                  "description": "at least 1 non-empty token(s) without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "projection",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "resource",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "entrypoint",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "initial_backoff_seconds",
+          "type": "int64",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "max_attempts",
+          "type": "int64",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        }
       ]
     },
     {
-      "kind": "StatefulActorNamespace", "resourceType": "takoform_stateful_actor_namespace",
+      "kind": "StatefulActorNamespace",
+      "resourceType": "takoform_stateful_actor_namespace",
       "attributes": [
-        { "name": "class_name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "connections", "type": "list<object>", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0, "attributes": [
-          { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "permissions", "type": "set<string>", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "projection", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "resource", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 }
-        ] },
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "migration_tag", "type": "string", "required": false, "optional": true, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "storage_profile", "type": "string", "required": false, "optional": true, "computed": false, "validators": 1, "planModifiers": 0 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 }
+        {
+          "name": "class_name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "connections",
+          "type": "list\u003cobject\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0,
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "permissions",
+              "type": "set\u003cstring\u003e",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.setStringsTokenValidator",
+                  "config": "provider.setStringsTokenValidator{minItems:1}",
+                  "description": "at least 1 non-empty token(s) without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "projection",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "resource",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "migration_tag",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "storage_profile",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.stringTokenValidator",
+              "config": "provider.stringTokenValidator{}",
+              "description": "value must be a non-empty token without whitespace"
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        }
       ]
     },
     {
-      "kind": "Schedule", "resourceType": "takoform_schedule",
+      "kind": "Schedule",
+      "resourceType": "takoform_schedule",
       "attributes": [
-        { "name": "connections", "type": "list<object>", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 0, "attributes": [
-          { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "permissions", "type": "set<string>", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "projection", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 },
-          { "name": "resource", "type": "string", "required": true, "optional": false, "computed": false, "validators": 1, "planModifiers": 0 }
-        ] },
-        { "name": "cron", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 0 },
-        { "name": "id", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 1 },
-        { "name": "locked", "type": "bool", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "name", "type": "string", "required": true, "optional": false, "computed": false, "validators": 0, "planModifiers": 1 },
-        { "name": "outputs", "type": "map<string>", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "portability", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "selected_implementation", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "space", "type": "string", "required": false, "optional": true, "computed": true, "validators": 0, "planModifiers": 2 },
-        { "name": "target", "type": "string", "required": false, "optional": false, "computed": true, "validators": 0, "planModifiers": 0 },
-        { "name": "timezone", "type": "string", "required": false, "optional": true, "computed": false, "validators": 1, "planModifiers": 0 }
+        {
+          "name": "connections",
+          "type": "list\u003cobject\u003e",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0,
+          "attributes": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "permissions",
+              "type": "set\u003cstring\u003e",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.setStringsTokenValidator",
+                  "config": "provider.setStringsTokenValidator{minItems:1}",
+                  "description": "at least 1 non-empty token(s) without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "projection",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            },
+            {
+              "name": "resource",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringTokenValidator",
+                  "config": "provider.stringTokenValidator{}",
+                  "description": "value must be a non-empty token without whitespace"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "cron",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "validators": 0,
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
+        },
+        {
+          "name": "outputs",
+          "type": "map\u003cstring\u003e",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "portability",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "selected_implementation",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "space",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 2,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            },
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "timezone",
+          "type": "string",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.stringTokenValidator",
+              "config": "provider.stringTokenValidator{}",
+              "description": "value must be a non-empty token without whitespace"
+            }
+          ]
+        }
       ]
     }
   ]

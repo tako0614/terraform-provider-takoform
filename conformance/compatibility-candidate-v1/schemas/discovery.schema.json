@@ -7,7 +7,7 @@
   "properties": {
     "format": { "const": "takoform.compatibility-candidate.discovery@v1" },
     "classification": { "const": "compatibility-candidate" },
-    "host": { "$ref": "../../../schemas/host-discovery.schema.json" },
+    "host": { "$ref": "host-discovery.schema.json" },
     "capabilities": {
       "type": "object",
       "required": ["apiVersion", "resources", "adapters", "compat", "identity", "commercial"],

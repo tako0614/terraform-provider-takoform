@@ -20,7 +20,7 @@
       },
       "additionalProperties": false
     },
-    "resource": {
+    "resourceCore": {
       "type": "object",
       "required": ["apiVersion", "kind", "metadata", "spec"],
       "properties": {
@@ -37,8 +37,11 @@
           "additionalProperties": false
         },
         "spec": { "type": "object" }
-      },
-      "additionalProperties": false
+      }
+    },
+    "resource": {
+      "$ref": "#/$defs/resourceCore",
+      "unevaluatedProperties": false
     }
   },
   "additionalProperties": false

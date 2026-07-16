@@ -10,9 +10,11 @@ import (
 	"testing"
 
 	frameworkdiag "github.com/hashicorp/terraform-plugin-framework/diag"
+	frameworkpath "github.com/hashicorp/terraform-plugin-framework/path"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
@@ -66,13 +68,130 @@ func TestCompatibilityCandidateProviderParity(t *testing.T) {
 			}
 
 			importFixture := imports[fixture.Kind]
-			space, name, ok := cutSpaceName(importFixture.Input)
-			if !ok || space != importFixture.Expected.Space || name != importFixture.Expected.Name {
-				t.Fatalf("import parsing drifted: ok=%v space=%q name=%q", ok, space, name)
-			}
+			assertImportState(t, ctx, resource, importFixture)
 
 			assertProviderError(t, ctx, errors[fixture.Kind], wantDesired)
 		})
+	}
+}
+
+func assertImportState(t *testing.T, ctx context.Context, candidate frameworkresource.Resource, fixture characterization.ImportCase) {
+	t.Helper()
+	importer, ok := candidate.(frameworkresource.ResourceWithImportState)
+	if !ok {
+		t.Fatalf("%s does not implement ResourceWithImportState", fixture.Kind)
+	}
+	var schemaResponse frameworkresource.SchemaResponse
+	candidate.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
+	if schemaResponse.Diagnostics.HasError() {
+		t.Fatalf("schema diagnostics before import: %v", schemaResponse.Diagnostics)
+	}
+	response := frameworkresource.ImportStateResponse{State: tfsdk.State{Schema: schemaResponse.Schema}}
+	var initial any
+	if fixture.Kind == client.KindEdgeWorker {
+		initial = nullEdgeWorkerImportModel()
+	} else {
+		initial = nullServiceShapeCandidateImportModel(candidate.(*serviceShapeResource).cfg.spec)
+	}
+	if diags := response.State.Set(ctx, initial); diags.HasError() {
+		t.Fatalf("initialize import state: %v", diags)
+	}
+	importer.ImportState(ctx, frameworkresource.ImportStateRequest{ID: fixture.Input}, &response)
+	if response.Diagnostics.HasError() {
+		t.Fatalf("ImportState(%q) diagnostics: %v", fixture.Input, response.Diagnostics)
+	}
+	var space types.String
+	if diags := response.State.GetAttribute(ctx, frameworkpath.Root("space"), &space); diags.HasError() {
+		t.Fatalf("read imported space: %v", diags)
+	}
+	var name types.String
+	if diags := response.State.GetAttribute(ctx, frameworkpath.Root("name"), &name); diags.HasError() {
+		t.Fatalf("read imported name: %v", diags)
+	}
+	if space.ValueString() != fixture.Expected.Space || name.ValueString() != fixture.Expected.Name {
+		t.Fatalf("ImportState(%q) wrote space=%q name=%q, want space=%q name=%q", fixture.Input, space.ValueString(), name.ValueString(), fixture.Expected.Space, fixture.Expected.Name)
+	}
+}
+
+func nullEdgeWorkerImportModel() edgeWorkerModel {
+	return edgeWorkerModel{
+		ID:                     types.StringNull(),
+		Name:                   types.StringNull(),
+		ArtifactPath:           types.StringNull(),
+		ArtifactURL:            types.StringNull(),
+		ArtifactRef:            types.StringNull(),
+		ArtifactSHA256:         types.StringNull(),
+		CompatibilityDate:      types.StringNull(),
+		CompatibilityFlags:     types.SetNull(types.StringType),
+		Profiles:               types.SetNull(types.StringType),
+		Connections:            types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+		Space:                  types.StringNull(),
+		SelectedImplementation: types.StringNull(),
+		Target:                 types.StringNull(),
+		Locked:                 types.BoolNull(),
+		Portability:            types.StringNull(),
+		Outputs:                types.MapNull(types.StringType),
+	}
+}
+
+func nullServiceShapeCandidateImportModel(spec serviceShapeSpecKind) any {
+	model := serviceShapeModel{
+		ID:                     types.StringNull(),
+		Name:                   types.StringNull(),
+		Interfaces:             types.SetNull(types.StringType),
+		StorageClass:           types.StringNull(),
+		Consistency:            types.StringNull(),
+		MaxRetries:             types.Int64Null(),
+		MaxBatchSize:           types.Int64Null(),
+		Engine:                 types.StringNull(),
+		MigrationsPath:         types.StringNull(),
+		Image:                  types.StringNull(),
+		Ports:                  types.SetNull(types.Int64Type),
+		PublicHTTP:             types.BoolNull(),
+		Environment:            types.MapNull(types.StringType),
+		Connections:            types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+		Dimensions:             types.Int64Null(),
+		Metric:                 types.StringNull(),
+		ArtifactPath:           types.StringNull(),
+		ArtifactURL:            types.StringNull(),
+		ArtifactRef:            types.StringNull(),
+		ArtifactSHA256:         types.StringNull(),
+		Entrypoint:             types.StringNull(),
+		MaxAttempts:            types.Int64Null(),
+		InitialBackoffSeconds:  types.Int64Null(),
+		ClassName:              types.StringNull(),
+		StorageProfile:         types.StringNull(),
+		MigrationTag:           types.StringNull(),
+		Cron:                   types.StringNull(),
+		Timezone:               types.StringNull(),
+		Space:                  types.StringNull(),
+		SelectedImplementation: types.StringNull(),
+		Target:                 types.StringNull(),
+		Locked:                 types.BoolNull(),
+		Portability:            types.StringNull(),
+		Outputs:                types.MapNull(types.StringType),
+	}
+	switch spec {
+	case specObjectBucket:
+		return objectBucketModelFromServiceShape(model)
+	case specKVStore:
+		return kvStoreModelFromServiceShape(model)
+	case specQueue:
+		return queueModelFromServiceShape(model)
+	case specSQLDatabase:
+		return sqlDatabaseModelFromServiceShape(model)
+	case specContainerService:
+		return containerServiceModelFromServiceShape(model)
+	case specVectorIndex:
+		return vectorIndexModelFromServiceShape(model)
+	case specDurableWorkflow:
+		return durableWorkflowModelFromServiceShape(model)
+	case specStatefulActorNamespace:
+		return statefulActorNamespaceModelFromServiceShape(model)
+	case specSchedule:
+		return scheduleModelFromServiceShape(model)
+	default:
+		panic("unsupported candidate import shape")
 	}
 }
 
@@ -222,6 +341,8 @@ func characterizeAttribute(t *testing.T, name string, attribute schema.Attribute
 	case schema.StringAttribute:
 		result.Type, result.Required, result.Optional, result.Computed = "string", value.Required, value.Optional, value.Computed
 		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
+		result.ValidatorSemantics = semanticFingerprints(value.Validators, true)
+		result.PlanModifierSemantics = semanticFingerprints(value.PlanModifiers, false)
 		if value.Default != nil {
 			var response defaults.StringResponse
 			value.Default.DefaultString(context.Background(), defaults.StringRequest{}, &response)
@@ -230,30 +351,70 @@ func characterizeAttribute(t *testing.T, name string, attribute schema.Attribute
 			}
 			defaultValue := response.PlanValue.ValueString()
 			result.Default = &defaultValue
+			semantic := semanticFingerprint(value.Default, true)
+			result.DefaultSemantic = &semantic
 		}
 	case schema.BoolAttribute:
 		result.Type, result.Required, result.Optional, result.Computed = "bool", value.Required, value.Optional, value.Computed
 		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
+		result.ValidatorSemantics = semanticFingerprints(value.Validators, true)
+		result.PlanModifierSemantics = semanticFingerprints(value.PlanModifiers, false)
 	case schema.Int64Attribute:
 		result.Type, result.Required, result.Optional, result.Computed = "int64", value.Required, value.Optional, value.Computed
 		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
+		result.ValidatorSemantics = semanticFingerprints(value.Validators, true)
+		result.PlanModifierSemantics = semanticFingerprints(value.PlanModifiers, false)
 	case schema.SetAttribute:
 		result.Type = "set<" + terraformElementType(t, value.ElementType) + ">"
 		result.Required, result.Optional, result.Computed = value.Required, value.Optional, value.Computed
 		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
+		result.ValidatorSemantics = semanticFingerprints(value.Validators, true)
+		result.PlanModifierSemantics = semanticFingerprints(value.PlanModifiers, false)
 	case schema.MapAttribute:
 		result.Type = "map<" + terraformElementType(t, value.ElementType) + ">"
 		result.Required, result.Optional, result.Computed = value.Required, value.Optional, value.Computed
 		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
+		result.ValidatorSemantics = semanticFingerprints(value.Validators, true)
+		result.PlanModifierSemantics = semanticFingerprints(value.PlanModifiers, false)
 	case schema.ListNestedAttribute:
 		result.Type = "list<object>"
 		result.Required, result.Optional, result.Computed = value.Required, value.Optional, value.Computed
 		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
+		result.ValidatorSemantics = semanticFingerprints(value.Validators, true)
+		result.PlanModifierSemantics = semanticFingerprints(value.PlanModifiers, false)
 		result.Attributes = characterizeAttributes(t, value.NestedObject.Attributes)
 	default:
 		t.Fatalf("unsupported schema attribute %s (%T)", name, attribute)
 	}
 	return result
+}
+
+type semanticDescriber interface {
+	Description(context.Context) string
+}
+
+func semanticFingerprints[T semanticDescriber](values []T, exposeConfig bool) []characterization.SemanticCase {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]characterization.SemanticCase, 0, len(values))
+	for _, value := range values {
+		result = append(result, semanticFingerprint(value, exposeConfig))
+	}
+	return result
+}
+
+func semanticFingerprint(value semanticDescriber, exposeConfig bool) characterization.SemanticCase {
+	description := value.Description(context.Background())
+	config := "description=" + description
+	if exposeConfig {
+		config = fmt.Sprintf("%#v", value)
+	}
+	return characterization.SemanticCase{
+		Type:        fmt.Sprintf("%T", value),
+		Config:      config,
+		Description: description,
+	}
 }
 
 func terraformElementType(t *testing.T, value any) string {

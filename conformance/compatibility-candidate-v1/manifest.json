@@ -6,131 +6,187 @@
   "apiVersion": "forms.takoform.com/v1alpha1",
   "digestMethod": "sha256 over repository bytes; case digest over encoding/json normalized value (characterization only)",
   "files": [
-    { "path": "fixtures/desired.json", "sha256": "sha256:f49e574a6a50d8ce4a7b1007c7523308b812262956a2239248dd0913e650ae36" },
-    { "path": "fixtures/discovery.json", "sha256": "sha256:759f8231028a8673d4571822ef7d9dd01ff9debac2f4713da1398fa6dc1a213d" },
-    { "path": "fixtures/error.json", "sha256": "sha256:af6ac090e64d57fd613a92882505fc403529331532f08ac30bd7a9f0f7113c55" },
-    { "path": "fixtures/import.json", "sha256": "sha256:6a7cb1a83d7f2b96ae84efd31ac533394616b60390b3175d2aa1a87a5fa17932" },
-    { "path": "fixtures/observed.json", "sha256": "sha256:42cf8d4c66914b1a54fe18c67e44158ab1e85cebe20736d8185eacc00a8368e5" },
-    { "path": "fixtures/output.json", "sha256": "sha256:5c1b4b854bdfec4c6205d807ee20f0c2128167e53f3c72c6375ec7e207754037" },
-    { "path": "fixtures/provider-schema.json", "sha256": "sha256:a6eaa888a49862a524f06a81e6a130bc97eb3c47a8bb59dcfe9cec4750c51461" },
-    { "path": "schemas/desired.schema.json", "sha256": "sha256:c9765f9d404c44fdbaa27ca43abaefa7ff2659edc5497dfb3ed37f50f5dc2d6d" },
-    { "path": "schemas/discovery.schema.json", "sha256": "sha256:9a55cf0f8667c627fdae3a72748b7c4327b9302f3906841fd190132a42d245f8" },
-    { "path": "schemas/error.schema.json", "sha256": "sha256:b27c6067fe593d452613a74c2688e5c1684aaa61739c04def462fcec428fedfd" },
-    { "path": "schemas/import.schema.json", "sha256": "sha256:c2582d33c172e0578ed6e109250f43bb64ca31f478fef14c0e7a5ad62eed7cfe" },
-    { "path": "schemas/observed.schema.json", "sha256": "sha256:2d319e41cf44fda139c851cafb2d3126e9481b1226cc2947371b7f6a69841907" },
-    { "path": "schemas/output.schema.json", "sha256": "sha256:decfd4c3ad708ef30f21222fa6500467f2e087ecb315c900e3d190581d7263a5" },
-    { "path": "schemas/provider-schema.schema.json", "sha256": "sha256:ae69263edbfc02fe53a72e3ffe7a308fa6263798b51da0eaed7c24fec5eb7381" }
+    {
+      "path": "fixtures/desired.json",
+      "sha256": "sha256:f49e574a6a50d8ce4a7b1007c7523308b812262956a2239248dd0913e650ae36"
+    },
+    {
+      "path": "fixtures/discovery.json",
+      "sha256": "sha256:759f8231028a8673d4571822ef7d9dd01ff9debac2f4713da1398fa6dc1a213d"
+    },
+    {
+      "path": "fixtures/error.json",
+      "sha256": "sha256:af6ac090e64d57fd613a92882505fc403529331532f08ac30bd7a9f0f7113c55"
+    },
+    {
+      "path": "fixtures/import.json",
+      "sha256": "sha256:6a7cb1a83d7f2b96ae84efd31ac533394616b60390b3175d2aa1a87a5fa17932"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "sha256": "sha256:42cf8d4c66914b1a54fe18c67e44158ab1e85cebe20736d8185eacc00a8368e5"
+    },
+    {
+      "path": "fixtures/output.json",
+      "sha256": "sha256:5c1b4b854bdfec4c6205d807ee20f0c2128167e53f3c72c6375ec7e207754037"
+    },
+    {
+      "path": "fixtures/provider-schema.json",
+      "sha256": "sha256:544745d2639d4aa2fa5c17af90e94253f8943bd3b20c39584d9c295c5390387c"
+    },
+    {
+      "path": "schemas/desired.schema.json",
+      "sha256": "sha256:365b3cc568924bb98d1dedf0d1e4e4702ca4b97754868a88d72add7229334230"
+    },
+    {
+      "path": "schemas/discovery.schema.json",
+      "sha256": "sha256:2cbefd8c92d774b184a3669f09f84e806b89387c56489738cc54e5cba1143f57"
+    },
+    {
+      "path": "schemas/error.schema.json",
+      "sha256": "sha256:b27c6067fe593d452613a74c2688e5c1684aaa61739c04def462fcec428fedfd"
+    },
+    {
+      "path": "schemas/host-discovery.schema.json",
+      "sha256": "sha256:1fa37de1f19c24742599bdb9d3aa947ba3d2a3880a3574b8e5d47171d658bdc4"
+    },
+    {
+      "path": "schemas/import.schema.json",
+      "sha256": "sha256:c2582d33c172e0578ed6e109250f43bb64ca31f478fef14c0e7a5ad62eed7cfe"
+    },
+    {
+      "path": "schemas/observed.schema.json",
+      "sha256": "sha256:c3bacf6c7f15bb8bd58829e3ab6cadf6e1305564039c74836638dae967dfd8f9"
+    },
+    {
+      "path": "schemas/output.schema.json",
+      "sha256": "sha256:decfd4c3ad708ef30f21222fa6500467f2e087ecb315c900e3d190581d7263a5"
+    },
+    {
+      "path": "schemas/provider-schema.schema.json",
+      "sha256": "sha256:88b79ad6e14a0fb70463e6f05c4b5bb3f8ab8f1d926bd6745cc87e7358c492f5"
+    }
   ],
   "discoveryCaseDigest": "sha256:d891af109436c985356dca2034c2ab642f364c4eb27fff10fabf2c7ce9ac32c1",
   "kinds": [
     {
-      "kind": "EdgeWorker", "resourceType": "takoform_edge_worker",
+      "kind": "EdgeWorker",
+      "resourceType": "takoform_edge_worker",
       "caseDigests": {
         "desired": "sha256:34d06675b68f6957344097f1ab99255302669fd9fdec56e947aeede1b32e1016",
         "error": "sha256:70d02988fd9b7565677685f9de27d83fe8950b36ea50b37124622fda9a45ce4f",
         "import": "sha256:d413d9378eebf5685e18209dd84eb17eeea3d725f33c6fcba01c7fdfe6860392",
         "observed": "sha256:b73fe4af6670e7fb24eab1ce2dba0b09b79dd0be86c352bad21becfeb73b92db",
         "output": "sha256:e45917c649d77d663630c0bb060e18b51cca9cecc97c39a1eb3321e6df7c1d9d",
-        "providerSchema": "sha256:277b874e7c4d0fadbffe29f5fde82c9090cb217d5e83b2b5d6f645aaa0cbf9ba"
+        "providerSchema": "sha256:6e685bda08b37d84a4a58e1e0d35ca81e48f474032866b6252e3634d0121466a"
       }
     },
     {
-      "kind": "ObjectBucket", "resourceType": "takoform_object_bucket",
+      "kind": "ObjectBucket",
+      "resourceType": "takoform_object_bucket",
       "caseDigests": {
         "desired": "sha256:bda4ba08abab8025663fe339bef5feec0836b0f1daa8f80aac6ad5a64d3f97cd",
         "error": "sha256:a051ddb217705bccabe154dd7693d7aebd4ff7cc26850a197afeb10eeaebfc1c",
         "import": "sha256:a7205facccc11d7c26baf4342f43d65034be20690c5e8de924712a424f4e8e3f",
         "observed": "sha256:698f99601efa1a465ab9ef9975eef48349d2aec886e65ebd7f233c00368326e2",
         "output": "sha256:bfc35aafef2d98b68cfa663aa7b05a4a9f20c67180b80b3f492b318c93d70e9c",
-        "providerSchema": "sha256:c07c127213840b38b7ae3ac3586bfb8161de2ba49bb6cdfdae6dd8e4d50724e4"
+        "providerSchema": "sha256:a990d8e92ec2585ec8fca5777b70407afba64df9f74908ab3b0a173da85da0fb"
       }
     },
     {
-      "kind": "KVStore", "resourceType": "takoform_kv_store",
+      "kind": "KVStore",
+      "resourceType": "takoform_kv_store",
       "caseDigests": {
         "desired": "sha256:a6591f7b6fbe6665f020b00c22798ab63ef32904e43c38a86a54a9aca840287e",
         "error": "sha256:3d7c8a2f03616f02a000221a98dbe1b1a3248b33c5319c93f2638916186e2040",
         "import": "sha256:7921779f5aafe67fb4e8301e19ad416e09c9c555fdd45bf8dd0d0950da060baf",
         "observed": "sha256:8edb32d80b85a54e049d92b11992e272668926d251e3e5dd26084187967542c4",
         "output": "sha256:bbd2d50ca0997fbb4e873565fa6e5c74874e5b084018ba9319e251eee1bf3407",
-        "providerSchema": "sha256:984bb3cb3438d9d016c8141c235ceb4e6523c9e995da8261458a910a2e7d9d2a"
+        "providerSchema": "sha256:09b1e65f476c7c321fef8c1f8e8387bf8026b9b1d822ca7fd1755b0949e964d0"
       }
     },
     {
-      "kind": "Queue", "resourceType": "takoform_queue",
+      "kind": "Queue",
+      "resourceType": "takoform_queue",
       "caseDigests": {
         "desired": "sha256:76c31ae4b9a2f90a5ef78233c1f7d93c177e1a343d310fbd6a55381ff125dd04",
         "error": "sha256:f32aaa315c0b6cbca9ff64bc5b61f5c006e45bb3b7ae5048325104116725a719",
         "import": "sha256:a8bbc95278f4026fa01cc7be7a55b117c3e8784dc6e7a634bdbe2a4c751859ef",
         "observed": "sha256:6ca5a409cd03298bdec816da8c84ec57da9ca2d662133d16b8c68e92b962c94e",
         "output": "sha256:3e55d4d290c0b7a51112027aee21d0f7bd397be9d0caed82d85a06ab78f1c28f",
-        "providerSchema": "sha256:9d977a6dc69d518cd42d517c2549f1a723742be177f5ce9e495a3f08a63f1c2b"
+        "providerSchema": "sha256:b345010c1fd32de62ea071b86eb43e153593c64ae8231b468fab1506a1293c77"
       }
     },
     {
-      "kind": "SQLDatabase", "resourceType": "takoform_sql_database",
+      "kind": "SQLDatabase",
+      "resourceType": "takoform_sql_database",
       "caseDigests": {
         "desired": "sha256:8532aa1b67c7bd07aab0d1f834aa3d25e3cd3e5d1eca1040e7c331222ae3a58a",
         "error": "sha256:15538648c8cca0848d21fc5b42abe51a87edad17f29d91a3330de62a72e4e276",
         "import": "sha256:3320baccd4c2f00342e08b7915efd6071767c584e90bece64eec019b9f1b3b2b",
         "observed": "sha256:bd4c4da4fde269ea425bcef4ba2feec29c7a537e96969c217b4db650d8b51a7f",
         "output": "sha256:ffe4be361258c1947f751fa52a34b03e5e05312af88c84dbf01c8ff25d9ec274",
-        "providerSchema": "sha256:f376d8ac284976c80a786f0d225201c85b6587582ccfde9d616f14915a54bfde"
+        "providerSchema": "sha256:ffdd8f716e9abcff00c577316d570297e7cb0e9c9f2fa1493abd725863818c8e"
       }
     },
     {
-      "kind": "ContainerService", "resourceType": "takoform_container_service",
+      "kind": "ContainerService",
+      "resourceType": "takoform_container_service",
       "caseDigests": {
         "desired": "sha256:400f9be1f2bd5e7afd5a3f5ecf337316e3e2df7cba6e99f6411d1cc77b46c063",
         "error": "sha256:4cd5de7a15711cae8b1d927df35c62924a1bbe50f82f97787099086cf75aaaf9",
         "import": "sha256:f82f3de3fdc77a78b4cdf7e83ef64cff7ef2110fdafb368b0153680815de3e24",
         "observed": "sha256:45830e0db212cd46993b34269aee8fd83c4e2671bad33f7cffc2dfba9a7c40aa",
         "output": "sha256:f51ec6d67bac1bc04f565b330edd596fd90f7948e3816d2d449c181d07611ad9",
-        "providerSchema": "sha256:21ce8d7b47e3d5412119146840f5cc088e2bfaaf785a6d031443d452d4196860"
+        "providerSchema": "sha256:959076516301025f9deabe25840841efdb5bd085f176c898353c466cfcca2ae3"
       }
     },
     {
-      "kind": "VectorIndex", "resourceType": "takoform_vector_index",
+      "kind": "VectorIndex",
+      "resourceType": "takoform_vector_index",
       "caseDigests": {
         "desired": "sha256:1e048d42f0c95ac4b1cf7a511d7d0e83f77cb489e911152abd69e558f0d4eb0c",
         "error": "sha256:641ee070d7bdd9da46384d45e233ab8d1f0261b1017a7b2dbd95b8bca50cd489",
         "import": "sha256:198967db3df69d021ff5a82c9c984449473b8a7c5684ca363fe49ca9eca5b9a7",
         "observed": "sha256:f66d3888252dd1e363b6e597c2ad2e1985fd9b76c3671d448c9c1d18fd797188",
         "output": "sha256:3ac5ee6aa52ce3079811099e44ac167e6c30a20a393fb3e61e0ca964875ec8c6",
-        "providerSchema": "sha256:154e6d8901387c5711a4129bd10f4ffebb9deb50bce9a8a58360109a777f2778"
+        "providerSchema": "sha256:1b01bd78056ea50864d562bae6697a9b3a36ec56263d291fc7c693d353a62345"
       }
     },
     {
-      "kind": "DurableWorkflow", "resourceType": "takoform_durable_workflow",
+      "kind": "DurableWorkflow",
+      "resourceType": "takoform_durable_workflow",
       "caseDigests": {
         "desired": "sha256:ddbb96074bdafb4384ee5244b7b8b0066eb269e54eed2eecc8bb35c547652f00",
         "error": "sha256:9d3427909d58b7cc985de27eec1878dc9e915b30a138525f747a5b2accfe6e2e",
         "import": "sha256:f0c20fa96155104ce7a838bfbbf796724675bbaca894f15b48cb5da1fb46fcb3",
         "observed": "sha256:3a4b6863b4bd5e94a7d5f64f4dc8d0ec8e65f99208b09764135fb1343a1c5b7f",
         "output": "sha256:51ffce82f04ab1060b6a889252ba6213d92bb93a79f36a38bd321d01aed5b471",
-        "providerSchema": "sha256:e796d264db7f43d1a68c043ca1d27d33903b78743b685089371978872733ef5e"
+        "providerSchema": "sha256:d18de45ac3c1471a60717939154c445f232b3deaebecbdfef5733664da04baa2"
       }
     },
     {
-      "kind": "StatefulActorNamespace", "resourceType": "takoform_stateful_actor_namespace",
+      "kind": "StatefulActorNamespace",
+      "resourceType": "takoform_stateful_actor_namespace",
       "caseDigests": {
         "desired": "sha256:40edfb7b40f0c155b2f522cb505e34dc948aa0186a535c72ccb21c93cfc35f65",
         "error": "sha256:4c235132954d96c4d183d701df872625151ad79718c1424bc1388fe9a9f7ccc0",
         "import": "sha256:1449e9edf9c4df55fd5b7e73a3b7de12cbf59bb3b87d1c99e70e58622a262dcb",
         "observed": "sha256:b79773b972c8806a82417c446b11ab8493e10063ce224457fe67cb18efa2d4c7",
         "output": "sha256:4b1b9e0b2b83e5fe4c76e178ba7bb2a25466daf237f03ac081e2dcd130102a29",
-        "providerSchema": "sha256:a5d15e6dad5d5c0c013db73d3ac5542df3605e4ed295eb993b976aa75a764193"
+        "providerSchema": "sha256:525c2a96988bd2fcd4dc03922423d649c9ccdd1d24fc0e881b9b7dc4cab38f5f"
       }
     },
     {
-      "kind": "Schedule", "resourceType": "takoform_schedule",
+      "kind": "Schedule",
+      "resourceType": "takoform_schedule",
       "caseDigests": {
         "desired": "sha256:cfdc150946d4ef28450384b386e80fe8e0d61ddbcab7dfbc7e031a69cf2216e8",
         "error": "sha256:46c75020727a8acf2d2fd08d1385f93adbedf644789864621ee5b13562e0f360",
         "import": "sha256:821a5ba2b58d6fc07c9edb40681c7089d0d77f1c94a46beb8c65626369815a3a",
         "observed": "sha256:3b92776034a9c56f1e20cd0f5382ab8a574a27734cd999bd888d3ea3943e6cac",
         "output": "sha256:86dfa398f2f0537e49ec6323eff99c5f1e520defe4df49097343847f364e5f17",
-        "providerSchema": "sha256:29c04b403f321e1871e708a5b5ee744e1c4dfbb226147508cbeadda59a867c79"
+        "providerSchema": "sha256:719617ea560969602ccb20dbf67050f5113d5dcdaf493e03487d8a9d52ebd84a"
       }
     }
   ]

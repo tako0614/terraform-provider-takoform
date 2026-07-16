@@ -2,7 +2,10 @@ module github.com/tako0614/terraform-provider-takoform
 
 go 1.23
 
-require github.com/hashicorp/terraform-plugin-framework v1.13.0
+require (
+	github.com/hashicorp/terraform-plugin-framework v1.13.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+)
 
 require (
 	github.com/fatih/color v1.13.0 // indirect

@@ -19,7 +19,7 @@
           "resourceType": { "type": "string", "pattern": "^takoform_[a-z_]+$" },
           "resource": {
             "allOf": [
-              { "$ref": "desired.schema.json#/$defs/resource" },
+              { "$ref": "desired.schema.json#/$defs/resourceCore" },
               {
                 "type": "object",
                 "required": ["status"],
@@ -38,7 +38,8 @@
                   }
                 }
               }
-            ]
+            ],
+            "unevaluatedProperties": false
           }
         },
         "additionalProperties": false
