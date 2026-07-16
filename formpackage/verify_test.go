@@ -287,6 +287,170 @@ func TestVerifyDirectoryRejectsSharedRefDAGAboveRuntimeValidationBudget(t *testi
 	}
 }
 
+func TestVerifyDirectoryRejectsCardinalityAmplifiedSharedRefDAG(t *testing.T) {
+	t.Parallel()
+	for _, keyword := range []string{"items", "contains", "additionalProperties", "propertyNames"} {
+		keyword := keyword
+		t.Run(keyword, func(t *testing.T) {
+			t.Parallel()
+			schema, fixture := repeatableSharedReferenceDAGSchema(keyword, 7, 64)
+			if err := validatePortableSchemaStructure(schema, "desiredSchema"); err != nil {
+				t.Fatalf("structurally bounded shared-reference schema rejected before fixture cardinality: %v", err)
+			}
+			root := makeValidPackage(t, func(definition map[string]any) {
+				definition["desiredSchema"] = schema
+			})
+			fixtureRaw := canonicalMarshal(t, fixture)
+			writeFixtureFile(t, filepath.Join(root, "fixtures", "desired.json"), fixtureRaw, 0o644)
+			mutateIndex(t, root, func(index map[string]any) {
+				for position, entryValue := range index["files"].([]any) {
+					entry := entryValue.(map[string]any)
+					if entry["path"] == "fixtures/desired.json" {
+						index["files"].([]any)[position] = fileEntry("fixtures/desired.json", "application/json", fixtureRaw)
+						return
+					}
+				}
+				t.Fatal("desired fixture is not listed")
+			})
+
+			_, err := VerifyDirectory(root)
+			if err == nil || !strings.Contains(err.Error(), "worst-case validation work") {
+				t.Fatalf("VerifyDirectory error = %v, want cardinality-amplified validation work limit", err)
+			}
+		})
+	}
+}
+
+func TestVerifyDirectoryRejectsEmbeddedContentValidation(t *testing.T) {
+	t.Parallel()
+	arraySchema, embedded := repeatableSharedReferenceDAGSchema("items", 7, 64)
+	schema := map[string]any{
+		"$schema":              "https://json-schema.org/draft/2020-12/schema",
+		"$defs":                arraySchema["$defs"],
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []any{"payload"},
+		"properties": map[string]any{
+			"payload": map[string]any{
+				"type":             "string",
+				"contentMediaType": "application/json",
+				"contentSchema": map[string]any{
+					"type":  "array",
+					"items": map[string]any{"$ref": "#/$defs/Node7"},
+				},
+			},
+		},
+	}
+	embeddedRaw := canonicalMarshal(t, embedded)
+	fixtureRaw := canonicalMarshal(t, map[string]any{"payload": string(embeddedRaw)})
+	root := makeValidPackage(t, func(definition map[string]any) {
+		definition["desiredSchema"] = schema
+	})
+	writeFixtureFile(t, filepath.Join(root, "fixtures", "desired.json"), fixtureRaw, 0o644)
+	mutateIndex(t, root, func(index map[string]any) {
+		for position, entryValue := range index["files"].([]any) {
+			entry := entryValue.(map[string]any)
+			if entry["path"] == "fixtures/desired.json" {
+				index["files"].([]any)[position] = fileEntry("fixtures/desired.json", "application/json", fixtureRaw)
+				return
+			}
+		}
+		t.Fatal("desired fixture is not listed")
+	})
+
+	_, err := VerifyDirectory(root)
+	if err == nil || !strings.Contains(err.Error(), "portable Forms do not decode or transform embedded content") {
+		t.Fatalf("VerifyDirectory error = %v, want embedded content transformation rejection", err)
+	}
+}
+
+func TestPortableSchemaRejectsEveryContentTransformationKeyword(t *testing.T) {
+	t.Parallel()
+	for keyword, value := range map[string]any{
+		"contentEncoding":  "base64",
+		"contentMediaType": "application/json",
+		"contentSchema":    map[string]any{"type": "string"},
+	} {
+		keyword := keyword
+		value := value
+		t.Run(keyword, func(t *testing.T) {
+			t.Parallel()
+			schema := map[string]any{"type": "string", keyword: value}
+			err := validatePortableSchemaStructure(schema, "desiredSchema")
+			if err == nil || !strings.Contains(err.Error(), keyword) {
+				t.Fatalf("validatePortableSchemaStructure error = %v, want %s rejection", err, keyword)
+			}
+		})
+	}
+}
+
+func repeatableSharedReferenceDAGSchema(keyword string, levels, cardinality int) (map[string]any, any) {
+	definitions := map[string]any{
+		"Node0": map[string]any{"type": "string"},
+	}
+	for level := 1; level <= levels; level++ {
+		reference := fmt.Sprintf("#/$defs/Node%d", level-1)
+		definitions[fmt.Sprintf("Node%d", level)] = map[string]any{
+			"allOf": []any{
+				map[string]any{"$ref": reference},
+				map[string]any{"$ref": strings.Replace(reference, "$defs", "%24defs", 1)},
+			},
+		}
+	}
+	reference := map[string]any{"$ref": fmt.Sprintf("#/$defs/Node%d", levels)}
+	schema := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"$defs":   definitions,
+	}
+	switch keyword {
+	case "items":
+		schema["type"] = "array"
+		schema["items"] = reference
+		fixture := make([]any, cardinality)
+		for index := range fixture {
+			fixture[index] = fmt.Sprintf("value-%d", index)
+		}
+		return schema, fixture
+	case "contains":
+		schema["type"] = "array"
+		schema["items"] = map[string]any{"type": "string"}
+		schema["contains"] = reference
+		fixture := make([]any, cardinality)
+		for index := range fixture {
+			fixture[index] = fmt.Sprintf("value-%d", index)
+		}
+		return schema, fixture
+	case "additionalProperties":
+		schema["type"] = "object"
+		schema["propertyNames"] = map[string]any{
+			"type":               "string",
+			"pattern":            portableMapKeyPattern,
+			portableMapPolicyKey: portableMapPolicyValue,
+		}
+		schema["additionalProperties"] = reference
+		fixture := make(map[string]any, cardinality)
+		for index := 0; index < cardinality; index++ {
+			fixture[fmt.Sprintf("Value%d", index)] = fmt.Sprintf("value-%d", index)
+		}
+		return schema, fixture
+	case "propertyNames":
+		schema["type"] = "object"
+		schema["additionalProperties"] = false
+		schema["propertyNames"] = reference
+		properties := make(map[string]any, cardinality)
+		fixture := make(map[string]any, cardinality)
+		for index := 0; index < cardinality; index++ {
+			name := fmt.Sprintf("Value%d", index)
+			properties[name] = map[string]any{"type": "string"}
+			fixture[name] = fmt.Sprintf("value-%d", index)
+		}
+		schema["properties"] = properties
+		return schema, fixture
+	default:
+		panic("unsupported repeatable keyword: " + keyword)
+	}
+}
+
 func TestPortableSchemaProofFailsClosedAtResourceLimits(t *testing.T) {
 	t.Parallel()
 	t.Run("depth", func(t *testing.T) {
@@ -331,6 +495,7 @@ func TestPortableSchemaRejectsUnprovenReferenceResolution(t *testing.T) {
 		{name: "anchor ref", candidate: map[string]any{"$ref": "#named"}, want: "document-local fragment"},
 		{name: "dynamic ref", candidate: map[string]any{"$dynamicRef": "#/$defs/Value"}, want: "dynamic resolution"},
 		{name: "alternate id", candidate: map[string]any{"$id": "nested", "type": "string"}, want: "resolution scopes"},
+		{name: "legacy dependencies", candidate: map[string]any{"type": "object", "additionalProperties": false, "dependencies": map[string]any{"trigger": map[string]any{"type": "string"}}}, want: "legacy dependencies"},
 	} {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
