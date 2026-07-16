@@ -255,11 +255,13 @@ func newGitFixture(t *testing.T) string {
 	t.Helper()
 	repo := t.TempDir()
 	run(t, repo, "git", "init", "--quiet")
+	run(t, repo, "git", "config", "user.name", "Release Test")
+	run(t, repo, "git", "config", "user.email", "release-test@example.invalid")
 	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("fixture\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	run(t, repo, "git", "add", "README.md")
-	run(t, repo, "git", "-c", "user.name=Release Test", "-c", "user.email=release-test@example.invalid", "commit", "--quiet", "-m", "fixture")
+	run(t, repo, "git", "commit", "--quiet", "-m", "fixture")
 	return repo
 }
 
