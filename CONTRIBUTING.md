@@ -4,12 +4,17 @@ Contributions are welcome. Open an issue before changing the public Service Form
 
 ## Local checks
 
-Use Go 1.23 or later and run:
+Use Go 1.25 or later and run:
 
 ```console
 gofmt -w .
 go vet ./...
 go test ./...
+go run ./cmd/conformance verify
+go run ./cmd/form-package conformance
+go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+go run github.com/google/go-licenses@v1.6.0 check ./... \
+  --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0
 ```
 
 A change is ready for review only when formatting, vet, and tests pass and any schema change includes documentation and an example.

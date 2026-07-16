@@ -15,6 +15,6 @@ The Phase 0 inventory is exactly these ten kinds and their corresponding statica
 | `StatefulActorNamespace` | `takoform_stateful_actor_namespace` | compatibility candidate |
 | `Schedule` | `takoform_schedule` | compatibility candidate |
 
-This inventory freezes the extracted provider surface; it does not assert that every current field has passed provider-neutral semantic review. Individual versioned form definitions and packages are intentionally absent until their lifecycle, portability, security, digest, signature, and conformance rules are specified.
+This inventory freezes the extracted provider surface; it does not assert that every current field has passed provider-neutral semantic review. The generic FormRef, Form Definition, package-index, canonicalization, and local-verification contracts now exist, but individual versioned definitions for these ten kinds are intentionally absent until each kind passes lifecycle, portability, security, and conformance review. Package signing and publication also remain pending.
 
 Target-pool, verified-domain, AI-gateway, and every other operator/admin object are outside the inventory.

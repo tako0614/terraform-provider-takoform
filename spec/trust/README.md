@@ -57,11 +57,13 @@ transparency proof, provenance, and digest validation. Installation is an
 operator action; a customer request path never fetches a package or executable
 extension.
 
-The workflow and package implementation named by the profile do not exist yet.
-Until they do, `formPackage.status` remains
-`contract-approved-implementation-pending`, no Form Package is published, and
-the ten current provider resources remain compatibility candidates rather than
-portable standards.
+The FormRef, Form Definition and package-index schemas, RFC 8785/I-JSON
+implementation, closed local verifier, and positive/negative corpus now exist.
+The Sigstore workflow and verifier, publisher-policy enforcement, remote
+distribution/install, activation, and revocation operations do not. Until those
+separate gates land, `formPackage.status` remains non-publishable, no Form
+Package is released, and the ten current provider resources remain
+compatibility candidates rather than portable standards.
 
 ## Rotation and revocation
 

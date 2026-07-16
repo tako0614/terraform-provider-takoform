@@ -37,13 +37,22 @@ wire behavior. Provider parity fingerprints validator allow-lists/configuration,
 default behavior, and concrete plan-modifier semantics in addition to attribute
 types and flags, and invokes every real resource `ImportState` handler.
 
-## Not implemented yet
+## Data-only Form Package v1 corpus
 
-A portable conformance runner and cross-language canonicalization do not yet
-exist. The candidate evidence above characterizes only the current provider and
-client implementation. A later contract phase must separately define and test
-signed-package identity, unavailable and unauthorized definitions, stale
-versions, digest mismatch, secret rejection, lifecycle idempotency, and package
-retention/revocation before any portable contract can be claimed.
+[`form-package-v1/`](form-package-v1/) is a separate corpus for the portable
+package layer. It includes one valid closed ExampleStore package and negative
+fixtures for duplicate names, invalid Unicode scalar sequences, negative zero,
+credentials, operator fields, target/capacity, price/billing/SKU, executable
+code fields, traversal, absolute paths, and backslashes. Filesystem-only
+symlink, executable-bit, and device/pipe cases are covered by library tests.
 
-No empty directory or README in this scaffold should be interpreted as signed-package, provenance, or cross-host conformance evidence.
+Run it with:
+
+```console
+go run ./cmd/form-package conformance
+```
+
+Passing this corpus proves the local data contract only. It is not signature,
+publisher, remote-install, host-activation, retention/revocation, lifecycle
+idempotency, or cross-host/kind-standardization evidence. Those later trust and
+host conformance layers remain unimplemented.

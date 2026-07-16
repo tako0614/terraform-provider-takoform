@@ -1,16 +1,59 @@
-# Form Definition boundary
+# Form Definition v1alpha1
 
-A future portable Form Definition is a data-only, deterministic description of one Service Form. Its stable identity is expected to be a `FormRef` containing:
+A Form Definition is a deterministic, data-only description of one portable
+service shape. Its normative Draft 2020-12 schema is
+[`../../formpackage/schemas/form-definition.schema.json`](../../formpackage/schemas/form-definition.schema.json).
 
-- `apiVersion`;
-- `kind`;
-- `definitionVersion`;
-- `schemaDigest` over canonically serialized definition bytes.
+## Exact FormRef
 
-A definition may eventually describe desired-spec and observed-output schemas, immutable fields, lifecycle capabilities, non-secret Interface descriptors, code-generation metadata, presentation hints, and conformance fixture references.
+The immutable reference to a definition is exactly these four fields, with no
+extensions:
 
-It must never contain credentials, secret values, target or pool IDs, account IDs, active region capacity, backend-manager identities, prices, SKUs, quota, billing, SLA, support policy, or arbitrary executable code.
+```json
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "ExampleStore",
+  "definitionVersion": "1.0.0",
+  "schemaDigest": "sha256:<64 lowercase hexadecimal characters>"
+}
+```
 
-## Phase 0 status
+The normative schema is
+[`../../formpackage/schemas/form-ref.schema.json`](../../formpackage/schemas/form-ref.schema.json).
+`kind` is a PascalCase portable kind, `definitionVersion` is SemVer, and
+`schemaDigest` is SHA-256 over the definition's RFC 8785 canonical bytes. The
+definition repeats the first three identity fields; a verifier rejects any
+mismatch.
 
-No canonical Form Definition schema or signed Form Package is committed yet. The exact ten schemas currently compiled into the provider remain characterization inputs, not automatically blessed standards. The D-08 decision in [`../trust/`](../trust/) selects canonicalization, digest, signature, publisher, transparency, rotation/revocation, retention, and distribution rules; the package schema, signing workflow, verifier, and negative conformance implementation still block publication.
+## Definition fields
+
+A definition contains:
+
+- the three non-digest identity fields;
+- a title, optional description, and explicit `compatibility-candidate`,
+  `standard`, or `deprecated` status;
+- inline Draft 2020-12 desired and observed schemas;
+- optional immutable JSON Pointer fields;
+- an explicit subset of `create`, `update`, `observe`, `delete`, and `import`;
+- optional non-secret Interface document schemas;
+- optional references to data-only conformance payloads in the same package.
+
+All JSON Schema references are document-local fragments. Network and
+package-path `$ref`/`$dynamicRef` values are rejected, so schema validation
+cannot fetch another resource.
+
+## Hard boundary
+
+Definitions and every JSON payload are recursively checked for credential,
+secret, token, account, operator, target/pool, capacity, backend manager,
+provider config, price, SKU, billing, quota, SLA/support policy, executable,
+command, script, source/adapter/validation/runtime code, WebAssembly, and plugin
+fields. This policy is intentionally fail-closed. A host-owned implementation,
+placement, commercial configuration, or executable extension is not portable
+Form Definition data.
+
+This contract does not standardize the provider's ten characterization kinds.
+Each kind remains a compatibility candidate until its own one-definition
+package and conformance review is completed. A ten-kind compatibility set is
+ten exact FormRefs/packages plus an external mapping payload, never one
+multi-definition package.

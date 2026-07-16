@@ -1,6 +1,6 @@
 module github.com/tako0614/terraform-provider-takoform/cmd/provider-release
 
-go 1.26.0
+go 1.26.5
 
 require (
 	github.com/in-toto/attestation v1.1.2
