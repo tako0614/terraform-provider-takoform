@@ -1,0 +1,93 @@
+# Based on HashiCorp's terraform-provider-scaffolding-framework release
+# contract. Public Terraform Registry asset names are intentionally exact.
+version: 2
+
+project_name: terraform-provider-takoform
+
+before:
+  hooks:
+    - go mod verify
+    - go test ./...
+
+builds:
+  - id: provider
+    main: .
+    env:
+      - CGO_ENABLED=0
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -s -w -buildid= -X main.version={{ .Version }}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    binary: "{{ .ProjectName }}_v{{ .Version }}"
+
+archives:
+  - id: provider
+    ids:
+      - provider
+    formats:
+      - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds_info:
+      owner: root
+      group: root
+      mode: 0755
+      mtime: "{{ .CommitDate }}"
+    files:
+      - src: LICENSE
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
+  extra_files:
+    - glob: .release-tmp/*_manifest.json
+
+signs:
+  - artifacts: checksum
+    args:
+      - --batch
+      - --local-user
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - --output
+      - ${signature}
+      - --detach-sign
+      - ${artifact}
+
+sboms:
+  - id: provider-archives
+    artifacts: archive
+    ids:
+      - provider
+    documents:
+      - "${artifact}.spdx.json"
+    cmd: syft
+    args:
+      - ${artifact}
+      - --output
+      - spdx-json=${document}
+    disable: false
+
+release:
+  draft: true
+  prerelease: auto
+  extra_files:
+    - glob: .release-tmp/*_manifest.json
+
+changelog:
+  disable: true

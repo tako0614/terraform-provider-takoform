@@ -105,6 +105,33 @@ func TestProviderDoesNotExposePushNotificationResources(t *testing.T) {
 	}
 }
 
+func TestProviderSplitDoesNotExposeTakosumiAdminResources(t *testing.T) {
+	forbidden := []string{
+		"target",
+		"target_pool",
+		"provider_connection",
+		"credential",
+		"provider_binding",
+		"policy",
+		"adapter",
+		"billing",
+		"quota",
+		"account",
+	}
+	for _, name := range providerResourceTypeNames(t) {
+		normalized := strings.ToLower(name)
+		for _, term := range forbidden {
+			if strings.Contains(normalized, term) {
+				t.Fatalf("Takosumi host administration is outside the typed Takoform provider: %s contains %q", name, term)
+			}
+		}
+	}
+	p := &takoformProvider{}
+	if dataSources := p.DataSources(context.Background()); len(dataSources) != 0 {
+		t.Fatalf("typed Takoform provider must not expose host-admin data sources: %d", len(dataSources))
+	}
+}
+
 func TestResourceAPIHTTPClientWaitsForServerSideOpenTofuRuns(t *testing.T) {
 	client := newResourceAPIHTTPClient()
 	if client.Timeout < 11*time.Minute {

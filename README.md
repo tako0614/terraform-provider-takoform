@@ -59,7 +59,11 @@ go vet ./...
 go test ./...
 ```
 
-Releases are intentionally not automated until maintainers have documented signing-key custody and Registry publication trust. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+Provider releases use the fail-closed signed `v*` tag workflow documented in
+[release/README.md](release/README.md). The signing key is pinned by fingerprint;
+the private key remains outside the repository. Do not create a release tag
+until the release descriptor, Registry public-key registration, and provider
+compatibility gates are complete.
 
 ## License
 

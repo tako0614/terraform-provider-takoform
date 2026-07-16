@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.0-rc.1",
+  "tag": "v0.1.0-rc.1",
+  "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
+  "providerAddress": "registry.terraform.io/tako0614/takoform",
+  "goModule": "github.com/tako0614/terraform-provider-takoform",
+  "goVersion": "go1.26.0",
+  "signingFingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709",
+  "publicKeyPath": "release/keys/provider-signing-key.asc",
+  "platforms": [
+    "darwin_amd64",
+    "darwin_arm64",
+    "linux_amd64",
+    "linux_arm64",
+    "windows_amd64"
+  ],
+  "publicationStatus": "candidate-only"
+}

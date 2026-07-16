@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -18,8 +19,14 @@ var version = "dev"
 
 func main() {
 	var debug bool
+	var showVersion bool
 	flag.BoolVar(&debug, "debug", false, "run the provider with support for debuggers like delve")
+	flag.BoolVar(&showVersion, "version", false, "print the embedded provider version and exit")
 	flag.Parse()
+	if showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	opts := providerserver.ServeOpts{
 		// Canonical Terraform Registry identity. OpenTofu accepts the same

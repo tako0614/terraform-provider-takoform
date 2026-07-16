@@ -22,8 +22,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # pinned: v6.0.0
         with:
-          go-version-file: go.mod
+          go-version: "1.26.0"
           cache: true
+          cache-dependency-path: |
+            go.sum
+            cmd/provider-release/go.sum
       - name: Check formatting
         shell: bash
         run: |
@@ -32,5 +35,15 @@ jobs:
             printf 'The following files need gofmt:\n%s\n' "$unformatted"
             exit 1
           fi
-      - run: go vet ./...
-      - run: go test ./...
+      - name: Verify provider module
+        run: |
+          go mod verify
+          go vet ./...
+          go test ./...
+      - name: Verify isolated release tooling
+        run: |
+          go -C cmd/provider-release mod verify
+          go -C cmd/provider-release vet ./...
+          go -C cmd/provider-release test ./...
+          go -C cmd/provider-release run . verify-source --allow-untagged-candidate
+          go -C cmd/provider-release run . verify-reproducible --allow-untagged-candidate

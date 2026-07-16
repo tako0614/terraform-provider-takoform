@@ -7,4 +7,5 @@ crash.*.log
 
 /terraform-provider-takoform
 /dist/
+/.release-tmp/
 /coverage.out

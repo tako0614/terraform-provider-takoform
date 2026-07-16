@@ -1,0 +1,231 @@
+name: Release provider
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: provider-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  SYFT_VERSION: "1.48.0"
+  SYFT_LINUX_AMD64_SHA256: "6cef9a7f37220d9067eaf9cfaaa2fce986e9f320a8d42cbc36658c99af78ea04"
+  EXPECTED_GPG_FINGERPRINT: "3510E75E05BBCC303B92D77934FC18AC897FB709"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: provider-release
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.0"
+          cache: true
+
+      - name: Import provider signing key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+
+      - name: Verify immutable release source and signed tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            echo "Provider releases require a tag trigger" >&2
+            exit 1
+          fi
+          if [[ "${{ steps.import_gpg.outputs.fingerprint }}" != "$EXPECTED_GPG_FINGERPRINT" ]]; then
+            echo "Imported signing key fingerprint does not match the pinned release signer" >&2
+            exit 1
+          fi
+          go -C cmd/provider-release test ./...
+          go -C cmd/provider-release run . verify-source --expected-trigger-tag "$GITHUB_REF_NAME"
+
+      - name: Materialize exact Registry manifest asset
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          rm -rf .release-tmp
+          mkdir -p .release-tmp
+          install -m 0644 terraform-registry-manifest.json \
+            ".release-tmp/terraform-provider-takoform_${version}_manifest.json"
+
+      - name: Refuse an existing public version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" 2>/dev/null || true)"
+          if [[ -n "$release_json" ]]; then
+            if [[ "$(jq -r '.draft and (.tag_name == env.GITHUB_REF_NAME)' <<<"$release_json")" != "true" ]]; then
+              echo "A public or mismatched GitHub release already owns $GITHUB_REF_NAME; refusing overwrite" >&2
+              exit 1
+            fi
+            release_id="$(jq -r .id <<<"$release_json")"
+            echo "Removing stale draft release $release_id from an interrupted attempt"
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id"
+          fi
+          registry_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            "https://registry.terraform.io/v1/providers/tako0614/takoform/$version/download/linux/amd64")"
+          if [[ "$registry_status" != "404" ]]; then
+            echo "Terraform Registry version preflight expected 404, got $registry_status; refusing overwrite" >&2
+            exit 1
+          fi
+
+      - name: Install pinned Syft
+        shell: bash
+        run: |
+          archive="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "$RUNNER_TEMP/$archive" \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/$archive"
+          printf '%s  %s\n' "$SYFT_LINUX_AMD64_SHA256" "$RUNNER_TEMP/$archive" \
+            | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" syft
+          mkdir -p "$RUNNER_TEMP/bin"
+          install -m 0755 "$RUNNER_TEMP/syft" "$RUNNER_TEMP/bin/syft"
+          printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Build first reproducibility snapshot
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
+        with:
+          distribution: goreleaser
+          version: v2.17.0
+          args: release --snapshot --clean --skip=publish,sign
+
+      - name: Capture first reproducibility snapshot
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/goreleaser-repro-1"
+          cp dist/*.zip "$RUNNER_TEMP/goreleaser-repro-1/"
+
+      - name: Perturb source mtime
+        shell: bash
+        run: touch -m -d '2040-01-02T03:04:05Z' LICENSE
+
+      - name: Build second reproducibility snapshot
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
+        with:
+          distribution: goreleaser
+          version: v2.17.0
+          args: release --snapshot --clean --skip=publish,sign
+
+      - name: Capture second reproducibility snapshot
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/goreleaser-repro-2"
+          cp dist/*.zip "$RUNNER_TEMP/goreleaser-repro-2/"
+
+      - name: Verify GoReleaser archive reproducibility
+        shell: bash
+        run: |
+          first="$RUNNER_TEMP/goreleaser-repro-1"
+          second="$RUNNER_TEMP/goreleaser-repro-2"
+          mapfile -t names < <(find "$first" -maxdepth 1 -type f -name '*.zip' -printf '%f\n' | sort)
+          if [[ "${#names[@]}" -ne 5 ]]; then
+            echo "Expected five provider archives, got ${#names[@]}" >&2
+            exit 1
+          fi
+          for name in "${names[@]}"; do
+            test -f "$second/$name"
+            first_digest="$(sha256sum "$first/$name" | cut -d' ' -f1)"
+            second_digest="$(sha256sum "$second/$name" | cut -d' ' -f1)"
+            if [[ "$first_digest" != "$second_digest" ]]; then
+              echo "$name changed after LICENSE mtime perturbation" >&2
+              exit 1
+            fi
+          done
+
+      - name: Create signed draft GitHub release assets
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
+        with:
+          distribution: goreleaser
+          version: v2.17.0
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+
+      - name: Verify exact draft release inventory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          checksum="dist/terraform-provider-takoform_${version}_SHA256SUMS"
+          signature="${checksum}.sig"
+          manifest=".release-tmp/terraform-provider-takoform_${version}_manifest.json"
+          test -f "$checksum"
+          test -f "$signature"
+          test -f "$manifest"
+          grep -F "  $(basename "$manifest")" "$checksum"
+          gpg --batch --verify "$signature" "$checksum"
+
+          expected="$RUNNER_TEMP/expected-assets.txt"
+          actual="$RUNNER_TEMP/actual-assets.txt"
+          {
+            find dist -maxdepth 1 -type f \( -name '*.zip' -o -name '*.spdx.json' \) -printf '%f\n'
+            basename "$checksum"
+            basename "$signature"
+            basename "$manifest"
+          } | sort -u > "$expected"
+          if [[ "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" != "true" ]]; then
+            echo "GoReleaser release is not a draft" >&2
+            exit 1
+          fi
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' \
+            | sort -u > "$actual"
+          if ! diff -u "$expected" "$actual"; then
+            echo "Draft release asset inventory differs from the locally verified inventory" >&2
+            exit 1
+          fi
+
+      - name: Attest released provider assets
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4
+        with:
+          subject-path: |
+            dist/*.zip
+            dist/*_SHA256SUMS
+            dist/*_SHA256SUMS.sig
+            dist/*.spdx.json
+            .release-tmp/*_manifest.json
+
+      - name: Publish verified draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .id)"
+          finalized="$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" -F draft=false)"
+          if [[ "$(jq -r .draft <<<"$finalized")" != "false" ]]; then
+            echo "GitHub did not finalize the provider release" >&2
+            exit 1
+          fi
+
+      - name: Remove partial draft after failure
+        if: ${{ always() && !success() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" 2>/dev/null || true)"
+          if [[ -n "$release_json" && "$(jq -r .draft <<<"$release_json")" == "true" ]]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$(jq -r .id <<<"$release_json")"
+          fi

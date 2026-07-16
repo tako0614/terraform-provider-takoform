@@ -9,3 +9,12 @@ Include the affected provider version, a minimal reproduction with all secrets r
 ## Supported versions
 
 Until the first tagged release, only the current `main` branch is supported. After releases begin, the latest stable release will receive security fixes.
+
+## Provider release trust
+
+Release checksums are signed by the key pinned in `release/version.json` and
+`release/keys/`. Report an unexpected signer, unsigned checksum, digest drift,
+or replaced GitHub release immediately through private vulnerability reporting.
+Key rotation is additive: pin and review the new public key, register it with
+the Terraform Registry, and publish only a new semver. Never replace bytes for
+an existing version.
