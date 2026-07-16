@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "status": "decision-approved-implementation-pending",
+  "provider": {
+    "status": "implemented-external-registration-and-install-proof-pending",
+    "artifactDigest": "sha256",
+    "releaseTagPattern": "v*",
+    "signature": {
+      "format": "openpgp-detached-binary",
+      "signedAsset": "terraform-provider-takoform_<version>_SHA256SUMS",
+      "fingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709"
+    },
+    "provenance": {
+      "envelope": "in-toto-statement-v1",
+      "predicate": "slsa-provenance-v1",
+      "attestation": "github-artifact-attestation"
+    },
+    "distribution": {
+      "source": "github-release",
+      "registry": "registry.terraform.io/tako0614/takoform",
+      "overwriteExistingVersion": false
+    }
+  },
+  "formPackage": {
+    "status": "contract-approved-implementation-pending",
+    "canonicalization": {
+      "format": "RFC8785",
+      "encoding": "UTF-8 I-JSON",
+      "reject": [
+        "duplicate-object-name",
+        "invalid-unicode",
+        "nan-or-infinity",
+        "negative-zero"
+      ]
+    },
+    "identity": {
+      "digest": "sha256",
+      "subject": "RFC8785 bytes of the package index",
+      "archiveBytesAreIdentity": false
+    },
+    "signature": {
+      "format": "application/vnd.dev.sigstore.bundle.v0.3+json",
+      "mode": "keyless-blob-signature",
+      "signedSubject": "RFC8785 bytes of the package index"
+    },
+    "publisherPolicy": {
+      "oidcIssuer": "https://token.actions.githubusercontent.com",
+      "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
+      "workflow": ".github/workflows/form-package-release.yml",
+      "tagPattern": "refs/tags/forms/*/v*"
+    },
+    "transparency": {
+      "authority": "sigstore-public-good-instance",
+      "requiredEvidence": "bundle transparency-log inclusion proof",
+      "offlineBundleVerificationRequired": true
+    },
+    "provenance": {
+      "envelope": "in-toto-statement-v1",
+      "predicate": "slsa-provenance-v1",
+      "sbom": "spdx-2.3"
+    },
+    "distribution": {
+      "initialSource": "github-release",
+      "mirrorPolicy": "copy exact assets only after bundle and digest verification",
+      "customerRequestFetch": false,
+      "overwriteExistingVersion": false
+    },
+    "revocation": {
+      "metadata": "signed append-only statement by exact package digest",
+      "blockNewCreateOrUpdate": true,
+      "retainReferencedBytesForObserveAndDelete": true,
+      "replaceBytesInPlace": false
+    },
+    "contentPolicy": {
+      "dataOnly": true,
+      "allowSymlinks": false,
+      "allowExecutableFiles": false,
+      "allowCredentialsOrOperatorFields": false
+    }
+  },
+  "separation": {
+    "reuseProviderGPGKeyForFormPackages": false,
+    "reuseForTakosumiLegacyProvider": false
+  }
+}

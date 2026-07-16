@@ -18,3 +18,7 @@ or replaced GitHub release immediately through private vulnerability reporting.
 Key rotation is additive: pin and review the new public key, register it with
 the Terraform Registry, and publish only a new semver. Never replace bytes for
 an existing version.
+
+Form Packages use the separate keyless publisher identity and revocation rules
+in [`spec/trust/`](spec/trust/). A Form Package must never reuse the provider
+GPG key or the separately owned Takosumi legacy/admin provider trust root.
