@@ -206,11 +206,11 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 				return VerificationReport{}, fmt.Errorf("conformance fixture %q payload %q must use application/json", fixture.Name, fixturePath)
 			}
 		}
-		if err := validateFixtureAgainstSchema(definitionSchemas.desired, payloads[fixture.DesiredPath], fixture.Name+" desired"); err != nil {
+		if err := validateFixtureAgainstSchema(definitionSchemas.desired, definition.DesiredSchema, payloads[fixture.DesiredPath], fixture.Name+" desired"); err != nil {
 			return VerificationReport{}, err
 		}
 		if fixture.ObservedPath != "" {
-			if err := validateFixtureAgainstSchema(definitionSchemas.observed, payloads[fixture.ObservedPath], fixture.Name+" observed"); err != nil {
+			if err := validateFixtureAgainstSchema(definitionSchemas.observed, definition.ObservedSchema, payloads[fixture.ObservedPath], fixture.Name+" observed"); err != nil {
 				return VerificationReport{}, err
 			}
 		}
@@ -229,10 +229,21 @@ func isJSONMediaType(mediaType string) bool {
 	return strings.HasSuffix(mediaType, "+json") || mediaType == "application/json" || mediaType == "application/schema+json"
 }
 
-func validateFixtureAgainstSchema(schema *jsonschema.Schema, raw []byte, label string) error {
+func validateFixtureAgainstSchema(schema *jsonschema.Schema, source map[string]any, raw []byte, label string) error {
 	value, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if err != nil {
 		return fmt.Errorf("conformance fixture %s is invalid JSON: %w", label, err)
+	}
+	estimator := schemaInstanceValidationWorkEstimator{
+		root: source,
+		memo: make(map[schemaInstanceValidationWorkKey]schemaValidationWorkMemo),
+	}
+	work, err := estimator.estimate(source, "#", value, "#", "value")
+	if err != nil {
+		return fmt.Errorf("conformance fixture %s validation-work estimate: %w", label, err)
+	}
+	if work > maxSchemaValidationWork {
+		return fmt.Errorf("conformance fixture %s worst-case validation work exceeds %d schema evaluations", label, maxSchemaValidationWork)
 	}
 	if err := schema.Validate(value); err != nil {
 		return fmt.Errorf("conformance fixture %s does not satisfy its Form Definition schema: %w", label, err)

@@ -369,6 +369,14 @@ func (validator *portableSchemaValidator) validateUncached(value any, location, 
 	if _, present := schema["patternProperties"]; present {
 		return schemaProofResult{}, fmt.Errorf("%s patternProperties is forbidden; use the reviewed typed-map escape", location)
 	}
+	if _, present := schema["dependencies"]; present {
+		return schemaProofResult{}, fmt.Errorf("%s legacy dependencies is forbidden; use dependentRequired or dependentSchemas", location)
+	}
+	for _, keyword := range []string{"contentEncoding", "contentMediaType", "contentSchema"} {
+		if _, present := schema[keyword]; present {
+			return schemaProofResult{}, fmt.Errorf("%s.%s is forbidden because portable Forms do not decode or transform embedded content", location, keyword)
+		}
+	}
 	if dialect, present := schema["$schema"]; present && dialect != "https://json-schema.org/draft/2020-12/schema" {
 		return schemaProofResult{}, fmt.Errorf("%s.$schema must remain Draft 2020-12", location)
 	}
@@ -436,7 +444,7 @@ func (validator *portableSchemaValidator) validateUncached(value any, location, 
 			recordChild(childResult)
 		}
 	}
-	for _, keyword := range []string{"additionalProperties", "items", "contains", "contentSchema", "unevaluatedItems", "unevaluatedProperties", "propertyNames", "not", "if", "then", "else"} {
+	for _, keyword := range []string{"additionalProperties", "items", "contains", "unevaluatedItems", "unevaluatedProperties", "propertyNames", "not", "if", "then", "else"} {
 		child, present := schema[keyword]
 		if !present || (keyword == "additionalProperties" && child == false) {
 			continue
@@ -594,7 +602,7 @@ func (estimator *schemaValidationWorkEstimator) estimate(value any, pointer stri
 			}
 		}
 	}
-	for _, keyword := range []string{"additionalProperties", "items", "contains", "contentSchema", "unevaluatedItems", "unevaluatedProperties", "propertyNames", "not", "if", "then", "else"} {
+	for _, keyword := range []string{"additionalProperties", "items", "contains", "unevaluatedItems", "unevaluatedProperties", "propertyNames", "not", "if", "then", "else"} {
 		child, present := schema[keyword]
 		if !present {
 			continue
@@ -648,6 +656,262 @@ func saturatingSchemaWorkAdd(left, right uint64) uint64 {
 		return limit
 	}
 	return left + right
+}
+
+type schemaInstanceValidationWorkKey struct {
+	schemaPointer   string
+	instancePointer string
+	instanceRole    string
+}
+
+type schemaInstanceValidationWorkEstimator struct {
+	root any
+	memo map[schemaInstanceValidationWorkKey]schemaValidationWorkMemo
+}
+
+// estimate charges schema work against the concrete fixture instance. Schema
+// proof and structural work alone cannot bound repeatable keywords: items,
+// contains, additionalProperties, and propertyNames can evaluate the same
+// shared-reference DAG once per array element or object property. Canonical
+// schema/instance pointers plus the value/property-name role are memoized so
+// analysis stays linear, while each repeated edge still adds the cached child
+// work to the saturating total that guards the real validator call.
+func (estimator *schemaInstanceValidationWorkEstimator) estimate(
+	schemaValue any,
+	schemaPointer string,
+	instanceValue any,
+	instancePointer string,
+	instanceRole string,
+) (uint64, error) {
+	key := schemaInstanceValidationWorkKey{
+		schemaPointer:   schemaPointer,
+		instancePointer: instancePointer,
+		instanceRole:    instanceRole,
+	}
+	if memo, present := estimator.memo[key]; present {
+		if memo.state == proofVisiting {
+			return 0, fmt.Errorf("cyclic schema reference at %s for instance %s", schemaPointer, instancePointer)
+		}
+		return memo.work, nil
+	}
+	estimator.memo[key] = schemaValidationWorkMemo{state: proofVisiting}
+	if _, ok := schemaValue.(bool); ok {
+		estimator.memo[key] = schemaValidationWorkMemo{state: proofDone, work: 1}
+		return 1, nil
+	}
+	schema, ok := schemaValue.(map[string]any)
+	if !ok {
+		return 0, fmt.Errorf("schema node %s is not an object or boolean", schemaPointer)
+	}
+
+	work := uint64(1)
+	addChildWithRole := func(childSchema any, childSchemaPointer string, childInstance any, childInstancePointer, childInstanceRole string) error {
+		if work > maxSchemaValidationWork {
+			return nil
+		}
+		childWork, err := estimator.estimate(childSchema, childSchemaPointer, childInstance, childInstancePointer, childInstanceRole)
+		if err != nil {
+			return err
+		}
+		work = saturatingSchemaWorkAdd(work, childWork)
+		return nil
+	}
+	addChild := func(childSchema any, childSchemaPointer string, childInstance any, childInstancePointer string) error {
+		return addChildWithRole(childSchema, childSchemaPointer, childInstance, childInstancePointer, instanceRole)
+	}
+
+	object, isObject := instanceValue.(map[string]any)
+	properties, hasProperties, err := schemaObjectKeyword(schema, "properties", schemaPointer)
+	if err != nil {
+		return 0, err
+	}
+	if isObject && hasProperties {
+		for name, childSchema := range properties {
+			childInstance, present := object[name]
+			if !present {
+				continue
+			}
+			if err := addChild(
+				childSchema,
+				appendSchemaPointer(schemaPointer, "properties", name),
+				childInstance,
+				appendSchemaPointer(instancePointer, name),
+			); err != nil {
+				return 0, err
+			}
+		}
+	}
+	dependentSchemas, hasDependentSchemas, err := schemaObjectKeyword(schema, "dependentSchemas", schemaPointer)
+	if err != nil {
+		return 0, err
+	}
+	if isObject && hasDependentSchemas {
+		for name, childSchema := range dependentSchemas {
+			if _, present := object[name]; !present {
+				continue
+			}
+			if err := addChild(
+				childSchema,
+				appendSchemaPointer(schemaPointer, "dependentSchemas", name),
+				instanceValue,
+				instancePointer,
+			); err != nil {
+				return 0, err
+			}
+		}
+	}
+
+	if isObject {
+		if childSchema, present := schema["additionalProperties"]; present {
+			for name, childInstance := range object {
+				if _, declared := properties[name]; declared {
+					continue
+				}
+				if err := addChild(
+					childSchema,
+					appendSchemaPointer(schemaPointer, "additionalProperties"),
+					childInstance,
+					appendSchemaPointer(instancePointer, name),
+				); err != nil {
+					return 0, err
+				}
+			}
+		}
+		if childSchema, present := schema["propertyNames"]; present {
+			for name := range object {
+				if err := addChildWithRole(
+					childSchema,
+					appendSchemaPointer(schemaPointer, "propertyNames"),
+					name,
+					appendSchemaPointer(instancePointer, "@propertyName", name),
+					"property-name",
+				); err != nil {
+					return 0, err
+				}
+			}
+		}
+		// Evaluation annotations are deliberately not reimplemented here. Applying
+		// unevaluatedProperties to every property is a safe upper bound.
+		if childSchema, present := schema["unevaluatedProperties"]; present {
+			for name, childInstance := range object {
+				if err := addChild(
+					childSchema,
+					appendSchemaPointer(schemaPointer, "unevaluatedProperties"),
+					childInstance,
+					appendSchemaPointer(instancePointer, name),
+				); err != nil {
+					return 0, err
+				}
+			}
+		}
+	}
+
+	array, isArray := instanceValue.([]any)
+	prefixItems, _ := schema["prefixItems"].([]any)
+	if isArray {
+		for index, childSchema := range prefixItems {
+			if index >= len(array) {
+				break
+			}
+			if err := addChild(
+				childSchema,
+				appendSchemaPointer(schemaPointer, "prefixItems", strconv.Itoa(index)),
+				array[index],
+				appendSchemaPointer(instancePointer, strconv.Itoa(index)),
+			); err != nil {
+				return 0, err
+			}
+		}
+		if childSchema, present := schema["items"]; present {
+			for index := len(prefixItems); index < len(array); index++ {
+				if err := addChild(
+					childSchema,
+					appendSchemaPointer(schemaPointer, "items"),
+					array[index],
+					appendSchemaPointer(instancePointer, strconv.Itoa(index)),
+				); err != nil {
+					return 0, err
+				}
+			}
+		}
+		if childSchema, present := schema["contains"]; present {
+			for index, childInstance := range array {
+				if err := addChild(
+					childSchema,
+					appendSchemaPointer(schemaPointer, "contains"),
+					childInstance,
+					appendSchemaPointer(instancePointer, strconv.Itoa(index)),
+				); err != nil {
+					return 0, err
+				}
+			}
+		}
+		// Applying unevaluatedItems to every item safely overestimates evaluation
+		// without duplicating the validator's annotation machinery.
+		if childSchema, present := schema["unevaluatedItems"]; present {
+			for index, childInstance := range array {
+				if err := addChild(
+					childSchema,
+					appendSchemaPointer(schemaPointer, "unevaluatedItems"),
+					childInstance,
+					appendSchemaPointer(instancePointer, strconv.Itoa(index)),
+				); err != nil {
+					return 0, err
+				}
+			}
+		}
+	}
+
+	for _, keyword := range []string{"not", "if", "then", "else"} {
+		childSchema, present := schema[keyword]
+		if !present {
+			continue
+		}
+		if err := addChild(
+			childSchema,
+			appendSchemaPointer(schemaPointer, keyword),
+			instanceValue,
+			instancePointer,
+		); err != nil {
+			return 0, err
+		}
+	}
+	for _, keyword := range []string{"allOf", "anyOf", "oneOf"} {
+		children, present := schema[keyword]
+		if !present {
+			continue
+		}
+		array, ok := children.([]any)
+		if !ok {
+			return 0, fmt.Errorf("schema node %s/%s is not an array", schemaPointer, keyword)
+		}
+		for index, childSchema := range array {
+			if err := addChild(
+				childSchema,
+				appendSchemaPointer(schemaPointer, keyword, strconv.Itoa(index)),
+				instanceValue,
+				instancePointer,
+			); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if reference, present := schema["$ref"]; present {
+		text, ok := reference.(string)
+		if !ok {
+			return 0, fmt.Errorf("schema node %s/$ref is not a string", schemaPointer)
+		}
+		target, targetPointer, err := resolveLocalSchemaReference(estimator.root, text)
+		if err != nil {
+			return 0, err
+		}
+		if err := addChild(target, targetPointer, instanceValue, instancePointer); err != nil {
+			return 0, err
+		}
+	}
+
+	estimator.memo[key] = schemaValidationWorkMemo{state: proofDone, work: work}
+	return work, nil
 }
 
 func validateExplicitObjectClosure(schema map[string]any, hasProperties bool, location string) error {

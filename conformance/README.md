@@ -50,7 +50,9 @@ also fixes boundary-safe words such as `apiKeysight`, `privateerKeys`, and
 are covered by library tests. Unit tests additionally prove linear admission of
 a shared-reference DAG, fail-closed schema proof depth/operation limits, the
 16,384-evaluation fixture-validation budget through the real directory
-verifier, and the 32-fixture Form Definition limit.
+verifier, cardinality amplification through `items`, `contains`,
+`additionalProperties`, and `propertyNames`, embedded content transformation
+rejection, and the 32-fixture Form Definition limit.
 
 Run it with:
 

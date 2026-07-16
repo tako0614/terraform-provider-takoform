@@ -52,16 +52,23 @@ content. It rejects:
   4096 schema-node/local-reference operation budget;
 - portable schemas whose saturating worst-case validation-work estimate exceeds
   16,384 schema evaluations, including repeated expansion through shared local
-  `$ref` DAG edges; and
+  `$ref` DAG edges;
+- `contentEncoding`, `contentMediaType`, or `contentSchema`, because portable
+  Forms do not decode or transform an embedded second document;
+- the legacy `dependencies` applicator (use `dependentRequired` or
+  `dependentSchemas`); and
 - Form Definitions with more than 32 conformance fixtures.
 
 Local `$ref` targets are admitted once per canonical JSON Pointer with explicit
 `visiting`/`done` states. Shared acyclic schema graphs therefore cost linear
 proof work. The separate validation-work estimate still charges every local
 reference occurrence because a fixture validator may revisit the same target
-through every branch. Desired and observed schemas are each compiled once
-before the bounded fixture loop. Cycles and resource-exhaustion inputs fail
-closed.
+through every branch. Before calling the real validator, a second instance-aware
+estimate charges `items`, `contains`, `additionalProperties`, `propertyNames`,
+and the corresponding unevaluated keywords once per concrete fixture element or
+property. Both estimates saturate at the same 16,384-evaluation limit. Desired
+and observed schemas are each compiled once before the bounded fixture loop.
+Cycles and resource-exhaustion inputs fail closed.
 
 Allowed payload media types are the Form Definition type, JSON Schema, generic
 JSON fixture data, Markdown, and plain text. The verifier limits index, file,
