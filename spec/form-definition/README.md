@@ -13,4 +13,4 @@ It must never contain credentials, secret values, target or pool IDs, account ID
 
 ## Phase 0 status
 
-No canonical Form Definition schema or signed Form Package is committed yet. The exact ten schemas currently compiled into the provider remain characterization inputs, not automatically blessed standards. Before publishing definition packages, the project must specify canonical serialization, digest and signature formats, trust roots, publisher policy, key custody/rotation/revocation, package retention, and negative conformance behavior.
+No canonical Form Definition schema or signed Form Package is committed yet. The exact ten schemas currently compiled into the provider remain characterization inputs, not automatically blessed standards. The D-08 decision in [`../trust/`](../trust/) selects canonicalization, digest, signature, publisher, transparency, rotation/revocation, retention, and distribution rules; the package schema, signing workflow, verifier, and negative conformance implementation still block publication.

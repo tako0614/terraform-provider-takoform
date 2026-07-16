@@ -3,6 +3,10 @@
 `release/version.json` is the independent Takoform provider version source. It
 does not inherit a Takosumi package or release version.
 
+The provider-specific trust lane is pinned by the D-08 profile in
+[`../spec/trust/`](../spec/trust/). Form Packages use a separate keyless trust
+lane and never reuse this provider GPG key.
+
 The repository can build deterministic, unsigned candidate evidence:
 
 ```console
