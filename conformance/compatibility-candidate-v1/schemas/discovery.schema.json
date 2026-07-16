@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/conformance/compatibility-candidate-v1/discovery.schema.json",
+  "title": "Takoform compatibility candidate discovery fixtures",
+  "type": "object",
+  "required": ["format", "classification", "host", "capabilities"],
+  "properties": {
+    "format": { "const": "takoform.compatibility-candidate.discovery@v1" },
+    "classification": { "const": "compatibility-candidate" },
+    "host": { "$ref": "../../../schemas/host-discovery.schema.json" },
+    "capabilities": {
+      "type": "object",
+      "required": ["apiVersion", "resources", "adapters", "compat", "identity", "commercial"],
+      "properties": {
+        "apiVersion": { "const": "forms.takoform.com/v1alpha1" },
+        "resources": { "type": "object", "minProperties": 10, "maxProperties": 10, "additionalProperties": { "const": true } },
+        "adapters": { "type": "object" },
+        "compat": { "type": "object" },
+        "identity": { "type": "object" },
+        "commercial": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

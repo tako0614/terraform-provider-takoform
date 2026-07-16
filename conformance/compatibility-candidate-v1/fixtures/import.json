@@ -1,0 +1,16 @@
+{
+  "format": "takoform.compatibility-candidate.import@v1",
+  "classification": "compatibility-candidate",
+  "cases": [
+    { "kind": "EdgeWorker", "resourceType": "takoform_edge_worker", "input": "fixture-space/edge", "expected": { "space": "fixture-space", "name": "edge" } },
+    { "kind": "ObjectBucket", "resourceType": "takoform_object_bucket", "input": "fixture-space/assets", "expected": { "space": "fixture-space", "name": "assets" } },
+    { "kind": "KVStore", "resourceType": "takoform_kv_store", "input": "fixture-space/cache", "expected": { "space": "fixture-space", "name": "cache" } },
+    { "kind": "Queue", "resourceType": "takoform_queue", "input": "fixture-space/jobs", "expected": { "space": "fixture-space", "name": "jobs" } },
+    { "kind": "SQLDatabase", "resourceType": "takoform_sql_database", "input": "fixture-space/main", "expected": { "space": "fixture-space", "name": "main" } },
+    { "kind": "ContainerService", "resourceType": "takoform_container_service", "input": "fixture-space/agent", "expected": { "space": "fixture-space", "name": "agent" } },
+    { "kind": "VectorIndex", "resourceType": "takoform_vector_index", "input": "fixture-space/embeddings", "expected": { "space": "fixture-space", "name": "embeddings" } },
+    { "kind": "DurableWorkflow", "resourceType": "takoform_durable_workflow", "input": "fixture-space/ingest", "expected": { "space": "fixture-space", "name": "ingest" } },
+    { "kind": "StatefulActorNamespace", "resourceType": "takoform_stateful_actor_namespace", "input": "fixture-space/rooms", "expected": { "space": "fixture-space", "name": "rooms" } },
+    { "kind": "Schedule", "resourceType": "takoform_schedule", "input": "fixture-space/nightly", "expected": { "space": "fixture-space", "name": "nightly" } }
+  ]
+}

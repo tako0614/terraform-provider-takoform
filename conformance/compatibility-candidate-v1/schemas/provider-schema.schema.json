@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/conformance/compatibility-candidate-v1/provider-schema.schema.json",
+  "title": "Takoform compatibility candidate provider schema fixtures",
+  "type": "object",
+  "required": ["format", "classification", "cases"],
+  "properties": {
+    "format": { "const": "takoform.compatibility-candidate.providerSchema@v1" },
+    "classification": { "const": "compatibility-candidate" },
+    "cases": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["kind", "resourceType", "attributes"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "resourceType": { "type": "string", "pattern": "^takoform_[a-z_]+$" },
+          "attributes": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/attribute" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "attribute": {
+      "type": "object",
+      "required": ["name", "type", "required", "optional", "computed", "validators", "planModifiers"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "optional": { "type": "boolean" },
+        "computed": { "type": "boolean" },
+        "default": { "type": "string" },
+        "validators": { "type": "integer", "minimum": 0 },
+        "planModifiers": { "type": "integer", "minimum": 0 },
+        "attributes": { "type": "array", "items": { "$ref": "#/$defs/attribute" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

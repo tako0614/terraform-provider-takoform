@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/conformance/compatibility-candidate-v1/import.schema.json",
+  "title": "Takoform compatibility candidate import fixtures",
+  "type": "object",
+  "required": ["format", "classification", "cases"],
+  "properties": {
+    "format": { "const": "takoform.compatibility-candidate.import@v1" },
+    "classification": { "const": "compatibility-candidate" },
+    "cases": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["kind", "resourceType", "input", "expected"],
+        "properties": {
+          "kind": { "type": "string" },
+          "resourceType": { "type": "string" },
+          "input": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+          "expected": {
+            "type": "object",
+            "required": ["space", "name"],
+            "properties": { "space": { "type": "string" }, "name": { "type": "string" } },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

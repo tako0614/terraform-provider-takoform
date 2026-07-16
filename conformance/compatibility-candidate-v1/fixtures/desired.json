@@ -1,0 +1,142 @@
+{
+  "format": "takoform.compatibility-candidate.desired@v1",
+  "classification": "compatibility-candidate",
+  "cases": [
+    {
+      "kind": "EdgeWorker",
+      "resourceType": "takoform_edge_worker",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "EdgeWorker",
+        "metadata": { "name": "edge", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": {
+          "name": "edge",
+          "source": { "artifactUrl": "https://artifacts.example.test/edge.js", "artifactSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+          "compatibilityDate": "2026-07-16",
+          "compatibilityFlags": ["nodejs_compat"],
+          "profiles": ["workers"],
+          "connections": { "ASSETS": { "resource": "ObjectBucket/assets", "permissions": ["read", "write"], "projection": "binding" } }
+        }
+      }
+    },
+    {
+      "kind": "ObjectBucket",
+      "resourceType": "takoform_object_bucket",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "ObjectBucket",
+        "metadata": { "name": "assets", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": { "name": "assets", "storageClass": "standard", "interfaces": ["s3_api"] }
+      }
+    },
+    {
+      "kind": "KVStore",
+      "resourceType": "takoform_kv_store",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "KVStore",
+        "metadata": { "name": "cache", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": { "name": "cache", "consistency": "strong" }
+      }
+    },
+    {
+      "kind": "Queue",
+      "resourceType": "takoform_queue",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "Queue",
+        "metadata": { "name": "jobs", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": { "name": "jobs", "delivery": { "maxRetries": 5, "maxBatchSize": 10 } }
+      }
+    },
+    {
+      "kind": "SQLDatabase",
+      "resourceType": "takoform_sql_database",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "SQLDatabase",
+        "metadata": { "name": "main", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": { "name": "main", "engine": "sqlite", "migrationsPath": "migrations" }
+      }
+    },
+    {
+      "kind": "ContainerService",
+      "resourceType": "takoform_container_service",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "ContainerService",
+        "metadata": { "name": "agent", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": {
+          "name": "agent",
+          "image": "ghcr.io/example/agent:1.0.0",
+          "ports": [8080],
+          "publicHttp": true,
+          "environment": { "LOG_LEVEL": "info" },
+          "connections": { "DATABASE": { "resource": "SQLDatabase/main", "permissions": ["read", "write"], "projection": "environment" } }
+        }
+      }
+    },
+    {
+      "kind": "VectorIndex",
+      "resourceType": "takoform_vector_index",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "VectorIndex",
+        "metadata": { "name": "embeddings", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": {
+          "name": "embeddings",
+          "dimensions": 1536,
+          "metric": "cosine",
+          "connections": { "DATABASE": { "resource": "SQLDatabase/main", "permissions": ["read"], "projection": "metadata" } }
+        }
+      }
+    },
+    {
+      "kind": "DurableWorkflow",
+      "resourceType": "takoform_durable_workflow",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "DurableWorkflow",
+        "metadata": { "name": "ingest", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": {
+          "name": "ingest",
+          "source": { "artifactRef": "artifact:workflow:ingest", "artifactSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+          "entrypoint": "IngestWorkflow",
+          "retry": { "maxAttempts": 3, "initialBackoffSeconds": 5 },
+          "connections": { "JOBS": { "resource": "Queue/jobs", "permissions": ["consume"], "projection": "binding" } }
+        }
+      }
+    },
+    {
+      "kind": "StatefulActorNamespace",
+      "resourceType": "takoform_stateful_actor_namespace",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "StatefulActorNamespace",
+        "metadata": { "name": "rooms", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": {
+          "name": "rooms",
+          "className": "RoomActor",
+          "storageProfile": "durable_sqlite",
+          "migrationTag": "v1",
+          "connections": { "DATABASE": { "resource": "SQLDatabase/main", "permissions": ["read", "write"], "projection": "storage" } }
+        }
+      }
+    },
+    {
+      "kind": "Schedule",
+      "resourceType": "takoform_schedule",
+      "resource": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "Schedule",
+        "metadata": { "name": "nightly", "space": "fixture-space", "managedBy": "opentofu" },
+        "spec": {
+          "name": "nightly",
+          "cron": "0 0 * * *",
+          "timezone": "UTC",
+          "connections": { "workflow": { "resource": "DurableWorkflow/ingest", "permissions": ["invoke"], "projection": "schedule_trigger" } }
+        }
+      }
+    }
+  ]
+}

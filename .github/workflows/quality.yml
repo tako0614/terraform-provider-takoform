@@ -40,6 +40,7 @@ jobs:
           go mod verify
           go vet ./...
           go test ./...
+          go run ./cmd/conformance verify
       - name: Verify isolated release tooling
         run: |
           go -C cmd/provider-release mod verify

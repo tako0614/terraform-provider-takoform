@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/conformance/compatibility-candidate-v1/output.schema.json",
+  "title": "Takoform compatibility candidate output fixtures",
+  "type": "object",
+  "required": ["format", "classification", "cases"],
+  "properties": {
+    "format": { "const": "takoform.compatibility-candidate.output@v1" },
+    "classification": { "const": "compatibility-candidate" },
+    "cases": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["kind", "resourceType", "state"],
+        "properties": {
+          "kind": { "type": "string" },
+          "resourceType": { "type": "string" },
+          "state": {
+            "type": "object",
+            "required": ["id", "name", "space", "selectedImplementation", "target", "locked", "portability", "outputs"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "name": { "type": "string", "minLength": 1 },
+              "space": { "type": "string", "minLength": 1 },
+              "selectedImplementation": { "type": "string", "minLength": 1 },
+              "target": { "type": "string", "minLength": 1 },
+              "locked": { "type": "boolean" },
+              "portability": { "type": "string" },
+              "outputs": { "type": "object", "additionalProperties": { "type": "string" } }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
