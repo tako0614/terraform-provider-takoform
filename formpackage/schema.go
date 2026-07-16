@@ -20,6 +20,8 @@ const (
 	portableMapKeyPattern  = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
 	portableMapPolicyKey   = "x-takoform-fieldPolicy"
 	portableMapPolicyValue = "portable-data-only-v1"
+	maxSchemaProofDepth    = 64
+	maxSchemaProofOps      = 4096
 )
 
 //go:embed schemas/*.schema.json
@@ -254,8 +256,27 @@ const (
 	objectExcluded
 )
 
+type schemaProofState uint8
+
+const (
+	proofVisiting schemaProofState = iota + 1
+	proofDone
+)
+
+type schemaProofResult struct {
+	mode     objectAdmission
+	maxDepth int
+}
+
+type schemaProofMemo struct {
+	state  schemaProofState
+	result schemaProofResult
+}
+
 type portableSchemaValidator struct {
-	root any
+	root       any
+	memo       map[string]schemaProofMemo
+	operations int
 }
 
 // validatePortableSchemaStructure proves at every schema node that object
@@ -263,82 +284,129 @@ type portableSchemaValidator struct {
 // the exact reviewed typed-map escape. JSON Schema's permissive empty/implicit
 // schemas otherwise accept arbitrary objects, so uncertainty fails closed.
 func validatePortableSchemaStructure(value any, location string) error {
-	validator := portableSchemaValidator{root: value}
-	_, err := validator.validate(value, location, nil)
+	validator := portableSchemaValidator{
+		root: value,
+		memo: make(map[string]schemaProofMemo),
+	}
+	_, err := validator.validate(value, location, "#", 0)
 	return err
 }
 
-func (validator portableSchemaValidator) validate(value any, location string, references []string) (objectAdmission, error) {
+func (validator *portableSchemaValidator) validate(value any, location, pointer string, depth int) (schemaProofResult, error) {
+	if depth > maxSchemaProofDepth {
+		return schemaProofResult{}, fmt.Errorf("%s portable schema closure proof exceeds depth limit %d", location, maxSchemaProofDepth)
+	}
+	if memo, present := validator.memo[pointer]; present {
+		if memo.state == proofVisiting {
+			return schemaProofResult{}, fmt.Errorf("%s cyclic schema references are not accepted by the portable closure proof", location)
+		}
+		if depth+memo.result.maxDepth > maxSchemaProofDepth {
+			return schemaProofResult{}, fmt.Errorf("%s portable schema closure proof exceeds depth limit %d", location, maxSchemaProofDepth)
+		}
+		return memo.result, nil
+	}
+	if err := validator.consumeOperation(location, "schema node"); err != nil {
+		return schemaProofResult{}, err
+	}
+	validator.memo[pointer] = schemaProofMemo{state: proofVisiting}
+	result, err := validator.validateUncached(value, location, pointer, depth)
+	if err != nil {
+		return schemaProofResult{}, err
+	}
+	if depth+result.maxDepth > maxSchemaProofDepth {
+		return schemaProofResult{}, fmt.Errorf("%s portable schema closure proof exceeds depth limit %d", location, maxSchemaProofDepth)
+	}
+	validator.memo[pointer] = schemaProofMemo{state: proofDone, result: result}
+	return result, nil
+}
+
+func (validator *portableSchemaValidator) consumeOperation(location, operation string) error {
+	validator.operations++
+	if validator.operations > maxSchemaProofOps {
+		return fmt.Errorf("%s portable schema closure proof exceeds combined node/ref operation budget %d while proving %s", location, maxSchemaProofOps, operation)
+	}
+	return nil
+}
+
+func (validator *portableSchemaValidator) validateUncached(value any, location, pointer string, depth int) (schemaProofResult, error) {
 	if boolean, ok := value.(bool); ok {
 		if boolean {
-			return objectOpen, fmt.Errorf("%s boolean true schema can admit arbitrary object values", location)
+			return schemaProofResult{}, fmt.Errorf("%s boolean true schema can admit arbitrary object values", location)
 		}
-		return objectExcluded, nil
+		return schemaProofResult{mode: objectExcluded}, nil
 	}
 	schema, ok := value.(map[string]any)
 	if !ok {
-		return objectOpen, fmt.Errorf("%s must be a JSON Schema object or boolean", location)
+		return schemaProofResult{}, fmt.Errorf("%s must be a JSON Schema object or boolean", location)
 	}
 	if _, present := schema["patternProperties"]; present {
-		return objectOpen, fmt.Errorf("%s patternProperties is forbidden; use the reviewed typed-map escape", location)
+		return schemaProofResult{}, fmt.Errorf("%s patternProperties is forbidden; use the reviewed typed-map escape", location)
 	}
 	if dialect, present := schema["$schema"]; present && dialect != "https://json-schema.org/draft/2020-12/schema" {
-		return objectOpen, fmt.Errorf("%s.$schema must remain Draft 2020-12", location)
+		return schemaProofResult{}, fmt.Errorf("%s.$schema must remain Draft 2020-12", location)
 	}
 	for _, keyword := range []string{"$id", "$anchor", "$dynamicAnchor", "$recursiveAnchor", "$recursiveRef", "$vocabulary"} {
 		if _, present := schema[keyword]; present {
-			return objectOpen, fmt.Errorf("%s.%s is forbidden because alternate or recursive resolution scopes cannot be proven closed", location, keyword)
+			return schemaProofResult{}, fmt.Errorf("%s.%s is forbidden because alternate or recursive resolution scopes cannot be proven closed", location, keyword)
 		}
 	}
 
 	properties, hasProperties, err := schemaObjectKeyword(schema, "properties", location)
 	if err != nil {
-		return objectOpen, err
+		return schemaProofResult{}, err
 	}
 	if hasProperties {
 		for name := range properties {
 			if isForbiddenFieldName(name) {
-				return objectOpen, fmt.Errorf("forbidden field %q at %s.properties", name, location)
+				return schemaProofResult{}, fmt.Errorf("forbidden field %q at %s.properties", name, location)
 			}
 		}
 	}
 	if err := validateSchemaFieldNameArray(schema["required"], location+".required"); err != nil {
-		return objectOpen, err
+		return schemaProofResult{}, err
 	}
 	if err := validateDependentRequiredNames(schema["dependentRequired"], location+".dependentRequired"); err != nil {
-		return objectOpen, err
+		return schemaProofResult{}, err
 	}
 
 	hasObjectType := schemaTypeIncludes(schema["type"], "object")
 	if schemaTypeIncludes(schema["type"], "array") {
 		if _, present := schema["items"]; !present {
-			return objectOpen, fmt.Errorf("%s array schema must declare items so nested object admission is proven closed", location)
+			return schemaProofResult{}, fmt.Errorf("%s array schema must declare items so nested object admission is proven closed", location)
 		}
 	}
 	mode := objectOpen
 	if hasObjectType {
 		if err := validateExplicitObjectClosure(schema, hasProperties, location); err != nil {
-			return objectOpen, err
+			return schemaProofResult{}, err
 		}
 		mode = objectClosed
 	} else if _, typePresent := schema["type"]; typePresent {
 		mode = objectExcluded
 	} else if hasObjectKeywords(schema) {
-		return objectOpen, fmt.Errorf("%s uses object keywords without explicit type=object and closed additionalProperties", location)
+		return schemaProofResult{}, fmt.Errorf("%s uses object keywords without explicit type=object and closed additionalProperties", location)
+	}
+	maxDepth := 0
+	recordChild := func(result schemaProofResult) {
+		if result.maxDepth+1 > maxDepth {
+			maxDepth = result.maxDepth + 1
+		}
 	}
 
 	for _, keyword := range []string{"$defs", "definitions", "properties", "dependentSchemas"} {
 		children, present, err := schemaObjectKeyword(schema, keyword, location)
 		if err != nil {
-			return objectOpen, err
+			return schemaProofResult{}, err
 		}
 		if !present {
 			continue
 		}
 		for name, child := range children {
-			if _, err := validator.validate(child, location+"."+keyword+"."+name, references); err != nil {
-				return objectOpen, err
+			childResult, err := validator.validate(child, location+"."+keyword+"."+name, appendSchemaPointer(pointer, keyword, name), depth+1)
+			if err != nil {
+				return schemaProofResult{}, err
 			}
+			recordChild(childResult)
 		}
 	}
 	for _, keyword := range []string{"additionalProperties", "items", "contains", "contentSchema", "unevaluatedItems", "unevaluatedProperties", "propertyNames", "not", "if", "then", "else"} {
@@ -346,9 +414,11 @@ func (validator portableSchemaValidator) validate(value any, location string, re
 		if !present || (keyword == "additionalProperties" && child == false) {
 			continue
 		}
-		if _, err := validator.validate(child, location+"."+keyword, references); err != nil {
-			return objectOpen, err
+		childResult, err := validator.validate(child, location+"."+keyword, appendSchemaPointer(pointer, keyword), depth+1)
+		if err != nil {
+			return schemaProofResult{}, err
 		}
+		recordChild(childResult)
 	}
 
 	compoundModes := map[string][]objectAdmission{}
@@ -359,15 +429,16 @@ func (validator portableSchemaValidator) validate(value any, location string, re
 		}
 		array, ok := children.([]any)
 		if !ok || len(array) == 0 {
-			return objectOpen, fmt.Errorf("%s.%s must be a non-empty array of schemas", location, keyword)
+			return schemaProofResult{}, fmt.Errorf("%s.%s must be a non-empty array of schemas", location, keyword)
 		}
 		modes := make([]objectAdmission, 0, len(array))
 		for index, child := range array {
-			childMode, err := validator.validate(child, fmt.Sprintf("%s.%s[%d]", location, keyword, index), references)
+			childResult, err := validator.validate(child, fmt.Sprintf("%s.%s[%d]", location, keyword, index), appendSchemaPointer(pointer, keyword, strconv.Itoa(index)), depth+1)
 			if err != nil {
-				return objectOpen, err
+				return schemaProofResult{}, err
 			}
-			modes = append(modes, childMode)
+			recordChild(childResult)
+			modes = append(modes, childResult.mode)
 		}
 		compoundModes[keyword] = modes
 	}
@@ -378,7 +449,7 @@ func (validator portableSchemaValidator) validate(value any, location string, re
 	if rawEnum, present := schema["enum"]; present {
 		values, ok := rawEnum.([]any)
 		if !ok || len(values) == 0 {
-			return objectOpen, fmt.Errorf("%s.enum must be a non-empty array", location)
+			return schemaProofResult{}, fmt.Errorf("%s.enum must be a non-empty array", location)
 		}
 		enumMode := objectExcluded
 		for _, candidate := range values {
@@ -389,22 +460,21 @@ func (validator portableSchemaValidator) validate(value any, location string, re
 	if referenceValue, present := schema["$ref"]; present {
 		reference, ok := referenceValue.(string)
 		if !ok {
-			return objectOpen, fmt.Errorf("%s.$ref must be a string", location)
+			return schemaProofResult{}, fmt.Errorf("%s.$ref must be a string", location)
 		}
-		target, err := resolveLocalSchemaReference(validator.root, reference)
+		if err := validator.consumeOperation(location+".$ref", "local reference"); err != nil {
+			return schemaProofResult{}, err
+		}
+		target, targetPointer, err := resolveLocalSchemaReference(validator.root, reference)
 		if err != nil {
-			return objectOpen, fmt.Errorf("%s.$ref: %w", location, err)
+			return schemaProofResult{}, fmt.Errorf("%s.$ref: %w", location, err)
 		}
-		for _, active := range references {
-			if active == reference {
-				return objectOpen, fmt.Errorf("%s.$ref cyclic schema references are not accepted by the portable closure proof", location)
-			}
-		}
-		targetMode, err := validator.validate(target, location+".$ref("+reference+")", append(references, reference))
+		targetResult, err := validator.validate(target, location+".$ref("+reference+")", targetPointer, depth+1)
 		if err != nil {
-			return objectOpen, err
+			return schemaProofResult{}, err
 		}
-		mode = intersectObjectAdmission(mode, targetMode)
+		recordChild(targetResult)
+		mode = intersectObjectAdmission(mode, targetResult.mode)
 	}
 	if modes, present := compoundModes["allOf"]; present {
 		allMode := objectOpen
@@ -423,9 +493,19 @@ func (validator portableSchemaValidator) validate(value any, location string, re
 		}
 	}
 	if mode == objectOpen {
-		return objectOpen, fmt.Errorf("%s can admit arbitrary object values; declare a non-object type, a closed object, or the reviewed typed-map escape", location)
+		return schemaProofResult{}, fmt.Errorf("%s can admit arbitrary object values; declare a non-object type, a closed object, or the reviewed typed-map escape", location)
 	}
-	return mode, nil
+	return schemaProofResult{mode: mode, maxDepth: maxDepth}, nil
+}
+
+func appendSchemaPointer(pointer string, tokens ...string) string {
+	var result strings.Builder
+	result.WriteString(pointer)
+	for _, token := range tokens {
+		result.WriteByte('/')
+		result.WriteString(strings.NewReplacer("~", "~0", "/", "~1").Replace(token))
+	}
+	return result.String()
 }
 
 func validateExplicitObjectClosure(schema map[string]any, hasProperties bool, location string) error {
@@ -521,44 +601,46 @@ func unionObjectAdmission(left, right objectAdmission) objectAdmission {
 	return objectExcluded
 }
 
-func resolveLocalSchemaReference(root any, reference string) (any, error) {
+func resolveLocalSchemaReference(root any, reference string) (any, string, error) {
 	if reference == "#" {
-		return root, nil
+		return root, "#", nil
 	}
 	if !strings.HasPrefix(reference, "#/") {
-		return nil, fmt.Errorf("only root or JSON Pointer fragments are supported")
+		return nil, "", fmt.Errorf("only root or JSON Pointer fragments are supported")
 	}
 	pointer, err := url.PathUnescape(reference[1:])
 	if err != nil {
-		return nil, fmt.Errorf("decode fragment: %w", err)
+		return nil, "", fmt.Errorf("decode fragment: %w", err)
 	}
 	current := root
+	canonicalPointer := "#"
 	for _, rawToken := range strings.Split(strings.TrimPrefix(pointer, "/"), "/") {
 		token, err := decodeJSONPointerToken(rawToken)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
+		canonicalPointer = appendSchemaPointer(canonicalPointer, token)
 		switch typed := current.(type) {
 		case map[string]any:
 			child, ok := typed[token]
 			if !ok {
-				return nil, fmt.Errorf("fragment token %q does not exist", token)
+				return nil, "", fmt.Errorf("fragment token %q does not exist", token)
 			}
 			current = child
 		case []any:
 			if token == "-" || (len(token) > 1 && token[0] == '0') {
-				return nil, fmt.Errorf("fragment array token %q is invalid", token)
+				return nil, "", fmt.Errorf("fragment array token %q is invalid", token)
 			}
 			index, err := strconv.Atoi(token)
 			if err != nil || index < 0 || index >= len(typed) {
-				return nil, fmt.Errorf("fragment array token %q is out of range", token)
+				return nil, "", fmt.Errorf("fragment array token %q is out of range", token)
 			}
 			current = typed[index]
 		default:
-			return nil, fmt.Errorf("fragment traverses non-container at %q", token)
+			return nil, "", fmt.Errorf("fragment traverses non-container at %q", token)
 		}
 	}
-	return current, nil
+	return current, canonicalPointer, nil
 }
 
 func decodeJSONPointerToken(value string) (string, error) {

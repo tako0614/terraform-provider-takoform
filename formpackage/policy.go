@@ -48,6 +48,16 @@ var forbiddenFieldTokens = stringSet(
 	"binary", "code", "exec", "executable", "command", "script", "bytecode", "wasm", "plugin",
 )
 
+// Plurals are listed rather than derived by trimming suffixes. Generic
+// singularization would turn unrelated portable words into sensitive tokens
+// and recreate the substring false positives this policy avoids.
+var forbiddenFieldPluralTokens = stringSet(
+	"credentials", "secrets", "passwords", "passphrases", "tokens", "authorizations", "bearers", "oauths", "cookies",
+	"operators", "accounts", "targets", "capacities", "providers", "backends", "implementations", "regions", "zones", "placements",
+	"prices", "pricings", "skus", "billings", "invoices", "payments", "currencies", "taxes", "quotas", "slas", "subscriptions", "entitlements",
+	"binaries", "codes", "execs", "executables", "commands", "scripts", "bytecodes", "wasms", "plugins",
+)
+
 // Some sensitive concepts are compounds whose individual words are useful in
 // portable schemas. Match reviewed boundary-delimited token sequences instead
 // of unsafe substrings: "apiKeyValue" is forbidden, while "description" and
@@ -67,6 +77,7 @@ var forbiddenFieldTokenSequences = [][]string{
 var forbiddenNormalizedCompoundBases = []string{
 	"apikey",
 	"privatekey",
+	"sshkey",
 	"sshprivatekey",
 	"signingkey",
 	"serviceoffering",
@@ -107,17 +118,22 @@ func isForbiddenFieldName(value string) bool {
 	if _, forbidden := forbiddenNormalizedFields[normalized]; forbidden {
 		return true
 	}
-	for _, base := range forbiddenNormalizedCompoundBases {
-		if !strings.HasPrefix(normalized, base) {
-			continue
-		}
-		if _, forbidden := forbiddenCompoundQualifiers[strings.TrimPrefix(normalized, base)]; forbidden {
-			return true
+	for _, singular := range forbiddenNormalizedCompoundBases {
+		for _, base := range []string{singular, singular + "s"} {
+			if normalized == base {
+				return true
+			}
+			if !strings.HasPrefix(normalized, base) {
+				continue
+			}
+			if _, forbidden := forbiddenCompoundQualifiers[strings.TrimPrefix(normalized, base)]; forbidden {
+				return true
+			}
 		}
 	}
 	tokens := splitFieldNameTokens(value)
 	for _, token := range tokens {
-		if _, forbidden := forbiddenFieldTokens[token]; forbidden {
+		if isForbiddenToken(token) {
 			return true
 		}
 	}
@@ -136,7 +152,7 @@ func containsTokenSequence(tokens, sequence []string) bool {
 	for start := 0; start <= len(tokens)-len(sequence); start++ {
 		matched := true
 		for offset := range sequence {
-			if tokens[start+offset] != sequence[offset] {
+			if !matchesCompoundToken(tokens[start+offset], sequence[offset]) {
 				matched = false
 				break
 			}
@@ -146,6 +162,34 @@ func containsTokenSequence(tokens, sequence []string) bool {
 		}
 	}
 	return false
+}
+
+func isForbiddenToken(token string) bool {
+	if _, forbidden := forbiddenFieldTokens[token]; forbidden {
+		return true
+	}
+	_, forbidden := forbiddenFieldPluralTokens[token]
+	return forbidden
+}
+
+func matchesCompoundToken(actual, singular string) bool {
+	if actual == singular {
+		return true
+	}
+	switch singular {
+	case "id":
+		return actual == "ids"
+	case "identifier":
+		return actual == "identifiers"
+	case "key":
+		return actual == "keys"
+	case "manager":
+		return actual == "managers"
+	case "offering":
+		return actual == "offerings"
+	default:
+		return false
+	}
 }
 
 func normalizeFieldName(value string) string {

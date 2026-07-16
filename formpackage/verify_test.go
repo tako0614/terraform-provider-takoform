@@ -2,6 +2,7 @@ package formpackage
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,6 +82,14 @@ func TestValidateDefinitionAllowsDescriptionsWithoutSubstringFalsePositive(t *te
 		properties["monkeyCount"] = map[string]any{"type": "integer"}
 		properties["serviceDescription"] = map[string]any{"type": "string"}
 		properties["managerialNote"] = map[string]any{"type": "string"}
+		properties["keys"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+		properties["identifiers"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+		properties["apiKeysight"] = map[string]any{"type": "string"}
+		properties["privateerKeys"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+		properties["managerialIds"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+		properties["keyboardLayout"] = map[string]any{"type": "string"}
+		properties["signingMode"] = map[string]any{"type": "string"}
+		properties["offeringIds"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
 	})
 	if _, err := VerifyDirectory(root); err != nil {
 		t.Fatalf("description was rejected by the field policy: %v", err)
@@ -128,6 +137,20 @@ func TestVerifyDirectoryRejectsForbiddenDefinitionFields(t *testing.T) {
 		"sshprivatekeypath",
 		"serviceofferingname",
 		"manageridentifiervalue",
+		"apiKeys",
+		"api_keys",
+		"APIKeys",
+		"privateKeys",
+		"sshKeys",
+		"signingKeys",
+		"managerIds",
+		"manager_ids",
+		"managerIdentifiers",
+		"manager-identifiers",
+		"serviceOfferings",
+		"backendManagers",
+		"providers",
+		"capacities",
 	} {
 		field := field
 		t.Run(field, func(t *testing.T) {
@@ -195,12 +218,83 @@ func TestPortableSchemaAllowsProvablyNonObjectCompositionAndClosedReference(t *t
 			},
 		}
 		properties["config"] = map[string]any{"$ref": "#/$defs/ClosedConfig"}
+		properties["backupConfig"] = map[string]any{"$ref": "#/$defs/ClosedConfig"}
 		properties["disabled"] = false
 		properties["tags"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
 	})
 	if _, err := VerifyDirectory(root); err != nil {
 		t.Fatalf("provably closed schema composition rejected: %v", err)
 	}
+}
+
+func TestPortableSchemaProofMemoizesSmallSharedDAG(t *testing.T) {
+	t.Parallel()
+	leaf := map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"enabled": map[string]any{"type": "boolean"},
+		},
+	}
+	definitions := map[string]any{"Node0": leaf}
+	for level := 1; level <= 14; level++ {
+		reference := fmt.Sprintf("#/$defs/Node%d", level-1)
+		definitions[fmt.Sprintf("Node%d", level)] = map[string]any{
+			"allOf": []any{
+				map[string]any{"$ref": reference},
+				map[string]any{"$ref": strings.Replace(reference, "$defs", "%24defs", 1)},
+			},
+		}
+	}
+	schema := map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"$defs":                definitions,
+		"properties": map[string]any{
+			"config": map[string]any{"$ref": "#/$defs/Node14"},
+		},
+	}
+	validator := portableSchemaValidator{root: schema, memo: make(map[string]schemaProofMemo)}
+	if _, err := validator.validate(schema, "desiredSchema", "#", 0); err != nil {
+		t.Fatalf("shared reference DAG rejected: %v", err)
+	}
+	if validator.operations > 100 {
+		t.Fatalf("shared reference DAG used %d proof operations, want linear cached proof", validator.operations)
+	}
+}
+
+func TestPortableSchemaProofFailsClosedAtResourceLimits(t *testing.T) {
+	t.Parallel()
+	t.Run("depth", func(t *testing.T) {
+		child := map[string]any{"type": "string"}
+		for level := 0; level <= maxSchemaProofDepth; level++ {
+			child = map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties":           map[string]any{"child": child},
+			}
+		}
+		err := validatePortableSchemaStructure(child, "desiredSchema")
+		if err == nil || !strings.Contains(err.Error(), "depth limit") {
+			t.Fatalf("validatePortableSchemaStructure error = %v, want depth limit", err)
+		}
+	})
+	t.Run("combined node and ref operation budget", func(t *testing.T) {
+		references := make([]any, 0, maxSchemaProofOps/2+1)
+		for index := 0; index <= maxSchemaProofOps/2; index++ {
+			references = append(references, map[string]any{"$ref": "#/$defs/Closed"})
+		}
+		schema := map[string]any{
+			"$defs": map[string]any{
+				"Closed": map[string]any{"type": "object", "additionalProperties": false},
+			},
+			"allOf": references,
+		}
+		err := validatePortableSchemaStructure(schema, "desiredSchema")
+		if err == nil || !strings.Contains(err.Error(), "operation budget") {
+			t.Fatalf("validatePortableSchemaStructure error = %v, want operation budget", err)
+		}
+	})
 }
 
 func TestPortableSchemaRejectsUnprovenReferenceResolution(t *testing.T) {

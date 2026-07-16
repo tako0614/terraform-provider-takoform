@@ -159,6 +159,66 @@
       "wantError": "forbidden field"
     },
     {
+      "name": "api-keys-plural-camel-field",
+      "operation": "content-policy",
+      "path": "negative/api-keys-plural-camel-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "api-keys-plural-snake-field",
+      "operation": "content-policy",
+      "path": "negative/api-keys-plural-snake-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "private-keys-field",
+      "operation": "content-policy",
+      "path": "negative/private-keys-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "ssh-keys-field",
+      "operation": "content-policy",
+      "path": "negative/ssh-keys-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "signing-keys-field",
+      "operation": "content-policy",
+      "path": "negative/signing-keys-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "manager-ids-field",
+      "operation": "content-policy",
+      "path": "negative/manager-ids-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "manager-identifiers-field",
+      "operation": "content-policy",
+      "path": "negative/manager-identifiers-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "service-offerings-field",
+      "operation": "content-policy",
+      "path": "negative/service-offerings-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "backend-managers-field",
+      "operation": "content-policy",
+      "path": "negative/backend-managers-field.json",
+      "wantError": "forbidden field"
+    },
+    {
+      "name": "providers-field",
+      "operation": "content-policy",
+      "path": "negative/providers-field.json",
+      "wantError": "forbidden field"
+    },
+    {
       "name": "schema-config-true",
       "operation": "schema-policy",
       "path": "negative/schema-config-true.json",

@@ -43,8 +43,12 @@ types and flags, and invokes every real resource `ImportState` handler.
 package layer. It includes one valid closed ExampleStore package and negative
 fixtures for duplicate names, invalid Unicode scalar sequences, negative zero,
 credentials, operator fields, target/capacity, price/billing/SKU, executable
-code fields, traversal, absolute paths, and backslashes. Filesystem-only
-symlink, executable-bit, and device/pipe cases are covered by library tests.
+code fields, plural API/private/SSH/signing key and manager identifier
+derivatives, traversal, absolute paths, and backslashes. The positive package
+also fixes boundary-safe words such as `apiKeysight`, `privateerKeys`, and
+`managerialIds`. Filesystem-only symlink, executable-bit, and device/pipe cases
+are covered by library tests. Unit tests additionally prove linear admission of
+a shared-reference DAG and fail-closed schema proof depth/operation limits.
 
 Run it with:
 
