@@ -78,9 +78,11 @@ go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
 Provider releases use the fail-closed signed `v*` tag workflow documented in
 [release/README.md](release/README.md). The signing key is pinned by fingerprint;
-the private key remains outside the repository. Do not create a release tag
-until the release descriptor, Registry public-key registration, and provider
-compatibility gates are complete.
+the private key remains outside the repository. The `tako0614` public namespace
+and pinned signing key are registered. Do not create a release tag until the
+release descriptor and provider compatibility gates are complete and the
+maintainer explicitly authorizes the first publication. The first real
+Registry/OpenTofu install proof remains post-publication evidence.
 
 ## License
 

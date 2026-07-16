@@ -115,7 +115,7 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	if profile.SchemaVersion != 1 || profile.Status != "decision-approved-implementation-in-progress" {
 		t.Fatalf("unexpected trust profile identity: version=%d status=%q", profile.SchemaVersion, profile.Status)
 	}
-	if profile.Provider.Status != "implemented-external-registration-and-install-proof-pending" ||
+	if profile.Provider.Status != "implemented-registry-key-registered-first-install-proof-pending" ||
 		profile.Provider.ArtifactDigest != "sha256" || profile.Provider.ReleaseTagPattern != "v*" {
 		t.Fatalf("provider trust lane is not fail-closed: %#v", profile.Provider)
 	}

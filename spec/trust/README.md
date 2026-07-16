@@ -18,8 +18,9 @@ The provider follows the Terraform Registry contract:
   fingerprint is pinned in `release/version.json` and `profile.json`;
 - SPDX 2.3 and SLSA provenance cover the exact release assets;
 - an existing version is never overwritten;
-- Registry public-key registration and clean Terraform/OpenTofu install proof
-  remain external release gates.
+- the `tako0614` public namespace and pinned key ID `34FC18AC897FB709` are
+  registered, while the first clean Terraform Registry/OpenTofu install proof
+  remains a post-publication external gate.
 
 Form Packages do not reuse the provider GPG key. The standard Takoform
 publisher uses a keyless Sigstore blob signature and bundle bound to the exact
