@@ -192,6 +192,28 @@ func TestResourceAPIHTTPClientWaitsForServerSideOpenTofuRuns(t *testing.T) {
 	}
 }
 
+func TestResourceAPIHTTPClientDoesNotForwardBearerThroughRedirect(t *testing.T) {
+	redirectTargetRequests := 0
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		redirectTargetRequests++
+	}))
+	defer redirectTarget.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", redirectTarget.URL)
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer redirector.Close()
+
+	_, err := configureClient(context.Background(), redirector.URL, "must-not-forward", newResourceAPIHTTPClient())
+	if err == nil {
+		t.Fatal("redirected discovery unexpectedly configured the provider")
+	}
+	if redirectTargetRequests != 0 {
+		t.Fatalf("redirect target received %d requests", redirectTargetRequests)
+	}
+}
+
 func TestProviderExampleResourcesMatchCurrentResources(t *testing.T) {
 	entries, err := os.ReadDir(filepath.Clean("../../examples/resources"))
 	if err != nil {

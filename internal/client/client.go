@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -45,7 +46,8 @@ const (
 	// fallback. The versioned Form host owns manager metadata.
 	ManagedByOpenTofu = "opentofu"
 
-	defaultUserAgent = "terraform-provider-takoform"
+	defaultUserAgent     = "terraform-provider-takoform"
+	maxResponseBodyBytes = 8 * 1024 * 1024
 )
 
 // ErrNotFound is returned when a resource read targets a resource that the
@@ -455,7 +457,18 @@ func (c *Client) configuredOrigin() (*url.URL, error) {
 		(configured.Path != "" && configured.Path != "/") {
 		return nil, errors.New("takoform: configured endpoint must not contain userinfo, path, query, or fragment")
 	}
+	if configured.Scheme == "http" && !isLoopbackHostname(configured.Hostname()) {
+		return nil, errors.New("takoform: configured endpoint must use HTTPS unless it is a loopback development origin")
+	}
 	return configured, nil
+}
+
+func isLoopbackHostname(hostname string) bool {
+	if strings.EqualFold(hostname, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(hostname)
+	return ip != nil && ip.IsLoopback()
 }
 
 func containsString(values []string, want string) bool {
@@ -986,10 +999,17 @@ func (c *Client) doJSONWithHeaders(
 			}
 			return nil, fmt.Errorf("takoform: request to %s failed: %w", fullURL, err)
 		}
-		data, readErr := io.ReadAll(resp.Body)
+		if resp.ContentLength > maxResponseBodyBytes {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("takoform: response from %s exceeds %d bytes", fullURL, maxResponseBodyBytes)
+		}
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes+1))
 		_ = resp.Body.Close()
 		if readErr != nil {
 			return nil, fmt.Errorf("takoform: reading response body: %w", readErr)
+		}
+		if len(data) > maxResponseBodyBytes {
+			return nil, fmt.Errorf("takoform: response from %s exceeds %d bytes", fullURL, maxResponseBodyBytes)
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
