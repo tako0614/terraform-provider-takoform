@@ -55,8 +55,12 @@ artifact attestations separately bind the exact release inventory and SBOM to
 the workflow run.
 
 The implemented initial distribution lane is an immutable GitHub Release. It
-uses `forms/<form-slug>/v<semver>`, the protected `form-package-release`
-Environment, commit-pinned Actions, Cosign v3 keyless blob signing, immediate
+uses `forms/<release-id>/v<semver>`, where the release ID is reversible
+lowercase unpadded base32 of the exact FormRef Kind. A protected-main
+`workflow_dispatch` accepts the exact existing tag and approved commit, then
+verifies tag existence, commit equality, and main ancestry before signing. It
+uses the protected `form-package-release` Environment, commit-pinned Actions,
+Cosign v3 keyless blob signing, immediate
 identity/transparency verification, an exact draft inventory check, and
 draft-then-publish finalization. A connected or air-gapped mirror copies the
 exact release assets only after signature,
@@ -83,14 +87,21 @@ Registry key removal through the maintainer/support process, and resumes only
 with a new key and new semver.
 
 Form Package keyless identity rotation is a reviewed change to the pinned OIDC
-issuer/repository/workflow policy. A signed append-only revocation statement
-references an exact package digest. Security revocation blocks new
+issuer/repository/protected-main workflow policy. An append-only revocation
+statement references an exact package digest. The signed subject is a
+cumulative checkpoint containing every statement from sequence 1 through its
+current sequence and the previous checkpoint digest. Security revocation blocks new
 create/update and activation, but referenced package bytes remain available for
 safe observe/delete or an explicit operator evacuation path. Deprecation is not
 security revocation, and neither state replaces package bytes in place.
 
-The delivery source is `forms/revocations/<statementVersion>.json`, selected by
+The delivery sources are `forms/revocations/<statementVersion>.json` and
+`forms/revocations/checkpoints/<statementVersion>.json`, selected by
 `forms/revocations/v<statementVersion>`. CI rejects edits, renames, and deletion
-of an existing statement path. The protected tag/release prevents rewriting its
-published bytes. Host enforcement is deliberately separate from delivery and
-is not yet claimed by this repository.
+of existing source paths. A host verifies the checkpoint bundle and exact
+protected-main publisher identity, requires sequence 1 for its initial pin,
+then durably stores `(sequence, canonical checkpoint digest, cumulative entries
+digest)` and accepts only the next sequence whose `previousCheckpointDigest`
+equals that pin and whose retained entry prefix has the same digest. This
+detects rollback, omission, prefix rewrite, and forks. Runtime enforcement remains separate
+from delivery and is not yet claimed by this repository.

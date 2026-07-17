@@ -55,7 +55,7 @@ jobs:
       - name: Build deterministic Form Package candidate evidence
         run: |
           go run ./cmd/form-package-release build-package \
-            --tag forms/example-store/v1.0.0 \
+            --tag forms/k-iv4gc3lqnrsvg5dpojsq/v1.0.0 \
             --package-dir conformance/form-package-v1/positive/example-store \
             --output "$RUNNER_TEMP/form-package-candidate" \
             --allow-untagged-candidate

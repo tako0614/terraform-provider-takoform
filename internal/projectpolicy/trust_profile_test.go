@@ -54,6 +54,7 @@ type trustProfile struct {
 			OIDCIssuer       string `json:"oidcIssuer"`
 			SourceRepository string `json:"sourceRepository"`
 			Workflow         string `json:"workflow"`
+			WorkflowIdentity string `json:"workflowIdentity"`
 			TagPattern       string `json:"tagPattern"`
 		} `json:"publisherPolicy"`
 		TagProtection struct {
@@ -62,6 +63,7 @@ type trustProfile struct {
 			RestrictDeletion       bool   `json:"restrictDeletion"`
 			RestrictNonFastForward bool   `json:"restrictNonFastForward"`
 			ReleaseEnvironment     string `json:"releaseEnvironment"`
+			DeploymentRef          string `json:"deploymentRef"`
 		} `json:"tagProtection"`
 		Transparency struct {
 			Authority                         string `json:"authority"`
@@ -81,13 +83,22 @@ type trustProfile struct {
 			OverwriteExistingVersion bool   `json:"overwriteExistingVersion"`
 		} `json:"distribution"`
 		Revocation struct {
-			Status                                   string `json:"status"`
-			Metadata                                 string `json:"metadata"`
-			Workflow                                 string `json:"workflow"`
-			TagPattern                               string `json:"tagPattern"`
-			BlockNewCreateOrUpdate                   bool   `json:"blockNewCreateOrUpdate"`
-			RetainReferencedBytesForObserveAndDelete bool   `json:"retainReferencedBytesForObserveAndDelete"`
-			ReplaceBytesInPlace                      bool   `json:"replaceBytesInPlace"`
+			Status           string `json:"status"`
+			Metadata         string `json:"metadata"`
+			Workflow         string `json:"workflow"`
+			WorkflowIdentity string `json:"workflowIdentity"`
+			TagPattern       string `json:"tagPattern"`
+			Checkpoint       struct {
+				SignedSubject            string   `json:"signedSubject"`
+				Cumulative               bool     `json:"cumulative"`
+				SequenceStartsAt         uint64   `json:"sequenceStartsAt"`
+				PreviousCheckpointDigest string   `json:"previousCheckpointDigest"`
+				HostPinRequired          bool     `json:"hostPinRequired"`
+				HostPinFields            []string `json:"hostPinFields"`
+			} `json:"checkpoint"`
+			BlockNewCreateOrUpdate                   bool `json:"blockNewCreateOrUpdate"`
+			RetainReferencedBytesForObserveAndDelete bool `json:"retainReferencedBytesForObserveAndDelete"`
+			ReplaceBytesInPlace                      bool `json:"replaceBytesInPlace"`
 		} `json:"revocation"`
 		ContentPolicy struct {
 			DataOnly                         bool `json:"dataOnly"`
@@ -165,12 +176,14 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		packageTrust.PublisherPolicy.OIDCIssuer != "https://token.actions.githubusercontent.com" ||
 		packageTrust.PublisherPolicy.SourceRepository != "github.com/tako0614/terraform-provider-takoform" ||
 		packageTrust.PublisherPolicy.Workflow != ".github/workflows/form-package-release.yml" ||
-		packageTrust.PublisherPolicy.TagPattern != "refs/tags/forms/*/v*" {
+		packageTrust.PublisherPolicy.WorkflowIdentity != "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main" ||
+		packageTrust.PublisherPolicy.TagPattern != "refs/tags/forms/k-*/v*" {
 		t.Fatalf("unexpected Form Package publisher policy")
 	}
-	if packageTrust.TagProtection.TagPattern != packageTrust.PublisherPolicy.TagPattern ||
+	if packageTrust.TagProtection.TagPattern != "refs/tags/forms/*/v*" ||
 		!packageTrust.TagProtection.RestrictCreation || !packageTrust.TagProtection.RestrictDeletion ||
-		!packageTrust.TagProtection.RestrictNonFastForward || packageTrust.TagProtection.ReleaseEnvironment != "form-package-release" {
+		!packageTrust.TagProtection.RestrictNonFastForward || packageTrust.TagProtection.ReleaseEnvironment != "form-package-release" ||
+		packageTrust.TagProtection.DeploymentRef != "refs/heads/main" {
 		t.Fatalf("Form Package protected-tag policy is incomplete")
 	}
 	if packageTrust.Transparency.Authority != "sigstore-public-good-instance" ||
@@ -190,7 +203,12 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		packageTrust.Revocation.Status != "signed-append-only-delivery-lane-implemented-no-statements-published" ||
 		!strings.Contains(packageTrust.Revocation.Metadata, "exact package digest") ||
 		packageTrust.Revocation.Workflow != ".github/workflows/form-package-revocation.yml" ||
+		packageTrust.Revocation.WorkflowIdentity != "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-revocation.yml@refs/heads/main" ||
 		packageTrust.Revocation.TagPattern != "refs/tags/forms/revocations/v*" ||
+		packageTrust.Revocation.Checkpoint.SignedSubject != "RFC8785 bytes of the cumulative revocation checkpoint" ||
+		!packageTrust.Revocation.Checkpoint.Cumulative || packageTrust.Revocation.Checkpoint.SequenceStartsAt != 1 ||
+		packageTrust.Revocation.Checkpoint.PreviousCheckpointDigest != "sha256" || !packageTrust.Revocation.Checkpoint.HostPinRequired ||
+		strings.Join(packageTrust.Revocation.Checkpoint.HostPinFields, ",") != "sequence,checkpointDigest,cumulativeEntriesDigest" ||
 		!packageTrust.Revocation.BlockNewCreateOrUpdate ||
 		!packageTrust.Revocation.RetainReferencedBytesForObserveAndDelete ||
 		packageTrust.Revocation.ReplaceBytesInPlace ||
@@ -209,6 +227,8 @@ func TestFormPackageWorkflowsRemainKeylessSeparatedAndCommitPinned(t *testing.T)
 	revocationWorkflow := readText(t, filepath.Join(root, ".github", "workflows", "form-package-revocation.yml"))
 	for name, workflow := range map[string]string{"package": packageWorkflow, "revocation": revocationWorkflow} {
 		for _, required := range []string{
+			"workflow_dispatch:",
+			"expected_commit:",
 			"id-token: write",
 			"attestations: write",
 			"environment: form-package-release",
@@ -218,19 +238,35 @@ func TestFormPackageWorkflowsRemainKeylessSeparatedAndCommitPinned(t *testing.T)
 			"--certificate-oidc-issuer \"https://token.actions.githubusercontent.com\"",
 			"actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6",
 			"refusing overwrite",
+			"refs/heads/main",
+			"git merge-base --is-ancestor",
+			"path: release-source",
+			"--repo \"$GITHUB_WORKSPACE/release-source\"",
+			"steps.draft.outputs.release_id",
 		} {
 			if !strings.Contains(workflow, required) {
 				t.Fatalf("%s workflow lacks %q", name, required)
 			}
 		}
-		for _, forbidden := range []string{"GPG_PRIVATE_KEY", "PASSPHRASE", "gpg --", "cosign.key", "--key "} {
+		for _, forbidden := range []string{"push:", "GPG_PRIVATE_KEY", "PASSPHRASE", "gpg --", "cosign.key", "--key "} {
 			if strings.Contains(workflow, forbidden) {
 				t.Fatalf("%s workflow crosses the keyless/provider trust boundary with %q", name, forbidden)
 			}
 		}
+		cleanupMarker := "- name: Remove partial draft after failure"
+		cleanupIndex := strings.Index(workflow, cleanupMarker)
+		if cleanupIndex < 0 {
+			t.Fatalf("%s workflow has no failure cleanup", name)
+		}
+		cleanup := workflow[cleanupIndex:]
+		if !strings.Contains(cleanup, "RELEASE_ID: ${{ steps.draft.outputs.release_id }}") ||
+			!strings.Contains(cleanup, "releases/$RELEASE_ID") || strings.Contains(cleanup, "releases/tags/") ||
+			strings.Contains(cleanup, "gh release view") {
+			t.Fatalf("%s workflow cleanup can target a pre-existing release", name)
+		}
 	}
-	if !strings.Contains(packageWorkflow, "!forms/revocations/v*") ||
-		!strings.Contains(revocationWorkflow, "forms/revocations/v*") {
+	if !strings.Contains(packageWorkflow, `^forms/k-[a-z2-7]`) ||
+		!strings.Contains(revocationWorkflow, `^forms/revocations/`) {
 		t.Fatal("package and revocation tag namespaces are not disjoint")
 	}
 }

@@ -16,10 +16,11 @@ Current committed surfaces:
 
 ## Status
 
-The FormRef, Form Definition, package-index and revocation schemas, RFC
+The FormRef, Form Definition, package-index, revocation, and cumulative
+revocation-checkpoint schemas, RFC
 8785/I-JSON library, closed local verifier, positive/negative corpus, protected
-keyless Sigstore release lane, and signed append-only revocation delivery lane
-are implemented. No real Form Package or revocation statement has been
+keyless Sigstore release lane, and signed append-only checkpoint delivery lane
+are implemented. No real Form Package or revocation checkpoint has been
 published. Remote host fetch/install, host publisher-policy verification,
 activation, and revocation enforcement remain consumer/operator work. The
 current ten provider resources remain frozen compatibility candidates; a

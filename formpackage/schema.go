@@ -14,17 +14,18 @@ import (
 )
 
 const (
-	formRefSchemaID         = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
-	formDefinitionSchemaID  = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
-	packageIndexSchemaID    = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
-	revocationSchemaID      = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
-	portableMapKeyPattern   = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
-	portableMapPolicyKey    = "x-takoform-fieldPolicy"
-	portableMapPolicyValue  = "portable-data-only-v1"
-	maxSchemaProofDepth     = 64
-	maxSchemaProofOps       = 4096
-	maxSchemaValidationWork = 16384
-	maxConformanceFixtures  = 32
+	formRefSchemaID              = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
+	formDefinitionSchemaID       = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
+	packageIndexSchemaID         = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
+	revocationSchemaID           = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
+	revocationCheckpointSchemaID = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json"
+	portableMapKeyPattern        = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
+	portableMapPolicyKey         = "x-takoform-fieldPolicy"
+	portableMapPolicyValue       = "portable-data-only-v1"
+	maxSchemaProofDepth          = 64
+	maxSchemaProofOps            = 4096
+	maxSchemaValidationWork      = 16384
+	maxConformanceFixtures       = 32
 )
 
 //go:embed schemas/*.schema.json
@@ -37,10 +38,11 @@ func (closedSchemaLoader) Load(resourceURL string) (any, error) {
 }
 
 type compiledSchemas struct {
-	formRef    *jsonschema.Schema
-	definition *jsonschema.Schema
-	index      *jsonschema.Schema
-	revocation *jsonschema.Schema
+	formRef              *jsonschema.Schema
+	definition           *jsonschema.Schema
+	index                *jsonschema.Schema
+	revocation           *jsonschema.Schema
+	revocationCheckpoint *jsonschema.Schema
 }
 
 var (
@@ -55,7 +57,7 @@ func loadSchemas() (compiledSchemas, error) {
 		compiler.DefaultDraft(jsonschema.Draft2020)
 		compiler.AssertFormat()
 		compiler.UseLoader(closedSchemaLoader{})
-		files := []string{"form-ref.schema.json", "form-definition.schema.json", "package-index.schema.json", "form-package-revocation.schema.json"}
+		files := []string{"form-ref.schema.json", "form-definition.schema.json", "package-index.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
 		entries, err := schemaFiles.ReadDir("schemas")
 		if err != nil {
 			schemasErr = fmt.Errorf("read embedded schema closure: %w", err)
@@ -127,6 +129,11 @@ func loadSchemas() (compiledSchemas, error) {
 		schemasValue.revocation, schemasErr = compiler.Compile(revocationSchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile Form Package revocation schema: %w", schemasErr)
+			return
+		}
+		schemasValue.revocationCheckpoint, schemasErr = compiler.Compile(revocationCheckpointSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile Form Package revocation checkpoint schema: %w", schemasErr)
 		}
 	})
 	return schemasValue, schemasErr
@@ -238,6 +245,104 @@ func ValidateRevocationStatement(raw []byte) (RevocationStatement, error) {
 		return RevocationStatement{}, fmt.Errorf("Form Package revocation: packageDigest is not canonical")
 	}
 	return statement, nil
+}
+
+// ValidateRevocationCheckpoint validates the cumulative checkpoint schema and
+// sequence closure. Signature verification remains a caller precondition.
+func ValidateRevocationCheckpoint(raw []byte) (RevocationCheckpoint, error) {
+	schemas, err := loadSchemas()
+	if err != nil {
+		return RevocationCheckpoint{}, err
+	}
+	var checkpoint RevocationCheckpoint
+	if err := validateDocument(raw, schemas.revocationCheckpoint, &checkpoint); err != nil {
+		return RevocationCheckpoint{}, fmt.Errorf("Form Package revocation checkpoint: %w", err)
+	}
+	if uint64(len(checkpoint.Entries)) != checkpoint.Sequence {
+		return RevocationCheckpoint{}, fmt.Errorf("Form Package revocation checkpoint: sequence %d requires %d cumulative entries, found %d", checkpoint.Sequence, checkpoint.Sequence, len(checkpoint.Entries))
+	}
+	if checkpoint.Sequence == 1 && checkpoint.PreviousCheckpointDigest != nil {
+		return RevocationCheckpoint{}, fmt.Errorf("Form Package revocation checkpoint: sequence 1 must have null previousCheckpointDigest")
+	}
+	if checkpoint.Sequence > 1 && (checkpoint.PreviousCheckpointDigest == nil || !ValidDigest(*checkpoint.PreviousCheckpointDigest)) {
+		return RevocationCheckpoint{}, fmt.Errorf("Form Package revocation checkpoint: sequence %d requires a canonical previousCheckpointDigest", checkpoint.Sequence)
+	}
+	seenVersions := map[string]struct{}{}
+	seenStatements := map[string]struct{}{}
+	for index, entry := range checkpoint.Entries {
+		wantSequence := uint64(index + 1)
+		if entry.Sequence != wantSequence {
+			return RevocationCheckpoint{}, fmt.Errorf("Form Package revocation checkpoint: entries[%d].sequence is %d, want %d", index, entry.Sequence, wantSequence)
+		}
+		if !ValidDigest(entry.StatementDigest) || !ValidDigest(entry.PackageDigest) {
+			return RevocationCheckpoint{}, fmt.Errorf("Form Package revocation checkpoint: entries[%d] has a non-canonical digest", index)
+		}
+		if _, duplicate := seenVersions[entry.StatementVersion]; duplicate {
+			return RevocationCheckpoint{}, fmt.Errorf("Form Package revocation checkpoint: duplicate statementVersion %q", entry.StatementVersion)
+		}
+		if _, duplicate := seenStatements[entry.StatementDigest]; duplicate {
+			return RevocationCheckpoint{}, fmt.Errorf("Form Package revocation checkpoint: duplicate statementDigest %q", entry.StatementDigest)
+		}
+		seenVersions[entry.StatementVersion] = struct{}{}
+		seenStatements[entry.StatementDigest] = struct{}{}
+	}
+	if checkpoint.Entries[len(checkpoint.Entries)-1].StatementVersion != checkpoint.CheckpointVersion {
+		return RevocationCheckpoint{}, fmt.Errorf("Form Package revocation checkpoint: final statementVersion must equal checkpointVersion")
+	}
+	return checkpoint, nil
+}
+
+// AdvanceRevocationCheckpoint verifies monotonic continuity against a host's
+// last trusted pin and returns the new pin. Callers must first verify the
+// checkpoint's Sigstore bundle and publisher identity.
+func AdvanceRevocationCheckpoint(previous *RevocationCheckpointPin, raw []byte) (RevocationCheckpointPin, error) {
+	checkpoint, err := ValidateRevocationCheckpoint(raw)
+	if err != nil {
+		return RevocationCheckpointPin{}, err
+	}
+	digest, err := DigestCanonicalJSON(raw)
+	if err != nil {
+		return RevocationCheckpointPin{}, err
+	}
+	if previous == nil {
+		if checkpoint.Sequence != 1 || checkpoint.PreviousCheckpointDigest != nil {
+			return RevocationCheckpointPin{}, fmt.Errorf("first trusted revocation checkpoint must be sequence 1")
+		}
+		entriesDigest, err := revocationEntriesDigest(checkpoint.Entries)
+		if err != nil {
+			return RevocationCheckpointPin{}, err
+		}
+		return RevocationCheckpointPin{Sequence: 1, Digest: digest, EntriesDigest: entriesDigest}, nil
+	}
+	if !ValidDigest(previous.Digest) || !ValidDigest(previous.EntriesDigest) {
+		return RevocationCheckpointPin{}, fmt.Errorf("previous revocation checkpoint pin has a non-canonical digest")
+	}
+	if checkpoint.Sequence != previous.Sequence+1 {
+		return RevocationCheckpointPin{}, fmt.Errorf("revocation checkpoint sequence is %d, want %d", checkpoint.Sequence, previous.Sequence+1)
+	}
+	if checkpoint.PreviousCheckpointDigest == nil || *checkpoint.PreviousCheckpointDigest != previous.Digest {
+		return RevocationCheckpointPin{}, fmt.Errorf("revocation checkpoint does not extend the pinned digest")
+	}
+	prefixDigest, err := revocationEntriesDigest(checkpoint.Entries[:int(previous.Sequence)])
+	if err != nil {
+		return RevocationCheckpointPin{}, err
+	}
+	if prefixDigest != previous.EntriesDigest {
+		return RevocationCheckpointPin{}, fmt.Errorf("revocation checkpoint rewrites the pinned cumulative entries")
+	}
+	entriesDigest, err := revocationEntriesDigest(checkpoint.Entries)
+	if err != nil {
+		return RevocationCheckpointPin{}, err
+	}
+	return RevocationCheckpointPin{Sequence: checkpoint.Sequence, Digest: digest, EntriesDigest: entriesDigest}, nil
+}
+
+func revocationEntriesDigest(entries []RevocationCheckpointEntry) (string, error) {
+	raw, err := json.Marshal(entries)
+	if err != nil {
+		return "", err
+	}
+	return DigestCanonicalJSON(raw)
 }
 
 func validateDocument(raw []byte, schema *jsonschema.Schema, destination any) error {

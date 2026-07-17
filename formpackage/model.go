@@ -1,13 +1,14 @@
 package formpackage
 
 const (
-	FormAPIVersion       = "forms.takoform.com/v1alpha1"
-	PackageAPIVersion    = "packages.forms.takoform.com/v1alpha1"
-	PackageKind          = "FormPackage"
-	TrustAPIVersion      = "trust.forms.takoform.com/v1alpha1"
-	RevocationKind       = "FormPackageRevocation"
-	PackageIndexFilename = "package-index.json"
-	DefinitionMediaType  = "application/vnd.takoform.form-definition.v1+json"
+	FormAPIVersion           = "forms.takoform.com/v1alpha1"
+	PackageAPIVersion        = "packages.forms.takoform.com/v1alpha1"
+	PackageKind              = "FormPackage"
+	TrustAPIVersion          = "trust.forms.takoform.com/v1alpha1"
+	RevocationKind           = "FormPackageRevocation"
+	RevocationCheckpointKind = "FormPackageRevocationCheckpoint"
+	PackageIndexFilename     = "package-index.json"
+	DefinitionMediaType      = "application/vnd.takoform.form-definition.v1+json"
 )
 
 // FormRef is the exact portable identity of one immutable Form Definition.
@@ -76,6 +77,7 @@ type VerificationReport struct {
 type RevocationStatement struct {
 	APIVersion       string            `json:"apiVersion"`
 	Kind             string            `json:"kind"`
+	Sequence         uint64            `json:"sequence"`
 	StatementVersion string            `json:"statementVersion"`
 	PackageDigest    string            `json:"packageDigest"`
 	FormRef          FormRef           `json:"formRef"`
@@ -90,4 +92,32 @@ type RevocationEffects struct {
 	BlockNewCreateOrUpdate         bool `json:"blockNewCreateOrUpdate"`
 	BlockActivation                bool `json:"blockActivation"`
 	RetainBytesForObserveAndDelete bool `json:"retainBytesForObserveAndDelete"`
+}
+
+// RevocationCheckpoint is a signed cumulative index. Sequence and
+// PreviousCheckpointDigest form a monotonic hash chain; Entries closes the
+// complete statement set from sequence 1 through this checkpoint.
+type RevocationCheckpoint struct {
+	APIVersion               string                      `json:"apiVersion"`
+	Kind                     string                      `json:"kind"`
+	CheckpointVersion        string                      `json:"checkpointVersion"`
+	Sequence                 uint64                      `json:"sequence"`
+	PreviousCheckpointDigest *string                     `json:"previousCheckpointDigest"`
+	Entries                  []RevocationCheckpointEntry `json:"entries"`
+}
+
+type RevocationCheckpointEntry struct {
+	Sequence         uint64  `json:"sequence"`
+	StatementVersion string  `json:"statementVersion"`
+	StatementDigest  string  `json:"statementDigest"`
+	PackageDigest    string  `json:"packageDigest"`
+	FormRef          FormRef `json:"formRef"`
+}
+
+// RevocationCheckpointPin is the minimum durable state a host retains after
+// cryptographically verifying a checkpoint signature and publisher policy.
+type RevocationCheckpointPin struct {
+	Sequence      uint64 `json:"sequence"`
+	Digest        string `json:"digest"`
+	EntriesDigest string `json:"entriesDigest"`
 }

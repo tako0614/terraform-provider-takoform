@@ -94,6 +94,7 @@ go run ./cmd/form-package verify PATH
 go run ./cmd/form-package canonicalize FILE.json
 go run ./cmd/form-package digest FILE.json
 go run ./cmd/form-package validate-revocation STATEMENT.json
+go run ./cmd/form-package validate-revocation-checkpoint CHECKPOINT.json
 go run ./cmd/form-package conformance
 ```
 
@@ -101,10 +102,13 @@ go run ./cmd/form-package conformance
 
 The repository-owned release tooling and protected workflows are documented in
 [`../../release/form-packages.md`](../../release/form-packages.md). A package
-source under `forms/releases/<form-slug>/<packageVersion>/` is re-verified,
+source under `forms/releases/<release-id>/<packageVersion>/` is re-verified,
 canonicalized, deterministically archived, described by SPDX 2.3 and SLSA v1
 evidence, and signed through a keyless Sigstore v0.3 bundle whose identity is
-bound to the exact repository, workflow, and `forms/<form-slug>/v<semver>` tag.
+bound to the exact repository and protected-main workflow. The reversible
+release ID is `k-` plus lowercase unpadded base32 of the exact FormRef Kind;
+the dispatcher separately verifies the exact `forms/<release-id>/v<semver>`
+source tag and approved commit before signing.
 The canonical index bytes—not archive metadata—remain the signed semantic
 subject.
 
