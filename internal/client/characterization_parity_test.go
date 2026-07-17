@@ -37,7 +37,7 @@ func TestCompatibilityCandidateDiscoveryParity(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(server.URL, "fixture-token", server.Client())
+	client := NewCompatibilityFallback(server.URL, "fixture-token", server.Client())
 	discovered, err := client.Discover(context.Background())
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
@@ -97,7 +97,7 @@ func TestCompatibilityCandidateDeployWireParity(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := New(server.URL, "fixture-token", server.Client())
+			client := NewCompatibilityFallback(server.URL, "fixture-token", server.Client())
 			got, err := client.PutResource(context.Background(), identity.Kind, want.Metadata.Name, &want)
 			if err != nil {
 				t.Fatalf("PutResource: %v", err)
@@ -126,7 +126,7 @@ func TestCompatibilityCandidateObserveWireParity(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := New(server.URL, "fixture-token", server.Client())
+			client := NewCompatibilityFallback(server.URL, "fixture-token", server.Client())
 			got, err := client.ObserveResource(context.Background(), identity.Kind, want.Metadata.Name, want.Metadata.Space)
 			if err != nil {
 				t.Fatalf("ObserveResource: %v", err)
@@ -155,7 +155,7 @@ func TestCompatibilityCandidateAPIErrorParity(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := New(server.URL, "fixture-token", server.Client())
+			client := NewCompatibilityFallback(server.URL, "fixture-token", server.Client())
 			_, err := client.GetResource(context.Background(), fixture.Kind, "fixture", "fixture-space")
 			var apiError *APIError
 			if !errors.As(err, &apiError) {

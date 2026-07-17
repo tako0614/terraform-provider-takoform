@@ -23,4 +23,6 @@ Do not place secrets in `environment`; credential projection is a host responsib
 
 ## Read-only attributes
 
-`id`, `selected_implementation`, `target`, `locked`, `portability`, and `outputs` report sanitized host results.
+`id`, `resource_version`, `portability`, and `outputs` report the canonical
+resource fence and sanitized public host results. Backend placement is not
+provider state.

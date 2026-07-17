@@ -8,7 +8,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "EdgeWorker",
-        "metadata": { "name": "edge", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "edge", "space": "fixture-space" },
         "spec": {
           "name": "edge",
           "source": { "artifactUrl": "https://artifacts.example.test/edge.js", "artifactSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
@@ -25,7 +25,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "ObjectBucket",
-        "metadata": { "name": "assets", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "assets", "space": "fixture-space" },
         "spec": { "name": "assets", "storageClass": "standard", "interfaces": ["s3_api"] }
       }
     },
@@ -35,7 +35,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "KVStore",
-        "metadata": { "name": "cache", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "cache", "space": "fixture-space" },
         "spec": { "name": "cache", "consistency": "strong" }
       }
     },
@@ -45,7 +45,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "Queue",
-        "metadata": { "name": "jobs", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "jobs", "space": "fixture-space" },
         "spec": { "name": "jobs", "delivery": { "maxRetries": 5, "maxBatchSize": 10 } }
       }
     },
@@ -55,7 +55,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "SQLDatabase",
-        "metadata": { "name": "main", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "main", "space": "fixture-space" },
         "spec": { "name": "main", "engine": "sqlite", "migrationsPath": "migrations" }
       }
     },
@@ -65,7 +65,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "ContainerService",
-        "metadata": { "name": "agent", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "agent", "space": "fixture-space" },
         "spec": {
           "name": "agent",
           "image": "ghcr.io/example/agent:1.0.0",
@@ -82,7 +82,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "VectorIndex",
-        "metadata": { "name": "embeddings", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "embeddings", "space": "fixture-space" },
         "spec": {
           "name": "embeddings",
           "dimensions": 1536,
@@ -97,7 +97,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "DurableWorkflow",
-        "metadata": { "name": "ingest", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "ingest", "space": "fixture-space" },
         "spec": {
           "name": "ingest",
           "source": { "artifactRef": "artifact:workflow:ingest", "artifactSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
@@ -113,7 +113,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "StatefulActorNamespace",
-        "metadata": { "name": "rooms", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "rooms", "space": "fixture-space" },
         "spec": {
           "name": "rooms",
           "className": "RoomActor",
@@ -129,7 +129,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "Schedule",
-        "metadata": { "name": "nightly", "space": "fixture-space", "managedBy": "opentofu" },
+        "metadata": { "name": "nightly", "space": "fixture-space" },
         "spec": {
           "name": "nightly",
           "cron": "0 0 * * *",

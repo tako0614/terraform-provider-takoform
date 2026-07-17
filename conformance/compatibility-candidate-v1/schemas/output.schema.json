@@ -19,14 +19,12 @@
           "resourceType": { "type": "string" },
           "state": {
             "type": "object",
-            "required": ["id", "name", "space", "selectedImplementation", "target", "locked", "portability", "outputs"],
+            "required": ["id", "name", "space", "resourceVersion", "portability", "outputs"],
             "properties": {
               "id": { "type": "string", "minLength": 1 },
               "name": { "type": "string", "minLength": 1 },
               "space": { "type": "string", "minLength": 1 },
-              "selectedImplementation": { "type": "string", "minLength": 1 },
-              "target": { "type": "string", "minLength": 1 },
-              "locked": { "type": "boolean" },
+              "resourceVersion": { "type": "string", "pattern": "^[1-9][0-9]*$" },
               "portability": { "type": "string" },
               "outputs": { "type": "object", "additionalProperties": { "type": "string" } }
             },

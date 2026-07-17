@@ -1,0 +1,16 @@
+{
+  "version": 4,
+  "terraform_version": "1.15.8",
+  "serial": 6,
+  "lineage": "00000000-0000-4000-8000-000000000001",
+  "outputs": {},
+  "resources": [
+    { "mode": "managed", "type": "takosumi_edge_worker", "name": "edge", "provider": "provider[\"registry.terraform.io/takosjp/takosumi\"]", "instances": [{ "schema_version": 0, "attributes": { "id": "tkrn:migration:EdgeWorker:edge", "name": "edge", "space": "migration", "artifact_url": "https://example.com/edge.js", "artifact_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "target_pool": null, "selected_implementation": "redacted.edge", "target": "redacted-target", "locked": true, "portability": "portable", "outputs": {} } }] },
+    { "mode": "managed", "type": "takosumi_object_bucket", "name": "assets", "provider": "provider[\"registry.terraform.io/takosjp/takosumi\"]", "instances": [{ "schema_version": 0, "attributes": { "id": "tkrn:migration:ObjectBucket:assets", "name": "assets", "space": "migration", "target_pool": null, "selected_implementation": "redacted.object", "target": "redacted-target", "locked": true, "portability": "portable", "outputs": {} } }] },
+    { "mode": "managed", "type": "takosumi_kv_store", "name": "cache", "provider": "provider[\"registry.terraform.io/takosjp/takosumi\"]", "instances": [{ "schema_version": 0, "attributes": { "id": "tkrn:migration:KVStore:cache", "name": "cache", "space": "migration", "consistency": "strong", "target_pool": null, "selected_implementation": "redacted.kv", "target": "redacted-target", "locked": true, "portability": "portable", "outputs": {} } }] },
+    { "mode": "managed", "type": "takosumi_queue", "name": "jobs", "provider": "provider[\"registry.terraform.io/takosjp/takosumi\"]", "instances": [{ "schema_version": 0, "attributes": { "id": "tkrn:migration:Queue:jobs", "name": "jobs", "space": "migration", "max_retries": 5, "max_batch_size": 10, "target_pool": null, "selected_implementation": "redacted.queue", "target": "redacted-target", "locked": true, "portability": "portable", "outputs": {} } }] },
+    { "mode": "managed", "type": "takosumi_sql_database", "name": "main", "provider": "provider[\"registry.terraform.io/takosjp/takosumi\"]", "instances": [{ "schema_version": 0, "attributes": { "id": "tkrn:migration:SQLDatabase:main", "name": "main", "space": "migration", "engine": "sqlite", "target_pool": null, "selected_implementation": "redacted.sql", "target": "redacted-target", "locked": true, "portability": "portable", "outputs": {} } }] },
+    { "mode": "managed", "type": "takosumi_container_service", "name": "agent", "provider": "provider[\"registry.terraform.io/takosjp/takosumi\"]", "instances": [{ "schema_version": 0, "attributes": { "id": "tkrn:migration:ContainerService:agent", "name": "agent", "space": "migration", "image": "ghcr.io/example/agent:1.0.0", "target_pool": null, "selected_implementation": "redacted.container", "target": "redacted-target", "locked": true, "portability": "portable", "outputs": {} } }] }
+  ],
+  "check_results": null
+}

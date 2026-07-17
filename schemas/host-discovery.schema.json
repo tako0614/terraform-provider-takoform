@@ -18,9 +18,18 @@
     },
     "features": {
       "type": "object",
-      "required": ["service_forms"],
+      "required": ["service_forms", "exact_form_ref", "optimistic_concurrency", "idempotent_lifecycle"],
       "properties": {
         "service_forms": {
+          "const": true
+        },
+        "exact_form_ref": {
+          "const": true
+        },
+        "optimistic_concurrency": {
+          "const": true
+        },
+        "idempotent_lifecycle": {
           "const": true
         }
       },
@@ -30,12 +39,21 @@
     },
     "endpoints": {
       "type": "object",
+      "required": ["api"],
       "properties": {
         "api": {
           "type": "string",
           "format": "uri"
         },
         "capabilities": {
+          "type": "string",
+          "format": "uri"
+        },
+        "forms": {
+          "type": "string",
+          "format": "uri"
+        },
+        "compatibility_api": {
           "type": "string",
           "format": "uri"
         }

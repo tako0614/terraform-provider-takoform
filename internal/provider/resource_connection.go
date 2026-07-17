@@ -47,20 +47,20 @@ func resourceConnectionAttributeWithRequired(required bool) schema.ListNestedAtt
 				},
 				"resource": schema.StringAttribute{
 					Required:    true,
-					Description: "Target resource reference, for example ObjectBucket/assets or Queue/jobs.",
+					Description: "Referenced Service Form resource, for example ObjectBucket/assets or Queue/jobs.",
 					Validators:  []validator.String{StringToken()},
 				},
 				"permissions": schema.SetAttribute{
 					Required:    true,
 					ElementType: types.StringType,
-					Description: "Open grant-permission tokens requested by the consumer. The selected Target implementation must advertise support.",
+					Description: "Open grant-permission tokens requested by the consumer. The configured host must support them.",
 					Validators: []validator.Set{
 						SetStringsToken(1),
 					},
 				},
 				"projection": schema.StringAttribute{
 					Required:    true,
-					Description: "Open projection capability token. The selected Target implementation must advertise support.",
+					Description: "Open projection capability token. The configured host must support it.",
 					Validators:  []validator.String{StringToken()},
 				},
 			},

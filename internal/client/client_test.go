@@ -7,21 +7,26 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
-func discoveryBody(serviceForms bool) string {
+func discoveryBody(serviceForms bool, origin string) string {
 	body := map[string]any{
 		"api_versions": []string{APIVersion},
 		"features": map[string]bool{
-			"service_forms": serviceForms,
-			"oidc":          true,
-			"compat_s3":     true,
+			"service_forms":          serviceForms,
+			"exact_form_ref":         true,
+			"optimistic_concurrency": true,
+			"idempotent_lifecycle":   true,
+			"oidc":                   true,
+			"compat_s3":              true,
 		},
 		"endpoints": map[string]string{
-			"api":          "https://takoform.example.com/api",
-			"capabilities": "https://takoform.example.com/v1/capabilities",
-			"oidc_issuer":  "https://takoform.example.com",
+			"api":          origin + "/apis/forms.takoform.com/v1alpha1",
+			"forms":        origin + "/apis/forms.takoform.com/v1alpha1/forms",
+			"capabilities": origin + "/v1/capabilities",
+			"oidc_issuer":  origin,
 		},
 	}
 	raw, _ := json.Marshal(body)
@@ -29,12 +34,13 @@ func discoveryBody(serviceForms bool) string {
 }
 
 func TestDiscover_Success(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/takoform" {
 			t.Errorf("unexpected discovery path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, discoveryBody(true))
+		_, _ = io.WriteString(w, discoveryBody(true, srv.URL))
 	}))
 	defer srv.Close()
 
@@ -62,18 +68,16 @@ func TestDiscover_Success(t *testing.T) {
 }
 
 func TestDiscover_ServiceFormsFalse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = io.WriteString(w, discoveryBody(false))
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, discoveryBody(false, srv.URL))
 	}))
 	defer srv.Close()
 
 	c := New(srv.URL, "", srv.Client())
-	disco, err := c.Discover(context.Background())
-	if err != nil {
-		t.Fatalf("Discover: %v", err)
-	}
-	if disco.SupportsServiceForms() {
-		t.Fatalf("expected SupportsServiceForms false")
+	_, err := c.Discover(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "features.service_forms") {
+		t.Fatalf("expected service_forms negotiation error, got %v", err)
 	}
 }
 
@@ -90,7 +94,7 @@ func TestGetCapabilities(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "", srv.Client())
+	c := NewCompatibilityFallback(srv.URL, "", srv.Client())
 	caps, err := c.GetCapabilities(context.Background())
 	if err != nil {
 		t.Fatalf("GetCapabilities: %v", err)
@@ -175,7 +179,7 @@ func TestPutResource_RoundTrip(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "secret-token", srv.Client())
+	c := NewCompatibilityFallback(srv.URL, "secret-token", srv.Client())
 	body := &Resource{
 		APIVersion: APIVersion,
 		Kind:       KindEdgeWorker,
@@ -229,7 +233,7 @@ func TestGetResource_NotFound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "", srv.Client())
+	c := NewCompatibilityFallback(srv.URL, "", srv.Client())
 	_, err := c.GetResource(context.Background(), KindEdgeWorker, "missing", "prod")
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
@@ -257,7 +261,7 @@ func TestObserveResource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "", srv.Client())
+	c := NewCompatibilityFallback(srv.URL, "", srv.Client())
 	out, err := c.ObserveResource(context.Background(), KindObjectBucket, "assets", "prod")
 	if err != nil {
 		t.Fatalf("ObserveResource: %v", err)
@@ -288,7 +292,7 @@ func TestRefreshResource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "", srv.Client())
+	c := NewCompatibilityFallback(srv.URL, "", srv.Client())
 	out, err := c.RefreshResource(context.Background(), KindObjectBucket, "assets", "prod")
 	if err != nil {
 		t.Fatalf("RefreshResource: %v", err)
@@ -327,7 +331,7 @@ func TestImportResource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "", srv.Client())
+	c := NewCompatibilityFallback(srv.URL, "", srv.Client())
 	out, err := c.ImportResource(
 		context.Background(),
 		KindObjectBucket,
@@ -356,7 +360,7 @@ func TestErrorEnvelope(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "", srv.Client())
+	c := NewCompatibilityFallback(srv.URL, "", srv.Client())
 	_, err := c.PutResource(context.Background(), KindEdgeWorker, "api", &Resource{})
 	if err == nil {
 		t.Fatalf("expected error")
@@ -401,7 +405,7 @@ func TestDeleteResource(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		c := New(srv.URL, "", srv.Client())
+		c := NewCompatibilityFallback(srv.URL, "", srv.Client())
 		if err := c.DeleteResource(context.Background(), KindEdgeWorker, "api", "prod"); err != nil {
 			t.Fatalf("DeleteResource: %v", err)
 		}
@@ -413,7 +417,7 @@ func TestDeleteResource(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		c := New(srv.URL, "", srv.Client())
+		c := NewCompatibilityFallback(srv.URL, "", srv.Client())
 		if err := c.DeleteResource(context.Background(), KindEdgeWorker, "api", "prod"); err != nil {
 			t.Fatalf("expected nil error on 404 delete, got %v", err)
 		}
@@ -442,7 +446,7 @@ func TestPreviewResource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(srv.URL, "", srv.Client())
+	c := NewCompatibilityFallback(srv.URL, "", srv.Client())
 	out, err := c.PreviewResource(context.Background(), &Resource{Kind: KindContainerService})
 	if err != nil {
 		t.Fatalf("PreviewResource: %v", err)

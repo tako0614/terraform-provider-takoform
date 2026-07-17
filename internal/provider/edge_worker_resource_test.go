@@ -117,7 +117,8 @@ func TestEdgeWorkerCreateAcceptsEndpointDefinedProfileTokens(t *testing.T) {
 
 	r := &edgeWorkerResource{
 		data: &providerData{
-			client:       client.New(srv.URL, "", srv.Client()),
+			client:       client.NewCompatibilityFallback(srv.URL, "", srv.Client()),
+			forms:        providerReleaseForms(),
 			defaultSpace: "prod",
 			capabilities: client.ProductCapabilities{
 				Resources: map[string]bool{client.KindEdgeWorker: true},
@@ -139,13 +140,11 @@ func TestEdgeWorkerCreateAcceptsEndpointDefinedProfileTokens(t *testing.T) {
 			types.StringValue("runtime.workers.next"),
 			types.StringValue("bindings.custom"),
 		}),
-		Connections:            types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
-		Space:                  types.StringNull(),
-		SelectedImplementation: types.StringUnknown(),
-		Target:                 types.StringUnknown(),
-		Locked:                 types.BoolUnknown(),
-		Portability:            types.StringUnknown(),
-		Outputs:                types.MapUnknown(types.StringType),
+		Connections:     types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+		Space:           types.StringNull(),
+		ResourceVersion: types.StringUnknown(),
+		Portability:     types.StringUnknown(),
+		Outputs:         types.MapUnknown(types.StringType),
 	})
 	if diags.HasError() {
 		t.Fatalf("plan diagnostics: %v", diags)

@@ -1,0 +1,79 @@
+{
+  "format": "takoform.portable-host-conformance@v1",
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "discoveryPath": "/.well-known/takoform",
+  "apiPath": "/apis/forms.takoform.com/v1alpha1",
+  "compatibilityPath": "/v1",
+  "runnerInput": {
+    "space": "conformance-space",
+    "name": "portable-assets",
+    "identity": {
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "ObjectBucket",
+        "definitionVersion": "0.0.0-legacy.1",
+        "schemaDigest": "sha256:ee32286a40681296fc6f3db9ece79c2d651821aa2e947d1fa1cd6e28e8be8391"
+      },
+      "packageDigest": "sha256:0c43dfbf565c959ad627a6cd8d19aa77bf56d9e3655f44f71bb207fb79b264f2"
+    },
+    "desired": {
+      "name": "portable-assets",
+      "storageClass": "standard",
+      "interfaces": ["s3_api"]
+    },
+    "importNativeId": "provider-native-portable-assets"
+  },
+  "preconditions": {
+    "create": "If-None-Match: *",
+    "update": "If-Match: quoted resourceVersion",
+    "import": "If-None-Match: * or If-Match: quoted resourceVersion",
+    "observe": "If-Match: quoted resourceVersion",
+    "refresh": "If-Match: quoted resourceVersion",
+    "delete": "If-Match: quoted resourceVersion"
+  },
+  "idempotentOperations": ["apply", "import", "observe", "refresh", "delete"],
+  "stableErrorCodes": [
+    "invalid_argument",
+    "unauthenticated",
+    "permission_denied",
+    "form_unknown",
+    "form_not_installed",
+    "form_unavailable",
+    "form_identity_conflict",
+    "resource_not_found",
+    "resource_version_conflict",
+    "resource_busy",
+    "import_conflict",
+    "policy_denied",
+    "backend_unavailable",
+    "internal_error"
+  ],
+  "retryableCodes": ["resource_busy", "backend_unavailable"],
+  "requiredRunnerChecks": [
+    "discovery",
+    "exact-availability",
+    "preview",
+    "apply",
+    "apply-idempotency",
+    "read",
+    "canonical-resource-parity",
+    "exact-digest-substitution-rejected",
+    "observe",
+    "refresh",
+    "canonical-audit-parity",
+    "import-idempotency",
+    "delete-idempotency"
+  ],
+  "forbiddenProviderState": [
+    "credential",
+    "secret",
+    "price",
+    "quote",
+    "billing",
+    "backend",
+    "selected_implementation",
+    "target",
+    "locked"
+  ],
+  "takosumiRunnerSource": "core/conformance/portable_form_host.ts"
+}

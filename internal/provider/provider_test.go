@@ -132,6 +132,56 @@ func TestProviderSplitDoesNotExposeTakosumiAdminResources(t *testing.T) {
 	}
 }
 
+func TestProviderStateExcludesBackendCredentialAndPriceAuthority(t *testing.T) {
+	for _, factory := range (&takoformProvider{}).Resources(context.Background()) {
+		candidate := factory()
+		var metadata frameworkresource.MetadataResponse
+		candidate.Metadata(context.Background(), frameworkresource.MetadataRequest{ProviderTypeName: "takoform"}, &metadata)
+		var schemaResponse frameworkresource.SchemaResponse
+		candidate.Schema(context.Background(), frameworkresource.SchemaRequest{}, &schemaResponse)
+		for _, forbidden := range []string{"selected_implementation", "target", "locked", "credential", "secret", "price", "quote", "billing", "backend"} {
+			if _, ok := schemaResponse.Schema.Attributes[forbidden]; ok {
+				t.Errorf("%s exposes forbidden provider-state attribute %s", metadata.TypeName, forbidden)
+			}
+		}
+		if _, ok := schemaResponse.Schema.Attributes["resource_version"]; !ok {
+			t.Errorf("%s omits the optimistic-concurrency fence", metadata.TypeName)
+		}
+	}
+}
+
+func TestConfigureClientUsesAdvertisedVersionedEndpointWithoutV1Capabilities(t *testing.T) {
+	var server *httptest.Server
+	legacyRequests := 0
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/takoform":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"api_versions": []string{"forms.takoform.com/v1alpha1"},
+				"features":     map[string]bool{"service_forms": true, "exact_form_ref": true, "optimistic_concurrency": true, "idempotent_lifecycle": true},
+				"endpoints": map[string]string{
+					"api":               server.URL + "/apis/forms.takoform.com/v1alpha1",
+					"forms":             server.URL + "/apis/forms.takoform.com/v1alpha1/forms",
+					"compatibility_api": server.URL + "/v1",
+				},
+			})
+		case "/v1/capabilities":
+			legacyRequests++
+			http.Error(w, "legacy endpoint must not be called", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	configured, err := configureClient(context.Background(), server.URL, "token", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configured.UsesCompatibilityFallback() || legacyRequests != 0 {
+		t.Fatalf("unexpected compatibility fallback=%v legacyRequests=%d", configured.UsesCompatibilityFallback(), legacyRequests)
+	}
+}
+
 func TestResourceAPIHTTPClientWaitsForServerSideOpenTofuRuns(t *testing.T) {
 	client := newResourceAPIHTTPClient()
 	if client.Timeout < 11*time.Minute {
@@ -259,7 +309,7 @@ func TestConfigureClient_AcceptsContainerServiceOnlyCapabilities(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client())
+	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client(), true)
 	if err != nil {
 		t.Fatalf("configureClient: %v", err)
 	}
@@ -296,7 +346,7 @@ func TestConfigureClient_AcceptsServiceFormAPIWithNoEnabledForms(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client())
+	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client(), true)
 	if err != nil {
 		t.Fatalf("configureClient: %v", err)
 	}
@@ -309,7 +359,7 @@ func TestConfigureClient_AcceptsServiceForms(t *testing.T) {
 	srv := httptest.NewServer(discoveryHandler(t, true))
 	defer srv.Close()
 
-	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client())
+	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client(), true)
 	if err != nil {
 		t.Fatalf("configureClient: %v", err)
 	}
@@ -322,11 +372,11 @@ func TestConfigureClient_RejectsWhenServiceFormsFalse(t *testing.T) {
 	srv := httptest.NewServer(discoveryHandler(t, false))
 	defer srv.Close()
 
-	_, err := configureClient(context.Background(), srv.URL, "", srv.Client())
+	_, err := configureClient(context.Background(), srv.URL, "", srv.Client(), true)
 	if err == nil {
 		t.Fatalf("expected configuration to fail when service_forms is false")
 	}
-	if !strings.Contains(err.Error(), "Service Form API") {
+	if !strings.Contains(err.Error(), "features.service_forms") {
 		t.Fatalf("expected a clear Service Form API diagnostic, got: %v", err)
 	}
 }
@@ -335,7 +385,7 @@ func TestConfigureClient_RejectsUnsupportedDiscoveryVersion(t *testing.T) {
 	srv := httptest.NewServer(versionedDiscoveryHandler(t, "forms.takoform.com/v0", "forms.takoform.com/v1alpha1"))
 	defer srv.Close()
 
-	_, err := configureClient(context.Background(), srv.URL, "", srv.Client())
+	_, err := configureClient(context.Background(), srv.URL, "", srv.Client(), true)
 	if err == nil {
 		t.Fatalf("expected configuration to fail on unsupported discovery api version")
 	}
@@ -348,7 +398,7 @@ func TestConfigureClient_RejectsUnsupportedCapabilitiesVersion(t *testing.T) {
 	srv := httptest.NewServer(versionedDiscoveryHandler(t, "forms.takoform.com/v1alpha1", "forms.takoform.com/v0"))
 	defer srv.Close()
 
-	_, err := configureClient(context.Background(), srv.URL, "", srv.Client())
+	_, err := configureClient(context.Background(), srv.URL, "", srv.Client(), true)
 	if err == nil {
 		t.Fatalf("expected configuration to fail on unsupported capabilities api version")
 	}
@@ -382,5 +432,23 @@ func TestFirstNonEmpty(t *testing.T) {
 	}
 	if got := firstNonEmpty("", ""); got != "" {
 		t.Fatalf("expected empty, got %q", got)
+	}
+}
+
+func TestParseExplicitBool(t *testing.T) {
+	for _, value := range []string{"", "0", "false", "FALSE", "no"} {
+		got, err := parseExplicitBool(value)
+		if err != nil || got {
+			t.Fatalf("parseExplicitBool(%q) = %v, %v", value, got, err)
+		}
+	}
+	for _, value := range []string{"1", "true", "TRUE", "yes"} {
+		got, err := parseExplicitBool(value)
+		if err != nil || !got {
+			t.Fatalf("parseExplicitBool(%q) = %v, %v", value, got, err)
+		}
+	}
+	if _, err := parseExplicitBool("fallback-please"); err == nil {
+		t.Fatal("expected invalid compatibility fallback value to fail closed")
 	}
 }

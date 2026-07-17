@@ -17,8 +17,8 @@ resource "takoform_object_bucket" "assets" {
   interfaces    = ["s3_api", "signed_url"]
 }
 
-output "bucket_selected_implementation" {
-  value = takoform_object_bucket.assets.selected_implementation
+output "bucket_resource_version" {
+  value = takoform_object_bucket.assets.resource_version
 }
 
 output "bucket_outputs" {

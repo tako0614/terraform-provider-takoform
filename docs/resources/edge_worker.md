@@ -24,4 +24,6 @@ See the [complete example](../../examples/resources/takoform_edge_worker/resourc
 
 ## Read-only attributes
 
-`id`, `selected_implementation`, `target`, `locked`, `portability`, and `outputs` report sanitized host results.
+`id`, `resource_version`, `portability`, and `outputs` report the canonical
+resource fence and sanitized public host results. Backend placement is not
+provider state.

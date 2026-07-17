@@ -19,8 +19,8 @@ resource "takoform_edge_worker" "api" {
   profiles           = ["workers_bindings"]
 }
 
-output "api_selected_implementation" {
-  value = takoform_edge_worker.api.selected_implementation
+output "api_resource_version" {
+  value = takoform_edge_worker.api.resource_version
 }
 
 output "api_outputs" {

@@ -17,8 +17,8 @@ resource "takoform_sql_database" "main" {
   migrations_path = "migrations"
 }
 
-output "database_selected_implementation" {
-  value = takoform_sql_database.main.selected_implementation
+output "database_resource_version" {
+  value = takoform_sql_database.main.resource_version
 }
 
 output "database_outputs" {

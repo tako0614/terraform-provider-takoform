@@ -17,8 +17,8 @@ resource "takoform_queue" "delivery" {
   max_batch_size = 25
 }
 
-output "queue_selected_implementation" {
-  value = takoform_queue.delivery.selected_implementation
+output "queue_resource_version" {
+  value = takoform_queue.delivery.resource_version
 }
 
 output "queue_outputs" {

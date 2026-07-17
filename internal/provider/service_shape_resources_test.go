@@ -45,16 +45,14 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			kind: client.KindObjectBucket,
 			spec: specObjectBucket,
 			resource: objectBucketModel{
-				ID:                     types.StringUnknown(),
-				Name:                   types.StringValue("assets"),
-				Interfaces:             types.SetNull(types.StringType),
-				StorageClass:           types.StringValue("standard"),
-				Space:                  types.StringNull(),
-				SelectedImplementation: types.StringUnknown(),
-				Target:                 types.StringUnknown(),
-				Locked:                 types.BoolUnknown(),
-				Portability:            types.StringUnknown(),
-				Outputs:                types.MapUnknown(types.StringType),
+				ID:              types.StringUnknown(),
+				Name:            types.StringValue("assets"),
+				Interfaces:      types.SetNull(types.StringType),
+				StorageClass:    types.StringValue("standard"),
+				Space:           types.StringNull(),
+				ResourceVersion: types.StringUnknown(),
+				Portability:     types.StringUnknown(),
+				Outputs:         types.MapUnknown(types.StringType),
 			},
 		},
 		{
@@ -62,15 +60,13 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			kind: client.KindKVStore,
 			spec: specKVStore,
 			resource: kvStoreModel{
-				ID:                     types.StringUnknown(),
-				Name:                   types.StringValue("cache"),
-				Consistency:            types.StringNull(),
-				Space:                  types.StringNull(),
-				SelectedImplementation: types.StringUnknown(),
-				Target:                 types.StringUnknown(),
-				Locked:                 types.BoolUnknown(),
-				Portability:            types.StringUnknown(),
-				Outputs:                types.MapUnknown(types.StringType),
+				ID:              types.StringUnknown(),
+				Name:            types.StringValue("cache"),
+				Consistency:     types.StringNull(),
+				Space:           types.StringNull(),
+				ResourceVersion: types.StringUnknown(),
+				Portability:     types.StringUnknown(),
+				Outputs:         types.MapUnknown(types.StringType),
 			},
 		},
 		{
@@ -78,16 +74,14 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			kind: client.KindQueue,
 			spec: specQueue,
 			resource: queueModel{
-				ID:                     types.StringUnknown(),
-				Name:                   types.StringValue("delivery"),
-				MaxRetries:             types.Int64Null(),
-				MaxBatchSize:           types.Int64Null(),
-				Space:                  types.StringNull(),
-				SelectedImplementation: types.StringUnknown(),
-				Target:                 types.StringUnknown(),
-				Locked:                 types.BoolUnknown(),
-				Portability:            types.StringUnknown(),
-				Outputs:                types.MapUnknown(types.StringType),
+				ID:              types.StringUnknown(),
+				Name:            types.StringValue("delivery"),
+				MaxRetries:      types.Int64Null(),
+				MaxBatchSize:    types.Int64Null(),
+				Space:           types.StringNull(),
+				ResourceVersion: types.StringUnknown(),
+				Portability:     types.StringUnknown(),
+				Outputs:         types.MapUnknown(types.StringType),
 			},
 		},
 		{
@@ -95,16 +89,14 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			kind: client.KindSQLDatabase,
 			spec: specSQLDatabase,
 			resource: sqlDatabaseModel{
-				ID:                     types.StringUnknown(),
-				Name:                   types.StringValue("main"),
-				Engine:                 types.StringNull(),
-				MigrationsPath:         types.StringNull(),
-				Space:                  types.StringNull(),
-				SelectedImplementation: types.StringUnknown(),
-				Target:                 types.StringUnknown(),
-				Locked:                 types.BoolUnknown(),
-				Portability:            types.StringUnknown(),
-				Outputs:                types.MapUnknown(types.StringType),
+				ID:              types.StringUnknown(),
+				Name:            types.StringValue("main"),
+				Engine:          types.StringNull(),
+				MigrationsPath:  types.StringNull(),
+				Space:           types.StringNull(),
+				ResourceVersion: types.StringUnknown(),
+				Portability:     types.StringUnknown(),
+				Outputs:         types.MapUnknown(types.StringType),
 			},
 		},
 		{
@@ -112,19 +104,17 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			kind: client.KindContainerService,
 			spec: specContainerService,
 			resource: containerServiceModel{
-				ID:                     types.StringUnknown(),
-				Name:                   types.StringValue("agent"),
-				Image:                  types.StringValue("ghcr.io/example/agent:1.0.0"),
-				Ports:                  types.SetNull(types.Int64Type),
-				PublicHTTP:             types.BoolNull(),
-				Environment:            types.MapNull(types.StringType),
-				Connections:            types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
-				Space:                  types.StringNull(),
-				SelectedImplementation: types.StringUnknown(),
-				Target:                 types.StringUnknown(),
-				Locked:                 types.BoolUnknown(),
-				Portability:            types.StringUnknown(),
-				Outputs:                types.MapUnknown(types.StringType),
+				ID:              types.StringUnknown(),
+				Name:            types.StringValue("agent"),
+				Image:           types.StringValue("ghcr.io/example/agent:1.0.0"),
+				Ports:           types.SetNull(types.Int64Type),
+				PublicHTTP:      types.BoolNull(),
+				Environment:     types.MapNull(types.StringType),
+				Connections:     types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+				Space:           types.StringNull(),
+				ResourceVersion: types.StringUnknown(),
+				Portability:     types.StringUnknown(),
+				Outputs:         types.MapUnknown(types.StringType),
 			},
 		},
 		{
@@ -134,10 +124,9 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			resource: vectorIndexModel{
 				ID: types.StringUnknown(), Name: types.StringValue("embeddings"),
 				Dimensions: types.Int64Value(1536), Metric: types.StringNull(),
-				Connections:            types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
-				Space:                  types.StringNull(),
-				SelectedImplementation: types.StringUnknown(), Target: types.StringUnknown(),
-				Locked: types.BoolUnknown(), Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
+				Connections:     types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+				Space:           types.StringNull(),
+				ResourceVersion: types.StringUnknown(), Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
 			},
 		},
 		{
@@ -149,11 +138,10 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 				ArtifactPath: types.StringValue("/work/workflow.js"), ArtifactURL: types.StringNull(),
 				ArtifactRef: types.StringNull(), ArtifactSHA256: types.StringNull(),
 				Entrypoint: types.StringValue("IngestWorkflow"), MaxAttempts: types.Int64Null(),
-				InitialBackoffSeconds:  types.Int64Null(),
-				Connections:            types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
-				Space:                  types.StringNull(),
-				SelectedImplementation: types.StringUnknown(), Target: types.StringUnknown(),
-				Locked: types.BoolUnknown(), Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
+				InitialBackoffSeconds: types.Int64Null(),
+				Connections:           types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+				Space:                 types.StringNull(),
+				ResourceVersion:       types.StringUnknown(), Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
 			},
 		},
 		{
@@ -163,11 +151,10 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			resource: statefulActorNamespaceModel{
 				ID: types.StringUnknown(), Name: types.StringValue("rooms"),
 				ClassName: types.StringValue("RoomActor"), StorageProfile: types.StringNull(),
-				MigrationTag:           types.StringNull(),
-				Connections:            types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
-				Space:                  types.StringNull(),
-				SelectedImplementation: types.StringUnknown(), Target: types.StringUnknown(),
-				Locked: types.BoolUnknown(), Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
+				MigrationTag:    types.StringNull(),
+				Connections:     types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+				Space:           types.StringNull(),
+				ResourceVersion: types.StringUnknown(), Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
 			},
 		},
 		{
@@ -177,10 +164,9 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			resource: scheduleModel{
 				ID: types.StringUnknown(), Name: types.StringValue("nightly"),
 				Cron: types.StringValue("0 0 * * *"), Timezone: types.StringNull(),
-				Connections:            testConnectionList(t, "workflow", "DurableWorkflow/ingest", []string{"invoke"}, "schedule_trigger"),
-				Space:                  types.StringNull(),
-				SelectedImplementation: types.StringUnknown(), Target: types.StringUnknown(),
-				Locked: types.BoolUnknown(), Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
+				Connections:     testConnectionList(t, "workflow", "DurableWorkflow/ingest", []string{"invoke"}, "schedule_trigger"),
+				Space:           types.StringNull(),
+				ResourceVersion: types.StringUnknown(), Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
 			},
 		},
 	}
@@ -250,8 +236,9 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 
 			r := &serviceShapeResource{
 				data: &providerData{
-					client:       client.New(srv.URL, "", srv.Client()),
+					client:       client.NewCompatibilityFallback(srv.URL, "", srv.Client()),
 					defaultSpace: "prod",
+					forms:        providerReleaseForms(),
 					capabilities: client.ProductCapabilities{
 						Resources: map[string]bool{tt.kind: true},
 					},
@@ -478,8 +465,8 @@ func TestNewServiceShapeImportObserveRefreshesTypedStateAndOutputs(t *testing.T)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodPost {
-					t.Errorf("expected observe POST, got %s", r.Method)
+				if r.Method != http.MethodGet {
+					t.Errorf("expected Resource GET, got %s", r.Method)
 				}
 				_ = json.NewEncoder(w).Encode(client.Resource{
 					APIVersion: client.APIVersion, Kind: tt.kind,
@@ -494,7 +481,8 @@ func TestNewServiceShapeImportObserveRefreshesTypedStateAndOutputs(t *testing.T)
 
 			shape := &serviceShapeResource{
 				data: &providerData{
-					client: client.New(srv.URL, "", srv.Client()), defaultSpace: "prod",
+					client: client.NewCompatibilityFallback(srv.URL, "", srv.Client()), defaultSpace: "prod",
+					forms:        providerReleaseForms(),
 					capabilities: client.ProductCapabilities{Resources: map[string]bool{tt.kind: true}},
 				},
 				cfg: serviceShapeConfig{kind: tt.kind, spec: tt.specKind},
@@ -535,9 +523,7 @@ func nullServiceShapeImportModel(spec serviceShapeSpecKind) any {
 	commonID := types.StringNull()
 	commonName := types.StringNull()
 	commonSpace := types.StringNull()
-	commonSelected := types.StringNull()
-	commonTarget := types.StringNull()
-	commonLocked := types.BoolNull()
+	commonResourceVersion := types.StringNull()
 	commonPortability := types.StringNull()
 	commonOutputs := types.MapNull(types.StringType)
 	nullConnections := types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes})
@@ -545,30 +531,30 @@ func nullServiceShapeImportModel(spec serviceShapeSpecKind) any {
 	case specVectorIndex:
 		return vectorIndexModel{
 			ID: commonID, Name: commonName, Dimensions: types.Int64Null(), Metric: types.StringNull(), Connections: nullConnections,
-			Space: commonSpace, SelectedImplementation: commonSelected,
-			Target: commonTarget, Locked: commonLocked, Portability: commonPortability, Outputs: commonOutputs,
+			Space: commonSpace, ResourceVersion: commonResourceVersion,
+			Portability: commonPortability, Outputs: commonOutputs,
 		}
 	case specDurableWorkflow:
 		return durableWorkflowModel{
 			ID: commonID, Name: commonName, ArtifactPath: types.StringNull(), ArtifactURL: types.StringNull(),
 			ArtifactRef: types.StringNull(), ArtifactSHA256: types.StringNull(), Entrypoint: types.StringNull(),
 			MaxAttempts: types.Int64Null(), InitialBackoffSeconds: types.Int64Null(), Connections: nullConnections,
-			Space: commonSpace, SelectedImplementation: commonSelected,
-			Target: commonTarget, Locked: commonLocked, Portability: commonPortability, Outputs: commonOutputs,
+			Space: commonSpace, ResourceVersion: commonResourceVersion,
+			Portability: commonPortability, Outputs: commonOutputs,
 		}
 	case specStatefulActorNamespace:
 		return statefulActorNamespaceModel{
 			ID: commonID, Name: commonName, ClassName: types.StringNull(), StorageProfile: types.StringNull(),
 			MigrationTag: types.StringNull(), Connections: nullConnections, Space: commonSpace,
-			SelectedImplementation: commonSelected, Target: commonTarget,
-			Locked: commonLocked, Portability: commonPortability, Outputs: commonOutputs,
+			ResourceVersion: commonResourceVersion,
+			Portability:     commonPortability, Outputs: commonOutputs,
 		}
 	case specSchedule:
 		return scheduleModel{
 			ID: commonID, Name: commonName, Cron: types.StringNull(), Timezone: types.StringNull(),
 			Connections: nullConnections, Space: commonSpace,
-			SelectedImplementation: commonSelected, Target: commonTarget, Locked: commonLocked,
-			Portability: commonPortability, Outputs: commonOutputs,
+			ResourceVersion: commonResourceVersion,
+			Portability:     commonPortability, Outputs: commonOutputs,
 		}
 	default:
 		panic("unsupported import test shape")

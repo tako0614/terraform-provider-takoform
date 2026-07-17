@@ -1,0 +1,20 @@
+{
+  "format": "takoform.provider-migration-evidence@v1",
+  "mappingSha256": "c94f59e5b5c783fa36434e3fe87d567c29ffd05b80860ffcb9a057a43f638ae0",
+  "legacyStateSha256": "d9e5c5e9d368bde2ed4a7c18b4fa2e46e1ff3a5f71ff6a9ad7199083c66339a1",
+  "goldenStateSha256": "ca333579961032f94f04a143801fa11e6ff95c646dea20624dbeb29849c25a1d",
+  "legacyResourceCount": 6,
+  "resourceCount": 10,
+  "phases": [
+    { "name": "state-backup", "status": "complete", "evidence": "redacted six-resource legacy backup digest is pinned independently from the new-provider golden state" },
+    { "name": "old-refresh-no-op", "status": "external-required", "evidence": "requires the pinned takosumi provider artifact, lock file, and a reachable host" },
+    { "name": "approved-remove-import", "status": "complete", "evidence": "bijection and canonical id/name/space continuity verified for all six real legacy resource types" },
+    { "name": "new-refresh-no-op", "status": "external-required", "evidence": "requires a built candidate provider and a reachable versioned Form host" },
+    { "name": "old-artifact-lock-rollback", "status": "external-required", "evidence": "the structural backup retains the exact old address/types; rollback refresh no-op still requires the pinned old artifact, lock, and host" }
+  ],
+  "externalBlockers": [
+    "pinned old takosumi provider artifact and lock file",
+    "reachable host with all ten exact FormRefs installed",
+    "published or locally mirrored Takoform candidate artifact for end-to-end refresh"
+  ]
+}
