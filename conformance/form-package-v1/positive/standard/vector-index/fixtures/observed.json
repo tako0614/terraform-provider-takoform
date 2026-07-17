@@ -1,18 +1,4 @@
 {
-  "applied": {
-    "connections": {
-      "DATABASE": {
-        "permissions": [
-          "read"
-        ],
-        "projection": "metadata",
-        "resource": "SQLDatabase/main"
-      }
-    },
-    "dimensions": 1536,
-    "metric": "cosine",
-    "name": "embeddings"
-  },
   "driftedFields": [],
   "generation": 1,
   "id": "VectorIndex/embeddings",

@@ -3,19 +3,5 @@
   "id": "VectorIndex/embeddings",
   "kind": "VectorIndex",
   "name": "embeddings",
-  "portability": "portable",
-  "portableSpec": {
-    "connections": {
-      "DATABASE": {
-        "permissions": [
-          "read"
-        ],
-        "projection": "metadata",
-        "resource": "SQLDatabase/main"
-      }
-    },
-    "dimensions": 1536,
-    "metric": "cosine",
-    "name": "embeddings"
-  }
+  "portability": "portable"
 }

@@ -3,12 +3,5 @@
   "id": "ObjectBucket/assets",
   "kind": "ObjectBucket",
   "name": "assets",
-  "portability": "portable",
-  "portableSpec": {
-    "interfaces": [
-      "s3_api"
-    ],
-    "name": "assets",
-    "storageClass": "standard"
-  }
+  "portability": "portable"
 }

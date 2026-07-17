@@ -16,7 +16,7 @@ func TestVersionedTypedReadsGetFenceThenObserveAndMapDrift(t *testing.T) {
 	for _, kind := range typedResourceKinds() {
 		kind := kind
 		t.Run(kind, func(t *testing.T) {
-			form := providerReleaseForms()[kind]
+			form := providerCandidateForms()[kind]
 			var server *httptest.Server
 			requests := make([]string, 0, 3)
 			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +80,7 @@ func TestVersionedTypedReadsStopOnExactGet404(t *testing.T) {
 			if _, err := formClient.Discover(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			_, err := observeResourceForRead(context.Background(), formClient, kind, "fixture", "prod", providerReleaseForms()[kind])
+			_, err := observeResourceForRead(context.Background(), formClient, kind, "fixture", "prod", providerCandidateForms()[kind])
 			if !errors.Is(err, client.ErrNotFound) {
 				t.Fatalf("error = %v, want ErrNotFound", err)
 			}
@@ -108,7 +108,7 @@ func TestCompatibilityTypedReadsUseObserveOnly(t *testing.T) {
 				})
 			}))
 			defer server.Close()
-			observed, err := observeResourceForRead(context.Background(), client.NewCompatibilityFallback(server.URL, "", server.Client()), kind, "fixture", "prod", providerReleaseForms()[kind])
+			observed, err := observeResourceForRead(context.Background(), client.NewCompatibilityFallback(server.URL, "", server.Client()), kind, "fixture", "prod", providerCandidateForms()[kind])
 			if err != nil {
 				t.Fatal(err)
 			}

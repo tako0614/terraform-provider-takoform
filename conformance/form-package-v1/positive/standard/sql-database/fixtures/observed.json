@@ -1,9 +1,4 @@
 {
-  "applied": {
-    "engine": "sqlite",
-    "migrationsPath": "migrations",
-    "name": "main"
-  },
   "driftedFields": [],
   "generation": 1,
   "id": "SQLDatabase/main",

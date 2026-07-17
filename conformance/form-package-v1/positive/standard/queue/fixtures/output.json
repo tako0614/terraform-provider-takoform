@@ -3,12 +3,5 @@
   "id": "Queue/jobs",
   "kind": "Queue",
   "name": "jobs",
-  "portability": "portable",
-  "portableSpec": {
-    "delivery": {
-      "maxBatchSize": 10,
-      "maxRetries": 5
-    },
-    "name": "jobs"
-  }
+  "portability": "portable"
 }

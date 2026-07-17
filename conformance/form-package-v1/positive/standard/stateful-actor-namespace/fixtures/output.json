@@ -3,21 +3,5 @@
   "id": "StatefulActorNamespace/rooms",
   "kind": "StatefulActorNamespace",
   "name": "rooms",
-  "portability": "portable",
-  "portableSpec": {
-    "className": "RoomActor",
-    "connections": {
-      "DATABASE": {
-        "permissions": [
-          "read",
-          "write"
-        ],
-        "projection": "storage",
-        "resource": "SQLDatabase/main"
-      }
-    },
-    "migrationTag": "v1",
-    "name": "rooms",
-    "storageProfile": "durable_sqlite"
-  }
+  "portability": "portable"
 }

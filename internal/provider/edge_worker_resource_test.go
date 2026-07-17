@@ -118,7 +118,7 @@ func TestEdgeWorkerCreateAcceptsEndpointDefinedProfileTokens(t *testing.T) {
 	r := &edgeWorkerResource{
 		data: &providerData{
 			client:       client.NewCompatibilityFallback(srv.URL, "", srv.Client()),
-			forms:        providerReleaseForms(),
+			forms:        providerCandidateForms(),
 			defaultSpace: "prod",
 			capabilities: client.ProductCapabilities{
 				Resources: map[string]bool{client.KindEdgeWorker: true},
@@ -177,7 +177,7 @@ func TestEdgeWorkerCreateAcceptsEndpointDefinedProfileTokens(t *testing.T) {
 
 func TestVersionedEdgeWorkerUpdateSendsIfMatchFromProviderState(t *testing.T) {
 	ctx := context.Background()
-	form := providerReleaseForms()[client.KindEdgeWorker]
+	form := providerCandidateForms()[client.KindEdgeWorker]
 	var server *httptest.Server
 	sawUpdate := false
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +228,7 @@ func TestVersionedEdgeWorkerUpdateSendsIfMatchFromProviderState(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := &edgeWorkerResource{data: &providerData{
-		client: formClient, forms: providerReleaseForms(), defaultSpace: "prod",
+		client: formClient, forms: providerCandidateForms(), defaultSpace: "prod",
 	}}
 	var schemaResp frameworkresource.SchemaResponse
 	r.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResp)

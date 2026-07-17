@@ -94,6 +94,17 @@ func Generate(root string) error {
 	if err := writeJSON(filepath.Join(root, "forms", "standard-package-set.json"), inventory); err != nil {
 		return err
 	}
+	refs := make(map[string]formregistry.Ref, len(entries))
+	for _, entry := range entries {
+		refs[entry.Kind] = formregistry.Ref{
+			APIVersion: entry.FormRef.APIVersion, Kind: entry.FormRef.Kind,
+			DefinitionVersion: entry.FormRef.DefinitionVersion,
+			SchemaDigest:      entry.FormRef.SchemaDigest, PackageDigest: entry.PackageDigest,
+		}
+	}
+	if err := writeJSON(filepath.Join(root, "internal", "formregistry", "candidate-refs.json"), refs); err != nil {
+		return err
+	}
 	if err := os.RemoveAll(filepath.Join(root, "conformance", "standard-form-admission-v1")); err != nil {
 		return err
 	}
@@ -116,7 +127,7 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 	definition := formpackage.FormDefinition{
 		APIVersion: formpackage.FormAPIVersion, Kind: spec.Kind, DefinitionVersion: definitionVersion,
 		Title: spec.Title, Description: spec.Description, Status: "standard",
-		DesiredSchema: desiredSchema, ObservedSchema: observedSchema(desiredSchema), OutputSchema: outputSchema(spec.Kind, desiredSchema),
+		DesiredSchema: desiredSchema, ObservedSchema: observedSchema(), OutputSchema: outputSchema(spec.Kind),
 		ImmutableFields:       append([]string(nil), spec.Immutable...),
 		LifecycleCapabilities: []string{"create", "read", "update", "delete", "import", "observe", "refresh", "drift"},
 		ConformanceFixtures: []formpackage.ConformanceFixture{{
@@ -127,12 +138,12 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 		}},
 	}
 	observed := map[string]any{
-		"applied": desired, "driftedFields": []any{}, "generation": 1, "id": spec.Kind + "/" + name,
+		"driftedFields": []any{}, "generation": 1, "id": spec.Kind + "/" + name,
 		"imported": true, "portability": "portable", "ready": true,
 	}
 	output := map[string]any{
 		"generation": 1, "id": spec.Kind + "/" + name, "kind": spec.Kind, "name": name,
-		"portability": "portable", "portableSpec": desired,
+		"portability": "portable",
 	}
 	negative, err := negativeDesired(spec.Kind, desired)
 	if err != nil {
@@ -226,7 +237,7 @@ func Verify(root string) error {
 		if compiled.APIVersion != entry.FormRef.APIVersion || compiled.Kind != entry.FormRef.Kind ||
 			compiled.DefinitionVersion != entry.FormRef.DefinitionVersion || compiled.SchemaDigest != entry.FormRef.SchemaDigest ||
 			compiled.PackageDigest != entry.PackageDigest {
-			return fmt.Errorf("%s provider release ref drift", entry.Kind)
+			return fmt.Errorf("%s provider candidate ref drift", entry.Kind)
 		}
 		var desired map[string]any
 		if err := readJSON(filepath.Join(packageRoot, "fixtures", "desired.json"), &desired); err != nil {
@@ -237,6 +248,18 @@ func Verify(root string) error {
 		}
 	}
 	return nil
+}
+
+// VerifyReleaseReady is the fail-closed provider publication gate. The
+// repository currently owns structural candidate bytes only: authenticated
+// Takosumi host evidence, Terraform protocol evidence, immutable package
+// release readback, and signed admission evidence require external trust and
+// therefore cannot be synthesized by this command.
+func VerifyReleaseReady(root string) error {
+	if err := Verify(root); err != nil {
+		return err
+	}
+	return fmt.Errorf("provider publication is blocked: the embedded Form set is structural-only and lacks authenticated external standard admission evidence")
 }
 
 func desiredSchema(kind string) (map[string]any, error) {
@@ -305,7 +328,6 @@ func desiredSchema(kind string) (map[string]any, error) {
 		properties["image"] = map[string]any{"type": "string", "pattern": "^[^@\\s]+@sha256:[A-Fa-f0-9]{64}$"}
 		properties["ports"] = map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "integer", "minimum": 1, "maximum": 65535}}
 		properties["publicHttp"] = map[string]any{"type": "boolean"}
-		properties["environment"] = typedStringMapSchema()
 		required = append(required, "image")
 	case "StatefulActorNamespace":
 		addConnections(false)
@@ -334,54 +356,36 @@ func desiredSchema(kind string) (map[string]any, error) {
 	return schema, nil
 }
 
-func observedSchema(desired map[string]any) map[string]any {
-	applied := cloneJSONMap(desired)
-	delete(applied, "$schema")
-	defs, _ := applied["$defs"].(map[string]any)
-	delete(applied, "$defs")
-	schema := map[string]any{
+func observedSchema() map[string]any {
+	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-		"required": []string{"id", "ready", "generation", "imported", "portability", "applied", "driftedFields"},
+		"required": []string{"id", "ready", "generation", "imported", "portability", "driftedFields"},
 		"properties": map[string]any{
 			"id":          map[string]any{"type": "string", "minLength": 1},
 			"ready":       map[string]any{"type": "boolean"},
 			"generation":  map[string]any{"type": "integer", "minimum": 1},
 			"imported":    map[string]any{"type": "boolean"},
 			"portability": map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
-			"applied":     applied,
 			"driftedFields": map[string]any{
 				"type": "array", "uniqueItems": true,
 				"items": map[string]any{"type": "string", "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$"},
 			},
 		},
 	}
-	if len(defs) > 0 {
-		schema["$defs"] = defs
-	}
-	return schema
 }
 
-func outputSchema(kind string, desired map[string]any) map[string]any {
-	portableSpec := cloneJSONMap(desired)
-	delete(portableSpec, "$schema")
-	defs, _ := portableSpec["$defs"].(map[string]any)
-	delete(portableSpec, "$defs")
-	schema := map[string]any{
+func outputSchema(kind string) map[string]any {
+	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-		"required": []string{"id", "kind", "name", "generation", "portability", "portableSpec"},
+		"required": []string{"id", "kind", "name", "generation", "portability"},
 		"properties": map[string]any{
-			"id":           map[string]any{"type": "string", "minLength": 1},
-			"kind":         map[string]any{"type": "string", "const": kind},
-			"name":         map[string]any{"type": "string", "minLength": 1},
-			"generation":   map[string]any{"type": "integer", "minimum": 1},
-			"portability":  map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
-			"portableSpec": portableSpec,
+			"id":          map[string]any{"type": "string", "minLength": 1},
+			"kind":        map[string]any{"type": "string", "const": kind},
+			"name":        map[string]any{"type": "string", "minLength": 1},
+			"generation":  map[string]any{"type": "integer", "minimum": 1},
+			"portability": map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
 		},
 	}
-	if len(defs) > 0 {
-		schema["$defs"] = defs
-	}
-	return schema
 }
 
 func canonicalDesired(kind string) (map[string]any, error) {
@@ -414,7 +418,6 @@ func canonicalDesired(kind string) (map[string]any, error) {
 	case "ContainerService":
 		return map[string]any{
 			"name": "agent", "image": "ghcr.io/example/agent@sha256:" + strings.Repeat("c", 64), "ports": []any{8080}, "publicHttp": true,
-			"environment": map[string]any{"LOG_LEVEL": "info"},
 			"connections": connections("DATABASE", "SQLDatabase/main", []any{"read", "write"}, "environment"),
 		}, nil
 	case "StatefulActorNamespace":
@@ -516,10 +519,6 @@ func tokenArraySchema() map[string]any {
 
 func tokenSchema(defaultValue string) map[string]any {
 	return map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$", "default": defaultValue}
-}
-
-func typedStringMapSchema() map[string]any {
-	return map[string]any{"type": "object", "propertyNames": portableMapKeys(), "additionalProperties": map[string]any{"type": "string"}}
 }
 
 func portableMapKeys() map[string]any {

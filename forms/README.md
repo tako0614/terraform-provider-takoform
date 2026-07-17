@@ -1,6 +1,6 @@
 # Standard-definition candidate set and legacy inventory
 
-The provider release pins this all-or-nothing set of exact candidate bytes:
+The provider build pins this all-or-nothing set of exact candidate bytes:
 
 | Kind | Provider resource | Standard identity |
 | --- | --- | --- |
@@ -19,11 +19,10 @@ The provider release pins this all-or-nothing set of exact candidate bytes:
 `(FormRef, packageDigest)` pair. Each independent package lives under
 [`../conformance/form-package-v1/positive/standard/`](../conformance/form-package-v1/positive/standard/)
 and contains canonical desired, observed, output, and negative fixtures. The
-observed fixture repeats the complete applied portable desired state and adds
-import/drift metadata; the output fixture repeats the complete non-secret
-`portableSpec` plus exact kind, generation, and portability identifiers. This
-keeps artifact integrity/version fields and public connection projections in
-the checked output contract rather than reducing it to a generic ID.
+observed fixture carries only lifecycle/import/drift status. The output fixture
+carries only exact kind, name, generation, identity, and portability evidence.
+Desired configuration, runner-local paths, and connection topology are echoed
+into neither contract.
 This repository does not emit passed Standard Form admission evidence from
 those files.
 
@@ -40,7 +39,16 @@ coverage, import support, and selected `RequiresReplace` modifiers. These
 checks do not execute a Terraform protocol lifecycle or a Takosumi host. The
 inventory therefore says `classification: structural-candidate`,
 `localConformance: structural-only`, `admissionStatus: external-required`, and
-`publicationReady: false`.
+`publicationReady: false`. Observed and output fixtures expose only lifecycle
+status/identity; neither echoes the desired document, connection topology, or
+runner-local artifact locations.
+
+The provider tag workflow runs
+`go run ./cmd/standard-form-conformance release-check`. That gate intentionally
+fails closed while these are the only available claims, so candidate FormRefs
+cannot silently become a public provider release identity. It can be opened
+only by a separately reviewed implementation that authenticates every external
+requirement and the exact signed admission evidence.
 
 An admission artifact may be accepted only after external runners authenticate
 complete host and provider lifecycle evidence. Shared negative admission

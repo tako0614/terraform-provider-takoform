@@ -53,17 +53,6 @@
       "connections": {
         "$ref": "#/$defs/connections"
       },
-      "environment": {
-        "additionalProperties": {
-          "type": "string"
-        },
-        "propertyNames": {
-          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-          "type": "string",
-          "x-takoform-fieldPolicy": "portable-data-only-v1"
-        },
-        "type": "object"
-      },
       "image": {
         "pattern": "^[^@\\s]+@sha256:[A-Fa-f0-9]{64}$",
         "type": "string"
@@ -94,96 +83,9 @@
     "type": "object"
   },
   "observedSchema": {
-    "$defs": {
-      "connection": {
-        "additionalProperties": false,
-        "properties": {
-          "permissions": {
-            "items": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "projection": {
-            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-            "type": "string"
-          },
-          "resource": {
-            "pattern": "^\\S+$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "resource",
-          "permissions",
-          "projection"
-        ],
-        "type": "object"
-      },
-      "connections": {
-        "additionalProperties": {
-          "$ref": "#/$defs/connection"
-        },
-        "propertyNames": {
-          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-          "type": "string",
-          "x-takoform-fieldPolicy": "portable-data-only-v1"
-        },
-        "type": "object"
-      }
-    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "applied": {
-        "additionalProperties": false,
-        "properties": {
-          "connections": {
-            "$ref": "#/$defs/connections"
-          },
-          "environment": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-              "type": "string",
-              "x-takoform-fieldPolicy": "portable-data-only-v1"
-            },
-            "type": "object"
-          },
-          "image": {
-            "pattern": "^[^@\\s]+@sha256:[A-Fa-f0-9]{64}$",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "ports": {
-            "items": {
-              "maximum": 65535,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "publicHttp": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "name",
-          "image"
-        ],
-        "type": "object"
-      },
       "driftedFields": {
         "items": {
           "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
@@ -217,53 +119,11 @@
       "generation",
       "imported",
       "portability",
-      "applied",
       "driftedFields"
     ],
     "type": "object"
   },
   "outputSchema": {
-    "$defs": {
-      "connection": {
-        "additionalProperties": false,
-        "properties": {
-          "permissions": {
-            "items": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "projection": {
-            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-            "type": "string"
-          },
-          "resource": {
-            "pattern": "^\\S+$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "resource",
-          "permissions",
-          "projection"
-        ],
-        "type": "object"
-      },
-      "connections": {
-        "additionalProperties": {
-          "$ref": "#/$defs/connection"
-        },
-        "propertyNames": {
-          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-          "type": "string",
-          "x-takoform-fieldPolicy": "portable-data-only-v1"
-        },
-        "type": "object"
-      }
-    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
@@ -286,52 +146,6 @@
       "portability": {
         "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
         "type": "string"
-      },
-      "portableSpec": {
-        "additionalProperties": false,
-        "properties": {
-          "connections": {
-            "$ref": "#/$defs/connections"
-          },
-          "environment": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-              "type": "string",
-              "x-takoform-fieldPolicy": "portable-data-only-v1"
-            },
-            "type": "object"
-          },
-          "image": {
-            "pattern": "^[^@\\s]+@sha256:[A-Fa-f0-9]{64}$",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "ports": {
-            "items": {
-              "maximum": 65535,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "publicHttp": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "name",
-          "image"
-        ],
-        "type": "object"
       }
     },
     "required": [
@@ -339,8 +153,7 @@
       "kind",
       "name",
       "generation",
-      "portability",
-      "portableSpec"
+      "portability"
     ],
     "type": "object"
   },

@@ -1,18 +1,4 @@
 {
-  "applied": {
-    "connections": {
-      "workflow": {
-        "permissions": [
-          "invoke"
-        ],
-        "projection": "schedule_trigger",
-        "resource": "DurableWorkflow/ingest"
-      }
-    },
-    "cron": "0 0 * * *",
-    "name": "nightly",
-    "timezone": "UTC"
-  },
   "driftedFields": [],
   "generation": 1,
   "id": "Schedule/nightly",

@@ -83,85 +83,9 @@
     "type": "object"
   },
   "observedSchema": {
-    "$defs": {
-      "connections": {
-        "additionalProperties": {
-          "$ref": "#/$defs/scheduleConnection"
-        },
-        "maxProperties": 1,
-        "minProperties": 1,
-        "propertyNames": {
-          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-          "type": "string",
-          "x-takoform-fieldPolicy": "portable-data-only-v1"
-        },
-        "type": "object"
-      },
-      "scheduleConnection": {
-        "additionalProperties": false,
-        "properties": {
-          "permissions": {
-            "contains": {
-              "const": "invoke",
-              "type": "string"
-            },
-            "items": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "projection": {
-            "const": "schedule_trigger",
-            "type": "string"
-          },
-          "resource": {
-            "pattern": "^\\S+$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "resource",
-          "permissions",
-          "projection"
-        ],
-        "type": "object"
-      }
-    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "applied": {
-        "additionalProperties": false,
-        "properties": {
-          "connections": {
-            "$ref": "#/$defs/connections"
-          },
-          "cron": {
-            "pattern": "^[0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)?$",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "timezone": {
-            "default": "UTC",
-            "pattern": "^[A-Za-z][A-Za-z0-9._:/+-]{0,127}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "cron",
-          "connections"
-        ],
-        "type": "object"
-      },
       "driftedFields": {
         "items": {
           "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
@@ -195,59 +119,11 @@
       "generation",
       "imported",
       "portability",
-      "applied",
       "driftedFields"
     ],
     "type": "object"
   },
   "outputSchema": {
-    "$defs": {
-      "connections": {
-        "additionalProperties": {
-          "$ref": "#/$defs/scheduleConnection"
-        },
-        "maxProperties": 1,
-        "minProperties": 1,
-        "propertyNames": {
-          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-          "type": "string",
-          "x-takoform-fieldPolicy": "portable-data-only-v1"
-        },
-        "type": "object"
-      },
-      "scheduleConnection": {
-        "additionalProperties": false,
-        "properties": {
-          "permissions": {
-            "contains": {
-              "const": "invoke",
-              "type": "string"
-            },
-            "items": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "projection": {
-            "const": "schedule_trigger",
-            "type": "string"
-          },
-          "resource": {
-            "pattern": "^\\S+$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "resource",
-          "permissions",
-          "projection"
-        ],
-        "type": "object"
-      }
-    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
@@ -270,35 +146,6 @@
       "portability": {
         "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
         "type": "string"
-      },
-      "portableSpec": {
-        "additionalProperties": false,
-        "properties": {
-          "connections": {
-            "$ref": "#/$defs/connections"
-          },
-          "cron": {
-            "pattern": "^[0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)?$",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "timezone": {
-            "default": "UTC",
-            "pattern": "^[A-Za-z][A-Za-z0-9._:/+-]{0,127}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "cron",
-          "connections"
-        ],
-        "type": "object"
       }
     },
     "required": [
@@ -306,8 +153,7 @@
       "kind",
       "name",
       "generation",
-      "portability",
-      "portableSpec"
+      "portability"
     ],
     "type": "object"
   },

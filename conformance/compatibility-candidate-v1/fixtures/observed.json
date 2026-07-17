@@ -52,7 +52,7 @@
       "resource": {
         "apiVersion": "forms.takoform.com/v1alpha1", "kind": "ContainerService",
         "metadata": { "name": "agent", "space": "fixture-space", "managedBy": "opentofu", "resourceVersion": "1" },
-        "spec": { "name": "agent", "image": "ghcr.io/example/agent:1.0.0", "ports": [8080], "publicHttp": true, "environment": { "LOG_LEVEL": "info" }, "connections": { "DATABASE": { "resource": "SQLDatabase/main", "permissions": ["read", "write"], "projection": "environment" } } },
+        "spec": { "name": "agent", "image": "ghcr.io/example/agent@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "ports": [8080], "publicHttp": true, "connections": { "DATABASE": { "resource": "SQLDatabase/main", "permissions": ["read", "write"], "projection": "environment" } } },
         "status": { "phase": "Ready", "observedGeneration": 1, "resolution": { "selectedImplementation": "fixture.container_service", "target": "fixture-target", "locked": true, "portability": "portable" }, "outputs": { "reference": "agent-output" }, "conditions": [{ "type": "Ready", "status": "True", "reason": "Fixture" }] }
       }
     },

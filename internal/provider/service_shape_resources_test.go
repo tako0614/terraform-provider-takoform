@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -107,10 +108,9 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			resource: containerServiceModel{
 				ID:              types.StringUnknown(),
 				Name:            types.StringValue("agent"),
-				Image:           types.StringValue("ghcr.io/example/agent:1.0.0"),
+				Image:           types.StringValue("ghcr.io/example/agent@sha256:" + strings.Repeat("c", 64)),
 				Ports:           types.SetNull(types.Int64Type),
 				PublicHTTP:      types.BoolNull(),
-				Environment:     types.MapNull(types.StringType),
 				Connections:     types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
 				Space:           types.StringNull(),
 				ResourceVersion: types.StringUnknown(),
@@ -239,7 +239,7 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 				data: &providerData{
 					client:       client.NewCompatibilityFallback(srv.URL, "", srv.Client()),
 					defaultSpace: "prod",
-					forms:        providerReleaseForms(),
+					forms:        providerCandidateForms(),
 					capabilities: client.ProductCapabilities{
 						Resources: map[string]bool{tt.kind: true},
 					},
@@ -328,12 +328,67 @@ func TestRefreshObjectBucketSpecDefaultsLegacyStorageClass(t *testing.T) {
 	}
 }
 
+func TestPortableDefaultsCanonicalizeAcrossWriteAndRefresh(t *testing.T) {
+	tests := []struct {
+		name      string
+		kind      string
+		specKind  serviceShapeSpecKind
+		model     serviceShapeModel
+		field     string
+		want      string
+		refreshed func(serviceShapeModel) string
+	}{
+		{
+			name: "sql engine", kind: client.KindSQLDatabase, specKind: specSQLDatabase,
+			model: serviceShapeModel{Name: types.StringValue("main"), Engine: types.StringNull()},
+			field: "engine", want: "sqlite", refreshed: func(model serviceShapeModel) string { return model.Engine.ValueString() },
+		},
+		{
+			name: "vector metric", kind: client.KindVectorIndex, specKind: specVectorIndex,
+			model: serviceShapeModel{Name: types.StringValue("embeddings"), Dimensions: types.Int64Value(1536), Metric: types.StringNull()},
+			field: "metric", want: "cosine", refreshed: func(model serviceShapeModel) string { return model.Metric.ValueString() },
+		},
+		{
+			name: "actor storage profile", kind: client.KindStatefulActorNamespace, specKind: specStatefulActorNamespace,
+			model: serviceShapeModel{Name: types.StringValue("rooms"), ClassName: types.StringValue("RoomActor"), StorageProfile: types.StringNull()},
+			field: "storageProfile", want: "durable_sqlite", refreshed: func(model serviceShapeModel) string { return model.StorageProfile.ValueString() },
+		},
+		{
+			name: "schedule timezone", kind: client.KindSchedule, specKind: specSchedule,
+			model: serviceShapeModel{
+				Name: types.StringValue("nightly"), Cron: types.StringValue("0 0 * * *"), Timezone: types.StringNull(),
+				Connections: testConnectionList(t, "workflow", "DurableWorkflow/ingest", []string{"invoke"}, "schedule_trigger"),
+			},
+			field: "timezone", want: "UTC", refreshed: func(model serviceShapeModel) string { return model.Timezone.ValueString() },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resource, _, diags := tt.model.toResource(context.Background(), "prod", tt.kind, tt.specKind)
+			if diags.HasError() {
+				t.Fatalf("toResource diagnostics: %v", diags)
+			}
+			if got := resource.Spec[tt.field]; got != tt.want {
+				t.Fatalf("wire default %s = %#v, want %q", tt.field, got, tt.want)
+			}
+
+			refreshed := serviceShapeModel{}
+			response := &client.Resource{Metadata: client.Metadata{Name: "legacy", Space: "prod"}, Spec: map[string]any{"name": "legacy"}}
+			if refreshDiags := refreshServiceShapeSpec(context.Background(), response, tt.specKind, &refreshed); refreshDiags.HasError() {
+				t.Fatalf("refresh diagnostics: %v", refreshDiags)
+			}
+			if got := tt.refreshed(refreshed); got != tt.want {
+				t.Fatalf("refreshed default %s = %q, want %q", tt.field, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestContainerServiceToResourceCarriesConnections(t *testing.T) {
 	model := containerServiceModel{
-		Name:        types.StringValue("agent"),
-		Image:       types.StringValue("ghcr.io/example/agent:1.0.0"),
-		PublicHTTP:  types.BoolValue(false),
-		Environment: types.MapNull(types.StringType),
+		Name:       types.StringValue("agent"),
+		Image:      types.StringValue("ghcr.io/example/agent@sha256:" + strings.Repeat("c", 64)),
+		PublicHTTP: types.BoolValue(false),
 		Connections: testConnectionList(
 			t,
 			"JOBS",
@@ -375,8 +430,23 @@ func TestNewServiceShapesRejectInvalidSpecsBeforeRemoteCalls(t *testing.T) {
 			model: serviceShapeModel{Name: types.StringValue("bad"), StorageClass: types.StringValue("provider-tier")},
 		},
 		{
+			name: "queue retries", kind: client.KindQueue, spec: specQueue,
+			model: serviceShapeModel{Name: types.StringValue("bad"), MaxRetries: types.Int64Value(-1)},
+		},
+		{
 			name: "vector dimensions", kind: client.KindVectorIndex, spec: specVectorIndex,
 			model: serviceShapeModel{Name: types.StringValue("bad"), Dimensions: types.Int64Value(0)},
+		},
+		{
+			name: "container mutable image", kind: client.KindContainerService, spec: specContainerService,
+			model: serviceShapeModel{Name: types.StringValue("bad"), Image: types.StringValue("ghcr.io/example/agent:latest")},
+		},
+		{
+			name: "container port range", kind: client.KindContainerService, spec: specContainerService,
+			model: serviceShapeModel{
+				Name: types.StringValue("bad"), Image: types.StringValue("ghcr.io/example/agent@sha256:" + strings.Repeat("c", 64)),
+				Ports: types.SetValueMust(types.Int64Type, []attr.Value{types.Int64Value(0)}),
+			},
 		},
 		{
 			name: "workflow digest", kind: client.KindDurableWorkflow, spec: specDurableWorkflow,
@@ -483,7 +553,7 @@ func TestCompatibilityServiceShapeImportReadObservesTypedStateAndOutputs(t *test
 			shape := &serviceShapeResource{
 				data: &providerData{
 					client: client.NewCompatibilityFallback(srv.URL, "", srv.Client()), defaultSpace: "prod",
-					forms:        providerReleaseForms(),
+					forms:        providerCandidateForms(),
 					capabilities: client.ProductCapabilities{Resources: map[string]bool{tt.kind: true}},
 				},
 				cfg: serviceShapeConfig{kind: tt.kind, spec: tt.specKind},

@@ -146,148 +146,9 @@
     "type": "object"
   },
   "observedSchema": {
-    "$defs": {
-      "artifactSource": {
-        "oneOf": [
-          {
-            "additionalProperties": false,
-            "properties": {
-              "artifactPath": {
-                "minLength": 1,
-                "type": "string"
-              }
-            },
-            "required": [
-              "artifactPath"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "artifactSha256": {
-                "$ref": "#/$defs/sha256"
-              },
-              "artifactUrl": {
-                "format": "uri",
-                "pattern": "^https://",
-                "type": "string"
-              }
-            },
-            "required": [
-              "artifactUrl",
-              "artifactSha256"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "artifactRef": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "artifactSha256": {
-                "$ref": "#/$defs/sha256"
-              }
-            },
-            "required": [
-              "artifactRef",
-              "artifactSha256"
-            ],
-            "type": "object"
-          }
-        ]
-      },
-      "connection": {
-        "additionalProperties": false,
-        "properties": {
-          "permissions": {
-            "items": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "projection": {
-            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-            "type": "string"
-          },
-          "resource": {
-            "pattern": "^\\S+$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "resource",
-          "permissions",
-          "projection"
-        ],
-        "type": "object"
-      },
-      "connections": {
-        "additionalProperties": {
-          "$ref": "#/$defs/connection"
-        },
-        "propertyNames": {
-          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-          "type": "string",
-          "x-takoform-fieldPolicy": "portable-data-only-v1"
-        },
-        "type": "object"
-      },
-      "sha256": {
-        "pattern": "^(sha256:)?[A-Fa-f0-9]{64}$",
-        "type": "string"
-      }
-    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "applied": {
-        "additionalProperties": false,
-        "properties": {
-          "compatibilityDate": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "compatibilityFlags": {
-            "items": {
-              "pattern": "^\\S+$",
-              "type": "string"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "connections": {
-            "$ref": "#/$defs/connections"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "profiles": {
-            "items": {
-              "pattern": "^\\S+$",
-              "type": "string"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "source": {
-            "$ref": "#/$defs/artifactSource"
-          }
-        },
-        "required": [
-          "name",
-          "source"
-        ],
-        "type": "object"
-      },
       "driftedFields": {
         "items": {
           "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
@@ -321,109 +182,11 @@
       "generation",
       "imported",
       "portability",
-      "applied",
       "driftedFields"
     ],
     "type": "object"
   },
   "outputSchema": {
-    "$defs": {
-      "artifactSource": {
-        "oneOf": [
-          {
-            "additionalProperties": false,
-            "properties": {
-              "artifactPath": {
-                "minLength": 1,
-                "type": "string"
-              }
-            },
-            "required": [
-              "artifactPath"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "artifactSha256": {
-                "$ref": "#/$defs/sha256"
-              },
-              "artifactUrl": {
-                "format": "uri",
-                "pattern": "^https://",
-                "type": "string"
-              }
-            },
-            "required": [
-              "artifactUrl",
-              "artifactSha256"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "artifactRef": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "artifactSha256": {
-                "$ref": "#/$defs/sha256"
-              }
-            },
-            "required": [
-              "artifactRef",
-              "artifactSha256"
-            ],
-            "type": "object"
-          }
-        ]
-      },
-      "connection": {
-        "additionalProperties": false,
-        "properties": {
-          "permissions": {
-            "items": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "projection": {
-            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-            "type": "string"
-          },
-          "resource": {
-            "pattern": "^\\S+$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "resource",
-          "permissions",
-          "projection"
-        ],
-        "type": "object"
-      },
-      "connections": {
-        "additionalProperties": {
-          "$ref": "#/$defs/connection"
-        },
-        "propertyNames": {
-          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-          "type": "string",
-          "x-takoform-fieldPolicy": "portable-data-only-v1"
-        },
-        "type": "object"
-      },
-      "sha256": {
-        "pattern": "^(sha256:)?[A-Fa-f0-9]{64}$",
-        "type": "string"
-      }
-    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
@@ -446,48 +209,6 @@
       "portability": {
         "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
         "type": "string"
-      },
-      "portableSpec": {
-        "additionalProperties": false,
-        "properties": {
-          "compatibilityDate": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "compatibilityFlags": {
-            "items": {
-              "pattern": "^\\S+$",
-              "type": "string"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "connections": {
-            "$ref": "#/$defs/connections"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "profiles": {
-            "items": {
-              "pattern": "^\\S+$",
-              "type": "string"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "source": {
-            "$ref": "#/$defs/artifactSource"
-          }
-        },
-        "required": [
-          "name",
-          "source"
-        ],
-        "type": "object"
       }
     },
     "required": [
@@ -495,8 +216,7 @@
       "kind",
       "name",
       "generation",
-      "portability",
-      "portableSpec"
+      "portability"
     ],
     "type": "object"
   },

@@ -271,7 +271,7 @@ func (r *edgeWorkerResource) assertConfigured(diags *diag.Diagnostics) bool {
 		return false
 	}
 	if _, ok := r.data.forms[client.KindEdgeWorker]; !ok {
-		diags.AddError("EdgeWorker FormRef missing", "This provider release has no exact EdgeWorker FormRef. This is a provider bug.")
+		diags.AddError("EdgeWorker FormRef missing", "This provider build has no exact candidate EdgeWorker FormRef. This is a provider bug.")
 		return false
 	}
 	if r.data.client.UsesCompatibilityFallback() && !r.data.capabilities.SupportsResource(client.KindEdgeWorker) {

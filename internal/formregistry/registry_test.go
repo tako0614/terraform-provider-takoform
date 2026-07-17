@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestReleaseRefsMatchStandardPackageSet(t *testing.T) {
+func TestCandidateRefsMatchStandardPackageSet(t *testing.T) {
 	t.Parallel()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "standard-package-set.json"))
 	if err != nil {
@@ -28,8 +28,8 @@ func TestReleaseRefsMatchStandardPackageSet(t *testing.T) {
 	if err := json.Unmarshal(raw, &inventory); err != nil {
 		t.Fatal(err)
 	}
-	if len(inventory.Packages) != len(releaseRefs) {
-		t.Fatalf("inventory has %d packages; provider compiled %d refs", len(inventory.Packages), len(releaseRefs))
+	if len(inventory.Packages) != len(candidateRefs) {
+		t.Fatalf("inventory has %d packages; provider compiled %d refs", len(inventory.Packages), len(candidateRefs))
 	}
 	for _, pkg := range inventory.Packages {
 		got, err := ForKind(pkg.Kind)
@@ -44,7 +44,7 @@ func TestReleaseRefsMatchStandardPackageSet(t *testing.T) {
 			PackageDigest:     pkg.PackageDigest,
 		}
 		if got != want {
-			t.Fatalf("release FormRef for %s drifted:\n got %#v\nwant %#v", pkg.Kind, got, want)
+			t.Fatalf("candidate FormRef for %s drifted:\n got %#v\nwant %#v", pkg.Kind, got, want)
 		}
 	}
 }

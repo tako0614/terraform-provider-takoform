@@ -43,7 +43,7 @@ func resourceConnectionAttributeWithRequired(required bool) schema.ListNestedAtt
 				"name": schema.StringAttribute{
 					Required:    true,
 					Description: "Connection name as seen by the consumer runtime, for example ASSETS or DATABASE.",
-					Validators:  []validator.String{StringToken()},
+					Validators:  []validator.String{StringMatches(portableConnectionNamePattern, "connection name must use the portable map-key grammar")},
 				},
 				"resource": schema.StringAttribute{
 					Required:    true,
@@ -55,13 +55,13 @@ func resourceConnectionAttributeWithRequired(required bool) schema.ListNestedAtt
 					ElementType: types.StringType,
 					Description: "Open grant-permission tokens requested by the consumer. The configured host must support them.",
 					Validators: []validator.Set{
-						SetStringsToken(1),
+						SetStringsMatch(1, portableCapabilityTokenPattern, "permission must use the portable capability-token grammar"),
 					},
 				},
 				"projection": schema.StringAttribute{
 					Required:    true,
 					Description: "Open projection capability token. The configured host must support it.",
-					Validators:  []validator.String{StringToken()},
+					Validators:  []validator.String{StringMatches(portableCapabilityTokenPattern, "projection must use the portable capability-token grammar")},
 				},
 			},
 		},

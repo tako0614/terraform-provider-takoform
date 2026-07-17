@@ -1,20 +1,4 @@
 {
-  "applied": {
-    "className": "RoomActor",
-    "connections": {
-      "DATABASE": {
-        "permissions": [
-          "read",
-          "write"
-        ],
-        "projection": "storage",
-        "resource": "SQLDatabase/main"
-      }
-    },
-    "migrationTag": "v1",
-    "name": "rooms",
-    "storageProfile": "durable_sqlite"
-  },
   "driftedFields": [],
   "generation": 1,
   "id": "StatefulActorNamespace/rooms",

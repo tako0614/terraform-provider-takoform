@@ -6,39 +6,39 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ContainerService",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:99bf9cea2c3b79b9accc703d6f7a2b23f9a19efb11d077ec29de8e6ec037b459"
+    "schemaDigest": "sha256:057739048709c3184b9c5494a4f94033e01a0e46996e0a441ce06c20c9429360"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 9146,
-      "digest": "sha256:2ee7eded4cefc0d173abe355d2cc9a50b34d189b39e0262dc8f711df122c8fc8"
+      "size": 4270,
+      "digest": "sha256:2d4b976618bd1fba29e473cf7a5651c182b5bcf1b7b4850d96f433ea6a2c5a3e"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 411,
-      "digest": "sha256:a0b4c4059badd2ebe9f7c119eb7a869b15df2efea2e0bf9ebad610fab945f482"
+      "size": 363,
+      "digest": "sha256:145f25b2858b707ef66da4a90793321cfbb828de2366eb2a3684dd3ade7111bb"
     },
     {
       "path": "fixtures/negative.json",
       "mediaType": "application/json",
-      "size": 408,
-      "digest": "sha256:97fda44ada78edfc2af5980a72fdedaaee95a191c06378cd466fd008b47f3235"
+      "size": 360,
+      "digest": "sha256:e982c7c6af94b786a0b103e63913478806c96b62de00b6b156ca57b815684dc3"
     },
     {
       "path": "fixtures/observed.json",
       "mediaType": "application/json",
-      "size": 610,
-      "digest": "sha256:50cf18ef6ba079954aeb58730d3e89be62cfc7817b4fb2e131a53e57a48d30af"
+      "size": 145,
+      "digest": "sha256:b95a97ecfd9e0e3553f79f35e289cbcebcd3307f2022236b8170b6ef85a5e917"
     },
     {
       "path": "fixtures/output.json",
       "mediaType": "application/json",
-      "size": 604,
-      "digest": "sha256:7ab0bef1b0cfee6137169cc7f980f732a64d257e2ffac3ee4826a862c2ee1ef6"
+      "size": 134,
+      "digest": "sha256:532a9903026023e59bf09155af67b221913605196496d310d89a755346feebaa"
     }
   ]
 }

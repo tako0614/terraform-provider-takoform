@@ -15,11 +15,10 @@ Declares a portable OCI container service. See the [complete example](../../exam
 - `image` (String, required) — OCI image reference.
 - `ports` (Set of Number, optional) — Requested container ports.
 - `public_http` (Boolean, optional) — Requests public HTTP exposure.
-- `environment` (Map of String, optional) — Non-secret environment variables.
 - `connections` (List of Object, optional) — Non-secret resource connections with `name`, `resource`, `permissions`, and `projection`.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
-Do not place secrets in `environment`; credential projection is a host responsibility.
+Runtime configuration and credentials are host-owned projections; this resource never stores arbitrary environment values.
 
 ## Read-only attributes
 

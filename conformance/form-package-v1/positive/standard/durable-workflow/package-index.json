@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "DurableWorkflow",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:6d0f1a9022c875dcb5d538819c90c763662ee5ac2d07880bb2503b24ad94f492"
+    "schemaDigest": "sha256:0d5ec1cd490806534903520ef2524dba0526b4b3d193984be6d5d33071fd7f85"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 13055,
-      "digest": "sha256:3c31037d1b0ac87dd1efca00aa1ef9fd1a69054b9db20ac9d7b901baa36d8394"
+      "size": 5899,
+      "digest": "sha256:09fa8b7d28a28af792f4bf1c8f655493195ad2d9ca3546d710b74249274f05fa"
     },
     {
       "path": "fixtures/desired.json",
@@ -31,14 +31,14 @@
     {
       "path": "fixtures/observed.json",
       "mediaType": "application/json",
-      "size": 638,
-      "digest": "sha256:575ffcc0a14aa09fa337519138eddf8a353db220077451c560211071f38e4702"
+      "size": 145,
+      "digest": "sha256:2786bd02847319b9705a4a140e9d0f2d9698193880a9d8ec3d7e393c948de5f3"
     },
     {
       "path": "fixtures/output.json",
       "mediaType": "application/json",
-      "size": 632,
-      "digest": "sha256:9c13d33824fd3591b68c95ac58c498a14510368e9752f2983603d75fbc32030b"
+      "size": 134,
+      "digest": "sha256:4b6b20a075ab52e05aa525c9d9da98f676b15ce312deee58f355cae5fa29d0d3"
     }
   ]
 }

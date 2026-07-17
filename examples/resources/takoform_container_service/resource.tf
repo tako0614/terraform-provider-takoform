@@ -13,13 +13,10 @@ provider "takoform" {
 
 resource "takoform_container_service" "agent" {
   name        = "agent"
-  image       = "ghcr.io/example/agent:1.0.0"
+  image       = "ghcr.io/example/agent@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   ports       = [8080]
   public_http = true
 
-  environment = {
-    NODE_ENV = "production"
-  }
 }
 
 output "container_resource_version" {
