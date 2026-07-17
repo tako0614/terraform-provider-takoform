@@ -31,3 +31,12 @@ publish. Changes to the signing fingerprint, public key, Registry asset naming,
 platform matrix, or GitHub release permissions require maintainer security
 review and a rotation plan. Never test release changes by overwriting an
 existing version; use a new semver prerelease.
+
+Form Package release sources live at
+`forms/releases/<form-slug>/<packageVersion>/` and use the disjoint
+`forms/<form-slug>/v<packageVersion>` tag namespace. Security revocation
+statements live at `forms/revocations/<statementVersion>.json`, are append-only,
+and use `forms/revocations/v<statementVersion>`. Both workflows are keyless and
+must not reference provider GPG secrets. Test the builders only with
+`--allow-untagged-candidate`; never create a real tag or GitHub Release to test
+a pull request.

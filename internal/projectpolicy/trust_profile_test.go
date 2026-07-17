@@ -56,6 +56,13 @@ type trustProfile struct {
 			Workflow         string `json:"workflow"`
 			TagPattern       string `json:"tagPattern"`
 		} `json:"publisherPolicy"`
+		TagProtection struct {
+			TagPattern             string `json:"tagPattern"`
+			RestrictCreation       bool   `json:"restrictCreation"`
+			RestrictDeletion       bool   `json:"restrictDeletion"`
+			RestrictNonFastForward bool   `json:"restrictNonFastForward"`
+			ReleaseEnvironment     string `json:"releaseEnvironment"`
+		} `json:"tagProtection"`
 		Transparency struct {
 			Authority                         string `json:"authority"`
 			RequiredEvidence                  string `json:"requiredEvidence"`
@@ -67,13 +74,17 @@ type trustProfile struct {
 			SBOM      string `json:"sbom"`
 		} `json:"provenance"`
 		Distribution struct {
+			Status                   string `json:"status"`
 			InitialSource            string `json:"initialSource"`
 			MirrorPolicy             string `json:"mirrorPolicy"`
 			CustomerRequestFetch     bool   `json:"customerRequestFetch"`
 			OverwriteExistingVersion bool   `json:"overwriteExistingVersion"`
 		} `json:"distribution"`
 		Revocation struct {
+			Status                                   string `json:"status"`
 			Metadata                                 string `json:"metadata"`
+			Workflow                                 string `json:"workflow"`
+			TagPattern                               string `json:"tagPattern"`
 			BlockNewCreateOrUpdate                   bool   `json:"blockNewCreateOrUpdate"`
 			RetainReferencedBytesForObserveAndDelete bool   `json:"retainReferencedBytesForObserveAndDelete"`
 			ReplaceBytesInPlace                      bool   `json:"replaceBytesInPlace"`
@@ -136,7 +147,7 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	}
 
 	packageTrust := profile.FormPackage
-	if packageTrust.Status != "local-data-contract-and-verifier-implemented-signing-and-distribution-pending" ||
+	if packageTrust.Status != "data-contract-verifier-and-keyless-release-lane-implemented-first-release-pending" ||
 		packageTrust.Canonicalization.Format != "RFC8785" ||
 		packageTrust.Canonicalization.Encoding != "UTF-8 I-JSON" ||
 		packageTrust.Identity.Digest != "sha256" ||
@@ -157,6 +168,11 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		packageTrust.PublisherPolicy.TagPattern != "refs/tags/forms/*/v*" {
 		t.Fatalf("unexpected Form Package publisher policy")
 	}
+	if packageTrust.TagProtection.TagPattern != packageTrust.PublisherPolicy.TagPattern ||
+		!packageTrust.TagProtection.RestrictCreation || !packageTrust.TagProtection.RestrictDeletion ||
+		!packageTrust.TagProtection.RestrictNonFastForward || packageTrust.TagProtection.ReleaseEnvironment != "form-package-release" {
+		t.Fatalf("Form Package protected-tag policy is incomplete")
+	}
 	if packageTrust.Transparency.Authority != "sigstore-public-good-instance" ||
 		!packageTrust.Transparency.OfflineBundleVerificationRequired ||
 		!strings.Contains(packageTrust.Transparency.RequiredEvidence, "inclusion proof") {
@@ -167,10 +183,14 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		packageTrust.Provenance.SBOM != "spdx-2.3" {
 		t.Fatalf("Form Package provenance profile is incomplete")
 	}
-	if packageTrust.Distribution.InitialSource != "github-release" ||
+	if packageTrust.Distribution.Status != "github-release-workflow-implemented-first-release-pending" ||
+		packageTrust.Distribution.InitialSource != "github-release" ||
 		!strings.Contains(packageTrust.Distribution.MirrorPolicy, "exact assets") ||
 		packageTrust.Distribution.CustomerRequestFetch || packageTrust.Distribution.OverwriteExistingVersion ||
+		packageTrust.Revocation.Status != "signed-append-only-delivery-lane-implemented-no-statements-published" ||
 		!strings.Contains(packageTrust.Revocation.Metadata, "exact package digest") ||
+		packageTrust.Revocation.Workflow != ".github/workflows/form-package-revocation.yml" ||
+		packageTrust.Revocation.TagPattern != "refs/tags/forms/revocations/v*" ||
 		!packageTrust.Revocation.BlockNewCreateOrUpdate ||
 		!packageTrust.Revocation.RetainReferencedBytesForObserveAndDelete ||
 		packageTrust.Revocation.ReplaceBytesInPlace ||
@@ -180,6 +200,38 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	}
 	if profile.Separation.ReuseProviderGPGKeyForFormPackages || profile.Separation.ReuseForTakosumiLegacyProvider {
 		t.Fatal("release trust lanes must remain independent")
+	}
+}
+
+func TestFormPackageWorkflowsRemainKeylessSeparatedAndCommitPinned(t *testing.T) {
+	root := repositoryRoot(t)
+	packageWorkflow := readText(t, filepath.Join(root, ".github", "workflows", "form-package-release.yml"))
+	revocationWorkflow := readText(t, filepath.Join(root, ".github", "workflows", "form-package-revocation.yml"))
+	for name, workflow := range map[string]string{"package": packageWorkflow, "revocation": revocationWorkflow} {
+		for _, required := range []string{
+			"id-token: write",
+			"attestations: write",
+			"environment: form-package-release",
+			"sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6",
+			"cosign sign-blob",
+			"cosign verify-blob",
+			"--certificate-oidc-issuer \"https://token.actions.githubusercontent.com\"",
+			"actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6",
+			"refusing overwrite",
+		} {
+			if !strings.Contains(workflow, required) {
+				t.Fatalf("%s workflow lacks %q", name, required)
+			}
+		}
+		for _, forbidden := range []string{"GPG_PRIVATE_KEY", "PASSPHRASE", "gpg --", "cosign.key", "--key "} {
+			if strings.Contains(workflow, forbidden) {
+				t.Fatalf("%s workflow crosses the keyless/provider trust boundary with %q", name, forbidden)
+			}
+		}
+	}
+	if !strings.Contains(packageWorkflow, "!forms/revocations/v*") ||
+		!strings.Contains(revocationWorkflow, "forms/revocations/v*") {
+		t.Fatal("package and revocation tag namespaces are not disjoint")
 	}
 }
 
@@ -198,6 +250,15 @@ func readStrictJSON(t *testing.T, path string, value any) {
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		t.Fatalf("decode %s: trailing JSON or parse error: %v", path, err)
 	}
+}
+
+func readText(t *testing.T, path string) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
 }
 
 func repositoryRoot(t *testing.T) string {

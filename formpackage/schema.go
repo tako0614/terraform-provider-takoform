@@ -17,6 +17,7 @@ const (
 	formRefSchemaID         = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
 	formDefinitionSchemaID  = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
 	packageIndexSchemaID    = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
+	revocationSchemaID      = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
 	portableMapKeyPattern   = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
 	portableMapPolicyKey    = "x-takoform-fieldPolicy"
 	portableMapPolicyValue  = "portable-data-only-v1"
@@ -39,6 +40,7 @@ type compiledSchemas struct {
 	formRef    *jsonschema.Schema
 	definition *jsonschema.Schema
 	index      *jsonschema.Schema
+	revocation *jsonschema.Schema
 }
 
 var (
@@ -53,7 +55,7 @@ func loadSchemas() (compiledSchemas, error) {
 		compiler.DefaultDraft(jsonschema.Draft2020)
 		compiler.AssertFormat()
 		compiler.UseLoader(closedSchemaLoader{})
-		files := []string{"form-ref.schema.json", "form-definition.schema.json", "package-index.schema.json"}
+		files := []string{"form-ref.schema.json", "form-definition.schema.json", "package-index.schema.json", "form-package-revocation.schema.json"}
 		entries, err := schemaFiles.ReadDir("schemas")
 		if err != nil {
 			schemasErr = fmt.Errorf("read embedded schema closure: %w", err)
@@ -120,6 +122,11 @@ func loadSchemas() (compiledSchemas, error) {
 		schemasValue.index, schemasErr = compiler.Compile(packageIndexSchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile package-index schema: %w", schemasErr)
+			return
+		}
+		schemasValue.revocation, schemasErr = compiler.Compile(revocationSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile Form Package revocation schema: %w", schemasErr)
 		}
 	})
 	return schemasValue, schemasErr
@@ -213,6 +220,24 @@ func validateIndex(raw []byte) (PackageIndex, any, error) {
 func ValidatePackageIndex(raw []byte) (PackageIndex, error) {
 	index, _, err := validateIndex(raw)
 	return index, err
+}
+
+// ValidateRevocationStatement validates one canonicalizable append-only
+// security revocation. Signature and publisher identity verification are
+// deliberately performed by the release/host trust layer, not by this parser.
+func ValidateRevocationStatement(raw []byte) (RevocationStatement, error) {
+	schemas, err := loadSchemas()
+	if err != nil {
+		return RevocationStatement{}, err
+	}
+	var statement RevocationStatement
+	if err := validateDocument(raw, schemas.revocation, &statement); err != nil {
+		return RevocationStatement{}, fmt.Errorf("Form Package revocation: %w", err)
+	}
+	if !ValidDigest(statement.PackageDigest) {
+		return RevocationStatement{}, fmt.Errorf("Form Package revocation: packageDigest is not canonical")
+	}
+	return statement, nil
 }
 
 func validateDocument(raw []byte, schema *jsonschema.Schema, destination any) error {

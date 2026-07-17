@@ -1,0 +1,169 @@
+name: Release Form Package
+
+on:
+  push:
+    tags:
+      - "forms/*/v*"
+      - "!forms/revocations/v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: form-package-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  EXPECTED_COSIGN_VERSION: "v3.0.6"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: form-package-release
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.5"
+          cache: true
+
+      - name: Install pinned Cosign v3
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
+
+      - name: Verify protected tag and build deterministic package evidence
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$GITHUB_REF_NAME" =~ ^forms/[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?/v[0-9][0-9A-Za-z.+-]*$ ]]; then
+            echo "Form Package releases require forms/<form-slug>/v<semver>" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_NAME" == forms/revocations/* ]]; then
+            echo "The reserved revocations namespace has a separate workflow" >&2
+            exit 1
+          fi
+          cosign_version="$(cosign version 2>&1)"
+          grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
+          go test ./formpackage ./cmd/form-package-release
+          output="$GITHUB_WORKSPACE/.release-tmp/form-package"
+          go run ./cmd/form-package-release build-package \
+            --repo "$GITHUB_WORKSPACE" \
+            --tag "$GITHUB_REF_NAME" \
+            --output "$output"
+          subject="$(jq -r .signedSubject "$output/release-manifest.json")"
+          bundle="$(jq -r .signatureBundle "$output/release-manifest.json")"
+          identity="$(jq -r .publisherPolicy.identity "$output/release-manifest.json")"
+          sbom="$(jq -r '.assets[] | select(.mediaType == "application/spdx+json") | .name' "$output/release-manifest.json")"
+          {
+            echo "output=$output"
+            echo "subject=$subject"
+            echo "bundle=$bundle"
+            echo "identity=$identity"
+            echo "sbom=$sbom"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Refuse an existing release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "A GitHub release already owns $GITHUB_REF_NAME; refusing overwrite" >&2
+            exit 1
+          fi
+
+      - name: Keyless-sign the canonical package index
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="${{ steps.build.outputs.output }}"
+          subject="$output/${{ steps.build.outputs.subject }}"
+          bundle="$output/${{ steps.build.outputs.bundle }}"
+          cosign sign-blob "$subject" --bundle "$bundle" --yes
+          cosign verify-blob "$subject" \
+            --bundle "$bundle" \
+            --certificate-identity "${{ steps.build.outputs.identity }}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          go run ./cmd/form-package-release finalize-bundle --output "$output"
+          (cd "$output" && sha256sum --check --strict SHA256SUMS)
+
+      - name: Create immutable-release candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          output="${{ steps.build.outputs.output }}"
+          notes="$RUNNER_TEMP/form-package-release-notes.md"
+          cat > "$notes" <<EOF
+          Data-only Takoform Form Package release.
+
+          Verify the canonical package index with the attached Sigstore bundle and the exact publisher identity recorded in release-manifest.json before installing or mirroring these assets.
+          EOF
+          mapfile -t assets < <(find "$output" -maxdepth 1 -type f -printf '%p\n' | sort)
+          gh release create "$GITHUB_REF_NAME" \
+            --draft --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$notes" \
+            "${assets[@]}"
+
+      - name: Verify exact draft release inventory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          output="${{ steps.build.outputs.output }}"
+          find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/expected-assets.txt"
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | sort > "$RUNNER_TEMP/actual-assets.txt"
+          diff -u "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/actual-assets.txt"
+          test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = "true"
+
+      - name: Attest exact release inventory with GitHub build provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-path: |
+            ${{ steps.build.outputs.output }}/*.tar.gz
+            ${{ steps.build.outputs.output }}/*_package-index.json
+            ${{ steps.build.outputs.output }}/*_package-index.sigstore.json
+            ${{ steps.build.outputs.output }}/*_provenance.intoto.json
+            ${{ steps.build.outputs.output }}/*_sbom.spdx.json
+            ${{ steps.build.outputs.output }}/release-manifest.json
+            ${{ steps.build.outputs.output }}/SHA256SUMS
+
+      - name: Attest package SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-path: |
+            ${{ steps.build.outputs.output }}/*.tar.gz
+            ${{ steps.build.outputs.output }}/*_package-index.json
+          sbom-path: ${{ steps.build.outputs.output }}/${{ steps.build.outputs.sbom }}
+
+      - name: Publish verified immutable release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .id)"
+          finalized="$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" -F draft=false)"
+          test "$(jq -r .draft <<<"$finalized")" = "false"
+
+      - name: Remove partial draft after failure
+        if: ${{ always() && !success() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" 2>/dev/null || true)"
+          if [[ -n "$release_json" && "$(jq -r .draft <<<"$release_json")" == "true" ]]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$(jq -r .id <<<"$release_json")"
+          fi

@@ -22,3 +22,11 @@ an existing version.
 Form Packages use the separate keyless publisher identity and revocation rules
 in [`spec/trust/`](spec/trust/). A Form Package must never reuse the provider
 GPG key or the separately owned Takosumi legacy/admin provider trust root.
+
+Published Form Package indexes and revocation statements must be verified
+against the attached Sigstore v0.3 bundle, the exact GitHub Actions workflow
+identity, and `https://token.actions.githubusercontent.com`. Report a missing
+transparency-log proof, a changed release asset, an unexpected workflow
+identity, or a revocation statement that does not retain package bytes for
+observe/delete as a supply-chain vulnerability. No Form Package or revocation
+release has been published yet.

@@ -58,6 +58,19 @@ func run(arguments []string) error {
 		}
 		fmt.Println(digest)
 		return nil
+	case "validate-revocation":
+		if len(arguments) != 2 {
+			return usageError()
+		}
+		raw, err := os.ReadFile(arguments[1])
+		if err != nil {
+			return err
+		}
+		statement, err := formpackage.ValidateRevocationStatement(raw)
+		if err != nil {
+			return err
+		}
+		return writeJSON(statement)
 	case "conformance":
 		if len(arguments) > 2 {
 			return usageError()
@@ -84,5 +97,5 @@ func writeJSON(value any) error {
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: form-package verify DIR | canonicalize FILE | digest FILE | conformance [CORPUS_DIR]")
+	return fmt.Errorf("usage: form-package verify DIR | canonicalize FILE | digest FILE | validate-revocation FILE | conformance [CORPUS_DIR]")
 }

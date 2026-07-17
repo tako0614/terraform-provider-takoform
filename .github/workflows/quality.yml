@@ -19,6 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # pinned: v6.0.0
         with:
@@ -42,9 +43,22 @@ jobs:
           go test ./...
           go run ./cmd/conformance verify
           go run ./cmd/form-package conformance
+          go test ./cmd/form-package-release
           go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
           go run github.com/google/go-licenses@v1.6.0 check ./... \
             --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0
+      - name: Enforce append-only revocation statements
+        if: ${{ github.event_name == 'pull_request' }}
+        run: >-
+          go run ./cmd/form-package-release check-revocations
+          --base "${{ github.event.pull_request.base.sha }}"
+      - name: Build deterministic Form Package candidate evidence
+        run: |
+          go run ./cmd/form-package-release build-package \
+            --tag forms/example-store/v1.0.0 \
+            --package-dir conformance/form-package-v1/positive/example-store \
+            --output "$RUNNER_TEMP/form-package-candidate" \
+            --allow-untagged-candidate
       - name: Verify isolated release tooling
         run: |
           go -C cmd/provider-release mod verify

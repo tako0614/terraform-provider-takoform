@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json",
+  "title": "Takoform Form Package security revocation v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "statementVersion",
+    "packageDigest",
+    "formRef",
+    "reasonCode",
+    "summary",
+    "issuedAt",
+    "effects"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "trust.forms.takoform.com/v1alpha1"
+    },
+    "kind": {
+      "const": "FormPackageRevocation"
+    },
+    "statementVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "packageDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "formRef": {
+      "$ref": "form-ref.schema.json"
+    },
+    "reasonCode": {
+      "enum": [
+        "publisher-identity-compromise",
+        "malicious-content",
+        "contract-invalid",
+        "signature-invalid",
+        "provenance-invalid"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "advisoryUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blockNewCreateOrUpdate",
+        "blockActivation",
+        "retainBytesForObserveAndDelete"
+      ],
+      "properties": {
+        "blockNewCreateOrUpdate": {
+          "const": true
+        },
+        "blockActivation": {
+          "const": true
+        },
+        "retainBytesForObserveAndDelete": {
+          "const": true
+        }
+      }
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(\\+([0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*))?$"
+    }
+  }
+}
