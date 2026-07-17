@@ -1,0 +1,15 @@
+{
+  "applied": {
+    "delivery": {
+      "maxBatchSize": 10,
+      "maxRetries": 5
+    },
+    "name": "jobs"
+  },
+  "driftedFields": [],
+  "generation": 1,
+  "id": "Queue/jobs",
+  "imported": true,
+  "portability": "portable",
+  "ready": true
+}

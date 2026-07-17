@@ -1,0 +1,21 @@
+{
+  "generation": 1,
+  "id": "Schedule/nightly",
+  "kind": "Schedule",
+  "name": "nightly",
+  "portability": "portable",
+  "portableSpec": {
+    "connections": {
+      "workflow": {
+        "permissions": [
+          "invoke"
+        ],
+        "projection": "schedule_trigger",
+        "resource": "DurableWorkflow/ingest"
+      }
+    },
+    "cron": "0 0 * * *",
+    "name": "nightly",
+    "timezone": "UTC"
+  }
+}

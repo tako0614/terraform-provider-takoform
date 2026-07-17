@@ -11,7 +11,7 @@ Current committed surfaces:
 - [`form-package/`](form-package/) — package-index identity, closed payload rules, and local verifier boundary;
 - [`trust/`](trust/) — the D-08 provider/Form Package trust decision and its machine-readable fail-closed profile;
 - [`../schemas/host-discovery.schema.json`](../schemas/host-discovery.schema.json) — machine-readable discovery validation;
-- [`../forms/README.md`](../forms/README.md) — the exact ten-kind compatibility inventory;
+- [`../forms/README.md`](../forms/README.md) — the exact ten-kind Stable set and retained legacy inventory;
 - [`../conformance/README.md`](../conformance/README.md) — current evidence and the next fixture boundary.
 
 ## Status
@@ -23,7 +23,15 @@ keyless Sigstore release lane, and signed append-only checkpoint delivery lane
 are implemented. No real Form Package or revocation checkpoint has been
 published. Remote host fetch/install, host publisher-policy verification,
 activation, and revocation enforcement remain consumer/operator work. The
-current ten provider resources remain frozen compatibility candidates; a
-release lane does not silently standardize them.
+current ten provider resources pin independent exact `1.0.0 / standard`
+definition candidates with local structural verification. Their inventory is
+`structural-candidate`, not `portable-standard`; definition status pins proposed
+final bytes and does not perform admission. The historical
+`0.0.0-legacy.1` packages remain frozen compatibility candidates and were not
+renamed or promoted. Passed Takosumi host and Terraform provider lifecycle
+evidence, portable negative wire-code coverage, package signatures, immutable
+tags, Registry installation/readback, and signed admission evidence are still
+external requirements. Authenticated host and provider evidence is the only
+path to `portable-standard` classification.
 
 The project identity is `forms.takoform.com/v1alpha1`; the Terraform provider identity is `registry.terraform.io/tako0614/takoform`.

@@ -55,6 +55,56 @@
       "name": "legacy-schedule-package",
       "path": "positive/legacy/schedule",
       "kind": "Schedule"
+    },
+    {
+      "name": "standard-edge-worker-package",
+      "path": "positive/standard/edge-worker",
+      "kind": "EdgeWorker"
+    },
+    {
+      "name": "standard-object-bucket-package",
+      "path": "positive/standard/object-bucket",
+      "kind": "ObjectBucket"
+    },
+    {
+      "name": "standard-kv-store-package",
+      "path": "positive/standard/kv-store",
+      "kind": "KVStore"
+    },
+    {
+      "name": "standard-sql-database-package",
+      "path": "positive/standard/sql-database",
+      "kind": "SQLDatabase"
+    },
+    {
+      "name": "standard-queue-package",
+      "path": "positive/standard/queue",
+      "kind": "Queue"
+    },
+    {
+      "name": "standard-vector-index-package",
+      "path": "positive/standard/vector-index",
+      "kind": "VectorIndex"
+    },
+    {
+      "name": "standard-durable-workflow-package",
+      "path": "positive/standard/durable-workflow",
+      "kind": "DurableWorkflow"
+    },
+    {
+      "name": "standard-container-service-package",
+      "path": "positive/standard/container-service",
+      "kind": "ContainerService"
+    },
+    {
+      "name": "standard-stateful-actor-namespace-package",
+      "path": "positive/standard/stateful-actor-namespace",
+      "kind": "StatefulActorNamespace"
+    },
+    {
+      "name": "standard-schedule-package",
+      "path": "positive/standard/schedule",
+      "kind": "Schedule"
     }
   ],
   "negative": [

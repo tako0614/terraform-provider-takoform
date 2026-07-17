@@ -1,40 +1,76 @@
-# Service Form compatibility inventory
+# Standard-definition candidate set and legacy inventory
 
-The Phase 0 inventory is exactly these ten kinds and their corresponding statically compiled provider resources:
+The provider release pins this all-or-nothing set of exact candidate bytes:
 
-| Kind | Provider resource | Status |
+| Kind | Provider resource | Standard identity |
 | --- | --- | --- |
-| `EdgeWorker` | `takoform_edge_worker` | compatibility candidate |
-| `ObjectBucket` | `takoform_object_bucket` | compatibility candidate |
-| `KVStore` | `takoform_kv_store` | compatibility candidate |
-| `Queue` | `takoform_queue` | compatibility candidate |
-| `SQLDatabase` | `takoform_sql_database` | compatibility candidate |
-| `ContainerService` | `takoform_container_service` | compatibility candidate |
-| `VectorIndex` | `takoform_vector_index` | compatibility candidate |
-| `DurableWorkflow` | `takoform_durable_workflow` | compatibility candidate |
-| `StatefulActorNamespace` | `takoform_stateful_actor_namespace` | compatibility candidate |
-| `Schedule` | `takoform_schedule` | compatibility candidate |
+| `EdgeWorker` | `takoform_edge_worker` | `1.0.0 / standard` |
+| `ObjectBucket` | `takoform_object_bucket` | `1.0.0 / standard` |
+| `KVStore` | `takoform_kv_store` | `1.0.0 / standard` |
+| `SQLDatabase` | `takoform_sql_database` | `1.0.0 / standard` |
+| `Queue` | `takoform_queue` | `1.0.0 / standard` |
+| `VectorIndex` | `takoform_vector_index` | `1.0.0 / standard` |
+| `DurableWorkflow` | `takoform_durable_workflow` | `1.0.0 / standard` |
+| `ContainerService` | `takoform_container_service` | `1.0.0 / standard` |
+| `StatefulActorNamespace` | `takoform_stateful_actor_namespace` | `1.0.0 / standard` |
+| `Schedule` | `takoform_schedule` | `1.0.0 / standard` |
 
-This inventory freezes the extracted provider surface; it does not assert that
-every current field has passed provider-neutral semantic review. Each kind now
-has one independent data-only compatibility package under
-[`../conformance/form-package-v1/positive/legacy/`](../conformance/form-package-v1/positive/legacy/),
-with `definitionVersion` and `packageVersion` set to `0.0.0-legacy.1`.
-Every package is strict-verifier and positive-fixture evidence only, remains
-`compatibility-candidate`, and contains no host envelope, credential, target,
-capacity, provider, billing, or observed-authority fields.
+[`standard-package-set.json`](standard-package-set.json) pins every exact
+`(FormRef, packageDigest)` pair. Each independent package lives under
+[`../conformance/form-package-v1/positive/standard/`](../conformance/form-package-v1/positive/standard/)
+and contains canonical desired, observed, output, and negative fixtures. The
+observed fixture repeats the complete applied portable desired state and adds
+import/drift metadata; the output fixture repeats the complete non-secret
+`portableSpec` plus exact kind, generation, and portability identifiers. This
+keeps artifact integrity/version fields and public connection projections in
+the checked output contract rather than reducing it to a generic ID.
+This repository does not emit passed Standard Form admission evidence from
+those files.
 
-[`legacy-package-set.json`](legacy-package-set.json) is the machine-readable
-backfill inventory. It pins the exact ten `(FormRef, packageDigest)` pairs and
-their conformance cases. The set is explicitly unsigned and non-publishable;
-it is not a multi-form package, catalog release, signature bundle, or host
-activation record. The historical host conversion and known loss boundaries
-are documented separately in
+Run both local structural gates after changing a package or provider schema:
+
+```bash
+go run ./cmd/standard-form-conformance generate
+go run ./cmd/standard-form-conformance verify
+```
+
+`generate` creates independent data-only definitions and fixtures; `verify`
+runs the package verifier and inspects actual provider constructors, attribute
+coverage, import support, and selected `RequiresReplace` modifiers. These
+checks do not execute a Terraform protocol lifecycle or a Takosumi host. The
+inventory therefore says `classification: structural-candidate`,
+`localConformance: structural-only`, `admissionStatus: external-required`, and
+`publicationReady: false`.
+
+An admission artifact may be accepted only after external runners authenticate
+complete host and provider lifecycle evidence. Shared negative admission
+fixtures use the portable API wire code `invalid_argument`; the package
+verifier's internal failure name `schema_validation_failed` is not a wire
+error. Immutable tags, Registry install/readback, Sigstore provenance, and
+signed admission evidence also remain external requirements.
+
+Each definition keeps `status: standard` so the exact proposed final bytes can
+be exercised and digest-pinned without a later status mutation. That field does
+not admit the package set. Only externally authenticated Takosumi host and
+Terraform provider lifecycle reports can produce admission evidence classified
+`portable-standard`; until then this inventory is neither admitted nor
+conformant.
+
+## Legacy compatibility identities
+
+The historical packages under
+[`../conformance/form-package-v1/positive/legacy/`](../conformance/form-package-v1/positive/legacy/)
+remain immutable `0.0.0-legacy.1 / compatibility-candidate` identities. They
+were not edited or promoted into this definition candidate set. Their exact digests remain in
+[`legacy-package-set.json`](legacy-package-set.json), and the historical wire
+conversion remains in
 [`legacy-takosumi-wire-mapping.md`](legacy-takosumi-wire-mapping.md).
 
-Only `/name` is asserted immutable across these definitions. In particular,
-`VectorIndex.dimensions` is not marked immutable because the characterized
-provider has no replacement plan modifier for it. Unknown host extension fields
-are rejected rather than preserved implicitly.
+Only `/name` is asserted immutable in the legacy definitions. The independent
+`VectorIndex@1.0.0` candidate additionally makes `/dimensions` immutable, and
+`SQLDatabase@1.0.0` makes `/engine` immutable; the provider schemas enforce
+replacement for both fields.
 
-Target-pool, verified-domain, AI-gateway, and every other operator/admin object are outside the inventory.
+Target pools, credentials, provider selection, backend managers, capacity,
+pricing, billing, quota, and execution authority are outside every portable
+Form Package and externally supplied admission evidence document.

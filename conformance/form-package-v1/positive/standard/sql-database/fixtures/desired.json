@@ -1,0 +1,5 @@
+{
+  "engine": "sqlite",
+  "migrationsPath": "migrations",
+  "name": "main"
+}

@@ -11,7 +11,7 @@ not delete the old provider or lock entry until rollback evidence is complete.
 3. Run an old-provider refresh-only plan and require no changes.
 4. Confirm the host has the exact release-owned FormRef/package identity for
    every resource kind being migrated, as pinned in
-   [`forms/legacy-package-set.json`](../forms/legacy-package-set.json).
+   [`forms/standard-package-set.json`](../forms/standard-package-set.json).
 5. Before removing any state address, require the operator to backfill every
    existing canonical Resource with that exact FormRef/package identity and a
    ResolutionLock for its currently selected native implementation. This is a

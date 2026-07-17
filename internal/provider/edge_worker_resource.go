@@ -324,6 +324,10 @@ func (m edgeWorkerModel) toResource(ctx context.Context, defaultSpace string) (*
 		return nil, "", diags
 	}
 	name := m.Name.ValueString()
+	if m.Name.IsNull() || m.Name.IsUnknown() || !validPortableName(name) {
+		diags.AddAttributeError(path.Root("name"), "Invalid resource name", "name must be a non-empty printable string of at most 128 characters.")
+		return nil, "", diags
+	}
 	source, sourceDiags := (artifactSourceValues{
 		Path: m.ArtifactPath, URL: m.ArtifactURL,
 		Ref: m.ArtifactRef, SHA256: m.ArtifactSHA256,

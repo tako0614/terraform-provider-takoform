@@ -32,11 +32,13 @@ A definition contains:
 - the three non-digest identity fields;
 - a title, optional description, and explicit `compatibility-candidate`,
   `standard`, or `deprecated` status;
-- inline Draft 2020-12 desired and observed schemas;
+- inline Draft 2020-12 desired and observed schemas, plus an optional output schema;
 - optional immutable JSON Pointer fields;
-- an explicit subset of `create`, `update`, `observe`, `delete`, and `import`;
+- an explicit subset of `create`, `read`, `update`, `delete`, `import`,
+  `observe`, `refresh`, and `drift`;
 - optional non-secret Interface document schemas;
-- optional references to data-only conformance payloads in the same package.
+- optional references to data-only positive desired/observed/output fixtures
+  and negative schema fixtures in the same package.
 
 JSON Schema `$ref` values are limited to the document root (`#`) or a
 document-local JSON Pointer (`#/...`). The closure proof resolves the target
@@ -104,8 +106,12 @@ such as `authorization`, `oauthClient`, `sessionCookie`, `apiKeyValue`,
 `privateKeyPem`, `invoice`, `paymentMethod`, `currency`, `taxCode`,
 `serviceOfferingId`, `managerIdentifier`, and `region` do not.
 
-This contract does not standardize the provider's ten characterization kinds.
-Each kind remains a compatibility candidate until its own one-definition
-package and conformance review is completed. A ten-kind compatibility set is
-ten exact FormRefs/packages plus an external mapping payload, never one
-multi-definition package.
+The provider's ten kinds now have independent exact `1.0.0 / standard`
+definition candidates and local structural fixtures. Their package-set
+classification remains `structural-candidate`; `status: standard` pins proposed
+final definition bytes and is not admission. Their earlier `0.0.0-legacy.1`
+characterization packages remain compatibility candidates. Both sets are ten
+exact one-definition packages, never one multi-definition package. Portable
+host/provider admission evidence is externally supplied and is not synthesized
+by the package generator; only authenticated evidence may classify an exact
+package `portable-standard`.

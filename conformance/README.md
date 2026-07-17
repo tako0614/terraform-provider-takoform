@@ -78,6 +78,23 @@ extension and one kind-specific invalid fixture, and cross-check the exact
 machine-readable set in
 [`../forms/legacy-package-set.json`](../forms/legacy-package-set.json).
 
+`form-package-v1/positive/standard/` contains the separate ten-package `1.0.0 /
+standard` definition candidate set. It does not replace or mutate the legacy compatibility
+identities. `go run ./cmd/standard-form-conformance verify` validates package
+bytes and fixtures and inspects the actual provider resource structure. It does
+not run the Terraform protocol lifecycle or a Takosumi host, and this repository
+intentionally contains no locally synthesized passed admission JSON.
+
+The machine-readable inventory classifies the set `structural-candidate`, marks
+local coverage `structural-only`, and admission `external-required`. Definition
+`status: standard` pins the proposed final bytes; it is not an admission claim.
+Complete Takosumi host and Terraform provider
+lifecycle reports, portable negative wire-code coverage (`invalid_argument`),
+signatures/provenance, immutable release tags, Registry installation/readback,
+and authenticated signed admission evidence remain external requirements. Only
+that authenticated evidence may classify the exact package as
+`portable-standard`.
+
 The same corpus contains negative fixtures for duplicate names, invalid Unicode
 scalar sequences, negative zero, credentials, operator fields, target/capacity,
 price/billing/SKU, executable code fields, plural API/private/SSH/signing key
@@ -97,7 +114,9 @@ Run it with:
 go run ./cmd/form-package conformance
 ```
 
-The current manifest result is 11 positive packages and 43 negative cases.
+The current manifest result is 21 positive packages (one ExampleStore, ten
+legacy compatibility candidates, and ten structural standard packages) and 43
+negative cases.
 Passing this corpus proves the local data contract only. It is not signature,
 publisher, remote-install, host-activation, retention/revocation, lifecycle
 idempotency, or cross-host/kind-standardization evidence. Those later trust and

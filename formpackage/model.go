@@ -29,10 +29,12 @@ type FormDefinition struct {
 	Status                string                `json:"status"`
 	DesiredSchema         map[string]any        `json:"desiredSchema"`
 	ObservedSchema        map[string]any        `json:"observedSchema"`
+	OutputSchema          map[string]any        `json:"outputSchema,omitempty"`
 	ImmutableFields       []string              `json:"immutableFields,omitempty"`
 	LifecycleCapabilities []string              `json:"lifecycleCapabilities"`
 	Interfaces            []InterfaceDescriptor `json:"interfaces,omitempty"`
 	ConformanceFixtures   []ConformanceFixture  `json:"conformanceFixtures,omitempty"`
+	NegativeFixtures      []NegativeFixture     `json:"negativeConformanceFixtures,omitempty"`
 }
 
 type InterfaceDescriptor struct {
@@ -46,6 +48,14 @@ type ConformanceFixture struct {
 	Name         string `json:"name"`
 	DesiredPath  string `json:"desiredPath"`
 	ObservedPath string `json:"observedPath,omitempty"`
+	OutputPath   string `json:"outputPath,omitempty"`
+}
+
+type NegativeFixture struct {
+	Name            string `json:"name"`
+	Stage           string `json:"stage"`
+	InputPath       string `json:"inputPath"`
+	ExpectedFailure string `json:"expectedFailure"`
 }
 
 type PackageIndex struct {

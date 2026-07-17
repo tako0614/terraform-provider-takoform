@@ -24,6 +24,10 @@ func printableBoundedString(value string, max int) bool {
 	})
 }
 
+func validPortableName(value string) bool {
+	return printableBoundedString(value, 128)
+}
+
 func normalizedPortableCron(value string) (string, bool) {
 	fields := strings.Fields(value)
 	if len(fields) != 5 {

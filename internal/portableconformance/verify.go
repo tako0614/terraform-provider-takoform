@@ -49,6 +49,7 @@ type Contract struct {
 	RunnerInput            RunnerInput       `json:"runnerInput"`
 	Preconditions          map[string]string `json:"preconditions"`
 	IdempotentOperations   []string          `json:"idempotentOperations"`
+	ValidationErrorCode    string            `json:"validationErrorCode"`
 	StableErrorCodes       []string          `json:"stableErrorCodes"`
 	RetryableCodes         []string          `json:"retryableCodes"`
 	RequiredRunnerChecks   []string          `json:"requiredRunnerChecks"`
@@ -118,6 +119,9 @@ func validate(contract Contract) error {
 	if !reflect.DeepEqual(contract.RetryableCodes, wantRetryable) {
 		return errors.New("portable host retry taxonomy drifted")
 	}
+	if contract.ValidationErrorCode != "invalid_argument" {
+		return errors.New("portable host validation errors must normalize to invalid_argument")
+	}
 	wantErrors := []string{
 		"invalid_argument", "unauthenticated", "permission_denied", "form_unknown", "form_not_installed",
 		"form_unavailable", "form_identity_conflict", "resource_not_found", "resource_version_conflict",
@@ -128,7 +132,7 @@ func validate(contract Contract) error {
 	}
 	wantChecks := []string{
 		"discovery", "exact-availability", "preview", "apply", "apply-idempotency", "read",
-		"canonical-resource-parity", "exact-digest-substitution-rejected", "observe", "refresh",
+		"canonical-resource-parity", "exact-digest-substitution-rejected", "invalid-argument-normalization", "observe", "refresh",
 		"canonical-audit-parity", "import-idempotency", "delete-idempotency",
 	}
 	if !reflect.DeepEqual(contract.RequiredRunnerChecks, wantChecks) {

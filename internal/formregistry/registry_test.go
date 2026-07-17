@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-func TestReleaseRefsMatchLegacyPackageSet(t *testing.T) {
+func TestReleaseRefsMatchStandardPackageSet(t *testing.T) {
 	t.Parallel()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "legacy-package-set.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "standard-package-set.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,13 @@
+{
+  "applied": {
+    "engine": "sqlite",
+    "migrationsPath": "migrations",
+    "name": "main"
+  },
+  "driftedFields": [],
+  "generation": 1,
+  "id": "SQLDatabase/main",
+  "imported": true,
+  "portability": "portable",
+  "ready": true
+}

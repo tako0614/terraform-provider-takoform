@@ -60,6 +60,7 @@ network access or code execution:
 
 ```console
 go run ./cmd/form-package conformance
+go run ./cmd/standard-form-conformance verify
 go run ./cmd/form-package verify conformance/form-package-v1/positive/example-store
 ```
 
@@ -88,6 +89,7 @@ go test ./...
 go run ./cmd/conformance verify
 go run ./cmd/migration-proof
 go run ./cmd/form-package conformance
+go run ./cmd/standard-form-conformance verify
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 ```
 
