@@ -590,6 +590,11 @@ func updatePortableHostContract(root string, entries []InventoryEntry) error {
 		},
 		PackageDigest: bucket.PackageDigest,
 	}
+	runnerDigest, err := portableconformance.RunnerEvidenceDigest(contract)
+	if err != nil {
+		return err
+	}
+	contract.RunnerEvidence.SHA256 = runnerDigest
 	if err := writeJSON(contractPath, contract); err != nil {
 		return err
 	}

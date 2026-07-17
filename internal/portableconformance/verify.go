@@ -138,7 +138,7 @@ func validate(contract Contract) error {
 	if !reflect.DeepEqual(contract.RequiredRunnerChecks, wantChecks) {
 		return errors.New("portable host required runner checks drifted")
 	}
-	runnerDigest, err := runnerEvidenceDigest(contract)
+	runnerDigest, err := RunnerEvidenceDigest(contract)
 	if err != nil {
 		return fmt.Errorf("portable host neutral runner evidence: %w", err)
 	}
@@ -154,21 +154,38 @@ func validate(contract Contract) error {
 	return nil
 }
 
-func runnerEvidenceDigest(contract Contract) (string, error) {
+// RunnerEvidenceDigest binds the neutral runner subject to every portable
+// contract input that changes black-box lifecycle behavior. It authenticates
+// no execution result; callers must supply and authenticate that separately.
+func RunnerEvidenceDigest(contract Contract) (string, error) {
 	payload := struct {
-		Subject              string            `json:"subject"`
-		APIVersion           string            `json:"apiVersion"`
-		RunnerInput          RunnerInput       `json:"runnerInput"`
-		Preconditions        map[string]string `json:"preconditions"`
-		IdempotentOperations []string          `json:"idempotentOperations"`
-		RequiredRunnerChecks []string          `json:"requiredRunnerChecks"`
+		Subject                string            `json:"subject"`
+		APIVersion             string            `json:"apiVersion"`
+		DiscoveryPath          string            `json:"discoveryPath"`
+		APIPath                string            `json:"apiPath"`
+		CompatibilityPath      string            `json:"compatibilityPath"`
+		RunnerInput            RunnerInput       `json:"runnerInput"`
+		Preconditions          map[string]string `json:"preconditions"`
+		IdempotentOperations   []string          `json:"idempotentOperations"`
+		ValidationErrorCode    string            `json:"validationErrorCode"`
+		StableErrorCodes       []string          `json:"stableErrorCodes"`
+		RetryableCodes         []string          `json:"retryableCodes"`
+		RequiredRunnerChecks   []string          `json:"requiredRunnerChecks"`
+		ForbiddenProviderState []string          `json:"forbiddenProviderState"`
 	}{
-		Subject:              contract.RunnerEvidence.Subject,
-		APIVersion:           contract.APIVersion,
-		RunnerInput:          contract.RunnerInput,
-		Preconditions:        contract.Preconditions,
-		IdempotentOperations: contract.IdempotentOperations,
-		RequiredRunnerChecks: contract.RequiredRunnerChecks,
+		Subject:                contract.RunnerEvidence.Subject,
+		APIVersion:             contract.APIVersion,
+		DiscoveryPath:          contract.DiscoveryPath,
+		APIPath:                contract.APIPath,
+		CompatibilityPath:      contract.CompatibilityPath,
+		RunnerInput:            contract.RunnerInput,
+		Preconditions:          contract.Preconditions,
+		IdempotentOperations:   contract.IdempotentOperations,
+		ValidationErrorCode:    contract.ValidationErrorCode,
+		StableErrorCodes:       contract.StableErrorCodes,
+		RetryableCodes:         contract.RetryableCodes,
+		RequiredRunnerChecks:   contract.RequiredRunnerChecks,
+		ForbiddenProviderState: contract.ForbiddenProviderState,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {

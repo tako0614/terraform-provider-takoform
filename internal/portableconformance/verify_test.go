@@ -30,7 +30,7 @@ func TestNeutralRunnerEvidenceDigestCoversSubjectAndInputs(t *testing.T) {
 	if err := decodeStrict(path, &contract); err != nil {
 		t.Fatal(err)
 	}
-	got, err := runnerEvidenceDigest(contract)
+	got, err := RunnerEvidenceDigest(contract)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestNeutralRunnerEvidenceDigestCoversSubjectAndInputs(t *testing.T) {
 	}
 	mutated := contract
 	mutated.RunnerEvidence.Subject = "implementation-specific-runner"
-	mutatedDigest, err := runnerEvidenceDigest(mutated)
+	mutatedDigest, err := RunnerEvidenceDigest(mutated)
 	if err != nil {
 		t.Fatal(err)
 	}
