@@ -50,12 +50,13 @@ cannot silently become a public provider release identity. It can be opened
 only by a separately reviewed implementation that authenticates every external
 requirement and the exact signed admission evidence.
 
-An admission artifact may be accepted only after external runners authenticate
-complete host and provider lifecycle evidence. Shared negative admission
-fixtures use the portable API wire code `invalid_argument`; the package
-verifier's internal failure name `schema_validation_failed` is not a wire
-error. Immutable tags, Registry install/readback, Sigstore provenance, and
-signed admission evidence also remain external requirements.
+The local Takosumi host proof and reviewed OpenTofu/Terraform FQN lifecycle
+matrix cover the candidate set; shared negative admission fixtures use the
+portable API wire code `invalid_argument`. The package verifier's internal
+failure name `schema_validation_failed` is not a wire error. An admission
+artifact may be accepted only after external runners authenticate that evidence
+and bind it to immutable tags, Registry install/readback, Sigstore provenance,
+and signed admission evidence.
 
 Each definition keeps `status: standard` so the exact proposed final bytes can
 be exercised and digest-pinned without a later status mutation. That field does

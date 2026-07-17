@@ -31,6 +31,14 @@ Every candidate contains:
 - `sbom.spdx.json` generated from the exact Go module graph;
 - `provenance.json`, an unsigned in-toto statement describing the build.
 
+`release/version.json` also pins the supported CLI/FQN matrix. Release CI must
+exercise OpenTofu `1.12.1` with
+`registry.opentofu.org/tako0614/takoform` and Terraform `1.15.8` with
+`registry.terraform.io/tako0614/takoform`. Both must expose the same schema and
+complete lifecycle evidence for the exact embedded structural candidate set;
+the two provider addresses are recorded independently and are never rewritten
+as aliases.
+
 The tool never signs, uploads, tags, creates a GitHub Release, or publishes to a
 Registry/mirror. The environment-gated `v*` tag workflow is the only release
 producer. It imports the `provider-release` Environment secret key, verifies the

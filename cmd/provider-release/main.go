@@ -32,18 +32,25 @@ const descriptorPath = "release/version.json"
 
 var semverPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
 
+type cliCompatibility struct {
+	Product         string `json:"product"`
+	Version         string `json:"version"`
+	ProviderAddress string `json:"providerAddress"`
+}
+
 type descriptor struct {
-	SchemaVersion      int      `json:"schemaVersion"`
-	Version            string   `json:"version"`
-	Tag                string   `json:"tag"`
-	SourceRepository   string   `json:"sourceRepository"`
-	ProviderAddress    string   `json:"providerAddress"`
-	GoModule           string   `json:"goModule"`
-	GoVersion          string   `json:"goVersion"`
-	SigningFingerprint string   `json:"signingFingerprint"`
-	PublicKeyPath      string   `json:"publicKeyPath"`
-	Platforms          []string `json:"platforms"`
-	PublicationStatus  string   `json:"publicationStatus"`
+	SchemaVersion      int                `json:"schemaVersion"`
+	Version            string             `json:"version"`
+	Tag                string             `json:"tag"`
+	SourceRepository   string             `json:"sourceRepository"`
+	ProviderAddress    string             `json:"providerAddress"`
+	CLIMatrix          []cliCompatibility `json:"cliMatrix"`
+	GoModule           string             `json:"goModule"`
+	GoVersion          string             `json:"goVersion"`
+	SigningFingerprint string             `json:"signingFingerprint"`
+	PublicKeyPath      string             `json:"publicKeyPath"`
+	Platforms          []string           `json:"platforms"`
+	PublicationStatus  string             `json:"publicationStatus"`
 }
 
 type sourceEvidence struct {
@@ -69,21 +76,22 @@ type artifact struct {
 }
 
 type releaseManifest struct {
-	SchemaVersion       int               `json:"schemaVersion"`
-	Kind                string            `json:"kind"`
-	Version             string            `json:"version"`
-	Tag                 string            `json:"tag"`
-	SourceRepository    string            `json:"sourceRepository"`
-	SourceCommit        string            `json:"sourceCommit"`
-	SourceDirty         bool              `json:"sourceDirty"`
-	ProviderAddress     string            `json:"providerAddress"`
-	GoModule            string            `json:"goModule"`
-	GoVersion           string            `json:"goVersion"`
-	PublicationStatus   string            `json:"publicationStatus"`
-	PublicationReady    bool              `json:"publicationReady"`
-	PublicationBlockers []string          `json:"publicationBlockers"`
-	Artifacts           []artifact        `json:"artifacts"`
-	Materials           map[string]string `json:"materials"`
+	SchemaVersion       int                `json:"schemaVersion"`
+	Kind                string             `json:"kind"`
+	Version             string             `json:"version"`
+	Tag                 string             `json:"tag"`
+	SourceRepository    string             `json:"sourceRepository"`
+	SourceCommit        string             `json:"sourceCommit"`
+	SourceDirty         bool               `json:"sourceDirty"`
+	ProviderAddress     string             `json:"providerAddress"`
+	CLIMatrix           []cliCompatibility `json:"cliMatrix"`
+	GoModule            string             `json:"goModule"`
+	GoVersion           string             `json:"goVersion"`
+	PublicationStatus   string             `json:"publicationStatus"`
+	PublicationReady    bool               `json:"publicationReady"`
+	PublicationBlockers []string           `json:"publicationBlockers"`
+	Artifacts           []artifact         `json:"artifacts"`
+	Materials           map[string]string  `json:"materials"`
 }
 
 type module struct {
@@ -213,6 +221,9 @@ func loadDescriptor(repo string) (descriptor, error) {
 		value.GoModule != "github.com/tako0614/terraform-provider-takoform" {
 		return value, errors.New("release descriptor public identity mismatch")
 	}
+	if err := validateCLIMatrix(value.CLIMatrix); err != nil {
+		return value, err
+	}
 	if value.SigningFingerprint != "3510E75E05BBCC303B92D77934FC18AC897FB709" ||
 		value.PublicKeyPath != "release/keys/provider-signing-key.asc" {
 		return value, errors.New("release descriptor signing identity mismatch")
@@ -236,6 +247,25 @@ func loadDescriptor(repo string) (descriptor, error) {
 		seen[platform] = true
 	}
 	return value, nil
+}
+
+func validateCLIMatrix(matrix []cliCompatibility) error {
+	expected := map[string]string{
+		"OpenTofu":  "registry.opentofu.org/tako0614/takoform",
+		"Terraform": "registry.terraform.io/tako0614/takoform",
+	}
+	if len(matrix) != len(expected) {
+		return errors.New("release descriptor must pin exactly OpenTofu and Terraform CLI/FQN entries")
+	}
+	seen := map[string]bool{}
+	for _, entry := range matrix {
+		address, ok := expected[entry.Product]
+		if !ok || seen[entry.Product] || entry.Version == "" || entry.ProviderAddress != address {
+			return fmt.Errorf("invalid release CLI/FQN matrix entry for %q", entry.Product)
+		}
+		seen[entry.Product] = true
+	}
+	return nil
 }
 
 func inspectSource(repo string, desc descriptor, allowDirty, allowUntagged bool) (sourceEvidence, error) {
@@ -419,7 +449,7 @@ func build(repo, output string, desc descriptor, allowDirty, allowUntagged bool)
 		SchemaVersion: 1, Kind: "takoform.provider-release-candidate@v1",
 		Version: desc.Version, Tag: desc.Tag, SourceRepository: desc.SourceRepository,
 		SourceCommit: evidence.Commit, SourceDirty: evidence.Dirty,
-		ProviderAddress: desc.ProviderAddress, GoModule: desc.GoModule, GoVersion: desc.GoVersion,
+		ProviderAddress: desc.ProviderAddress, CLIMatrix: desc.CLIMatrix, GoModule: desc.GoModule, GoVersion: desc.GoVersion,
 		PublicationStatus: desc.PublicationStatus, PublicationReady: false,
 		PublicationBlockers: evidence.Blockers, Artifacts: artifacts,
 		Materials: map[string]string{"SHA256SUMS": checksumDigest, "sbom.spdx.json": sbomDigest},
@@ -591,6 +621,7 @@ func createProvenance(desc descriptor, evidence sourceEvidence, artifacts []arti
 				"internalParameters": map[string]any{
 					"goVersion": desc.GoVersion,
 					"platforms": desc.Platforms,
+					"cliMatrix": desc.CLIMatrix,
 				},
 				"resolvedDependencies": []map[string]any{{"uri": "git+https://" + desc.SourceRepository, "digest": map[string]string{"gitCommit": evidence.Commit}}},
 			},

@@ -26,6 +26,9 @@ func TestReleaseDescriptorPinsPublicIdentityAndSigner(t *testing.T) {
 	if desc.Tag != "v"+desc.Version {
 		t.Fatalf("Registry tag mismatch: %q", desc.Tag)
 	}
+	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
+		t.Fatalf("CLI/FQN matrix: %v", err)
+	}
 }
 
 func TestReleaseDescriptorRejectsWrongSigner(t *testing.T) {
@@ -46,6 +49,14 @@ func TestReleaseDescriptorRejectsWrongSigner(t *testing.T) {
 	}
 	if _, err := loadDescriptor(fixture); err == nil || !strings.Contains(err.Error(), "signing identity mismatch") {
 		t.Fatalf("expected wrong signer rejection, got %v", err)
+	}
+}
+
+func TestReleaseDescriptorRejectsAliasedCLIMatrix(t *testing.T) {
+	desc := testDescriptor()
+	desc.CLIMatrix[0].ProviderAddress = desc.ProviderAddress
+	if err := validateCLIMatrix(desc.CLIMatrix); err == nil || !strings.Contains(err.Error(), "invalid release CLI/FQN matrix") {
+		t.Fatalf("expected aliased CLI/FQN matrix rejection, got %v", err)
 	}
 }
 
@@ -237,11 +248,15 @@ func TestOfficialInTotoAndSLSAValidatorsAcceptCandidateProvenance(t *testing.T) 
 
 func testDescriptor() descriptor {
 	return descriptor{
-		SchemaVersion:      1,
-		Version:            "0.1.0-rc.1",
-		Tag:                "v0.1.0-rc.1",
-		SourceRepository:   "github.com/tako0614/terraform-provider-takoform",
-		ProviderAddress:    "registry.terraform.io/tako0614/takoform",
+		SchemaVersion:    1,
+		Version:          "0.1.0-rc.1",
+		Tag:              "v0.1.0-rc.1",
+		SourceRepository: "github.com/tako0614/terraform-provider-takoform",
+		ProviderAddress:  "registry.terraform.io/tako0614/takoform",
+		CLIMatrix: []cliCompatibility{
+			{Product: "OpenTofu", Version: "1.12.1", ProviderAddress: "registry.opentofu.org/tako0614/takoform"},
+			{Product: "Terraform", Version: "1.15.8", ProviderAddress: "registry.terraform.io/tako0614/takoform"},
+		},
 		GoModule:           "github.com/tako0614/terraform-provider-takoform",
 		GoVersion:          runtime.Version(),
 		SigningFingerprint: "3510E75E05BBCC303B92D77934FC18AC897FB709",

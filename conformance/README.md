@@ -28,21 +28,28 @@ versioned Form host. The generic candidate covers create, read plus observe,
 mutable update with state-generation fencing, explicit refresh, native import,
 CLI import, drift mapping, delete, exact response-identity rejection, and
 replacement plans for immutable names, SQL engine, and vector dimensions.
-The data-only candidate report binds the CLI product, version, executable
-basename, and binary SHA-256 without leaking a host-local path. CI runs the
-OpenTofu variant; the same runner accepts Terraform:
+The data-only candidate report binds the CLI product/version, exact canonical
+provider FQN, provider schema digest, embedded ten-Form candidate-set digest,
+release-descriptor provider version/binary digest, CLI executable basename,
+and CLI binary SHA-256 without leaking a host-local path. CI
+runs the reviewed OpenTofu and Terraform versions as one fail-closed matrix:
 
 ```console
 go run ./cmd/provider-lifecycle-conformance verify --cli tofu
 go run ./cmd/provider-lifecycle-conformance verify --cli /path/to/terraform
+go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 ```
 
 This is intentionally classified `generic-lifecycle-candidate` with
-`publicationReady: false` and `bindingStatus: pending-final-package-set`. It
-does not publish a checked-in passed report or claim standard Form admission.
-After the final package set and exact digests settle, separate Terraform and
-OpenTofu reports must be bound to those exact FormRef/package fixtures before
-they can contribute to standard admission evidence.
+`publicationReady: false` and
+`bindingStatus: exact-structural-candidate-set`. It does not publish a
+checked-in passed report or claim standard Form admission. The matrix requires
+OpenTofu `1.12.1` under
+`registry.opentofu.org/tako0614/takoform` and Terraform `1.15.8` under
+`registry.terraform.io/tako0614/takoform`, then requires identical provider
+schema, exact FormRef/package identity, and lifecycle evidence. Immutable
+release/readback plus authenticated signed external admission are still
+required before these structural candidates can become portable standards.
 
 ## Phase 0/1 golden characterization
 
@@ -88,10 +95,11 @@ intentionally contains no locally synthesized passed admission JSON.
 The machine-readable inventory classifies the set `structural-candidate`, marks
 local coverage `structural-only`, and admission `external-required`. Definition
 `status: standard` pins the proposed final bytes; it is not an admission claim.
-Complete Takosumi host and Terraform provider
-lifecycle reports, portable negative wire-code coverage (`invalid_argument`),
-signatures/provenance, immutable release tags, Registry installation/readback,
-and authenticated signed admission evidence remain external requirements. Only
+The local dual-CLI/FQN provider lifecycle matrix and Takosumi host fixture proof
+cover the candidate set, including portable negative wire-code coverage
+(`invalid_argument`). Signatures/provenance, immutable release tags, Registry
+installation/readback, and authenticated signed admission evidence remain
+external requirements. Only
 that authenticated evidence may classify the exact package as
 `portable-standard`.
 
