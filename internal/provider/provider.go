@@ -177,7 +177,14 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 }
 
 func newResourceAPIHTTPClient() *http.Client {
-	return &http.Client{Timeout: defaultResourceAPITimeout}
+	return &http.Client{
+		Timeout: defaultResourceAPITimeout,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			// Discovery and Resource API endpoints are exact protocol identities.
+			// Do not forward a provider bearer token through an HTTP redirect.
+			return http.ErrUseLastResponse
+		},
+	}
 }
 
 func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resource {

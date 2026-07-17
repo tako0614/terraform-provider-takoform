@@ -234,11 +234,44 @@ func TestDiscoveryRequiresConfiguredOrigin(t *testing.T) {
 	for _, endpoint := range []string{
 		"forms.example.com", "ftp://forms.example.com", "https://user@forms.example.com",
 		"https://forms.example.com/base", "https://forms.example.com?api=1", "https://forms.example.com#fragment",
+		"http://forms.example.com",
 	} {
 		client := New(endpoint, "", nil)
 		if _, err := client.Discover(context.Background()); err == nil {
 			t.Fatalf("Discover(%q) unexpectedly succeeded", endpoint)
 		}
+	}
+	for _, endpoint := range []string{"http://localhost:8090", "http://127.0.0.2:8090", "http://[::1]:8090"} {
+		client := New(endpoint, "", nil)
+		if _, err := client.configuredOrigin(); err != nil {
+			t.Fatalf("configuredOrigin(%q) rejected loopback development origin: %v", endpoint, err)
+		}
+	}
+}
+
+func TestClientRejectsOversizedResponses(t *testing.T) {
+	t.Parallel()
+	exact := []byte(`{"padding":"` + strings.Repeat("x", maxResponseBodyBytes-len(`{"padding":""}`)) + `"}`)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/exact" {
+			_, _ = w.Write(exact)
+			return
+		}
+		_, _ = w.Write(append(exact, '\n'))
+	}))
+	defer server.Close()
+
+	client := New(server.URL, "", server.Client())
+	var accepted map[string]string
+	if err := client.doJSON(context.Background(), http.MethodGet, server.URL+"/exact", nil, &accepted); err != nil {
+		t.Fatalf("response at exact bound was rejected: %v", err)
+	}
+	if len(accepted["padding"]) == 0 {
+		t.Fatal("response at exact bound was not decoded")
+	}
+	if _, err := client.Discover(context.Background()); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("expected bounded response error, got %v", err)
 	}
 }
 
