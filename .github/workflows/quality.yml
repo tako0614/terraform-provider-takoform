@@ -49,6 +49,7 @@ jobs:
           go run ./cmd/conformance verify
           go run ./cmd/migration-proof
           go run ./cmd/form-package conformance
+          go run ./cmd/standard-form-conformance verify
           go test ./cmd/form-package-release
           go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
           go run github.com/google/go-licenses@v1.6.0 check ./... \

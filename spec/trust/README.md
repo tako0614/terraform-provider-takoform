@@ -74,8 +74,15 @@ release builder, keyless Sigstore workflow, and append-only revocation delivery
 lane now exist. No real package or revocation statement has been released.
 Remote host distribution/install, host-side publisher-policy enforcement,
 activation, and revocation consumption still require implementation and live
-evidence. The ten current provider resources remain compatibility candidates
-rather than portable standards.
+evidence. The ten current provider resources have local deterministic `1.0.0 /
+standard` definition candidate bytes and structural fixtures only. Their
+inventory is `structural-candidate`, not `portable-standard`; definition status
+does not admit them. Passed host/provider
+lifecycle reports, portable negative wire-code coverage, signature, immutable
+tag, Registry installation/readback, and authenticated admission evidence are
+still missing. Only authenticated host/provider evidence can classify the exact
+package `portable-standard`. The legacy packages remain compatibility
+candidates.
 
 ## Rotation and revocation
 

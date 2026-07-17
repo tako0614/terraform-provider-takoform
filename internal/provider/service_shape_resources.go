@@ -983,6 +983,10 @@ func (m serviceShapeModel) toResource(ctx context.Context, defaultSpace, kind st
 	}
 
 	name := m.Name.ValueString()
+	if m.Name.IsNull() || m.Name.IsUnknown() || !validPortableName(name) {
+		diags.AddAttributeError(path.Root("name"), "Invalid resource name", "name must be a non-empty printable string of at most 128 characters.")
+		return nil, "", diags
+	}
 	spec := map[string]any{"name": name}
 	switch specKind {
 	case specObjectBucket:

@@ -32,9 +32,10 @@ read/lifecycle URLs carry all five fields as query parameters. Responses that
 substitute any Form identity field or the requested Resource `metadata.name` /
 `metadata.space` fail closed.
 
-The current ten exact references are pinned by
-[`forms/legacy-package-set.json`](../../forms/legacy-package-set.json). They
-remain compatibility candidates, not portable standards.
+The provider release's ten exact standard references are pinned by
+[`forms/standard-package-set.json`](../../forms/standard-package-set.json).
+The separate references in `legacy-package-set.json` remain retained migration
+identities and are not used as this release's standard availability contract.
 
 ## Resource lifecycle
 
@@ -68,6 +69,10 @@ lifecycle action and may do materially more work than a read-only observation.
 
 Stable errors use
 `{ "error": { "code", "message", "requestId", "retryable", "hostCode?" } }`.
+The versioned portable API normalizes validation failures to
+`invalid_argument`; a host-specific cause may be retained in `hostCode` or
+`details`. Compatibility-facade codes such as `invalid_spec`, and the package
+verifier's internal `schema_validation_failed`, are not portable wire codes.
 Provider diagnostics may expose the stable code and request ID, but state never
 contains credentials, prices, quotes, backend selection, Target identity, or
 manager authority.

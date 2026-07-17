@@ -44,6 +44,9 @@
     "observedSchema": {
       "$ref": "#/$defs/jsonSchema"
     },
+    "outputSchema": {
+      "$ref": "#/$defs/jsonSchema"
+    },
     "immutableFields": {
       "type": "array",
       "uniqueItems": true,
@@ -57,7 +60,7 @@
       "minItems": 1,
       "uniqueItems": true,
       "items": {
-        "enum": ["create", "update", "observe", "delete", "import"]
+        "enum": ["create", "read", "update", "delete", "import", "observe", "refresh", "drift"]
       }
     },
     "interfaces": {
@@ -105,6 +108,35 @@
           },
           "observedPath": {
             "$ref": "#/$defs/packagePath"
+          },
+          "outputPath": {
+            "$ref": "#/$defs/packagePath"
+          }
+        }
+      }
+    },
+    "negativeConformanceFixtures": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "stage", "inputPath", "expectedFailure"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+          },
+          "stage": {
+            "enum": ["desired", "observed", "output"]
+          },
+          "inputPath": {
+            "$ref": "#/$defs/packagePath"
+          },
+          "expectedFailure": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._-]{2,127}$"
           }
         }
       }

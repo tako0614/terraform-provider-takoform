@@ -1,0 +1,12 @@
+{
+  "applied": {
+    "consistency": "strong",
+    "name": "cache"
+  },
+  "driftedFields": [],
+  "generation": 1,
+  "id": "KVStore/cache",
+  "imported": true,
+  "portability": "portable",
+  "ready": true
+}

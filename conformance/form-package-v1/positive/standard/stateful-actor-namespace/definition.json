@@ -1,0 +1,340 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "StatefulActorNamespace",
+  "definitionVersion": "1.0.0",
+  "title": "Stateful Actor Namespace",
+  "description": "Provider-neutral namespace, class, and storage contract for stateful actors.",
+  "status": "standard",
+  "desiredSchema": {
+    "$defs": {
+      "connection": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "projection": {
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "resource": {
+            "pattern": "^\\S+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "permissions",
+          "projection"
+        ],
+        "type": "object"
+      },
+      "connections": {
+        "additionalProperties": {
+          "$ref": "#/$defs/connection"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "className": {
+        "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+        "type": "string"
+      },
+      "connections": {
+        "$ref": "#/$defs/connections"
+      },
+      "migrationTag": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": ".*\\S.*",
+        "type": "string"
+      },
+      "name": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": ".*\\S.*",
+        "type": "string"
+      },
+      "storageProfile": {
+        "default": "durable_sqlite",
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "name",
+      "className"
+    ],
+    "type": "object"
+  },
+  "observedSchema": {
+    "$defs": {
+      "connection": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "projection": {
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "resource": {
+            "pattern": "^\\S+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "permissions",
+          "projection"
+        ],
+        "type": "object"
+      },
+      "connections": {
+        "additionalProperties": {
+          "$ref": "#/$defs/connection"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "applied": {
+        "additionalProperties": false,
+        "properties": {
+          "className": {
+            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+            "type": "string"
+          },
+          "connections": {
+            "$ref": "#/$defs/connections"
+          },
+          "migrationTag": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "type": "string"
+          },
+          "storageProfile": {
+            "default": "durable_sqlite",
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "className"
+        ],
+        "type": "object"
+      },
+      "driftedFields": {
+        "items": {
+          "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "generation": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "imported": {
+        "type": "boolean"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "id",
+      "ready",
+      "generation",
+      "imported",
+      "portability",
+      "applied",
+      "driftedFields"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "$defs": {
+      "connection": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "projection": {
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "resource": {
+            "pattern": "^\\S+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "permissions",
+          "projection"
+        ],
+        "type": "object"
+      },
+      "connections": {
+        "additionalProperties": {
+          "$ref": "#/$defs/connection"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "generation": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "kind": {
+        "const": "StatefulActorNamespace",
+        "type": "string"
+      },
+      "name": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "portableSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "className": {
+            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+            "type": "string"
+          },
+          "connections": {
+            "$ref": "#/$defs/connections"
+          },
+          "migrationTag": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": ".*\\S.*",
+            "type": "string"
+          },
+          "storageProfile": {
+            "default": "durable_sqlite",
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "className"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "kind",
+      "name",
+      "generation",
+      "portability",
+      "portableSpec"
+    ],
+    "type": "object"
+  },
+  "immutableFields": [
+    "/name"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh",
+    "drift"
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json",
+      "observedPath": "fixtures/observed.json",
+      "outputPath": "fixtures/output.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-invalid-semantics",
+      "stage": "desired",
+      "inputPath": "fixtures/negative.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

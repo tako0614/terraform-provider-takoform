@@ -11,27 +11,36 @@
       "formRef": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "ObjectBucket",
-        "definitionVersion": "0.0.0-legacy.1",
-        "schemaDigest": "sha256:ee32286a40681296fc6f3db9ece79c2d651821aa2e947d1fa1cd6e28e8be8391"
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:bf69d69780cd382784c974257514bbed27e9bf0e04b7ffca8f3e20507c8ea4cd"
       },
-      "packageDigest": "sha256:0c43dfbf565c959ad627a6cd8d19aa77bf56d9e3655f44f71bb207fb79b264f2"
+      "packageDigest": "sha256:bd52b33978b33fa3b62a7bd484fd43f261e87c6ff19a8223047de578b25d0e48"
     },
     "desired": {
+      "interfaces": [
+        "s3_api"
+      ],
       "name": "portable-assets",
-      "storageClass": "standard",
-      "interfaces": ["s3_api"]
+      "storageClass": "standard"
     },
     "importNativeId": "provider-native-portable-assets"
   },
   "preconditions": {
     "create": "If-None-Match: *",
-    "update": "If-Match: quoted resourceVersion",
+    "delete": "If-Match: quoted resourceVersion",
     "import": "If-None-Match: * or If-Match: quoted resourceVersion",
     "observe": "If-Match: quoted resourceVersion",
     "refresh": "If-Match: quoted resourceVersion",
-    "delete": "If-Match: quoted resourceVersion"
+    "update": "If-Match: quoted resourceVersion"
   },
-  "idempotentOperations": ["apply", "import", "observe", "refresh", "delete"],
+  "idempotentOperations": [
+    "apply",
+    "import",
+    "observe",
+    "refresh",
+    "delete"
+  ],
+  "validationErrorCode": "invalid_argument",
   "stableErrorCodes": [
     "invalid_argument",
     "unauthenticated",
@@ -48,7 +57,10 @@
     "backend_unavailable",
     "internal_error"
   ],
-  "retryableCodes": ["resource_busy", "backend_unavailable"],
+  "retryableCodes": [
+    "resource_busy",
+    "backend_unavailable"
+  ],
   "requiredRunnerChecks": [
     "discovery",
     "exact-availability",
@@ -58,6 +70,7 @@
     "read",
     "canonical-resource-parity",
     "exact-digest-substitution-rejected",
+    "invalid-argument-normalization",
     "observe",
     "refresh",
     "canonical-audit-parity",

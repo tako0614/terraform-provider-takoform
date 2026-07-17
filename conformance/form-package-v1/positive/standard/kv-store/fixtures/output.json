@@ -1,0 +1,11 @@
+{
+  "generation": 1,
+  "id": "KVStore/cache",
+  "kind": "KVStore",
+  "name": "cache",
+  "portability": "portable",
+  "portableSpec": {
+    "consistency": "strong",
+    "name": "cache"
+  }
+}

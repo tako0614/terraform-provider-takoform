@@ -1,0 +1,24 @@
+{
+  "compatibilityDate": "2026-07-16",
+  "compatibilityFlags": [
+    "nodejs_compat"
+  ],
+  "connections": {
+    "ASSETS": {
+      "permissions": [
+        "read",
+        "write"
+      ],
+      "projection": "binding",
+      "resource": "ObjectBucket/assets"
+    }
+  },
+  "name": "edge",
+  "profiles": [
+    "workers"
+  ],
+  "source": {
+    "artifactSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "artifactUrl": "https://artifacts.example.test/edge.js"
+  }
+}

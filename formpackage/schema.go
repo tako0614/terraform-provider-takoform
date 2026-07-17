@@ -160,6 +160,7 @@ func ValidateFormRef(raw []byte) (FormRef, error) {
 type compiledDefinitionSchemas struct {
 	desired  *jsonschema.Schema
 	observed *jsonschema.Schema
+	output   *jsonschema.Schema
 }
 
 func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDefinitionSchemas, error) {
@@ -183,6 +184,13 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 	if err != nil {
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
+	var output *jsonschema.Schema
+	if definition.OutputSchema != nil {
+		output, err = compileInlineSchema(definition.OutputSchema, "outputSchema")
+		if err != nil {
+			return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
+		}
+	}
 	for index, descriptor := range definition.Interfaces {
 		if descriptor.DocumentSchema != nil {
 			if _, err := compileInlineSchema(descriptor.DocumentSchema, fmt.Sprintf("interfaces[%d].documentSchema", index)); err != nil {
@@ -193,7 +201,7 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 	if err := validateDefinitionSemantics(definition); err != nil {
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
-	return definition, value, compiledDefinitionSchemas{desired: desired, observed: observed}, nil
+	return definition, value, compiledDefinitionSchemas{desired: desired, observed: observed, output: output}, nil
 }
 
 func validateDefinition(raw []byte) (FormDefinition, any, error) {
@@ -1242,6 +1250,9 @@ func validateDefinitionSemantics(definition FormDefinition) error {
 	if len(definition.ConformanceFixtures) > maxConformanceFixtures {
 		return fmt.Errorf("Form Definition has %d conformance fixtures; maximum is %d", len(definition.ConformanceFixtures), maxConformanceFixtures)
 	}
+	if len(definition.NegativeFixtures) > maxConformanceFixtures {
+		return fmt.Errorf("Form Definition has %d negative conformance fixtures; maximum is %d", len(definition.NegativeFixtures), maxConformanceFixtures)
+	}
 	interfaces := map[string]struct{}{}
 	for _, descriptor := range definition.Interfaces {
 		key := descriptor.Name + "@" + descriptor.Version
@@ -1263,6 +1274,20 @@ func validateDefinitionSemantics(definition FormDefinition) error {
 			if err := validatePackagePath(fixture.ObservedPath); err != nil {
 				return fmt.Errorf("conformance fixture %q observedPath: %w", fixture.Name, err)
 			}
+		}
+		if fixture.OutputPath != "" {
+			if err := validatePackagePath(fixture.OutputPath); err != nil {
+				return fmt.Errorf("conformance fixture %q outputPath: %w", fixture.Name, err)
+			}
+		}
+	}
+	for _, fixture := range definition.NegativeFixtures {
+		if _, duplicate := fixtures[fixture.Name]; duplicate {
+			return fmt.Errorf("Form Definition has duplicate conformance fixture name %q", fixture.Name)
+		}
+		fixtures[fixture.Name] = struct{}{}
+		if err := validatePackagePath(fixture.InputPath); err != nil {
+			return fmt.Errorf("negative conformance fixture %q inputPath: %w", fixture.Name, err)
 		}
 	}
 	return nil

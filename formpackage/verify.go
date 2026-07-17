@@ -194,7 +194,7 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 		return VerificationReport{}, err
 	}
 	for _, fixture := range definition.ConformanceFixtures {
-		for _, fixturePath := range []string{fixture.DesiredPath, fixture.ObservedPath} {
+		for _, fixturePath := range []string{fixture.DesiredPath, fixture.ObservedPath, fixture.OutputPath} {
 			if fixturePath == "" {
 				continue
 			}
@@ -213,6 +213,44 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 			if err := validateFixtureAgainstSchema(definitionSchemas.observed, definition.ObservedSchema, payloads[fixture.ObservedPath], fixture.Name+" observed"); err != nil {
 				return VerificationReport{}, err
 			}
+		}
+		if fixture.OutputPath != "" {
+			if definitionSchemas.output == nil {
+				return VerificationReport{}, fmt.Errorf("conformance fixture %q declares outputPath but Form Definition has no outputSchema", fixture.Name)
+			}
+			if err := validateFixtureAgainstSchema(definitionSchemas.output, definition.OutputSchema, payloads[fixture.OutputPath], fixture.Name+" output"); err != nil {
+				return VerificationReport{}, err
+			}
+		}
+	}
+	for _, fixture := range definition.NegativeFixtures {
+		fixtureFile, ok := listed[fixture.InputPath]
+		if !ok {
+			return VerificationReport{}, fmt.Errorf("negative conformance fixture %q references unlisted payload %q", fixture.Name, fixture.InputPath)
+		}
+		if fixtureFile.MediaType != "application/json" {
+			return VerificationReport{}, fmt.Errorf("negative conformance fixture %q payload %q must use application/json", fixture.Name, fixture.InputPath)
+		}
+		var schema *jsonschema.Schema
+		var source map[string]any
+		switch fixture.Stage {
+		case "desired":
+			schema, source = definitionSchemas.desired, definition.DesiredSchema
+		case "observed":
+			schema, source = definitionSchemas.observed, definition.ObservedSchema
+		case "output":
+			schema, source = definitionSchemas.output, definition.OutputSchema
+		default:
+			return VerificationReport{}, fmt.Errorf("negative conformance fixture %q uses unsupported package-validation stage %q", fixture.Name, fixture.Stage)
+		}
+		if schema == nil {
+			return VerificationReport{}, fmt.Errorf("negative conformance fixture %q stage %q has no schema", fixture.Name, fixture.Stage)
+		}
+		if fixture.ExpectedFailure != "schema_validation_failed" {
+			return VerificationReport{}, fmt.Errorf("negative conformance fixture %q has unsupported expectedFailure %q", fixture.Name, fixture.ExpectedFailure)
+		}
+		if err := validateFixtureAgainstSchema(schema, source, payloads[fixture.InputPath], fixture.Name+" "+fixture.Stage); err == nil {
+			return VerificationReport{}, fmt.Errorf("negative conformance fixture %q unexpectedly passed %s validation", fixture.Name, fixture.Stage)
 		}
 	}
 	packageDigest, err := DigestCanonicalJSON(indexRaw)
