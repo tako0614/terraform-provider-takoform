@@ -83,6 +83,7 @@ type serviceShapeModel struct {
 	Timezone              types.String `tfsdk:"timezone"`
 	Space                 types.String `tfsdk:"space"`
 	ResourceVersion       types.String `tfsdk:"resource_version"`
+	DriftStatus           types.String `tfsdk:"drift_status"`
 	Portability           types.String `tfsdk:"portability"`
 	Outputs               types.Map    `tfsdk:"outputs"`
 }
@@ -94,6 +95,7 @@ type objectBucketModel struct {
 	StorageClass    types.String `tfsdk:"storage_class"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
+	DriftStatus     types.String `tfsdk:"drift_status"`
 	Portability     types.String `tfsdk:"portability"`
 	Outputs         types.Map    `tfsdk:"outputs"`
 }
@@ -104,6 +106,7 @@ type kvStoreModel struct {
 	Consistency     types.String `tfsdk:"consistency"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
+	DriftStatus     types.String `tfsdk:"drift_status"`
 	Portability     types.String `tfsdk:"portability"`
 	Outputs         types.Map    `tfsdk:"outputs"`
 }
@@ -115,6 +118,7 @@ type queueModel struct {
 	MaxBatchSize    types.Int64  `tfsdk:"max_batch_size"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
+	DriftStatus     types.String `tfsdk:"drift_status"`
 	Portability     types.String `tfsdk:"portability"`
 	Outputs         types.Map    `tfsdk:"outputs"`
 }
@@ -126,6 +130,7 @@ type sqlDatabaseModel struct {
 	MigrationsPath  types.String `tfsdk:"migrations_path"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
+	DriftStatus     types.String `tfsdk:"drift_status"`
 	Portability     types.String `tfsdk:"portability"`
 	Outputs         types.Map    `tfsdk:"outputs"`
 }
@@ -140,6 +145,7 @@ type containerServiceModel struct {
 	Connections     types.List   `tfsdk:"connections"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
+	DriftStatus     types.String `tfsdk:"drift_status"`
 	Portability     types.String `tfsdk:"portability"`
 	Outputs         types.Map    `tfsdk:"outputs"`
 }
@@ -152,6 +158,7 @@ type vectorIndexModel struct {
 	Connections     types.List   `tfsdk:"connections"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
+	DriftStatus     types.String `tfsdk:"drift_status"`
 	Portability     types.String `tfsdk:"portability"`
 	Outputs         types.Map    `tfsdk:"outputs"`
 }
@@ -169,6 +176,7 @@ type durableWorkflowModel struct {
 	Connections           types.List   `tfsdk:"connections"`
 	Space                 types.String `tfsdk:"space"`
 	ResourceVersion       types.String `tfsdk:"resource_version"`
+	DriftStatus           types.String `tfsdk:"drift_status"`
 	Portability           types.String `tfsdk:"portability"`
 	Outputs               types.Map    `tfsdk:"outputs"`
 }
@@ -182,6 +190,7 @@ type statefulActorNamespaceModel struct {
 	Connections     types.List   `tfsdk:"connections"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
+	DriftStatus     types.String `tfsdk:"drift_status"`
 	Portability     types.String `tfsdk:"portability"`
 	Outputs         types.Map    `tfsdk:"outputs"`
 }
@@ -194,12 +203,13 @@ type scheduleModel struct {
 	Connections     types.List   `tfsdk:"connections"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
+	DriftStatus     types.String `tfsdk:"drift_status"`
 	Portability     types.String `tfsdk:"portability"`
 	Outputs         types.Map    `tfsdk:"outputs"`
 }
 
 func (m objectBucketModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.Interfaces = m.Interfaces
 	base.StorageClass = m.StorageClass
 	return base
@@ -213,13 +223,14 @@ func objectBucketModelFromServiceShape(m serviceShapeModel) objectBucketModel {
 		StorageClass:    m.StorageClass,
 		Space:           m.Space,
 		ResourceVersion: m.ResourceVersion,
+		DriftStatus:     m.DriftStatus,
 		Portability:     m.Portability,
 		Outputs:         m.Outputs,
 	}
 }
 
 func (m kvStoreModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.Consistency = m.Consistency
 	return base
 }
@@ -231,13 +242,14 @@ func kvStoreModelFromServiceShape(m serviceShapeModel) kvStoreModel {
 		Consistency:     m.Consistency,
 		Space:           m.Space,
 		ResourceVersion: m.ResourceVersion,
+		DriftStatus:     m.DriftStatus,
 		Portability:     m.Portability,
 		Outputs:         m.Outputs,
 	}
 }
 
 func (m queueModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.MaxRetries = m.MaxRetries
 	base.MaxBatchSize = m.MaxBatchSize
 	return base
@@ -251,13 +263,14 @@ func queueModelFromServiceShape(m serviceShapeModel) queueModel {
 		MaxBatchSize:    m.MaxBatchSize,
 		Space:           m.Space,
 		ResourceVersion: m.ResourceVersion,
+		DriftStatus:     m.DriftStatus,
 		Portability:     m.Portability,
 		Outputs:         m.Outputs,
 	}
 }
 
 func (m sqlDatabaseModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.Engine = m.Engine
 	base.MigrationsPath = m.MigrationsPath
 	return base
@@ -271,13 +284,14 @@ func sqlDatabaseModelFromServiceShape(m serviceShapeModel) sqlDatabaseModel {
 		MigrationsPath:  m.MigrationsPath,
 		Space:           m.Space,
 		ResourceVersion: m.ResourceVersion,
+		DriftStatus:     m.DriftStatus,
 		Portability:     m.Portability,
 		Outputs:         m.Outputs,
 	}
 }
 
 func (m containerServiceModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.Image = m.Image
 	base.Ports = m.Ports
 	base.PublicHTTP = m.PublicHTTP
@@ -297,13 +311,14 @@ func containerServiceModelFromServiceShape(m serviceShapeModel) containerService
 		Connections:     m.Connections,
 		Space:           m.Space,
 		ResourceVersion: m.ResourceVersion,
+		DriftStatus:     m.DriftStatus,
 		Portability:     m.Portability,
 		Outputs:         m.Outputs,
 	}
 }
 
 func (m vectorIndexModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.Dimensions = m.Dimensions
 	base.Metric = m.Metric
 	base.Connections = m.Connections
@@ -314,12 +329,12 @@ func vectorIndexModelFromServiceShape(m serviceShapeModel) vectorIndexModel {
 	return vectorIndexModel{
 		ID: m.ID, Name: m.Name, Dimensions: m.Dimensions, Metric: m.Metric,
 		Connections: m.Connections, Space: m.Space,
-		ResourceVersion: m.ResourceVersion, Portability: m.Portability, Outputs: m.Outputs,
+		ResourceVersion: m.ResourceVersion, DriftStatus: m.DriftStatus, Portability: m.Portability, Outputs: m.Outputs,
 	}
 }
 
 func (m durableWorkflowModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.ArtifactPath = m.ArtifactPath
 	base.ArtifactURL = m.ArtifactURL
 	base.ArtifactRef = m.ArtifactRef
@@ -338,12 +353,12 @@ func durableWorkflowModelFromServiceShape(m serviceShapeModel) durableWorkflowMo
 		ArtifactSHA256: m.ArtifactSHA256, Entrypoint: m.Entrypoint,
 		MaxAttempts: m.MaxAttempts, InitialBackoffSeconds: m.InitialBackoffSeconds,
 		Connections: m.Connections, Space: m.Space,
-		ResourceVersion: m.ResourceVersion, Portability: m.Portability, Outputs: m.Outputs,
+		ResourceVersion: m.ResourceVersion, DriftStatus: m.DriftStatus, Portability: m.Portability, Outputs: m.Outputs,
 	}
 }
 
 func (m statefulActorNamespaceModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.ClassName = m.ClassName
 	base.StorageProfile = m.StorageProfile
 	base.MigrationTag = m.MigrationTag
@@ -356,12 +371,12 @@ func statefulActorNamespaceModelFromServiceShape(m serviceShapeModel) statefulAc
 		ID: m.ID, Name: m.Name, ClassName: m.ClassName,
 		StorageProfile: m.StorageProfile, MigrationTag: m.MigrationTag,
 		Connections: m.Connections, Space: m.Space,
-		ResourceVersion: m.ResourceVersion, Portability: m.Portability, Outputs: m.Outputs,
+		ResourceVersion: m.ResourceVersion, DriftStatus: m.DriftStatus, Portability: m.Portability, Outputs: m.Outputs,
 	}
 }
 
 func (m scheduleModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.Cron = m.Cron
 	base.Timezone = m.Timezone
 	base.Connections = m.Connections
@@ -372,7 +387,7 @@ func scheduleModelFromServiceShape(m serviceShapeModel) scheduleModel {
 	return scheduleModel{
 		ID: m.ID, Name: m.Name, Cron: m.Cron, Timezone: m.Timezone,
 		Connections: m.Connections, Space: m.Space,
-		ResourceVersion: m.ResourceVersion, Portability: m.Portability, Outputs: m.Outputs,
+		ResourceVersion: m.ResourceVersion, DriftStatus: m.DriftStatus, Portability: m.Portability, Outputs: m.Outputs,
 	}
 }
 
@@ -381,6 +396,7 @@ func serviceShapeModelFromCommon(
 	name types.String,
 	space types.String,
 	resourceVersion types.String,
+	driftStatus types.String,
 	portability types.String,
 	outputs types.Map,
 ) serviceShapeModel {
@@ -389,6 +405,7 @@ func serviceShapeModelFromCommon(
 		Name:            name,
 		Space:           space,
 		ResourceVersion: resourceVersion,
+		DriftStatus:     driftStatus,
 		Portability:     portability,
 		Outputs:         outputs,
 	}
@@ -643,6 +660,10 @@ func commonServiceShapeAttributes() map[string]schema.Attribute {
 				stringplanmodifier.UseStateForUnknown(),
 			},
 		},
+		"drift_status": schema.StringAttribute{
+			Computed:    true,
+			Description: "Read-only native observation result: current, drifted, or missing.",
+		},
 		"portability": schema.StringAttribute{
 			Computed:    true,
 			Description: "Host-reported portability assessment.",
@@ -701,7 +722,7 @@ func (r *serviceShapeResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 	form := r.data.forms[r.cfg.kind]
-	res, err := r.data.client.GetResource(ctx, r.cfg.kind, state.Name.ValueString(), readSpace, form)
+	res, err := observeResourceForRead(ctx, r.data.client, r.cfg.kind, state.Name.ValueString(), readSpace, form)
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -1138,6 +1159,7 @@ func applyServiceShapeStatus(ctx context.Context, res *client.Resource, kind, sp
 	m.ID = types.StringValue(resourceIDForKind(res, space, kind, m.Name.ValueString()))
 	m.ResourceVersion = types.StringValue(res.Metadata.ResourceVersion)
 	if res.Status != nil {
+		m.DriftStatus = types.StringValue(res.Status.DriftStatus)
 		portability := res.Status.Portability
 		if portability == "" {
 			portability = res.Status.Resolution.Portability
@@ -1147,6 +1169,7 @@ func applyServiceShapeStatus(ctx context.Context, res *client.Resource, kind, sp
 		diags.Append(d...)
 		m.Outputs = outputs
 	} else {
+		m.DriftStatus = types.StringValue("")
 		m.Portability = types.StringValue("")
 		m.Outputs = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}

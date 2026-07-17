@@ -18,6 +18,6 @@ Declares a portable message queue. See the [complete example](../../examples/res
 
 ## Read-only attributes
 
-`id`, `resource_version`, `portability`, and `outputs` report the canonical
-resource fence and sanitized public host results. Backend placement is not
-provider state.
+`id`, `resource_version`, `drift_status`, `portability`, and `outputs` report
+the canonical resource fence, native observation result, and sanitized public
+host results. Backend placement is not provider state.

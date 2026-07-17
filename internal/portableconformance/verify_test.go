@@ -23,3 +23,27 @@ func TestPortableHostContractMatchesReleaseOwnedObjectBucket(t *testing.T) {
 		t.Fatalf("cross-repo runner FormRef %#v differs from provider release %#v", identity, release)
 	}
 }
+
+func TestNeutralRunnerEvidenceDigestCoversSubjectAndInputs(t *testing.T) {
+	path := filepath.Join("..", "..", "conformance", "portable-host-v1", "contract.json")
+	var contract Contract
+	if err := decodeStrict(path, &contract); err != nil {
+		t.Fatal(err)
+	}
+	got, err := runnerEvidenceDigest(contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != contract.RunnerEvidence.SHA256 {
+		t.Fatalf("runner evidence digest = %q, contract has %q", got, contract.RunnerEvidence.SHA256)
+	}
+	mutated := contract
+	mutated.RunnerEvidence.Subject = "implementation-specific-runner"
+	mutatedDigest, err := runnerEvidenceDigest(mutated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mutatedDigest == contract.RunnerEvidence.SHA256 {
+		t.Fatal("runner subject substitution did not change the evidence digest")
+	}
+}

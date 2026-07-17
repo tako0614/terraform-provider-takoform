@@ -16,6 +16,10 @@ go run ./cmd/conformance verify
 go run ./cmd/migration-proof
 ```
 
+Provider publication uses `go run ./cmd/migration-proof --require-complete`.
+Unlike the structural local command, release mode exits nonzero for every
+`external-required` phase or remaining external blocker.
+
 ## Phase 0/1 golden characterization
 
 `compatibility-candidate-v1/` freezes the current ten-kind provider/client
@@ -87,6 +91,9 @@ exposed by the old Takosumi provider, a separate all-ten Takoform golden state,
 an explicit provider/type mapping, and structural backup/import/rollback
 evidence. The four new-only kinds are not represented as fictional
 `takosumi_*` migrations. The verifier rejects provider-address aliasing and
-secret, price, or backend data in new state. Live old/new and rollback refresh
-no-op proof remains explicitly external because it requires pinned provider
-artifacts, lock files, and a reachable host.
+secret, price, or backend data in new state. It also compares state lineage,
+schema version, and every overlapping desired attribute across the six mapped
+resources. Live old/new and rollback refresh no-op proof remains explicitly
+external because it requires the pinned old provider artifact, its exact lock
+and HCL migration input, and a reachable operator migration host; the release
+workflow therefore stays fail-closed until those phases have machine evidence.

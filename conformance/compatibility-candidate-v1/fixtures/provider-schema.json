@@ -143,6 +143,15 @@
           ]
         },
         {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
           "name": "id",
           "type": "string",
           "required": false,
@@ -251,6 +260,15 @@
       "kind": "ObjectBucket",
       "resourceType": "takoform_object_bucket",
       "attributes": [
+        {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
         {
           "name": "id",
           "type": "string",
@@ -399,6 +417,15 @@
           ]
         },
         {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
           "name": "id",
           "type": "string",
           "required": false,
@@ -491,6 +518,15 @@
       "kind": "Queue",
       "resourceType": "takoform_queue",
       "attributes": [
+        {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
         {
           "name": "id",
           "type": "string",
@@ -602,6 +638,15 @@
       "kind": "SQLDatabase",
       "resourceType": "takoform_sql_database",
       "attributes": [
+        {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
         {
           "name": "engine",
           "type": "string",
@@ -794,6 +839,15 @@
               ]
             }
           ]
+        },
+        {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
         },
         {
           "name": "environment",
@@ -1005,6 +1059,15 @@
           "required": true,
           "optional": false,
           "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
           "validators": 0,
           "planModifiers": 0
         },
@@ -1229,6 +1292,15 @@
           ]
         },
         {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
           "name": "entrypoint",
           "type": "string",
           "required": true,
@@ -1433,6 +1505,15 @@
           ]
         },
         {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
           "name": "id",
           "type": "string",
           "required": false,
@@ -1631,6 +1712,15 @@
           "required": true,
           "optional": false,
           "computed": false,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
+          "name": "drift_status",
+          "type": "string",
+          "required": false,
+          "optional": false,
+          "computed": true,
           "validators": 0,
           "planModifiers": 0
         },

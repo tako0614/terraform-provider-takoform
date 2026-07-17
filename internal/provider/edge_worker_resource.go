@@ -45,6 +45,7 @@ type edgeWorkerModel struct {
 	Connections        types.List   `tfsdk:"connections"`
 	Space              types.String `tfsdk:"space"`
 	ResourceVersion    types.String `tfsdk:"resource_version"`
+	DriftStatus        types.String `tfsdk:"drift_status"`
 	Portability        types.String `tfsdk:"portability"`
 	Outputs            types.Map    `tfsdk:"outputs"`
 }
@@ -124,6 +125,10 @@ func (r *edgeWorkerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"drift_status": schema.StringAttribute{
+				Computed:    true,
+				Description: "Read-only native observation result: current, drifted, or missing.",
+			},
 			"portability": schema.StringAttribute{
 				Computed:    true,
 				Description: "Host-reported portability assessment.",
@@ -183,7 +188,7 @@ func (r *edgeWorkerResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 	form := r.data.forms[client.KindEdgeWorker]
-	res, err := r.data.client.GetResource(ctx, client.KindEdgeWorker, state.Name.ValueString(), readSpace, form)
+	res, err := observeResourceForRead(ctx, r.data.client, client.KindEdgeWorker, state.Name.ValueString(), readSpace, form)
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -364,6 +369,7 @@ func applyEdgeWorkerStatus(ctx context.Context, res *client.Resource, space stri
 	m.ID = types.StringValue(resourceIDForKind(res, space, client.KindEdgeWorker, m.Name.ValueString()))
 	m.ResourceVersion = types.StringValue(res.Metadata.ResourceVersion)
 	if res.Status != nil {
+		m.DriftStatus = types.StringValue(res.Status.DriftStatus)
 		portability := res.Status.Portability
 		if portability == "" {
 			portability = res.Status.Resolution.Portability
@@ -373,6 +379,7 @@ func applyEdgeWorkerStatus(ctx context.Context, res *client.Resource, space stri
 		diags.Append(d...)
 		m.Outputs = outputs
 	} else {
+		m.DriftStatus = types.StringValue("")
 		m.Portability = types.StringValue("")
 		m.Outputs = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}

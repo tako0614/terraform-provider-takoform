@@ -123,6 +123,9 @@ type Status struct {
 	Resolution         Resolution     `json:"resolution"`
 	Outputs            map[string]any `json:"outputs,omitempty"`
 	Conditions         []Condition    `json:"conditions,omitempty"`
+	// DriftStatus is transport evidence from the versioned observe response.
+	// It is intentionally not part of the Resource wire envelope.
+	DriftStatus string `json:"-"`
 }
 
 // Resource is the Takoform Resource object envelope. Spec is kept generic so
@@ -606,6 +609,9 @@ func (c *Client) PutResource(ctx context.Context, kind, name string, body *Resou
 		if err := validateResourceIdentity(kind, body); err != nil {
 			return nil, err
 		}
+		if body.Metadata.Name != name {
+			return nil, errors.New("takoform: Resource metadata.name does not match the requested URL name")
+		}
 	}
 	operation := "create"
 	if body.Metadata.ResourceVersion != "" {
@@ -649,7 +655,7 @@ func (c *Client) PutResource(ctx context.Context, kind, name string, body *Resou
 		return nil, err
 	}
 	if !c.compatibilityFallback {
-		if err := verifyResourceIdentity(body.Form, &out); err != nil {
+		if err := verifyResourceIdentity(body.Form, name, body.Metadata.Space, &out); err != nil {
 			return nil, err
 		}
 		if err := captureResourceVersion(&out, responseHeaders); err != nil {
@@ -687,6 +693,9 @@ func (c *Client) ImportResource(ctx context.Context, kind, name, nativeID string
 	if err := validateResourceIdentity(kind, body); err != nil {
 		return nil, err
 	}
+	if body.Metadata.Name != name {
+		return nil, errors.New("takoform: Resource metadata.name does not match the requested URL name")
+	}
 	if err := c.EnsureFormAvailable(ctx, body.Metadata.Space, *body.Form, "import"); err != nil {
 		return nil, err
 	}
@@ -698,7 +707,7 @@ func (c *Client) ImportResource(ctx context.Context, kind, name, nativeID string
 	if err != nil {
 		return nil, err
 	}
-	if err := verifyResourceIdentity(body.Form, &wrapped.Resource); err != nil {
+	if err := verifyResourceIdentity(body.Form, name, body.Metadata.Space, &wrapped.Resource); err != nil {
 		return nil, err
 	}
 	if err := captureResourceVersion(&wrapped.Resource, responseHeaders); err != nil {
@@ -733,7 +742,7 @@ func (c *Client) GetResource(ctx context.Context, kind, name, space string, form
 		return nil, err
 	}
 	if expected != nil {
-		if err := verifyResourceIdentity(expected, &out); err != nil {
+		if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
 			return nil, err
 		}
 		if err := captureResourceVersion(&out, responseHeaders); err != nil {
@@ -766,7 +775,10 @@ func (c *Client) ObserveResource(ctx context.Context, kind, name, space string, 
 	var out Resource
 	var target any = &out
 	var wrapped struct {
-		Resource Resource `json:"resource"`
+		Resource    Resource `json:"resource"`
+		Observation struct {
+			Status string `json:"status"`
+		} `json:"observation"`
 	}
 	if expected != nil {
 		target = &wrapped
@@ -785,12 +797,22 @@ func (c *Client) ObserveResource(ctx context.Context, kind, name, space string, 
 	}
 	if expected != nil {
 		out = wrapped.Resource
-		if err := verifyResourceIdentity(expected, &out); err != nil {
+		if wrapped.Observation.Status != "current" && wrapped.Observation.Status != "drifted" && wrapped.Observation.Status != "missing" {
+			return nil, errors.New("takoform: host observe response omitted a valid observation status")
+		}
+		if out.Status == nil {
+			out.Status = &Status{}
+		}
+		out.Status.DriftStatus = wrapped.Observation.Status
+		if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
 			return nil, err
 		}
 		if err := captureResourceVersion(&out, responseHeaders); err != nil {
 			return nil, err
 		}
+	}
+	if expected == nil && out.Status != nil {
+		out.Status.DriftStatus = driftStatusFromConditions(out.Status.Conditions)
 	}
 	return &out, nil
 }
@@ -837,7 +859,7 @@ func (c *Client) RefreshResource(ctx context.Context, kind, name, space string, 
 	}
 	if expected != nil {
 		out = wrapped.Resource
-		if err := verifyResourceIdentity(expected, &out); err != nil {
+		if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
 			return nil, err
 		}
 		if err := captureResourceVersion(&out, responseHeaders); err != nil {
@@ -1074,6 +1096,9 @@ func validateResourceIdentity(kind string, resource *Resource) error {
 	if resource.APIVersion != APIVersion || resource.Kind != kind || resource.Form.FormRef.APIVersion != APIVersion || resource.Form.FormRef.Kind != kind {
 		return errors.New("takoform: Resource and exact FormRef identities do not match")
 	}
+	if strings.TrimSpace(resource.Metadata.Name) == "" || strings.TrimSpace(resource.Metadata.Space) == "" {
+		return errors.New("takoform: versioned Resource requires metadata.name and metadata.space")
+	}
 	if err := validateInstalledFormReference(kind, *resource.Form); err != nil {
 		return err
 	}
@@ -1112,12 +1137,15 @@ func validResourceVersion(value string) bool {
 	return true
 }
 
-func verifyResourceIdentity(expected *InstalledFormReference, resource *Resource) error {
+func verifyResourceIdentity(expected *InstalledFormReference, expectedName, expectedSpace string, resource *Resource) error {
 	if expected == nil || resource == nil || resource.Form == nil || !sameForm(expected, resource.Form) {
 		return errors.New("takoform: host response changed the exact FormRef/package identity")
 	}
 	if resource.APIVersion != APIVersion || resource.Kind != expected.FormRef.Kind {
 		return errors.New("takoform: host response changed the Resource identity")
+	}
+	if resource.Metadata.Name != expectedName || resource.Metadata.Space != expectedSpace {
+		return errors.New("takoform: host response changed the requested Resource name or space")
 	}
 	return nil
 }
@@ -1129,6 +1157,21 @@ func sameForm(left, right *InstalledFormReference) bool {
 		left.FormRef.DefinitionVersion == right.FormRef.DefinitionVersion &&
 		left.FormRef.SchemaDigest == right.FormRef.SchemaDigest &&
 		left.PackageDigest == right.PackageDigest
+}
+
+func driftStatusFromConditions(conditions []Condition) string {
+	for _, condition := range conditions {
+		if condition.Type != "Drifted" {
+			continue
+		}
+		switch strings.ToLower(condition.Status) {
+		case "true":
+			return "drifted"
+		case "false":
+			return "current"
+		}
+	}
+	return ""
 }
 
 func captureResourceVersion(resource *Resource, headers http.Header) error {

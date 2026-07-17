@@ -8,13 +8,12 @@
   "phases": [
     { "name": "state-backup", "status": "complete", "evidence": "redacted six-resource legacy backup digest is pinned independently from the new-provider golden state" },
     { "name": "old-refresh-no-op", "status": "external-required", "evidence": "requires the pinned takosumi provider artifact, lock file, and a reachable host" },
-    { "name": "approved-remove-import", "status": "complete", "evidence": "bijection and canonical id/name/space continuity verified for all six real legacy resource types" },
+    { "name": "approved-remove-import", "status": "complete", "evidence": "bijection, lineage/schema-version continuity, canonical identity, and overlapping desired attributes verified for all six real legacy resource types" },
     { "name": "new-refresh-no-op", "status": "external-required", "evidence": "requires a built candidate provider and a reachable versioned Form host" },
     { "name": "old-artifact-lock-rollback", "status": "external-required", "evidence": "the structural backup retains the exact old address/types; rollback refresh no-op still requires the pinned old artifact, lock, and host" }
   ],
   "externalBlockers": [
-    "pinned old takosumi provider artifact and lock file",
-    "reachable host with all ten exact FormRefs installed",
-    "published or locally mirrored Takoform candidate artifact for end-to-end refresh"
+    "pinned old takosumi provider artifact and exact lock/HCL migration input",
+    "reachable operator migration host with the six canonical Resources backfilled to exact FormRefs and ResolutionLocks"
   ]
 }

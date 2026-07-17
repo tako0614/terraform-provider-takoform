@@ -12,7 +12,13 @@ not delete the old provider or lock entry until rollback evidence is complete.
 4. Confirm the host has the exact release-owned FormRef/package identity for
    every resource kind being migrated, as pinned in
    [`forms/legacy-package-set.json`](../forms/legacy-package-set.json).
-5. Build or install the reviewed Takoform candidate through a local filesystem
+5. Before removing any state address, require the operator to backfill every
+   existing canonical Resource with that exact FormRef/package identity and a
+   ResolutionLock for its currently selected native implementation. This is a
+   host-side migration prerequisite: the old provider state does not contain
+   enough immutable Form lineage to reconstruct it safely, and a newly resolved
+   implementation is not an acceptable substitute.
+6. Build or install the reviewed Takoform candidate through a local filesystem
    mirror; a public Registry release is not required.
 
 ## Approved transition
@@ -37,6 +43,15 @@ Do not run a normal plan or apply between `state rm` and `import`. If migration
 is interrupted in that window, restore the backup rather than allowing either
 provider to create a replacement.
 
+This `tofu import SPACE/NAME` step adopts the already-existing canonical Form
+host Resource into Terraform state. It deliberately does **not** adopt an
+unmanaged native backend object and does not call the Deploy API native import
+operation. Native backend adoption requires a separately reviewed desired
+Resource body plus native ID through `POST .../import`; do not substitute that
+operation into this provider-address migration. If exact FormRef and
+ResolutionLock backfill has not made the canonical Resource readable first,
+stop and restore the state backup.
+
 The old Takosumi provider exposed only `edge_worker`, `object_bucket`,
 `kv_store`, `queue`, `sql_database`, and `container_service`. Takoform's
 `vector_index`, `durable_workflow`, `stateful_actor_namespace`, and `schedule`
@@ -49,7 +64,7 @@ the canonical host Resource through its exact FormRef and generation fence.
 Do not copy the old `target_pool` argument. The old computed
 `selected_implementation`, `target`, and `locked` fields intentionally have no
 Takoform state equivalent; the new provider records only `resource_version`,
-portability, typed desired fields, and sanitized public outputs.
+`drift_status`, portability, typed desired fields, and sanitized public outputs.
 
 ## Rollback
 
@@ -59,7 +74,12 @@ refresh-only plan. It must remain a no-op. If either old or new refresh differs,
 do not continue and do not rewrite state by hand.
 
 Run `go run ./cmd/migration-proof` to verify the redacted six-kind legacy
-backup, its exact provider/type bijection, canonical identity continuity, and
-the backend-free ten-kind Takoform golden state. The report intentionally lists
-the live old/new and rollback refresh proofs as external blockers until the
-pinned artifacts and a reachable host are supplied.
+backup, its exact provider/type bijection, state lineage/schema-version
+continuity, overlapping desired attributes, canonical identity continuity, and
+the backend-free ten-kind Takoform golden state. Publication runs
+`go run ./cmd/migration-proof --require-complete`; that mode fails while any
+phase is `external-required` or any external blocker remains. The checked-in
+report intentionally lists the live old/new and rollback refresh proofs as
+external blockers until the pinned old artifact/lock/HCL input and a reachable
+operator migration host are supplied, so a release cannot turn structural
+evidence into a false lifecycle claim.
