@@ -93,13 +93,26 @@ depth and do not replace that immutable-staging precondition.
 go run ./cmd/form-package verify PATH
 go run ./cmd/form-package canonicalize FILE.json
 go run ./cmd/form-package digest FILE.json
+go run ./cmd/form-package validate-revocation STATEMENT.json
 go run ./cmd/form-package conformance
 ```
 
-## Deliberate non-goals of this slice
+## Release boundary
 
-This is the portable data contract and closed local verifier only. It does not
-implement archive extraction, remote fetch/install, Sigstore signing or
-verification, publisher policy, revocation delivery, host activation, provider
-publication, or executable adapters. A package is not publishable merely
-because this local verifier accepts it.
+The repository-owned release tooling and protected workflows are documented in
+[`../../release/form-packages.md`](../../release/form-packages.md). A package
+source under `forms/releases/<form-slug>/<packageVersion>/` is re-verified,
+canonicalized, deterministically archived, described by SPDX 2.3 and SLSA v1
+evidence, and signed through a keyless Sigstore v0.3 bundle whose identity is
+bound to the exact repository, workflow, and `forms/<form-slug>/v<semver>` tag.
+The canonical index bytes—not archive metadata—remain the signed semantic
+subject.
+
+## Deliberate non-goals of the local verifier
+
+The local verifier does not extract archives, fetch/install remote packages,
+verify Sigstore publisher identity, consume revocation feeds, activate a Form,
+publish a provider, or execute adapters. Those trust operations stay in the
+release or host layer. A package is not publishable merely because this local
+verifier accepts it, and a checked-in workflow is not proof that a live release
+exists.

@@ -16,11 +16,13 @@ Current committed surfaces:
 
 ## Status
 
-The FormRef, Form Definition, package-index schemas, RFC 8785/I-JSON library,
-closed local verifier, and positive/negative corpus are implemented. The
-Sigstore release/signature lane, remote distribution/install, activation, and
-revocation operations are not implemented, so no Form Package is publishable.
-The current ten provider resources also remain a frozen compatibility
-candidate; this core does not silently standardize them.
+The FormRef, Form Definition, package-index and revocation schemas, RFC
+8785/I-JSON library, closed local verifier, positive/negative corpus, protected
+keyless Sigstore release lane, and signed append-only revocation delivery lane
+are implemented. No real Form Package or revocation statement has been
+published. Remote host fetch/install, host publisher-policy verification,
+activation, and revocation enforcement remain consumer/operator work. The
+current ten provider resources remain frozen compatibility candidates; a
+release lane does not silently standardize them.
 
 The project identity is `forms.takoform.com/v1alpha1`; the Terraform provider identity is `registry.terraform.io/tako0614/takoform`.

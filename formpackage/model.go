@@ -4,6 +4,8 @@ const (
 	FormAPIVersion       = "forms.takoform.com/v1alpha1"
 	PackageAPIVersion    = "packages.forms.takoform.com/v1alpha1"
 	PackageKind          = "FormPackage"
+	TrustAPIVersion      = "trust.forms.takoform.com/v1alpha1"
+	RevocationKind       = "FormPackageRevocation"
 	PackageIndexFilename = "package-index.json"
 	DefinitionMediaType  = "application/vnd.takoform.form-definition.v1+json"
 )
@@ -66,4 +68,26 @@ type VerificationReport struct {
 	FormRef       FormRef `json:"formRef"`
 	FileCount     int     `json:"fileCount"`
 	PayloadBytes  int64   `json:"payloadBytes"`
+}
+
+// RevocationStatement is one immutable, append-only security decision for an
+// exact Form Package digest. Deprecation is represented by Form Definition
+// status and must not be encoded as a security revocation.
+type RevocationStatement struct {
+	APIVersion       string            `json:"apiVersion"`
+	Kind             string            `json:"kind"`
+	StatementVersion string            `json:"statementVersion"`
+	PackageDigest    string            `json:"packageDigest"`
+	FormRef          FormRef           `json:"formRef"`
+	ReasonCode       string            `json:"reasonCode"`
+	Summary          string            `json:"summary"`
+	AdvisoryURL      string            `json:"advisoryUrl,omitempty"`
+	IssuedAt         string            `json:"issuedAt"`
+	Effects          RevocationEffects `json:"effects"`
+}
+
+type RevocationEffects struct {
+	BlockNewCreateOrUpdate         bool `json:"blockNewCreateOrUpdate"`
+	BlockActivation                bool `json:"blockActivation"`
+	RetainBytesForObserveAndDelete bool `json:"retainBytesForObserveAndDelete"`
 }

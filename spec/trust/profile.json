@@ -22,7 +22,7 @@
     }
   },
   "formPackage": {
-    "status": "local-data-contract-and-verifier-implemented-signing-and-distribution-pending",
+    "status": "data-contract-verifier-and-keyless-release-lane-implemented-first-release-pending",
     "canonicalization": {
       "format": "RFC8785",
       "encoding": "UTF-8 I-JSON",
@@ -49,6 +49,13 @@
       "workflow": ".github/workflows/form-package-release.yml",
       "tagPattern": "refs/tags/forms/*/v*"
     },
+    "tagProtection": {
+      "tagPattern": "refs/tags/forms/*/v*",
+      "restrictCreation": true,
+      "restrictDeletion": true,
+      "restrictNonFastForward": true,
+      "releaseEnvironment": "form-package-release"
+    },
     "transparency": {
       "authority": "sigstore-public-good-instance",
       "requiredEvidence": "bundle transparency-log inclusion proof",
@@ -60,13 +67,17 @@
       "sbom": "spdx-2.3"
     },
     "distribution": {
+      "status": "github-release-workflow-implemented-first-release-pending",
       "initialSource": "github-release",
       "mirrorPolicy": "copy exact assets only after bundle and digest verification",
       "customerRequestFetch": false,
       "overwriteExistingVersion": false
     },
     "revocation": {
+      "status": "signed-append-only-delivery-lane-implemented-no-statements-published",
       "metadata": "signed append-only statement by exact package digest",
+      "workflow": ".github/workflows/form-package-revocation.yml",
+      "tagPattern": "refs/tags/forms/revocations/v*",
       "blockNewCreateOrUpdate": true,
       "retainReferencedBytesForObserveAndDelete": true,
       "replaceBytesInPlace": false

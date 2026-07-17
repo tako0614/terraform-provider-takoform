@@ -59,8 +59,17 @@ go run ./cmd/form-package conformance
 go run ./cmd/form-package verify conformance/form-package-v1/positive/example-store
 ```
 
-This does not make packages publishable: Sigstore, remote distribution,
-activation, and revocation operations are deliberately still pending.
+The protected Form Package release lane now builds deterministic package
+evidence, keyless-signs the canonical index with Cosign v3, verifies its
+Sigstore transparency bundle, attaches SPDX 2.3 and SLSA v1 evidence, and
+publishes only an exact immutable GitHub Release inventory. A separate
+append-only lane signs exact-digest security revocations. See
+[the Form Package release boundary](release/form-packages.md).
+
+No Form Package has been published yet. Host-side remote fetch/install,
+publisher-policy verification, activation, and revocation enforcement remain
+separate consumer/operator gates; the presence of the workflow is not live
+release evidence.
 
 ## Development
 

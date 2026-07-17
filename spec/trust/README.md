@@ -47,24 +47,31 @@ validation or adapter code.
 
 ## Provenance and publication
 
-The package index receives a Sigstore bundle before a draft release can become
-public. The release also contains an in-toto Statement v1 with SLSA Provenance
-v1 and an SPDX 2.3 data-artifact SBOM. The provenance binds the exact package
-digest to its source commit and protected build workflow.
+The package index receives a Sigstore v0.3 bundle before a draft release can
+become public. The release also contains an in-toto Statement v1 with SLSA
+Provenance v1 and an SPDX 2.3 data-artifact SBOM. The provenance binds the exact
+package artifacts to their source commit and protected build workflow. GitHub
+artifact attestations separately bind the exact release inventory and SBOM to
+the workflow run.
 
-The initial distribution is an immutable GitHub Release. A connected or
-air-gapped mirror copies the exact release assets only after signature,
+The implemented initial distribution lane is an immutable GitHub Release. It
+uses `forms/<form-slug>/v<semver>`, the protected `form-package-release`
+Environment, commit-pinned Actions, Cosign v3 keyless blob signing, immediate
+identity/transparency verification, an exact draft inventory check, and
+draft-then-publish finalization. A connected or air-gapped mirror copies the
+exact release assets only after signature,
 transparency proof, provenance, and digest validation. Installation is an
 operator action; a customer request path never fetches a package or executable
 extension.
 
-The FormRef, Form Definition and package-index schemas, RFC 8785/I-JSON
-implementation, closed local verifier, and positive/negative corpus now exist.
-The Sigstore workflow and verifier, publisher-policy enforcement, remote
-distribution/install, activation, and revocation operations do not. Until those
-separate gates land, `formPackage.status` remains non-publishable, no Form
-Package is released, and the ten current provider resources remain
-compatibility candidates rather than portable standards.
+The FormRef, Form Definition, package-index and revocation schemas, RFC
+8785/I-JSON implementation, closed local verifier, positive/negative corpus,
+release builder, keyless Sigstore workflow, and append-only revocation delivery
+lane now exist. No real package or revocation statement has been released.
+Remote host distribution/install, host-side publisher-policy enforcement,
+activation, and revocation consumption still require implementation and live
+evidence. The ten current provider resources remain compatibility candidates
+rather than portable standards.
 
 ## Rotation and revocation
 
@@ -81,3 +88,9 @@ references an exact package digest. Security revocation blocks new
 create/update and activation, but referenced package bytes remain available for
 safe observe/delete or an explicit operator evacuation path. Deprecation is not
 security revocation, and neither state replaces package bytes in place.
+
+The delivery source is `forms/revocations/<statementVersion>.json`, selected by
+`forms/revocations/v<statementVersion>`. CI rejects edits, renames, and deletion
+of an existing statement path. The protected tag/release prevents rewriting its
+published bytes. Host enforcement is deliberately separate from delivery and
+is not yet claimed by this repository.

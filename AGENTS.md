@@ -15,9 +15,9 @@ The HCP Terraform organization used by maintainers is not a public provider name
 - Keep the provider statically typed and limited to the ten resources listed in `forms/README.md` until a specification and conformance change explicitly expands it.
 - Do not add target pools, backend managers, credentials, secrets, prices, billing, quota, accounts, capacity, SLA, or operator-policy resources.
 - A host selects and operates concrete implementations. Provider state may contain only sanitized observed evidence and outputs.
-- Form definitions and fixtures are data-only. Do not add remotely executable package code or claim package signing until trust roots, canonicalization, custody, rotation, and revocation are specified and implemented.
+- Form definitions and fixtures are data-only. Do not add remotely executable package code. The protected keyless release and revocation delivery lanes are implemented, but do not claim that a package was published, mirrored, installed, or revoked until the corresponding signed live evidence exists.
 - Keep the repository independent of Takosumi and all closed Cloud code. A conforming Takosumi host is one consumer of this contract, not its owner.
 
 ## Checks
 
-Run `gofmt -w .`, `go vet ./...`, `go test ./...`, and `tofu fmt -check -recursive examples` before review.
+Run `gofmt -w .`, `go vet ./...`, `go test ./...`, `go run ./cmd/form-package conformance`, and `tofu fmt -check -recursive examples` before review. Release changes must also build deterministic provider and Form Package candidate evidence without creating a tag or release.

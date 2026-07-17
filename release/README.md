@@ -5,7 +5,8 @@ does not inherit a Takosumi package or release version.
 
 The provider-specific trust lane is pinned by the D-08 profile in
 [`../spec/trust/`](../spec/trust/). Form Packages use a separate keyless trust
-lane and never reuse this provider GPG key.
+lane and never reuse this provider GPG key. Its release and revocation delivery
+boundary is documented in [`form-packages.md`](form-packages.md).
 
 The repository can build deterministic, unsigned candidate evidence:
 
