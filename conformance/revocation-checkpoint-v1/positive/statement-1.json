@@ -1,0 +1,21 @@
+{
+  "apiVersion": "trust.forms.takoform.com/v1alpha1",
+  "kind": "FormPackageRevocation",
+  "sequence": 1,
+  "statementVersion": "1.0.0",
+  "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "ObjectBucket",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "reasonCode": "signature-invalid",
+  "summary": "The retained signature cannot be validated.",
+  "issuedAt": "2026-07-17T00:00:00Z",
+  "effects": {
+    "blockNewCreateOrUpdate": true,
+    "blockActivation": true,
+    "retainBytesForObserveAndDelete": true
+  }
+}

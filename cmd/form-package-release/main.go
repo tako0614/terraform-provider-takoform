@@ -7,9 +7,11 @@ package main
 import (
 	"archive/tar"
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"crypto/sha1" // SPDX 2.3 package verification code requires SHA-1.
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -19,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -37,9 +40,10 @@ const (
 )
 
 var (
-	packageTagPattern    = regexp.MustCompile(`^forms/([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)/v(` + semverPattern + `)$`)
+	packageTagPattern    = regexp.MustCompile(`^forms/(k-[a-z2-7]{2,103})/v(` + semverPattern + `)$`)
 	revocationTagPattern = regexp.MustCompile(`^forms/revocations/v(` + semverPattern + `)$`)
-	revocationPath       = regexp.MustCompile(`^forms/revocations/[0-9A-Za-z.+-]+\.json$`)
+	revocationPath       = regexp.MustCompile(`^forms/revocations(?:/checkpoints)?/[0-9A-Za-z.+-]+\.json$`)
+	kindPattern          = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
 )
 
 const semverPattern = `(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?`
@@ -59,9 +63,11 @@ type releaseManifest struct {
 	SourceCommit        string                  `json:"sourceCommit"`
 	Workflow            string                  `json:"workflow"`
 	PackageVersion      string                  `json:"packageVersion,omitempty"`
-	FormSlug            string                  `json:"formSlug,omitempty"`
+	ReleaseID           string                  `json:"releaseId,omitempty"`
 	PackageDigest       string                  `json:"packageDigest"`
 	FormRef             formpackage.FormRef     `json:"formRef"`
+	CheckpointSequence  uint64                  `json:"checkpointSequence,omitempty"`
+	CheckpointDigest    string                  `json:"checkpointDigest,omitempty"`
 	Canonicalization    string                  `json:"canonicalization"`
 	SignedSubject       string                  `json:"signedSubject"`
 	SignatureBundle     string                  `json:"signatureBundle"`
@@ -123,7 +129,7 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("build-package", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	repo := flags.String("repo", ".", "repository root")
-	tag := flags.String("tag", "", "exact forms/<slug>/v<semver> tag")
+	tag := flags.String("tag", "", "exact forms/<release-id>/v<semver> tag")
 	packageDir := flags.String("package-dir", "", "candidate-only package source override")
 	outputDir := flags.String("output", "", "new output directory")
 	allowUntagged := flags.Bool("allow-untagged-candidate", false, "permit non-publishable local candidate without an attached tag")
@@ -132,15 +138,19 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 		return usageError()
 	}
 	matches := packageTagPattern.FindStringSubmatch(*tag)
-	if matches == nil || matches[1] == "revocations" {
-		return fmt.Errorf("package tag must match forms/<form-slug>/v<semver> and must not use reserved slug revocations")
+	if matches == nil {
+		return fmt.Errorf("package tag must match forms/k-<lowercase-base32-kind>/v<semver>")
 	}
-	slug, version := matches[1], matches[2]
+	releaseID, version := matches[1], matches[2]
+	tagKind, err := kindFromReleaseID(releaseID)
+	if err != nil {
+		return err
+	}
 	if *packageDir != "" && !*allowUntagged {
 		return fmt.Errorf("--package-dir is allowed only with --allow-untagged-candidate")
 	}
 	if *packageDir == "" {
-		*packageDir = filepath.Join(*repo, "forms", "releases", slug, version)
+		*packageDir = filepath.Join(*repo, "forms", "releases", releaseID, version)
 	}
 	evidence, err := inspectSource(*repo, *tag, *allowUntagged, *allowDirty)
 	if err != nil {
@@ -161,22 +171,22 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	if index.PackageVersion != version {
 		return fmt.Errorf("tag version %q does not match packageVersion %q", version, index.PackageVersion)
 	}
-	if got := kindToSlug(index.FormRef.Kind); got != slug {
-		return fmt.Errorf("tag form slug %q does not match FormRef kind %q (want %q)", slug, index.FormRef.Kind, got)
+	if tagKind != index.FormRef.Kind {
+		return fmt.Errorf("tag release id %q decodes to kind %q, not FormRef kind %q", releaseID, tagKind, index.FormRef.Kind)
 	}
 	canonicalIndex, err := formpackage.Canonicalize(indexRaw)
 	if err != nil {
 		return err
 	}
-	base := "takoform-form-" + slug + "_" + version
+	base := "takoform-form-" + releaseID + "_" + version
 	manifest := releaseManifest{
 		SchemaVersion: 1, ReleaseType: "form-package", Tag: *tag,
 		SourceRepository: sourceRepository, SourceCommit: evidence.commit,
-		Workflow: packageWorkflow, PackageVersion: version, FormSlug: slug,
+		Workflow: packageWorkflow, PackageVersion: version, ReleaseID: releaseID,
 		PackageDigest: report.PackageDigest, FormRef: report.FormRef,
 		Canonicalization: canonicalization, SignedSubject: base + "_package-index.json",
 		SignatureBundle: base + "_package-index.sigstore.json", SignatureMediaType: bundleMediaType,
-		PublisherPolicy:  publisherPolicy(*tag, packageWorkflow),
+		PublisherPolicy:  publisherPolicy(packageWorkflow, "refs/tags/forms/k-*/v*"),
 		PublicationReady: false, PublicationBlockers: evidence.blockers,
 	}
 	if err := createOutput(*outputDir); err != nil {
@@ -231,6 +241,7 @@ func runBuildRevocation(arguments []string, output io.Writer) error {
 	repo := flags.String("repo", ".", "repository root")
 	tag := flags.String("tag", "", "exact forms/revocations/v<semver> tag")
 	statementPath := flags.String("statement", "", "candidate-only statement override")
+	checkpointPath := flags.String("checkpoint", "", "candidate-only cumulative checkpoint override")
 	outputDir := flags.String("output", "", "new output directory")
 	allowUntagged := flags.Bool("allow-untagged-candidate", false, "permit non-publishable local candidate without an attached tag")
 	allowDirty := flags.Bool("allow-dirty-candidate", false, "permit non-publishable local candidate from a dirty tree")
@@ -245,25 +256,30 @@ func runBuildRevocation(arguments []string, output io.Writer) error {
 	if *statementPath != "" && !*allowUntagged {
 		return fmt.Errorf("--statement is allowed only with --allow-untagged-candidate")
 	}
+	if *checkpointPath != "" && !*allowUntagged {
+		return fmt.Errorf("--checkpoint is allowed only with --allow-untagged-candidate")
+	}
 	if *statementPath == "" {
 		*statementPath = filepath.Join(*repo, "forms", "revocations", version+".json")
+	}
+	if *checkpointPath == "" {
+		*checkpointPath = filepath.Join(*repo, "forms", "revocations", "checkpoints", version+".json")
 	}
 	evidence, err := inspectSource(*repo, *tag, *allowUntagged, *allowDirty)
 	if err != nil {
 		return err
 	}
-	raw, err := os.ReadFile(*statementPath)
-	if err != nil {
-		return err
-	}
-	revocation, err := formpackage.ValidateRevocationStatement(raw)
+	revocation, canonicalStatement, checkpoint, canonicalCheckpoint, err := verifyRevocationSourceChain(*statementPath, *checkpointPath)
 	if err != nil {
 		return err
 	}
 	if revocation.StatementVersion != version {
 		return fmt.Errorf("tag version %q does not match statementVersion %q", version, revocation.StatementVersion)
 	}
-	canonical, err := formpackage.Canonicalize(raw)
+	if checkpoint.CheckpointVersion != version || checkpoint.Sequence != revocation.Sequence {
+		return fmt.Errorf("tag version %q does not match current checkpoint version/sequence", version)
+	}
+	checkpointDigest, err := formpackage.DigestCanonicalJSON(canonicalCheckpoint)
 	if err != nil {
 		return err
 	}
@@ -273,23 +289,32 @@ func runBuildRevocation(arguments []string, output io.Writer) error {
 		SourceRepository: sourceRepository, SourceCommit: evidence.commit,
 		Workflow: revokeWorkflow, PackageVersion: version,
 		PackageDigest: revocation.PackageDigest, FormRef: revocation.FormRef,
-		Canonicalization: canonicalization, SignedSubject: base + ".json",
-		SignatureBundle: base + ".sigstore.json", SignatureMediaType: bundleMediaType,
-		PublisherPolicy:  publisherPolicy(*tag, revokeWorkflow),
+		CheckpointSequence: checkpoint.Sequence, CheckpointDigest: checkpointDigest,
+		Canonicalization: canonicalization, SignedSubject: base + "_checkpoint.json",
+		SignatureBundle: base + "_checkpoint.sigstore.json", SignatureMediaType: bundleMediaType,
+		PublisherPolicy:  publisherPolicy(revokeWorkflow, "refs/tags/forms/revocations/v*"),
 		PublicationReady: false, PublicationBlockers: evidence.blockers,
 	}
 	if err := createOutput(*outputDir); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(*outputDir, manifest.SignedSubject), canonical, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(*outputDir, manifest.SignedSubject), canonicalCheckpoint, 0o644); err != nil {
 		return err
 	}
-	asset, err := describeAsset(filepath.Join(*outputDir, manifest.SignedSubject), manifest.SignedSubject, "application/vnd.takoform.form-package-revocation.v1+json")
+	checkpointAsset, err := describeAsset(filepath.Join(*outputDir, manifest.SignedSubject), manifest.SignedSubject, "application/vnd.takoform.form-package-revocation-checkpoint.v1+json")
+	if err != nil {
+		return err
+	}
+	statementName := base + "_statement.json"
+	if err := os.WriteFile(filepath.Join(*outputDir, statementName), canonicalStatement, 0o644); err != nil {
+		return err
+	}
+	statementAsset, err := describeAsset(filepath.Join(*outputDir, statementName), statementName, "application/vnd.takoform.form-package-revocation.v1+json")
 	if err != nil {
 		return err
 	}
 	provenanceName := base + "_provenance.intoto.json"
-	provenance := createProvenance(*tag, revokeWorkflow, evidence.commit, []releaseAsset{asset})
+	provenance := createProvenance(*tag, revokeWorkflow, evidence.commit, []releaseAsset{checkpointAsset, statementAsset})
 	if err := writeJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
 		return err
 	}
@@ -297,7 +322,7 @@ func runBuildRevocation(arguments []string, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	manifest.Assets = []releaseAsset{asset, provenanceAsset}
+	manifest.Assets = []releaseAsset{checkpointAsset, statementAsset, provenanceAsset}
 	if err := writeJSON(filepath.Join(*outputDir, "release-manifest.json"), manifest); err != nil {
 		return err
 	}
@@ -409,26 +434,192 @@ func inspectSource(repo, tag string, allowUntagged, allowDirty bool) (sourceEvid
 	return sourceEvidence{commit: strings.TrimSpace(commit), commitTime: commitTime.UTC(), blockers: blockers}, nil
 }
 
-func publisherPolicy(tag, workflow string) publisherPolicyEvidence {
+func publisherPolicy(workflow, tagPattern string) publisherPolicyEvidence {
 	return publisherPolicyEvidence{
 		OIDCIssuer: "https://token.actions.githubusercontent.com",
-		Identity:   "https://" + sourceRepository + "/" + workflow + "@refs/tags/" + tag,
-		TagPattern: "refs/tags/forms/*/v*",
+		Identity:   "https://" + sourceRepository + "/" + workflow + "@refs/heads/main",
+		TagPattern: tagPattern,
 	}
 }
 
-func kindToSlug(kind string) string {
-	runes := []rune(kind)
-	var result []rune
-	for index, current := range runes {
-		if unicode.IsUpper(current) && index > 0 &&
-			(unicode.IsLower(runes[index-1]) || unicode.IsDigit(runes[index-1]) ||
-				(index+1 < len(runes) && unicode.IsLower(runes[index+1]))) {
-			result = append(result, '-')
-		}
-		result = append(result, unicode.ToLower(current))
+type revocationSourceEntry struct {
+	statement formpackage.RevocationStatement
+	canonical []byte
+}
+
+type checkpointSourceEntry struct {
+	checkpoint formpackage.RevocationCheckpoint
+	canonical  []byte
+}
+
+// verifyRevocationSourceChain closes the complete repository-backed statement
+// and checkpoint history. A publisher cannot omit, reorder, rewrite, or fork an
+// earlier revocation while still producing a valid current release.
+func verifyRevocationSourceChain(statementPath, checkpointPath string) (formpackage.RevocationStatement, []byte, formpackage.RevocationCheckpoint, []byte, error) {
+	statements := map[uint64]revocationSourceEntry{}
+	statementEntries, err := os.ReadDir(filepath.Dir(statementPath))
+	if err != nil {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
 	}
-	return string(result)
+	for _, entry := range statementEntries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		path := filepath.Join(filepath.Dir(statementPath), entry.Name())
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+		}
+		statement, err := formpackage.ValidateRevocationStatement(raw)
+		if err != nil {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("validate %s: %w", path, err)
+		}
+		if entry.Name() != statement.StatementVersion+".json" {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("revocation statement %s must be named %s.json", path, statement.StatementVersion)
+		}
+		if _, exists := statements[statement.Sequence]; exists {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("duplicate revocation statement sequence %d", statement.Sequence)
+		}
+		canonical, err := formpackage.Canonicalize(raw)
+		if err != nil {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+		}
+		statements[statement.Sequence] = revocationSourceEntry{statement: statement, canonical: canonical}
+	}
+
+	checkpoints := map[uint64]checkpointSourceEntry{}
+	checkpointEntries, err := os.ReadDir(filepath.Dir(checkpointPath))
+	if err != nil {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+	}
+	for _, entry := range checkpointEntries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		path := filepath.Join(filepath.Dir(checkpointPath), entry.Name())
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+		}
+		checkpoint, err := formpackage.ValidateRevocationCheckpoint(raw)
+		if err != nil {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("validate %s: %w", path, err)
+		}
+		if entry.Name() != checkpoint.CheckpointVersion+".json" {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("revocation checkpoint %s must be named %s.json", path, checkpoint.CheckpointVersion)
+		}
+		if _, exists := checkpoints[checkpoint.Sequence]; exists {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("duplicate revocation checkpoint sequence %d", checkpoint.Sequence)
+		}
+		canonical, err := formpackage.Canonicalize(raw)
+		if err != nil {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+		}
+		checkpoints[checkpoint.Sequence] = checkpointSourceEntry{checkpoint: checkpoint, canonical: canonical}
+	}
+
+	selectedStatementRaw, err := os.ReadFile(statementPath)
+	if err != nil {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+	}
+	selectedStatement, err := formpackage.ValidateRevocationStatement(selectedStatementRaw)
+	if err != nil {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+	}
+	selectedStatementCanonical, err := formpackage.Canonicalize(selectedStatementRaw)
+	if err != nil {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+	}
+	selectedCheckpointRaw, err := os.ReadFile(checkpointPath)
+	if err != nil {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+	}
+	selectedCheckpoint, err := formpackage.ValidateRevocationCheckpoint(selectedCheckpointRaw)
+	if err != nil {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+	}
+	selectedCheckpointCanonical, err := formpackage.Canonicalize(selectedCheckpointRaw)
+	if err != nil {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+	}
+	sequence := selectedStatement.Sequence
+	if selectedCheckpoint.Sequence != sequence || uint64(len(statements)) != sequence || uint64(len(checkpoints)) != sequence {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("revocation source must contain exactly sequences 1 through %d for both statements and checkpoints", sequence)
+	}
+
+	var previousCheckpointDigest string
+	for current := uint64(1); current <= sequence; current++ {
+		_, ok := statements[current]
+		if !ok {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("missing revocation statement sequence %d", current)
+		}
+		checkpointEntry, ok := checkpoints[current]
+		if !ok {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("missing revocation checkpoint sequence %d", current)
+		}
+		if current == 1 {
+			if checkpointEntry.checkpoint.PreviousCheckpointDigest != nil {
+				return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("revocation checkpoint sequence 1 cannot have a predecessor")
+			}
+		} else if checkpointEntry.checkpoint.PreviousCheckpointDigest == nil || *checkpointEntry.checkpoint.PreviousCheckpointDigest != previousCheckpointDigest {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("revocation checkpoint sequence %d does not extend sequence %d", current, current-1)
+		}
+		for index := uint64(1); index <= current; index++ {
+			priorStatement := statements[index]
+			statementDigest, err := formpackage.DigestCanonicalJSON(priorStatement.canonical)
+			if err != nil {
+				return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+			}
+			checkpointIndex := checkpointEntry.checkpoint.Entries[index-1]
+			if checkpointIndex.Sequence != index || checkpointIndex.StatementVersion != priorStatement.statement.StatementVersion ||
+				checkpointIndex.StatementDigest != statementDigest || checkpointIndex.PackageDigest != priorStatement.statement.PackageDigest ||
+				!reflect.DeepEqual(checkpointIndex.FormRef, priorStatement.statement.FormRef) {
+				return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("revocation checkpoint sequence %d does not exactly commit statement sequence %d", current, index)
+			}
+		}
+		previousCheckpointDigest, err = formpackage.DigestCanonicalJSON(checkpointEntry.canonical)
+		if err != nil {
+			return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, err
+		}
+	}
+
+	selectedStatementEntry, ok := statements[sequence]
+	if !ok || !bytes.Equal(selectedStatementEntry.canonical, selectedStatementCanonical) {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("selected revocation statement is not the current source entry")
+	}
+	selectedCheckpointEntry, ok := checkpoints[sequence]
+	if !ok || !bytes.Equal(selectedCheckpointEntry.canonical, selectedCheckpointCanonical) {
+		return formpackage.RevocationStatement{}, nil, formpackage.RevocationCheckpoint{}, nil, fmt.Errorf("selected revocation checkpoint is not the current source entry")
+	}
+	return selectedStatement, selectedStatementEntry.canonical, selectedCheckpoint, selectedCheckpointEntry.canonical, nil
+}
+
+func releaseIDForKind(kind string) (string, error) {
+	if !kindPattern.MatchString(kind) {
+		return "", fmt.Errorf("kind %q is outside the FormRef ASCII identity grammar", kind)
+	}
+	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(kind))
+	return "k-" + strings.ToLower(encoded), nil
+}
+
+func kindFromReleaseID(releaseID string) (string, error) {
+	if !strings.HasPrefix(releaseID, "k-") || len(releaseID) < 4 || len(releaseID) > 105 {
+		return "", fmt.Errorf("release id %q is outside k-<lowercase-base32-kind>", releaseID)
+	}
+	encoded := strings.TrimPrefix(releaseID, "k-")
+	if strings.ToLower(encoded) != encoded {
+		return "", fmt.Errorf("release id %q must be lowercase", releaseID)
+	}
+	raw, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(encoded))
+	if err != nil {
+		return "", fmt.Errorf("decode release id %q: %w", releaseID, err)
+	}
+	kind := string(raw)
+	canonical, err := releaseIDForKind(kind)
+	if err != nil || canonical != releaseID {
+		return "", fmt.Errorf("release id %q is not the canonical encoding of a FormRef kind", releaseID)
+	}
+	return kind, nil
 }
 
 func createOutput(path string) error {

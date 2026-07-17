@@ -1,10 +1,16 @@
 name: Release Form Package
 
 on:
-  push:
-    tags:
-      - "forms/*/v*"
-      - "!forms/revocations/v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact existing forms/k-<base32-kind>/v<semver> tag
+        required: true
+        type: string
+      expected_commit:
+        description: Exact approved 40-character tag commit
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,7 +18,7 @@ permissions:
   attestations: write
 
 concurrency:
-  group: form-package-release-${{ github.ref }}
+  group: form-package-release-${{ inputs.tag }}
   cancel-in-progress: false
 
 env:
@@ -25,8 +31,47 @@ jobs:
     timeout-minutes: 20
     environment: form-package-release
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Check out the trusted main workflow and release tooling
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify trusted main and the exact approved tag commit
+        id: source
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
+            echo "Release dispatch must execute the current protected main commit" >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^forms/k-[a-z2-7]{2,103}/v[0-9][0-9A-Za-z.+-]*$ ]]; then
+            echo "Form Package releases require an exact base32 release-id tag" >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "expected_commit must be an exact lowercase 40-character Git commit" >&2
+            exit 1
+          fi
+          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
+          tag_commit="$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")"
+          test "$tag_commit" = "$EXPECTED_COMMIT"
+          git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "commit=$tag_commit"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out the untrusted tagged package source separately
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.tag }}
+          path: release-source
           fetch-depth: 0
           persist-credentials: false
 
@@ -38,26 +83,23 @@ jobs:
       - name: Install pinned Cosign v3
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
 
-      - name: Verify protected tag and build deterministic package evidence
+      - name: Build deterministic evidence with trusted main tooling
         id: build
         shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+          EXPECTED_COMMIT: ${{ steps.source.outputs.commit }}
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$GITHUB_REF_NAME" =~ ^forms/[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?/v[0-9][0-9A-Za-z.+-]*$ ]]; then
-            echo "Form Package releases require forms/<form-slug>/v<semver>" >&2
-            exit 1
-          fi
-          if [[ "$GITHUB_REF_NAME" == forms/revocations/* ]]; then
-            echo "The reserved revocations namespace has a separate workflow" >&2
-            exit 1
-          fi
+          test "$(git -C release-source rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git -C release-source status --porcelain=v1 --untracked-files=all)"
           cosign_version="$(cosign version 2>&1)"
           grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
           go test ./formpackage ./cmd/form-package-release
-          output="$GITHUB_WORKSPACE/.release-tmp/form-package"
+          output="$RUNNER_TEMP/form-package"
           go run ./cmd/form-package-release build-package \
-            --repo "$GITHUB_WORKSPACE" \
-            --tag "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_WORKSPACE/release-source" \
+            --tag "$RELEASE_TAG" \
             --output "$output"
           subject="$(jq -r .signedSubject "$output/release-manifest.json")"
           bundle="$(jq -r .signatureBundle "$output/release-manifest.json")"
@@ -75,10 +117,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
         run: |
           set -euo pipefail
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "A GitHub release already owns $GITHUB_REF_NAME; refusing overwrite" >&2
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "A GitHub release already owns $RELEASE_TAG; refusing overwrite" >&2
             exit 1
           fi
 
@@ -97,35 +140,43 @@ jobs:
           go run ./cmd/form-package-release finalize-bundle --output "$output"
           (cd "$output" && sha256sum --check --strict SHA256SUMS)
 
-      - name: Create immutable-release candidate
+      - name: Create this run's immutable-release candidate
+        id: draft
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
         run: |
           set -euo pipefail
-          output="${{ steps.build.outputs.output }}"
-          notes="$RUNNER_TEMP/form-package-release-notes.md"
-          cat > "$notes" <<EOF
-          Data-only Takoform Form Package release.
+          response="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$RELEASE_TAG" -f name="$RELEASE_TAG" -F draft=true \
+            -f body='Data-only Takoform Form Package release. Verify the canonical package index, attached Sigstore bundle, and publisher identity before installation.')"
+          release_id="$(jq -r .id <<<"$response")"
+          test "$release_id" != "null"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
-          Verify the canonical package index with the attached Sigstore bundle and the exact publisher identity recorded in release-manifest.json before installing or mirroring these assets.
-          EOF
-          mapfile -t assets < <(find "$output" -maxdepth 1 -type f -printf '%p\n' | sort)
-          gh release create "$GITHUB_REF_NAME" \
-            --draft --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$notes" \
-            "${assets[@]}"
-
-      - name: Verify exact draft release inventory
+      - name: Upload the exact local asset inventory
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
         run: |
           set -euo pipefail
-          output="${{ steps.build.outputs.output }}"
-          find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/expected-assets.txt"
-          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | sort > "$RUNNER_TEMP/actual-assets.txt"
+          while IFS= read -r asset; do
+            gh release upload "$RELEASE_TAG" "$asset"
+          done < <(find "${{ steps.build.outputs.output }}" -maxdepth 1 -type f -print | sort)
+
+      - name: Verify this run's exact draft release inventory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          find "${{ steps.build.outputs.output }}" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/expected-assets.txt"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[].name' | sort > "$RUNNER_TEMP/actual-assets.txt"
           diff -u "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/actual-assets.txt"
-          test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = "true"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .draft)" = "true"
 
       - name: Attest exact release inventory with GitHub build provenance
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
@@ -147,14 +198,14 @@ jobs:
             ${{ steps.build.outputs.output }}/*_package-index.json
           sbom-path: ${{ steps.build.outputs.output }}/${{ steps.build.outputs.sbom }}
 
-      - name: Publish verified immutable release
+      - name: Publish this run's verified immutable release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
         run: |
           set -euo pipefail
-          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .id)"
-          finalized="$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" -F draft=false)"
+          finalized="$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false)"
           test "$(jq -r .draft <<<"$finalized")" = "false"
 
       - name: Remove partial draft after failure
@@ -162,8 +213,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
         run: |
-          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" 2>/dev/null || true)"
-          if [[ -n "$release_json" && "$(jq -r .draft <<<"$release_json")" == "true" ]]; then
-            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$(jq -r .id <<<"$release_json")"
+          set -euo pipefail
+          if [[ -z "$RELEASE_ID" ]]; then
+            exit 0
+          fi
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" 2>/dev/null || true)"
+          if [[ -n "$release_json" && "$(jq -r .draft <<<"$release_json")" == "true" && "$(jq -r .tag_name <<<"$release_json")" == "$RELEASE_TAG" ]]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
           fi

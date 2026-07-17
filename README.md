@@ -63,7 +63,8 @@ The protected Form Package release lane now builds deterministic package
 evidence, keyless-signs the canonical index with Cosign v3, verifies its
 Sigstore transparency bundle, attaches SPDX 2.3 and SLSA v1 evidence, and
 publishes only an exact immutable GitHub Release inventory. A separate
-append-only lane signs exact-digest security revocations. See
+append-only lane signs cumulative, hash-chained checkpoints for exact-digest
+security revocations. See
 [the Form Package release boundary](release/form-packages.md).
 
 No Form Package has been published yet. Host-side remote fetch/install,

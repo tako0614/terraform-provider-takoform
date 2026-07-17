@@ -47,14 +47,16 @@
       "oidcIssuer": "https://token.actions.githubusercontent.com",
       "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
       "workflow": ".github/workflows/form-package-release.yml",
-      "tagPattern": "refs/tags/forms/*/v*"
+      "workflowIdentity": "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main",
+      "tagPattern": "refs/tags/forms/k-*/v*"
     },
     "tagProtection": {
       "tagPattern": "refs/tags/forms/*/v*",
       "restrictCreation": true,
       "restrictDeletion": true,
       "restrictNonFastForward": true,
-      "releaseEnvironment": "form-package-release"
+      "releaseEnvironment": "form-package-release",
+      "deploymentRef": "refs/heads/main"
     },
     "transparency": {
       "authority": "sigstore-public-good-instance",
@@ -77,7 +79,20 @@
       "status": "signed-append-only-delivery-lane-implemented-no-statements-published",
       "metadata": "signed append-only statement by exact package digest",
       "workflow": ".github/workflows/form-package-revocation.yml",
+      "workflowIdentity": "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-revocation.yml@refs/heads/main",
       "tagPattern": "refs/tags/forms/revocations/v*",
+      "checkpoint": {
+        "signedSubject": "RFC8785 bytes of the cumulative revocation checkpoint",
+        "cumulative": true,
+        "sequenceStartsAt": 1,
+        "previousCheckpointDigest": "sha256",
+        "hostPinRequired": true,
+        "hostPinFields": [
+          "sequence",
+          "checkpointDigest",
+          "cumulativeEntriesDigest"
+        ]
+      },
       "blockNewCreateOrUpdate": true,
       "retainReferencedBytesForObserveAndDelete": true,
       "replaceBytesInPlace": false

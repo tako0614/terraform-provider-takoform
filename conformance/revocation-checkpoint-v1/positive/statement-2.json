@@ -1,0 +1,21 @@
+{
+  "apiVersion": "trust.forms.takoform.com/v1alpha1",
+  "kind": "FormPackageRevocation",
+  "sequence": 2,
+  "statementVersion": "1.1.0",
+  "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "SQLDatabase",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "reasonCode": "malicious-content",
+  "summary": "The package contains malicious data.",
+  "issuedAt": "2026-07-17T01:00:00Z",
+  "effects": {
+    "blockNewCreateOrUpdate": true,
+    "blockActivation": true,
+    "retainBytesForObserveAndDelete": true
+  }
+}

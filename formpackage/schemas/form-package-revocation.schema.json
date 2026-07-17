@@ -7,6 +7,7 @@
   "required": [
     "apiVersion",
     "kind",
+    "sequence",
     "statementVersion",
     "packageDigest",
     "formRef",
@@ -21,6 +22,10 @@
     },
     "kind": {
       "const": "FormPackageRevocation"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
     },
     "statementVersion": {
       "$ref": "#/$defs/semver"

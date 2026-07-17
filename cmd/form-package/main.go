@@ -71,6 +71,19 @@ func run(arguments []string) error {
 			return err
 		}
 		return writeJSON(statement)
+	case "validate-revocation-checkpoint":
+		if len(arguments) != 2 {
+			return usageError()
+		}
+		raw, err := os.ReadFile(arguments[1])
+		if err != nil {
+			return err
+		}
+		checkpoint, err := formpackage.ValidateRevocationCheckpoint(raw)
+		if err != nil {
+			return err
+		}
+		return writeJSON(checkpoint)
 	case "conformance":
 		if len(arguments) > 2 {
 			return usageError()
@@ -97,5 +110,5 @@ func writeJSON(value any) error {
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: form-package verify DIR | canonicalize FILE | digest FILE | validate-revocation FILE | conformance [CORPUS_DIR]")
+	return fmt.Errorf("usage: form-package verify DIR | canonicalize FILE | digest FILE | validate-revocation FILE | validate-revocation-checkpoint FILE | conformance [CORPUS_DIR]")
 }

@@ -33,10 +33,13 @@ review and a rotation plan. Never test release changes by overwriting an
 existing version; use a new semver prerelease.
 
 Form Package release sources live at
-`forms/releases/<form-slug>/<packageVersion>/` and use the disjoint
-`forms/<form-slug>/v<packageVersion>` tag namespace. Security revocation
-statements live at `forms/revocations/<statementVersion>.json`, are append-only,
-and use `forms/revocations/v<statementVersion>`. Both workflows are keyless and
+`forms/releases/<release-id>/<packageVersion>/`, where the release ID is the
+reversible base32 encoding defined in `release/form-packages.md`, and use the
+disjoint `forms/<release-id>/v<packageVersion>` tag namespace. Security
+revocation statements and cumulative checkpoints live under
+`forms/revocations/`, are append-only, and use
+`forms/revocations/v<statementVersion>`. Both workflows dispatch from protected
+main, are keyless, and
 must not reference provider GPG secrets. Test the builders only with
 `--allow-untagged-candidate`; never create a real tag or GitHub Release to test
 a pull request.
