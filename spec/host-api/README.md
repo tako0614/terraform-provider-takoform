@@ -29,7 +29,8 @@ Every typed provider resource is compiled against one release-owned
 identity as installed, executable, activated, available to the principal, and
 supporting the requested operation. Resource bodies carry the same `form` and
 read/lifecycle URLs carry all five fields as query parameters. Responses that
-substitute any identity field fail closed.
+substitute any Form identity field or the requested Resource `metadata.name` /
+`metadata.space` fail closed.
 
 The current ten exact references are pinned by
 [`forms/legacy-package-set.json`](../../forms/legacy-package-set.json). They
@@ -45,7 +46,8 @@ The API base is `/apis/forms.takoform.com/v1alpha1` on the reference host:
 - `GET /resources/{kind}/{name}` reads canonical portable state;
 - `POST /resources/{kind}/{name}/import` imports a native object;
 - `POST /resources/{kind}/{name}/observe` observes drift;
-- `POST /resources/{kind}/{name}/refresh` refreshes state;
+- `POST /resources/{kind}/{name}/refresh` publishes host-owned backend state
+  and sanitized outputs without changing native provider resources;
 - `DELETE /resources/{kind}/{name}` deletes it.
 
 Create and new-resource import use `If-None-Match: *`. Update, existing-resource
@@ -56,6 +58,14 @@ Only an error with `retryable: true` and code `resource_busy` or
 `backend_unavailable` is automatically retried. A resource-version conflict is
 never retried.
 
+An OpenTofu/Terraform provider Read is not the host refresh operation. In
+versioned mode, every provider Read first performs the exact GET to obtain the
+current `resourceVersion`, then sends a generation-fenced observe and maps its
+`current` / `drifted` / `missing` result to `drift_status`. Compatibility mode
+retains its historical single observe request. The provider does not call the
+state/output publication endpoint on every Read; refresh is an explicit host
+lifecycle action and may do materially more work than a read-only observation.
+
 Stable errors use
 `{ "error": { "code", "message", "requestId", "retryable", "hostCode?" } }`.
 Provider diagnostics may expose the stable code and request ID, but state never
@@ -65,8 +75,9 @@ manager authority.
 ## Cross-repo conformance
 
 [`conformance/portable-host-v1/contract.json`](../../conformance/portable-host-v1/contract.json)
-is the digest-pinned cross-repo input for a neutral host runner. Its required
-check names match Takosumi's black-box
-`core/conformance/portable_form_host.ts` runner without making this repository
-depend on Takosumi source or closed Cloud code. `go run ./cmd/conformance verify`
-checks the fixture and its exact release-owned ObjectBucket identity.
+is the digest-pinned input for any neutral black-box host runner. The contract
+names a provider-independent runner subject and pins a digest over that subject,
+runner input, mutation preconditions, idempotent operations, and required check
+set. It contains no Takosumi repository path or closed implementation identity.
+`go run ./cmd/conformance verify` checks both digests and the fixture's exact
+release-owned ObjectBucket identity.

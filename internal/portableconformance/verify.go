@@ -35,6 +35,11 @@ type RunnerInput struct {
 	ImportNativeID string                 `json:"importNativeId"`
 }
 
+type RunnerEvidence struct {
+	Subject string `json:"subject"`
+	SHA256  string `json:"sha256"`
+}
+
 type Contract struct {
 	Format                 string            `json:"format"`
 	APIVersion             string            `json:"apiVersion"`
@@ -48,7 +53,7 @@ type Contract struct {
 	RetryableCodes         []string          `json:"retryableCodes"`
 	RequiredRunnerChecks   []string          `json:"requiredRunnerChecks"`
 	ForbiddenProviderState []string          `json:"forbiddenProviderState"`
-	TakosumiRunnerSource   string            `json:"takosumiRunnerSource"`
+	RunnerEvidence         RunnerEvidence    `json:"runnerEvidence"`
 }
 
 type manifest struct {
@@ -87,7 +92,7 @@ func Verify(root string) (Contract, error) {
 func validate(contract Contract) error {
 	if contract.Format != "takoform.portable-host-conformance@v1" || contract.APIVersion != APIVersion ||
 		contract.DiscoveryPath != "/.well-known/takoform" || contract.APIPath != "/apis/forms.takoform.com/v1alpha1" ||
-		contract.CompatibilityPath != "/v1" || contract.TakosumiRunnerSource != "core/conformance/portable_form_host.ts" {
+		contract.CompatibilityPath != "/v1" || contract.RunnerEvidence.Subject != "takoform.portable-host-black-box-runner@v1" {
 		return errors.New("portable host contract identity is invalid")
 	}
 	identity := contract.RunnerInput.Identity
@@ -129,6 +134,13 @@ func validate(contract Contract) error {
 	if !reflect.DeepEqual(contract.RequiredRunnerChecks, wantChecks) {
 		return errors.New("portable host required runner checks drifted")
 	}
+	runnerDigest, err := runnerEvidenceDigest(contract)
+	if err != nil {
+		return fmt.Errorf("portable host neutral runner evidence: %w", err)
+	}
+	if contract.RunnerEvidence.SHA256 != runnerDigest {
+		return errors.New("portable host neutral runner evidence digest drifted")
+	}
 	wantForbidden := []string{
 		"credential", "secret", "price", "quote", "billing", "backend", "selected_implementation", "target", "locked",
 	}
@@ -136,6 +148,30 @@ func validate(contract Contract) error {
 		return errors.New("portable host forbidden provider state list drifted")
 	}
 	return nil
+}
+
+func runnerEvidenceDigest(contract Contract) (string, error) {
+	payload := struct {
+		Subject              string            `json:"subject"`
+		APIVersion           string            `json:"apiVersion"`
+		RunnerInput          RunnerInput       `json:"runnerInput"`
+		Preconditions        map[string]string `json:"preconditions"`
+		IdempotentOperations []string          `json:"idempotentOperations"`
+		RequiredRunnerChecks []string          `json:"requiredRunnerChecks"`
+	}{
+		Subject:              contract.RunnerEvidence.Subject,
+		APIVersion:           contract.APIVersion,
+		RunnerInput:          contract.RunnerInput,
+		Preconditions:        contract.Preconditions,
+		IdempotentOperations: contract.IdempotentOperations,
+		RequiredRunnerChecks: contract.RequiredRunnerChecks,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 func decodeStrict(path string, value any) error {

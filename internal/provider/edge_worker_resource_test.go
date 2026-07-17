@@ -175,6 +175,101 @@ func TestEdgeWorkerCreateAcceptsEndpointDefinedProfileTokens(t *testing.T) {
 	}
 }
 
+func TestVersionedEdgeWorkerUpdateSendsIfMatchFromProviderState(t *testing.T) {
+	ctx := context.Background()
+	form := providerReleaseForms()[client.KindEdgeWorker]
+	var server *httptest.Server
+	sawUpdate := false
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/.well-known/takoform":
+			writeProviderDiscovery(t, w, server.URL)
+		case r.Method == http.MethodGet && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/forms":
+			_ = json.NewEncoder(w).Encode(map[string]any{"forms": []client.FormAvailability{{
+				Identity: form, DefinitionKnown: true, Installed: true, Executable: true,
+				Activated: true, AvailableToPrincipal: true, Operations: []string{"update"},
+			}}})
+		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/preview":
+			var desired client.Resource
+			if err := json.NewDecoder(r.Body).Decode(&desired); err != nil {
+				t.Fatal(err)
+			}
+			if desired.Metadata.ResourceVersion != "7" {
+				t.Errorf("preview resourceVersion = %q, want 7", desired.Metadata.ResourceVersion)
+			}
+			_ = json.NewEncoder(w).Encode(client.PreviewResourceResult{
+				Resource: desired, Review: client.PreviewReview{PlanDigest: "sha256:plan", SpecDigest: "sha256:spec"},
+			})
+		case r.Method == http.MethodPut && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/EdgeWorker/api":
+			sawUpdate = true
+			if r.Header.Get("If-Match") != `"7"` {
+				t.Errorf("If-Match = %q, want quoted provider state generation 7", r.Header.Get("If-Match"))
+			}
+			var apply struct {
+				client.Resource
+				Review client.DeploymentReview `json:"review"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&apply); err != nil {
+				t.Fatal(err)
+			}
+			apply.Resource.Metadata.ResourceVersion = "8"
+			apply.Resource.Status = &client.Status{Portability: "portable", Outputs: map[string]any{"url": "https://api.example.test"}}
+			w.Header().Set("ETag", `"8"`)
+			_ = json.NewEncoder(w).Encode(apply.Resource)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	formClient := client.New(server.URL, "", server.Client())
+	if _, err := formClient.Discover(ctx); err != nil {
+		t.Fatal(err)
+	}
+	r := &edgeWorkerResource{data: &providerData{
+		client: formClient, forms: providerReleaseForms(), defaultSpace: "prod",
+	}}
+	var schemaResp frameworkresource.SchemaResponse
+	r.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResp)
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	diags := plan.Set(ctx, edgeWorkerModel{
+		ID:                 types.StringValue("tkrn:prod:EdgeWorker:api"),
+		Name:               types.StringValue("api"),
+		ArtifactPath:       types.StringValue("/work/dist/worker.js"),
+		ArtifactURL:        types.StringNull(),
+		ArtifactRef:        types.StringNull(),
+		ArtifactSHA256:     types.StringNull(),
+		CompatibilityDate:  types.StringNull(),
+		CompatibilityFlags: types.SetNull(types.StringType),
+		Profiles:           types.SetNull(types.StringType),
+		Connections:        types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+		Space:              types.StringValue("prod"),
+		ResourceVersion:    types.StringValue("7"),
+		DriftStatus:        types.StringValue("current"),
+		Portability:        types.StringValue("portable"),
+		Outputs:            types.MapValueMust(types.StringType, map[string]attr.Value{}),
+	})
+	if diags.HasError() {
+		t.Fatalf("plan diagnostics: %v", diags)
+	}
+	resp := frameworkresource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	r.Update(ctx, frameworkresource.UpdateRequest{Plan: plan}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %v", resp.Diagnostics)
+	}
+	if !sawUpdate {
+		t.Fatal("provider did not execute the versioned update")
+	}
+	var state edgeWorkerModel
+	if diags := resp.State.Get(ctx, &state); diags.HasError() {
+		t.Fatalf("state diagnostics: %v", diags)
+	}
+	if state.ResourceVersion.ValueString() != "8" {
+		t.Fatalf("state resource_version = %q, want 8", state.ResourceVersion.ValueString())
+	}
+}
+
 func testConnectionList(t *testing.T, name, resource string, permissions []string, projection string) types.List {
 	t.Helper()
 	permissionValues := make([]attr.Value, 0, len(permissions))

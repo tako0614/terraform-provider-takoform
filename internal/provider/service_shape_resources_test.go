@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
@@ -407,7 +408,7 @@ func TestNewServiceShapesRejectInvalidSpecsBeforeRemoteCalls(t *testing.T) {
 	}
 }
 
-func TestNewServiceShapeImportObserveRefreshesTypedStateAndOutputs(t *testing.T) {
+func TestCompatibilityServiceShapeImportReadObservesTypedStateAndOutputs(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
 		name     string
@@ -465,8 +466,8 @@ func TestNewServiceShapeImportObserveRefreshesTypedStateAndOutputs(t *testing.T)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodGet {
-					t.Errorf("expected Resource GET, got %s", r.Method)
+				if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/observe") {
+					t.Errorf("expected Resource observe, got %s %s", r.Method, r.URL.Path)
 				}
 				_ = json.NewEncoder(w).Encode(client.Resource{
 					APIVersion: client.APIVersion, Kind: tt.kind,
@@ -474,7 +475,7 @@ func TestNewServiceShapeImportObserveRefreshesTypedStateAndOutputs(t *testing.T)
 					Spec:     tt.spec,
 					Status: &client.Status{Resolution: client.Resolution{
 						SelectedImplementation: "operator.test", Target: "target-a", Locked: true, Portability: "portable",
-					}, Outputs: map[string]any{"endpoint": "https://service.example.test"}},
+					}, Outputs: map[string]any{"endpoint": "https://service.example.test"}, Conditions: []client.Condition{{Type: "Drifted", Status: "False"}}},
 				})
 			}))
 			defer srv.Close()
@@ -514,6 +515,9 @@ func TestNewServiceShapeImportObserveRefreshesTypedStateAndOutputs(t *testing.T)
 			}
 			if outputs["endpoint"] != "https://service.example.test" {
 				t.Fatalf("public outputs not refreshed: %#v", outputs)
+			}
+			if model.DriftStatus.ValueString() != "current" {
+				t.Fatalf("drift_status = %q, want current", model.DriftStatus.ValueString())
 			}
 		})
 	}

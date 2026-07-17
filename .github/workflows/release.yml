@@ -56,7 +56,7 @@ jobs:
           fi
           go -C cmd/provider-release test ./...
           go run ./cmd/conformance verify
-          go run ./cmd/migration-proof
+          go run ./cmd/migration-proof --require-complete
           go -C cmd/provider-release run . verify-source --expected-trigger-tag "$GITHUB_REF_NAME"
 
       - name: Materialize exact Registry manifest asset

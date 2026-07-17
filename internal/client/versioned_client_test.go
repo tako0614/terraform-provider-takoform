@@ -290,6 +290,99 @@ func TestExactInstalledFormReferenceValidationFailsClosed(t *testing.T) {
 	}
 }
 
+func TestVersionedLifecycleRejectsResponseNameAndSpaceSubstitution(t *testing.T) {
+	operations := []struct {
+		name string
+		run  func(*Client, *Resource) error
+	}{
+		{name: "put", run: func(c *Client, desired *Resource) error {
+			_, err := c.PutResource(context.Background(), KindObjectBucket, "assets", desired)
+			return err
+		}},
+		{name: "import", run: func(c *Client, desired *Resource) error {
+			_, err := c.ImportResource(context.Background(), KindObjectBucket, "assets", "native-assets", desired)
+			return err
+		}},
+		{name: "get", run: func(c *Client, _ *Resource) error {
+			_, err := c.GetResource(context.Background(), KindObjectBucket, "assets", "prod", exactObjectBucketFixture)
+			return err
+		}},
+		{name: "observe", run: func(c *Client, _ *Resource) error {
+			_, err := c.ObserveResource(context.Background(), KindObjectBucket, "assets", "prod", MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture})
+			return err
+		}},
+		{name: "refresh", run: func(c *Client, _ *Resource) error {
+			_, err := c.RefreshResource(context.Background(), KindObjectBucket, "assets", "prod", MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture})
+			return err
+		}},
+	}
+	mutations := []struct {
+		name   string
+		mutate func(*Resource)
+	}{
+		{name: "name", mutate: func(resource *Resource) { resource.Metadata.Name = "substituted" }},
+		{name: "space", mutate: func(resource *Resource) { resource.Metadata.Space = "other-space" }},
+	}
+
+	for _, operation := range operations {
+		for _, mutation := range mutations {
+			t.Run(operation.name+"/"+mutation.name, func(t *testing.T) {
+				var server *httptest.Server
+				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					switch {
+					case r.URL.Path == "/.well-known/takoform":
+						writeVersionedDiscovery(t, w, server.URL)
+					case r.URL.Path == "/apis/forms.takoform.com/v1alpha1/forms":
+						_ = json.NewEncoder(w).Encode(map[string]any{"forms": []FormAvailability{{
+							Identity: exactObjectBucketFixture, DefinitionKnown: true, Installed: true,
+							Executable: true, Activated: true, AvailableToPrincipal: true,
+							Operations: []string{"create", "import"},
+						}}})
+					case r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/preview":
+						var desired Resource
+						if err := json.NewDecoder(r.Body).Decode(&desired); err != nil {
+							t.Fatal(err)
+						}
+						_ = json.NewEncoder(w).Encode(PreviewResourceResult{Resource: desired, Review: PreviewReview{PlanDigest: "sha256:plan"}})
+					default:
+						resource := Resource{
+							APIVersion: APIVersion, Kind: KindObjectBucket, Form: &exactObjectBucketFixture,
+							Metadata: Metadata{Name: "assets", Space: "prod", ResourceVersion: "1"},
+						}
+						mutation.mutate(&resource)
+						w.Header().Set("ETag", `"1"`)
+						switch operation.name {
+						case "put", "get":
+							_ = json.NewEncoder(w).Encode(resource)
+						case "import":
+							_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
+						case "observe":
+							_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "observation": map[string]any{"status": "current"}})
+						case "refresh":
+							_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "refresh": map[string]any{"summary": "refreshed"}})
+						}
+					}
+				}))
+				defer server.Close()
+
+				formClient := New(server.URL, "", server.Client())
+				if _, err := formClient.Discover(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				desired := &Resource{
+					APIVersion: APIVersion, Kind: KindObjectBucket, Form: &exactObjectBucketFixture,
+					Metadata: Metadata{Name: "assets", Space: "prod"}, Spec: map[string]any{"name": "assets"},
+				}
+				err := operation.run(formClient, desired)
+				if err == nil || !strings.Contains(err.Error(), "name or space") {
+					t.Fatalf("error = %v, want fail-closed requested identity rejection", err)
+				}
+			})
+		}
+	}
+}
+
 func writeVersionedDiscovery(t *testing.T, w http.ResponseWriter, origin string) {
 	t.Helper()
 	_ = json.NewEncoder(w).Encode(map[string]any{

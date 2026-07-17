@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
@@ -126,6 +127,9 @@ func Verify(root string) (Report, error) {
 	if len(state.Resources) != 10 || evidence.ResourceCount != len(state.Resources) {
 		return Report{}, errors.New("provider migration resource count is incomplete")
 	}
+	if err := validateStateLineage(legacy, state); err != nil {
+		return Report{}, err
+	}
 	byOld := map[string]ResourceMapping{}
 	for _, item := range mapping.Resources {
 		byOld[item.FromType] = item
@@ -178,11 +182,19 @@ func Verify(root string) (Report, error) {
 		}
 		if item, migrates := byNew[resource.Type]; migrates {
 			old := legacyByKind[item.Kind]
-			oldAttributes := old.Instances[0].Attributes
+			oldInstance := old.Instances[0]
+			newInstance := resource.Instances[0]
+			if err := validateSchemaVersion(item.Kind, oldInstance, newInstance); err != nil {
+				return Report{}, err
+			}
+			oldAttributes := oldInstance.Attributes
 			for _, key := range []string{"id", "name", "space"} {
-				if attributes[key] != oldAttributes[key] {
+				if !reflect.DeepEqual(attributes[key], oldAttributes[key]) {
 					return Report{}, fmt.Errorf("migration identity %s drifted for %s", key, item.Kind)
 				}
+			}
+			if err := compareOverlappingDesiredAttributes(item.Kind, oldAttributes, attributes); err != nil {
+				return Report{}, err
 			}
 		}
 		_ = kind
@@ -197,6 +209,60 @@ func Verify(root string) (Report, error) {
 		MigratedResourceCount: len(mapping.Resources), ResourceCount: len(state.Resources),
 		StructuralStatus: "complete", Phases: evidence.Phases, ExternalBlockers: evidence.ExternalBlockers,
 	}, nil
+}
+
+func validateStateLineage(legacy, current tfState) error {
+	if legacy.Version != 4 || current.Version != 4 || strings.TrimSpace(legacy.Lineage) == "" || legacy.Lineage != current.Lineage {
+		return errors.New("provider migration state lineage or format version drifted")
+	}
+	return nil
+}
+
+func validateSchemaVersion(kind string, legacy, current tfStateInstance) error {
+	if legacy.SchemaVersion < 0 || legacy.SchemaVersion != current.SchemaVersion {
+		return fmt.Errorf("migration schema_version drifted for %s", kind)
+	}
+	return nil
+}
+
+// RequireComplete turns the structural verifier into a publication gate.
+// Structural proof remains useful locally, but no release may treat an
+// external-required lifecycle phase as completed evidence.
+func RequireComplete(report Report) error {
+	if len(report.ExternalBlockers) != 0 {
+		return fmt.Errorf("provider migration proof still has %d external blocker(s)", len(report.ExternalBlockers))
+	}
+	for _, phase := range report.Phases {
+		if phase.Status != "complete" {
+			return fmt.Errorf("provider migration phase %s is %s", phase.Name, phase.Status)
+		}
+	}
+	return nil
+}
+
+func compareOverlappingDesiredAttributes(kind string, legacy, current map[string]any) error {
+	ignored := map[string]bool{
+		"id": true, "resource_version": true, "portability": true, "outputs": true,
+		"target_pool": true, "selected_implementation": true, "target": true, "locked": true,
+	}
+	overlaps := 0
+	for key, legacyValue := range legacy {
+		if ignored[key] {
+			continue
+		}
+		currentValue, ok := current[key]
+		if !ok {
+			continue
+		}
+		overlaps++
+		if !reflect.DeepEqual(legacyValue, currentValue) {
+			return fmt.Errorf("migration desired attribute %s drifted for %s", key, kind)
+		}
+	}
+	if overlaps == 0 {
+		return fmt.Errorf("migration has no overlapping desired attributes for %s", kind)
+	}
+	return nil
 }
 
 func validateMapping(mapping Mapping) error {
@@ -227,18 +293,30 @@ func validatePhases(evidence Evidence) error {
 	if evidence.Format != "takoform.provider-migration-evidence@v1" {
 		return errors.New("migration evidence identity is invalid")
 	}
-	want := []struct{ name, status string }{
-		{"state-backup", "complete"}, {"old-refresh-no-op", "external-required"},
-		{"approved-remove-import", "complete"}, {"new-refresh-no-op", "external-required"},
-		{"old-artifact-lock-rollback", "external-required"},
+	want := []struct {
+		name             string
+		externalEligible bool
+	}{
+		{"state-backup", false}, {"old-refresh-no-op", true},
+		{"approved-remove-import", false}, {"new-refresh-no-op", true},
+		{"old-artifact-lock-rollback", true},
 	}
-	if len(evidence.Phases) != len(want) || len(evidence.ExternalBlockers) != 3 {
+	if len(evidence.Phases) != len(want) {
 		return errors.New("migration evidence phases are incomplete")
 	}
+	externalRequired := 0
 	for index, expected := range want {
-		if evidence.Phases[index].Name != expected.name || evidence.Phases[index].Status != expected.status || evidence.Phases[index].Evidence == "" {
+		phase := evidence.Phases[index]
+		validStatus := phase.Status == "complete" || (expected.externalEligible && phase.Status == "external-required")
+		if phase.Name != expected.name || !validStatus || phase.Evidence == "" {
 			return errors.New("migration evidence phase drifted")
 		}
+		if phase.Status == "external-required" {
+			externalRequired++
+		}
+	}
+	if (externalRequired == 0 && len(evidence.ExternalBlockers) != 0) || (externalRequired > 0 && len(evidence.ExternalBlockers) == 0) {
+		return errors.New("migration evidence blockers do not match incomplete phases")
 	}
 	return nil
 }

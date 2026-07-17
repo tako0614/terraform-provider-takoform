@@ -75,5 +75,8 @@
     "target",
     "locked"
   ],
-  "takosumiRunnerSource": "core/conformance/portable_form_host.ts"
+  "runnerEvidence": {
+    "subject": "takoform.portable-host-black-box-runner@v1",
+    "sha256": "sha256:62d639140619e0dba5d31888bf334573595b6662a9f316ddced738f2d5efec84"
+  }
 }
