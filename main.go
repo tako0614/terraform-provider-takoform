@@ -29,8 +29,9 @@ func main() {
 	}
 
 	opts := providerserver.ServeOpts{
-		// Canonical Terraform Registry identity. OpenTofu accepts the same
-		// fully-qualified provider address.
+		// Plugin handshake identity for the Terraform Registry release. The
+		// conformance matrix separately proves OpenTofu state under the canonical
+		// registry.opentofu.org FQN without treating the two FQNs as aliases.
 		Address: "registry.terraform.io/tako0614/takoform",
 		Debug:   debug,
 	}

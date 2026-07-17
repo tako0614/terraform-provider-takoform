@@ -29,7 +29,10 @@ resource "takoform_object_bucket" "assets" {
 ```
 
 `endpoint`, `space`, and the sensitive bearer `token` can instead be supplied as `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
-The provider follows the same-origin versioned endpoint advertised by discovery.
+Terraform uses `registry.terraform.io/tako0614/takoform`; OpenTofu uses
+`registry.opentofu.org/tako0614/takoform`. The provider lifecycle matrix proves
+both canonical FQNs independently and never treats them as interchangeable
+state identities. The provider follows the same-origin versioned endpoint advertised by discovery.
 The historical `/v1` facade requires the explicit `compatibility_fallback = true`
 setting (or `TAKOFORM_COMPATIBILITY_FALLBACK=true`) and is never selected as an
 implicit downgrade.
@@ -88,6 +91,7 @@ go vet ./...
 go test ./...
 go run ./cmd/conformance verify
 go run ./cmd/migration-proof
+go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
