@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -529,6 +530,9 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 			Optional:    true,
 			Description: "Optional open SQL engine capability token. Defaults to sqlite; the configured host must support it.",
 			Validators:  []validator.String{StringToken()},
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplace(),
+			},
 		}
 		attrs["migrations_path"] = schema.StringAttribute{
 			Optional:    true,
@@ -558,6 +562,9 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 		attrs["dimensions"] = schema.Int64Attribute{
 			Required:    true,
 			Description: "Positive vector dimensions fixed for the index lifecycle.",
+			PlanModifiers: []planmodifier.Int64{
+				int64planmodifier.RequiresReplace(),
+			},
 		}
 		attrs["metric"] = schema.StringAttribute{
 			Optional:    true,
@@ -656,9 +663,6 @@ func commonServiceShapeAttributes() map[string]schema.Attribute {
 		"resource_version": schema.StringAttribute{
 			Computed:    true,
 			Description: "Opaque desired-generation fence returned by the Form host.",
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
-			},
 		},
 		"drift_status": schema.StringAttribute{
 			Computed:    true,
@@ -752,6 +756,15 @@ func (r *serviceShapeResource) Update(ctx context.Context, req resource.UpdateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	state, diags := r.modelFromState(ctx, req.State)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// resource_version is computed, so the update plan intentionally carries an
+	// unknown value. Preserve the last observed state generation only as the
+	// optimistic-concurrency fence; the host response publishes the new value.
+	plan.ResourceVersion = state.ResourceVersion
 	r.put(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return

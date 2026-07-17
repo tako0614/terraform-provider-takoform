@@ -20,6 +20,30 @@ Provider publication uses `go run ./cmd/migration-proof --require-complete`.
 Unlike the structural local command, release mode exits nonzero for every
 `external-required` phase or remaining external blocker.
 
+## Actual provider protocol lifecycle candidate
+
+`cmd/provider-lifecycle-conformance` builds the real provider binary and drives
+all ten typed resources through a Terraform-compatible CLI against an in-process
+versioned Form host. The generic candidate covers create, read plus observe,
+mutable update with state-generation fencing, explicit refresh, native import,
+CLI import, drift mapping, delete, exact response-identity rejection, and
+replacement plans for immutable names, SQL engine, and vector dimensions.
+The data-only candidate report binds the CLI product, version, executable
+basename, and binary SHA-256 without leaking a host-local path. CI runs the
+OpenTofu variant; the same runner accepts Terraform:
+
+```console
+go run ./cmd/provider-lifecycle-conformance verify --cli tofu
+go run ./cmd/provider-lifecycle-conformance verify --cli /path/to/terraform
+```
+
+This is intentionally classified `generic-lifecycle-candidate` with
+`publicationReady: false` and `bindingStatus: pending-final-package-set`. It
+does not publish a checked-in passed report or claim standard Form admission.
+After the final package set and exact digests settle, separate Terraform and
+OpenTofu reports must be bound to those exact FormRef/package fixtures before
+they can contribute to standard admission evidence.
+
 ## Phase 0/1 golden characterization
 
 `compatibility-candidate-v1/` freezes the current ten-kind provider/client
