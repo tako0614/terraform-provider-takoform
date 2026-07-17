@@ -121,9 +121,6 @@ func (r *edgeWorkerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"resource_version": schema.StringAttribute{
 				Computed:    true,
 				Description: "Opaque desired-generation fence returned by the Form host.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"drift_status": schema.StringAttribute{
 				Computed:    true,
@@ -218,6 +215,15 @@ func (r *edgeWorkerResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	var state edgeWorkerModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// resource_version is computed, so the update plan intentionally carries an
+	// unknown value. Preserve the last observed state generation only as the
+	// optimistic-concurrency fence; the host response publishes the new value.
+	plan.ResourceVersion = state.ResourceVersion
 	r.put(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return

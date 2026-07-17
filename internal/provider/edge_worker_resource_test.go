@@ -245,28 +245,49 @@ func TestVersionedEdgeWorkerUpdateSendsIfMatchFromProviderState(t *testing.T) {
 		Profiles:           types.SetNull(types.StringType),
 		Connections:        types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
 		Space:              types.StringValue("prod"),
+		ResourceVersion:    types.StringUnknown(),
+		DriftStatus:        types.StringUnknown(),
+		Portability:        types.StringUnknown(),
+		Outputs:            types.MapUnknown(types.StringType),
+	})
+	if diags.HasError() {
+		t.Fatalf("plan diagnostics: %v", diags)
+	}
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	diags = state.Set(ctx, edgeWorkerModel{
+		ID:                 types.StringValue("tkrn:prod:EdgeWorker:api"),
+		Name:               types.StringValue("api"),
+		ArtifactPath:       types.StringValue("/work/dist/worker.js"),
+		ArtifactURL:        types.StringNull(),
+		ArtifactRef:        types.StringNull(),
+		ArtifactSHA256:     types.StringNull(),
+		CompatibilityDate:  types.StringNull(),
+		CompatibilityFlags: types.SetNull(types.StringType),
+		Profiles:           types.SetNull(types.StringType),
+		Connections:        types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+		Space:              types.StringValue("prod"),
 		ResourceVersion:    types.StringValue("7"),
 		DriftStatus:        types.StringValue("current"),
 		Portability:        types.StringValue("portable"),
 		Outputs:            types.MapValueMust(types.StringType, map[string]attr.Value{}),
 	})
 	if diags.HasError() {
-		t.Fatalf("plan diagnostics: %v", diags)
+		t.Fatalf("state diagnostics: %v", diags)
 	}
 	resp := frameworkresource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
-	r.Update(ctx, frameworkresource.UpdateRequest{Plan: plan}, &resp)
+	r.Update(ctx, frameworkresource.UpdateRequest{Plan: plan, State: state}, &resp)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("update diagnostics: %v", resp.Diagnostics)
 	}
 	if !sawUpdate {
 		t.Fatal("provider did not execute the versioned update")
 	}
-	var state edgeWorkerModel
-	if diags := resp.State.Get(ctx, &state); diags.HasError() {
+	var result edgeWorkerModel
+	if diags := resp.State.Get(ctx, &result); diags.HasError() {
 		t.Fatalf("state diagnostics: %v", diags)
 	}
-	if state.ResourceVersion.ValueString() != "8" {
-		t.Fatalf("state resource_version = %q, want 8", state.ResourceVersion.ValueString())
+	if result.ResourceVersion.ValueString() != "8" {
+		t.Fatalf("state resource_version = %q, want 8", result.ResourceVersion.ValueString())
 	}
 }
 

@@ -224,14 +224,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
@@ -342,14 +335,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
@@ -482,14 +468,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
@@ -602,14 +581,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
@@ -654,12 +626,19 @@
           "optional": true,
           "computed": false,
           "validators": 1,
-          "planModifiers": 0,
+          "planModifiers": 1,
           "validatorSemantics": [
             {
               "type": "provider.stringTokenValidator",
               "config": "provider.stringTokenValidator{}",
               "description": "value must be a non-empty token without whitespace"
+            }
+          ],
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
             }
           ]
         },
@@ -729,14 +708,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
@@ -942,14 +914,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
@@ -1060,7 +1025,14 @@
           "optional": false,
           "computed": false,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "int64planmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ]
         },
         {
           "name": "drift_status",
@@ -1144,14 +1116,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
@@ -1384,14 +1349,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
@@ -1579,14 +1537,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
@@ -1781,14 +1732,7 @@
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 1,
-          "planModifierSemantics": [
-            {
-              "type": "stringplanmodifier.useStateForUnknownModifier",
-              "config": "description=Once set, the value of this attribute in state will not change.",
-              "description": "Once set, the value of this attribute in state will not change."
-            }
-          ]
+          "planModifiers": 0
         },
         {
           "name": "space",
