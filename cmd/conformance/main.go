@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/characterization"
+	"github.com/tako0614/terraform-provider-takoform/internal/portableconformance"
 )
 
 func main() {
@@ -24,7 +26,12 @@ func main() {
 		if err != nil {
 			fatal(err)
 		}
-		fmt.Printf("verified non-publishable compatibility candidate: %d kinds, %d evidence files\n", report.KindCount, report.FileCount)
+		portableRoot := filepath.Join(repoRoot, "conformance", "portable-host-v1")
+		portable, err := portableconformance.Verify(portableRoot)
+		if err != nil {
+			fatal(err)
+		}
+		fmt.Printf("verified non-publishable compatibility candidate: %d kinds, %d evidence files; portable host %s\n", report.KindCount, report.FileCount, portable.APIVersion)
 	case "render-manifest":
 		manifest, err := characterization.RenderManifest(evidenceRoot)
 		if err != nil {
@@ -36,8 +43,21 @@ func main() {
 		if err := encoder.Encode(manifest); err != nil {
 			fatal(err)
 		}
+	case "write-manifest":
+		manifest, err := characterization.RenderManifest(evidenceRoot)
+		if err != nil {
+			fatal(err)
+		}
+		raw, err := json.MarshalIndent(manifest, "", "  ")
+		if err != nil {
+			fatal(err)
+		}
+		raw = append(raw, '\n')
+		if err := os.WriteFile(filepath.Join(evidenceRoot, "manifest.json"), raw, 0o644); err != nil {
+			fatal(err)
+		}
 	default:
-		fatal(fmt.Errorf("usage: go run ./cmd/conformance [verify|render-manifest]"))
+		fatal(fmt.Errorf("usage: go run ./cmd/conformance [verify|render-manifest|write-manifest]"))
 	}
 }
 

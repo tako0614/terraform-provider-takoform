@@ -115,61 +115,57 @@ func assertImportState(t *testing.T, ctx context.Context, candidate frameworkres
 
 func nullEdgeWorkerImportModel() edgeWorkerModel {
 	return edgeWorkerModel{
-		ID:                     types.StringNull(),
-		Name:                   types.StringNull(),
-		ArtifactPath:           types.StringNull(),
-		ArtifactURL:            types.StringNull(),
-		ArtifactRef:            types.StringNull(),
-		ArtifactSHA256:         types.StringNull(),
-		CompatibilityDate:      types.StringNull(),
-		CompatibilityFlags:     types.SetNull(types.StringType),
-		Profiles:               types.SetNull(types.StringType),
-		Connections:            types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
-		Space:                  types.StringNull(),
-		SelectedImplementation: types.StringNull(),
-		Target:                 types.StringNull(),
-		Locked:                 types.BoolNull(),
-		Portability:            types.StringNull(),
-		Outputs:                types.MapNull(types.StringType),
+		ID:                 types.StringNull(),
+		Name:               types.StringNull(),
+		ArtifactPath:       types.StringNull(),
+		ArtifactURL:        types.StringNull(),
+		ArtifactRef:        types.StringNull(),
+		ArtifactSHA256:     types.StringNull(),
+		CompatibilityDate:  types.StringNull(),
+		CompatibilityFlags: types.SetNull(types.StringType),
+		Profiles:           types.SetNull(types.StringType),
+		Connections:        types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+		Space:              types.StringNull(),
+		ResourceVersion:    types.StringNull(),
+		Portability:        types.StringNull(),
+		Outputs:            types.MapNull(types.StringType),
 	}
 }
 
 func nullServiceShapeCandidateImportModel(spec serviceShapeSpecKind) any {
 	model := serviceShapeModel{
-		ID:                     types.StringNull(),
-		Name:                   types.StringNull(),
-		Interfaces:             types.SetNull(types.StringType),
-		StorageClass:           types.StringNull(),
-		Consistency:            types.StringNull(),
-		MaxRetries:             types.Int64Null(),
-		MaxBatchSize:           types.Int64Null(),
-		Engine:                 types.StringNull(),
-		MigrationsPath:         types.StringNull(),
-		Image:                  types.StringNull(),
-		Ports:                  types.SetNull(types.Int64Type),
-		PublicHTTP:             types.BoolNull(),
-		Environment:            types.MapNull(types.StringType),
-		Connections:            types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
-		Dimensions:             types.Int64Null(),
-		Metric:                 types.StringNull(),
-		ArtifactPath:           types.StringNull(),
-		ArtifactURL:            types.StringNull(),
-		ArtifactRef:            types.StringNull(),
-		ArtifactSHA256:         types.StringNull(),
-		Entrypoint:             types.StringNull(),
-		MaxAttempts:            types.Int64Null(),
-		InitialBackoffSeconds:  types.Int64Null(),
-		ClassName:              types.StringNull(),
-		StorageProfile:         types.StringNull(),
-		MigrationTag:           types.StringNull(),
-		Cron:                   types.StringNull(),
-		Timezone:               types.StringNull(),
-		Space:                  types.StringNull(),
-		SelectedImplementation: types.StringNull(),
-		Target:                 types.StringNull(),
-		Locked:                 types.BoolNull(),
-		Portability:            types.StringNull(),
-		Outputs:                types.MapNull(types.StringType),
+		ID:                    types.StringNull(),
+		Name:                  types.StringNull(),
+		Interfaces:            types.SetNull(types.StringType),
+		StorageClass:          types.StringNull(),
+		Consistency:           types.StringNull(),
+		MaxRetries:            types.Int64Null(),
+		MaxBatchSize:          types.Int64Null(),
+		Engine:                types.StringNull(),
+		MigrationsPath:        types.StringNull(),
+		Image:                 types.StringNull(),
+		Ports:                 types.SetNull(types.Int64Type),
+		PublicHTTP:            types.BoolNull(),
+		Environment:           types.MapNull(types.StringType),
+		Connections:           types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
+		Dimensions:            types.Int64Null(),
+		Metric:                types.StringNull(),
+		ArtifactPath:          types.StringNull(),
+		ArtifactURL:           types.StringNull(),
+		ArtifactRef:           types.StringNull(),
+		ArtifactSHA256:        types.StringNull(),
+		Entrypoint:            types.StringNull(),
+		MaxAttempts:           types.Int64Null(),
+		InitialBackoffSeconds: types.Int64Null(),
+		ClassName:             types.StringNull(),
+		StorageProfile:        types.StringNull(),
+		MigrationTag:          types.StringNull(),
+		Cron:                  types.StringNull(),
+		Timezone:              types.StringNull(),
+		Space:                 types.StringNull(),
+		ResourceVersion:       types.StringNull(),
+		Portability:           types.StringNull(),
+		Outputs:               types.MapNull(types.StringType),
 	}
 	switch spec {
 	case specObjectBucket:
@@ -251,24 +247,24 @@ func providerOutputState(t *testing.T, ctx context.Context, kind string, fixture
 		var model edgeWorkerModel
 		assertNoDiagnostics(t, refreshEdgeWorkerSpec(&fixture, &model))
 		assertNoDiagnostics(t, applyEdgeWorkerStatus(ctx, &fixture, fixture.Metadata.Space, &model))
-		return outputState(model.ID, model.Name, model.Space, model.SelectedImplementation, model.Target, model.Locked, model.Portability, model.Outputs)
+		return outputState(model.ID, model.Name, model.Space, model.ResourceVersion, model.Portability, model.Outputs)
 	}
 	shape := candidateResourceForKind(t, kind).(*serviceShapeResource)
 	var model serviceShapeModel
 	assertNoDiagnostics(t, refreshServiceShapeSpec(ctx, &fixture, shape.cfg.spec, &model))
 	assertNoDiagnostics(t, applyServiceShapeStatus(ctx, &fixture, kind, fixture.Metadata.Space, &model))
-	return outputState(model.ID, model.Name, model.Space, model.SelectedImplementation, model.Target, model.Locked, model.Portability, model.Outputs)
+	return outputState(model.ID, model.Name, model.Space, model.ResourceVersion, model.Portability, model.Outputs)
 }
 
-func outputState(id, name, space, selected, target types.String, locked types.Bool, portability types.String, outputs types.Map) characterization.OutputState {
+func outputState(id, name, space, resourceVersion, portability types.String, outputs types.Map) characterization.OutputState {
 	values := make(map[string]string, len(outputs.Elements()))
 	for key, value := range outputs.Elements() {
 		values[key] = value.(types.String).ValueString()
 	}
 	return characterization.OutputState{
 		ID: id.ValueString(), Name: name.ValueString(), Space: space.ValueString(),
-		SelectedImplementation: selected.ValueString(), Target: target.ValueString(),
-		Locked: locked.ValueBool(), Portability: portability.ValueString(), Outputs: values,
+		ResourceVersion: resourceVersion.ValueString(),
+		Portability:     portability.ValueString(), Outputs: values,
 	}
 }
 

@@ -13,6 +13,7 @@ go test ./...
 go vet ./...
 tofu fmt -check -recursive examples
 go run ./cmd/conformance verify
+go run ./cmd/migration-proof
 ```
 
 ## Phase 0/1 golden characterization
@@ -73,3 +74,19 @@ Passing this corpus proves the local data contract only. It is not signature,
 publisher, remote-install, host-activation, retention/revocation, lifecycle
 idempotency, or cross-host/kind-standardization evidence. Those later trust and
 host conformance layers remain unimplemented.
+
+## Portable host and provider migration evidence
+
+`portable-host-v1/` pins the versioned discovery/API paths, exact ObjectBucket
+FormRef/package identity, concurrency/idempotency rules, stable error taxonomy,
+and required cross-repo black-box runner checks. The provider client consumes
+the same contract in adversarial HTTP tests.
+
+`provider-migration-v1/` contains a redacted backup for the six types actually
+exposed by the old Takosumi provider, a separate all-ten Takoform golden state,
+an explicit provider/type mapping, and structural backup/import/rollback
+evidence. The four new-only kinds are not represented as fictional
+`takosumi_*` migrations. The verifier rejects provider-address aliasing and
+secret, price, or backend data in new state. Live old/new and rollback refresh
+no-op proof remains explicitly external because it requires pinned provider
+artifacts, lock files, and a reachable host.

@@ -53,176 +53,153 @@ type serviceShapeResource struct {
 }
 
 type serviceShapeModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	Interfaces             types.Set    `tfsdk:"interfaces"`
-	StorageClass           types.String `tfsdk:"storage_class"`
-	Consistency            types.String `tfsdk:"consistency"`
-	MaxRetries             types.Int64  `tfsdk:"max_retries"`
-	MaxBatchSize           types.Int64  `tfsdk:"max_batch_size"`
-	Engine                 types.String `tfsdk:"engine"`
-	MigrationsPath         types.String `tfsdk:"migrations_path"`
-	Image                  types.String `tfsdk:"image"`
-	Ports                  types.Set    `tfsdk:"ports"`
-	PublicHTTP             types.Bool   `tfsdk:"public_http"`
-	Environment            types.Map    `tfsdk:"environment"`
-	Connections            types.List   `tfsdk:"connections"`
-	Dimensions             types.Int64  `tfsdk:"dimensions"`
-	Metric                 types.String `tfsdk:"metric"`
-	ArtifactPath           types.String `tfsdk:"artifact_path"`
-	ArtifactURL            types.String `tfsdk:"artifact_url"`
-	ArtifactRef            types.String `tfsdk:"artifact_ref"`
-	ArtifactSHA256         types.String `tfsdk:"artifact_sha256"`
-	Entrypoint             types.String `tfsdk:"entrypoint"`
-	MaxAttempts            types.Int64  `tfsdk:"max_attempts"`
-	InitialBackoffSeconds  types.Int64  `tfsdk:"initial_backoff_seconds"`
-	ClassName              types.String `tfsdk:"class_name"`
-	StorageProfile         types.String `tfsdk:"storage_profile"`
-	MigrationTag           types.String `tfsdk:"migration_tag"`
-	Cron                   types.String `tfsdk:"cron"`
-	Timezone               types.String `tfsdk:"timezone"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID                    types.String `tfsdk:"id"`
+	Name                  types.String `tfsdk:"name"`
+	Interfaces            types.Set    `tfsdk:"interfaces"`
+	StorageClass          types.String `tfsdk:"storage_class"`
+	Consistency           types.String `tfsdk:"consistency"`
+	MaxRetries            types.Int64  `tfsdk:"max_retries"`
+	MaxBatchSize          types.Int64  `tfsdk:"max_batch_size"`
+	Engine                types.String `tfsdk:"engine"`
+	MigrationsPath        types.String `tfsdk:"migrations_path"`
+	Image                 types.String `tfsdk:"image"`
+	Ports                 types.Set    `tfsdk:"ports"`
+	PublicHTTP            types.Bool   `tfsdk:"public_http"`
+	Environment           types.Map    `tfsdk:"environment"`
+	Connections           types.List   `tfsdk:"connections"`
+	Dimensions            types.Int64  `tfsdk:"dimensions"`
+	Metric                types.String `tfsdk:"metric"`
+	ArtifactPath          types.String `tfsdk:"artifact_path"`
+	ArtifactURL           types.String `tfsdk:"artifact_url"`
+	ArtifactRef           types.String `tfsdk:"artifact_ref"`
+	ArtifactSHA256        types.String `tfsdk:"artifact_sha256"`
+	Entrypoint            types.String `tfsdk:"entrypoint"`
+	MaxAttempts           types.Int64  `tfsdk:"max_attempts"`
+	InitialBackoffSeconds types.Int64  `tfsdk:"initial_backoff_seconds"`
+	ClassName             types.String `tfsdk:"class_name"`
+	StorageProfile        types.String `tfsdk:"storage_profile"`
+	MigrationTag          types.String `tfsdk:"migration_tag"`
+	Cron                  types.String `tfsdk:"cron"`
+	Timezone              types.String `tfsdk:"timezone"`
+	Space                 types.String `tfsdk:"space"`
+	ResourceVersion       types.String `tfsdk:"resource_version"`
+	Portability           types.String `tfsdk:"portability"`
+	Outputs               types.Map    `tfsdk:"outputs"`
 }
 
 type objectBucketModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	Interfaces             types.Set    `tfsdk:"interfaces"`
-	StorageClass           types.String `tfsdk:"storage_class"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	Interfaces      types.Set    `tfsdk:"interfaces"`
+	StorageClass    types.String `tfsdk:"storage_class"`
+	Space           types.String `tfsdk:"space"`
+	ResourceVersion types.String `tfsdk:"resource_version"`
+	Portability     types.String `tfsdk:"portability"`
+	Outputs         types.Map    `tfsdk:"outputs"`
 }
 
 type kvStoreModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	Consistency            types.String `tfsdk:"consistency"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	Consistency     types.String `tfsdk:"consistency"`
+	Space           types.String `tfsdk:"space"`
+	ResourceVersion types.String `tfsdk:"resource_version"`
+	Portability     types.String `tfsdk:"portability"`
+	Outputs         types.Map    `tfsdk:"outputs"`
 }
 
 type queueModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	MaxRetries             types.Int64  `tfsdk:"max_retries"`
-	MaxBatchSize           types.Int64  `tfsdk:"max_batch_size"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	MaxRetries      types.Int64  `tfsdk:"max_retries"`
+	MaxBatchSize    types.Int64  `tfsdk:"max_batch_size"`
+	Space           types.String `tfsdk:"space"`
+	ResourceVersion types.String `tfsdk:"resource_version"`
+	Portability     types.String `tfsdk:"portability"`
+	Outputs         types.Map    `tfsdk:"outputs"`
 }
 
 type sqlDatabaseModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	Engine                 types.String `tfsdk:"engine"`
-	MigrationsPath         types.String `tfsdk:"migrations_path"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	Engine          types.String `tfsdk:"engine"`
+	MigrationsPath  types.String `tfsdk:"migrations_path"`
+	Space           types.String `tfsdk:"space"`
+	ResourceVersion types.String `tfsdk:"resource_version"`
+	Portability     types.String `tfsdk:"portability"`
+	Outputs         types.Map    `tfsdk:"outputs"`
 }
 
 type containerServiceModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	Image                  types.String `tfsdk:"image"`
-	Ports                  types.Set    `tfsdk:"ports"`
-	PublicHTTP             types.Bool   `tfsdk:"public_http"`
-	Environment            types.Map    `tfsdk:"environment"`
-	Connections            types.List   `tfsdk:"connections"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	Image           types.String `tfsdk:"image"`
+	Ports           types.Set    `tfsdk:"ports"`
+	PublicHTTP      types.Bool   `tfsdk:"public_http"`
+	Environment     types.Map    `tfsdk:"environment"`
+	Connections     types.List   `tfsdk:"connections"`
+	Space           types.String `tfsdk:"space"`
+	ResourceVersion types.String `tfsdk:"resource_version"`
+	Portability     types.String `tfsdk:"portability"`
+	Outputs         types.Map    `tfsdk:"outputs"`
 }
 
 type vectorIndexModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	Dimensions             types.Int64  `tfsdk:"dimensions"`
-	Metric                 types.String `tfsdk:"metric"`
-	Connections            types.List   `tfsdk:"connections"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	Dimensions      types.Int64  `tfsdk:"dimensions"`
+	Metric          types.String `tfsdk:"metric"`
+	Connections     types.List   `tfsdk:"connections"`
+	Space           types.String `tfsdk:"space"`
+	ResourceVersion types.String `tfsdk:"resource_version"`
+	Portability     types.String `tfsdk:"portability"`
+	Outputs         types.Map    `tfsdk:"outputs"`
 }
 
 type durableWorkflowModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	ArtifactPath           types.String `tfsdk:"artifact_path"`
-	ArtifactURL            types.String `tfsdk:"artifact_url"`
-	ArtifactRef            types.String `tfsdk:"artifact_ref"`
-	ArtifactSHA256         types.String `tfsdk:"artifact_sha256"`
-	Entrypoint             types.String `tfsdk:"entrypoint"`
-	MaxAttempts            types.Int64  `tfsdk:"max_attempts"`
-	InitialBackoffSeconds  types.Int64  `tfsdk:"initial_backoff_seconds"`
-	Connections            types.List   `tfsdk:"connections"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID                    types.String `tfsdk:"id"`
+	Name                  types.String `tfsdk:"name"`
+	ArtifactPath          types.String `tfsdk:"artifact_path"`
+	ArtifactURL           types.String `tfsdk:"artifact_url"`
+	ArtifactRef           types.String `tfsdk:"artifact_ref"`
+	ArtifactSHA256        types.String `tfsdk:"artifact_sha256"`
+	Entrypoint            types.String `tfsdk:"entrypoint"`
+	MaxAttempts           types.Int64  `tfsdk:"max_attempts"`
+	InitialBackoffSeconds types.Int64  `tfsdk:"initial_backoff_seconds"`
+	Connections           types.List   `tfsdk:"connections"`
+	Space                 types.String `tfsdk:"space"`
+	ResourceVersion       types.String `tfsdk:"resource_version"`
+	Portability           types.String `tfsdk:"portability"`
+	Outputs               types.Map    `tfsdk:"outputs"`
 }
 
 type statefulActorNamespaceModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	ClassName              types.String `tfsdk:"class_name"`
-	StorageProfile         types.String `tfsdk:"storage_profile"`
-	MigrationTag           types.String `tfsdk:"migration_tag"`
-	Connections            types.List   `tfsdk:"connections"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	ClassName       types.String `tfsdk:"class_name"`
+	StorageProfile  types.String `tfsdk:"storage_profile"`
+	MigrationTag    types.String `tfsdk:"migration_tag"`
+	Connections     types.List   `tfsdk:"connections"`
+	Space           types.String `tfsdk:"space"`
+	ResourceVersion types.String `tfsdk:"resource_version"`
+	Portability     types.String `tfsdk:"portability"`
+	Outputs         types.Map    `tfsdk:"outputs"`
 }
 
 type scheduleModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	Cron                   types.String `tfsdk:"cron"`
-	Timezone               types.String `tfsdk:"timezone"`
-	Connections            types.List   `tfsdk:"connections"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	Cron            types.String `tfsdk:"cron"`
+	Timezone        types.String `tfsdk:"timezone"`
+	Connections     types.List   `tfsdk:"connections"`
+	Space           types.String `tfsdk:"space"`
+	ResourceVersion types.String `tfsdk:"resource_version"`
+	Portability     types.String `tfsdk:"portability"`
+	Outputs         types.Map    `tfsdk:"outputs"`
 }
 
 func (m objectBucketModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(
-		m.ID, m.Name, m.Space, m.SelectedImplementation,
-		m.Target, m.Locked, m.Portability, m.Outputs,
-	)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
 	base.Interfaces = m.Interfaces
 	base.StorageClass = m.StorageClass
 	return base
@@ -230,47 +207,37 @@ func (m objectBucketModel) toServiceShapeModel() serviceShapeModel {
 
 func objectBucketModelFromServiceShape(m serviceShapeModel) objectBucketModel {
 	return objectBucketModel{
-		ID:                     m.ID,
-		Name:                   m.Name,
-		Interfaces:             m.Interfaces,
-		StorageClass:           m.StorageClass,
-		Space:                  m.Space,
-		SelectedImplementation: m.SelectedImplementation,
-		Target:                 m.Target,
-		Locked:                 m.Locked,
-		Portability:            m.Portability,
-		Outputs:                m.Outputs,
+		ID:              m.ID,
+		Name:            m.Name,
+		Interfaces:      m.Interfaces,
+		StorageClass:    m.StorageClass,
+		Space:           m.Space,
+		ResourceVersion: m.ResourceVersion,
+		Portability:     m.Portability,
+		Outputs:         m.Outputs,
 	}
 }
 
 func (m kvStoreModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(
-		m.ID, m.Name, m.Space, m.SelectedImplementation,
-		m.Target, m.Locked, m.Portability, m.Outputs,
-	)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
 	base.Consistency = m.Consistency
 	return base
 }
 
 func kvStoreModelFromServiceShape(m serviceShapeModel) kvStoreModel {
 	return kvStoreModel{
-		ID:                     m.ID,
-		Name:                   m.Name,
-		Consistency:            m.Consistency,
-		Space:                  m.Space,
-		SelectedImplementation: m.SelectedImplementation,
-		Target:                 m.Target,
-		Locked:                 m.Locked,
-		Portability:            m.Portability,
-		Outputs:                m.Outputs,
+		ID:              m.ID,
+		Name:            m.Name,
+		Consistency:     m.Consistency,
+		Space:           m.Space,
+		ResourceVersion: m.ResourceVersion,
+		Portability:     m.Portability,
+		Outputs:         m.Outputs,
 	}
 }
 
 func (m queueModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(
-		m.ID, m.Name, m.Space, m.SelectedImplementation,
-		m.Target, m.Locked, m.Portability, m.Outputs,
-	)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
 	base.MaxRetries = m.MaxRetries
 	base.MaxBatchSize = m.MaxBatchSize
 	return base
@@ -278,24 +245,19 @@ func (m queueModel) toServiceShapeModel() serviceShapeModel {
 
 func queueModelFromServiceShape(m serviceShapeModel) queueModel {
 	return queueModel{
-		ID:                     m.ID,
-		Name:                   m.Name,
-		MaxRetries:             m.MaxRetries,
-		MaxBatchSize:           m.MaxBatchSize,
-		Space:                  m.Space,
-		SelectedImplementation: m.SelectedImplementation,
-		Target:                 m.Target,
-		Locked:                 m.Locked,
-		Portability:            m.Portability,
-		Outputs:                m.Outputs,
+		ID:              m.ID,
+		Name:            m.Name,
+		MaxRetries:      m.MaxRetries,
+		MaxBatchSize:    m.MaxBatchSize,
+		Space:           m.Space,
+		ResourceVersion: m.ResourceVersion,
+		Portability:     m.Portability,
+		Outputs:         m.Outputs,
 	}
 }
 
 func (m sqlDatabaseModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(
-		m.ID, m.Name, m.Space, m.SelectedImplementation,
-		m.Target, m.Locked, m.Portability, m.Outputs,
-	)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
 	base.Engine = m.Engine
 	base.MigrationsPath = m.MigrationsPath
 	return base
@@ -303,24 +265,19 @@ func (m sqlDatabaseModel) toServiceShapeModel() serviceShapeModel {
 
 func sqlDatabaseModelFromServiceShape(m serviceShapeModel) sqlDatabaseModel {
 	return sqlDatabaseModel{
-		ID:                     m.ID,
-		Name:                   m.Name,
-		Engine:                 m.Engine,
-		MigrationsPath:         m.MigrationsPath,
-		Space:                  m.Space,
-		SelectedImplementation: m.SelectedImplementation,
-		Target:                 m.Target,
-		Locked:                 m.Locked,
-		Portability:            m.Portability,
-		Outputs:                m.Outputs,
+		ID:              m.ID,
+		Name:            m.Name,
+		Engine:          m.Engine,
+		MigrationsPath:  m.MigrationsPath,
+		Space:           m.Space,
+		ResourceVersion: m.ResourceVersion,
+		Portability:     m.Portability,
+		Outputs:         m.Outputs,
 	}
 }
 
 func (m containerServiceModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(
-		m.ID, m.Name, m.Space, m.SelectedImplementation,
-		m.Target, m.Locked, m.Portability, m.Outputs,
-	)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
 	base.Image = m.Image
 	base.Ports = m.Ports
 	base.PublicHTTP = m.PublicHTTP
@@ -331,27 +288,22 @@ func (m containerServiceModel) toServiceShapeModel() serviceShapeModel {
 
 func containerServiceModelFromServiceShape(m serviceShapeModel) containerServiceModel {
 	return containerServiceModel{
-		ID:                     m.ID,
-		Name:                   m.Name,
-		Image:                  m.Image,
-		Ports:                  m.Ports,
-		PublicHTTP:             m.PublicHTTP,
-		Environment:            m.Environment,
-		Connections:            m.Connections,
-		Space:                  m.Space,
-		SelectedImplementation: m.SelectedImplementation,
-		Target:                 m.Target,
-		Locked:                 m.Locked,
-		Portability:            m.Portability,
-		Outputs:                m.Outputs,
+		ID:              m.ID,
+		Name:            m.Name,
+		Image:           m.Image,
+		Ports:           m.Ports,
+		PublicHTTP:      m.PublicHTTP,
+		Environment:     m.Environment,
+		Connections:     m.Connections,
+		Space:           m.Space,
+		ResourceVersion: m.ResourceVersion,
+		Portability:     m.Portability,
+		Outputs:         m.Outputs,
 	}
 }
 
 func (m vectorIndexModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(
-		m.ID, m.Name, m.Space, m.SelectedImplementation,
-		m.Target, m.Locked, m.Portability, m.Outputs,
-	)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
 	base.Dimensions = m.Dimensions
 	base.Metric = m.Metric
 	base.Connections = m.Connections
@@ -362,16 +314,12 @@ func vectorIndexModelFromServiceShape(m serviceShapeModel) vectorIndexModel {
 	return vectorIndexModel{
 		ID: m.ID, Name: m.Name, Dimensions: m.Dimensions, Metric: m.Metric,
 		Connections: m.Connections, Space: m.Space,
-		SelectedImplementation: m.SelectedImplementation, Target: m.Target,
-		Locked: m.Locked, Portability: m.Portability, Outputs: m.Outputs,
+		ResourceVersion: m.ResourceVersion, Portability: m.Portability, Outputs: m.Outputs,
 	}
 }
 
 func (m durableWorkflowModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(
-		m.ID, m.Name, m.Space, m.SelectedImplementation,
-		m.Target, m.Locked, m.Portability, m.Outputs,
-	)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
 	base.ArtifactPath = m.ArtifactPath
 	base.ArtifactURL = m.ArtifactURL
 	base.ArtifactRef = m.ArtifactRef
@@ -390,16 +338,12 @@ func durableWorkflowModelFromServiceShape(m serviceShapeModel) durableWorkflowMo
 		ArtifactSHA256: m.ArtifactSHA256, Entrypoint: m.Entrypoint,
 		MaxAttempts: m.MaxAttempts, InitialBackoffSeconds: m.InitialBackoffSeconds,
 		Connections: m.Connections, Space: m.Space,
-		SelectedImplementation: m.SelectedImplementation, Target: m.Target,
-		Locked: m.Locked, Portability: m.Portability, Outputs: m.Outputs,
+		ResourceVersion: m.ResourceVersion, Portability: m.Portability, Outputs: m.Outputs,
 	}
 }
 
 func (m statefulActorNamespaceModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(
-		m.ID, m.Name, m.Space, m.SelectedImplementation,
-		m.Target, m.Locked, m.Portability, m.Outputs,
-	)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
 	base.ClassName = m.ClassName
 	base.StorageProfile = m.StorageProfile
 	base.MigrationTag = m.MigrationTag
@@ -412,16 +356,12 @@ func statefulActorNamespaceModelFromServiceShape(m serviceShapeModel) statefulAc
 		ID: m.ID, Name: m.Name, ClassName: m.ClassName,
 		StorageProfile: m.StorageProfile, MigrationTag: m.MigrationTag,
 		Connections: m.Connections, Space: m.Space,
-		SelectedImplementation: m.SelectedImplementation, Target: m.Target,
-		Locked: m.Locked, Portability: m.Portability, Outputs: m.Outputs,
+		ResourceVersion: m.ResourceVersion, Portability: m.Portability, Outputs: m.Outputs,
 	}
 }
 
 func (m scheduleModel) toServiceShapeModel() serviceShapeModel {
-	base := serviceShapeModelFromCommon(
-		m.ID, m.Name, m.Space, m.SelectedImplementation,
-		m.Target, m.Locked, m.Portability, m.Outputs,
-	)
+	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.Portability, m.Outputs)
 	base.Cron = m.Cron
 	base.Timezone = m.Timezone
 	base.Connections = m.Connections
@@ -432,8 +372,7 @@ func scheduleModelFromServiceShape(m serviceShapeModel) scheduleModel {
 	return scheduleModel{
 		ID: m.ID, Name: m.Name, Cron: m.Cron, Timezone: m.Timezone,
 		Connections: m.Connections, Space: m.Space,
-		SelectedImplementation: m.SelectedImplementation, Target: m.Target,
-		Locked: m.Locked, Portability: m.Portability, Outputs: m.Outputs,
+		ResourceVersion: m.ResourceVersion, Portability: m.Portability, Outputs: m.Outputs,
 	}
 }
 
@@ -441,21 +380,17 @@ func serviceShapeModelFromCommon(
 	id types.String,
 	name types.String,
 	space types.String,
-	selectedImplementation types.String,
-	target types.String,
-	locked types.Bool,
+	resourceVersion types.String,
 	portability types.String,
 	outputs types.Map,
 ) serviceShapeModel {
 	return serviceShapeModel{
-		ID:                     id,
-		Name:                   name,
-		Space:                  space,
-		SelectedImplementation: selectedImplementation,
-		Target:                 target,
-		Locked:                 locked,
-		Portability:            portability,
-		Outputs:                outputs,
+		ID:              id,
+		Name:            name,
+		Space:           space,
+		ResourceVersion: resourceVersion,
+		Portability:     portability,
+		Outputs:         outputs,
 	}
 }
 
@@ -463,7 +398,7 @@ func NewObjectBucketResource() resource.Resource {
 	return &serviceShapeResource{cfg: serviceShapeConfig{
 		typeSuffix:  "object_bucket",
 		kind:        client.KindObjectBucket,
-		description: "Provider-neutral object bucket. Data-plane access stays S3-compatible; this shape exists when Takoform owns binding, policy, metering, or managed target placement.",
+		description: "Provider-neutral object bucket with an optional S3-compatible data-plane interface. Placement, policy, and metering remain host responsibilities.",
 		spec:        specObjectBucket,
 	}}
 }
@@ -490,7 +425,7 @@ func NewSQLDatabaseResource() resource.Resource {
 	return &serviceShapeResource{cfg: serviceShapeConfig{
 		typeSuffix:  "sql_database",
 		kind:        client.KindSQLDatabase,
-		description: "Provider-neutral SQL database shape. Engine is an open capability token and requires explicit operator Target support.",
+		description: "Provider-neutral SQL database shape. Engine is an open capability token and requires explicit support from the configured host.",
 		spec:        specSQLDatabase,
 	}}
 }
@@ -566,16 +501,16 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 	case specQueue:
 		attrs["max_retries"] = schema.Int64Attribute{
 			Optional:    true,
-			Description: "Optional delivery retry preference. The selected adapter decides support.",
+			Description: "Optional delivery retry preference. The configured host decides support.",
 		}
 		attrs["max_batch_size"] = schema.Int64Attribute{
 			Optional:    true,
-			Description: "Optional consumer batch size preference. The selected adapter decides support.",
+			Description: "Optional consumer batch size preference. The configured host decides support.",
 		}
 	case specSQLDatabase:
 		attrs["engine"] = schema.StringAttribute{
 			Optional:    true,
-			Description: "Optional open SQL engine capability token. Defaults to sqlite; the selected Target implementation must advertise it.",
+			Description: "Optional open SQL engine capability token. Defaults to sqlite; the configured host must support it.",
 			Validators:  []validator.String{StringToken()},
 		}
 		attrs["migrations_path"] = schema.StringAttribute{
@@ -599,7 +534,7 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 		attrs["environment"] = schema.MapAttribute{
 			Optional:    true,
 			ElementType: types.StringType,
-			Description: "Non-secret environment variables. Secrets and AI keys must come from ProviderConnection/Secret projection, not this map.",
+			Description: "Non-secret environment variables. Secrets and AI keys must come from host-managed credential injection, not this map.",
 		}
 		attrs["connections"] = resourceConnectionAttribute()
 	case specVectorIndex:
@@ -609,7 +544,7 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 		}
 		attrs["metric"] = schema.StringAttribute{
 			Optional:    true,
-			Description: "Open similarity metric capability token. Defaults to cosine and requires explicit Target support.",
+			Description: "Open similarity metric capability token. Defaults to cosine and requires explicit support from the configured host.",
 			Validators:  []validator.String{StringToken()},
 		}
 		attrs["connections"] = resourceConnectionAttribute()
@@ -665,7 +600,7 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 		}
 		attrs["timezone"] = schema.StringAttribute{
 			Optional:    true,
-			Description: "Open timezone token. Defaults to UTC; non-UTC requires explicit Resolver capability evidence.",
+			Description: "Open timezone token. Defaults to UTC; non-UTC requires explicit support from the configured host.",
 			Validators:  []validator.String{StringToken()},
 		}
 		attrs["connections"] = requiredResourceConnectionAttribute()
@@ -701,26 +636,21 @@ func commonServiceShapeAttributes() map[string]schema.Attribute {
 				stringplanmodifier.UseStateForUnknown(),
 			},
 		},
-		"selected_implementation": schema.StringAttribute{
+		"resource_version": schema.StringAttribute{
 			Computed:    true,
-			Description: "Backend implementation selected by the Resolver.",
-		},
-		"target": schema.StringAttribute{
-			Computed:    true,
-			Description: "Target the resource landed on.",
-		},
-		"locked": schema.BoolAttribute{
-			Computed:    true,
-			Description: "Whether the resolution is locked.",
+			Description: "Opaque desired-generation fence returned by the Form host.",
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
 		},
 		"portability": schema.StringAttribute{
 			Computed:    true,
-			Description: "Resolver portability assessment.",
+			Description: "Host-reported portability assessment.",
 		},
 		"outputs": schema.MapAttribute{
 			Computed:    true,
 			ElementType: types.StringType,
-			Description: "Resolved outputs.",
+			Description: "Sanitized public outputs returned by the host.",
 		},
 	}
 }
@@ -766,7 +696,12 @@ func (r *serviceShapeResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 	readSpace := effectiveSpace(state.Space, r.data.defaultSpace)
-	res, err := r.data.client.ObserveResource(ctx, r.cfg.kind, state.Name.ValueString(), readSpace)
+	if readSpace == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("space"), "Missing space", "Import as SPACE/NAME or configure the provider space before reading this resource.")
+		return
+	}
+	form := r.data.forms[r.cfg.kind]
+	res, err := r.data.client.GetResource(ctx, r.cfg.kind, state.Name.ValueString(), readSpace, form)
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -813,9 +748,14 @@ func (r *serviceShapeResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 	deleteSpace := effectiveSpace(state.Space, r.data.defaultSpace)
+	if deleteSpace == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("space"), "Missing space", "A Space is required before deleting this resource.")
+		return
+	}
 	r.data.serviceFormMutate.Lock()
 	defer r.data.serviceFormMutate.Unlock()
-	if err := r.data.client.DeleteResource(ctx, r.cfg.kind, state.Name.ValueString(), deleteSpace); err != nil {
+	form := r.data.forms[r.cfg.kind]
+	if err := r.data.client.DeleteResource(ctx, r.cfg.kind, state.Name.ValueString(), deleteSpace, client.MutationFence{ResourceVersion: state.ResourceVersion.ValueString(), Form: form}); err != nil {
 		resp.Diagnostics.AddError("Failed to delete "+r.cfg.kind, err.Error())
 	}
 }
@@ -954,7 +894,11 @@ func (r *serviceShapeResource) assertConfigured(diags *diag.Diagnostics) bool {
 		)
 		return false
 	}
-	if !r.data.capabilities.SupportsResource(r.cfg.kind) {
+	if _, ok := r.data.forms[r.cfg.kind]; !ok {
+		diags.AddError(r.cfg.kind+" FormRef missing", "This provider release has no exact "+r.cfg.kind+" FormRef. This is a provider bug.")
+		return false
+	}
+	if r.data.client.UsesCompatibilityFallback() && !r.data.capabilities.SupportsResource(r.cfg.kind) {
 		diags.AddError(
 			r.cfg.kind+" not supported",
 			"The configured endpoint does not advertise the "+r.cfg.kind+" Service Form.",
@@ -969,6 +913,14 @@ func (r *serviceShapeResource) put(ctx context.Context, plan *serviceShapeModel,
 	diags.Append(d...)
 	if diags.HasError() {
 		return
+	}
+	form := r.data.forms[r.cfg.kind]
+	body.Form = &form
+	if !plan.ResourceVersion.IsNull() && !plan.ResourceVersion.IsUnknown() {
+		body.Metadata.ResourceVersion = plan.ResourceVersion.ValueString()
+	}
+	if r.data.client.UsesCompatibilityFallback() {
+		body.Metadata.ManagedBy = client.ManagedByOpenTofu
 	}
 	r.data.serviceFormMutate.Lock()
 	defer r.data.serviceFormMutate.Unlock()
@@ -1176,30 +1128,25 @@ func (m serviceShapeModel) toResource(ctx context.Context, defaultSpace, kind st
 	return &client.Resource{
 		APIVersion: client.APIVersion,
 		Kind:       kind,
-		Metadata: client.Metadata{
-			Name:      name,
-			Space:     space,
-			ManagedBy: client.ManagedByOpenTofu,
-		},
-		Spec: spec,
+		Metadata:   client.Metadata{Name: name, Space: space},
+		Spec:       spec,
 	}, space, diags
 }
 
 func applyServiceShapeStatus(ctx context.Context, res *client.Resource, kind, space string, m *serviceShapeModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 	m.ID = types.StringValue(resourceIDForKind(res, space, kind, m.Name.ValueString()))
+	m.ResourceVersion = types.StringValue(res.Metadata.ResourceVersion)
 	if res.Status != nil {
-		m.SelectedImplementation = types.StringValue(res.Status.Resolution.SelectedImplementation)
-		m.Target = types.StringValue(res.Status.Resolution.Target)
-		m.Locked = types.BoolValue(res.Status.Resolution.Locked)
-		m.Portability = types.StringValue(res.Status.Resolution.Portability)
+		portability := res.Status.Portability
+		if portability == "" {
+			portability = res.Status.Resolution.Portability
+		}
+		m.Portability = types.StringValue(portability)
 		outputs, d := types.MapValueFrom(ctx, types.StringType, outputsToStringMap(res.Status.Outputs))
 		diags.Append(d...)
 		m.Outputs = outputs
 	} else {
-		m.SelectedImplementation = types.StringValue("")
-		m.Target = types.StringValue("")
-		m.Locked = types.BoolValue(false)
 		m.Portability = types.StringValue("")
 		m.Outputs = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}

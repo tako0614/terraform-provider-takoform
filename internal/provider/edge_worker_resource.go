@@ -33,22 +33,20 @@ func NewEdgeWorkerResource() resource.Resource {
 }
 
 type edgeWorkerModel struct {
-	ID                     types.String `tfsdk:"id"`
-	Name                   types.String `tfsdk:"name"`
-	ArtifactPath           types.String `tfsdk:"artifact_path"`
-	ArtifactURL            types.String `tfsdk:"artifact_url"`
-	ArtifactRef            types.String `tfsdk:"artifact_ref"`
-	ArtifactSHA256         types.String `tfsdk:"artifact_sha256"`
-	CompatibilityDate      types.String `tfsdk:"compatibility_date"`
-	CompatibilityFlags     types.Set    `tfsdk:"compatibility_flags"`
-	Profiles               types.Set    `tfsdk:"profiles"`
-	Connections            types.List   `tfsdk:"connections"`
-	Space                  types.String `tfsdk:"space"`
-	SelectedImplementation types.String `tfsdk:"selected_implementation"`
-	Target                 types.String `tfsdk:"target"`
-	Locked                 types.Bool   `tfsdk:"locked"`
-	Portability            types.String `tfsdk:"portability"`
-	Outputs                types.Map    `tfsdk:"outputs"`
+	ID                 types.String `tfsdk:"id"`
+	Name               types.String `tfsdk:"name"`
+	ArtifactPath       types.String `tfsdk:"artifact_path"`
+	ArtifactURL        types.String `tfsdk:"artifact_url"`
+	ArtifactRef        types.String `tfsdk:"artifact_ref"`
+	ArtifactSHA256     types.String `tfsdk:"artifact_sha256"`
+	CompatibilityDate  types.String `tfsdk:"compatibility_date"`
+	CompatibilityFlags types.Set    `tfsdk:"compatibility_flags"`
+	Profiles           types.Set    `tfsdk:"profiles"`
+	Connections        types.List   `tfsdk:"connections"`
+	Space              types.String `tfsdk:"space"`
+	ResourceVersion    types.String `tfsdk:"resource_version"`
+	Portability        types.String `tfsdk:"portability"`
+	Outputs            types.Map    `tfsdk:"outputs"`
 }
 
 func (r *edgeWorkerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -119,26 +117,21 @@ func (r *edgeWorkerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"selected_implementation": schema.StringAttribute{
+			"resource_version": schema.StringAttribute{
 				Computed:    true,
-				Description: "Backend implementation selected by the Resolver.",
-			},
-			"target": schema.StringAttribute{
-				Computed:    true,
-				Description: "Target the resource landed on.",
-			},
-			"locked": schema.BoolAttribute{
-				Computed:    true,
-				Description: "Whether the resolution is locked.",
+				Description: "Opaque desired-generation fence returned by the Form host.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"portability": schema.StringAttribute{
 				Computed:    true,
-				Description: "Resolver portability assessment.",
+				Description: "Host-reported portability assessment.",
 			},
 			"outputs": schema.MapAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
-				Description: "Resolved outputs.",
+				Description: "Sanitized public outputs returned by the host.",
 			},
 		},
 	}
@@ -185,7 +178,12 @@ func (r *edgeWorkerResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 	readSpace := effectiveSpace(state.Space, r.data.defaultSpace)
-	res, err := r.data.client.ObserveResource(ctx, client.KindEdgeWorker, state.Name.ValueString(), readSpace)
+	if readSpace == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("space"), "Missing space", "Import as SPACE/NAME or configure the provider space before reading this resource.")
+		return
+	}
+	form := r.data.forms[client.KindEdgeWorker]
+	res, err := r.data.client.GetResource(ctx, client.KindEdgeWorker, state.Name.ValueString(), readSpace, form)
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -232,9 +230,14 @@ func (r *edgeWorkerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 	deleteSpace := effectiveSpace(state.Space, r.data.defaultSpace)
+	if deleteSpace == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("space"), "Missing space", "A Space is required before deleting this resource.")
+		return
+	}
 	r.data.serviceFormMutate.Lock()
 	defer r.data.serviceFormMutate.Unlock()
-	if err := r.data.client.DeleteResource(ctx, client.KindEdgeWorker, state.Name.ValueString(), deleteSpace); err != nil {
+	form := r.data.forms[client.KindEdgeWorker]
+	if err := r.data.client.DeleteResource(ctx, client.KindEdgeWorker, state.Name.ValueString(), deleteSpace, client.MutationFence{ResourceVersion: state.ResourceVersion.ValueString(), Form: form}); err != nil {
 		resp.Diagnostics.AddError("Failed to delete EdgeWorker", err.Error())
 	}
 }
@@ -256,7 +259,11 @@ func (r *edgeWorkerResource) assertConfigured(diags *diag.Diagnostics) bool {
 		)
 		return false
 	}
-	if !r.data.capabilities.SupportsResource(client.KindEdgeWorker) {
+	if _, ok := r.data.forms[client.KindEdgeWorker]; !ok {
+		diags.AddError("EdgeWorker FormRef missing", "This provider release has no exact EdgeWorker FormRef. This is a provider bug.")
+		return false
+	}
+	if r.data.client.UsesCompatibilityFallback() && !r.data.capabilities.SupportsResource(client.KindEdgeWorker) {
 		diags.AddError(
 			"EdgeWorker not supported",
 			"The configured endpoint does not advertise the EdgeWorker Service Form.",
@@ -271,6 +278,14 @@ func (r *edgeWorkerResource) put(ctx context.Context, plan *edgeWorkerModel, dia
 	diags.Append(d...)
 	if diags.HasError() {
 		return
+	}
+	form := r.data.forms[client.KindEdgeWorker]
+	body.Form = &form
+	if !plan.ResourceVersion.IsNull() && !plan.ResourceVersion.IsUnknown() {
+		body.Metadata.ResourceVersion = plan.ResourceVersion.ValueString()
+	}
+	if r.data.client.UsesCompatibilityFallback() {
+		body.Metadata.ManagedBy = client.ManagedByOpenTofu
 	}
 	r.data.serviceFormMutate.Lock()
 	defer r.data.serviceFormMutate.Unlock()
@@ -339,30 +354,25 @@ func (m edgeWorkerModel) toResource(ctx context.Context, defaultSpace string) (*
 	return &client.Resource{
 		APIVersion: client.APIVersion,
 		Kind:       client.KindEdgeWorker,
-		Metadata: client.Metadata{
-			Name:      name,
-			Space:     space,
-			ManagedBy: client.ManagedByOpenTofu,
-		},
-		Spec: spec,
+		Metadata:   client.Metadata{Name: name, Space: space},
+		Spec:       spec,
 	}, space, diags
 }
 
 func applyEdgeWorkerStatus(ctx context.Context, res *client.Resource, space string, m *edgeWorkerModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 	m.ID = types.StringValue(resourceIDForKind(res, space, client.KindEdgeWorker, m.Name.ValueString()))
+	m.ResourceVersion = types.StringValue(res.Metadata.ResourceVersion)
 	if res.Status != nil {
-		m.SelectedImplementation = types.StringValue(res.Status.Resolution.SelectedImplementation)
-		m.Target = types.StringValue(res.Status.Resolution.Target)
-		m.Locked = types.BoolValue(res.Status.Resolution.Locked)
-		m.Portability = types.StringValue(res.Status.Resolution.Portability)
+		portability := res.Status.Portability
+		if portability == "" {
+			portability = res.Status.Resolution.Portability
+		}
+		m.Portability = types.StringValue(portability)
 		outputs, d := types.MapValueFrom(ctx, types.StringType, outputsToStringMap(res.Status.Outputs))
 		diags.Append(d...)
 		m.Outputs = outputs
 	} else {
-		m.SelectedImplementation = types.StringValue("")
-		m.Target = types.StringValue("")
-		m.Locked = types.BoolValue(false)
 		m.Portability = types.StringValue("")
 		m.Outputs = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}

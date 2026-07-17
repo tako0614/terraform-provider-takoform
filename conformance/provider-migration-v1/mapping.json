@@ -1,0 +1,14 @@
+{
+  "format": "takoform.provider-migration-map@v1",
+  "fromProvider": "registry.terraform.io/takosjp/takosumi",
+  "toProvider": "registry.terraform.io/tako0614/takoform",
+  "approvedPath": "backup-remove-import-refresh-or-restore-backup",
+  "resources": [
+    { "kind": "EdgeWorker", "fromType": "takosumi_edge_worker", "toType": "takoform_edge_worker" },
+    { "kind": "ObjectBucket", "fromType": "takosumi_object_bucket", "toType": "takoform_object_bucket" },
+    { "kind": "KVStore", "fromType": "takosumi_kv_store", "toType": "takoform_kv_store" },
+    { "kind": "Queue", "fromType": "takosumi_queue", "toType": "takoform_queue" },
+    { "kind": "SQLDatabase", "fromType": "takosumi_sql_database", "toType": "takoform_sql_database" },
+    { "kind": "ContainerService", "fromType": "takosumi_container_service", "toType": "takoform_container_service" }
+  ]
+}

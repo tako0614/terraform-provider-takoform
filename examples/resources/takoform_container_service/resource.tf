@@ -22,8 +22,8 @@ resource "takoform_container_service" "agent" {
   }
 }
 
-output "container_selected_implementation" {
-  value = takoform_container_service.agent.selected_implementation
+output "container_resource_version" {
+  value = takoform_container_service.agent.resource_version
 }
 
 output "container_outputs" {

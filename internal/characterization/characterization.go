@@ -133,14 +133,12 @@ type OutputCase struct {
 }
 
 type OutputState struct {
-	ID                     string            `json:"id"`
-	Name                   string            `json:"name"`
-	Space                  string            `json:"space"`
-	SelectedImplementation string            `json:"selectedImplementation"`
-	Target                 string            `json:"target"`
-	Locked                 bool              `json:"locked"`
-	Portability            string            `json:"portability"`
-	Outputs                map[string]string `json:"outputs"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	Space           string            `json:"space"`
+	ResourceVersion string            `json:"resourceVersion"`
+	Portability     string            `json:"portability"`
+	Outputs         map[string]string `json:"outputs"`
 }
 
 type ImportCase struct {
@@ -587,8 +585,8 @@ func validateResourceCases(cases []ResourceCase, observed bool) error {
 		if resource.APIVersion != APIVersion || resource.Kind != item.Kind || resource.Metadata.Name == "" || resource.Metadata.Space == "" || resource.Spec == nil {
 			return fmt.Errorf("%s has invalid resource envelope", item.Kind)
 		}
-		if !observed && resource.Metadata.ManagedBy != "opentofu" {
-			return fmt.Errorf("%s desired resource is not managed by opentofu", item.Kind)
+		if !observed && resource.Metadata.ManagedBy != "" {
+			return fmt.Errorf("%s desired resource carries host-owned manager metadata", item.Kind)
 		}
 		if observed && (resource.Status == nil || resource.Status.Resolution == nil || resource.Status.Outputs == nil) {
 			return fmt.Errorf("%s observed resource lacks sanitized status evidence", item.Kind)
@@ -643,7 +641,7 @@ func validateAttributeSemantics(kind string, attribute AttributeCase) error {
 func validateOutputCases(cases []OutputCase) error {
 	for _, item := range cases {
 		state := item.State
-		if state.ID == "" || state.Name == "" || state.Space == "" || state.SelectedImplementation == "" || state.Target == "" || state.Outputs == nil {
+		if state.ID == "" || state.Name == "" || state.Space == "" || state.ResourceVersion == "" || state.Outputs == nil {
 			return fmt.Errorf("%s output characterization is incomplete", item.Kind)
 		}
 	}

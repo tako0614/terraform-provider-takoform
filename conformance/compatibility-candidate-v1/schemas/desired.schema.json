@@ -28,11 +28,12 @@
         "kind": { "type": "string", "minLength": 1 },
         "metadata": {
           "type": "object",
-          "required": ["name", "space", "managedBy"],
+          "required": ["name", "space"],
           "properties": {
             "name": { "type": "string", "minLength": 1 },
             "space": { "type": "string", "minLength": 1 },
-            "managedBy": { "const": "opentofu" }
+            "managedBy": { "const": "opentofu" },
+            "resourceVersion": { "type": "string", "pattern": "^[1-9][0-9]*$" }
           },
           "additionalProperties": false
         },

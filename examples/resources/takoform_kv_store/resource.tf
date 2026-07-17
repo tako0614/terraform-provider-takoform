@@ -16,8 +16,8 @@ resource "takoform_kv_store" "cache" {
   consistency = "eventual"
 }
 
-output "kv_selected_implementation" {
-  value = takoform_kv_store.cache.selected_implementation
+output "kv_resource_version" {
+  value = takoform_kv_store.cache.resource_version
 }
 
 output "kv_outputs" {

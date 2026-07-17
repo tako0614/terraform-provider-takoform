@@ -159,15 +159,6 @@
           ]
         },
         {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
-        },
-        {
           "name": "name",
           "type": "string",
           "required": true,
@@ -218,13 +209,20 @@
           ]
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -246,15 +244,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         }
       ]
     },
@@ -295,15 +284,6 @@
           ]
         },
         {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
-        },
-        {
           "name": "name",
           "type": "string",
           "required": true,
@@ -338,13 +318,20 @@
           "planModifiers": 0
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -388,15 +375,6 @@
               "description": "value must be one of: standard, infrequent_access"
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         }
       ]
     },
@@ -437,15 +415,6 @@
           ]
         },
         {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
-        },
-        {
           "name": "name",
           "type": "string",
           "required": true,
@@ -480,13 +449,20 @@
           "planModifiers": 0
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -508,15 +484,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         }
       ]
     },
@@ -539,15 +506,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         },
         {
           "name": "max_batch_size",
@@ -602,13 +560,20 @@
           "planModifiers": 0
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -630,15 +595,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         }
       ]
     },
@@ -677,15 +633,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         },
         {
           "name": "migrations_path",
@@ -731,13 +678,20 @@
           "planModifiers": 0
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -759,15 +713,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         }
       ]
     },
@@ -885,15 +830,6 @@
           "planModifiers": 0
         },
         {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
-        },
-        {
           "name": "name",
           "type": "string",
           "required": true,
@@ -946,13 +882,20 @@
           "planModifiers": 0
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -974,15 +917,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         }
       ]
     },
@@ -1091,15 +1025,6 @@
           ]
         },
         {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
-        },
-        {
           "name": "metric",
           "type": "string",
           "required": false,
@@ -1150,13 +1075,20 @@
           "planModifiers": 0
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -1178,15 +1110,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         }
       ]
     },
@@ -1340,15 +1263,6 @@
           "planModifiers": 0
         },
         {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
-        },
-        {
           "name": "max_attempts",
           "type": "int64",
           "required": false,
@@ -1392,13 +1306,20 @@
           "planModifiers": 0
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -1420,15 +1341,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         }
       ]
     },
@@ -1537,15 +1449,6 @@
           ]
         },
         {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
-        },
-        {
           "name": "migration_tag",
           "type": "string",
           "required": false,
@@ -1589,13 +1492,20 @@
           "planModifiers": 0
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -1633,15 +1543,6 @@
               "description": "value must be a non-empty token without whitespace"
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         }
       ]
     },
@@ -1750,15 +1651,6 @@
           ]
         },
         {
-          "name": "locked",
-          "type": "bool",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
-        },
-        {
           "name": "name",
           "type": "string",
           "required": true,
@@ -1793,13 +1685,20 @@
           "planModifiers": 0
         },
         {
-          "name": "selected_implementation",
+          "name": "resource_version",
           "type": "string",
           "required": false,
           "optional": false,
           "computed": true,
           "validators": 0,
-          "planModifiers": 0
+          "planModifiers": 1,
+          "planModifierSemantics": [
+            {
+              "type": "stringplanmodifier.useStateForUnknownModifier",
+              "config": "description=Once set, the value of this attribute in state will not change.",
+              "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
         },
         {
           "name": "space",
@@ -1821,15 +1720,6 @@
               "description": "Once set, the value of this attribute in state will not change."
             }
           ]
-        },
-        {
-          "name": "target",
-          "type": "string",
-          "required": false,
-          "optional": false,
-          "computed": true,
-          "validators": 0,
-          "planModifiers": 0
         },
         {
           "name": "timezone",

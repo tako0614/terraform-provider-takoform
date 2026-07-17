@@ -85,8 +85,8 @@ type setStringsTokenValidator struct {
 }
 
 // SetStringsToken validates an extensible set of non-empty capability tokens.
-// Endpoint-side Target evidence remains the authority for whether a token is
-// executable; the provider checks only portable wire syntax.
+// The configured host remains the authority for whether a token is executable;
+// the provider checks only portable wire syntax.
 func SetStringsToken(minItems int) validator.Set {
 	return setStringsTokenValidator{minItems: minItems}
 }

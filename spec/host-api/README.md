@@ -1,29 +1,72 @@
-# Portable form-host API candidate
+# Portable Form host API v1alpha1
 
-The provider candidate uses the following HTTP boundary. It is deliberately independent of backend managers and operator administration.
+The provider uses a versioned, provider-neutral HTTP boundary. A host owns
+placement and execution; this protocol owns exact Form identity, portable
+desired state, optimistic concurrency, mutation replay, and stable errors.
 
-## Discovery
+## Discovery and endpoint selection
 
-`GET /.well-known/takoform` returns:
+`GET /.well-known/takoform` must advertise:
 
-- `api_versions`, which must include `forms.takoform.com/v1alpha1`;
-- `features.service_forms`, which must be `true`;
-- `endpoints.capabilities`, an optional absolute capabilities URL.
+- `api_versions` containing `forms.takoform.com/v1alpha1`;
+- `features.service_forms = true`;
+- `features.exact_form_ref`, `features.optimistic_concurrency`, and
+  `features.idempotent_lifecycle` all set to true;
+- an absolute same-origin `endpoints.api` URL;
+- an absolute same-origin `endpoints.forms` URL, or `{endpoints.api}/forms`.
 
-The JSON shape is defined by [`../../schemas/host-discovery.schema.json`](../../schemas/host-discovery.schema.json). Unknown feature and endpoint keys are ignored for forward compatibility.
+The provider sends bearer credentials only to same-origin advertised URLs and
+uses `endpoints.api` exactly as advertised. A missing versioned endpoint is an
+error. The historical `/v1` facade is available only when
+`compatibility_fallback = true` (or `TAKOFORM_COMPATIBILITY_FALLBACK=true`) and
+discovery omits `endpoints.api`; it is never an implicit downgrade.
 
-## Capabilities
+## Exact identity
 
-`GET /v1/capabilities` returns `apiVersion` and a `resources` map. A resource is usable only when its exact kind is `true`. Provider schema presence does not imply that a host offers or can realize a form.
+Every typed provider resource is compiled against one release-owned
+`InstalledFormReference`: `apiVersion`, `kind`, `definitionVersion`,
+`schemaDigest`, and `packageDigest`. `GET /forms` must return that exact
+identity as installed, executable, activated, available to the principal, and
+supporting the requested operation. Resource bodies carry the same `form` and
+read/lifecycle URLs carry all five fields as query parameters. Responses that
+substitute any identity field fail closed.
+
+The current ten exact references are pinned by
+[`forms/legacy-package-set.json`](../../forms/legacy-package-set.json). They
+remain compatibility candidates, not portable standards.
 
 ## Resource lifecycle
 
-- `POST /v1/resources/preview` validates and previews a desired Resource envelope.
-- `PUT /v1/resources/{kind}/{name}` applies the previewed desired state.
-- `GET /v1/resources/{kind}/{name}` observes current state.
-- `DELETE /v1/resources/{kind}/{name}` deletes it.
-- `space` is passed as a query parameter when non-empty.
+The API base is `/apis/forms.takoform.com/v1alpha1` on the reference host:
 
-The Resource envelope contains `apiVersion`, `kind`, `metadata`, `spec`, and sanitized `status`. The provider never accepts a backend, target pool, credential, price, billing, capacity, or operator-policy selector in desired HCL.
+- `GET /forms` discovers exact availability;
+- `POST /resources/preview` returns `review.planDigest`;
+- `PUT /resources/{kind}/{name}` applies that reviewed plan;
+- `GET /resources/{kind}/{name}` reads canonical portable state;
+- `POST /resources/{kind}/{name}/import` imports a native object;
+- `POST /resources/{kind}/{name}/observe` observes drift;
+- `POST /resources/{kind}/{name}/refresh` refreshes state;
+- `DELETE /resources/{kind}/{name}` deletes it.
 
-The current preview/apply evidence fields are characterized by Go client tests. They are not yet a final interoperability standard: stable idempotency, optimistic concurrency, retry, timeout, error reason, and versioned FormRef semantics still require normative schemas and cross-host fixtures.
+Create and new-resource import use `If-None-Match: *`. Update, existing-resource
+import, observe, refresh, and delete use one quoted `If-Match` resource version.
+Every apply/import/observe/refresh/delete request has a deterministic
+`Idempotency-Key`; retries reuse the same key.
+Only an error with `retryable: true` and code `resource_busy` or
+`backend_unavailable` is automatically retried. A resource-version conflict is
+never retried.
+
+Stable errors use
+`{ "error": { "code", "message", "requestId", "retryable", "hostCode?" } }`.
+Provider diagnostics may expose the stable code and request ID, but state never
+contains credentials, prices, quotes, backend selection, Target identity, or
+manager authority.
+
+## Cross-repo conformance
+
+[`conformance/portable-host-v1/contract.json`](../../conformance/portable-host-v1/contract.json)
+is the digest-pinned cross-repo input for a neutral host runner. Its required
+check names match Takosumi's black-box
+`core/conformance/portable_form_host.ts` runner without making this repository
+depend on Takosumi source or closed Cloud code. `go run ./cmd/conformance verify`
+checks the fixture and its exact release-owned ObjectBucket identity.

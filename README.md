@@ -29,6 +29,10 @@ resource "takoform_object_bucket" "assets" {
 ```
 
 `endpoint`, `space`, and the sensitive bearer `token` can instead be supplied as `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
+The provider follows the same-origin versioned endpoint advertised by discovery.
+The historical `/v1` facade requires the explicit `compatibility_fallback = true`
+setting (or `TAKOFORM_COMPATIBILITY_FALLBACK=true`) and is never selected as an
+implicit downgrade.
 
 ## Resources
 
@@ -45,7 +49,7 @@ resource "takoform_object_bucket" "assets" {
 | `takoform_stateful_actor_namespace` | Stateful actor namespace |
 | `takoform_schedule` | Cron-triggered invocation |
 
-The provider deliberately has no target-pool, backend, credential, pricing, quota, billing, or operator-policy resources. It discovers `features.service_forms` and the supported form kinds from the configured host. Backend placement and credentials remain host responsibilities; computed fields only report sanitized resolution evidence.
+The provider deliberately has no target-pool, backend, credential, pricing, quota, billing, or operator-policy resources. It discovers `features.service_forms` and verifies the release-owned exact FormRef/package identity against the configured host. Backend placement and credentials remain host responsibilities; state contains only the canonical resource ID, generation fence, portability, desired typed fields, and sanitized public outputs.
 
 See [the portable specification status](spec/README.md), [Form Package contract](spec/form-package/README.md), [form inventory](forms/README.md), [conformance status](conformance/README.md), [provider documentation](docs/index.md), and [examples](examples/resources/).
 
@@ -82,6 +86,7 @@ gofmt -w .
 go vet ./...
 go test ./...
 go run ./cmd/conformance verify
+go run ./cmd/migration-proof
 go run ./cmd/form-package conformance
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 ```
