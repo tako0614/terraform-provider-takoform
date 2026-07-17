@@ -255,7 +255,7 @@ func exerciseExplicitHostActions(ctx context.Context, endpoint string, httpClien
 	if _, err := formClient.Discover(ctx); err != nil {
 		return err
 	}
-	forms := releaseForms()
+	forms := candidateForms()
 	for _, item := range resourceCases {
 		form := forms[item.Kind]
 		current, err := formClient.GetResource(ctx, item.Kind, item.Name, "prod", form)
@@ -307,7 +307,7 @@ func verifyDriftState(raw []byte) error {
 	return nil
 }
 
-func releaseForms() map[string]client.InstalledFormReference {
+func candidateForms() map[string]client.InstalledFormReference {
 	out := map[string]client.InstalledFormReference{}
 	for kind, ref := range formregistry.All() {
 		out[kind] = client.InstalledFormReference{
@@ -458,12 +458,12 @@ func exerciseReplacementPlans(workDir, configPath, endpoint string, run terrafor
 func stackConfig(endpoint string, revision int) string {
 	artifactDigit, artifactRevision, storageClass, consistency, engine := "1", 1, "standard", "strong", "sqlite"
 	queueRetries, queueBatch, port, dimensions := 5, 25, 8080, 1536
-	image, migrationsPath, metric := "1.0.0", "migrations/v1", "cosine"
+	imageDigest, migrationsPath, metric := strings.Repeat("c", 64), "migrations/v1", "cosine"
 	workflowEntrypoint, actorTag, cron, nameSuffix := "IngestWorkflow", "v1", "0 0 * * *", ""
 	if revision >= 2 {
 		artifactDigit, artifactRevision, storageClass, consistency = "3", 2, "infrequent_access", "eventual"
 		queueRetries, queueBatch, port = 6, 30, 9090
-		image, migrationsPath, metric = "2.0.0", "migrations/v2", "dot"
+		imageDigest, migrationsPath, metric = strings.Repeat("d", 64), "migrations/v2", "dot"
 		workflowEntrypoint, actorTag, cron = "IngestWorkflowV2", "v2", "15 0 * * *"
 	}
 	if revision == 3 {
@@ -508,7 +508,7 @@ resource "takoform_sql_database" "main" {
 }
 resource "takoform_container_service" "agent" {
   name = "agent%s"
-  image = "ghcr.io/example/agent:%s"
+  image = "ghcr.io/example/agent@sha256:%s"
   ports = [%d]
   public_http = true
 }
@@ -541,7 +541,7 @@ resource "takoform_schedule" "nightly_ingest" {
 		nameSuffix, consistency,
 		nameSuffix, queueRetries, queueBatch,
 		nameSuffix, engine, migrationsPath,
-		nameSuffix, image, port,
+		nameSuffix, imageDigest, port,
 		nameSuffix, dimensions, metric,
 		nameSuffix, artifactRevision, digest, workflowEntrypoint,
 		nameSuffix, actorTag,
@@ -569,7 +569,7 @@ func newFormHost() *formHost {
 	for _, item := range resourceCases {
 		counts[item.Kind] = &lifecycleCounts{}
 	}
-	return &formHost{forms: releaseForms(), resources: map[string]client.Resource{}, counts: counts}
+	return &formHost{forms: candidateForms(), resources: map[string]client.Resource{}, counts: counts}
 }
 
 func (h *formHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {

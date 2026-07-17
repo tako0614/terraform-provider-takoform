@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "KVStore",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:ea3cd77484cb969e1ffaa2e57d11a75536063a641da2e72835a87327e1e50fc3"
+    "schemaDigest": "sha256:ab80c341650b694c90c9573dc610bd278858b8f9cd9271b915c21c7c164106b5"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 3898,
-      "digest": "sha256:2126a2dd43dfdc93bb27063b9e553ddc81b367ad4e4217e69671ad69c45ef76f"
+      "size": 2884,
+      "digest": "sha256:b728eb51b6460ea71fb017d66745149275cc67cbb3ac49528722134ac9d4ccb5"
     },
     {
       "path": "fixtures/desired.json",
@@ -31,14 +31,14 @@
     {
       "path": "fixtures/observed.json",
       "mediaType": "application/json",
-      "size": 205,
-      "digest": "sha256:b3b5e61737102bb519e520e02f71a7625d085819b53cb6d5b5034f292be84b7d"
+      "size": 136,
+      "digest": "sha256:78f0a5d3a37d5701b00fdc6f95a03ca468a649667c99608205c5db1afbbce33b"
     },
     {
       "path": "fixtures/output.json",
       "mediaType": "application/json",
-      "size": 190,
-      "digest": "sha256:a656e44ba340b6d30730b90ee4d9d3cd120978d0e84c7dcf83c57710d62a720f"
+      "size": 116,
+      "digest": "sha256:061065f2fb214834b863317cfff15da46ecd8a5ce3161b70964936f7a67ebf88"
     }
   ]
 }

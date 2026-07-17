@@ -86,9 +86,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._-]{0,63}$\", description:\"connection name must use the portable map-key grammar\"}",
+                  "description": "connection name must use the portable map-key grammar"
                 }
               ]
             },
@@ -102,9 +102,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.setStringsTokenValidator",
-                  "config": "provider.setStringsTokenValidator{minItems:1}",
-                  "description": "at least 1 non-empty token(s) without whitespace"
+                  "type": "provider.setStringsPatternValidator",
+                  "config": "provider.setStringsPatternValidator{minItems:1, pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"permission must use the portable capability-token grammar\"}",
+                  "description": "at least 1 value(s); each permission must use the portable capability-token grammar"
                 }
               ]
             },
@@ -118,9 +118,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"projection must use the portable capability-token grammar\"}",
+                  "description": "projection must use the portable capability-token grammar"
                 }
               ]
             },
@@ -528,8 +528,15 @@
           "required": false,
           "optional": true,
           "computed": false,
-          "validators": 0,
-          "planModifiers": 0
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.int64AtLeastValidator",
+              "config": "provider.int64AtLeastValidator{minimum:0}",
+              "description": "value must be at least 0"
+            }
+          ]
         },
         {
           "name": "max_retries",
@@ -537,8 +544,15 @@
           "required": false,
           "optional": true,
           "computed": false,
-          "validators": 0,
-          "planModifiers": 0
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.int64AtLeastValidator",
+              "config": "provider.int64AtLeastValidator{minimum:0}",
+              "description": "value must be at least 0"
+            }
+          ]
         },
         {
           "name": "name",
@@ -624,14 +638,20 @@
           "type": "string",
           "required": false,
           "optional": true,
-          "computed": false,
+          "computed": true,
+          "default": "sqlite",
+          "defaultSemantic": {
+            "type": "stringdefault.staticStringDefault",
+            "config": "stringdefault.staticStringDefault{defaultVal:\"sqlite\"}",
+            "description": "value defaults to sqlite"
+          },
           "validators": 1,
           "planModifiers": 1,
           "validatorSemantics": [
             {
-              "type": "provider.stringTokenValidator",
-              "config": "provider.stringTokenValidator{}",
-              "description": "value must be a non-empty token without whitespace"
+              "type": "provider.stringPatternValidator",
+              "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"engine must use the portable capability-token grammar\"}",
+              "description": "engine must use the portable capability-token grammar"
             }
           ],
           "planModifierSemantics": [
@@ -756,9 +776,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._-]{0,63}$\", description:\"connection name must use the portable map-key grammar\"}",
+                  "description": "connection name must use the portable map-key grammar"
                 }
               ]
             },
@@ -772,9 +792,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.setStringsTokenValidator",
-                  "config": "provider.setStringsTokenValidator{minItems:1}",
-                  "description": "at least 1 non-empty token(s) without whitespace"
+                  "type": "provider.setStringsPatternValidator",
+                  "config": "provider.setStringsPatternValidator{minItems:1, pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"permission must use the portable capability-token grammar\"}",
+                  "description": "at least 1 value(s); each permission must use the portable capability-token grammar"
                 }
               ]
             },
@@ -788,9 +808,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"projection must use the portable capability-token grammar\"}",
+                  "description": "projection must use the portable capability-token grammar"
                 }
               ]
             },
@@ -822,15 +842,6 @@
           "planModifiers": 0
         },
         {
-          "name": "environment",
-          "type": "map\u003cstring\u003e",
-          "required": false,
-          "optional": true,
-          "computed": false,
-          "validators": 0,
-          "planModifiers": 0
-        },
-        {
           "name": "id",
           "type": "string",
           "required": false,
@@ -852,8 +863,15 @@
           "required": true,
           "optional": false,
           "computed": false,
-          "validators": 0,
-          "planModifiers": 0
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.stringOCIDigestReferenceValidator",
+              "config": "provider.stringOCIDigestReferenceValidator{}",
+              "description": "value must be an OCI image reference pinned by sha256 digest"
+            }
+          ]
         },
         {
           "name": "name",
@@ -895,8 +913,15 @@
           "required": false,
           "optional": true,
           "computed": false,
-          "validators": 0,
-          "planModifiers": 0
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.setInt64RangeValidator",
+              "config": "provider.setInt64RangeValidator{minItems:0, minimum:1, maximum:65535}",
+              "description": "at least 0 value(s), each between 1 and 65535"
+            }
+          ]
         },
         {
           "name": "public_http",
@@ -962,9 +987,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._-]{0,63}$\", description:\"connection name must use the portable map-key grammar\"}",
+                  "description": "connection name must use the portable map-key grammar"
                 }
               ]
             },
@@ -978,9 +1003,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.setStringsTokenValidator",
-                  "config": "provider.setStringsTokenValidator{minItems:1}",
-                  "description": "at least 1 non-empty token(s) without whitespace"
+                  "type": "provider.setStringsPatternValidator",
+                  "config": "provider.setStringsPatternValidator{minItems:1, pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"permission must use the portable capability-token grammar\"}",
+                  "description": "at least 1 value(s); each permission must use the portable capability-token grammar"
                 }
               ]
             },
@@ -994,9 +1019,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"projection must use the portable capability-token grammar\"}",
+                  "description": "projection must use the portable capability-token grammar"
                 }
               ]
             },
@@ -1024,8 +1049,15 @@
           "required": true,
           "optional": false,
           "computed": false,
-          "validators": 0,
+          "validators": 1,
           "planModifiers": 1,
+          "validatorSemantics": [
+            {
+              "type": "provider.int64AtLeastValidator",
+              "config": "provider.int64AtLeastValidator{minimum:1}",
+              "description": "value must be at least 1"
+            }
+          ],
           "planModifierSemantics": [
             {
               "type": "int64planmodifier.requiresReplaceIfModifier",
@@ -1064,14 +1096,20 @@
           "type": "string",
           "required": false,
           "optional": true,
-          "computed": false,
+          "computed": true,
+          "default": "cosine",
+          "defaultSemantic": {
+            "type": "stringdefault.staticStringDefault",
+            "config": "stringdefault.staticStringDefault{defaultVal:\"cosine\"}",
+            "description": "value defaults to cosine"
+          },
           "validators": 1,
           "planModifiers": 0,
           "validatorSemantics": [
             {
-              "type": "provider.stringTokenValidator",
-              "config": "provider.stringTokenValidator{}",
-              "description": "value must be a non-empty token without whitespace"
+              "type": "provider.stringPatternValidator",
+              "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"metric must use the portable capability-token grammar\"}",
+              "description": "metric must use the portable capability-token grammar"
             }
           ]
         },
@@ -1200,9 +1238,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._-]{0,63}$\", description:\"connection name must use the portable map-key grammar\"}",
+                  "description": "connection name must use the portable map-key grammar"
                 }
               ]
             },
@@ -1216,9 +1254,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.setStringsTokenValidator",
-                  "config": "provider.setStringsTokenValidator{minItems:1}",
-                  "description": "at least 1 non-empty token(s) without whitespace"
+                  "type": "provider.setStringsPatternValidator",
+                  "config": "provider.setStringsPatternValidator{minItems:1, pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"permission must use the portable capability-token grammar\"}",
+                  "description": "at least 1 value(s); each permission must use the portable capability-token grammar"
                 }
               ]
             },
@@ -1232,9 +1270,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"projection must use the portable capability-token grammar\"}",
+                  "description": "projection must use the portable capability-token grammar"
                 }
               ]
             },
@@ -1296,8 +1334,15 @@
           "required": false,
           "optional": true,
           "computed": false,
-          "validators": 0,
-          "planModifiers": 0
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.int64AtLeastValidator",
+              "config": "provider.int64AtLeastValidator{minimum:0}",
+              "description": "value must be at least 0"
+            }
+          ]
         },
         {
           "name": "max_attempts",
@@ -1305,8 +1350,15 @@
           "required": false,
           "optional": true,
           "computed": false,
-          "validators": 0,
-          "planModifiers": 0
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.int64AtLeastValidator",
+              "config": "provider.int64AtLeastValidator{minimum:1}",
+              "description": "value must be at least 1"
+            }
+          ]
         },
         {
           "name": "name",
@@ -1384,8 +1436,15 @@
           "required": true,
           "optional": false,
           "computed": false,
-          "validators": 0,
-          "planModifiers": 0
+          "validators": 1,
+          "planModifiers": 0,
+          "validatorSemantics": [
+            {
+              "type": "provider.stringPatternValidator",
+              "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z_$][A-Za-z0-9_$]*$\", description:\"class_name must use the portable runtime class grammar\"}",
+              "description": "class_name must use the portable runtime class grammar"
+            }
+          ]
         },
         {
           "name": "connections",
@@ -1406,9 +1465,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._-]{0,63}$\", description:\"connection name must use the portable map-key grammar\"}",
+                  "description": "connection name must use the portable map-key grammar"
                 }
               ]
             },
@@ -1422,9 +1481,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.setStringsTokenValidator",
-                  "config": "provider.setStringsTokenValidator{minItems:1}",
-                  "description": "at least 1 non-empty token(s) without whitespace"
+                  "type": "provider.setStringsPatternValidator",
+                  "config": "provider.setStringsPatternValidator{minItems:1, pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"permission must use the portable capability-token grammar\"}",
+                  "description": "at least 1 value(s); each permission must use the portable capability-token grammar"
                 }
               ]
             },
@@ -1438,9 +1497,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"projection must use the portable capability-token grammar\"}",
+                  "description": "projection must use the portable capability-token grammar"
                 }
               ]
             },
@@ -1565,14 +1624,20 @@
           "type": "string",
           "required": false,
           "optional": true,
-          "computed": false,
+          "computed": true,
+          "default": "durable_sqlite",
+          "defaultSemantic": {
+            "type": "stringdefault.staticStringDefault",
+            "config": "stringdefault.staticStringDefault{defaultVal:\"durable_sqlite\"}",
+            "description": "value defaults to durable_sqlite"
+          },
           "validators": 1,
           "planModifiers": 0,
           "validatorSemantics": [
             {
-              "type": "provider.stringTokenValidator",
-              "config": "provider.stringTokenValidator{}",
-              "description": "value must be a non-empty token without whitespace"
+              "type": "provider.stringPatternValidator",
+              "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"storage_profile must use the portable capability-token grammar\"}",
+              "description": "storage_profile must use the portable capability-token grammar"
             }
           ]
         }
@@ -1601,9 +1666,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._-]{0,63}$\", description:\"connection name must use the portable map-key grammar\"}",
+                  "description": "connection name must use the portable map-key grammar"
                 }
               ]
             },
@@ -1617,9 +1682,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.setStringsTokenValidator",
-                  "config": "provider.setStringsTokenValidator{minItems:1}",
-                  "description": "at least 1 non-empty token(s) without whitespace"
+                  "type": "provider.setStringsPatternValidator",
+                  "config": "provider.setStringsPatternValidator{minItems:1, pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"permission must use the portable capability-token grammar\"}",
+                  "description": "at least 1 value(s); each permission must use the portable capability-token grammar"
                 }
               ]
             },
@@ -1633,9 +1698,9 @@
               "planModifiers": 0,
               "validatorSemantics": [
                 {
-                  "type": "provider.stringTokenValidator",
-                  "config": "provider.stringTokenValidator{}",
-                  "description": "value must be a non-empty token without whitespace"
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:-]{0,127}$\", description:\"projection must use the portable capability-token grammar\"}",
+                  "description": "projection must use the portable capability-token grammar"
                 }
               ]
             },
@@ -1760,14 +1825,20 @@
           "type": "string",
           "required": false,
           "optional": true,
-          "computed": false,
+          "computed": true,
+          "default": "UTC",
+          "defaultSemantic": {
+            "type": "stringdefault.staticStringDefault",
+            "config": "stringdefault.staticStringDefault{defaultVal:\"UTC\"}",
+            "description": "value defaults to UTC"
+          },
           "validators": 1,
           "planModifiers": 0,
           "validatorSemantics": [
             {
-              "type": "provider.stringTokenValidator",
-              "config": "provider.stringTokenValidator{}",
-              "description": "value must be a non-empty token without whitespace"
+              "type": "provider.stringPatternValidator",
+              "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9._:/+-]{0,127}$\", description:\"timezone must use the portable timezone grammar\"}",
+              "description": "timezone must use the portable timezone grammar"
             }
           ]
         }

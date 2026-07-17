@@ -39,35 +39,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "applied": {
-        "additionalProperties": false,
-        "properties": {
-          "delivery": {
-            "additionalProperties": false,
-            "properties": {
-              "maxBatchSize": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxRetries": {
-                "minimum": 0,
-                "type": "integer"
-              }
-            },
-            "type": "object"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "type": "object"
-      },
       "driftedFields": {
         "items": {
           "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
@@ -101,7 +72,6 @@
       "generation",
       "imported",
       "portability",
-      "applied",
       "driftedFields"
     ],
     "type": "object"
@@ -129,35 +99,6 @@
       "portability": {
         "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
         "type": "string"
-      },
-      "portableSpec": {
-        "additionalProperties": false,
-        "properties": {
-          "delivery": {
-            "additionalProperties": false,
-            "properties": {
-              "maxBatchSize": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxRetries": {
-                "minimum": 0,
-                "type": "integer"
-              }
-            },
-            "type": "object"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "type": "object"
       }
     },
     "required": [
@@ -165,8 +106,7 @@
       "kind",
       "name",
       "generation",
-      "portability",
-      "portableSpec"
+      "portability"
     ],
     "type": "object"
   },

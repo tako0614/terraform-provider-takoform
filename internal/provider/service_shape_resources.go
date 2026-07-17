@@ -66,7 +66,6 @@ type serviceShapeModel struct {
 	Image                 types.String `tfsdk:"image"`
 	Ports                 types.Set    `tfsdk:"ports"`
 	PublicHTTP            types.Bool   `tfsdk:"public_http"`
-	Environment           types.Map    `tfsdk:"environment"`
 	Connections           types.List   `tfsdk:"connections"`
 	Dimensions            types.Int64  `tfsdk:"dimensions"`
 	Metric                types.String `tfsdk:"metric"`
@@ -142,7 +141,6 @@ type containerServiceModel struct {
 	Image           types.String `tfsdk:"image"`
 	Ports           types.Set    `tfsdk:"ports"`
 	PublicHTTP      types.Bool   `tfsdk:"public_http"`
-	Environment     types.Map    `tfsdk:"environment"`
 	Connections     types.List   `tfsdk:"connections"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
@@ -296,7 +294,6 @@ func (m containerServiceModel) toServiceShapeModel() serviceShapeModel {
 	base.Image = m.Image
 	base.Ports = m.Ports
 	base.PublicHTTP = m.PublicHTTP
-	base.Environment = m.Environment
 	base.Connections = m.Connections
 	return base
 }
@@ -308,7 +305,6 @@ func containerServiceModelFromServiceShape(m serviceShapeModel) containerService
 		Image:           m.Image,
 		Ports:           m.Ports,
 		PublicHTTP:      m.PublicHTTP,
-		Environment:     m.Environment,
 		Connections:     m.Connections,
 		Space:           m.Space,
 		ResourceVersion: m.ResourceVersion,
@@ -520,16 +516,20 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 		attrs["max_retries"] = schema.Int64Attribute{
 			Optional:    true,
 			Description: "Optional delivery retry preference. The configured host decides support.",
+			Validators:  []validator.Int64{Int64AtLeast(0)},
 		}
 		attrs["max_batch_size"] = schema.Int64Attribute{
 			Optional:    true,
 			Description: "Optional consumer batch size preference. The configured host decides support.",
+			Validators:  []validator.Int64{Int64AtLeast(0)},
 		}
 	case specSQLDatabase:
 		attrs["engine"] = schema.StringAttribute{
 			Optional:    true,
+			Computed:    true,
+			Default:     stringdefault.StaticString("sqlite"),
 			Description: "Optional open SQL engine capability token. Defaults to sqlite; the configured host must support it.",
-			Validators:  []validator.String{StringToken()},
+			Validators:  []validator.String{StringMatches(portableCapabilityTokenPattern, "engine must use the portable capability-token grammar")},
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.RequiresReplace(),
 			},
@@ -541,35 +541,35 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 	case specContainerService:
 		attrs["image"] = schema.StringAttribute{
 			Required:    true,
-			Description: "OCI image reference.",
+			Description: "Immutable OCI image reference pinned by sha256 digest.",
+			Validators:  []validator.String{StringOCIDigestReference()},
 		}
 		attrs["ports"] = schema.SetAttribute{
 			Optional:    true,
 			ElementType: types.Int64Type,
 			Description: "Container ports requested by the service.",
+			Validators:  []validator.Set{SetInt64Range(0, 1, 65535)},
 		}
 		attrs["public_http"] = schema.BoolAttribute{
 			Optional:    true,
 			Description: "Whether this container asks for public HTTP exposure.",
-		}
-		attrs["environment"] = schema.MapAttribute{
-			Optional:    true,
-			ElementType: types.StringType,
-			Description: "Non-secret environment variables. Secrets and AI keys must come from host-managed credential injection, not this map.",
 		}
 		attrs["connections"] = resourceConnectionAttribute()
 	case specVectorIndex:
 		attrs["dimensions"] = schema.Int64Attribute{
 			Required:    true,
 			Description: "Positive vector dimensions fixed for the index lifecycle.",
+			Validators:  []validator.Int64{Int64AtLeast(1)},
 			PlanModifiers: []planmodifier.Int64{
 				int64planmodifier.RequiresReplace(),
 			},
 		}
 		attrs["metric"] = schema.StringAttribute{
 			Optional:    true,
+			Computed:    true,
+			Default:     stringdefault.StaticString("cosine"),
 			Description: "Open similarity metric capability token. Defaults to cosine and requires explicit support from the configured host.",
-			Validators:  []validator.String{StringToken()},
+			Validators:  []validator.String{StringMatches(portableCapabilityTokenPattern, "metric must use the portable capability-token grammar")},
 		}
 		attrs["connections"] = resourceConnectionAttribute()
 	case specDurableWorkflow:
@@ -596,21 +596,26 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 		attrs["max_attempts"] = schema.Int64Attribute{
 			Optional:    true,
 			Description: "Optional positive maximum workflow attempts.",
+			Validators:  []validator.Int64{Int64AtLeast(1)},
 		}
 		attrs["initial_backoff_seconds"] = schema.Int64Attribute{
 			Optional:    true,
 			Description: "Optional non-negative initial retry backoff in seconds.",
+			Validators:  []validator.Int64{Int64AtLeast(0)},
 		}
 		attrs["connections"] = resourceConnectionAttribute()
 	case specStatefulActorNamespace:
 		attrs["class_name"] = schema.StringAttribute{
 			Required:    true,
 			Description: "Runtime class identifier owning actor behavior inside this namespace.",
+			Validators:  []validator.String{StringMatches(runtimeClassNamePattern.String(), "class_name must use the portable runtime class grammar")},
 		}
 		attrs["storage_profile"] = schema.StringAttribute{
 			Optional:    true,
+			Computed:    true,
+			Default:     stringdefault.StaticString("durable_sqlite"),
 			Description: "Open namespace storage capability token. Defaults to durable_sqlite.",
-			Validators:  []validator.String{StringToken()},
+			Validators:  []validator.String{StringMatches(portableCapabilityTokenPattern, "storage_profile must use the portable capability-token grammar")},
 		}
 		attrs["migration_tag"] = schema.StringAttribute{
 			Optional:    true,
@@ -624,8 +629,10 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 		}
 		attrs["timezone"] = schema.StringAttribute{
 			Optional:    true,
+			Computed:    true,
+			Default:     stringdefault.StaticString("UTC"),
 			Description: "Open timezone token. Defaults to UTC; non-UTC requires explicit support from the configured host.",
-			Validators:  []validator.String{StringToken()},
+			Validators:  []validator.String{StringMatches(portableTimezonePattern, "timezone must use the portable timezone grammar")},
 		}
 		attrs["connections"] = requiredResourceConnectionAttribute()
 	}
@@ -929,7 +936,7 @@ func (r *serviceShapeResource) assertConfigured(diags *diag.Diagnostics) bool {
 		return false
 	}
 	if _, ok := r.data.forms[r.cfg.kind]; !ok {
-		diags.AddError(r.cfg.kind+" FormRef missing", "This provider release has no exact "+r.cfg.kind+" FormRef. This is a provider bug.")
+		diags.AddError(r.cfg.kind+" FormRef missing", "This provider build has no exact candidate "+r.cfg.kind+" FormRef. This is a provider bug.")
 		return false
 	}
 	if r.data.client.UsesCompatibilityFallback() && !r.data.capabilities.SupportsResource(r.cfg.kind) {
@@ -1020,28 +1027,49 @@ func (m serviceShapeModel) toResource(ctx context.Context, defaultSpace, kind st
 	case specQueue:
 		delivery := map[string]any{}
 		if !m.MaxRetries.IsNull() && !m.MaxRetries.IsUnknown() {
+			if m.MaxRetries.ValueInt64() < 0 {
+				diags.AddAttributeError(path.Root("max_retries"), "Invalid retry count", "max_retries must be a non-negative integer.")
+				return nil, "", diags
+			}
 			delivery["maxRetries"] = m.MaxRetries.ValueInt64()
 		}
 		if !m.MaxBatchSize.IsNull() && !m.MaxBatchSize.IsUnknown() {
+			if m.MaxBatchSize.ValueInt64() < 0 {
+				diags.AddAttributeError(path.Root("max_batch_size"), "Invalid batch size", "max_batch_size must be a non-negative integer.")
+				return nil, "", diags
+			}
 			delivery["maxBatchSize"] = m.MaxBatchSize.ValueInt64()
 		}
 		if len(delivery) > 0 {
 			spec["delivery"] = delivery
 		}
 	case specSQLDatabase:
-		if !m.Engine.IsNull() && !m.Engine.IsUnknown() && m.Engine.ValueString() != "" {
-			spec["engine"] = m.Engine.ValueString()
+		engine := knownTrimmedString(m.Engine)
+		if engine == "" {
+			engine = "sqlite"
 		}
+		spec["engine"] = engine
 		if !m.MigrationsPath.IsNull() && !m.MigrationsPath.IsUnknown() && m.MigrationsPath.ValueString() != "" {
 			spec["migrationsPath"] = m.MigrationsPath.ValueString()
 		}
 	case specContainerService:
-		spec["image"] = m.Image.ValueString()
+		image := m.Image.ValueString()
+		if !validOCIDigestReference(image) {
+			diags.AddAttributeError(path.Root("image"), "Invalid OCI image reference", "image must be pinned as repository@sha256:<64 hexadecimal characters>.")
+			return nil, "", diags
+		}
+		spec["image"] = image
 		if !m.Ports.IsNull() && !m.Ports.IsUnknown() {
 			var ports []int64
 			diags.Append(m.Ports.ElementsAs(ctx, &ports, false)...)
 			if diags.HasError() {
 				return nil, "", diags
+			}
+			for _, port := range ports {
+				if port < 1 || port > 65535 {
+					diags.AddAttributeError(path.Root("ports"), "Invalid container port", "ports must contain only integers between 1 and 65535.")
+					return nil, "", diags
+				}
 			}
 			if len(ports) > 0 {
 				spec["ports"] = ports
@@ -1049,16 +1077,6 @@ func (m serviceShapeModel) toResource(ctx context.Context, defaultSpace, kind st
 		}
 		if !m.PublicHTTP.IsNull() && !m.PublicHTTP.IsUnknown() {
 			spec["publicHttp"] = m.PublicHTTP.ValueBool()
-		}
-		if !m.Environment.IsNull() && !m.Environment.IsUnknown() {
-			env := map[string]string{}
-			diags.Append(m.Environment.ElementsAs(ctx, &env, false)...)
-			if diags.HasError() {
-				return nil, "", diags
-			}
-			if len(env) > 0 {
-				spec["environment"] = env
-			}
 		}
 		if connections := resourceConnectionsToSpec(ctx, m.Connections, &diags); len(connections) > 0 {
 			spec["connections"] = connections
@@ -1069,9 +1087,11 @@ func (m serviceShapeModel) toResource(ctx context.Context, defaultSpace, kind st
 			return nil, "", diags
 		}
 		spec["dimensions"] = m.Dimensions.ValueInt64()
-		if metric := knownTrimmedString(m.Metric); metric != "" {
-			spec["metric"] = metric
+		metric := knownTrimmedString(m.Metric)
+		if metric == "" {
+			metric = "cosine"
 		}
+		spec["metric"] = metric
 		if connections := resourceConnectionsToSpec(ctx, m.Connections, &diags); len(connections) > 0 {
 			spec["connections"] = connections
 		}
@@ -1119,9 +1139,11 @@ func (m serviceShapeModel) toResource(ctx context.Context, defaultSpace, kind st
 			return nil, "", diags
 		}
 		spec["className"] = className
-		if storageProfile := knownTrimmedString(m.StorageProfile); storageProfile != "" {
-			spec["storageProfile"] = storageProfile
+		storageProfile := knownTrimmedString(m.StorageProfile)
+		if storageProfile == "" {
+			storageProfile = "durable_sqlite"
 		}
+		spec["storageProfile"] = storageProfile
 		if migrationTag := m.MigrationTag.ValueString(); !m.MigrationTag.IsNull() && !m.MigrationTag.IsUnknown() {
 			if !printableBoundedString(migrationTag, 128) {
 				diags.AddAttributeError(path.Root("migration_tag"), "Invalid namespace migration tag", "migration_tag must be a non-empty printable string of at most 128 characters.")
@@ -1139,9 +1161,11 @@ func (m serviceShapeModel) toResource(ctx context.Context, defaultSpace, kind st
 			return nil, "", diags
 		}
 		spec["cron"] = cron
-		if timezone := knownTrimmedString(m.Timezone); timezone != "" {
-			spec["timezone"] = timezone
+		timezone := knownTrimmedString(m.Timezone)
+		if timezone == "" {
+			timezone = "UTC"
 		}
+		spec["timezone"] = timezone
 		if m.Connections.IsNull() || m.Connections.IsUnknown() || len(m.Connections.Elements()) != 1 {
 			diags.AddAttributeError(path.Root("connections"), "Invalid schedule target", "connections must contain exactly one schedule target.")
 			return nil, "", diags
@@ -1236,7 +1260,7 @@ func refreshServiceShapeSpec(ctx context.Context, res *client.Resource, specKind
 		if v, ok := res.Spec["engine"].(string); ok && v != "" {
 			m.Engine = types.StringValue(v)
 		} else {
-			m.Engine = types.StringNull()
+			m.Engine = types.StringValue("sqlite")
 		}
 		if v, ok := res.Spec["migrationsPath"].(string); ok && v != "" {
 			m.MigrationsPath = types.StringValue(v)
@@ -1259,19 +1283,6 @@ func refreshServiceShapeSpec(ctx context.Context, res *client.Resource, specKind
 		} else {
 			m.PublicHTTP = types.BoolNull()
 		}
-		if raw, ok := res.Spec["environment"].(map[string]any); ok {
-			env := map[string]string{}
-			for key, value := range raw {
-				if s, ok := value.(string); ok {
-					env[key] = s
-				}
-			}
-			value, d := types.MapValueFrom(ctx, types.StringType, env)
-			diags.Append(d...)
-			m.Environment = value
-		} else {
-			m.Environment = types.MapNull(types.StringType)
-		}
 		if raw, ok := res.Spec["connections"]; ok {
 			connections, d := resourceConnectionsFromSpec(ctx, raw)
 			diags.Append(d...)
@@ -1281,7 +1292,11 @@ func refreshServiceShapeSpec(ctx context.Context, res *client.Resource, specKind
 		}
 	case specVectorIndex:
 		m.Dimensions = int64FromSpec(res.Spec["dimensions"])
-		m.Metric = optionalStringFromAny(res.Spec["metric"])
+		if metric := optionalStringFromAny(res.Spec["metric"]); metric.IsNull() {
+			m.Metric = types.StringValue("cosine")
+		} else {
+			m.Metric = metric
+		}
 		m.Connections = refreshResourceConnections(ctx, res.Spec["connections"], &diags)
 	case specDurableWorkflow:
 		source := artifactSourceValuesFromSpec(res.Spec["source"])
@@ -1300,12 +1315,20 @@ func refreshServiceShapeSpec(ctx context.Context, res *client.Resource, specKind
 		m.Connections = refreshResourceConnections(ctx, res.Spec["connections"], &diags)
 	case specStatefulActorNamespace:
 		m.ClassName = optionalStringFromAny(res.Spec["className"])
-		m.StorageProfile = optionalStringFromAny(res.Spec["storageProfile"])
+		if storageProfile := optionalStringFromAny(res.Spec["storageProfile"]); storageProfile.IsNull() {
+			m.StorageProfile = types.StringValue("durable_sqlite")
+		} else {
+			m.StorageProfile = storageProfile
+		}
 		m.MigrationTag = optionalStringFromAny(res.Spec["migrationTag"])
 		m.Connections = refreshResourceConnections(ctx, res.Spec["connections"], &diags)
 	case specSchedule:
 		m.Cron = optionalStringFromAny(res.Spec["cron"])
-		m.Timezone = optionalStringFromAny(res.Spec["timezone"])
+		if timezone := optionalStringFromAny(res.Spec["timezone"]); timezone.IsNull() {
+			m.Timezone = types.StringValue("UTC")
+		} else {
+			m.Timezone = timezone
+		}
 		m.Connections = refreshResourceConnections(ctx, res.Spec["connections"], &diags)
 	}
 	return diags

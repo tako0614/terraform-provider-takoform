@@ -3,9 +3,5 @@
   "id": "KVStore/cache",
   "kind": "KVStore",
   "name": "cache",
-  "portability": "portable",
-  "portableSpec": {
-    "consistency": "strong",
-    "name": "cache"
-  }
+  "portability": "portable"
 }

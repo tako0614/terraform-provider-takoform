@@ -8,7 +8,7 @@
   "files": [
     {
       "path": "fixtures/desired.json",
-      "sha256": "sha256:21a7d2f649af55d6ef242dc02037171c058dcae108c0460d10765c042d1a5433"
+      "sha256": "sha256:9df69dadde4554e01bc7d2533f4de276e320246702e2435feaffe6b103d5010b"
     },
     {
       "path": "fixtures/discovery.json",
@@ -24,7 +24,7 @@
     },
     {
       "path": "fixtures/observed.json",
-      "sha256": "sha256:dfac31726bc1668ccd38e363fcb5f7eea070050983e6f097670a400e12f31f2f"
+      "sha256": "sha256:e3a7640a87a2e99e7b4c776f6b5254a0b17eb8036485a6bb4d4ccb33e0b1b98f"
     },
     {
       "path": "fixtures/output.json",
@@ -32,7 +32,7 @@
     },
     {
       "path": "fixtures/provider-schema.json",
-      "sha256": "sha256:d5d5835844c63fb356ce6691bab4f90e82a355c0b39fcf37bbee22a5dcf6703d"
+      "sha256": "sha256:4e619222a58562b2e981d07a536191d3b8903f1c130a44bc6f4d6acb769e41f2"
     },
     {
       "path": "schemas/desired.schema.json",
@@ -78,7 +78,7 @@
         "import": "sha256:d413d9378eebf5685e18209dd84eb17eeea3d725f33c6fcba01c7fdfe6860392",
         "observed": "sha256:e5c7e813e23a9078331dcd0369becfcffd35f16272af7add23cba90749a44f0c",
         "output": "sha256:151132e8e5f5c92d8a08bd7c75ffd06dad1f5a82952606ced41ebd965f59425c",
-        "providerSchema": "sha256:765ba6efb5aa16bbf277e4687ad400a359aa873a768764cbc55e20c158eda347"
+        "providerSchema": "sha256:3c2931a0edd370cf359ea38e6509a808064f0c06624f31506f409662a8415df0"
       }
     },
     {
@@ -114,7 +114,7 @@
         "import": "sha256:a8bbc95278f4026fa01cc7be7a55b117c3e8784dc6e7a634bdbe2a4c751859ef",
         "observed": "sha256:391556c4bdd2e304e012475ccd5a3a3fb49da219ce16dca2b167c1f237a06797",
         "output": "sha256:86ef359714c194a4e9e549b9ca2ea65bb28cf12ebc18cacdb450a859df4edb96",
-        "providerSchema": "sha256:ece35dde1b1b5ebff7d01c1aa3479501e7fc3ced3197ba45a5eb9c6edbfce490"
+        "providerSchema": "sha256:e61efae6be552f09ec0fe1c734ed0cbdc81e2f99f9436672ec7c26b68d89fe46"
       }
     },
     {
@@ -126,19 +126,19 @@
         "import": "sha256:3320baccd4c2f00342e08b7915efd6071767c584e90bece64eec019b9f1b3b2b",
         "observed": "sha256:5894f43a77e2689a18e4c9700e5aef152b6c6d2841cf8d0b912d3e48e453bf98",
         "output": "sha256:42080089142d9f2ee50bb90cf2e98013a22c90d7622226eea309a8fe777a6f62",
-        "providerSchema": "sha256:489f56f299855fa3489dc901ea1c51acc5d0ae8ba00ddf4a352bb81ae56cfe4c"
+        "providerSchema": "sha256:423d00f868bab50e0b68c4ba0a856816da2acd48724dcac52c8fc776809c557d"
       }
     },
     {
       "kind": "ContainerService",
       "resourceType": "takoform_container_service",
       "caseDigests": {
-        "desired": "sha256:27690be2702bf0fd2ff5387755b362861525b30d190001bb37d66fc70b982396",
+        "desired": "sha256:529bd5fb9a8f2a809e878f1d112351829f090c0efc2e2f6e3b507cade80d74b6",
         "error": "sha256:4cd5de7a15711cae8b1d927df35c62924a1bbe50f82f97787099086cf75aaaf9",
         "import": "sha256:f82f3de3fdc77a78b4cdf7e83ef64cff7ef2110fdafb368b0153680815de3e24",
-        "observed": "sha256:c582c727be7da0b826aaa797d6bbbd5fd9fce913df04c707142d3e83384abe00",
+        "observed": "sha256:9354eaf3daf884f7d2a1934f7a672312b8d8f3406ba9eaa8b15b8e5e88c97e93",
         "output": "sha256:a09c4ec15ca0f4252774a19d0330086ae46dfaf2bea38d728ae181f9754e84b0",
-        "providerSchema": "sha256:584bf88de8b67aeee7d87abf8d363b92b4a55979308f7c286f54dd38ca160174"
+        "providerSchema": "sha256:a63185638d50d67401445ccb74c6d522bcf13fc9f99aa13aabfc8fdd27ee021a"
       }
     },
     {
@@ -150,7 +150,7 @@
         "import": "sha256:198967db3df69d021ff5a82c9c984449473b8a7c5684ca363fe49ca9eca5b9a7",
         "observed": "sha256:4f3a79035310d031d70ce5729a31818d392497f4e35ec1e713d1aa2cc18456af",
         "output": "sha256:b0f1ad4ae4ddea6f8d888ac36fe67d51150444a18ff06af6cc5dc03dae5bb278",
-        "providerSchema": "sha256:2d89763bab5367f36c401fa092b5dacf3f8eb895287d9976ff1e0fdb31486a4f"
+        "providerSchema": "sha256:19fd4aaf4883c9b6feef6fa281b01260e3c2b88069224d62f19615a2c81bb3d7"
       }
     },
     {
@@ -162,7 +162,7 @@
         "import": "sha256:f0c20fa96155104ce7a838bfbbf796724675bbaca894f15b48cb5da1fb46fcb3",
         "observed": "sha256:fa06883801b23839387cb1af7fce80b9fd4c041a337e0e118936e129baf6363a",
         "output": "sha256:8ab3c3ff938d073d1acd1062eff879a7f1d539a39c4d3c5d2a436b40160f5948",
-        "providerSchema": "sha256:9ec09981e27192f96390c5e384ff575dc33c96f010113faa179e7cbbb70a5655"
+        "providerSchema": "sha256:2aaa77218b7720600f6becfaacac44431da50194c5cbebc95703ac0acc5c06cb"
       }
     },
     {
@@ -174,7 +174,7 @@
         "import": "sha256:1449e9edf9c4df55fd5b7e73a3b7de12cbf59bb3b87d1c99e70e58622a262dcb",
         "observed": "sha256:5f63fa69dab41b693b997a35d5d531d26a98499744e8d8fce317ae4deb59282a",
         "output": "sha256:85e6859273ad8dbeb0882258ba3ca17b27c96e7a50954e864b68c848d54dba2c",
-        "providerSchema": "sha256:d84bac510cedb8085c4d99daa508835f5d312b83a67a5046be392dadc090a369"
+        "providerSchema": "sha256:820ae091a73487bc5bf4b4b88adf176e7a35775d40445e9556f22144a62377c9"
       }
     },
     {
@@ -186,7 +186,7 @@
         "import": "sha256:821a5ba2b58d6fc07c9edb40681c7089d0d77f1c94a46beb8c65626369815a3a",
         "observed": "sha256:ab8f51afbbe05578232c3ff0b3e64b925a0351871cd3bce10ecc0f1eed18e059",
         "output": "sha256:ab7058639c6397ba81b8f89415dee9f2d1b48f9e2a9d9866829392481a18785b",
-        "providerSchema": "sha256:cef4a53a64724f38ac3df5927575ded58cd62b9db3578245b656bab80b4d2c99"
+        "providerSchema": "sha256:a68555e9465960260774f612ec7de1e37a2ccda0662579736f82a9fcef334f33"
       }
     }
   ]

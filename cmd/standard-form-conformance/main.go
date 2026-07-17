@@ -8,15 +8,17 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify") {
-		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify")
+	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "release-check") {
+		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|release-check")
 		os.Exit(2)
 	}
 	var err error
 	if os.Args[1] == "generate" {
 		err = standardforms.Generate(".")
-	} else {
+	} else if os.Args[1] == "verify" {
 		err = standardforms.Verify(".")
+	} else {
+		err = standardforms.VerifyReleaseReady(".")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "standard-form-conformance:", err)

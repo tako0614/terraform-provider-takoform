@@ -82,84 +82,9 @@
     "type": "object"
   },
   "observedSchema": {
-    "$defs": {
-      "connection": {
-        "additionalProperties": false,
-        "properties": {
-          "permissions": {
-            "items": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "projection": {
-            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-            "type": "string"
-          },
-          "resource": {
-            "pattern": "^\\S+$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "resource",
-          "permissions",
-          "projection"
-        ],
-        "type": "object"
-      },
-      "connections": {
-        "additionalProperties": {
-          "$ref": "#/$defs/connection"
-        },
-        "propertyNames": {
-          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-          "type": "string",
-          "x-takoform-fieldPolicy": "portable-data-only-v1"
-        },
-        "type": "object"
-      }
-    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "applied": {
-        "additionalProperties": false,
-        "properties": {
-          "className": {
-            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
-            "type": "string"
-          },
-          "connections": {
-            "$ref": "#/$defs/connections"
-          },
-          "migrationTag": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "storageProfile": {
-            "default": "durable_sqlite",
-            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "className"
-        ],
-        "type": "object"
-      },
       "driftedFields": {
         "items": {
           "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
@@ -193,53 +118,11 @@
       "generation",
       "imported",
       "portability",
-      "applied",
       "driftedFields"
     ],
     "type": "object"
   },
   "outputSchema": {
-    "$defs": {
-      "connection": {
-        "additionalProperties": false,
-        "properties": {
-          "permissions": {
-            "items": {
-              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "projection": {
-            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-            "type": "string"
-          },
-          "resource": {
-            "pattern": "^\\S+$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "resource",
-          "permissions",
-          "projection"
-        ],
-        "type": "object"
-      },
-      "connections": {
-        "additionalProperties": {
-          "$ref": "#/$defs/connection"
-        },
-        "propertyNames": {
-          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-          "type": "string",
-          "x-takoform-fieldPolicy": "portable-data-only-v1"
-        },
-        "type": "object"
-      }
-    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
@@ -262,40 +145,6 @@
       "portability": {
         "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
         "type": "string"
-      },
-      "portableSpec": {
-        "additionalProperties": false,
-        "properties": {
-          "className": {
-            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
-            "type": "string"
-          },
-          "connections": {
-            "$ref": "#/$defs/connections"
-          },
-          "migrationTag": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": ".*\\S.*",
-            "type": "string"
-          },
-          "storageProfile": {
-            "default": "durable_sqlite",
-            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "className"
-        ],
-        "type": "object"
       }
     },
     "required": [
@@ -303,8 +152,7 @@
       "kind",
       "name",
       "generation",
-      "portability",
-      "portableSpec"
+      "portability"
     ],
     "type": "object"
   },

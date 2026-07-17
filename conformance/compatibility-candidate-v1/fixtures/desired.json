@@ -68,10 +68,9 @@
         "metadata": { "name": "agent", "space": "fixture-space" },
         "spec": {
           "name": "agent",
-          "image": "ghcr.io/example/agent:1.0.0",
+          "image": "ghcr.io/example/agent@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
           "ports": [8080],
           "publicHttp": true,
-          "environment": { "LOG_LEVEL": "info" },
           "connections": { "DATABASE": { "resource": "SQLDatabase/main", "permissions": ["read", "write"], "projection": "environment" } }
         }
       }

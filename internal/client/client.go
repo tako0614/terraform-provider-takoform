@@ -144,7 +144,8 @@ type Resource struct {
 	ID string `json:"id,omitempty"`
 }
 
-// FormRef pins one immutable provider-owned typed Form Definition.
+// FormRef pins one immutable typed Form Definition. Publication and admission
+// are external to this value.
 type FormRef struct {
 	APIVersion        string `json:"apiVersion"`
 	Kind              string `json:"kind"`

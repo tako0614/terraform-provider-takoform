@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "Schedule",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:9ec8c9650e42d2f2f0fb456b0cf718270dbfca7dd754fe929f1fa734f9c111b3"
+    "schemaDigest": "sha256:44c61dd9bd4c5e76ff280b468bcc2c5f1f94ac109a72a80afd0d497709b13ae8"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 8584,
-      "digest": "sha256:f972531b5b3d889e9581645e15d53f18a7fa47bdec5669094196e49adf9f328d"
+      "size": 4430,
+      "digest": "sha256:9053a3ce28659f38ff478ea4c9697b33078440a18424de3ad6f468d8ef291fb6"
     },
     {
       "path": "fixtures/desired.json",
@@ -31,14 +31,14 @@
     {
       "path": "fixtures/observed.json",
       "mediaType": "application/json",
-      "size": 427,
-      "digest": "sha256:93b2ce167b840b82832802a01cc05362f86f5f2ff03b1e36b4b3ec0e18bb69e8"
+      "size": 139,
+      "digest": "sha256:2338b9d8f0acf45722e90f1208dc8aa952492d24448623f2ebf56d5ef7d27be9"
     },
     {
       "path": "fixtures/output.json",
       "mediaType": "application/json",
-      "size": 415,
-      "digest": "sha256:9a466ebe2c85f24ab94c85155bc952ea07e383e83591be15f4e4653e16c0ad03"
+      "size": 122,
+      "digest": "sha256:a6bb782ca8b38cc84a7816127cf0d394530d7737246142f0bdf52e41c47134bc"
     }
   ]
 }

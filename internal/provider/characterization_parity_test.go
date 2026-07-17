@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -23,12 +24,34 @@ import (
 )
 
 func TestCompatibilityCandidateProviderParity(t *testing.T) {
-	t.Parallel()
+	updateFixture := os.Getenv("TAKOFORM_UPDATE_CHARACTERIZATION") == "1"
+	if !updateFixture {
+		t.Parallel()
+	}
 
 	root := filepath.Join("..", "..", "conformance", "compatibility-candidate-v1")
 	ctx := context.Background()
 
 	schemaDoc := mustLoadCases[characterization.ProviderSchemaCase](t, root, "providerSchema")
+	if updateFixture {
+		for index := range schemaDoc.Cases {
+			candidate := candidateResourceForKind(t, schemaDoc.Cases[index].Kind)
+			var response frameworkresource.SchemaResponse
+			candidate.Schema(ctx, frameworkresource.SchemaRequest{}, &response)
+			if response.Diagnostics.HasError() {
+				t.Fatalf("schema diagnostics: %v", response.Diagnostics)
+			}
+			schemaDoc.Cases[index].Attributes = characterizeAttributes(t, response.Schema.Attributes)
+		}
+		raw, err := json.MarshalIndent(schemaDoc, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw = append(raw, '\n')
+		if err := os.WriteFile(filepath.Join(root, "fixtures", "provider-schema.json"), raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	desiredDoc := mustLoadCases[characterization.ResourceCase](t, root, "desired")
 	observedDoc := mustLoadCases[characterization.ResourceCase](t, root, "observed")
 	outputDoc := mustLoadCases[characterization.OutputCase](t, root, "output")
@@ -146,7 +169,6 @@ func nullServiceShapeCandidateImportModel(spec serviceShapeSpecKind) any {
 		Image:                 types.StringNull(),
 		Ports:                 types.SetNull(types.Int64Type),
 		PublicHTTP:            types.BoolNull(),
-		Environment:           types.MapNull(types.StringType),
 		Connections:           types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes}),
 		Dimensions:            types.Int64Null(),
 		Metric:                types.StringNull(),

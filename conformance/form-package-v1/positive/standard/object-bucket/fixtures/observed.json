@@ -1,11 +1,4 @@
 {
-  "applied": {
-    "interfaces": [
-      "s3_api"
-    ],
-    "name": "assets",
-    "storageClass": "standard"
-  },
   "driftedFields": [],
   "generation": 1,
   "id": "ObjectBucket/assets",

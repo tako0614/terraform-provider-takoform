@@ -170,7 +170,7 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 		client:       c,
 		defaultSpace: space,
 		capabilities: c.Capabilities,
-		forms:        providerReleaseForms(),
+		forms:        providerCandidateForms(),
 	}
 	resp.ResourceData = data
 	resp.DataSourceData = data
@@ -249,7 +249,7 @@ func configureClient(ctx context.Context, endpoint, token string, httpClient *ht
 	return c, nil
 }
 
-func providerReleaseForms() map[string]client.InstalledFormReference {
+func providerCandidateForms() map[string]client.InstalledFormReference {
 	refs := formregistry.All()
 	out := make(map[string]client.InstalledFormReference, len(refs))
 	for kind, ref := range refs {

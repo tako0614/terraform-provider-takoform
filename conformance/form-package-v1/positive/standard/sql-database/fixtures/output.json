@@ -3,10 +3,5 @@
   "id": "SQLDatabase/main",
   "kind": "SQLDatabase",
   "name": "main",
-  "portability": "portable",
-  "portableSpec": {
-    "engine": "sqlite",
-    "migrationsPath": "migrations",
-    "name": "main"
-  }
+  "portability": "portable"
 }

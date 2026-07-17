@@ -34,7 +34,7 @@ provider "takoform" {
 
 The endpoint must advertise `features.service_forms = true`, API version
 `forms.takoform.com/v1alpha1`, the versioned endpoint features, and exact
-availability for each release-owned FormRef used by configuration. This
+availability for each exact build-pinned candidate FormRef used by configuration. This
 provider does not expose target-pool, backend, credential, pricing, billing,
 quota, account, or operator-policy resources.
 

@@ -80,7 +80,7 @@ func providerFieldsForDesired(kind, field string) []string {
 		"publicHttp": "public_http", "dimensions": "dimensions", "entrypoint": "entrypoint",
 		"className": "class_name", "storageProfile": "storage_profile", "migrationTag": "migration_tag",
 		"connections": "connections", "interfaces": "interfaces", "consistency": "consistency",
-		"image": "image", "ports": "ports", "environment": "environment", "metric": "metric",
+		"image": "image", "ports": "ports", "metric": "metric",
 		"name": "name", "profiles": "profiles", "cron": "cron", "timezone": "timezone", "engine": "engine",
 	}
 	if field == "delivery" {

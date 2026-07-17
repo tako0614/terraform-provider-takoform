@@ -49,7 +49,7 @@ implicit downgrade.
 | `takoform_stateful_actor_namespace` | Stateful actor namespace |
 | `takoform_schedule` | Cron-triggered invocation |
 
-The provider deliberately has no target-pool, backend, credential, pricing, quota, billing, or operator-policy resources. It discovers `features.service_forms` and verifies the release-owned exact FormRef/package identity against the configured host. Backend placement and credentials remain host responsibilities; state contains only the canonical resource ID, generation fence, read-only drift status, portability, desired typed fields, and sanitized public outputs.
+The provider deliberately has no target-pool, backend, credential, pricing, quota, billing, or operator-policy resources. It discovers `features.service_forms` and verifies the exact build-pinned candidate FormRef/package identity against the configured host. Backend placement, admission, and credentials remain host responsibilities; state contains only the canonical resource ID, generation fence, read-only drift status, portability, desired typed fields, and sanitized public outputs.
 
 See [the portable specification status](spec/README.md), [Form Package contract](spec/form-package/README.md), [form inventory](forms/README.md), [conformance status](conformance/README.md), [provider documentation](docs/index.md), and [examples](examples/resources/).
 

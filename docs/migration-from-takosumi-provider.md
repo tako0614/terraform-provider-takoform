@@ -9,7 +9,7 @@ not delete the old provider or lock entry until rollback evidence is complete.
 1. Pin the exact old Takosumi provider artifact and `.terraform.lock.hcl`.
 2. Back up state with `tofu state pull` and record its SHA-256.
 3. Run an old-provider refresh-only plan and require no changes.
-4. Confirm the host has the exact release-owned FormRef/package identity for
+4. Confirm the host has admitted the exact build-pinned FormRef/package identity for
    every resource kind being migrated, as pinned in
    [`forms/standard-package-set.json`](../forms/standard-package-set.json).
 5. Before removing any state address, require the operator to backfill every

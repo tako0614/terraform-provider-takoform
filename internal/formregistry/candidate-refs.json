@@ -1,0 +1,72 @@
+{
+  "ContainerService": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "ContainerService",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:057739048709c3184b9c5494a4f94033e01a0e46996e0a441ce06c20c9429360",
+    "packageDigest": "sha256:a5eb511a0fdb190b6c85f51f148a9c6ca4e5030047d7db5d8628a1c49279a8cd"
+  },
+  "DurableWorkflow": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "DurableWorkflow",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:0d5ec1cd490806534903520ef2524dba0526b4b3d193984be6d5d33071fd7f85",
+    "packageDigest": "sha256:1ffe98598c3c9dec5c3fd84b9c9a14f03c1780a43cf29d712182432c8edad3e0"
+  },
+  "EdgeWorker": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "EdgeWorker",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:3f34cdce49e872b132fdc22b3b1228ce1fb6bbe6177b410996d72c465885ea87",
+    "packageDigest": "sha256:64fc2726885d59d66024d63a9f95e8cefe76b175dcee8c74e9b4ecefc06cdefa"
+  },
+  "KVStore": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "KVStore",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:ab80c341650b694c90c9573dc610bd278858b8f9cd9271b915c21c7c164106b5",
+    "packageDigest": "sha256:0d3e51d7bfbf6a12995fcf5d7b2c2036cd3b429625723f512669cae1fed0e79d"
+  },
+  "ObjectBucket": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "ObjectBucket",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:cef08a0fad637c322e1059c138d11d490cb3b95b2d328a6d35801c0cdec3bdb8",
+    "packageDigest": "sha256:a0e82691a448b22df329d14866b7e8acd3550fc9ee1c172c597f7d4f8e57cbf5"
+  },
+  "Queue": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "Queue",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:a4096fb54c12ce76ecd8ee1fa3a91d48a632d1443c642a8301ca745d7ce574a7",
+    "packageDigest": "sha256:3b85bf99de0ed59ec33457e353bbdbf4db9c9562c9b588153d9f57a718892556"
+  },
+  "SQLDatabase": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "SQLDatabase",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:6229e5231db54996f58bfd4c6052519267a1b1a3973912d5d1ee3b6ebb66b9c6",
+    "packageDigest": "sha256:5c783261aec8c6ac385d0f6b8fb498f134570798630018dc555d92ae6bef84ce"
+  },
+  "Schedule": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "Schedule",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:44c61dd9bd4c5e76ff280b468bcc2c5f1f94ac109a72a80afd0d497709b13ae8",
+    "packageDigest": "sha256:928d05162a66b24f0a491f66fb3733571f1811faac3e0a9b83547b2f2b2c0b05"
+  },
+  "StatefulActorNamespace": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "StatefulActorNamespace",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:8c4b8f1ab12817e90a5f15a86ce8f6c6d775bd096a224639cf47664cbb941a39",
+    "packageDigest": "sha256:20806961e8a48ea2ba1caa1e8819560e3306d44ec80dafe382ba25c2c110a85f"
+  },
+  "VectorIndex": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "VectorIndex",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:7d7c36ab4b6007220bf8f2cdd1997f893a9d06595a11c7843c8f6bdd9d2961bc",
+    "packageDigest": "sha256:4d3e18955937cb4dd63abd4d347d948237b3bd08b6dd8d0b0aea43526b49421c"
+  }
+}
