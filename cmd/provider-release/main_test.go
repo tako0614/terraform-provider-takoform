@@ -92,6 +92,69 @@ func TestVerifyExpectedTriggerTagRequiresExactDescriptorTag(t *testing.T) {
 	}
 }
 
+func TestProviderTagWorkflowExportsReadOnlySignedObject(t *testing.T) {
+	workflow, err := os.ReadFile(filepath.Join(testRepoRoot(t), ".github", "workflows", "provider-release-tag.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	for _, required := range []string{
+		"contents: read",
+		"persist-credentials: false",
+		"takoform.provider-signed-tag-artifact@v1",
+		"preflight-sha256:",
+		"git cat-file tag",
+		"provider-signed-tag-${{ github.run_id }}-${{ github.run_attempt }}",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("provider tag workflow lacks %q", required)
+		}
+	}
+	for _, forbidden := range []string{"contents: write", "persist-credentials: true", "git push origin"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("provider tag signing workflow retains remote write authority %q", forbidden)
+		}
+	}
+}
+
+func TestVerifyClosedChecksumsRejectsExtraAndTamperedFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "payload"), []byte("trusted\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	digest, _, err := fileDigest(filepath.Join(root, "payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "SHA256SUMS"), []byte(digest+"  payload\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyClosedChecksums(root, []string{"SHA256SUMS", "payload"}, []string{"payload"}); err != nil {
+		t.Fatalf("valid closed inventory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "extra"), []byte("unexpected\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyClosedChecksums(root, []string{"SHA256SUMS", "payload"}, []string{"payload"}); err == nil || !strings.Contains(err.Error(), "inventory mismatch") {
+		t.Fatalf("expected extra-file rejection, got %v", err)
+	}
+}
+
+func TestVerifyTagObjectBindingsRequiresExactRunAndPreflight(t *testing.T) {
+	commit := strings.Repeat("a", 40)
+	preflight := "sha256:" + strings.Repeat("b", 64)
+	runURL := "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123/attempts/1"
+	raw := []byte("object " + commit + "\ntype commit\ntag v0.1.0-rc.2\ntagger Takoform Provider Release <release@takoform.invalid> 1784408928 +0000\n\n" +
+		"Takoform provider v0.1.0-rc.2\n\nsource-commit: " + commit + "\npreflight-sha256: " + preflight + "\nworkflow-run: " + runURL + "\n" +
+		"-----BEGIN PGP SIGNATURE-----\nfixture\n")
+	if err := verifyTagObjectBindings(raw, "v0.1.0-rc.2", commit, preflight, runURL); err != nil {
+		t.Fatalf("exact binding: %v", err)
+	}
+	if err := verifyTagObjectBindings(raw, "v0.1.0-rc.2", commit, "sha256:"+strings.Repeat("c", 64), runURL); err == nil {
+		t.Fatal("mismatched preflight digest was accepted")
+	}
+}
+
 func TestInspectSourceRejectsUnsignedExactTag(t *testing.T) {
 	repo := newGitFixture(t)
 	desc := testDescriptor()

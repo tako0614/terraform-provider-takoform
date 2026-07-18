@@ -141,9 +141,39 @@ type statementPredicate struct {
 	RunDetails      map[string]any `json:"runDetails"`
 }
 
+type signedTagArtifactMetadata struct {
+	Format            string `json:"format"`
+	Repository        string `json:"repository"`
+	WorkflowPath      string `json:"workflowPath"`
+	WorkflowRef       string `json:"workflowRef"`
+	RunID             string `json:"runId"`
+	RunAttempt        string `json:"runAttempt"`
+	SourceRef         string `json:"sourceRef"`
+	SourceCommit      string `json:"sourceCommit"`
+	ReleaseTag        string `json:"releaseTag"`
+	ObjectFormat      string `json:"objectFormat"`
+	TagObjectOID      string `json:"tagObjectOid"`
+	TagObjectSHA256   string `json:"tagObjectSha256"`
+	PreflightSHA256   string `json:"preflightSha256"`
+	SignerFingerprint string `json:"signerFingerprint"`
+}
+
+type signedTagArtifactEvidence struct {
+	Kind                 string `json:"kind"`
+	ReleaseTag           string `json:"releaseTag"`
+	SourceCommit         string `json:"sourceCommit"`
+	WorkflowRun          string `json:"workflowRun"`
+	PreflightSHA256      string `json:"preflightSha256"`
+	TagObjectOID         string `json:"tagObjectOid"`
+	TagObjectSHA256      string `json:"tagObjectSha256"`
+	SignerFingerprint    string `json:"signerFingerprint"`
+	LocalRefMaterialized bool   `json:"localRefMaterialized"`
+	Verified             bool   `json:"verified"`
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: provider-release <verify-source|build|verify-reproducible> [options]")
+		fail("usage: provider-release <verify-source|build|verify-reproducible|verify-tag-artifact> [options]")
 	}
 	repo, err := repositoryRoot()
 	check(err)
@@ -188,9 +218,235 @@ func main() {
 			"platforms":    desc.Platforms,
 			"reproducible": true,
 		})
+	case "verify-tag-artifact":
+		fs := flag.NewFlagSet("verify-tag-artifact", flag.ExitOnError)
+		artifactPath := fs.String("artifact", "", "downloaded provider-signed-tag artifact directory")
+		preflightPath := fs.String("preflight-artifact", "", "downloaded provider-tag-preflight artifact directory")
+		expectedRunID := fs.String("expected-run-id", "", "exact approved GitHub Actions run id")
+		expectedRunAttempt := fs.String("expected-run-attempt", "", "exact approved GitHub Actions run attempt")
+		expectedCommit := fs.String("expected-commit", "", "exact protected-main source commit")
+		materializeRef := fs.Bool("materialize-ref", false, "atomically create the local descriptor tag ref after verification")
+		check(fs.Parse(os.Args[2:]))
+		evidence, err := verifySignedTagArtifact(repo, desc, *artifactPath, *preflightPath, *expectedRunID, *expectedRunAttempt, *expectedCommit, *materializeRef)
+		check(err)
+		writeJSON(os.Stdout, evidence)
 	default:
 		fail("unknown command: " + os.Args[1])
 	}
+}
+
+func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflightPath, expectedRunID, expectedRunAttempt, expectedCommit string, materializeRef bool) (signedTagArtifactEvidence, error) {
+	if strings.TrimSpace(artifactPath) == "" || strings.TrimSpace(preflightPath) == "" {
+		return signedTagArtifactEvidence{}, errors.New("--artifact and --preflight-artifact are required")
+	}
+	if !regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(expectedRunID) || !regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(expectedRunAttempt) {
+		return signedTagArtifactEvidence{}, errors.New("expected run id and attempt must be positive decimal strings")
+	}
+	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(expectedCommit) {
+		return signedTagArtifactEvidence{}, errors.New("expected commit must be an exact lowercase 40-character object id")
+	}
+	if err := verifyClosedChecksums(preflightPath,
+		[]string{"SHA256SUMS", "preflight.json", "provider-candidate-manifest.json", "provider-lifecycle-matrix.json", "provider-provenance.json", "provider-sbom.spdx.json"},
+		[]string{"preflight.json", "provider-candidate-manifest.json", "provider-lifecycle-matrix.json", "provider-provenance.json", "provider-sbom.spdx.json"}); err != nil {
+		return signedTagArtifactEvidence{}, fmt.Errorf("verify preflight artifact: %w", err)
+	}
+	if err := verifyClosedChecksums(artifactPath, []string{"SHA256SUMS", "metadata.json", "tag-object"}, []string{"metadata.json", "tag-object"}); err != nil {
+		return signedTagArtifactEvidence{}, fmt.Errorf("verify signed tag artifact: %w", err)
+	}
+	var metadata signedTagArtifactMetadata
+	if err := readStrictJSONFile(filepath.Join(artifactPath, "metadata.json"), &metadata); err != nil {
+		return signedTagArtifactEvidence{}, fmt.Errorf("read signed tag metadata: %w", err)
+	}
+	expectedWorkflowPath := ".github/workflows/provider-release-tag.yml"
+	expectedWorkflowRef := "tako0614/terraform-provider-takoform/" + expectedWorkflowPath + "@refs/heads/main"
+	expectedWorkflowRun := "https://github.com/tako0614/terraform-provider-takoform/actions/runs/" + expectedRunID + "/attempts/" + expectedRunAttempt
+	if metadata.Format != "takoform.provider-signed-tag-artifact@v1" ||
+		metadata.Repository != "tako0614/terraform-provider-takoform" ||
+		metadata.WorkflowPath != expectedWorkflowPath || metadata.WorkflowRef != expectedWorkflowRef ||
+		metadata.RunID != expectedRunID || metadata.RunAttempt != expectedRunAttempt ||
+		metadata.SourceRef != "refs/heads/main" || metadata.SourceCommit != expectedCommit ||
+		metadata.ReleaseTag != desc.Tag || metadata.SignerFingerprint != desc.SigningFingerprint {
+		return signedTagArtifactEvidence{}, errors.New("signed tag metadata does not match the exact release, source, workflow run, or signer")
+	}
+	objectFormat, err := command(repo, nil, "git", "rev-parse", "--show-object-format")
+	if err != nil {
+		return signedTagArtifactEvidence{}, err
+	}
+	objectFormat = strings.TrimSpace(objectFormat)
+	oidLength := 40
+	if objectFormat == "sha256" {
+		oidLength = 64
+	} else if objectFormat != "sha1" {
+		return signedTagArtifactEvidence{}, fmt.Errorf("unsupported Git object format %q", objectFormat)
+	}
+	if metadata.ObjectFormat != objectFormat || !regexp.MustCompile(fmt.Sprintf(`^[0-9a-f]{%d}$`, oidLength)).MatchString(metadata.TagObjectOID) {
+		return signedTagArtifactEvidence{}, errors.New("tag object id or object format does not match the local repository")
+	}
+	sha256Pattern := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	if !sha256Pattern.MatchString(metadata.TagObjectSHA256) || !sha256Pattern.MatchString(metadata.PreflightSHA256) {
+		return signedTagArtifactEvidence{}, errors.New("artifact metadata contains an invalid SHA256 digest")
+	}
+	preflightDigest, _, err := fileDigest(filepath.Join(preflightPath, "SHA256SUMS"))
+	if err != nil {
+		return signedTagArtifactEvidence{}, err
+	}
+	if metadata.PreflightSHA256 != "sha256:"+preflightDigest {
+		return signedTagArtifactEvidence{}, errors.New("signed preflight digest does not match the downloaded closed preflight inventory")
+	}
+	tagObjectPath := filepath.Join(artifactPath, "tag-object")
+	tagObject, err := os.ReadFile(tagObjectPath)
+	if err != nil {
+		return signedTagArtifactEvidence{}, err
+	}
+	tagObjectDigest, _, err := fileDigest(tagObjectPath)
+	if err != nil {
+		return signedTagArtifactEvidence{}, err
+	}
+	if metadata.TagObjectSHA256 != "sha256:"+tagObjectDigest {
+		return signedTagArtifactEvidence{}, errors.New("tag object digest does not match metadata")
+	}
+	if err := verifyTagObjectBindings(tagObject, desc.Tag, expectedCommit, metadata.PreflightSHA256, expectedWorkflowRun); err != nil {
+		return signedTagArtifactEvidence{}, err
+	}
+	if _, err := command(repo, nil, "git", "cat-file", "-e", expectedCommit+"^{commit}"); err != nil {
+		return signedTagArtifactEvidence{}, fmt.Errorf("expected source commit is unavailable locally: %w", err)
+	}
+	tagObjectOID, err := commandInput(repo, nil, tagObject, "git", "mktag")
+	if err != nil {
+		return signedTagArtifactEvidence{}, fmt.Errorf("reconstruct signed tag object: %w", err)
+	}
+	tagObjectOID = strings.TrimSpace(tagObjectOID)
+	if tagObjectOID != metadata.TagObjectOID {
+		return signedTagArtifactEvidence{}, fmt.Errorf("reconstructed tag object id %s does not match expected %s", tagObjectOID, metadata.TagObjectOID)
+	}
+	peeled, err := command(repo, nil, "git", "rev-parse", tagObjectOID+"^{}")
+	if err != nil || strings.TrimSpace(peeled) != expectedCommit {
+		return signedTagArtifactEvidence{}, errors.New("reconstructed tag object does not peel to the exact protected-main commit")
+	}
+	gnupgHome, err := os.MkdirTemp("", "takoform-provider-tag-verify-")
+	if err != nil {
+		return signedTagArtifactEvidence{}, err
+	}
+	defer os.RemoveAll(gnupgHome)
+	if err := os.Chmod(gnupgHome, 0o700); err != nil {
+		return signedTagArtifactEvidence{}, err
+	}
+	verifyEnv := append(os.Environ(), "GNUPGHOME="+gnupgHome)
+	if _, err := command(repo, verifyEnv, "gpg", "--batch", "--import", filepath.Join(repo, desc.PublicKeyPath)); err != nil {
+		return signedTagArtifactEvidence{}, fmt.Errorf("import pinned provider public key: %w", err)
+	}
+	var verifyOutput bytes.Buffer
+	verify := exec.Command("git", "verify-tag", "--raw", tagObjectOID)
+	verify.Dir, verify.Env, verify.Stdout, verify.Stderr = repo, verifyEnv, &verifyOutput, &verifyOutput
+	verifyErr := verify.Run()
+	signer, err := verifyPinnedTagSigner(verifyOutput.String(), verifyErr, desc.SigningFingerprint)
+	if err != nil {
+		return signedTagArtifactEvidence{}, err
+	}
+	if materializeRef {
+		zeroOID := strings.Repeat("0", oidLength)
+		if _, err := command(repo, nil, "git", "update-ref", "refs/tags/"+desc.Tag, tagObjectOID, zeroOID); err != nil {
+			return signedTagArtifactEvidence{}, fmt.Errorf("materialize local release tag ref: %w", err)
+		}
+	}
+	return signedTagArtifactEvidence{
+		Kind: "takoform.provider-signed-tag-verification@v1", ReleaseTag: desc.Tag, SourceCommit: expectedCommit,
+		WorkflowRun: expectedWorkflowRun, PreflightSHA256: metadata.PreflightSHA256,
+		TagObjectOID: tagObjectOID, TagObjectSHA256: metadata.TagObjectSHA256,
+		SignerFingerprint: signer, LocalRefMaterialized: materializeRef, Verified: true,
+	}, nil
+}
+
+func verifyClosedChecksums(root string, expectedFiles, checksumTargets []string) error {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	actualFiles := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("artifact entry %q is not a regular file", entry.Name())
+		}
+		actualFiles = append(actualFiles, entry.Name())
+	}
+	sort.Strings(actualFiles)
+	expected := append([]string(nil), expectedFiles...)
+	sort.Strings(expected)
+	if strings.Join(actualFiles, "\n") != strings.Join(expected, "\n") {
+		return fmt.Errorf("closed artifact inventory mismatch: got %v, want %v", actualFiles, expected)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, "SHA256SUMS"))
+	if err != nil {
+		return err
+	}
+	if len(raw) == 0 || raw[len(raw)-1] != '\n' {
+		return errors.New("SHA256SUMS must be non-empty and newline terminated")
+	}
+	wantTargets := append([]string(nil), checksumTargets...)
+	sort.Strings(wantTargets)
+	actualTargets := make([]string, 0, len(wantTargets))
+	for _, line := range strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n") {
+		if len(line) < 67 || line[64:66] != "  " || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(line[:64]) {
+			return fmt.Errorf("invalid checksum line %q", line)
+		}
+		name := line[66:]
+		if name == "" || filepath.Base(name) != name {
+			return fmt.Errorf("unsafe checksum target %q", name)
+		}
+		digest, _, err := fileDigest(filepath.Join(root, name))
+		if err != nil {
+			return err
+		}
+		if digest != line[:64] {
+			return fmt.Errorf("checksum mismatch for %s", name)
+		}
+		actualTargets = append(actualTargets, name)
+	}
+	sort.Strings(actualTargets)
+	if strings.Join(actualTargets, "\n") != strings.Join(wantTargets, "\n") {
+		return fmt.Errorf("checksum target inventory mismatch: got %v, want %v", actualTargets, wantTargets)
+	}
+	return nil
+}
+
+func verifyTagObjectBindings(raw []byte, releaseTag, sourceCommit, preflightSHA256, workflowRun string) error {
+	headerEnd := bytes.Index(raw, []byte("\n\n"))
+	signatureStart := bytes.Index(raw, []byte("-----BEGIN PGP SIGNATURE-----"))
+	if headerEnd < 0 || signatureStart <= headerEnd+2 {
+		return errors.New("tag object does not contain canonical headers, message, and PGP signature")
+	}
+	headers := strings.Split(string(raw[:headerEnd]), "\n")
+	if len(headers) != 4 || headers[0] != "object "+sourceCommit || headers[1] != "type commit" || headers[2] != "tag "+releaseTag ||
+		!strings.HasPrefix(headers[3], "tagger Takoform Provider Release <release@takoform.invalid> ") {
+		return errors.New("tag object headers do not bind the exact source commit, tag, type, and release identity")
+	}
+	expectedMessage := fmt.Sprintf("Takoform provider %s\n\nsource-commit: %s\npreflight-sha256: %s\nworkflow-run: %s\n", releaseTag, sourceCommit, preflightSHA256, workflowRun)
+	if string(raw[headerEnd+2:signatureStart]) != expectedMessage {
+		return errors.New("signed tag message does not bind the exact source, preflight inventory, and workflow run")
+	}
+	return nil
+}
+
+func readStrictJSONFile(path string, value any) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("JSON document contains trailing data")
+	}
+	return nil
 }
 
 func repositoryRoot() (string, error) {
@@ -743,6 +999,21 @@ func command(dir string, env []string, name string, args ...string) (string, err
 	if env != nil {
 		cmd.Env = env
 	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.String(), nil
+}
+
+func commandInput(dir string, env []string, input []byte, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	if env != nil {
+		cmd.Env = env
+	}
+	cmd.Stdin = bytes.NewReader(input)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
