@@ -1,6 +1,8 @@
 package providerlifecycle
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -30,13 +32,36 @@ func TestLoadCLIMatrixPinsDistinctCanonicalAddresses(t *testing.T) {
 }
 
 func TestStackConfigUsesExactCLIProviderAddress(t *testing.T) {
-	openTofu := stackConfig("https://forms.example.test", OpenTofuProviderAddress, 1)
-	if !strings.Contains(openTofu, `source = "`+OpenTofuProviderAddress+`"`) || strings.Contains(openTofu, TerraformProviderAddress) {
+	openTofu := stackConfig("https://forms.example.test", OpenTofuProviderAddress, "1.0.0", 1)
+	if !strings.Contains(openTofu, `source = "`+OpenTofuProviderAddress+`"`) || !strings.Contains(openTofu, `version = "1.0.0"`) || strings.Contains(openTofu, TerraformProviderAddress) {
 		t.Fatalf("OpenTofu config did not retain its exact FQN:\n%s", openTofu)
 	}
-	terra := stackConfig("https://forms.example.test", TerraformProviderAddress, 1)
+	terra := stackConfig("https://forms.example.test", TerraformProviderAddress, "1.0.0", 1)
 	if !strings.Contains(terra, `source = "`+TerraformProviderAddress+`"`) || strings.Contains(terra, OpenTofuProviderAddress) {
 		t.Fatalf("Terraform config did not retain its exact FQN:\n%s", terra)
+	}
+}
+
+func TestFindInstalledProviderBinaryRequiresOneExecutableRegularFile(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	providerDir := filepath.Join(root, ".terraform", "providers", "registry.example.test", "tako0614", "takoform", "1.0.0", "linux_amd64")
+	if err := os.MkdirAll(providerDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(providerDir, "terraform-provider-takoform_v1.0.0")
+	if err := os.WriteFile(binary, []byte("fixture"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := findInstalledProviderBinary(root, "1.0.0")
+	if err != nil || got != binary {
+		t.Fatalf("installed binary = %q, %v", got, err)
+	}
+	if err := os.WriteFile(filepath.Join(providerDir, "terraform-provider-takoform_duplicate"), []byte("fixture"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := findInstalledProviderBinary(root, "1.0.0"); err == nil || !strings.Contains(err.Error(), "2 provider binaries") {
+		t.Fatalf("duplicate binary error = %v", err)
 	}
 }
 
@@ -49,12 +74,25 @@ func TestValidateMatrixRejectsAddressAliasingAndEvidenceDrift(t *testing.T) {
 	terra := completeReport("Terraform", "1.15.8", TerraformProviderAddress)
 	matrix := MatrixReport{
 		Format: MatrixReportFormat, Classification: "supported-cli-fqn-candidate-matrix", PublicationReady: false,
+		InstallationSource:      LocalDevOverride,
 		ReleaseDescriptorSHA256: "sha256:" + strings.Repeat("a", 64),
 		CandidateSetSHA256:      candidateSetSHA256(), ProviderSchemaSHA256: "sha256:" + strings.Repeat("b", 64),
 		Reports: []Report{openTofu, terra},
 	}
 	if err := ValidateMatrix(matrix, requirements); err != nil {
 		t.Fatalf("valid matrix: %v", err)
+	}
+	if err := ValidateRegistryMatrix(matrix, requirements); err == nil {
+		t.Fatal("Registry matrix accepted local dev-override evidence")
+	}
+	registry := matrix
+	registry.InstallationSource = DirectRegistryInstall
+	registry.Reports = append([]Report(nil), matrix.Reports...)
+	for index := range registry.Reports {
+		registry.Reports[index].InstallationSource = DirectRegistryInstall
+	}
+	if err := ValidateRegistryMatrix(registry, requirements); err != nil {
+		t.Fatalf("valid direct Registry matrix: %v", err)
 	}
 
 	aliased := matrix
@@ -70,6 +108,22 @@ func TestValidateMatrixRejectsAddressAliasingAndEvidenceDrift(t *testing.T) {
 	drifted.Reports[1].Resources[0].Checks.Delete = false
 	if err := ValidateMatrix(drifted, requirements); err == nil {
 		t.Fatal("matrix accepted divergent lifecycle evidence")
+	}
+
+	duplicateResource := registry
+	duplicateResource.Reports = append([]Report(nil), registry.Reports...)
+	duplicateResource.Reports[0].Resources = append([]ResourceEvidence(nil), registry.Reports[0].Resources...)
+	duplicateResource.Reports[0].Resources[1] = duplicateResource.Reports[0].Resources[0]
+	if err := ValidateRegistryMatrix(duplicateResource, requirements); err == nil {
+		t.Fatal("Registry matrix accepted a duplicated resource identity")
+	}
+
+	unknownNegative := registry
+	unknownNegative.Reports = append([]Report(nil), registry.Reports...)
+	unknownNegative.Reports[0].NegativeChecks = append([]NegativeEvidence(nil), registry.Reports[0].NegativeChecks...)
+	unknownNegative.Reports[0].NegativeChecks[0].Name = "unreviewed-negative"
+	if err := ValidateRegistryMatrix(unknownNegative, requirements); err == nil {
+		t.Fatal("Registry matrix accepted an unreviewed negative fixture")
 	}
 }
 
@@ -88,9 +142,9 @@ func completeReport(product, version, address string) Report {
 	return Report{
 		Format: ReportFormat, Classification: "generic-lifecycle-candidate", PublicationReady: false,
 		BindingStatus: "exact-structural-candidate-set", RunnerSubject: RunnerSubject,
-		Protocol:           "Terraform provider protocol v6 + versioned Form host HTTP",
+		Protocol: providerProtocol, InstallationSource: LocalDevOverride,
 		CandidateSetSHA256: candidateSetSHA256(), ProviderSchemaSHA256: "sha256:" + strings.Repeat("b", 64),
-		ProviderBinary: ProviderBinaryIdentity{Version: "0.1.0-rc.1", SHA256: "sha256:" + strings.Repeat("d", 64)},
+		ProviderBinary: ProviderBinaryIdentity{Version: "0.1.0-rc.2", SHA256: "sha256:" + strings.Repeat("d", 64)},
 		CLI:            CLIIdentity{Product: product, Version: version, ProviderAddress: address, ExecutableName: strings.ToLower(product), ExecutableSHA256: "sha256:" + strings.Repeat("c", 64)},
 		Resources:      resources,
 		NegativeChecks: []NegativeEvidence{

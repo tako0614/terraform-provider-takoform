@@ -8,8 +8,8 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "release-check") {
-		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|release-check")
+	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "release-check") {
+		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|candidate-publication-check|release-check")
 		os.Exit(2)
 	}
 	var err error
@@ -17,6 +17,8 @@ func main() {
 		err = standardforms.Generate(".")
 	} else if os.Args[1] == "verify" {
 		err = standardforms.Verify(".")
+	} else if os.Args[1] == "candidate-publication-check" {
+		err = standardforms.VerifyCandidatePublication(".")
 	} else {
 		err = standardforms.VerifyReleaseReady(".")
 	}

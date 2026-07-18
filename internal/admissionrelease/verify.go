@@ -34,14 +34,13 @@ var (
 
 // VerifyAdmissionSet is the fail-closed release entry point. This foundation
 // performs strict retained-set, exact-candidate, canonical-digest, package,
-// and admission-structure checks. Retained evidence signatures are verified
-// offline; publication remains blocked until report and release-readback
-// closure checks are implemented as independent fail-closed gates.
+// and admission-structure checks. Every retained report, package index, and
+// Registry readback is then authenticated offline before Form admission opens.
 func VerifyAdmissionSet(root string, candidates CandidateSet) error {
 	return verifyAdmissionSet(root, candidates, nil)
 }
 
-func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedEvidenceVerifier) error {
+func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedSubjectVerifier) error {
 	if err := validateCandidateSet(candidates); err != nil {
 		return fmt.Errorf("standard-admission candidate set: %w", err)
 	}
@@ -50,7 +49,7 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedE
 	raw, err := readRetainedRelativeFile(root, setManifestPath, maxSetBytes)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("provider publication is blocked: missing %s", setManifestPath)
+			return fmt.Errorf("Form admission activation is blocked: missing %s", setManifestPath)
 		}
 		return fmt.Errorf("read %s: %w", setManifestPath, err)
 	}
@@ -63,7 +62,7 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedE
 		return fmt.Errorf("verify %s: %w", setManifestPath, err)
 	}
 
-	subjects := make([]RetainedSubject, 0, len(ordered))
+	subjects := make([]RetainedSubject, 0, len(ordered)*4+1)
 	for _, pair := range ordered {
 		evidenceFile := filepath.Join(admissionRoot, filepath.FromSlash(pair.entry.EvidencePath))
 		evidenceRaw, err := readRetainedRelativeFile(root, path.Join(admissionRootPath, pair.entry.EvidencePath), maxEvidenceBytes)
@@ -93,29 +92,82 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedE
 		if err != nil {
 			return fmt.Errorf("%s candidate definition: %w", pair.entry.Kind, err)
 		}
-		if _, err := standardform.ValidateEvidenceStructure(evidenceFile, report, definition); err != nil {
+		evidence, err := standardform.ValidateEvidenceStructure(evidenceFile, report, definition)
+		if err != nil {
 			return fmt.Errorf("%s retained admission structure: %w", pair.entry.Kind, err)
 		}
 
 		directory := path.Dir(pair.entry.EvidencePath)
 		subjects = append(subjects, RetainedSubject{
-			Kind:         pair.entry.Kind,
+			Kind: pair.entry.Kind, Role: roleAdmissionEvidence,
 			Path:         pair.entry.EvidencePath,
 			Canonical:    append([]byte(nil), canonical...),
 			SigstorePath: path.Join(directory, "evidence.sigstore.json"),
 		})
+
+		positiveNames := make([]string, 0, len(evidence.Fixtures.Positive))
+		for _, fixture := range evidence.Fixtures.Positive {
+			positiveNames = append(positiveNames, fixture.Name)
+		}
+		negativeNames := make([]string, 0, len(evidence.Fixtures.Negative))
+		for _, fixture := range evidence.Fixtures.Negative {
+			negativeNames = append(negativeNames, fixture.Name)
+		}
+		for _, retained := range []struct {
+			role   string
+			path   string
+			digest string
+			bundle string
+			proof  standardform.ConformanceProof
+		}{
+			{role: roleHostReport, path: pair.entry.HostReportPath, digest: pair.entry.HostReportDigest, bundle: pair.entry.HostReportSigstoreBundle, proof: evidence.Conformance.Host},
+			{role: roleProviderReport, path: pair.entry.ProviderReportPath, digest: pair.entry.ProviderReportDigest, bundle: pair.entry.ProviderReportSigstoreBundle, proof: evidence.Conformance.Provider},
+		} {
+			runnerReport, reportRaw, err := readCanonicalRunnerReport(admissionRoot, retained.path, maxReportBytes)
+			if err != nil {
+				return fmt.Errorf("%s %s: %w", pair.entry.Kind, retained.role, err)
+			}
+			if formpackage.DigestBytes(reportRaw) != retained.digest || retained.proof.EvidenceDigest != retained.digest {
+				return fmt.Errorf("%s %s digest does not match the admission proof", pair.entry.Kind, retained.role)
+			}
+			if err := validateRunnerReport(runnerReport, retained.role, retained.proof, positiveNames, negativeNames); err != nil {
+				return fmt.Errorf("%s: %w", pair.entry.Kind, err)
+			}
+			subjects = append(subjects, RetainedSubject{
+				Kind: pair.entry.Kind, Role: retained.role, Path: retained.path,
+				Canonical: reportRaw, SigstorePath: retained.bundle,
+			})
+		}
+
+		packageIndex, err := verifyPackageReleaseReadback(admissionRoot, pair, set.PackageVersion)
+		if err != nil {
+			return fmt.Errorf("%s package release readback: %w", pair.entry.Kind, err)
+		}
+		subjects = append(subjects, RetainedSubject{
+			Kind: pair.entry.Kind, Role: rolePackageIndex, Path: pair.entry.PackageIndexPath,
+			Canonical: packageIndex, SigstorePath: pair.entry.PackageIndexSigstoreBundle,
+		})
 	}
 
+	_, registryRaw, err := verifyRegistryReadback(root, admissionRoot, set)
+	if err != nil {
+		return fmt.Errorf("provider Registry install/readback: %w", err)
+	}
+	subjects = append(subjects, RetainedSubject{
+		Kind: "provider", Role: roleRegistryReadback, Path: set.ProviderRegistryReadback.Path,
+		Canonical: registryRaw, SigstorePath: set.ProviderRegistryReadback.SigstoreBundle,
+	})
+
 	if verifier == nil {
-		verifier, err = loadOfflineRetainedEvidenceVerifier(admissionRoot)
+		verifier, err = loadOfflineRetainedSubjectVerifier(admissionRoot)
 		if err != nil {
-			return fmt.Errorf("provider publication is blocked: load offline retained-evidence trust: %w", err)
+			return fmt.Errorf("Form admission activation is blocked: load offline retained-subject trust: %w", err)
 		}
 	}
-	if err := verifier.VerifyRetainedEvidence(admissionRoot, set, subjects); err != nil {
-		return fmt.Errorf("provider publication is blocked: authenticate retained standard-admission evidence: %w", err)
+	if err := verifier.VerifyRetainedSubjects(admissionRoot, set, subjects); err != nil {
+		return fmt.Errorf("Form admission activation is blocked: authenticate retained standard-admission closure: %w", err)
 	}
-	return fmt.Errorf("provider publication is blocked: authenticated host/provider report and release-readback closure is not implemented")
+	return nil
 }
 
 type matchedEntry struct {
@@ -135,6 +187,11 @@ func validateSet(set Set, candidates CandidateSet) ([]matchedEntry, error) {
 	}
 	if len(set.Entries) != len(candidates.Entries) {
 		return nil, fmt.Errorf("entry closure has %d entries, want exactly %d", len(set.Entries), len(candidates.Entries))
+	}
+	if set.ProviderRegistryReadback.Path != "registry/provider-readback.json" ||
+		set.ProviderRegistryReadback.SigstoreBundle != "registry/provider-readback.sigstore.json" ||
+		!formpackage.ValidDigest(set.ProviderRegistryReadback.Digest) {
+		return nil, fmt.Errorf("providerRegistryReadback must bind the canonical retained report and bundle")
 	}
 
 	expected := make(map[string]Candidate, len(candidates.Entries))
@@ -170,10 +227,17 @@ func validateSet(set Set, candidates CandidateSet) ([]matchedEntry, error) {
 		if !releaseCommitPattern.MatchString(entry.ReleaseCommit) {
 			return nil, fmt.Errorf("%s releaseCommit must be a lowercase 40-hex commit", entry.Kind)
 		}
-		if !formpackage.ValidDigest(entry.EvidenceDigest) {
-			return nil, fmt.Errorf("%s evidenceDigest is not a canonical SHA-256 digest", entry.Kind)
+		for label, digest := range map[string]string{
+			"evidenceDigest":               entry.EvidenceDigest,
+			"hostReportDigest":             entry.HostReportDigest,
+			"providerReportDigest":         entry.ProviderReportDigest,
+			"packageReleaseManifestDigest": entry.PackageReleaseManifestDigest,
+		} {
+			if !formpackage.ValidDigest(digest) {
+				return nil, fmt.Errorf("%s %s is not a canonical SHA-256 digest", entry.Kind, label)
+			}
 		}
-		if err := validateEntryPaths(entry); err != nil {
+		if err := validateEntryPaths(entry, candidates.PackageVersion); err != nil {
 			return nil, fmt.Errorf("%s retained paths: %w", entry.Kind, err)
 		}
 		ordered = append(ordered, matchedEntry{entry: entry, candidate: candidate})
@@ -211,12 +275,17 @@ func validateCandidateSet(candidates CandidateSet) error {
 	return nil
 }
 
-func validateEntryPaths(entry SetEntry) error {
+func validateEntryPaths(entry SetEntry, packageVersion string) error {
 	directory := path.Join("packages", entry.Slug)
 	for label, value := range map[string]string{
-		"evidencePath":       entry.EvidencePath,
-		"hostReportPath":     entry.HostReportPath,
-		"providerReportPath": entry.ProviderReportPath,
+		"evidencePath":                 entry.EvidencePath,
+		"hostReportPath":               entry.HostReportPath,
+		"hostReportSigstoreBundle":     entry.HostReportSigstoreBundle,
+		"providerReportPath":           entry.ProviderReportPath,
+		"providerReportSigstoreBundle": entry.ProviderReportSigstoreBundle,
+		"packageReleaseManifestPath":   entry.PackageReleaseManifestPath,
+		"packageIndexPath":             entry.PackageIndexPath,
+		"packageIndexSigstoreBundle":   entry.PackageIndexSigstoreBundle,
 	} {
 		if err := validateRelativePath(value); err != nil {
 			return fmt.Errorf("%s: %w", label, err)
@@ -224,17 +293,18 @@ func validateEntryPaths(entry SetEntry) error {
 	}
 	if entry.EvidencePath != path.Join(directory, "evidence.json") ||
 		entry.HostReportPath != path.Join(directory, "host-report.json") ||
-		entry.ProviderReportPath != path.Join(directory, "provider-report.json") {
+		entry.HostReportSigstoreBundle != path.Join(directory, "host-report.sigstore.json") ||
+		entry.ProviderReportPath != path.Join(directory, "provider-report.json") ||
+		entry.ProviderReportSigstoreBundle != path.Join(directory, "provider-report.sigstore.json") {
 		return fmt.Errorf("package evidence/report paths must use the canonical %s directory", directory)
 	}
-	if err := validateRelativePath(entry.PackageIndexSigstoreBundle); err != nil {
-		return fmt.Errorf("packageIndexSigstoreBundle: %w", err)
-	}
-	if !strings.HasPrefix(entry.PackageIndexSigstoreBundle, "releases/") {
-		return fmt.Errorf("packageIndexSigstoreBundle must be retained below releases")
-	}
-	if !strings.HasSuffix(entry.PackageIndexSigstoreBundle, ".sigstore.json") {
-		return fmt.Errorf("packageIndexSigstoreBundle must name a retained Sigstore JSON bundle")
+	releaseID := releaseIDForKind(entry.Kind)
+	releaseDirectory := path.Join("releases", releaseID, packageVersion)
+	base := "takoform-form-" + releaseID + "_" + packageVersion + "_package-index"
+	if entry.PackageReleaseManifestPath != path.Join(releaseDirectory, "release-manifest.json") ||
+		entry.PackageIndexPath != path.Join(releaseDirectory, base+".json") ||
+		entry.PackageIndexSigstoreBundle != path.Join(releaseDirectory, base+".sigstore.json") {
+		return fmt.Errorf("package release paths must use the canonical %s directory and asset names", releaseDirectory)
 	}
 	return nil
 }

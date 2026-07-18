@@ -21,7 +21,7 @@ func TestOfflineSigstoreVerifierChecksProofTimeSCTIdentityAndDigest(t *testing.T
 	retainedBundle := data.Bundle(t, "othername.sigstore.json")
 	policy := testPublisherPolicy()
 
-	verifier, err := newOfflineRetainedEvidenceVerifier(trustedRoot, policy)
+	verifier, err := newOfflineRoleVerifier(trustedRoot, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestOfflineSigstoreVerifierChecksProofTimeSCTIdentityAndDigest(t *testing.T
 
 	wrongPolicy := policy
 	wrongPolicy.CertificateIdentity = "unexpected@example.invalid"
-	wrongIdentityVerifier, err := newOfflineRetainedEvidenceVerifier(trustedRoot, wrongPolicy)
+	wrongIdentityVerifier, err := newOfflineRoleVerifier(trustedRoot, wrongPolicy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestOfflineSigstoreVerifierChecksProofTimeSCTIdentityAndDigest(t *testing.T
 		t.Fatalf("wrong identity error = %v", err)
 	}
 
-	withoutCTVerifier, err := newOfflineRetainedEvidenceVerifier(trustedMaterialWithoutCT{TrustedMaterial: trustedRoot}, policy)
+	withoutCTVerifier, err := newOfflineRoleVerifier(trustedMaterialWithoutCT{TrustedMaterial: trustedRoot}, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestOfflineSigstoreVerifierRequiresV03InclusionProof(t *testing.T) {
 func TestLoadOfflineVerifierRequiresPinnedRetainedTrust(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	if _, err := loadOfflineRetainedEvidenceVerifier(root); err == nil || !strings.Contains(err.Error(), offlineSigstorePinsPath) {
+	if _, err := loadOfflineRetainedSubjectVerifier(root); err == nil || !strings.Contains(err.Error(), offlineSigstorePinsPath) {
 		t.Fatalf("missing pins error = %v", err)
 	}
 
@@ -95,24 +95,36 @@ func TestLoadOfflineVerifierRequiresPinnedRetainedTrust(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeRetainedTestFile(t, root, canonicalTrustedRootPath, trustedRootRaw)
-	writeRetainedTestFile(t, root, canonicalPublisherPolicyPath, policyRaw)
+	for _, path := range []string{
+		canonicalPublisherPolicyPath,
+		canonicalHostReportPolicyPath,
+		canonicalProviderReportPolicyPath,
+		canonicalPackageIndexPolicyPath,
+		canonicalRegistryReadbackPolicyPath,
+	} {
+		writeRetainedTestFile(t, root, path, policyRaw)
+	}
 	pins := OfflineSigstorePins{
 		Format: offlineSigstorePinsFormat,
 		TrustedRoot: RetainedFile{
 			Path: canonicalTrustedRootPath, Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
-		PublisherPolicy: RetainedFile{
+		AdmissionEvidencePolicy: RetainedFile{
 			Path: canonicalPublisherPolicyPath, Digest: formDigest(policyRaw),
 		},
+		HostReportPolicy:       RetainedFile{Path: canonicalHostReportPolicyPath, Digest: formDigest(policyRaw)},
+		ProviderReportPolicy:   RetainedFile{Path: canonicalProviderReportPolicyPath, Digest: formDigest(policyRaw)},
+		PackageIndexPolicy:     RetainedFile{Path: canonicalPackageIndexPolicyPath, Digest: formDigest(policyRaw)},
+		RegistryReadbackPolicy: RetainedFile{Path: canonicalRegistryReadbackPolicyPath, Digest: formDigest(policyRaw)},
 	}
 	writeRetainedTestJSON(t, root, offlineSigstorePinsPath, pins)
-	if _, err := loadOfflineRetainedEvidenceVerifier(root); err == nil || !strings.Contains(err.Error(), "pinned trusted root digest mismatch") {
+	if _, err := loadOfflineRetainedSubjectVerifier(root); err == nil || !strings.Contains(err.Error(), "pinned trusted root digest mismatch") {
 		t.Fatalf("trusted-root pin mismatch error = %v", err)
 	}
 
 	pins.TrustedRoot.Digest = formDigest(trustedRootRaw)
 	writeRetainedTestJSON(t, root, offlineSigstorePinsPath, pins)
-	if _, err := loadOfflineRetainedEvidenceVerifier(root); err != nil {
+	if _, err := loadOfflineRetainedSubjectVerifier(root); err != nil {
 		t.Fatalf("load exact retained trust: %v", err)
 	}
 }

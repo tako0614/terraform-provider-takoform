@@ -12,13 +12,13 @@ import (
 func main() {
 	command := "verify"
 	args := os.Args[1:]
-	if len(args) > 0 && (args[0] == "verify" || args[0] == "render" || args[0] == "matrix" || args[0] == "render-matrix") {
+	if len(args) > 0 && (args[0] == "verify" || args[0] == "render" || args[0] == "matrix" || args[0] == "render-matrix" || args[0] == "registry-matrix" || args[0] == "render-registry-matrix") {
 		// Commands are deliberately limited below; parsing them before --cli keeps
 		// the common `verify --cli /path` invocation terse.
 		command = args[0]
 		args = args[1:]
 	}
-	if command == "matrix" || command == "render-matrix" {
+	if command == "matrix" || command == "render-matrix" || command == "registry-matrix" || command == "render-registry-matrix" {
 		runMatrix(command, args)
 		return
 	}
@@ -63,7 +63,7 @@ func runMatrix(command string, args []string) {
 	terraformPath := "terraform"
 	for len(args) > 0 {
 		if len(args) < 2 {
-			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance [matrix|render-matrix] [--opentofu PATH] [--terraform PATH]"))
+			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance [matrix|render-matrix|registry-matrix|render-registry-matrix] [--opentofu PATH] [--terraform PATH]"))
 		}
 		switch args[0] {
 		case "--opentofu":
@@ -71,7 +71,7 @@ func runMatrix(command string, args []string) {
 		case "--terraform":
 			terraformPath = args[1]
 		default:
-			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance [matrix|render-matrix] [--opentofu PATH] [--terraform PATH]"))
+			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance [matrix|render-matrix|registry-matrix|render-registry-matrix] [--opentofu PATH] [--terraform PATH]"))
 		}
 		args = args[2:]
 	}
@@ -79,11 +79,17 @@ func runMatrix(command string, args []string) {
 	if err != nil {
 		fail(err)
 	}
-	report, err := providerlifecycle.RunMatrix(context.Background(), root, openTofuPath, terraformPath)
+	registry := command == "registry-matrix" || command == "render-registry-matrix"
+	var report providerlifecycle.MatrixReport
+	if registry {
+		report, err = providerlifecycle.RunRegistryMatrix(context.Background(), root, openTofuPath, terraformPath)
+	} else {
+		report, err = providerlifecycle.RunMatrix(context.Background(), root, openTofuPath, terraformPath)
+	}
 	if err != nil {
 		fail(err)
 	}
-	if command == "render-matrix" {
+	if command == "render-matrix" || command == "render-registry-matrix" {
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(report); err != nil {
@@ -91,7 +97,11 @@ func runMatrix(command string, args []string) {
 		}
 		return
 	}
-	fmt.Printf("verified non-publishable supported CLI/FQN candidate matrix: %d CLIs, %d exact typed resources\n", len(report.Reports), len(report.Reports[0].Resources))
+	mode := "local dev-override"
+	if registry {
+		mode = "direct Registry install/readback"
+	}
+	fmt.Printf("verified non-publishable supported CLI/FQN candidate matrix (%s): %d CLIs, %d exact typed resources\n", mode, len(report.Reports), len(report.Reports[0].Resources))
 }
 
 func fail(err error) {

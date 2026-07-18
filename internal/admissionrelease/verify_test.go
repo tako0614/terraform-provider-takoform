@@ -2,7 +2,6 @@ package admissionrelease
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,7 +68,7 @@ func TestVerifyAdmissionSetRejectsRetainedEvidenceDigestMismatch(t *testing.T) {
 	}
 }
 
-func TestVerifyAdmissionSetRejectsStructurallyValidUnauthenticatedEvidence(t *testing.T) {
+func TestVerifyAdmissionSetRejectsStructurallyValidEvidenceWithoutReportClosure(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	packagePath := "conformance/form-package-v1/positive/standard/object-bucket"
@@ -120,23 +119,9 @@ func TestVerifyAdmissionSetRejectsStructurallyValidUnauthenticatedEvidence(t *te
 	writeRetainedTestFile(t, root, admissionRootPath+"/"+set.Entries[0].EvidencePath, canonical)
 
 	err = VerifyAdmissionSet(root, candidates)
-	if err == nil || !strings.Contains(err.Error(), "trust/offline-sigstore-pins.json") {
-		t.Fatalf("unauthenticated evidence error = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "host-report.json") {
+		t.Fatalf("missing report closure error = %v", err)
 	}
-
-	err = verifyAdmissionSet(root, candidates, acceptingRetainedEvidenceVerifier{})
-	if err == nil || !strings.Contains(err.Error(), "authenticated host/provider report and release-readback closure is not implemented") {
-		t.Fatalf("post-authentication closure error = %v", err)
-	}
-}
-
-type acceptingRetainedEvidenceVerifier struct{}
-
-func (acceptingRetainedEvidenceVerifier) VerifyRetainedEvidence(_ string, _ Set, subjects []RetainedSubject) error {
-	if len(subjects) != 1 || subjects[0].Kind != "ObjectBucket" || len(subjects[0].Canonical) == 0 {
-		return fmt.Errorf("unexpected retained subject closure")
-	}
-	return nil
 }
 
 func testCandidates() CandidateSet {
@@ -156,6 +141,10 @@ func testCandidates() CandidateSet {
 func testSet() Set {
 	return Set{
 		Format: setFormat, DefinitionVersion: "1.0.0", PackageVersion: "1.0.0", AdmissionReleaseTag: "forms/admissions/v1.0.0",
+		ProviderRegistryReadback: RegistryReadbackRef{
+			Path: "registry/provider-readback.json", Digest: testEvidenceDigest,
+			SigstoreBundle: "registry/provider-readback.sigstore.json",
+		},
 		Entries: []SetEntry{{
 			Kind: "ObjectBucket", Slug: "object-bucket",
 			FormRef: formpackage.FormRef{
@@ -163,11 +152,16 @@ func testSet() Set {
 			},
 			PackageDigest: testPackageDigest,
 			ReleaseTag:    "forms/" + releaseIDForKind("ObjectBucket") + "/v1.0.0", ReleaseCommit: "0123456789abcdef0123456789abcdef01234567",
-			PackageIndexSigstoreBundle: "releases/object-bucket-package-index.sigstore.json",
-			EvidencePath:               "packages/object-bucket/evidence.json", EvidenceDigest: testEvidenceDigest,
-			HostReportPath:     "packages/object-bucket/host-report.json",
-			ProviderReportPath: "packages/object-bucket/provider-report.json",
-			AdmissionStatus:    "portable-standard",
+			PackageReleaseManifestPath:   "releases/k-j5rguzldorbhky3lmv2a/1.0.0/release-manifest.json",
+			PackageReleaseManifestDigest: testEvidenceDigest,
+			PackageIndexPath:             "releases/k-j5rguzldorbhky3lmv2a/1.0.0/takoform-form-k-j5rguzldorbhky3lmv2a_1.0.0_package-index.json",
+			PackageIndexSigstoreBundle:   "releases/k-j5rguzldorbhky3lmv2a/1.0.0/takoform-form-k-j5rguzldorbhky3lmv2a_1.0.0_package-index.sigstore.json",
+			EvidencePath:                 "packages/object-bucket/evidence.json", EvidenceDigest: testEvidenceDigest,
+			HostReportPath: "packages/object-bucket/host-report.json", HostReportDigest: testEvidenceDigest,
+			HostReportSigstoreBundle: "packages/object-bucket/host-report.sigstore.json",
+			ProviderReportPath:       "packages/object-bucket/provider-report.json", ProviderReportDigest: testEvidenceDigest,
+			ProviderReportSigstoreBundle: "packages/object-bucket/provider-report.sigstore.json",
+			AdmissionStatus:              "portable-standard",
 		}},
 	}
 }

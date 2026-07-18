@@ -49,8 +49,8 @@ jobs:
       - name: Verify supported CLI/FQN lifecycle matrix
         run: go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 
-      - name: Refuse provider publication without external Form admission
-        run: go run ./cmd/standard-form-conformance release-check
+      - name: Verify candidate-only provider publication cannot activate Forms
+        run: go run ./cmd/standard-form-conformance candidate-publication-check
 
       - name: Import provider signing key
         id: import_gpg

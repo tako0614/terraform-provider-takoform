@@ -23,9 +23,12 @@ import (
 )
 
 const (
-	ReportFormat       = "takoform.provider-lifecycle-candidate@v2"
-	MatrixReportFormat = "takoform.provider-cli-fqn-matrix@v1"
-	RunnerSubject      = "takoform.provider-binary-cli-runner@v1"
+	ReportFormat          = "takoform.provider-lifecycle-candidate@v3"
+	MatrixReportFormat    = "takoform.provider-cli-fqn-matrix@v2"
+	RunnerSubject         = "takoform.provider-binary-cli-runner@v1"
+	LocalDevOverride      = "local-dev-override"
+	DirectRegistryInstall = "direct-registry-install"
+	providerProtocol      = "Terraform provider protocol v6 + versioned Form host HTTP"
 
 	OpenTofuProviderAddress  = "registry.opentofu.org/tako0614/takoform"
 	TerraformProviderAddress = "registry.terraform.io/tako0614/takoform"
@@ -83,6 +86,7 @@ type Report struct {
 	BindingStatus        string                     `json:"bindingStatus"`
 	RunnerSubject        string                     `json:"runnerSubject"`
 	Protocol             string                     `json:"protocol"`
+	InstallationSource   string                     `json:"installationSource"`
 	CandidateSetSHA256   string                     `json:"candidateSetSha256"`
 	ProviderSchemaSHA256 string                     `json:"providerSchemaSha256"`
 	ProviderBinary       ProviderBinaryIdentity     `json:"providerBinary"`
@@ -105,6 +109,7 @@ type MatrixReport struct {
 	ReleaseDescriptorSHA256 string   `json:"releaseDescriptorSha256"`
 	CandidateSetSHA256      string   `json:"candidateSetSha256"`
 	ProviderSchemaSHA256    string   `json:"providerSchemaSha256"`
+	InstallationSource      string   `json:"installationSource"`
 	Reports                 []Report `json:"reports"`
 }
 
@@ -129,6 +134,17 @@ var resourceCases = []resourceCase{
 }
 
 func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
+	return run(ctx, repoRoot, cliPath, LocalDevOverride)
+}
+
+// RunRegistry executes the same lifecycle without dev_overrides. The exact
+// version pinned by release/version.json must be installed by the CLI from its
+// canonical Registry address before any lifecycle action runs.
+func RunRegistry(ctx context.Context, repoRoot, cliPath string) (Report, error) {
+	return run(ctx, repoRoot, cliPath, DirectRegistryInstall)
+}
+
+func run(ctx context.Context, repoRoot, cliPath, installationSource string) (Report, error) {
 	cli, identity, err := identifyCLI(ctx, cliPath)
 	if err != nil {
 		return Report{}, err
@@ -155,9 +171,55 @@ func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	providerBinary := filepath.Join(binDir, "terraform-provider-takoform")
-	if output, err := runCommand(ctx, repoRoot, nil, "go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-buildid= -X main.version="+providerVersion, "-o", providerBinary, "."); err != nil {
-		return Report{}, fmt.Errorf("build provider binary: %w\n%s", err, output)
+	cliConfig := filepath.Join(temp, "terraformrc")
+	cliConfigBody := `provider_installation {
+	  direct {}
+}
+`
+	providerBinary := ""
+	if installationSource == LocalDevOverride {
+		providerBinary = filepath.Join(binDir, "terraform-provider-takoform")
+		if output, err := runCommand(ctx, repoRoot, nil, "go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-buildid= -X main.version="+providerVersion, "-o", providerBinary, "."); err != nil {
+			return Report{}, fmt.Errorf("build provider binary: %w\n%s", err, output)
+		}
+		cliConfigBody = fmt.Sprintf(`provider_installation {
+  dev_overrides {
+    %q = %q
+  }
+  direct {}
+}
+`, identity.ProviderAddress, binDir)
+	} else if installationSource != DirectRegistryInstall {
+		return Report{}, fmt.Errorf("unsupported provider installation source %q", installationSource)
+	}
+	if err := os.WriteFile(cliConfig, []byte(cliConfigBody), 0o600); err != nil {
+		return Report{}, err
+	}
+	env := append(os.Environ(),
+		"TF_CLI_CONFIG_FILE="+cliConfig,
+		"TF_IN_AUTOMATION=1",
+		"CHECKPOINT_DISABLE=1",
+		"TF_PLUGIN_CACHE_DIR=",
+		"TF_CLI_ARGS=",
+		"TF_CLI_ARGS_init=",
+	)
+	configPath := filepath.Join(workDir, "main.tf")
+	if err := os.WriteFile(configPath, []byte(stackConfig(server.URL, identity.ProviderAddress, providerVersion, 1)), 0o600); err != nil {
+		return Report{}, err
+	}
+	terraformRun := func(args ...string) (string, error) {
+		base := []string{"-chdir=" + workDir}
+		base = append(base, args...)
+		return runCommand(ctx, repoRoot, env, cli, base...)
+	}
+	if installationSource == DirectRegistryInstall {
+		if output, err := terraformRun("init", "-input=false", "-no-color"); err != nil {
+			return Report{}, fmt.Errorf("%s direct Registry install of %s v%s: %w\n%s", identity.Product, identity.ProviderAddress, providerVersion, err, output)
+		}
+		providerBinary, err = findInstalledProviderBinary(workDir, providerVersion)
+		if err != nil {
+			return Report{}, err
+		}
 	}
 	reportedVersion, err := runCommand(ctx, repoRoot, nil, providerBinary, "-version")
 	if err != nil || strings.TrimSpace(reportedVersion) != providerVersion {
@@ -166,30 +228,6 @@ func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
 	providerBinarySHA256, err := fileSHA256(providerBinary)
 	if err != nil {
 		return Report{}, err
-	}
-	cliConfig := filepath.Join(temp, "terraformrc")
-	if err := os.WriteFile(cliConfig, []byte(fmt.Sprintf(`provider_installation {
-  dev_overrides {
-    %q = %q
-  }
-  direct {}
-}
-`, identity.ProviderAddress, binDir)), 0o600); err != nil {
-		return Report{}, err
-	}
-	env := append(os.Environ(),
-		"TF_CLI_CONFIG_FILE="+cliConfig,
-		"TF_IN_AUTOMATION=1",
-		"CHECKPOINT_DISABLE=1",
-	)
-	configPath := filepath.Join(workDir, "main.tf")
-	if err := os.WriteFile(configPath, []byte(stackConfig(server.URL, identity.ProviderAddress, 1)), 0o600); err != nil {
-		return Report{}, err
-	}
-	terraformRun := func(args ...string) (string, error) {
-		base := []string{"-chdir=" + workDir}
-		base = append(base, args...)
-		return runCommand(ctx, repoRoot, env, cli, base...)
 	}
 	providerSchemaSHA256, err := captureProviderSchema(terraformRun, identity.ProviderAddress)
 	if err != nil {
@@ -232,13 +270,13 @@ func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
 		return Report{}, fmt.Errorf("exact FormRef/package substitution negative fixture was not rejected\n%s", negativeFormOutput)
 	}
 
-	if err := os.WriteFile(configPath, []byte(stackConfig(server.URL, identity.ProviderAddress, 2)), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(stackConfig(server.URL, identity.ProviderAddress, providerVersion, 2)), 0o600); err != nil {
 		return Report{}, err
 	}
 	if output, err := terraformRun("apply", "-auto-approve", "-input=false", "-no-color"); err != nil {
 		return Report{}, fmt.Errorf("%s update apply: %w\n%s", identity.Product, err, output)
 	}
-	immutableEvidence, err := exerciseReplacementPlans(workDir, configPath, server.URL, identity.ProviderAddress, terraformRun)
+	immutableEvidence, err := exerciseReplacementPlans(workDir, configPath, server.URL, identity.ProviderAddress, providerVersion, terraformRun)
 	if err != nil {
 		return Report{}, err
 	}
@@ -266,12 +304,23 @@ func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
 		return Report{}, fmt.Errorf("%s destroy: %w\n%s", identity.Product, err, output)
 	}
 
-	return host.report(identity, ProviderBinaryIdentity{Version: providerVersion, SHA256: providerBinarySHA256}, providerSchemaSHA256, immutableEvidence), nil
+	return host.report(identity, ProviderBinaryIdentity{Version: providerVersion, SHA256: providerBinarySHA256}, providerSchemaSHA256, installationSource, immutableEvidence), nil
 }
 
 func Validate(report Report) error {
+	return validateReport(report, LocalDevOverride)
+}
+
+// ValidateRegistry verifies a report that was produced only after the CLI
+// performed a direct Registry install of the pinned provider version.
+func ValidateRegistry(report Report) error {
+	return validateReport(report, DirectRegistryInstall)
+}
+
+func validateReport(report Report, installationSource string) error {
 	if report.Format != ReportFormat || report.Classification != "generic-lifecycle-candidate" || report.PublicationReady ||
 		report.BindingStatus != "exact-structural-candidate-set" || report.RunnerSubject != RunnerSubject || len(report.Resources) != len(resourceCases) ||
+		report.Protocol != providerProtocol || report.InstallationSource != installationSource ||
 		report.CandidateSetSHA256 != candidateSetSHA256() || !validDigest(report.ProviderSchemaSHA256) ||
 		report.ProviderBinary.Version == "" || !validDigest(report.ProviderBinary.SHA256) ||
 		report.CLI.Product == "" || report.CLI.Version == "" || report.CLI.ExecutableName == "" || !validDigest(report.CLI.ExecutableSHA256) {
@@ -281,23 +330,63 @@ func Validate(report Report) error {
 	if err != nil || report.CLI.ProviderAddress != expectedAddress {
 		return errors.New("provider lifecycle candidate used an unsupported CLI/FQN identity")
 	}
+	expectedResources := make(map[string]string, len(resourceCases))
+	for _, item := range resourceCases {
+		expectedResources[item.Kind] = item.ResourceType
+	}
+	seenResources := make(map[string]struct{}, len(report.Resources))
 	for _, resource := range report.Resources {
+		expectedType, known := expectedResources[resource.Kind]
+		if !known || resource.ResourceType != expectedType {
+			return fmt.Errorf("provider lifecycle candidate contains unexpected resource identity %s/%s", resource.Kind, resource.ResourceType)
+		}
+		if _, duplicate := seenResources[resource.Kind]; duplicate {
+			return fmt.Errorf("provider lifecycle candidate duplicates resource %s", resource.Kind)
+		}
+		seenResources[resource.Kind] = struct{}{}
 		checks := resource.Checks
 		if !checks.Create || !checks.Read || !checks.Update || !checks.Observe || !checks.Refresh || !checks.NativeImport ||
 			!checks.CLIImport || !checks.Delete || !checks.DriftState || !checks.NameReplace {
 			return fmt.Errorf("provider lifecycle candidate is incomplete for %s", resource.Kind)
 		}
 	}
-	if len(report.NegativeChecks) != 2 || !report.NegativeChecks[0].Passed || !report.NegativeChecks[1].Passed {
+	expectedNegative := map[string]string{
+		"response-name-substitution-rejected":           client.KindObjectBucket,
+		"response-package-digest-substitution-rejected": client.KindKVStore,
+	}
+	if len(report.NegativeChecks) != len(expectedNegative) {
 		return errors.New("provider lifecycle negative fixture is incomplete")
+	}
+	seenNegative := make(map[string]struct{}, len(report.NegativeChecks))
+	for _, evidence := range report.NegativeChecks {
+		expectedKind, known := expectedNegative[evidence.Name]
+		if !known || evidence.Kind != expectedKind || strings.TrimSpace(evidence.Fixture) == "" || !evidence.Passed {
+			return errors.New("provider lifecycle negative fixture is incomplete")
+		}
+		if _, duplicate := seenNegative[evidence.Name]; duplicate {
+			return fmt.Errorf("provider lifecycle duplicates negative fixture %q", evidence.Name)
+		}
+		seenNegative[evidence.Name] = struct{}{}
 	}
 	if len(report.ImmutableReplace) != len(resourceCases)+2 {
 		return errors.New("provider lifecycle immutable replacement evidence is incomplete")
 	}
+	expectedImmutable := make(map[string]struct{}, len(resourceCases)+2)
+	for _, item := range resourceCases {
+		expectedImmutable[item.Kind+"/name"] = struct{}{}
+	}
+	expectedImmutable[client.KindSQLDatabase+"/engine"] = struct{}{}
+	expectedImmutable[client.KindVectorIndex+"/dimensions"] = struct{}{}
+	seenImmutable := make(map[string]struct{}, len(report.ImmutableReplace))
 	for _, evidence := range report.ImmutableReplace {
-		if !evidence.Passed {
+		key := evidence.Kind + evidence.Field
+		if _, known := expectedImmutable[key]; !known || !evidence.Passed {
 			return fmt.Errorf("provider lifecycle immutable replacement failed for %s%s", evidence.Kind, evidence.Field)
 		}
+		if _, duplicate := seenImmutable[key]; duplicate {
+			return fmt.Errorf("provider lifecycle duplicates immutable replacement %s", key)
+		}
+		seenImmutable[key] = struct{}{}
 	}
 	return nil
 }
@@ -350,6 +439,16 @@ func loadProviderVersion(repoRoot string) (string, error) {
 }
 
 func RunMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath string) (MatrixReport, error) {
+	return runMatrix(ctx, repoRoot, openTofuPath, terraformPath, LocalDevOverride)
+}
+
+// RunRegistryMatrix runs the reviewed CLI/FQN matrix using direct Registry
+// installation rather than a locally built dev override.
+func RunRegistryMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath string) (MatrixReport, error) {
+	return runMatrix(ctx, repoRoot, openTofuPath, terraformPath, DirectRegistryInstall)
+}
+
+func runMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath, installationSource string) (MatrixReport, error) {
 	requirements, descriptorSHA256, err := LoadCLIMatrix(repoRoot)
 	if err != nil {
 		return MatrixReport{}, err
@@ -357,7 +456,12 @@ func RunMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath string
 	paths := map[string]string{"OpenTofu": openTofuPath, "Terraform": terraformPath}
 	reports := make([]Report, 0, len(requirements))
 	for _, requirement := range requirements {
-		report, err := Run(ctx, repoRoot, paths[requirement.Product])
+		var report Report
+		if installationSource == DirectRegistryInstall {
+			report, err = RunRegistry(ctx, repoRoot, paths[requirement.Product])
+		} else {
+			report, err = Run(ctx, repoRoot, paths[requirement.Product])
+		}
 		if err != nil {
 			return MatrixReport{}, err
 		}
@@ -365,19 +469,30 @@ func RunMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath string
 	}
 	matrix := MatrixReport{
 		Format: MatrixReportFormat, Classification: "supported-cli-fqn-candidate-matrix", PublicationReady: false,
-		ReleaseDescriptorSHA256: descriptorSHA256, CandidateSetSHA256: candidateSetSHA256(), Reports: reports,
+		ReleaseDescriptorSHA256: descriptorSHA256, CandidateSetSHA256: candidateSetSHA256(), InstallationSource: installationSource, Reports: reports,
 	}
 	if len(reports) > 0 {
 		matrix.ProviderSchemaSHA256 = reports[0].ProviderSchemaSHA256
 	}
-	if err := ValidateMatrix(matrix, requirements); err != nil {
+	if err := validateMatrix(matrix, requirements, installationSource); err != nil {
 		return MatrixReport{}, err
 	}
 	return matrix, nil
 }
 
 func ValidateMatrix(matrix MatrixReport, requirements []CLIRequirement) error {
+	return validateMatrix(matrix, requirements, LocalDevOverride)
+}
+
+// ValidateRegistryMatrix requires the direct Registry installation marker on
+// the matrix and every nested lifecycle report.
+func ValidateRegistryMatrix(matrix MatrixReport, requirements []CLIRequirement) error {
+	return validateMatrix(matrix, requirements, DirectRegistryInstall)
+}
+
+func validateMatrix(matrix MatrixReport, requirements []CLIRequirement, installationSource string) error {
 	if matrix.Format != MatrixReportFormat || matrix.Classification != "supported-cli-fqn-candidate-matrix" || matrix.PublicationReady ||
+		matrix.InstallationSource != installationSource ||
 		!validDigest(matrix.ReleaseDescriptorSHA256) || matrix.CandidateSetSHA256 != candidateSetSHA256() ||
 		!validDigest(matrix.ProviderSchemaSHA256) || len(matrix.Reports) != len(requirements) || len(requirements) != 2 {
 		return errors.New("provider CLI/FQN matrix identity is invalid")
@@ -390,7 +505,7 @@ func ValidateMatrix(matrix MatrixReport, requirements []CLIRequirement) error {
 	seen := map[string]bool{}
 	for index := range matrix.Reports {
 		report := matrix.Reports[index]
-		if err := Validate(report); err != nil {
+		if err := validateReport(report, installationSource); err != nil {
 			return err
 		}
 		requirement, ok := requirementByProduct[report.CLI.Product]
@@ -537,6 +652,12 @@ func candidateSetSHA256() string {
 	return fmt.Sprintf("sha256:%x", sum)
 }
 
+// CandidateSetSHA256 is the deterministic identity shared by local lifecycle
+// reports and authenticated Registry install/readback reports.
+func CandidateSetSHA256() string {
+	return candidateSetSHA256()
+}
+
 func fileSHA256(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -548,6 +669,34 @@ func fileSHA256(path string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("sha256:%x", hasher.Sum(nil)), nil
+}
+
+func findInstalledProviderBinary(workDir, version string) (string, error) {
+	providerRoot := filepath.Join(workDir, ".terraform", "providers")
+	matches := []string{}
+	err := filepath.WalkDir(providerRoot, func(filename string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "terraform-provider-takoform") {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+			matches = append(matches, filename)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("inspect directly installed provider: %w", err)
+	}
+	if len(matches) != 1 {
+		return "", fmt.Errorf("direct Registry install produced %d provider binaries for v%s, want exactly one", len(matches), version)
+	}
+	return matches[0], nil
 }
 
 func runCommand(ctx context.Context, dir string, env []string, name string, args ...string) (string, error) {
@@ -639,10 +788,12 @@ func validDigest(value string) bool {
 
 type terraformRunFunc func(args ...string) (string, error)
 
-func exerciseReplacementPlans(workDir, configPath, endpoint, providerAddress string, run terraformRunFunc) ([]ImmutableReplaceEvidence, error) {
-	defer func() { _ = os.WriteFile(configPath, []byte(stackConfig(endpoint, providerAddress, 2)), 0o600) }()
+func exerciseReplacementPlans(workDir, configPath, endpoint, providerAddress, providerVersion string, run terraformRunFunc) ([]ImmutableReplaceEvidence, error) {
+	defer func() {
+		_ = os.WriteFile(configPath, []byte(stackConfig(endpoint, providerAddress, providerVersion, 2)), 0o600)
+	}()
 	verifyPlan := func(revision int, expected map[string]bool) error {
-		if err := os.WriteFile(configPath, []byte(stackConfig(endpoint, providerAddress, revision)), 0o600); err != nil {
+		if err := os.WriteFile(configPath, []byte(stackConfig(endpoint, providerAddress, providerVersion, revision)), 0o600); err != nil {
 			return err
 		}
 		planPath := filepath.Join(workDir, fmt.Sprintf("replace-%d.tfplan", revision))
@@ -702,7 +853,7 @@ func exerciseReplacementPlans(workDir, configPath, endpoint, providerAddress str
 	return evidence, nil
 }
 
-func stackConfig(endpoint, providerAddress string, revision int) string {
+func stackConfig(endpoint, providerAddress, providerVersion string, revision int) string {
 	artifactDigit, artifactRevision, storageClass, consistency, engine := "1", 1, "standard", "strong", "sqlite"
 	queueRetries, queueBatch, port, dimensions := 5, 25, 8080, 1536
 	imageDigest, migrationsPath, metric := strings.Repeat("c", 64), "migrations/v1", "cosine"
@@ -722,7 +873,7 @@ func stackConfig(endpoint, providerAddress string, revision int) string {
 	digest := strings.Repeat(artifactDigit, 64)
 	return fmt.Sprintf(`terraform {
   required_providers {
-    takoform = { source = %q }
+    takoform = { source = %q, version = %q }
   }
 }
 provider "takoform" {
@@ -782,7 +933,7 @@ resource "takoform_schedule" "nightly_ingest" {
   timezone = "UTC"
   connections = [{ name = "workflow", resource = "DurableWorkflow/ingest", permissions = ["invoke"], projection = "schedule_trigger" }]
 }
-`, providerAddress, endpoint,
+`, providerAddress, providerVersion, endpoint,
 		nameSuffix, artifactRevision, digest,
 		nameSuffix, storageClass,
 		nameSuffix, consistency,
@@ -1082,7 +1233,7 @@ func (h *formHost) markDriftStateVerified() {
 	}
 }
 
-func (h *formHost) report(identity CLIIdentity, providerBinary ProviderBinaryIdentity, providerSchemaSHA256 string, immutable []ImmutableReplaceEvidence) Report {
+func (h *formHost) report(identity CLIIdentity, providerBinary ProviderBinaryIdentity, providerSchemaSHA256, installationSource string, immutable []ImmutableReplaceEvidence) Report {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	immutableByKindField := map[string]bool{}
@@ -1106,7 +1257,7 @@ func (h *formHost) report(identity CLIIdentity, providerBinary ProviderBinaryIde
 	return Report{
 		Format: ReportFormat, Classification: "generic-lifecycle-candidate", PublicationReady: false,
 		BindingStatus: "exact-structural-candidate-set", RunnerSubject: RunnerSubject,
-		Protocol:           "Terraform provider protocol v6 + versioned Form host HTTP",
+		Protocol: providerProtocol, InstallationSource: installationSource,
 		CandidateSetSHA256: candidateSetSHA256(), ProviderSchemaSHA256: providerSchemaSHA256,
 		ProviderBinary: providerBinary, CLI: identity,
 		Resources: resources,

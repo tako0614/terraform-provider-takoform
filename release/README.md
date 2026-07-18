@@ -39,10 +39,55 @@ complete lifecycle evidence for the exact embedded structural candidate set;
 the two provider addresses are recorded independently and are never rewritten
 as aliases.
 
-The tool never signs, uploads, tags, creates a GitHub Release, or publishes to a
-Registry/mirror. The environment-gated `v*` tag workflow is the only release
-producer. It imports the `provider-release` Environment secret key, verifies the
-signed tag, uses the pinned
+Provider publication is Phase 1 only. The `v*` workflow runs
+`candidate-publication-check`, which requires `publicationStatus:
+candidate-only` and the unchanged structural inventory. Publishing that exact
+binary, checksums, SBOM, provenance, and signatures does not mutate
+`admissionStatus`, create admission evidence, install a Form Package, or grant
+host activation authority. This separation is required because a genuine
+Public Registry readback cannot exist until the immutable provider version is
+already public.
+
+The normal `matrix` command intentionally uses a locally built provider binary
+through `dev_overrides`; it is a pre-publication regression gate and is not
+Registry evidence. After the first authorized publication, capture the
+post-publication readback with:
+
+```console
+go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
+  --opentofu tofu --terraform terraform \
+  > admission/v1/registry/provider-lifecycle-matrix.json
+go run ./cmd/admission-readback registry \
+  --matrix admission/v1/registry/provider-lifecycle-matrix.json \
+  --provider-release-commit "$(git rev-list -n 1 "$(jq -r .tag release/version.json)")" \
+  > admission/v1/registry/provider-readback.json
+```
+
+That mode pins the exact descriptor version in generated configuration, runs
+`init` with only `direct {}`, locates and hashes the downloaded provider
+binary, and repeats the complete lifecycle. Its report carries
+`installationSource: direct-registry-install`; the admission validator rejects
+otherwise-valid matrices carrying `local-dev-override`. The matrix is still
+not self-authenticating: it becomes usable only when an externally signed,
+canonical `takoform.provider-registry-readback@v1` document binds its digest,
+installed binary/schema digests, CLI/FQN identities, provider tag, and source
+commit.
+
+Phase 2 is the separate protected
+`.github/workflows/standard-admission-release.yml` lane selected by an exact
+`forms/admissions/v*` tag at the current protected-main commit. It runs the
+offline `release-check`, reruns both direct Registry installs and compares the
+fresh matrix to the authenticated retained matrix, signs the exact admission
+set with its own keyless workflow identity, attests the activation inventory,
+and publishes a distinct immutable GitHub Release. Only that release is Form
+admission activation. It needs a separately reviewed
+`standard-admission-release` Environment; provider signing credentials are not
+reused.
+
+The provider build tool never signs, uploads, tags, creates a GitHub Release,
+or publishes to a Registry/mirror. The environment-gated `v*` tag workflow is
+the only provider release producer. It imports the `provider-release`
+Environment secret key, verifies the signed tag, uses the pinned
 GoReleaser/Syft toolchain, creates the Registry manifest/checksum/binary detached
 signature assets, and records GitHub build provenance.
 

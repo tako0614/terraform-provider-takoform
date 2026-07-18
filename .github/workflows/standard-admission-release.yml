@@ -1,0 +1,229 @@
+name: Activate Standard Form admission
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact existing forms/admissions/v<semver> tag
+        required: true
+        type: string
+      expected_commit:
+        description: Exact approved 40-character protected-main commit
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: standard-admission-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  EXPECTED_COSIGN_VERSION: "v3.0.6"
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: standard-admission-release
+    steps:
+      - name: Check out the exact protected-main admission source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify the exact activation tag and source commit
+        id: source
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
+            echo "Admission activation must execute the current protected main commit" >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^forms/admissions/v[0-9][0-9A-Za-z.+-]*$ ]]; then
+            echo "Admission activation requires an exact forms/admissions/v* tag" >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ || "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo "expected_commit must equal the current protected-main commit" >&2
+            exit 1
+          fi
+          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
+          test "$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$EXPECTED_COMMIT"
+          test "$(jq -r .admissionReleaseTag admission/v1/standard-admission-set.json)" = "$RELEASE_TAG"
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "commit=$EXPECTED_COMMIT"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.5"
+          cache: true
+
+      - uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # pinned: v2
+        with:
+          tofu_version: 1.12.1
+          tofu_wrapper: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # pinned: v4.0.1
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Verify candidate publication remains separate from admission
+        run: go run ./cmd/standard-form-conformance candidate-publication-check
+
+      - name: Install pinned Cosign v3
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
+
+      - name: Re-run direct Registry install/readback for both supported CLIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          fresh="$RUNNER_TEMP/provider-lifecycle-matrix.json"
+          go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
+            --opentofu tofu --terraform terraform > "$fresh"
+          jq -S -c . "$fresh" > "$RUNNER_TEMP/fresh.canonical.json"
+          jq -S -c . admission/v1/registry/provider-lifecycle-matrix.json > "$RUNNER_TEMP/retained.canonical.json"
+          diff -u "$RUNNER_TEMP/retained.canonical.json" "$RUNNER_TEMP/fresh.canonical.json"
+
+      - name: Authenticate this run's exact Registry readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign_version="$(cosign version 2>&1)"
+          grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
+          subject="admission/v1/registry/provider-readback.json"
+          bundle="admission/v1/registry/provider-readback.sigstore.json"
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/standard-admission-release.yml@refs/heads/main"
+          provider_tag="$(jq -r .tag release/version.json)"
+          test "$(jq -r .providerReleaseTag "$subject")" = "$provider_tag"
+          git show-ref --verify --quiet "refs/tags/$provider_tag"
+          test "$(git rev-list -n 1 "refs/tags/$provider_tag")" = "$(jq -r .providerReleaseCommit "$subject")"
+          test ! -e "$bundle"
+          cosign sign-blob "$subject" --bundle "$bundle" --yes
+          cosign verify-blob "$subject" --bundle "$bundle" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+      - name: Verify the complete signed admission closure offline
+        run: go run ./cmd/standard-form-conformance release-check
+
+      - name: Build and sign the exact activation inventory
+        id: build
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cosign_version="$(cosign version 2>&1)"
+          grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
+          output="$RUNNER_TEMP/standard-admission"
+          mkdir -p "$output"
+          install -m 0644 admission/v1/standard-admission-set.json "$output/standard-admission-set.json"
+          install -m 0644 "$RUNNER_TEMP/provider-lifecycle-matrix.json" "$output/fresh-provider-lifecycle-matrix.json"
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner -C admission -cf - v1 \
+            | gzip -n > "$output/takoform-standard-admission-v1.tar.gz"
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/standard-admission-release.yml@refs/heads/main"
+          cosign sign-blob "$output/standard-admission-set.json" \
+            --bundle "$output/standard-admission-set.sigstore.json" --yes
+          cosign verify-blob "$output/standard-admission-set.json" \
+            --bundle "$output/standard-admission-set.sigstore.json" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          (cd "$output" && sha256sum \
+            fresh-provider-lifecycle-matrix.json \
+            standard-admission-set.json \
+            standard-admission-set.sigstore.json \
+            takoform-standard-admission-v1.tar.gz > SHA256SUMS)
+          {
+            echo "output=$output"
+            echo "identity=$identity"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Refuse an existing activation release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "An activation release already owns $RELEASE_TAG; refusing overwrite" >&2
+            exit 1
+          fi
+
+      - name: Create this run's activation draft
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          set -euo pipefail
+          response="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$RELEASE_TAG" -f name="$RELEASE_TAG" -F draft=true \
+            -f body='Takoform Standard Form admission activation. Provider publication alone does not grant this status.')"
+          release_id="$(jq -r .id <<<"$response")"
+          test "$release_id" != "null"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Upload and verify the exact activation inventory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          set -euo pipefail
+          output="${{ steps.build.outputs.output }}"
+          while IFS= read -r asset; do
+            gh release upload "$RELEASE_TAG" "$asset"
+          done < <(find "$output" -maxdepth 1 -type f -print | sort)
+          find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/expected-assets.txt"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[].name' | sort > "$RUNNER_TEMP/actual-assets.txt"
+          diff -u "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/actual-assets.txt"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .draft)" = "true"
+
+      - name: Attest the activation inventory
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-path: ${{ steps.build.outputs.output }}/*
+
+      - name: Publish this run's verified activation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          finalized="$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false)"
+          test "$(jq -r .draft <<<"$finalized")" = "false"
+
+      - name: Remove partial activation draft after failure
+        if: ${{ always() && !success() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$RELEASE_ID" ]]; then
+            exit 0
+          fi
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" 2>/dev/null || true)"
+          if [[ -n "$release_json" && "$(jq -r .draft <<<"$release_json")" == "true" && "$(jq -r .tag_name <<<"$release_json")" == "$RELEASE_TAG" ]]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
+          fi
