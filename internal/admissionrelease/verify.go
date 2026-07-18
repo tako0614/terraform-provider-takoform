@@ -34,20 +34,20 @@ var (
 
 // VerifyAdmissionSet is the fail-closed release entry point. This foundation
 // performs strict retained-set, exact-candidate, canonical-digest, package,
-// and admission-structure checks. Publication remains blocked until an
-// offline authenticated-retained-set verifier is implemented and wired here.
+// and admission-structure checks. Retained evidence signatures are verified
+// offline; publication remains blocked until report and release-readback
+// closure checks are implemented as independent fail-closed gates.
 func VerifyAdmissionSet(root string, candidates CandidateSet) error {
 	return verifyAdmissionSet(root, candidates, nil)
 }
 
-func verifyAdmissionSet(root string, candidates CandidateSet, verifier AuthenticatedRetainedSetVerifier) error {
+func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedEvidenceVerifier) error {
 	if err := validateCandidateSet(candidates); err != nil {
 		return fmt.Errorf("standard-admission candidate set: %w", err)
 	}
 
 	admissionRoot := filepath.Join(root, filepath.FromSlash(admissionRootPath))
-	manifestFile := filepath.Join(admissionRoot, setManifestName)
-	raw, err := readRetainedRegularFile(manifestFile, maxSetBytes)
+	raw, err := readRetainedRelativeFile(root, setManifestPath, maxSetBytes)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("provider publication is blocked: missing %s", setManifestPath)
@@ -66,7 +66,7 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier Authentic
 	subjects := make([]RetainedSubject, 0, len(ordered))
 	for _, pair := range ordered {
 		evidenceFile := filepath.Join(admissionRoot, filepath.FromSlash(pair.entry.EvidencePath))
-		evidenceRaw, err := readRetainedRegularFile(evidenceFile, maxEvidenceBytes)
+		evidenceRaw, err := readRetainedRelativeFile(root, path.Join(admissionRootPath, pair.entry.EvidencePath), maxEvidenceBytes)
 		if err != nil {
 			return fmt.Errorf("read %s evidence %q: %w", pair.entry.Kind, pair.entry.EvidencePath, err)
 		}
@@ -99,24 +99,23 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier Authentic
 
 		directory := path.Dir(pair.entry.EvidencePath)
 		subjects = append(subjects, RetainedSubject{
-			Kind:             pair.entry.Kind,
-			Path:             pair.entry.EvidencePath,
-			Canonical:        append([]byte(nil), canonical...),
-			SigstorePath:     path.Join(directory, "evidence.sigstore.json"),
-			HostReport:       pair.entry.HostReportPath,
-			HostSigstore:     path.Join(directory, "host-report.sigstore.json"),
-			ProviderReport:   pair.entry.ProviderReportPath,
-			ProviderSigstore: path.Join(directory, "provider-report.sigstore.json"),
+			Kind:         pair.entry.Kind,
+			Path:         pair.entry.EvidencePath,
+			Canonical:    append([]byte(nil), canonical...),
+			SigstorePath: path.Join(directory, "evidence.sigstore.json"),
 		})
 	}
 
 	if verifier == nil {
-		return fmt.Errorf("provider publication is blocked: authenticated retained standard-admission verifier is required; offline Sigstore verification is not implemented")
+		verifier, err = loadOfflineRetainedEvidenceVerifier(admissionRoot)
+		if err != nil {
+			return fmt.Errorf("provider publication is blocked: load offline retained-evidence trust: %w", err)
+		}
 	}
-	if err := verifier.VerifyRetainedSet(admissionRoot, set, subjects); err != nil {
-		return fmt.Errorf("provider publication is blocked: authenticate retained standard-admission set: %w", err)
+	if err := verifier.VerifyRetainedEvidence(admissionRoot, set, subjects); err != nil {
+		return fmt.Errorf("provider publication is blocked: authenticate retained standard-admission evidence: %w", err)
 	}
-	return nil
+	return fmt.Errorf("provider publication is blocked: authenticated host/provider report and release-readback closure is not implemented")
 }
 
 type matchedEntry struct {
@@ -303,4 +302,29 @@ func readRetainedRegularFile(filename string, maximum int64) ([]byte, error) {
 		return nil, fmt.Errorf("retained artifact exceeds %d bytes", maximum)
 	}
 	return raw, nil
+}
+
+func readRetainedRelativeFile(root, relative string, maximum int64) ([]byte, error) {
+	if err := validateRelativePath(relative); err != nil {
+		return nil, err
+	}
+	current := root
+	parts := strings.Split(filepath.FromSlash(relative), string(filepath.Separator))
+	for index, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return nil, err
+		}
+		if index < len(parts)-1 {
+			if !info.IsDir() {
+				return nil, fmt.Errorf("retained path component %q is not a directory", strings.Join(parts[:index+1], "/"))
+			}
+			continue
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("retained artifact is not a regular file")
+		}
+	}
+	return readRetainedRegularFile(current, maximum)
 }

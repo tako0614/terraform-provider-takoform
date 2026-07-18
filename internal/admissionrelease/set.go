@@ -27,8 +27,7 @@ type Candidate struct {
 
 // Set is the retained standard-admission set manifest. The manifest only
 // binds artifacts together; its portable-standard claims are not trusted
-// until an AuthenticatedRetainedSetVerifier authenticates every retained
-// subject and its release provenance.
+// until every retained subject and its release provenance are authenticated.
 type Set struct {
 	Format              string     `json:"format"`
 	DefinitionVersion   string     `json:"definitionVersion"`
@@ -57,21 +56,16 @@ type SetEntry struct {
 // RetainedSubject is a canonical evidence document whose exact bytes and
 // detached authentication material must be verified offline before release.
 type RetainedSubject struct {
-	Kind             string
-	Path             string
-	Canonical        []byte
-	SigstorePath     string
-	HostReport       string
-	HostSigstore     string
-	ProviderReport   string
-	ProviderSigstore string
+	Kind         string
+	Path         string
+	Canonical    []byte
+	SigstorePath string
 }
 
-// AuthenticatedRetainedSetVerifier is the mandatory authentication seam for
-// release evidence. Implementations must verify retained bytes offline,
-// including publisher policy, trusted-root digest pins, certificate/SCT
-// validity, and Rekor inclusion proof. Structural validation alone must never
-// implement this interface as a successful verifier.
-type AuthenticatedRetainedSetVerifier interface {
-	VerifyRetainedSet(admissionRoot string, set Set, subjects []RetainedSubject) error
+// RetainedEvidenceVerifier authenticates the admission evidence subjects in
+// one set. This intentionally narrower seam does not claim that host/provider
+// reports or package release readback have been authenticated. The outer
+// release gate remains blocked until those independent checks are implemented.
+type RetainedEvidenceVerifier interface {
+	VerifyRetainedEvidence(admissionRoot string, set Set, subjects []RetainedSubject) error
 }
