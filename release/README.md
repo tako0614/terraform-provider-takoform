@@ -103,13 +103,21 @@ ref is never release evidence.
 The provider build tool never signs, uploads, tags, creates a GitHub Release,
 or publishes to a Registry/mirror. Maintainers dispatch the protected
 `.github/workflows/provider-release-tag.yml` lane with the exact descriptor tag
-and current protected-main commit. It verifies the candidate, unused Git tag,
-absent Registry version, and reproducibility before importing the
-`provider-release` Environment key and pushing one annotated signed tag. No
-local human signing key is required. That push triggers `release.yml`, the only
-provider artifact producer. It imports the same Environment key, verifies the signed tag, uses the pinned
-GoReleaser/Syft toolchain, creates the Registry manifest/checksum/binary detached
-signature assets, and records GitHub build provenance.
+and current protected-main commit. Its read-only preflight job has no protected
+Environment, write token, or signing key and is the only job that executes Go,
+the candidate provider, or either Terraform-compatible CLI. Only canonical
+descriptor/build/SBOM/provenance/lifecycle digests cross the artifact boundary.
+The protected write job starts from a fresh exact checkout, performs only
+static JSON/hash/Git/Registry-absence checks, imports the `provider-release`
+Environment key, and pushes one annotated signed tag. No local human signing
+key is required. That push triggers `release.yml`, the only
+provider artifact producer. Its read-only build job verifies the signed tag
+with the public key, runs the candidate and pinned GoReleaser/Syft toolchain,
+and exports a checksum-closed unsigned inventory. A fresh protected publication
+job executes no provider or repository Go code: it statically rechecks the tag,
+inventory, Registry absence, and checksums, imports the same Environment key,
+adds only the detached checksum signature, publishes the exact draft assets,
+and records GitHub build provenance.
 
 Repository configuration is part of the trust boundary, not a claim made by
 this tree. The workflow references the `provider-release` GitHub Environment,
