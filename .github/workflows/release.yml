@@ -156,15 +156,23 @@ jobs:
           mkdir -p "$output"
           cp dist/*.zip dist/*.spdx.json "$output/"
           install -m 0644 ".release-tmp/terraform-provider-takoform_${version}_manifest.json" "$output/"
-          mapfile -t archives < <(find "$output" -maxdepth 1 -type f -name '*.zip' -printf '%f\n' | sort)
-          mapfile -t sboms < <(find "$output" -maxdepth 1 -type f -name '*.spdx.json' -printf '%f\n' | sort)
-          test "${#archives[@]}" = "5"
-          test "${#sboms[@]}" = "5"
-          mapfile -t unsigned < <(find "$output" -maxdepth 1 -type f -printf '%f\n' | sort)
-          test "${#unsigned[@]}" = "11"
+          expected="$RUNNER_TEMP/expected-unsigned-assets.txt"
+          {
+            for platform in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64 windows_amd64; do
+              archive="terraform-provider-takoform_${version}_${platform}.zip"
+              printf '%s\n' "$archive" "${archive}.spdx.json"
+            done
+            printf '%s\n' "terraform-provider-takoform_${version}_manifest.json"
+          } | sort > "$expected"
+          find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/actual-unsigned-assets.txt"
+          diff -u "$expected" "$RUNNER_TEMP/actual-unsigned-assets.txt"
+          mapfile -t unsigned < "$expected"
           checksum="terraform-provider-takoform_${version}_SHA256SUMS"
           (cd "$output" && for name in "${unsigned[@]}"; do sha256sum "$name"; done > "$checksum")
           (cd "$output" && sha256sum --check --strict "$checksum")
+          awk 'NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 ~ /\// { exit 1 } { print $2 }' "$output/$checksum" \
+            | sort > "$RUNNER_TEMP/checksum-assets.txt"
+          diff -u "$expected" "$RUNNER_TEMP/checksum-assets.txt"
 
       - name: Upload only the closed unsigned inventory
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -221,13 +229,24 @@ jobs:
           manifest="$output/terraform-provider-takoform_${version}_manifest.json"
           test -f "$checksum"
           test -f "$manifest"
-          mapfile -t archives < <(find "$output" -maxdepth 1 -type f -name '*.zip' -printf '%f\n' | sort)
-          mapfile -t sboms < <(find "$output" -maxdepth 1 -type f -name '*.spdx.json' -printf '%f\n' | sort)
-          test "${#archives[@]}" = "5"
-          test "${#sboms[@]}" = "5"
-          mapfile -t actual < <(find "$output" -maxdepth 1 -type f -printf '%f\n' | sort)
-          test "${#actual[@]}" = "12"
+          expected_unsigned="$RUNNER_TEMP/expected-unsigned-assets.txt"
+          {
+            for platform in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64 windows_amd64; do
+              archive="terraform-provider-takoform_${version}_${platform}.zip"
+              printf '%s\n' "$archive" "${archive}.spdx.json"
+            done
+            printf '%s\n' "$(basename "$manifest")"
+          } | sort > "$expected_unsigned"
+          {
+            cat "$expected_unsigned"
+            printf '%s\n' "$(basename "$checksum")"
+          } | sort > "$RUNNER_TEMP/expected-unsigned-inventory.txt"
+          find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/actual-unsigned-inventory.txt"
+          diff -u "$RUNNER_TEMP/expected-unsigned-inventory.txt" "$RUNNER_TEMP/actual-unsigned-inventory.txt"
           (cd "$output" && sha256sum --check --strict "$(basename "$checksum")")
+          awk 'NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 ~ /\// { exit 1 } { print $2 }' "$checksum" \
+            | sort > "$RUNNER_TEMP/checksum-assets.txt"
+          diff -u "$expected_unsigned" "$RUNNER_TEMP/checksum-assets.txt"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "A GitHub release already owns $GITHUB_REF_NAME; refusing overwrite" >&2
             exit 1
@@ -265,6 +284,12 @@ jobs:
           test ! -e "$signature"
           gpg --batch --local-user "$EXPECTED_GPG_FINGERPRINT" --output "$signature" --detach-sign "$checksum"
           gpg --batch --verify "$signature" "$checksum"
+          {
+            cat "$RUNNER_TEMP/expected-unsigned-inventory.txt"
+            printf '%s\n' "$(basename "$signature")"
+          } | sort > "$RUNNER_TEMP/expected-signed-inventory.txt"
+          find "$(dirname "$checksum")" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/actual-signed-inventory.txt"
+          diff -u "$RUNNER_TEMP/expected-signed-inventory.txt" "$RUNNER_TEMP/actual-signed-inventory.txt"
 
       - name: Create this run's provider release draft
         id: draft
