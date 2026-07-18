@@ -100,17 +100,43 @@ GPG fingerprint; import only `release/keys/provider-signing-key.asc` before an
 offline local check. A 40-character string without the corresponding immutable
 ref is never release evidence.
 
-The provider build tool never signs, uploads, tags, creates a GitHub Release,
-or publishes to a Registry/mirror. Maintainers dispatch the protected
+The provider build tool never signs, uploads, creates a GitHub Release, or
+publishes to a Registry/mirror. Maintainers dispatch the protected
 `.github/workflows/provider-release-tag.yml` lane with the exact descriptor tag
 and current protected-main commit. Its read-only preflight job has no protected
 Environment, write token, or signing key and is the only job that executes Go,
 the candidate provider, or either Terraform-compatible CLI. Only canonical
 descriptor/build/SBOM/provenance/lifecycle digests cross the artifact boundary.
-The protected write job starts from a fresh exact checkout, performs only
+The protected signing job starts from a fresh exact checkout, performs only
 static JSON/hash/Git/Registry-absence checks, imports the `provider-release`
-Environment key, and pushes one annotated signed tag. No local human signing
-key is required. That push triggers `release.yml`, the only
+Environment key, and exports a checksum-closed public signed-tag object without
+repository write credentials. The signed message binds the protected-main
+commit, complete preflight checksum inventory, and exact Actions run/attempt.
+No local human signing key is required.
+
+After the Environment-approved run succeeds, an admin maintainer downloads both
+artifacts and performs the second half of the release boundary locally:
+
+```console
+gh run download <run-id> --name provider-tag-preflight-<commit> --dir /tmp/provider-tag-preflight
+gh run download <run-id> --name provider-signed-tag-<run-id>-<attempt> --dir /tmp/provider-signed-tag
+go -C ./cmd/provider-release run . verify-tag-artifact \
+  --artifact /tmp/provider-signed-tag \
+  --preflight-artifact /tmp/provider-tag-preflight \
+  --expected-run-id <run-id> \
+  --expected-run-attempt <attempt> \
+  --expected-commit <commit> \
+  --materialize-ref
+git push origin refs/tags/$(jq -r .tag release/version.json):refs/tags/$(jq -r .tag release/version.json)
+```
+
+The verifier closes both inventories, reconstructs the exact public tag object
+with `git mktag`, checks its expected object id and peeled target, imports only
+the pinned public key in a temporary keyring, verifies the signer fingerprint,
+and refuses to replace an existing local tag ref. The final push uses the
+maintainer's existing admin authentication to cross the restricted tag-creation
+ruleset; the Actions job itself cannot bypass that rule. That push triggers
+`release.yml`, the only
 provider artifact producer. Its read-only build job verifies the signed tag
 with the public key, runs the candidate and pinned GoReleaser/Syft toolchain,
 and exports a checksum-closed unsigned inventory. A fresh protected publication

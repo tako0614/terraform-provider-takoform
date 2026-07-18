@@ -139,14 +139,14 @@ jobs:
     timeout-minutes: 10
     environment: provider-release
     permissions:
-      contents: write
+      contents: read
     steps:
-      - name: Check out the exact protected-main candidate with push authority
+      - name: Check out the exact protected-main candidate without write credentials
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Download read-only preflight evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -154,7 +154,7 @@ jobs:
           name: provider-tag-preflight-${{ github.sha }}
           path: ${{ runner.temp }}/provider-preflight
 
-      - name: Verify source, descriptor, evidence hashes, and unused authority
+      - name: Verify source, descriptor, evidence hashes, and remote absence
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.tag }}
@@ -235,7 +235,7 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: false
 
-      - name: Create and push one annotated signed tag without executing candidate code
+      - name: Create and export one annotated signed tag object without remote authority
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.tag }}
@@ -250,12 +250,54 @@ jobs:
           git fetch --no-tags origin main
           test "$(git rev-parse refs/remotes/origin/main)" = "$EXPECTED_COMMIT"
           test -z "$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG")"
+          preflight="$RUNNER_TEMP/provider-preflight"
+          preflight_sha256="sha256:$(sha256sum "$preflight/SHA256SUMS" | cut -d' ' -f1)"
+          workflow_path=".github/workflows/provider-release-tag.yml"
+          workflow_ref="$GITHUB_REPOSITORY/$workflow_path@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$workflow_ref"
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          workflow_run="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+          tag_message="$RUNNER_TEMP/provider-tag-message.txt"
+          printf 'Takoform provider %s\n\nsource-commit: %s\npreflight-sha256: %s\nworkflow-run: %s\n' \
+            "$RELEASE_TAG" "$EXPECTED_COMMIT" "$preflight_sha256" "$workflow_run" > "$tag_message"
           git config user.name "Takoform Provider Release"
           git config user.email "release@takoform.invalid"
-          git tag --sign --local-user "$EXPECTED_GPG_FINGERPRINT" \
-            --message "Takoform provider $RELEASE_TAG" "$RELEASE_TAG" "$EXPECTED_COMMIT"
+          git tag --sign --local-user "$EXPECTED_GPG_FINGERPRINT" --cleanup=verbatim \
+            --file "$tag_message" "$RELEASE_TAG" "$EXPECTED_COMMIT"
           test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = "tag"
           test "$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$EXPECTED_COMMIT"
           verification="$(git verify-tag --raw "$RELEASE_TAG" 2>&1)"
           grep -F "[GNUPG:] VALIDSIG $EXPECTED_GPG_FINGERPRINT " <<<"$verification"
-          git push origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          output="$RUNNER_TEMP/provider-signed-tag"
+          mkdir -p "$output"
+          tag_object_oid="$(git rev-parse "refs/tags/$RELEASE_TAG")"
+          git cat-file tag "$tag_object_oid" > "$output/tag-object"
+          test "$(git hash-object -t tag "$output/tag-object")" = "$tag_object_oid"
+          tag_object_sha256="sha256:$(sha256sum "$output/tag-object" | cut -d' ' -f1)"
+          jq -n -S -c \
+            --arg format "takoform.provider-signed-tag-artifact@v1" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflowPath "$workflow_path" \
+            --arg workflowRef "$GITHUB_WORKFLOW_REF" \
+            --arg runId "$GITHUB_RUN_ID" \
+            --arg runAttempt "$GITHUB_RUN_ATTEMPT" \
+            --arg sourceRef "$GITHUB_REF" \
+            --arg sourceCommit "$EXPECTED_COMMIT" \
+            --arg releaseTag "$RELEASE_TAG" \
+            --arg objectFormat "$(git rev-parse --show-object-format)" \
+            --arg tagObjectOid "$tag_object_oid" \
+            --arg tagObjectSha256 "$tag_object_sha256" \
+            --arg preflightSha256 "$preflight_sha256" \
+            --arg signerFingerprint "$EXPECTED_GPG_FINGERPRINT" \
+            '{format:$format,repository:$repository,workflowPath:$workflowPath,workflowRef:$workflowRef,runId:$runId,runAttempt:$runAttempt,sourceRef:$sourceRef,sourceCommit:$sourceCommit,releaseTag:$releaseTag,objectFormat:$objectFormat,tagObjectOid:$tagObjectOid,tagObjectSha256:$tagObjectSha256,preflightSha256:$preflightSha256,signerFingerprint:$signerFingerprint}' \
+            > "$output/metadata.json"
+          (cd "$output" && sha256sum metadata.json tag-object > SHA256SUMS)
+
+      - name: Upload the closed signed tag object for maintainer publication
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-signed-tag-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/provider-signed-tag
+          if-no-files-found: error
+          retention-days: 1
