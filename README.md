@@ -82,7 +82,7 @@ release evidence.
 
 ## Development
 
-Go 1.25 or later is required. Release builds are pinned to Go 1.26.5 or a
+Go 1.25.8 or later is required. Release builds are pinned to Go 1.26.5 or a
 newer patched toolchain declared by the release descriptor.
 
 ```console

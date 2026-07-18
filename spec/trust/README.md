@@ -84,6 +84,38 @@ still missing. Only authenticated host/provider evidence can classify the exact
 package `portable-standard`. The legacy packages remain compatibility
 candidates.
 
+## Offline standard-admission verification
+
+Provider `release-check` has an offline verifier for one deliberately narrow
+slice: the exact retained RFC 8785 admission-evidence document for each member
+of the compiled standard candidate set. It does not authenticate host/provider
+reports, a Form Package release readback, or Registry installation.
+
+The retained admission directory must contain these reviewed source inputs:
+
+```text
+admission/v1/trust/offline-sigstore-pins.json
+admission/v1/trust/trusted-root.json
+admission/v1/trust/publisher-policy.json
+admission/v1/packages/<slug>/evidence.sigstore.json
+```
+
+The pin manifest binds the exact trusted-root and publisher-policy bytes by
+canonical `sha256:<lowercase-hex>` digest. The strict publisher policy pins one
+exact Fulcio OIDC issuer, certificate identity, and Sigstore v0.3 media type.
+The verifier accepts only a keyless blob message signature over the exact
+retained evidence SHA-256, requires a verified Rekor inclusion proof and
+signed integrated time, validates the Fulcio chain and exact identity, and
+requires a verified certificate-transparency SCT. It reads only retained
+regular files below `admission/v1`; parent-directory symlinks and network
+lookups are rejected by construction.
+
+No production trust root, publisher policy, admission set, or bundle is
+installed in this repository yet. Their absence is intentional and keeps
+`release-check` fail-closed. Adding the real retained files and pin digests is
+evidence work, not a test-fixture generation step, and must not be synthesized
+from the distribution endpoint during release.
+
 ## Rotation and revocation
 
 Provider key rotation is additive: register and pin a new public key before a

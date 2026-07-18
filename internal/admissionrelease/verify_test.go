@@ -2,6 +2,7 @@ package admissionrelease
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,9 +120,23 @@ func TestVerifyAdmissionSetRejectsStructurallyValidUnauthenticatedEvidence(t *te
 	writeRetainedTestFile(t, root, admissionRootPath+"/"+set.Entries[0].EvidencePath, canonical)
 
 	err = VerifyAdmissionSet(root, candidates)
-	if err == nil || !strings.Contains(err.Error(), "authenticated retained standard-admission verifier is required") {
+	if err == nil || !strings.Contains(err.Error(), "trust/offline-sigstore-pins.json") {
 		t.Fatalf("unauthenticated evidence error = %v", err)
 	}
+
+	err = verifyAdmissionSet(root, candidates, acceptingRetainedEvidenceVerifier{})
+	if err == nil || !strings.Contains(err.Error(), "authenticated host/provider report and release-readback closure is not implemented") {
+		t.Fatalf("post-authentication closure error = %v", err)
+	}
+}
+
+type acceptingRetainedEvidenceVerifier struct{}
+
+func (acceptingRetainedEvidenceVerifier) VerifyRetainedEvidence(_ string, _ Set, subjects []RetainedSubject) error {
+	if len(subjects) != 1 || subjects[0].Kind != "ObjectBucket" || len(subjects[0].Canonical) == 0 {
+		return fmt.Errorf("unexpected retained subject closure")
+	}
+	return nil
 }
 
 func testCandidates() CandidateSet {

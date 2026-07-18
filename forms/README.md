@@ -47,8 +47,14 @@ The provider tag workflow runs
 `go run ./cmd/standard-form-conformance release-check`. That gate intentionally
 fails closed while these are the only available claims, so candidate FormRefs
 cannot silently become a public provider release identity. It can be opened
-only by a separately reviewed implementation that authenticates every external
-requirement and the exact signed admission evidence.
+only after every external requirement is authenticated. The gate now verifies
+retained RFC 8785 admission-evidence bytes against an offline Sigstore v0.3
+bundle, a digest-pinned trusted root, and a digest-pinned exact Fulcio
+publisher policy. It requires a Rekor inclusion proof, a signed integrated
+time, and a verified certificate-transparency SCT without contacting GitHub or
+another distribution endpoint. It still blocks publication after that slice:
+authenticated host/provider reports, package release readback, and Registry
+install/readback closure remain independent missing gates.
 
 The local Takosumi host proof and reviewed OpenTofu/Terraform FQN lifecycle
 matrix cover the candidate set; shared negative admission fixtures use the
