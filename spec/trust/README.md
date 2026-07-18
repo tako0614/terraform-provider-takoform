@@ -96,6 +96,14 @@ release. Failure in Phase 2 leaves the already-public provider harmlessly
 candidate-only. Provider GPG authority, package publisher identities, runner
 report identities, and admission-release identity remain distinct.
 
+The direct Registry provider is untrusted executable code. It runs only in a
+read-only job with no protected Environment, OIDC token, attestation, or
+repository-write permission. Only its canonical matrix crosses the job
+boundary. The protected authentication job starts from a fresh exact-commit
+checkout, compares that artifact byte-for-byte with reviewed source, and signs
+the readback; a separate publication job consumes only the signed,
+checksum-closed activation inventory.
+
 ## Offline standard-admission verification
 
 Provider `release-check` has an offline verifier for the complete retained
@@ -142,6 +150,10 @@ The `takoform.offline-sigstore-pins@v2` manifest binds the exact trusted-root
 and five role-specific publisher-policy byte sets by canonical
 `sha256:<lowercase-hex>` digest. Each strict publisher policy pins one exact
 Fulcio OIDC issuer, certificate identity, and Sigstore v0.3 media type. The
+five `(issuer, certificate identity)` pairs must be mutually distinct, so an
+admission-evidence publisher, host runner, provider runner, package publisher,
+or Registry-readback/admission authority cannot silently substitute for
+another role. The
 verifier accepts only keyless blob message signatures over the exact retained
 subject SHA-256, requires a verified Rekor inclusion proof and signed
 integrated time, validates the Fulcio chain and exact identity, and requires a
@@ -179,6 +191,13 @@ schema digests, both CLI/FQN/binary identities, and the exact direct-install
 matrix digest. `cmd/admission-readback` renders this unsigned canonical subject
 from a validated direct matrix; only the protected activation workflow signs
 it.
+
+Before authentication opens, `release-check` resolves the admission tag,
+provider tag, and every Form Package tag from fetched local Git refs and
+requires the exact retained commit. The admission tag must point at the current
+checkout, and the annotated provider tag must verify against the pinned
+`3510E75E05BBCC303B92D77934FC18AC897FB709` GPG fingerprint. Package index
+Sigstore authentication remains separate from that Git ref-existence fence.
 
 No production trust root, publisher policy, admission set, report, Registry
 readback, or bundle is installed in this repository yet. Their absence is

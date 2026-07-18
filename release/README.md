@@ -22,6 +22,13 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
+The pre-v1 legacy-provider migration report remains useful structural evidence,
+but its operator-host refresh/rollback drills are external migration evidence,
+not authority to publish this candidate-only provider. The tag and artifact
+lanes therefore run the structural migration proof without
+`--require-complete`; Form activation remains blocked by the separate complete
+Phase 2 admission closure.
+
 Every candidate contains:
 
 - one deterministic archive for each configured platform;
@@ -76,18 +83,31 @@ commit.
 Phase 2 is the separate protected
 `.github/workflows/standard-admission-release.yml` lane selected by an exact
 `forms/admissions/v*` tag at the current protected-main commit. It runs the
-offline `release-check`, reruns both direct Registry installs and compares the
-fresh matrix to the authenticated retained matrix, signs the exact admission
-set with its own keyless workflow identity, attests the activation inventory,
-and publishes a distinct immutable GitHub Release. Only that release is Form
-admission activation. It needs a separately reviewed
+offline `release-check` after rerunning both direct Registry installs in an
+isolated read-only job with no Environment, token-minting, attestation, or
+repository-write authority. That job exports only the canonical matrix. A
+fresh exact-commit checkout in the protected authentication job compares the
+artifact to reviewed source before signing anything. A separate write-authorized
+job reverifies the signed inventory and publishes a distinct immutable GitHub
+Release. Only that release is Form admission activation. It needs a separately reviewed
 `standard-admission-release` Environment; provider signing credentials are not
 reused.
 
+`release-check` also resolves the admission tag, provider tag, and every
+package tag from fetched local Git refs and requires their exact retained
+commits. The provider tag must be annotated and signed by the pinned provider
+GPG fingerprint; import only `release/keys/provider-signing-key.asc` before an
+offline local check. A 40-character string without the corresponding immutable
+ref is never release evidence.
+
 The provider build tool never signs, uploads, tags, creates a GitHub Release,
-or publishes to a Registry/mirror. The environment-gated `v*` tag workflow is
-the only provider release producer. It imports the `provider-release`
-Environment secret key, verifies the signed tag, uses the pinned
+or publishes to a Registry/mirror. Maintainers dispatch the protected
+`.github/workflows/provider-release-tag.yml` lane with the exact descriptor tag
+and current protected-main commit. It verifies the candidate, unused Git tag,
+absent Registry version, and reproducibility before importing the
+`provider-release` Environment key and pushing one annotated signed tag. No
+local human signing key is required. That push triggers `release.yml`, the only
+provider artifact producer. It imports the same Environment key, verifies the signed tag, uses the pinned
 GoReleaser/Syft toolchain, creates the Registry manifest/checksum/binary detached
 signature assets, and records GitHub build provenance.
 

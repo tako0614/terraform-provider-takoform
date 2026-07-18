@@ -90,19 +90,27 @@ func TestLoadOfflineVerifierRequiresPinnedRetainedTrust(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	policyRaw, err := json.Marshal(testPublisherPolicy())
-	if err != nil {
-		t.Fatal(err)
-	}
 	writeRetainedTestFile(t, root, canonicalTrustedRootPath, trustedRootRaw)
-	for _, path := range []string{
-		canonicalPublisherPolicyPath,
-		canonicalHostReportPolicyPath,
-		canonicalProviderReportPolicyPath,
-		canonicalPackageIndexPolicyPath,
-		canonicalRegistryReadbackPolicyPath,
-	} {
-		writeRetainedTestFile(t, root, path, policyRaw)
+	policyFiles := []struct {
+		path     string
+		identity string
+	}{
+		{canonicalPublisherPolicyPath, "admission-evidence!oidc.local"},
+		{canonicalHostReportPolicyPath, "host-report!oidc.local"},
+		{canonicalProviderReportPolicyPath, "provider-report!oidc.local"},
+		{canonicalPackageIndexPolicyPath, "package-index!oidc.local"},
+		{canonicalRegistryReadbackPolicyPath, "registry-readback!oidc.local"},
+	}
+	policyRaws := make(map[string][]byte, len(policyFiles))
+	for _, file := range policyFiles {
+		policy := testPublisherPolicy()
+		policy.CertificateIdentity = file.identity
+		policyRaw, err := json.Marshal(policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeRetainedTestFile(t, root, file.path, policyRaw)
+		policyRaws[file.path] = policyRaw
 	}
 	pins := OfflineSigstorePins{
 		Format: offlineSigstorePinsFormat,
@@ -110,12 +118,12 @@ func TestLoadOfflineVerifierRequiresPinnedRetainedTrust(t *testing.T) {
 			Path: canonicalTrustedRootPath, Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 		AdmissionEvidencePolicy: RetainedFile{
-			Path: canonicalPublisherPolicyPath, Digest: formDigest(policyRaw),
+			Path: canonicalPublisherPolicyPath, Digest: formDigest(policyRaws[canonicalPublisherPolicyPath]),
 		},
-		HostReportPolicy:       RetainedFile{Path: canonicalHostReportPolicyPath, Digest: formDigest(policyRaw)},
-		ProviderReportPolicy:   RetainedFile{Path: canonicalProviderReportPolicyPath, Digest: formDigest(policyRaw)},
-		PackageIndexPolicy:     RetainedFile{Path: canonicalPackageIndexPolicyPath, Digest: formDigest(policyRaw)},
-		RegistryReadbackPolicy: RetainedFile{Path: canonicalRegistryReadbackPolicyPath, Digest: formDigest(policyRaw)},
+		HostReportPolicy:       RetainedFile{Path: canonicalHostReportPolicyPath, Digest: formDigest(policyRaws[canonicalHostReportPolicyPath])},
+		ProviderReportPolicy:   RetainedFile{Path: canonicalProviderReportPolicyPath, Digest: formDigest(policyRaws[canonicalProviderReportPolicyPath])},
+		PackageIndexPolicy:     RetainedFile{Path: canonicalPackageIndexPolicyPath, Digest: formDigest(policyRaws[canonicalPackageIndexPolicyPath])},
+		RegistryReadbackPolicy: RetainedFile{Path: canonicalRegistryReadbackPolicyPath, Digest: formDigest(policyRaws[canonicalRegistryReadbackPolicyPath])},
 	}
 	writeRetainedTestJSON(t, root, offlineSigstorePinsPath, pins)
 	if _, err := loadOfflineRetainedSubjectVerifier(root); err == nil || !strings.Contains(err.Error(), "pinned trusted root digest mismatch") {
@@ -126,6 +134,14 @@ func TestLoadOfflineVerifierRequiresPinnedRetainedTrust(t *testing.T) {
 	writeRetainedTestJSON(t, root, offlineSigstorePinsPath, pins)
 	if _, err := loadOfflineRetainedSubjectVerifier(root); err != nil {
 		t.Fatalf("load exact retained trust: %v", err)
+	}
+
+	duplicatePolicyRaw := policyRaws[canonicalPublisherPolicyPath]
+	writeRetainedTestFile(t, root, canonicalHostReportPolicyPath, duplicatePolicyRaw)
+	pins.HostReportPolicy.Digest = formDigest(duplicatePolicyRaw)
+	writeRetainedTestJSON(t, root, offlineSigstorePinsPath, pins)
+	if _, err := loadOfflineRetainedSubjectVerifier(root); err == nil || !strings.Contains(err.Error(), "reuse the same certificate identity") {
+		t.Fatalf("duplicate role publisher identity error = %v", err)
 	}
 }
 

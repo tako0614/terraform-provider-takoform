@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,16 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 	}
 	writeRetainedTestFile(t, filepath.Join(root, "admission", "v1"), path.Join(releaseDirectory, indexName), indexRaw)
 	archiveRaw := buildPackageFixtureArchive(t, packageRoot, indexRaw)
+	trailingArchive := append(append([]byte(nil), archiveRaw...), []byte("trailing")...)
+	if err := verifyPackageArchive(trailingArchive, indexRaw); err == nil || !strings.Contains(err.Error(), "trailing bytes") {
+		t.Fatalf("trailing gzip member bytes error = %v", err)
+	}
+	nondeterministicArchive := buildPackageFixtureArchiveWithMutation(t, packageRoot, indexRaw, func(header *tar.Header) {
+		header.Uid = 1000
+	})
+	if err := verifyPackageArchive(nondeterministicArchive, indexRaw); err == nil || !strings.Contains(err.Error(), "deterministic regular file") {
+		t.Fatalf("nondeterministic tar metadata error = %v", err)
+	}
 	assets := map[string]struct {
 		media string
 		raw   []byte
@@ -132,10 +143,11 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 		Kind: "ObjectBucket", Slug: "object-bucket", PackagePath: packagePath, FormRef: packageReport.FormRef, PackageDigest: packageReport.PackageDigest,
 	}}}
 	verifier := &recordingSubjectVerifier{}
-	if err := verifyAdmissionSet(root, candidates, verifier); err != nil {
+	refVerifier := &recordingReleaseRefVerifier{}
+	if err := verifyAdmissionSet(root, candidates, verifier, refVerifier); err != nil {
 		t.Fatalf("complete authenticated local fixture: %v", err)
 	}
-	if verifier.subjectCount != 5 || formpackage.DigestBytes(registryRaw) != registryRef.Digest {
+	if verifier.subjectCount != 5 || !refVerifier.called || formpackage.DigestBytes(registryRaw) != registryRef.Digest {
 		t.Fatalf("authenticated closure = %d subjects, registry digest %s", verifier.subjectCount, registryRef.Digest)
 	}
 }
@@ -266,6 +278,15 @@ type recordingSubjectVerifier struct {
 	subjectCount int
 }
 
+type recordingReleaseRefVerifier struct {
+	called bool
+}
+
+func (v *recordingReleaseRefVerifier) VerifyReleaseRefs(_ string, _ Set, _ ProviderRegistryReadback) error {
+	v.called = true
+	return nil
+}
+
 func (v *recordingSubjectVerifier) VerifyRetainedSubjects(admissionRoot string, _ Set, subjects []RetainedSubject) error {
 	for _, subject := range subjects {
 		if len(subject.Canonical) == 0 {
@@ -301,6 +322,10 @@ func writeTestBundlePlaceholders(t *testing.T, root string, paths ...string) {
 }
 
 func buildPackageFixtureArchive(t *testing.T, packageRoot string, indexRaw []byte) []byte {
+	return buildPackageFixtureArchiveWithMutation(t, packageRoot, indexRaw, nil)
+}
+
+func buildPackageFixtureArchiveWithMutation(t *testing.T, packageRoot string, indexRaw []byte, mutate func(*tar.Header)) []byte {
 	t.Helper()
 	index, err := formpackage.ValidatePackageIndex(indexRaw)
 	if err != nil {
@@ -317,6 +342,9 @@ func buildPackageFixtureArchive(t *testing.T, packageRoot string, indexRaw []byt
 	write := func(name string, raw []byte) {
 		t.Helper()
 		header := &tar.Header{Name: name, Mode: 0o644, Size: int64(len(raw)), ModTime: time.Unix(0, 0).UTC(), AccessTime: time.Unix(0, 0).UTC(), ChangeTime: time.Unix(0, 0).UTC(), Format: tar.FormatPAX}
+		if mutate != nil {
+			mutate(header)
+		}
 		if err := tarWriter.WriteHeader(header); err != nil {
 			t.Fatal(err)
 		}

@@ -112,6 +112,7 @@ func loadOfflineRetainedSubjectVerifier(admissionRoot string) (RetainedSubjectVe
 		{role: roleRegistryReadback, retained: pins.RegistryReadbackPolicy},
 	}
 	result := &offlineRetainedSubjectVerifier{roles: make(map[string]*offlineRoleVerifier, len(retainedPolicies))}
+	seenPublisherIdentities := make(map[string]string, len(retainedPolicies))
 	for _, item := range retainedPolicies {
 		role, retained := item.role, item.retained
 		policyRaw, err := readPinnedRetainedFile(admissionRoot, role+" publisher policy", retained, maxPublisherPolicyBytes)
@@ -125,6 +126,11 @@ func loadOfflineRetainedSubjectVerifier(admissionRoot string) (RetainedSubjectVe
 		if err := decodeStrictJSON(policyRaw, &policy); err != nil {
 			return nil, fmt.Errorf("decode pinned %s publisher policy: %w", role, err)
 		}
+		identityKey := policy.OIDCIssuer + "\x00" + policy.CertificateIdentity
+		if priorRole, duplicate := seenPublisherIdentities[identityKey]; duplicate {
+			return nil, fmt.Errorf("%s and %s publisher policies reuse the same certificate identity", priorRole, role)
+		}
+		seenPublisherIdentities[identityKey] = role
 		verifier, err := newOfflineRoleVerifier(trustedRoot, policy)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", role, err)

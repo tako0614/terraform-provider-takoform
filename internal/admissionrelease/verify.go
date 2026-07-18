@@ -37,10 +37,10 @@ var (
 // and admission-structure checks. Every retained report, package index, and
 // Registry readback is then authenticated offline before Form admission opens.
 func VerifyAdmissionSet(root string, candidates CandidateSet) error {
-	return verifyAdmissionSet(root, candidates, nil)
+	return verifyAdmissionSet(root, candidates, nil, gitReleaseRefVerifier{})
 }
 
-func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedSubjectVerifier) error {
+func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedSubjectVerifier, refVerifier ReleaseRefVerifier) error {
 	if err := validateCandidateSet(candidates); err != nil {
 		return fmt.Errorf("standard-admission candidate set: %w", err)
 	}
@@ -149,7 +149,7 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedS
 		})
 	}
 
-	_, registryRaw, err := verifyRegistryReadback(root, admissionRoot, set)
+	registryReadback, registryRaw, err := verifyRegistryReadback(root, admissionRoot, set)
 	if err != nil {
 		return fmt.Errorf("provider Registry install/readback: %w", err)
 	}
@@ -157,6 +157,12 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedS
 		Kind: "provider", Role: roleRegistryReadback, Path: set.ProviderRegistryReadback.Path,
 		Canonical: registryRaw, SigstorePath: set.ProviderRegistryReadback.SigstoreBundle,
 	})
+	if refVerifier == nil {
+		return fmt.Errorf("Form admission activation is blocked: release-ref verifier is required")
+	}
+	if err := refVerifier.VerifyReleaseRefs(root, set, registryReadback); err != nil {
+		return fmt.Errorf("Form admission activation is blocked: immutable release refs: %w", err)
+	}
 
 	if verifier == nil {
 		verifier, err = loadOfflineRetainedSubjectVerifier(admissionRoot)

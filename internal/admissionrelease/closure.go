@@ -331,7 +331,8 @@ func verifyPackageArchive(archiveRaw, canonicalIndex []byte) error {
 	if err != nil {
 		return err
 	}
-	reader, err := gzip.NewReader(bytes.NewReader(archiveRaw))
+	compressed := bytes.NewReader(archiveRaw)
+	reader, err := gzip.NewReader(compressed)
 	if err != nil {
 		return err
 	}
@@ -361,9 +362,14 @@ func verifyPackageArchive(archiveRaw, canonicalIndex []byte) error {
 		if err != nil {
 			return fmt.Errorf("entry %d %q: %w", position, want.name, err)
 		}
+		epoch := time.Unix(0, 0).UTC()
+		expectedPAX := map[string]string{"atime": "0", "ctime": "0"}
 		if header.Name != want.name || header.Typeflag != tar.TypeReg || header.Mode != 0o644 || header.Size != want.size ||
-			!header.ModTime.Equal(time.Unix(0, 0).UTC()) || header.Linkname != "" {
-			return fmt.Errorf("entry %d is not the deterministic regular file %q", position, want.name)
+			!header.ModTime.Equal(epoch) || !header.AccessTime.Equal(epoch) || !header.ChangeTime.Equal(epoch) ||
+			header.Uid != 0 || header.Gid != 0 || header.Uname != "" || header.Gname != "" || header.Linkname != "" ||
+			header.Devmajor != 0 || header.Devminor != 0 || header.Format != tar.FormatPAX ||
+			!reflect.DeepEqual(header.PAXRecords, expectedPAX) || len(header.Xattrs) != 0 {
+			return fmt.Errorf("entry %d is not the deterministic regular file %q: uid=%d gid=%d uname=%q gname=%q format=%s pax=%v xattrs=%v", position, want.name, header.Uid, header.Gid, header.Uname, header.Gname, header.Format, header.PAXRecords, header.Xattrs)
 		}
 		payload, err := io.ReadAll(io.LimitReader(tarReader, want.size+1))
 		if err != nil {
@@ -379,6 +385,15 @@ func verifyPackageArchive(archiveRaw, canonicalIndex []byte) error {
 			return err
 		}
 		return fmt.Errorf("archive contains unlisted entry %q", header.Name)
+	}
+	if _, err := io.Copy(io.Discard, reader); err != nil {
+		return fmt.Errorf("finish gzip member: %w", err)
+	}
+	if err := reader.Close(); err != nil {
+		return fmt.Errorf("close gzip member: %w", err)
+	}
+	if compressed.Len() != 0 {
+		return fmt.Errorf("archive contains %d trailing bytes or an additional gzip member", compressed.Len())
 	}
 	return nil
 }

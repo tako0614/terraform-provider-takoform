@@ -86,3 +86,9 @@ type RetainedSubject struct {
 type RetainedSubjectVerifier interface {
 	VerifyRetainedSubjects(admissionRoot string, set Set, subjects []RetainedSubject) error
 }
+
+// ReleaseRefVerifier proves that every retained release claim resolves to the
+// exact immutable Git tag and commit in the checked-out source history.
+type ReleaseRefVerifier interface {
+	VerifyReleaseRefs(root string, set Set, readback ProviderRegistryReadback) error
+}
