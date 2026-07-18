@@ -94,8 +94,20 @@ go run ./cmd/migration-proof
 go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
+go run ./cmd/standard-form-conformance candidate-publication-check
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 ```
+
+`matrix` is the local `dev_overrides` regression gate. The separate
+`render-registry-matrix` command performs a version-pinned direct Registry
+install and exists for signed post-publication readback only; it is expected to
+fail before the first provider version is public.
+
+Provider publication and Standard Form admission are separate releases. The
+provider `v*` workflow can publish only while the descriptor and inventory are
+candidate-only; this never changes admission status. A later protected
+`forms/admissions/v*` workflow runs `release-check` over real signed package,
+runner, Registry, and admission evidence and is the only activation authority.
 
 Provider releases use the fail-closed signed `v*` tag workflow documented in
 [release/README.md](release/README.md). The signing key is pinned by fingerprint;

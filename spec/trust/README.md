@@ -84,12 +84,37 @@ still missing. Only authenticated host/provider evidence can classify the exact
 package `portable-standard`. The legacy packages remain compatibility
 candidates.
 
+Provider distribution and standard Form admission use an explicit two-phase
+authority split. Phase 1 may publish a signed, deterministic provider version
+while `release/version.json` and every package entry remain `candidate-only` /
+`external-required`; installability does not admit or activate any Form. Phase
+2 starts only after that same immutable version is available through both
+canonical Registry FQNs. The protected `forms/admissions/v*` workflow then
+requires the complete authenticated closure below, reruns and compares the
+direct install matrix, and publishes a separately signed admission activation
+release. Failure in Phase 2 leaves the already-public provider harmlessly
+candidate-only. Provider GPG authority, package publisher identities, runner
+report identities, and admission-release identity remain distinct.
+
+The direct Registry provider is untrusted executable code. It runs only in a
+read-only job with no protected Environment, OIDC token, attestation, or
+repository-write permission. Only its canonical matrix crosses the job
+boundary. The protected authentication job starts from a fresh exact-commit
+checkout, compares that artifact byte-for-byte with reviewed source, and signs
+the readback; a separate publication job consumes only the signed,
+checksum-closed activation inventory.
+
 ## Offline standard-admission verification
 
-Provider `release-check` has an offline verifier for one deliberately narrow
-slice: the exact retained RFC 8785 admission-evidence document for each member
-of the compiled standard candidate set. It does not authenticate host/provider
-reports, a Form Package release readback, or Registry installation.
+Provider `release-check` has an offline verifier for the complete retained
+standard-admission closure. For every member of the compiled candidate set it
+requires the exact RFC 8785 admission-evidence document, canonical host and
+provider runner reports, the immutable Form Package release manifest and its
+exact five-asset readback, and the keyless-signed canonical package index. One
+signed provider Registry readback must additionally bind the entire set to a
+two-CLI lifecycle matrix whose nested reports were produced with
+`installationSource: direct-registry-install`. A local `dev_overrides` matrix
+is explicitly rejected.
 
 The retained admission directory must contain these reviewed source inputs:
 
@@ -97,24 +122,88 @@ The retained admission directory must contain these reviewed source inputs:
 admission/v1/trust/offline-sigstore-pins.json
 admission/v1/trust/trusted-root.json
 admission/v1/trust/publisher-policy.json
+admission/v1/trust/host-report-policy.json
+admission/v1/trust/provider-report-policy.json
+admission/v1/trust/package-index-policy.json
+admission/v1/trust/registry-readback-policy.json
+admission/v1/registry/provider-readback.json
+admission/v1/registry/provider-readback.sigstore.json
+admission/v1/registry/provider-lifecycle-matrix.json
+admission/v1/packages/<slug>/evidence.json
 admission/v1/packages/<slug>/evidence.sigstore.json
+admission/v1/packages/<slug>/host-report.json
+admission/v1/packages/<slug>/host-report.sigstore.json
+admission/v1/packages/<slug>/provider-report.json
+admission/v1/packages/<slug>/provider-report.sigstore.json
+admission/v1/releases/<release-id>/<version>/release-manifest.json
+admission/v1/releases/<release-id>/<version>/<five exact release assets>
 ```
 
-The pin manifest binds the exact trusted-root and publisher-policy bytes by
-canonical `sha256:<lowercase-hex>` digest. The strict publisher policy pins one
-exact Fulcio OIDC issuer, certificate identity, and Sigstore v0.3 media type.
-The verifier accepts only a keyless blob message signature over the exact
-retained evidence SHA-256, requires a verified Rekor inclusion proof and
-signed integrated time, validates the Fulcio chain and exact identity, and
-requires a verified certificate-transparency SCT. It reads only retained
-regular files below `admission/v1`; parent-directory symlinks and network
-lookups are rejected by construction.
+All retained identities and readback bytes are reviewed source. The one
+`registry/provider-readback.sigstore.json` bundle is deliberately absent from
+the tagged tree and is produced in the protected Phase 2 workflow only after
+its fresh direct-install matrix exactly matches the retained matrix; the
+activation archive retains the generated bundle. The offline gate then
+authenticates it like every other subject before creating a release.
 
-No production trust root, publisher policy, admission set, or bundle is
-installed in this repository yet. Their absence is intentional and keeps
-`release-check` fail-closed. Adding the real retained files and pin digests is
-evidence work, not a test-fixture generation step, and must not be synthesized
-from the distribution endpoint during release.
+The `takoform.offline-sigstore-pins@v2` manifest binds the exact trusted-root
+and five role-specific publisher-policy byte sets by canonical
+`sha256:<lowercase-hex>` digest. Each strict publisher policy pins one exact
+Fulcio OIDC issuer, certificate identity, and Sigstore v0.3 media type. The
+five `(issuer, certificate identity)` pairs must be mutually distinct, so an
+admission-evidence publisher, host runner, provider runner, package publisher,
+or Registry-readback/admission authority cannot silently substitute for
+another role. The
+verifier accepts only keyless blob message signatures over the exact retained
+subject SHA-256, requires a verified Rekor inclusion proof and signed
+integrated time, validates the Fulcio chain and exact identity, and requires a
+verified certificate-transparency SCT. It reads only retained regular files
+below `admission/v1`; parent-directory symlinks and network lookups are
+rejected by construction.
+
+The admission set format is `takoform.standard-admission-set@v2`. The earlier
+v1 formats were an intentionally non-opening pre-release foundation: no real
+set or trust pins were installed and no provider release could pass them.
+Therefore v2 is a clean pre-publication contract replacement, not a migration
+of admitted or customer state. Test fixtures use an explicit in-process fake
+subject verifier and are never written under the repository's `admission/`
+path; they do not represent signatures or live evidence.
+
+Each canonical `takoform.standard-runner-report@v1` document is role-bound as
+`host-report` or `provider-report` and contains only its runner subject and
+version, exact `(FormRef, packageDigest)`, `passed` status, all eight lifecycle
+booleans, named positive fixture results, and named negative results normalized
+to `invalid_argument`. Its canonical SHA-256 must equal both the v2 set entry's
+role digest and the corresponding `AdmissionEvidence.conformance.*.evidenceDigest`.
+Unknown fields, duplicate/failed fixtures, incomplete lifecycle, identity
+substitution, and non-portable negative codes fail closed.
+
+The deterministic package readback does not trust a download URL. The v2 set
+pins the exact release-manifest bytes; the validator rereads all five assets,
+checks every size and digest, requires the canonical index, archive, Sigstore
+bundle, SPDX SBOM, and in-toto provenance names/media types, compares the index
+to the provider-compiled candidate, verifies the deterministic tar entry order,
+metadata, payload sizes/digests, and absence of unlisted archive entries, and
+then authenticates that exact index.
+The canonical `takoform.provider-registry-readback@v1` similarly binds the
+provider version/tag/commit, current release descriptor, candidate-set and
+schema digests, both CLI/FQN/binary identities, and the exact direct-install
+matrix digest. `cmd/admission-readback` renders this unsigned canonical subject
+from a validated direct matrix; only the protected activation workflow signs
+it.
+
+Before authentication opens, `release-check` resolves the admission tag,
+provider tag, and every Form Package tag from fetched local Git refs and
+requires the exact retained commit. The admission tag must point at the current
+checkout, and the annotated provider tag must verify against the pinned
+`3510E75E05BBCC303B92D77934FC18AC897FB709` GPG fingerprint. Package index
+Sigstore authentication remains separate from that Git ref-existence fence.
+
+No production trust root, publisher policy, admission set, report, Registry
+readback, or bundle is installed in this repository yet. Their absence is
+intentional and keeps `release-check` fail-closed. Adding the real retained
+files and pin digests is evidence work, not a test-fixture generation step,
+and must not be synthesized from the distribution endpoint during release.
 
 ## Rotation and revocation
 

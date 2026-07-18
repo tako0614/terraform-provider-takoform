@@ -22,6 +22,13 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
+The pre-v1 legacy-provider migration report remains useful structural evidence,
+but its operator-host refresh/rollback drills are external migration evidence,
+not authority to publish this candidate-only provider. The tag and artifact
+lanes therefore run the structural migration proof without
+`--require-complete`; Form activation remains blocked by the separate complete
+Phase 2 admission closure.
+
 Every candidate contains:
 
 - one deterministic archive for each configured platform;
@@ -39,12 +46,78 @@ complete lifecycle evidence for the exact embedded structural candidate set;
 the two provider addresses are recorded independently and are never rewritten
 as aliases.
 
-The tool never signs, uploads, tags, creates a GitHub Release, or publishes to a
-Registry/mirror. The environment-gated `v*` tag workflow is the only release
-producer. It imports the `provider-release` Environment secret key, verifies the
-signed tag, uses the pinned
-GoReleaser/Syft toolchain, creates the Registry manifest/checksum/binary detached
-signature assets, and records GitHub build provenance.
+Provider publication is Phase 1 only. The `v*` workflow runs
+`candidate-publication-check`, which requires `publicationStatus:
+candidate-only` and the unchanged structural inventory. Publishing that exact
+binary, checksums, SBOM, provenance, and signatures does not mutate
+`admissionStatus`, create admission evidence, install a Form Package, or grant
+host activation authority. This separation is required because a genuine
+Public Registry readback cannot exist until the immutable provider version is
+already public.
+
+The normal `matrix` command intentionally uses a locally built provider binary
+through `dev_overrides`; it is a pre-publication regression gate and is not
+Registry evidence. After the first authorized publication, capture the
+post-publication readback with:
+
+```console
+go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
+  --opentofu tofu --terraform terraform \
+  > admission/v1/registry/provider-lifecycle-matrix.json
+go run ./cmd/admission-readback registry \
+  --matrix admission/v1/registry/provider-lifecycle-matrix.json \
+  --provider-release-commit "$(git rev-list -n 1 "$(jq -r .tag release/version.json)")" \
+  > admission/v1/registry/provider-readback.json
+```
+
+That mode pins the exact descriptor version in generated configuration, runs
+`init` with only `direct {}`, locates and hashes the downloaded provider
+binary, and repeats the complete lifecycle. Its report carries
+`installationSource: direct-registry-install`; the admission validator rejects
+otherwise-valid matrices carrying `local-dev-override`. The matrix is still
+not self-authenticating: it becomes usable only when an externally signed,
+canonical `takoform.provider-registry-readback@v1` document binds its digest,
+installed binary/schema digests, CLI/FQN identities, provider tag, and source
+commit.
+
+Phase 2 is the separate protected
+`.github/workflows/standard-admission-release.yml` lane selected by an exact
+`forms/admissions/v*` tag at the current protected-main commit. It runs the
+offline `release-check` after rerunning both direct Registry installs in an
+isolated read-only job with no Environment, token-minting, attestation, or
+repository-write authority. That job exports only the canonical matrix. A
+fresh exact-commit checkout in the protected authentication job compares the
+artifact to reviewed source before signing anything. A separate write-authorized
+job reverifies the signed inventory and publishes a distinct immutable GitHub
+Release. Only that release is Form admission activation. It needs a separately reviewed
+`standard-admission-release` Environment; provider signing credentials are not
+reused.
+
+`release-check` also resolves the admission tag, provider tag, and every
+package tag from fetched local Git refs and requires their exact retained
+commits. The provider tag must be annotated and signed by the pinned provider
+GPG fingerprint; import only `release/keys/provider-signing-key.asc` before an
+offline local check. A 40-character string without the corresponding immutable
+ref is never release evidence.
+
+The provider build tool never signs, uploads, tags, creates a GitHub Release,
+or publishes to a Registry/mirror. Maintainers dispatch the protected
+`.github/workflows/provider-release-tag.yml` lane with the exact descriptor tag
+and current protected-main commit. Its read-only preflight job has no protected
+Environment, write token, or signing key and is the only job that executes Go,
+the candidate provider, or either Terraform-compatible CLI. Only canonical
+descriptor/build/SBOM/provenance/lifecycle digests cross the artifact boundary.
+The protected write job starts from a fresh exact checkout, performs only
+static JSON/hash/Git/Registry-absence checks, imports the `provider-release`
+Environment key, and pushes one annotated signed tag. No local human signing
+key is required. That push triggers `release.yml`, the only
+provider artifact producer. Its read-only build job verifies the signed tag
+with the public key, runs the candidate and pinned GoReleaser/Syft toolchain,
+and exports a checksum-closed unsigned inventory. A fresh protected publication
+job executes no provider or repository Go code: it statically rechecks the tag,
+inventory, Registry absence, and checksums, imports the same Environment key,
+adds only the detached checksum signature, publishes the exact draft assets,
+and records GitHub build provenance.
 
 Repository configuration is part of the trust boundary, not a claim made by
 this tree. The workflow references the `provider-release` GitHub Environment,

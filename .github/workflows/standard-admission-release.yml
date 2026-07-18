@@ -1,0 +1,321 @@
+name: Activate Standard Form admission
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact existing forms/admissions/v<semver> tag
+        required: true
+        type: string
+      expected_commit:
+        description: Exact approved 40-character protected-main commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standard-admission-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  EXPECTED_COSIGN_VERSION: "v3.0.6"
+  EXPECTED_GPG_FINGERPRINT: "3510E75E05BBCC303B92D77934FC18AC897FB709"
+
+jobs:
+  direct-registry-readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out read-only lifecycle tooling
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.5"
+          cache: true
+
+      - uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # pinned: v2
+        with:
+          tofu_version: 1.12.1
+          tofu_wrapper: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # pinned: v4.0.1
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Verify candidate publication remains separate from admission
+        run: go run ./cmd/standard-form-conformance candidate-publication-check
+
+      - name: Execute untrusted Registry provider only in this read-only job
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/provider-lifecycle-matrix.json"
+          go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
+            --opentofu tofu --terraform terraform > "$output"
+          jq -S -c . "$output" > "$RUNNER_TEMP/provider-lifecycle-matrix.canonical.json"
+
+      - name: Export only the fresh canonical matrix
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: direct-registry-readback-${{ github.sha }}
+          path: ${{ runner.temp }}/provider-lifecycle-matrix.canonical.json
+          if-no-files-found: error
+          retention-days: 1
+
+  authenticate:
+    needs: direct-registry-readback
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: standard-admission-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out the exact protected-main admission source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify the exact activation tag and source commit
+        id: source
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
+            echo "Admission activation must execute the current protected main commit" >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^forms/admissions/v[0-9][0-9A-Za-z.+-]*$ ]]; then
+            echo "Admission activation requires an exact forms/admissions/v* tag" >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ || "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo "expected_commit must equal the current protected-main commit" >&2
+            exit 1
+          fi
+          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
+          test "$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$EXPECTED_COMMIT"
+          test "$(jq -r .admissionReleaseTag admission/v1/standard-admission-set.json)" = "$RELEASE_TAG"
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "commit=$EXPECTED_COMMIT"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.5"
+          cache: true
+
+      - name: Install pinned Cosign v3
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
+
+      - name: Import only the pinned provider verification key
+        shell: bash
+        run: |
+          set -euo pipefail
+          fingerprints="$(gpg --batch --with-colons --import-options show-only --import release/keys/provider-signing-key.asc | awk -F: '$1 == "fpr" { print $10 }')"
+          test "$fingerprints" = "$EXPECTED_GPG_FINGERPRINT"
+          gpg --batch --import release/keys/provider-signing-key.asc
+
+      - name: Download the isolated direct Registry readback
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: direct-registry-readback-${{ github.sha }}
+          path: ${{ runner.temp }}/direct-registry-readback
+
+      - name: Compare the isolated readback to reviewed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          fresh="$RUNNER_TEMP/direct-registry-readback/provider-lifecycle-matrix.canonical.json"
+          jq -S -c . admission/v1/registry/provider-lifecycle-matrix.json > "$RUNNER_TEMP/retained.canonical.json"
+          diff -u "$RUNNER_TEMP/retained.canonical.json" "$fresh"
+
+      - name: Authenticate this run's exact Registry readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign_version="$(cosign version 2>&1)"
+          grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
+          subject="admission/v1/registry/provider-readback.json"
+          bundle="admission/v1/registry/provider-readback.sigstore.json"
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/standard-admission-release.yml@refs/heads/main"
+          provider_tag="$(jq -r .tag release/version.json)"
+          test "$(jq -r .providerReleaseTag "$subject")" = "$provider_tag"
+          git show-ref --verify --quiet "refs/tags/$provider_tag"
+          test "$(git rev-list -n 1 "refs/tags/$provider_tag")" = "$(jq -r .providerReleaseCommit "$subject")"
+          test ! -e "$bundle"
+          cosign sign-blob "$subject" --bundle "$bundle" --yes
+          cosign verify-blob "$subject" --bundle "$bundle" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+      - name: Verify the complete signed admission closure offline
+        run: go run ./cmd/standard-form-conformance release-check
+
+      - name: Build and sign the exact activation inventory
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign_version="$(cosign version 2>&1)"
+          grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
+          output="$RUNNER_TEMP/standard-admission"
+          mkdir -p "$output"
+          install -m 0644 admission/v1/standard-admission-set.json "$output/standard-admission-set.json"
+          install -m 0644 "$RUNNER_TEMP/direct-registry-readback/provider-lifecycle-matrix.canonical.json" "$output/fresh-provider-lifecycle-matrix.json"
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner -C admission -cf - v1 \
+            | gzip -n > "$output/takoform-standard-admission-v1.tar.gz"
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/standard-admission-release.yml@refs/heads/main"
+          cosign sign-blob "$output/standard-admission-set.json" \
+            --bundle "$output/standard-admission-set.sigstore.json" --yes
+          cosign verify-blob "$output/standard-admission-set.json" \
+            --bundle "$output/standard-admission-set.sigstore.json" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          (cd "$output" && sha256sum \
+            fresh-provider-lifecycle-matrix.json \
+            standard-admission-set.json \
+            standard-admission-set.sigstore.json \
+            takoform-standard-admission-v1.tar.gz > SHA256SUMS)
+
+      - name: Export the authenticated activation inventory
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: authenticated-standard-admission-${{ github.sha }}
+          path: ${{ runner.temp }}/standard-admission
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: authenticate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: standard-admission-release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download only the authenticated activation inventory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: authenticated-standard-admission-${{ github.sha }}
+          path: ${{ runner.temp }}/standard-admission
+
+      - name: Install pinned Cosign v3
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
+
+      - name: Reverify the exact authenticated inventory
+        id: inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/standard-admission"
+          (cd "$output" && sha256sum --check --strict SHA256SUMS)
+          find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/actual-assets.txt"
+          printf '%s\n' \
+            SHA256SUMS \
+            fresh-provider-lifecycle-matrix.json \
+            standard-admission-set.json \
+            standard-admission-set.sigstore.json \
+            takoform-standard-admission-v1.tar.gz | sort > "$RUNNER_TEMP/expected-assets.txt"
+          diff -u "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/actual-assets.txt"
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/standard-admission-release.yml@refs/heads/main"
+          cosign verify-blob "$output/standard-admission-set.json" \
+            --bundle "$output/standard-admission-set.sigstore.json" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          echo "output=$output" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse an existing activation release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "An activation release already owns $RELEASE_TAG; refusing overwrite" >&2
+            exit 1
+          fi
+
+      - name: Create this run's activation draft
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          response="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$RELEASE_TAG" -f name="$RELEASE_TAG" -F draft=true \
+            -f body='Takoform Standard Form admission activation. Provider publication alone does not grant this status.')"
+          release_id="$(jq -r .id <<<"$response")"
+          test "$release_id" != "null"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Upload and verify the exact activation inventory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          output="${{ steps.inventory.outputs.output }}"
+          while IFS= read -r asset; do
+            gh release upload "$RELEASE_TAG" "$asset"
+          done < <(find "$output" -maxdepth 1 -type f -print | sort)
+          find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/expected-assets.txt"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[].name' | sort > "$RUNNER_TEMP/actual-assets.txt"
+          diff -u "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/actual-assets.txt"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .draft)" = "true"
+
+      - name: Attest the activation inventory
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-path: ${{ steps.inventory.outputs.output }}/*
+
+      - name: Publish this run's verified activation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          finalized="$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false)"
+          test "$(jq -r .draft <<<"$finalized")" = "false"
+
+      - name: Remove partial activation draft after failure
+        if: ${{ always() && !success() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$RELEASE_ID" ]]; then
+            exit 0
+          fi
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" 2>/dev/null || true)"
+          if [[ -n "$release_json" && "$(jq -r .draft <<<"$release_json")" == "true" && "$(jq -r .tag_name <<<"$release_json")" == "$RELEASE_TAG" ]]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
+          fi

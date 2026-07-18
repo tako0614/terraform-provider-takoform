@@ -43,18 +43,33 @@ inventory therefore says `classification: structural-candidate`,
 status/identity; neither echoes the desired document, connection topology, or
 runner-local artifact locations.
 
-The provider tag workflow runs
-`go run ./cmd/standard-form-conformance release-check`. That gate intentionally
-fails closed while these are the only available claims, so candidate FormRefs
-cannot silently become a public provider release identity. It can be opened
-only after every external requirement is authenticated. The gate now verifies
+Provider publication and Form admission activation are two different
+authorities. Phase 1's `v*` provider workflow runs
+`candidate-publication-check`: it may publish the exact provider build to the
+Public Registry while this inventory remains `external-required` and while no
+Form becomes admitted or activated. Phase 2's protected
+`forms/admissions/v*` workflow runs `release-check` only after that same
+provider version can be installed directly from both canonical Registry FQNs.
+That activation gate opens only after every external requirement is
+authenticated. It verifies
 retained RFC 8785 admission-evidence bytes against an offline Sigstore v0.3
-bundle, a digest-pinned trusted root, and a digest-pinned exact Fulcio
-publisher policy. It requires a Rekor inclusion proof, a signed integrated
-time, and a verified certificate-transparency SCT without contacting GitHub or
-another distribution endpoint. It still blocks publication after that slice:
-authenticated host/provider reports, package release readback, and Registry
-install/readback closure remain independent missing gates.
+bundle, a digest-pinned trusted root, and role-specific digest-pinned exact
+Fulcio publisher policies. It requires a Rekor inclusion proof, a signed
+integrated time, and a verified certificate-transparency SCT without
+contacting GitHub or another distribution endpoint. The same fail-closed chain
+now validates canonical signed host/provider runner reports, the exact five
+asset Form Package release manifest/readback for every candidate, and a signed
+provider readback backed by the complete direct-Registry OpenTofu/Terraform
+lifecycle matrix. These are implemented validators, not generated evidence.
+No retained production admission set, trust pins, reports, release assets, or
+Registry readback exists yet, so `release-check` still fails closed at the
+first missing live artifact.
+
+This ordering is intentional, not a publication bypass: the immutable public
+provider is a typed client for structural candidates, while only the separate
+signed admission release can classify the exact packages
+`portable-standard`. A failed or absent Phase 2 leaves every Form unavailable
+for standard activation even though the provider binary is installable.
 
 The local Takosumi host proof and reviewed OpenTofu/Terraform FQN lifecycle
 matrix cover the candidate set; shared negative admission fixtures use the
@@ -63,6 +78,27 @@ failure name `schema_validation_failed` is not a wire error. An admission
 artifact may be accepted only after external runners authenticate that evidence
 and bind it to immutable tags, Registry install/readback, Sigstore provenance,
 and signed admission evidence.
+
+After an authorized provider publication, generate the direct Registry matrix
+without `dev_overrides`:
+
+```bash
+go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
+  --opentofu tofu --terraform terraform \
+  > admission/v1/registry/provider-lifecycle-matrix.json
+go run ./cmd/admission-readback registry \
+  --matrix admission/v1/registry/provider-lifecycle-matrix.json \
+  --provider-release-commit "$(git rev-list -n 1 "$(jq -r .tag release/version.json)")" \
+  > admission/v1/registry/provider-readback.json
+```
+
+The command pins the provider version from `release/version.json`, runs
+`init` against each canonical FQN, hashes the installed provider binary and
+schema, and performs the same ten-resource lifecycle. A local matrix produced
+by `render-matrix` carries `installationSource: local-dev-override` and is
+rejected by Registry readback validation. `admission-readback` strictly
+validates the direct matrix and emits RFC 8785 canonical readback bytes; it
+does not sign them or change admission state.
 
 Each definition keeps `status: standard` so the exact proposed final bytes can
 be exercised and digest-pinned without a later status mutation. That field does

@@ -81,13 +81,13 @@ func TestVerifyPinnedTagSignerRejectsWrongSigner(t *testing.T) {
 }
 
 func TestVerifyExpectedTriggerTagRequiresExactDescriptorTag(t *testing.T) {
-	if err := verifyExpectedTriggerTag("v0.1.0-rc.1", "v0.1.0-rc.1"); err != nil {
+	if err := verifyExpectedTriggerTag("v0.1.0-rc.2", "v0.1.0-rc.2"); err != nil {
 		t.Fatalf("exact trigger tag: %v", err)
 	}
-	if err := verifyExpectedTriggerTag("", "v0.1.0-rc.1"); err != nil {
+	if err := verifyExpectedTriggerTag("", "v0.1.0-rc.2"); err != nil {
 		t.Fatalf("local verification may omit trigger tag: %v", err)
 	}
-	if err := verifyExpectedTriggerTag("v0.1.0", "v0.1.0-rc.1"); err == nil || !strings.Contains(err.Error(), "does not match descriptor tag") {
+	if err := verifyExpectedTriggerTag("v0.1.0", "v0.1.0-rc.2"); err == nil || !strings.Contains(err.Error(), "does not match descriptor tag") {
 		t.Fatalf("expected mismatched trigger rejection, got %v", err)
 	}
 }
@@ -235,7 +235,7 @@ func TestSPDXValidationRejectsMissingCreated(t *testing.T) {
 func TestOfficialInTotoAndSLSAValidatorsAcceptCandidateProvenance(t *testing.T) {
 	desc := testDescriptor()
 	evidence := sourceEvidence{Commit: strings.Repeat("a", 40), GoVersion: desc.GoVersion}
-	artifacts := []artifact{{Archive: "terraform-provider-takoform_0.1.0-rc.1_linux_amd64.zip", ArchiveSHA256: strings.Repeat("b", 64)}}
+	artifacts := []artifact{{Archive: "terraform-provider-takoform_0.1.0-rc.2_linux_amd64.zip", ArchiveSHA256: strings.Repeat("b", 64)}}
 	document := createProvenance(desc, evidence, artifacts)
 	if err := validateSLSAProvenance(document); err != nil {
 		t.Fatalf("official in-toto/SLSA validators rejected candidate provenance: %v", err)
@@ -249,8 +249,8 @@ func TestOfficialInTotoAndSLSAValidatorsAcceptCandidateProvenance(t *testing.T) 
 func testDescriptor() descriptor {
 	return descriptor{
 		SchemaVersion:    1,
-		Version:          "0.1.0-rc.1",
-		Tag:              "v0.1.0-rc.1",
+		Version:          "0.1.0-rc.2",
+		Tag:              "v0.1.0-rc.2",
 		SourceRepository: "github.com/tako0614/terraform-provider-takoform",
 		ProviderAddress:  "registry.terraform.io/tako0614/takoform",
 		CLIMatrix: []cliCompatibility{

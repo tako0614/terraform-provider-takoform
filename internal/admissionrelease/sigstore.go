@@ -13,28 +13,41 @@ import (
 )
 
 const (
-	offlineSigstorePinsFormat      = "takoform.offline-sigstore-pins@v1"
-	publisherPolicyFormat          = "takoform.sigstore-publisher-policy@v1"
-	offlineSigstorePinsPath        = "trust/offline-sigstore-pins.json"
-	canonicalTrustedRootPath       = "trust/trusted-root.json"
-	canonicalPublisherPolicyPath   = "trust/publisher-policy.json"
-	sigstoreBundleMediaTypeV03     = "application/vnd.dev.sigstore.bundle.v0.3+json"
-	maxOfflineSigstorePinsBytes    = 64 << 10
-	maxPublisherPolicyBytes        = 64 << 10
-	maxTrustedRootBytes            = 4 << 20
-	maxSigstoreBundleBytes         = 16 << 20
-	requiredTransparencyLogEntries = 1
-	requiredIntegratedTimestamps   = 1
-	requiredCertificateTimestamps  = 1
+	offlineSigstorePinsFormat           = "takoform.offline-sigstore-pins@v2"
+	publisherPolicyFormat               = "takoform.sigstore-publisher-policy@v1"
+	offlineSigstorePinsPath             = "trust/offline-sigstore-pins.json"
+	canonicalTrustedRootPath            = "trust/trusted-root.json"
+	canonicalPublisherPolicyPath        = "trust/publisher-policy.json"
+	canonicalHostReportPolicyPath       = "trust/host-report-policy.json"
+	canonicalProviderReportPolicyPath   = "trust/provider-report-policy.json"
+	canonicalPackageIndexPolicyPath     = "trust/package-index-policy.json"
+	canonicalRegistryReadbackPolicyPath = "trust/registry-readback-policy.json"
+	sigstoreBundleMediaTypeV03          = "application/vnd.dev.sigstore.bundle.v0.3+json"
+	maxOfflineSigstorePinsBytes         = 64 << 10
+	maxPublisherPolicyBytes             = 64 << 10
+	maxTrustedRootBytes                 = 4 << 20
+	maxSigstoreBundleBytes              = 16 << 20
+	requiredTransparencyLogEntries      = 1
+	requiredIntegratedTimestamps        = 1
+	requiredCertificateTimestamps       = 1
+	roleAdmissionEvidence               = "admission-evidence"
+	roleHostReport                      = "host-report"
+	roleProviderReport                  = "provider-report"
+	rolePackageIndex                    = "package-index"
+	roleRegistryReadback                = "registry-readback"
 )
 
 // OfflineSigstorePins binds the reviewed trust inputs used by release-check.
 // The pin manifest itself is protected source, not evidence discovered from a
 // release or distribution endpoint.
 type OfflineSigstorePins struct {
-	Format          string       `json:"format"`
-	TrustedRoot     RetainedFile `json:"trustedRoot"`
-	PublisherPolicy RetainedFile `json:"publisherPolicy"`
+	Format                  string       `json:"format"`
+	TrustedRoot             RetainedFile `json:"trustedRoot"`
+	AdmissionEvidencePolicy RetainedFile `json:"admissionEvidencePolicy"`
+	HostReportPolicy        RetainedFile `json:"hostReportPolicy"`
+	ProviderReportPolicy    RetainedFile `json:"providerReportPolicy"`
+	PackageIndexPolicy      RetainedFile `json:"packageIndexPolicy"`
+	RegistryReadbackPolicy  RetainedFile `json:"registryReadbackPolicy"`
 }
 
 // RetainedFile identifies one repository-retained trust input by exact bytes.
@@ -53,13 +66,17 @@ type PublisherPolicy struct {
 	BundleMediaType     string `json:"bundleMediaType"`
 }
 
-type offlineRetainedEvidenceVerifier struct {
+type offlineRoleVerifier struct {
 	verifier  *verify.Verifier
 	identity  verify.CertificateIdentity
 	mediaType string
 }
 
-func loadOfflineRetainedEvidenceVerifier(admissionRoot string) (RetainedEvidenceVerifier, error) {
+type offlineRetainedSubjectVerifier struct {
+	roles map[string]*offlineRoleVerifier
+}
+
+func loadOfflineRetainedSubjectVerifier(admissionRoot string) (RetainedSubjectVerifier, error) {
 	pinsRaw, err := readRetainedRelativeFile(admissionRoot, offlineSigstorePinsPath, maxOfflineSigstorePinsBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", offlineSigstorePinsPath, err)
@@ -84,18 +101,43 @@ func loadOfflineRetainedEvidenceVerifier(admissionRoot string) (RetainedEvidence
 		return nil, fmt.Errorf("decode pinned trusted root: %w", err)
 	}
 
-	policyRaw, err := readPinnedRetainedFile(admissionRoot, "publisher policy", pins.PublisherPolicy, maxPublisherPolicyBytes)
-	if err != nil {
-		return nil, err
+	retainedPolicies := []struct {
+		role     string
+		retained RetainedFile
+	}{
+		{role: roleAdmissionEvidence, retained: pins.AdmissionEvidencePolicy},
+		{role: roleHostReport, retained: pins.HostReportPolicy},
+		{role: roleProviderReport, retained: pins.ProviderReportPolicy},
+		{role: rolePackageIndex, retained: pins.PackageIndexPolicy},
+		{role: roleRegistryReadback, retained: pins.RegistryReadbackPolicy},
 	}
-	if _, err := formpackage.Canonicalize(policyRaw); err != nil {
-		return nil, fmt.Errorf("validate pinned publisher policy I-JSON: %w", err)
+	result := &offlineRetainedSubjectVerifier{roles: make(map[string]*offlineRoleVerifier, len(retainedPolicies))}
+	seenPublisherIdentities := make(map[string]string, len(retainedPolicies))
+	for _, item := range retainedPolicies {
+		role, retained := item.role, item.retained
+		policyRaw, err := readPinnedRetainedFile(admissionRoot, role+" publisher policy", retained, maxPublisherPolicyBytes)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := formpackage.Canonicalize(policyRaw); err != nil {
+			return nil, fmt.Errorf("validate pinned %s publisher policy I-JSON: %w", role, err)
+		}
+		var policy PublisherPolicy
+		if err := decodeStrictJSON(policyRaw, &policy); err != nil {
+			return nil, fmt.Errorf("decode pinned %s publisher policy: %w", role, err)
+		}
+		identityKey := policy.OIDCIssuer + "\x00" + policy.CertificateIdentity
+		if priorRole, duplicate := seenPublisherIdentities[identityKey]; duplicate {
+			return nil, fmt.Errorf("%s and %s publisher policies reuse the same certificate identity", priorRole, role)
+		}
+		seenPublisherIdentities[identityKey] = role
+		verifier, err := newOfflineRoleVerifier(trustedRoot, policy)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", role, err)
+		}
+		result.roles[role] = verifier
 	}
-	var policy PublisherPolicy
-	if err := decodeStrictJSON(policyRaw, &policy); err != nil {
-		return nil, fmt.Errorf("decode pinned publisher policy: %w", err)
-	}
-	return newOfflineRetainedEvidenceVerifier(trustedRoot, policy)
+	return result, nil
 }
 
 func validateOfflineSigstorePins(pins OfflineSigstorePins) error {
@@ -107,7 +149,11 @@ func validateOfflineSigstorePins(pins OfflineSigstorePins) error {
 		retained RetainedFile
 	}{
 		{label: "trustedRoot", retained: pins.TrustedRoot},
-		{label: "publisherPolicy", retained: pins.PublisherPolicy},
+		{label: "admissionEvidencePolicy", retained: pins.AdmissionEvidencePolicy},
+		{label: "hostReportPolicy", retained: pins.HostReportPolicy},
+		{label: "providerReportPolicy", retained: pins.ProviderReportPolicy},
+		{label: "packageIndexPolicy", retained: pins.PackageIndexPolicy},
+		{label: "registryReadbackPolicy", retained: pins.RegistryReadbackPolicy},
 	} {
 		label, retained := item.label, item.retained
 		if err := validateRelativePath(retained.Path); err != nil {
@@ -120,8 +166,20 @@ func validateOfflineSigstorePins(pins OfflineSigstorePins) error {
 	if pins.TrustedRoot.Path != canonicalTrustedRootPath {
 		return fmt.Errorf("trustedRoot path is %q, want %q", pins.TrustedRoot.Path, canonicalTrustedRootPath)
 	}
-	if pins.PublisherPolicy.Path != canonicalPublisherPolicyPath {
-		return fmt.Errorf("publisherPolicy path is %q, want %q", pins.PublisherPolicy.Path, canonicalPublisherPolicyPath)
+	for _, item := range []struct {
+		label string
+		got   string
+		want  string
+	}{
+		{label: "admissionEvidencePolicy", got: pins.AdmissionEvidencePolicy.Path, want: canonicalPublisherPolicyPath},
+		{label: "hostReportPolicy", got: pins.HostReportPolicy.Path, want: canonicalHostReportPolicyPath},
+		{label: "providerReportPolicy", got: pins.ProviderReportPolicy.Path, want: canonicalProviderReportPolicyPath},
+		{label: "packageIndexPolicy", got: pins.PackageIndexPolicy.Path, want: canonicalPackageIndexPolicyPath},
+		{label: "registryReadbackPolicy", got: pins.RegistryReadbackPolicy.Path, want: canonicalRegistryReadbackPolicyPath},
+	} {
+		if item.got != item.want {
+			return fmt.Errorf("%s path is %q, want %q", item.label, item.got, item.want)
+		}
 	}
 	return nil
 }
@@ -138,7 +196,7 @@ func readPinnedRetainedFile(admissionRoot, label string, retained RetainedFile, 
 	return raw, nil
 }
 
-func newOfflineRetainedEvidenceVerifier(trustedMaterial sigstoreroot.TrustedMaterial, policy PublisherPolicy) (*offlineRetainedEvidenceVerifier, error) {
+func newOfflineRoleVerifier(trustedMaterial sigstoreroot.TrustedMaterial, policy PublisherPolicy) (*offlineRoleVerifier, error) {
 	if err := validatePublisherPolicy(policy); err != nil {
 		return nil, fmt.Errorf("publisher policy: %w", err)
 	}
@@ -155,7 +213,7 @@ func newOfflineRetainedEvidenceVerifier(trustedMaterial sigstoreroot.TrustedMate
 	if err != nil {
 		return nil, fmt.Errorf("offline Sigstore verifier: %w", err)
 	}
-	return &offlineRetainedEvidenceVerifier{verifier: verifier, identity: identity, mediaType: policy.BundleMediaType}, nil
+	return &offlineRoleVerifier{verifier: verifier, identity: identity, mediaType: policy.BundleMediaType}, nil
 }
 
 func validatePublisherPolicy(policy PublisherPolicy) error {
@@ -171,40 +229,32 @@ func validatePublisherPolicy(policy PublisherPolicy) error {
 	return nil
 }
 
-func (v *offlineRetainedEvidenceVerifier) VerifyRetainedEvidence(admissionRoot string, set Set, subjects []RetainedSubject) error {
-	if len(subjects) != len(set.Entries) {
-		return fmt.Errorf("retained subject closure has %d entries, want %d", len(subjects), len(set.Entries))
+func (v *offlineRetainedSubjectVerifier) VerifyRetainedSubjects(admissionRoot string, set Set, subjects []RetainedSubject) error {
+	wantCount := len(set.Entries)*4 + 1
+	if len(subjects) != wantCount {
+		return fmt.Errorf("retained subject closure has %d entries, want %d", len(subjects), wantCount)
 	}
-	entries := make(map[string]SetEntry, len(set.Entries))
-	for _, entry := range set.Entries {
-		if _, duplicate := entries[entry.Kind]; duplicate {
-			return fmt.Errorf("retained set duplicates kind %q", entry.Kind)
-		}
-		entries[entry.Kind] = entry
-	}
+	expected := expectedRetainedSubjects(set)
 	seen := make(map[string]struct{}, len(subjects))
 	for _, subject := range subjects {
-		if subject.Kind == "" || len(subject.Canonical) == 0 {
-			return fmt.Errorf("retained subject kind and canonical bytes are required")
+		if subject.Kind == "" || subject.Role == "" || len(subject.Canonical) == 0 {
+			return fmt.Errorf("retained subject kind, role, and canonical bytes are required")
 		}
-		if _, duplicate := seen[subject.Kind]; duplicate {
-			return fmt.Errorf("retained subjects duplicate kind %q", subject.Kind)
+		key := subject.Role + ":" + subject.Kind
+		if _, duplicate := seen[key]; duplicate {
+			return fmt.Errorf("retained subjects duplicate %q", key)
 		}
-		seen[subject.Kind] = struct{}{}
-		entry, ok := entries[subject.Kind]
+		seen[key] = struct{}{}
+		want, ok := expected[key]
 		if !ok {
-			return fmt.Errorf("retained subject kind %q is not in the admission set", subject.Kind)
+			return fmt.Errorf("retained subject %q is not in the admission set", key)
 		}
 		canonical, err := formpackage.Canonicalize(subject.Canonical)
 		if err != nil || !bytes.Equal(canonical, subject.Canonical) {
 			return fmt.Errorf("%s retained subject is not the exact RFC 8785 canonical evidence bytes", subject.Kind)
 		}
-		if entry.EvidencePath != subject.Path || entry.EvidenceDigest != formpackage.DigestBytes(subject.Canonical) {
+		if want.Path != subject.Path || want.Digest != formpackage.DigestBytes(subject.Canonical) || want.Bundle != subject.SigstorePath {
 			return fmt.Errorf("%s retained subject path/digest is not bound by the admission set", subject.Kind)
-		}
-		expectedBundlePath := path.Join(path.Dir(subject.Path), "evidence.sigstore.json")
-		if subject.SigstorePath != expectedBundlePath {
-			return fmt.Errorf("%s evidence bundle path is %q, want %q", subject.Kind, subject.SigstorePath, expectedBundlePath)
 		}
 		if err := validateRelativePath(subject.SigstorePath); err != nil {
 			return fmt.Errorf("%s evidence bundle path: %w", subject.Kind, err)
@@ -217,19 +267,52 @@ func (v *offlineRetainedEvidenceVerifier) VerifyRetainedEvidence(admissionRoot s
 		if err := retainedBundle.UnmarshalJSON(bundleRaw); err != nil {
 			return fmt.Errorf("%s evidence bundle: %w", subject.Kind, err)
 		}
-		if err := v.verifyCanonicalSubject(&retainedBundle, subject.Canonical); err != nil {
+		roleVerifier, ok := v.roles[subject.Role]
+		if !ok {
+			return fmt.Errorf("%s has no pinned publisher policy", subject.Role)
+		}
+		if err := roleVerifier.verifyCanonicalSubject(&retainedBundle, subject.Canonical); err != nil {
 			return fmt.Errorf("%s evidence bundle: %w", subject.Kind, err)
 		}
 	}
 	return nil
 }
 
-func (v *offlineRetainedEvidenceVerifier) verifyCanonicalSubject(retainedBundle *bundle.Bundle, canonical []byte) error {
+type retainedSubjectBinding struct {
+	Path   string
+	Digest string
+	Bundle string
+}
+
+func expectedRetainedSubjects(set Set) map[string]retainedSubjectBinding {
+	expected := make(map[string]retainedSubjectBinding, len(set.Entries)*4+1)
+	for _, entry := range set.Entries {
+		expected[roleAdmissionEvidence+":"+entry.Kind] = retainedSubjectBinding{
+			Path: entry.EvidencePath, Digest: entry.EvidenceDigest,
+			Bundle: path.Join(path.Dir(entry.EvidencePath), "evidence.sigstore.json"),
+		}
+		expected[roleHostReport+":"+entry.Kind] = retainedSubjectBinding{
+			Path: entry.HostReportPath, Digest: entry.HostReportDigest, Bundle: entry.HostReportSigstoreBundle,
+		}
+		expected[roleProviderReport+":"+entry.Kind] = retainedSubjectBinding{
+			Path: entry.ProviderReportPath, Digest: entry.ProviderReportDigest, Bundle: entry.ProviderReportSigstoreBundle,
+		}
+		expected[rolePackageIndex+":"+entry.Kind] = retainedSubjectBinding{
+			Path: entry.PackageIndexPath, Digest: entry.PackageDigest, Bundle: entry.PackageIndexSigstoreBundle,
+		}
+	}
+	expected[roleRegistryReadback+":provider"] = retainedSubjectBinding{
+		Path: set.ProviderRegistryReadback.Path, Digest: set.ProviderRegistryReadback.Digest, Bundle: set.ProviderRegistryReadback.SigstoreBundle,
+	}
+	return expected
+}
+
+func (v *offlineRoleVerifier) verifyCanonicalSubject(retainedBundle *bundle.Bundle, canonical []byte) error {
 	digest := sha256.Sum256(canonical)
 	return v.verifyBundleDigest(retainedBundle, digest[:])
 }
 
-func (v *offlineRetainedEvidenceVerifier) verifyBundleDigest(retainedBundle *bundle.Bundle, digest []byte) error {
+func (v *offlineRoleVerifier) verifyBundleDigest(retainedBundle *bundle.Bundle, digest []byte) error {
 	if retainedBundle.MediaType != v.mediaType {
 		return fmt.Errorf("media type is %q, want %q", retainedBundle.MediaType, v.mediaType)
 	}

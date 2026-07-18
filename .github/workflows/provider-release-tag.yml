@@ -1,0 +1,261 @@
+name: Author provider release tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact provider tag from release/version.json
+        required: true
+        type: string
+      expected_commit:
+        description: Exact approved 40-character protected-main commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-release-tag-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  EXPECTED_GPG_FINGERPRINT: "3510E75E05BBCC303B92D77934FC18AC897FB709"
+
+jobs:
+  candidate-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out read-only candidate source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify the requested protected-main source
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
+            echo "Provider preflight must execute the current protected main commit" >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ || "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo "expected_commit must equal the current protected-main commit" >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ || "$(jq -r .tag release/version.json)" != "$RELEASE_TAG" || "v$(jq -r .version release/version.json)" != "$RELEASE_TAG" ]]; then
+            echo "tag must exactly match the provider release descriptor" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.5"
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            cmd/provider-release/go.sum
+
+      - uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # pinned: v2
+        with:
+          tofu_version: 1.12.1
+          tofu_wrapper: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # pinned: v4.0.1
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Execute candidate code only in this read-only job
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          go test ./...
+          go run ./cmd/provider-lifecycle-conformance render-matrix \
+            --opentofu tofu --terraform terraform > "$RUNNER_TEMP/provider-lifecycle-matrix.json"
+          go run ./cmd/standard-form-conformance candidate-publication-check
+          go run ./cmd/migration-proof
+          go -C cmd/provider-release mod verify
+          go -C cmd/provider-release test ./...
+          go -C cmd/provider-release run . verify-source --allow-untagged-candidate
+          go -C cmd/provider-release run . verify-reproducible --allow-untagged-candidate
+          go -C cmd/provider-release run . build \
+            --output "$RUNNER_TEMP/provider-candidate" \
+            --allow-untagged-candidate
+
+      - name: Export deterministic preflight evidence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/provider-preflight"
+          mkdir -p "$output"
+          install -m 0644 "$RUNNER_TEMP/provider-candidate/manifest.json" "$output/provider-candidate-manifest.json"
+          install -m 0644 "$RUNNER_TEMP/provider-candidate/sbom.spdx.json" "$output/provider-sbom.spdx.json"
+          install -m 0644 "$RUNNER_TEMP/provider-candidate/provenance.json" "$output/provider-provenance.json"
+          jq -S -c . "$RUNNER_TEMP/provider-lifecycle-matrix.json" > "$output/provider-lifecycle-matrix.json"
+          descriptor_digest="sha256:$(sha256sum release/version.json | cut -d' ' -f1)"
+          manifest_digest="sha256:$(sha256sum "$output/provider-candidate-manifest.json" | cut -d' ' -f1)"
+          sbom_digest="sha256:$(sha256sum "$output/provider-sbom.spdx.json" | cut -d' ' -f1)"
+          provenance_digest="sha256:$(sha256sum "$output/provider-provenance.json" | cut -d' ' -f1)"
+          matrix_digest="sha256:$(sha256sum "$output/provider-lifecycle-matrix.json" | cut -d' ' -f1)"
+          jq -n -S -c \
+            --arg format "takoform.provider-tag-preflight@v1" \
+            --arg sourceCommit "$(git rev-parse HEAD)" \
+            --arg releaseDescriptorSha256 "$descriptor_digest" \
+            --arg providerCandidateManifestSha256 "$manifest_digest" \
+            --arg providerSBOMSha256 "$sbom_digest" \
+            --arg providerProvenanceSha256 "$provenance_digest" \
+            --arg providerLifecycleMatrixSha256 "$matrix_digest" \
+            '{format:$format,sourceCommit:$sourceCommit,releaseDescriptorSha256:$releaseDescriptorSha256,providerCandidateManifestSha256:$providerCandidateManifestSha256,providerSBOMSha256:$providerSBOMSha256,providerProvenanceSha256:$providerProvenanceSha256,providerLifecycleMatrixSha256:$providerLifecycleMatrixSha256}' \
+            > "$output/preflight.json"
+          (cd "$output" && sha256sum \
+            preflight.json \
+            provider-candidate-manifest.json \
+            provider-lifecycle-matrix.json \
+            provider-provenance.json \
+            provider-sbom.spdx.json > SHA256SUMS)
+
+      - name: Upload read-only preflight evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-tag-preflight-${{ github.sha }}
+          path: ${{ runner.temp }}/provider-preflight
+          if-no-files-found: error
+          retention-days: 1
+
+  tag:
+    needs: candidate-preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: provider-release
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the exact protected-main candidate with push authority
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Download read-only preflight evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: provider-tag-preflight-${{ github.sha }}
+          path: ${{ runner.temp }}/provider-preflight
+
+      - name: Verify source, descriptor, evidence hashes, and unused authority
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
+            echo "Provider tag authoring must execute the current protected main commit" >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ || "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo "expected_commit must equal the current protected-main commit" >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ || "$(jq -r .tag release/version.json)" != "$RELEASE_TAG" || "v$(jq -r .version release/version.json)" != "$RELEASE_TAG" ]]; then
+            echo "tag must exactly match the provider release descriptor" >&2
+            exit 1
+          fi
+          evidence="$RUNNER_TEMP/provider-preflight"
+          find "$evidence" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/actual-evidence.txt"
+          printf '%s\n' \
+            SHA256SUMS \
+            preflight.json \
+            provider-candidate-manifest.json \
+            provider-lifecycle-matrix.json \
+            provider-provenance.json \
+            provider-sbom.spdx.json | sort > "$RUNNER_TEMP/expected-evidence.txt"
+          diff -u "$RUNNER_TEMP/expected-evidence.txt" "$RUNNER_TEMP/actual-evidence.txt"
+          (cd "$evidence" && sha256sum --check --strict SHA256SUMS)
+          descriptor_digest="sha256:$(sha256sum release/version.json | cut -d' ' -f1)"
+          test "$(jq -r .format "$evidence/preflight.json")" = "takoform.provider-tag-preflight@v1"
+          test "$(jq -r .sourceCommit "$evidence/preflight.json")" = "$EXPECTED_COMMIT"
+          test "$(jq -r .releaseDescriptorSha256 "$evidence/preflight.json")" = "$descriptor_digest"
+          test "$(jq -r .providerCandidateManifestSha256 "$evidence/preflight.json")" = "sha256:$(sha256sum "$evidence/provider-candidate-manifest.json" | cut -d' ' -f1)"
+          test "$(jq -r .providerSBOMSha256 "$evidence/preflight.json")" = "sha256:$(sha256sum "$evidence/provider-sbom.spdx.json" | cut -d' ' -f1)"
+          test "$(jq -r .providerProvenanceSha256 "$evidence/preflight.json")" = "sha256:$(sha256sum "$evidence/provider-provenance.json" | cut -d' ' -f1)"
+          test "$(jq -r .providerLifecycleMatrixSha256 "$evidence/preflight.json")" = "sha256:$(sha256sum "$evidence/provider-lifecycle-matrix.json" | cut -d' ' -f1)"
+          test "$(jq -r .version "$evidence/provider-candidate-manifest.json")" = "${RELEASE_TAG#v}"
+          test "$(jq -r .tag "$evidence/provider-candidate-manifest.json")" = "$RELEASE_TAG"
+          test "$(jq -r .sourceCommit "$evidence/provider-candidate-manifest.json")" = "$EXPECTED_COMMIT"
+          test "$(jq -r .sourceDirty "$evidence/provider-candidate-manifest.json")" = "false"
+          test "$(jq -r .publicationStatus "$evidence/provider-candidate-manifest.json")" = "candidate-only"
+          test "$(jq -r .publicationReady "$evidence/provider-candidate-manifest.json")" = "false"
+          jq -e '.publicationBlockers | index("exact release tag is not attached to HEAD") != null' "$evidence/provider-candidate-manifest.json" >/dev/null
+          test "$(jq '.artifacts | length' "$evidence/provider-candidate-manifest.json")" = "5"
+          jq -e '.materials | has("SHA256SUMS") and has("sbom.spdx.json")' "$evidence/provider-candidate-manifest.json" >/dev/null
+          jq -e . "$evidence/provider-sbom.spdx.json" >/dev/null
+          jq -e . "$evidence/provider-provenance.json" >/dev/null
+          test "$(jq -r .releaseDescriptorSha256 "$evidence/provider-lifecycle-matrix.json")" = "$descriptor_digest"
+          test "$(jq -r .installationSource "$evidence/provider-lifecycle-matrix.json")" = "local-dev-override"
+          test "$(jq -r .publicationReady "$evidence/provider-lifecycle-matrix.json")" = "false"
+          test "$(jq '.reports | length' "$evidence/provider-lifecycle-matrix.json")" = "2"
+          jq -e '.reports | all(.installationSource == "local-dev-override")' "$evidence/provider-lifecycle-matrix.json" >/dev/null
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            echo "Local history already contains $RELEASE_TAG" >&2
+            exit 1
+          fi
+          test -z "$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG")"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "A GitHub release already owns $RELEASE_TAG" >&2
+            exit 1
+          fi
+          version="${RELEASE_TAG#v}"
+          registry_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            "https://registry.terraform.io/v1/providers/tako0614/takoform/$version/download/linux/amd64")"
+          if [[ "$registry_status" != "404" ]]; then
+            echo "Terraform Registry version preflight expected 404, got $registry_status" >&2
+            exit 1
+          fi
+
+      - name: Import the protected provider signing key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: false
+
+      - name: Create and push one annotated signed tag without executing candidate code
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          IMPORTED_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+        run: |
+          set -euo pipefail
+          if [[ "$IMPORTED_FINGERPRINT" != "$EXPECTED_GPG_FINGERPRINT" ]]; then
+            echo "Imported signing key fingerprint does not match the pinned provider signer" >&2
+            exit 1
+          fi
+          git fetch --no-tags origin main
+          test "$(git rev-parse refs/remotes/origin/main)" = "$EXPECTED_COMMIT"
+          test -z "$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG")"
+          git config user.name "Takoform Provider Release"
+          git config user.email "release@takoform.invalid"
+          git tag --sign --local-user "$EXPECTED_GPG_FINGERPRINT" \
+            --message "Takoform provider $RELEASE_TAG" "$RELEASE_TAG" "$EXPECTED_COMMIT"
+          test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = "tag"
+          test "$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$EXPECTED_COMMIT"
+          verification="$(git verify-tag --raw "$RELEASE_TAG" 2>&1)"
+          grep -F "[GNUPG:] VALIDSIG $EXPECTED_GPG_FINGERPRINT " <<<"$verification"
+          git push origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"

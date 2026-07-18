@@ -251,10 +251,36 @@ func Verify(root string) error {
 	return nil
 }
 
-// VerifyReleaseReady is the fail-closed provider publication gate. Structural
-// candidates are verified first, then exact retained standard-admission bytes
-// must close over the compiled set and pass offline authentication. Neither
-// step synthesizes or upgrades external evidence.
+// VerifyCandidatePublication is the Phase 1 provider publication gate. It
+// proves that the provider still embeds only the reviewed structural candidate
+// set and that the release descriptor explicitly remains candidate-only. It
+// does not read, create, or upgrade standard-admission evidence.
+func VerifyCandidatePublication(root string) error {
+	if err := Verify(root); err != nil {
+		return err
+	}
+	var descriptor struct {
+		SchemaVersion     int    `json:"schemaVersion"`
+		Version           string `json:"version"`
+		Tag               string `json:"tag"`
+		ProviderAddress   string `json:"providerAddress"`
+		PublicationStatus string `json:"publicationStatus"`
+	}
+	if err := readJSON(filepath.Join(root, "release", "version.json"), &descriptor); err != nil {
+		return err
+	}
+	if descriptor.SchemaVersion != 1 || descriptor.Version == "" || descriptor.Tag != "v"+descriptor.Version ||
+		descriptor.ProviderAddress != "registry.terraform.io/tako0614/takoform" || descriptor.PublicationStatus != "candidate-only" {
+		return fmt.Errorf("Phase 1 provider publication requires the exact candidate-only release descriptor")
+	}
+	return nil
+}
+
+// VerifyReleaseReady is the fail-closed Phase 2 Form-admission activation
+// gate. Structural candidates are verified first, then the exact retained
+// standard-admission reports and distribution readbacks must close over the
+// compiled set and pass offline authentication. It is deliberately not part
+// of Phase 1 candidate-only provider publication.
 func VerifyReleaseReady(root string) error {
 	if err := Verify(root); err != nil {
 		return err
