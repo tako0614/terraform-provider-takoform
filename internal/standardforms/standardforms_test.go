@@ -16,7 +16,7 @@ func TestCommittedStableSetVerifies(t *testing.T) {
 func TestProviderReleaseGateFailsClosedWithoutExternalAdmission(t *testing.T) {
 	t.Parallel()
 	err := VerifyReleaseReady(filepath.Join("..", ".."))
-	if err == nil || !strings.Contains(err.Error(), "lacks authenticated external standard admission evidence") {
+	if err == nil || !strings.Contains(err.Error(), "missing admission/v1/standard-admission-set.json") {
 		t.Fatalf("release gate error = %v", err)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
 	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformance"
 	"github.com/tako0614/terraform-provider-takoform/internal/provider"
@@ -250,16 +251,34 @@ func Verify(root string) error {
 	return nil
 }
 
-// VerifyReleaseReady is the fail-closed provider publication gate. The
-// repository currently owns structural candidate bytes only: authenticated
-// Takosumi host evidence, Terraform protocol evidence, immutable package
-// release readback, and signed admission evidence require external trust and
-// therefore cannot be synthesized by this command.
+// VerifyReleaseReady is the fail-closed provider publication gate. Structural
+// candidates are verified first, then exact retained standard-admission bytes
+// must close over the compiled set and pass offline authentication. Neither
+// step synthesizes or upgrades external evidence.
 func VerifyReleaseReady(root string) error {
 	if err := Verify(root); err != nil {
 		return err
 	}
-	return fmt.Errorf("provider publication is blocked: the embedded Form set is structural-only and lacks authenticated external standard admission evidence")
+	candidates := make([]admissionrelease.Candidate, 0, len(Specs))
+	for _, spec := range Specs {
+		ref, err := formregistry.ForKind(spec.Kind)
+		if err != nil {
+			return err
+		}
+		candidates = append(candidates, admissionrelease.Candidate{
+			Kind: spec.Kind, Slug: spec.Slug,
+			PackagePath: filepath.ToSlash(filepath.Join("conformance", "form-package-v1", "positive", "standard", spec.Slug)),
+			FormRef: formpackage.FormRef{
+				APIVersion: ref.APIVersion, Kind: ref.Kind, DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest,
+			},
+			PackageDigest: ref.PackageDigest,
+		})
+	}
+	return admissionrelease.VerifyAdmissionSet(root, admissionrelease.CandidateSet{
+		DefinitionVersion: definitionVersion,
+		PackageVersion:    packageVersion,
+		Entries:           candidates,
+	})
 }
 
 func desiredSchema(kind string) (map[string]any, error) {
