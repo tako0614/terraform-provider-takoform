@@ -68,6 +68,7 @@ network access or code execution:
 ```console
 go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
+go run ./cmd/standard-form-conformance published-package-check
 go run ./cmd/form-package verify conformance/form-package-v1/positive/example-store
 ```
 
@@ -79,10 +80,15 @@ append-only lane signs cumulative, hash-chained checkpoints for exact-digest
 security revocations. See
 [the Form Package release boundary](release/form-packages.md).
 
-No Form Package has been published yet. Host-side remote fetch/install,
-publisher-policy verification, activation, and revocation enforcement remain
-separate consumer/operator gates; the presence of the workflow is not live
-release evidence.
+All ten `1.0.0` structural-candidate Form Packages now have immutable live
+GitHub Releases. Their exact seven-asset inventories, Git refs, production
+Sigstore trusted root, and package-index workflow policy are retained under
+[`admission/v1/`](admission/v1/) and pass the offline
+`published-package-check`. Publication still does not admit a Form: host and
+provider lifecycle reports, direct Registry readback, signed admission
+evidence, the distinct remaining role authorities, and a live revocation-chain
+proof remain external. No `forms/admissions/v*` activation or revocation
+release has been published.
 
 ## Development
 
@@ -99,6 +105,7 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
 go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
 go run ./cmd/standard-form-conformance candidate-publication-check
+go run ./cmd/standard-form-conformance published-package-check
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 ```
 

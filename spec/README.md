@@ -20,7 +20,9 @@ The FormRef, Form Definition, package-index, revocation, and cumulative
 revocation-checkpoint schemas, RFC
 8785/I-JSON library, closed local verifier, positive/negative corpus, protected
 keyless Sigstore release lane, and signed append-only checkpoint delivery lane
-are implemented. No real Form Package or revocation checkpoint has been
+are implemented. The ten `1.0.0` Form Packages have real immutable releases,
+and their retained package indexes pass offline production-root/publisher-policy
+verification. No revocation checkpoint or admission activation has been
 published. Remote host fetch/install, host publisher-policy verification,
 activation, and revocation enforcement remain consumer/operator work. The
 current ten provider resources pin independent exact `1.0.0 / standard`
@@ -29,9 +31,10 @@ definition candidates with local structural verification. Their inventory is
 final bytes and does not perform admission. The historical
 `0.0.0-legacy.1` packages remain frozen compatibility candidates and were not
 renamed or promoted. Passed Takosumi host and Terraform provider lifecycle
-evidence, portable negative wire-code coverage, package signatures, immutable
-tags, Registry installation/readback, and signed admission evidence are still
-external requirements. Authenticated host and provider evidence is the only
+evidence, portable negative wire-code coverage, Registry installation/readback,
+signed admission evidence, and live revocation-chain proof are still external
+requirements. Package signatures and immutable tags are now retained
+publication evidence only. Authenticated host and provider evidence is the only
 path to `portable-standard` classification.
 
 The project identity is `forms.takoform.com/v1alpha1`; the Terraform provider identity is `registry.terraform.io/tako0614/takoform`.

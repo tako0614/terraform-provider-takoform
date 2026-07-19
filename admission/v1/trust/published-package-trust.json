@@ -1,0 +1,20 @@
+{
+  "format": "takoform.published-package-trust@v1",
+  "trustedRoot": {
+    "path": "trust/trusted-root.json",
+    "digest": "sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"
+  },
+  "packageIndexPolicy": {
+    "path": "trust/package-index-policy.json",
+    "digest": "sha256:7caea552e607cb386b9e06bb23251754bf588577ed5708577634ec7b5aea3237"
+  },
+  "registryReadbackPolicy": {
+    "path": "trust/registry-readback-policy.json",
+    "digest": "sha256:58972b142dfd1b418b93c6982a51d1c4a8028bad2e89835ad0d2900385c18abd"
+  },
+  "unsettledPublisherRoles": [
+    "admission-evidence",
+    "host-report",
+    "provider-report"
+  ]
+}

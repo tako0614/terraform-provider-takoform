@@ -20,4 +20,4 @@ The HCP Terraform organization used by maintainers is not a public provider name
 
 ## Checks
 
-Run `gofmt -w .`, `go vet ./...`, `go test ./...`, `go run ./cmd/form-package conformance`, and `tofu fmt -check -recursive examples` before review. Release changes must also build deterministic provider and Form Package candidate evidence without creating a tag or release.
+Run `gofmt -w .`, `go vet ./...`, `go test ./...`, `go run ./cmd/form-package conformance`, `go run ./cmd/standard-form-conformance published-package-check`, and `tofu fmt -check -recursive examples` before review. Release changes must also build deterministic provider and Form Package candidate evidence without creating a tag or release.
