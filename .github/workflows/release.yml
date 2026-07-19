@@ -316,7 +316,7 @@ jobs:
           fi
           response="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
             -f tag_name="$GITHUB_REF_NAME" -f name="$GITHUB_REF_NAME" -F draft=true -F prerelease="$prerelease" \
-            -f body='Signed deterministic Takoform provider release candidate. Provider publication does not activate Standard Forms.')"
+            -f body='Signed deterministic Takoform provider release. Provider publication does not activate Standard Forms.')"
           release_id="$(jq -r .id <<<"$response")"
           test "$release_id" != "null"
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
