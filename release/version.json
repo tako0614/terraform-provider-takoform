@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "version": "0.1.0-rc.3",
-  "tag": "v0.1.0-rc.3",
+  "version": "0.1.0",
+  "tag": "v0.1.0",
   "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
   "providerAddress": "registry.terraform.io/tako0614/takoform",
   "cliMatrix": [
