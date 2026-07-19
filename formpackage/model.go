@@ -1,5 +1,7 @@
 package formpackage
 
+import "encoding/json"
+
 const (
 	FormAPIVersion           = "forms.takoform.com/v1alpha1"
 	PackageAPIVersion        = "packages.forms.takoform.com/v1alpha1"
@@ -37,11 +39,43 @@ type FormDefinition struct {
 	NegativeFixtures      []NegativeFixture     `json:"negativeConformanceFixtures,omitempty"`
 }
 
+// InterfaceDescriptor declares one portable runtime interface a Form exposes.
+// Name and Version are author-defined: there is no registry, allowlist, or
+// central approval for an interface type. A host owns the resulting record,
+// authorization, and lifecycle; this descriptor owns only declared data.
 type InterfaceDescriptor struct {
-	Name           string         `json:"name"`
-	Version        string         `json:"version"`
-	Description    string         `json:"description,omitempty"`
-	DocumentSchema map[string]any `json:"documentSchema,omitempty"`
+	Name           string                      `json:"name"`
+	Version        string                      `json:"version"`
+	Description    string                      `json:"description,omitempty"`
+	Required       bool                        `json:"required,omitempty"`
+	Document       map[string]any              `json:"document,omitempty"`
+	DocumentSchema map[string]any              `json:"documentSchema,omitempty"`
+	Inputs         []InterfaceInputDeclaration `json:"inputs,omitempty"`
+}
+
+// Portable interface input sources. Any other source must be host-namespaced
+// (`<host>.<token>`) and is explicitly non-portable: a host that does not
+// understand one fails closed instead of dropping the input.
+const (
+	InterfaceInputSourceLiteral = "literal"
+	InterfaceInputSourceOutput  = "output"
+)
+
+// InterfaceInputDeclaration is a deterministic mapping from the Form's own
+// output document (or a literal) into one named interface input. Value is raw
+// JSON so an explicit JSON null remains distinguishable from an absent value.
+// It never carries credentials, targets, or host identifiers.
+type InterfaceInputDeclaration struct {
+	Name    string          `json:"name"`
+	Source  string          `json:"source"`
+	Pointer string          `json:"pointer,omitempty"`
+	Value   json.RawMessage `json:"value,omitempty"`
+}
+
+// PortableInterfaceInputSource reports whether a source is part of the closed
+// portable vocabulary every conforming host must understand.
+func PortableInterfaceInputSource(source string) bool {
+	return source == InterfaceInputSourceLiteral || source == InterfaceInputSourceOutput
 }
 
 type ConformanceFixture struct {

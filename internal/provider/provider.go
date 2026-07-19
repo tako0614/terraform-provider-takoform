@@ -203,7 +203,9 @@ func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resour
 }
 
 func (p *takoformProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return nil
+	return []func() datasource.DataSource{
+		NewInterfaceDataSource,
+	}
 }
 
 // configureClient builds the client, discovers capabilities, and enforces the

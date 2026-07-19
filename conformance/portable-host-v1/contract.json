@@ -55,6 +55,8 @@
     "import_conflict",
     "policy_denied",
     "backend_unavailable",
+    "interface_identity_ambiguous",
+    "interface_instance_ambiguous",
     "internal_error"
   ],
   "retryableCodes": [
@@ -77,6 +79,38 @@
     "import-idempotency",
     "delete-idempotency"
   ],
+  "interfaceDeclarations": {
+    "optional": true,
+    "featureFlag": "interface_declarations",
+    "endpointKey": "interfaces",
+    "listPath": "{api}/interfaces",
+    "getPath": "{api}/interfaces/{name}",
+    "descriptorIdentity": ["name", "version"],
+    "runtimeIdentity": ["space", "resource.kind", "resource.name", "name", "version"],
+    "versionQuery": "version",
+    "omittedVersionRule": "only-when-visible-name-is-unique",
+    "resourceKindQuery": "resourceKind",
+    "resourceNameQuery": "resourceName",
+    "omittedResourceRule": "only-when-visible-instance-is-unique",
+    "identityAmbiguousCode": "interface_identity_ambiguous",
+    "instanceAmbiguousCode": "interface_instance_ambiguous",
+    "documentRule": "copy-exact-declared-document",
+    "requiredReadinessRule": "not-ready-unless-materialized-validated-resolved",
+    "checks": [
+      "absent-feature-is-not-an-error",
+      "exact-pair-read",
+      "omitted-version-unique-only",
+      "ambiguous-version-fails-closed",
+      "exact-resource-instance-read",
+      "multi-resource-instance-fails-closed",
+      "document-exact-copy",
+      "document-schema-valid",
+      "required-rejected-without-feature",
+      "required-not-ready-unless-resolved",
+      "optional-omission-not-listed",
+      "authorization-not-implied"
+    ]
+  },
   "forbiddenProviderState": [
     "credential",
     "secret",
@@ -90,6 +124,6 @@
   ],
   "runnerEvidence": {
     "subject": "takoform.portable-host-black-box-runner@v1",
-    "sha256": "sha256:8ccc388808aabb27ee5a2b8ba9319fc2f69ee90893e1b73d662d7ebf58ef930c"
+    "sha256": "sha256:b9073cbc45d5630aa88bf9beca20ac6df32ec080a11e5e00774c41b63f6e2020"
   }
 }

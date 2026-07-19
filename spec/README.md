@@ -9,6 +9,7 @@ Current committed surfaces:
 - [`host-api/`](host-api/) — the minimal discovery, capability, preview, apply, observe, and delete contract used by the provider candidate;
 - [`form-definition/`](form-definition/) — exact FormRef and data-only Form Definition contract;
 - [`form-package/`](form-package/) — package-index identity, closed payload rules, and local verifier boundary;
+- [`interface-declaration/`](interface-declaration/) — open `(name, version)` runtime interface descriptors, exact non-secret documents, and deterministic input mappings;
 - [`trust/`](trust/) — the D-08 provider/Form Package trust decision and its machine-readable fail-closed profile;
 - [`../schemas/host-discovery.schema.json`](../schemas/host-discovery.schema.json) — machine-readable discovery validation;
 - [`../forms/README.md`](../forms/README.md) — the exact ten-kind Stable set and retained legacy inventory;

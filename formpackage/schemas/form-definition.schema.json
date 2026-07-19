@@ -65,6 +65,7 @@
     },
     "interfaces": {
       "type": "array",
+      "maxItems": 64,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -78,14 +79,48 @@
           },
           "version": {
             "type": "string",
-            "pattern": "^v[1-9][0-9]*$"
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
           },
           "description": {
             "type": "string",
             "maxLength": 1024
           },
+          "required": {
+            "type": "boolean"
+          },
+          "document": {
+            "type": "object"
+          },
           "documentSchema": {
             "$ref": "#/$defs/jsonSchema"
+          },
+          "inputs": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "source"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$"
+                },
+                "source": {
+                  "type": "string",
+                  "maxLength": 128,
+                  "anyOf": [
+                    { "enum": ["literal", "output"] },
+                    { "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" }
+                  ]
+                },
+                "pointer": {
+                  "$ref": "#/$defs/jsonPointer"
+                },
+                "value": {}
+              }
+            }
           }
         }
       }
@@ -152,6 +187,11 @@
         },
         "type": {}
       }
+    },
+    "jsonPointer": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^(?:/(?:[^~/]|~[01])*)*$"
     },
     "packagePath": {
       "type": "string",

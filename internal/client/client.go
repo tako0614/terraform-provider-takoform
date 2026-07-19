@@ -70,6 +70,7 @@ type Discovery struct {
 type Endpoints struct {
 	API              string `json:"api,omitempty"`
 	Forms            string `json:"forms,omitempty"`
+	Interfaces       string `json:"interfaces,omitempty"`
 	Capabilities     string `json:"capabilities,omitempty"`
 	CompatibilityAPI string `json:"compatibility_api,omitempty"`
 	OIDCIssuer       string `json:"oidc_issuer,omitempty"`
@@ -300,6 +301,7 @@ type Client struct {
 	userAgent                  string
 	apiBase                    string
 	formsURL                   string
+	interfacesURL              string
 	compatibilityAPI           string
 	allowCompatibilityFallback bool
 	compatibilityFallback      bool
@@ -379,6 +381,7 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 	c.compatibilityFallback = false
 	c.apiBase = ""
 	c.formsURL = ""
+	c.interfacesURL = ""
 	if !disco.SupportsServiceForms() {
 		return errors.New("takoform: discovery does not advertise features.service_forms")
 	}
@@ -419,6 +422,18 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 			return fmt.Errorf("takoform: invalid discovery forms endpoint: %w", err)
 		}
 		c.formsURL = strings.TrimRight(formsURL, "/")
+	}
+	// Runtime interface declarations are an optional, read-only surface. A host
+	// that advertises no declarations remains a conforming Form host.
+	if disco.HasFeature(FeatureInterfaceDeclarations) {
+		c.interfacesURL = c.apiBase + "/interfaces"
+		if disco.Endpoints.Interfaces != "" {
+			interfacesURL, err := c.validAdvertisedEndpoint(disco.Endpoints.Interfaces)
+			if err != nil {
+				return fmt.Errorf("takoform: invalid discovery interfaces endpoint: %w", err)
+			}
+			c.interfacesURL = strings.TrimRight(interfacesURL, "/")
+		}
 	}
 	if disco.Endpoints.CompatibilityAPI != "" {
 		compatibilityAPI, err := c.validAdvertisedEndpoint(disco.Endpoints.CompatibilityAPI)

@@ -117,6 +117,12 @@ func VerifyConformance(root string) (ConformanceReport, error) {
 					}
 				}
 			}
+		case "definition":
+			input, err := readConformanceInput(root, test.Path)
+			if err != nil {
+				return ConformanceReport{}, err
+			}
+			_, testErr = ValidateDefinition(input)
 		case "package-path":
 			testErr = validatePackagePath(test.Value)
 		default:

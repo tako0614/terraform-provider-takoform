@@ -193,8 +193,16 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 	}
 	for index, descriptor := range definition.Interfaces {
 		if descriptor.DocumentSchema != nil {
-			if _, err := compileInlineSchema(descriptor.DocumentSchema, fmt.Sprintf("interfaces[%d].documentSchema", index)); err != nil {
+			compiled, err := compileInlineSchema(descriptor.DocumentSchema, fmt.Sprintf("interfaces[%d].documentSchema", index))
+			if err != nil {
 				return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
+			}
+			document := descriptor.Document
+			if document == nil {
+				document = map[string]any{}
+			}
+			if err := compiled.Validate(document); err != nil {
+				return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("interfaces[%d].document does not satisfy documentSchema: %w", index, err)
 			}
 		}
 	}
@@ -214,6 +222,17 @@ func validateDefinition(raw []byte) (FormDefinition, any, error) {
 func ValidateDefinition(raw []byte) (FormDefinition, error) {
 	definition, _, err := validateDefinition(raw)
 	return definition, err
+}
+
+// ValidatePortableData rejects credential, secret, host-authority, commercial,
+// and executable field vocabulary from an already decoded JSON value. Runtime
+// declaration readers use the same fail-closed policy as Form Definitions
+// before exposing host-supplied documents or values to non-sensitive state.
+func ValidatePortableData(value any) error {
+	if err := rejectForbiddenContent(value, "$runtime"); err != nil {
+		return fmt.Errorf("portable data-only content policy: %w", err)
+	}
+	return nil
 }
 
 func validateIndex(raw []byte) (PackageIndex, any, error) {
@@ -1246,6 +1265,29 @@ func validateDependentRequiredNames(value any, location string) error {
 	return nil
 }
 
+func validateInterfaceInputs(interfaceKey string, inputs []InterfaceInputDeclaration) error {
+	names := map[string]struct{}{}
+	for _, input := range inputs {
+		if _, duplicate := names[input.Name]; duplicate {
+			return fmt.Errorf("Interface %q has duplicate input %q", interfaceKey, input.Name)
+		}
+		names[input.Name] = struct{}{}
+		if input.Source == InterfaceInputSourceLiteral {
+			if len(input.Value) == 0 {
+				return fmt.Errorf("Interface %q input %q is a literal without a value", interfaceKey, input.Name)
+			}
+			if input.Pointer != "" {
+				return fmt.Errorf("Interface %q input %q is a literal and must not carry a pointer", interfaceKey, input.Name)
+			}
+			continue
+		}
+		if len(input.Value) > 0 {
+			return fmt.Errorf("Interface %q input %q carries a value with source %q; only a literal may", interfaceKey, input.Name, input.Source)
+		}
+	}
+	return nil
+}
+
 func validateDefinitionSemantics(definition FormDefinition) error {
 	if len(definition.ConformanceFixtures) > maxConformanceFixtures {
 		return fmt.Errorf("Form Definition has %d conformance fixtures; maximum is %d", len(definition.ConformanceFixtures), maxConformanceFixtures)
@@ -1260,6 +1302,9 @@ func validateDefinitionSemantics(definition FormDefinition) error {
 			return fmt.Errorf("Form Definition has duplicate Interface %q", key)
 		}
 		interfaces[key] = struct{}{}
+		if err := validateInterfaceInputs(key, descriptor.Inputs); err != nil {
+			return err
+		}
 	}
 	fixtures := map[string]struct{}{}
 	for _, fixture := range definition.ConformanceFixtures {
