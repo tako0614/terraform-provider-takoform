@@ -152,6 +152,7 @@ func testSet() Set {
 			},
 			PackageDigest: testPackageDigest,
 			ReleaseTag:    "forms/" + releaseIDForKind("ObjectBucket") + "/v1.0.0", ReleaseCommit: "0123456789abcdef0123456789abcdef01234567",
+			ReleaseToolingCommit:         "89abcdef0123456789abcdef0123456789abcdef",
 			PackageReleaseManifestPath:   "releases/k-j5rguzldorbhky3lmv2a/1.0.0/release-manifest.json",
 			PackageReleaseManifestDigest: testEvidenceDigest,
 			PackageIndexPath:             "releases/k-j5rguzldorbhky3lmv2a/1.0.0/takoform-form-k-j5rguzldorbhky3lmv2a_1.0.0_package-index.json",

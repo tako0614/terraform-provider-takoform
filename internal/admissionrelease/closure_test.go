@@ -88,9 +88,11 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 		t.Fatalf("nondeterministic tar metadata error = %v", err)
 	}
 	releaseCommit := "0123456789abcdef0123456789abcdef01234567"
+	toolingCommit := "89abcdef0123456789abcdef0123456789abcdef"
 	releaseTag := "forms/" + releaseID + "/v1.0.0"
 	metadataManifest := packageReleaseManifest{
 		Tag: releaseTag, SourceRepository: sourceRepository, SourceCommit: releaseCommit, Workflow: packageReleaseWorkflow,
+		ToolingCommit:  toolingCommit,
 		PackageVersion: "1.0.0", PackageDigest: packageReport.PackageDigest, FormRef: packageReport.FormRef,
 		Canonicalization: "RFC8785", SignedSubject: indexName,
 	}
@@ -117,13 +119,14 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 	}
 	manifest := packageReleaseManifest{
 		SchemaVersion: packageReleaseSchema, ReleaseType: packageReleaseType, Tag: releaseTag,
-		SourceRepository: sourceRepository, SourceCommit: releaseCommit, Workflow: packageReleaseWorkflow,
+		SourceRepository: sourceRepository, SourceCommit: releaseCommit, ToolingCommit: toolingCommit, Workflow: packageReleaseWorkflow,
 		PackageVersion: "1.0.0", ReleaseID: releaseID, PackageDigest: packageReport.PackageDigest, FormRef: packageReport.FormRef,
 		Canonicalization: "RFC8785", SignedSubject: indexName, SignatureBundle: bundleName, SignatureMediaType: sigstoreBundleMediaTypeV03,
 		PublisherPolicy: releasePublisherPolicy{
-			OIDCIssuer: "https://token.actions.githubusercontent.com",
-			Identity:   "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main",
-			TagPattern: "refs/tags/forms/k-*/v*",
+			OIDCIssuer:    "https://token.actions.githubusercontent.com",
+			Identity:      "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main",
+			TagPattern:    "refs/tags/forms/k-*/v*",
+			ToolingCommit: toolingCommit,
 		},
 		Assets: releaseAssets, PublicationReady: true, PublicationBlockers: []string{},
 	}
@@ -139,7 +142,7 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 		ProviderRegistryReadback: registryRef,
 		Entries: []SetEntry{{
 			Kind: "ObjectBucket", Slug: "object-bucket", FormRef: packageReport.FormRef, PackageDigest: packageReport.PackageDigest,
-			ReleaseTag: "forms/" + releaseID + "/v1.0.0", ReleaseCommit: releaseCommit,
+			ReleaseTag: "forms/" + releaseID + "/v1.0.0", ReleaseCommit: releaseCommit, ReleaseToolingCommit: toolingCommit,
 			PackageReleaseManifestPath: path.Join(releaseDirectory, "release-manifest.json"), PackageReleaseManifestDigest: formpackage.DigestBytes(manifestRaw),
 			PackageIndexPath: path.Join(releaseDirectory, indexName), PackageIndexSigstoreBundle: path.Join(releaseDirectory, bundleName),
 			EvidencePath: "packages/object-bucket/evidence.json", EvidenceDigest: formpackage.DigestBytes(evidenceRaw),
@@ -169,6 +172,27 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 		"sbom-unknown":      mutateCanonicalFixture(t, sbomRaw, func(value map[string]any) { value["unexpected"] = true }),
 		"sbom-omission":     mutateCanonicalFixture(t, sbomRaw, func(value map[string]any) { delete(value, "files") }),
 		"sbom-tamper":       mutateCanonicalFixture(t, sbomRaw, func(value map[string]any) { value["name"] = "different package" }),
+		"sbom-relationship-omission": mutateCanonicalFixture(t, sbomRaw, func(value map[string]any) {
+			relationships := value["relationships"].([]any)
+			value["relationships"] = relationships[:len(relationships)-1]
+		}),
+		"sbom-relationship-substitution": mutateCanonicalFixture(t, sbomRaw, func(value map[string]any) {
+			value["relationships"].([]any)[1].(map[string]any)["relatedSpdxElement"] = "SPDXRef-File-substituted"
+		}),
+		"sbom-relationship-duplicate": mutateCanonicalFixture(t, sbomRaw, func(value map[string]any) {
+			relationships := value["relationships"].([]any)
+			value["relationships"] = append(relationships, relationships[1])
+		}),
+		"sbom-relationship-extra": mutateCanonicalFixture(t, sbomRaw, func(value map[string]any) {
+			relationships := value["relationships"].([]any)
+			value["relationships"] = append(relationships, map[string]any{
+				"spdxElementId": "SPDXRef-Package", "relationshipType": "CONTAINS", "relatedSpdxElement": "SPDXRef-File-unlisted",
+			})
+		}),
+		"sbom-relationship-reorder": mutateCanonicalFixture(t, sbomRaw, func(value map[string]any) {
+			relationships := value["relationships"].([]any)
+			relationships[1], relationships[2] = relationships[2], relationships[1]
+		}),
 	} {
 		if err := verifyPackageSBOM(candidate, indexRaw, packageRoot, metadataManifest); err == nil {
 			t.Errorf("%s unexpectedly passed", name)
@@ -182,10 +206,41 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 		"provenance-tamper": mutateCanonicalFixture(t, provenanceRaw, func(value map[string]any) {
 			value["predicate"].(map[string]any)["buildDefinition"].(map[string]any)["resolvedDependencies"].([]any)[0].(map[string]any)["digest"].(map[string]any)["gitCommit"] = strings.Repeat("f", 40)
 		}),
+		"provenance-tooling-substitution": mutateCanonicalFixture(t, provenanceRaw, func(value map[string]any) {
+			value["predicate"].(map[string]any)["buildDefinition"].(map[string]any)["resolvedDependencies"].([]any)[1].(map[string]any)["digest"].(map[string]any)["gitCommit"] = strings.Repeat("e", 40)
+		}),
+		"provenance-builder-substitution": mutateCanonicalFixture(t, provenanceRaw, func(value map[string]any) {
+			value["predicate"].(map[string]any)["runDetails"].(map[string]any)["builder"].(map[string]any)["id"] = "https://example.invalid/unversioned"
+		}),
+		"provenance-tag-substitution": mutateCanonicalFixture(t, provenanceRaw, func(value map[string]any) {
+			value["predicate"].(map[string]any)["buildDefinition"].(map[string]any)["externalParameters"].(map[string]any)["tag"] = "forms/k-substituted/v1.0.0"
+		}),
 	} {
 		if err := verifyPackageProvenance(candidate, metadataManifest, metadataAssets); err == nil {
 			t.Errorf("%s unexpectedly passed", name)
 		}
+	}
+	writeTamperedManifest := func(value packageReleaseManifest) {
+		t.Helper()
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeRetainedTestFile(t, filepath.Join(root, "admission", "v1"), path.Join(releaseDirectory, "release-manifest.json"), raw)
+		set.Entries[0].PackageReleaseManifestDigest = formpackage.DigestBytes(raw)
+		writeRetainedTestJSON(t, root, setManifestPath, set)
+	}
+	tamperedManifest := manifest
+	tamperedManifest.PublisherPolicy.ToolingCommit = strings.Repeat("d", 40)
+	writeTamperedManifest(tamperedManifest)
+	if err := verifyAdmissionSet(root, candidates, &recordingSubjectVerifier{}, &recordingReleaseRefVerifier{}); err == nil || !strings.Contains(err.Error(), "publisher policy") {
+		t.Fatalf("publisher-policy tooling substitution error = %v", err)
+	}
+	tamperedManifest.ToolingCommit = strings.Repeat("d", 40)
+	set.Entries[0].ReleaseToolingCommit = tamperedManifest.ToolingCommit
+	writeTamperedManifest(tamperedManifest)
+	if err := verifyAdmissionSet(root, candidates, &recordingSubjectVerifier{}, &recordingReleaseRefVerifier{}); err == nil || !strings.Contains(err.Error(), "provenance") {
+		t.Fatalf("release-tooling provenance substitution error = %v", err)
 	}
 }
 
@@ -397,6 +452,15 @@ func buildPackageSBOMFixture(t *testing.T, packageRoot string, indexRaw []byte, 
 	for _, file := range index.Files {
 		appendFile(file.Path, file.Digest)
 	}
+	relationships := make([]spdxRelationship, 0, len(files)+1)
+	relationships = append(relationships, spdxRelationship{
+		SPDXElementID: "SPDXRef-DOCUMENT", RelationshipType: "DESCRIBES", RelatedSPDXElement: "SPDXRef-Package",
+	})
+	for _, file := range files {
+		relationships = append(relationships, spdxRelationship{
+			SPDXElementID: "SPDXRef-Package", RelationshipType: "CONTAINS", RelatedSPDXElement: file.SPDXID,
+		})
+	}
 	return canonicalFixture(t, packageSBOM{
 		SPDXVersion: "SPDX-2.3", DataLicense: "CC0-1.0", SPDXID: "SPDXRef-DOCUMENT",
 		Name:              "Takoform Form Package " + manifest.FormRef.Kind + " " + manifest.PackageVersion,
@@ -408,10 +472,7 @@ func buildPackageSBOMFixture(t *testing.T, packageRoot string, indexRaw []byte, 
 			PackageVerificationCode: spdxPackageVerificationCode{Value: code},
 			LicenseConcluded:        "NOASSERTION", LicenseDeclared: "NOASSERTION", CopyrightText: "NOASSERTION",
 		}},
-		Files: files,
-		Relationships: []spdxRelationship{{
-			SPDXElementID: "SPDXRef-DOCUMENT", RelationshipType: "DESCRIBES", RelatedSPDXElement: "SPDXRef-Package",
-		}},
+		Files: files, Relationships: relationships,
 	})
 }
 
@@ -432,10 +493,12 @@ func buildPackageProvenanceFixture(t *testing.T, manifest packageReleaseManifest
 				ExternalParameters: map[string]string{"tag": manifest.Tag},
 				InternalParameters: map[string]string{"canonicalization": "RFC8785"},
 				ResolvedDependencies: []provenanceDependency{{
-					URI: "git+https://" + manifest.SourceRepository, Digest: map[string]string{"gitCommit": manifest.SourceCommit},
+					Name: "tagged-release-source", URI: "git+https://" + manifest.SourceRepository, Digest: map[string]string{"gitCommit": manifest.SourceCommit},
+				}, {
+					Name: "protected-main-release-tooling", URI: "git+https://" + manifest.SourceRepository, Digest: map[string]string{"gitCommit": manifest.ToolingCommit},
 				}},
 			},
-			RunDetails: provenanceRunDetails{Builder: provenanceBuilder{ID: "https://" + manifest.SourceRepository + "/" + manifest.Workflow}},
+			RunDetails: provenanceRunDetails{Builder: provenanceBuilder{ID: "https://" + manifest.SourceRepository + "/" + manifest.Workflow + "@" + manifest.ToolingCommit}},
 		},
 	})
 }

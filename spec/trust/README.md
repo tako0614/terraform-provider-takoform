@@ -187,9 +187,11 @@ metadata, payload sizes/digests, and absence of unlisted archive entries, and
 then authenticates that exact index. The SBOM and provenance are themselves
 RFC 8785 canonical, strictly decoded evidence: the verifier recomputes the
 SPDX file closure and package verification code and requires SLSA subjects,
-source repository, tag, commit, workflow, and canonicalization parameters to
-match the exact retained package release. Unknown, duplicate, omitted, or
-substituted metadata fails closed.
+source repository, tag, tagged-source commit, distinct protected-main tooling
+commit, commit-versioned workflow builder, and canonicalization parameters to
+match the exact retained package release. The publisher policy evidence keeps
+the certificate identity at `@refs/heads/main` and pins the same tooling
+commit. Unknown, duplicate, omitted, or substituted metadata fails closed.
 The canonical `takoform.provider-registry-readback@v1` similarly binds the
 provider version/tag/commit, current release descriptor, candidate-set and
 schema digests, both CLI/FQN/binary identities, and the exact direct-install

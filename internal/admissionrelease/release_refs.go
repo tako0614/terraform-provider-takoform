@@ -42,6 +42,22 @@ func (gitReleaseRefVerifier) VerifyReleaseRefs(root string, set Set, readback Pr
 		if err := requireTagCommit(root, entry.Kind+" package release", entry.ReleaseTag, entry.ReleaseCommit); err != nil {
 			return err
 		}
+		if err := requireCommitAncestor(root, entry.Kind+" release tooling", entry.ReleaseToolingCommit, head); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func requireCommitAncestor(root, label, commit, descendant string) error {
+	if !releaseCommitPattern.MatchString(commit) || !releaseCommitPattern.MatchString(descendant) {
+		return fmt.Errorf("%s commit ancestry requires exact lowercase 40-hex commits", label)
+	}
+	if _, err := gitOutput(root, "cat-file", "-e", commit+"^{commit}"); err != nil {
+		return fmt.Errorf("%s commit %s is not retained in source history", label, commit)
+	}
+	if _, err := gitOutput(root, "merge-base", "--is-ancestor", commit, descendant); err != nil {
+		return fmt.Errorf("%s commit %s is not an ancestor of admission commit %s", label, commit, descendant)
 	}
 	return nil
 }

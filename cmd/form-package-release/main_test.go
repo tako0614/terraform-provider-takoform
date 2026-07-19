@@ -18,6 +18,8 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
+const testToolingCommit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
 func TestReleaseIDIsInjectiveReversibleAndFilesystemSafe(t *testing.T) {
 	t.Parallel()
 	kinds := []string{"SQLDatabase", "SqlDatabase", "SqLDatabase", "A" + strings.Repeat("a", 63)}
@@ -58,7 +60,7 @@ func TestBuildPackageIsDeterministicAndCanonical(t *testing.T) {
 	for _, output := range outputs {
 		if err := run([]string{
 			"build-package", "--repo", repo, "--tag", tag,
-			"--package-dir", packageDir, "--output", output, "--allow-untagged-candidate",
+			"--package-dir", packageDir, "--output", output, "--tooling-commit", testToolingCommit, "--allow-untagged-candidate",
 		}, io.Discard); err != nil {
 			t.Fatal(err)
 		}
@@ -68,6 +70,9 @@ func TestBuildPackageIsDeterministicAndCanonical(t *testing.T) {
 	wantIdentity := "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
 	if manifest.PublisherPolicy.Identity != wantIdentity {
 		t.Fatalf("publisher identity = %q, want %q", manifest.PublisherPolicy.Identity, wantIdentity)
+	}
+	if manifest.ToolingCommit != testToolingCommit || manifest.PublisherPolicy.ToolingCommit != testToolingCommit {
+		t.Fatalf("release tooling commit is not pinned in the manifest and publisher policy: %+v", manifest)
 	}
 	for _, name := range []string{
 		baseName + ".tar.gz",
@@ -137,6 +142,21 @@ func TestBuildPackageIsDeterministicAndCanonical(t *testing.T) {
 	if sbom["spdxVersion"] != "SPDX-2.3" {
 		t.Fatalf("unexpected SBOM: %+v", sbom)
 	}
+	files, ok := sbom["files"].([]any)
+	if !ok {
+		t.Fatalf("SBOM files are missing: %+v", sbom)
+	}
+	relationships, ok := sbom["relationships"].([]any)
+	if !ok || len(relationships) != len(files)+1 {
+		t.Fatalf("SBOM relationship closure has %d relationships for %d files", len(relationships), len(files))
+	}
+	for index, rawFile := range files {
+		file := rawFile.(map[string]any)
+		relationship := relationships[index+1].(map[string]any)
+		if relationship["spdxElementId"] != "SPDXRef-Package" || relationship["relationshipType"] != "CONTAINS" || relationship["relatedSpdxElement"] != file["SPDXID"] {
+			t.Fatalf("SBOM file %d is not deterministically contained by the package: file=%+v relationship=%+v", index, file, relationship)
+		}
+	}
 	validateSPDX(t, sbomPath)
 	var provenance statement
 	readJSON(t, filepath.Join(outputs[0], baseName+"_provenance.intoto.json"), &provenance)
@@ -156,7 +176,7 @@ func TestFinalizeRequiresTransparencyEvidence(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "release")
 	if err := run([]string{
 		"build-package", "--repo", repo, "--tag", tag,
-		"--package-dir", packageDir, "--output", output, "--allow-untagged-candidate",
+		"--package-dir", packageDir, "--output", output, "--tooling-commit", testToolingCommit, "--allow-untagged-candidate",
 	}, io.Discard); err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +245,7 @@ func TestBuildRevocationAndAppendOnlyGuard(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "release")
 	if err := run([]string{
 		"build-revocation", "--repo", repo, "--tag", "forms/revocations/v1.0.0",
-		"--output", output, "--allow-untagged-candidate",
+		"--output", output, "--tooling-commit", testToolingCommit, "--allow-untagged-candidate",
 	}, io.Discard); err != nil {
 		t.Fatal(err)
 	}

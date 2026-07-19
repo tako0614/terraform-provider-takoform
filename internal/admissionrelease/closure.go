@@ -72,6 +72,7 @@ type packageReleaseManifest struct {
 	Tag                 string                 `json:"tag"`
 	SourceRepository    string                 `json:"sourceRepository"`
 	SourceCommit        string                 `json:"sourceCommit"`
+	ToolingCommit       string                 `json:"toolingCommit"`
 	Workflow            string                 `json:"workflow"`
 	PackageVersion      string                 `json:"packageVersion"`
 	ReleaseID           string                 `json:"releaseId"`
@@ -88,9 +89,10 @@ type packageReleaseManifest struct {
 }
 
 type releasePublisherPolicy struct {
-	OIDCIssuer string `json:"oidcIssuer"`
-	Identity   string `json:"identity"`
-	TagPattern string `json:"tagPattern"`
+	OIDCIssuer    string `json:"oidcIssuer"`
+	Identity      string `json:"identity"`
+	TagPattern    string `json:"tagPattern"`
+	ToolingCommit string `json:"toolingCommit"`
 }
 
 type releaseAsset struct {
@@ -178,6 +180,7 @@ type provenanceBuildDefinition struct {
 }
 
 type provenanceDependency struct {
+	Name   string            `json:"name"`
 	URI    string            `json:"uri"`
 	Digest map[string]string `json:"digest"`
 }
@@ -342,6 +345,7 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 	expectedReleaseID := releaseIDForKind(entry.Kind)
 	if manifest.SchemaVersion != packageReleaseSchema || manifest.ReleaseType != packageReleaseType ||
 		manifest.Tag != entry.ReleaseTag || manifest.SourceRepository != sourceRepository || manifest.SourceCommit != entry.ReleaseCommit ||
+		manifest.ToolingCommit != entry.ReleaseToolingCommit ||
 		manifest.Workflow != packageReleaseWorkflow || manifest.PackageVersion != packageVersion ||
 		manifest.ReleaseID != expectedReleaseID || manifest.PackageDigest != entry.PackageDigest || manifest.FormRef != entry.FormRef ||
 		manifest.Canonicalization != "RFC8785" || manifest.SignatureMediaType != sigstoreBundleMediaTypeV03 ||
@@ -354,7 +358,7 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 		return nil, fmt.Errorf("package release signed subject/bundle path drift")
 	}
 	if manifest.PublisherPolicy.OIDCIssuer != packagePublisherIssuer || manifest.PublisherPolicy.Identity != packagePublisherIdentity ||
-		manifest.PublisherPolicy.TagPattern != packagePublisherTagPattern {
+		manifest.PublisherPolicy.TagPattern != packagePublisherTagPattern || manifest.PublisherPolicy.ToolingCommit != manifest.ToolingCommit {
 		return nil, fmt.Errorf("package release publisher policy is not the protected Takoform package workflow")
 	}
 	if len(manifest.Assets) != 5 {
@@ -485,6 +489,10 @@ func verifyPackageSBOM(raw, canonicalIndex []byte, packageRoot string, manifest 
 		return fmt.Errorf("file closure has %d entries, want %d", len(document.Files), len(expectedFiles))
 	}
 	seenIDs := make(map[string]struct{}, len(document.Files))
+	wantRelationships := make([]spdxRelationship, 0, len(document.Files)+1)
+	wantRelationships = append(wantRelationships, spdxRelationship{
+		SPDXElementID: "SPDXRef-DOCUMENT", RelationshipType: "DESCRIBES", RelatedSPDXElement: "SPDXRef-Package",
+	})
 	for position, expected := range expectedFiles {
 		file := document.Files[position]
 		digest := strings.TrimPrefix(expected.digest, "sha256:")
@@ -499,12 +507,12 @@ func verifyPackageSBOM(raw, canonicalIndex []byte, packageRoot string, manifest 
 			return fmt.Errorf("duplicate SPDX file id %q", file.SPDXID)
 		}
 		seenIDs[file.SPDXID] = struct{}{}
+		wantRelationships = append(wantRelationships, spdxRelationship{
+			SPDXElementID: "SPDXRef-Package", RelationshipType: "CONTAINS", RelatedSPDXElement: wantID,
+		})
 	}
-	wantRelationships := []spdxRelationship{{
-		SPDXElementID: "SPDXRef-DOCUMENT", RelationshipType: "DESCRIBES", RelatedSPDXElement: "SPDXRef-Package",
-	}}
 	if !reflect.DeepEqual(document.Relationships, wantRelationships) {
-		return fmt.Errorf("document relationship closure is not exact")
+		return fmt.Errorf("document relationship closure does not exactly DESCRIBE the package and CONTAIN every file in order")
 	}
 	return nil
 }
@@ -573,12 +581,15 @@ func verifyPackageProvenance(raw []byte, manifest packageReleaseManifest, assets
 			ExternalParameters: map[string]string{"tag": manifest.Tag},
 			InternalParameters: map[string]string{"canonicalization": "RFC8785"},
 			ResolvedDependencies: []provenanceDependency{{
-				URI:    "git+https://" + manifest.SourceRepository,
+				Name: "tagged-release-source", URI: "git+https://" + manifest.SourceRepository,
 				Digest: map[string]string{"gitCommit": manifest.SourceCommit},
+			}, {
+				Name: "protected-main-release-tooling", URI: "git+https://" + manifest.SourceRepository,
+				Digest: map[string]string{"gitCommit": manifest.ToolingCommit},
 			}},
 		},
 		RunDetails: provenanceRunDetails{Builder: provenanceBuilder{
-			ID: "https://" + manifest.SourceRepository + "/" + manifest.Workflow,
+			ID: "https://" + manifest.SourceRepository + "/" + manifest.Workflow + "@" + manifest.ToolingCommit,
 		}},
 	}
 	if statement.Type != "https://in-toto.io/Statement/v1" || statement.PredicateType != "https://slsa.dev/provenance/v1" ||

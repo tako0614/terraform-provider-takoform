@@ -100,6 +100,7 @@ jobs:
           go run ./cmd/form-package-release build-package \
             --repo "$GITHUB_WORKSPACE/release-source" \
             --tag "$RELEASE_TAG" \
+            --tooling-commit "$GITHUB_SHA" \
             --output "$output"
           subject="$(jq -r .signedSubject "$output/release-manifest.json")"
           bundle="$(jq -r .signatureBundle "$output/release-manifest.json")"
