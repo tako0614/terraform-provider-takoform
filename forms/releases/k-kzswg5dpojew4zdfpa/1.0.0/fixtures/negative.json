@@ -1,0 +1,14 @@
+{
+  "connections": {
+    "DATABASE": {
+      "permissions": [
+        "read"
+      ],
+      "projection": "metadata",
+      "resource": "SQLDatabase/main"
+    }
+  },
+  "dimensions": 0,
+  "metric": "cosine",
+  "name": "embeddings"
+}

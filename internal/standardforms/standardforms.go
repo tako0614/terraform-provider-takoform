@@ -2,6 +2,7 @@ package standardforms
 
 import (
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -231,6 +232,11 @@ func Verify(root string) error {
 		if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
 			return fmt.Errorf("%s inventory digest drift", entry.Kind)
 		}
+		releaseID := "k-" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(entry.Kind)))
+		releaseRoot := filepath.Join(root, "forms", "releases", releaseID, packageVersion)
+		if err := verifyReleaseSource(packageRoot, releaseRoot, entry); err != nil {
+			return fmt.Errorf("%s release source: %w", entry.Kind, err)
+		}
 		compiled, err := formregistry.ForKind(entry.Kind)
 		if err != nil {
 			return err
@@ -246,6 +252,45 @@ func Verify(root string) error {
 		}
 		if err := provider.VerifyStandardFormStructure(entry.Kind, desired); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func verifyReleaseSource(fixtureRoot, releaseRoot string, entry InventoryEntry) error {
+	report, err := formpackage.VerifyDirectory(releaseRoot)
+	if err != nil {
+		return err
+	}
+	if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
+		return fmt.Errorf("identity differs from the exact structural candidate")
+	}
+	fixtureIndexRaw, err := os.ReadFile(filepath.Join(fixtureRoot, formpackage.PackageIndexFilename))
+	if err != nil {
+		return err
+	}
+	releaseIndexRaw, err := os.ReadFile(filepath.Join(releaseRoot, formpackage.PackageIndexFilename))
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(fixtureIndexRaw, releaseIndexRaw) {
+		return fmt.Errorf("package-index.json bytes differ from the reviewed fixture source")
+	}
+	index, err := formpackage.ValidatePackageIndex(releaseIndexRaw)
+	if err != nil {
+		return err
+	}
+	for _, file := range index.Files {
+		fixtureRaw, err := os.ReadFile(filepath.Join(fixtureRoot, filepath.FromSlash(file.Path)))
+		if err != nil {
+			return err
+		}
+		releaseRaw, err := os.ReadFile(filepath.Join(releaseRoot, filepath.FromSlash(file.Path)))
+		if err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(fixtureRaw, releaseRaw) {
+			return fmt.Errorf("%s bytes differ from the reviewed fixture source", file.Path)
 		}
 	}
 	return nil

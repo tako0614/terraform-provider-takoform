@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "EdgeWorker/edge",
+  "kind": "EdgeWorker",
+  "name": "edge",
+  "portability": "portable"
+}

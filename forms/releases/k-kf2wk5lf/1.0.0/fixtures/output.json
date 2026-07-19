@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "Queue/jobs",
+  "kind": "Queue",
+  "name": "jobs",
+  "portability": "portable"
+}
