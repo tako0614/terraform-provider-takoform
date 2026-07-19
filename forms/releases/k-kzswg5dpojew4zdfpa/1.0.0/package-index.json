@@ -1,0 +1,44 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "VectorIndex",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:7d7c36ab4b6007220bf8f2cdd1997f893a9d06595a11c7843c8f6bdd9d2961bc"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 4161,
+      "digest": "sha256:7bf1f1981ca7705decf71bba03700f74b3a114a17361a6fcd8cafc6b5d6449a6"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 235,
+      "digest": "sha256:5c065e8b834d5d2357983fa6d9d77ee0c52ab265c4117563da10eeef286937e7"
+    },
+    {
+      "path": "fixtures/negative.json",
+      "mediaType": "application/json",
+      "size": 232,
+      "digest": "sha256:8cbb1d61224c1af9a38b4638221201b5bf49fb90d93a53f9bb313b4b7943820f"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 145,
+      "digest": "sha256:5de16681fecfd83018abb61c8fc68b8fb0732fa463eb5e713165e4b6fda19768"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 134,
+      "digest": "sha256:008d20e5d8531bf1f55dde46da3d346e261a63c74d671d3ebcc65062ba7f99ab"
+    }
+  ]
+}

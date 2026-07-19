@@ -44,6 +44,7 @@ var (
 	revocationTagPattern = regexp.MustCompile(`^forms/revocations/v(` + semverPattern + `)$`)
 	revocationPath       = regexp.MustCompile(`^forms/revocations(?:/checkpoints)?/[0-9A-Za-z.+-]+\.json$`)
 	kindPattern          = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
+	commitPattern        = regexp.MustCompile(`^[0-9a-f]{40}$`)
 )
 
 const semverPattern = `(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?`
@@ -61,6 +62,7 @@ type releaseManifest struct {
 	Tag                 string                  `json:"tag"`
 	SourceRepository    string                  `json:"sourceRepository"`
 	SourceCommit        string                  `json:"sourceCommit"`
+	ToolingCommit       string                  `json:"toolingCommit"`
 	Workflow            string                  `json:"workflow"`
 	PackageVersion      string                  `json:"packageVersion,omitempty"`
 	ReleaseID           string                  `json:"releaseId,omitempty"`
@@ -79,9 +81,10 @@ type releaseManifest struct {
 }
 
 type publisherPolicyEvidence struct {
-	OIDCIssuer string `json:"oidcIssuer"`
-	Identity   string `json:"identity"`
-	TagPattern string `json:"tagPattern"`
+	OIDCIssuer    string `json:"oidcIssuer"`
+	Identity      string `json:"identity"`
+	TagPattern    string `json:"tagPattern"`
+	ToolingCommit string `json:"toolingCommit"`
 }
 
 type statement struct {
@@ -132,9 +135,10 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	tag := flags.String("tag", "", "exact forms/<release-id>/v<semver> tag")
 	packageDir := flags.String("package-dir", "", "candidate-only package source override")
 	outputDir := flags.String("output", "", "new output directory")
+	toolingCommit := flags.String("tooling-commit", "", "exact protected-main release-tooling commit")
 	allowUntagged := flags.Bool("allow-untagged-candidate", false, "permit non-publishable local candidate without an attached tag")
 	allowDirty := flags.Bool("allow-dirty-candidate", false, "permit non-publishable local candidate from a dirty tree")
-	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || *tag == "" || *outputDir == "" {
+	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || *tag == "" || *outputDir == "" || !commitPattern.MatchString(*toolingCommit) {
 		return usageError()
 	}
 	matches := packageTagPattern.FindStringSubmatch(*tag)
@@ -181,12 +185,12 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	base := "takoform-form-" + releaseID + "_" + version
 	manifest := releaseManifest{
 		SchemaVersion: 1, ReleaseType: "form-package", Tag: *tag,
-		SourceRepository: sourceRepository, SourceCommit: evidence.commit,
+		SourceRepository: sourceRepository, SourceCommit: evidence.commit, ToolingCommit: *toolingCommit,
 		Workflow: packageWorkflow, PackageVersion: version, ReleaseID: releaseID,
 		PackageDigest: report.PackageDigest, FormRef: report.FormRef,
 		Canonicalization: canonicalization, SignedSubject: base + "_package-index.json",
 		SignatureBundle: base + "_package-index.sigstore.json", SignatureMediaType: bundleMediaType,
-		PublisherPolicy:  publisherPolicy(packageWorkflow, "refs/tags/forms/k-*/v*"),
+		PublisherPolicy:  publisherPolicy(packageWorkflow, "refs/tags/forms/k-*/v*", *toolingCommit),
 		PublicationReady: false, PublicationBlockers: evidence.blockers,
 	}
 	if err := createOutput(*outputDir); err != nil {
@@ -211,7 +215,7 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := writeJSON(filepath.Join(*outputDir, sbomName), sbom); err != nil {
+	if err := writeCanonicalJSON(filepath.Join(*outputDir, sbomName), sbom); err != nil {
 		return err
 	}
 	sbomAsset, err := describeAsset(filepath.Join(*outputDir, sbomName), sbomName, "application/spdx+json")
@@ -220,8 +224,8 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	}
 	assets = append(assets, sbomAsset)
 	provenanceName := base + "_provenance.intoto.json"
-	provenance := createProvenance(*tag, packageWorkflow, evidence.commit, assets[:2])
-	if err := writeJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
+	provenance := createProvenance(*tag, packageWorkflow, evidence.commit, *toolingCommit, assets[:2])
+	if err := writeCanonicalJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
 		return err
 	}
 	provenanceAsset, err := describeAsset(filepath.Join(*outputDir, provenanceName), provenanceName, "application/vnd.in-toto+json")
@@ -243,9 +247,10 @@ func runBuildRevocation(arguments []string, output io.Writer) error {
 	statementPath := flags.String("statement", "", "candidate-only statement override")
 	checkpointPath := flags.String("checkpoint", "", "candidate-only cumulative checkpoint override")
 	outputDir := flags.String("output", "", "new output directory")
+	toolingCommit := flags.String("tooling-commit", "", "exact protected-main release-tooling commit")
 	allowUntagged := flags.Bool("allow-untagged-candidate", false, "permit non-publishable local candidate without an attached tag")
 	allowDirty := flags.Bool("allow-dirty-candidate", false, "permit non-publishable local candidate from a dirty tree")
-	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || *tag == "" || *outputDir == "" {
+	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || *tag == "" || *outputDir == "" || !commitPattern.MatchString(*toolingCommit) {
 		return usageError()
 	}
 	matches := revocationTagPattern.FindStringSubmatch(*tag)
@@ -286,13 +291,13 @@ func runBuildRevocation(arguments []string, output io.Writer) error {
 	base := "takoform-form-revocation_" + version
 	manifest := releaseManifest{
 		SchemaVersion: 1, ReleaseType: "form-package-revocation", Tag: *tag,
-		SourceRepository: sourceRepository, SourceCommit: evidence.commit,
+		SourceRepository: sourceRepository, SourceCommit: evidence.commit, ToolingCommit: *toolingCommit,
 		Workflow: revokeWorkflow, PackageVersion: version,
 		PackageDigest: revocation.PackageDigest, FormRef: revocation.FormRef,
 		CheckpointSequence: checkpoint.Sequence, CheckpointDigest: checkpointDigest,
 		Canonicalization: canonicalization, SignedSubject: base + "_checkpoint.json",
 		SignatureBundle: base + "_checkpoint.sigstore.json", SignatureMediaType: bundleMediaType,
-		PublisherPolicy:  publisherPolicy(revokeWorkflow, "refs/tags/forms/revocations/v*"),
+		PublisherPolicy:  publisherPolicy(revokeWorkflow, "refs/tags/forms/revocations/v*", *toolingCommit),
 		PublicationReady: false, PublicationBlockers: evidence.blockers,
 	}
 	if err := createOutput(*outputDir); err != nil {
@@ -314,8 +319,8 @@ func runBuildRevocation(arguments []string, output io.Writer) error {
 		return err
 	}
 	provenanceName := base + "_provenance.intoto.json"
-	provenance := createProvenance(*tag, revokeWorkflow, evidence.commit, []releaseAsset{checkpointAsset, statementAsset})
-	if err := writeJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
+	provenance := createProvenance(*tag, revokeWorkflow, evidence.commit, *toolingCommit, []releaseAsset{checkpointAsset, statementAsset})
+	if err := writeCanonicalJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
 		return err
 	}
 	provenanceAsset, err := describeAsset(filepath.Join(*outputDir, provenanceName), provenanceName, "application/vnd.in-toto+json")
@@ -434,11 +439,11 @@ func inspectSource(repo, tag string, allowUntagged, allowDirty bool) (sourceEvid
 	return sourceEvidence{commit: strings.TrimSpace(commit), commitTime: commitTime.UTC(), blockers: blockers}, nil
 }
 
-func publisherPolicy(workflow, tagPattern string) publisherPolicyEvidence {
+func publisherPolicy(workflow, tagPattern, toolingCommit string) publisherPolicyEvidence {
 	return publisherPolicyEvidence{
 		OIDCIssuer: "https://token.actions.githubusercontent.com",
 		Identity:   "https://" + sourceRepository + "/" + workflow + "@refs/heads/main",
-		TagPattern: tagPattern,
+		TagPattern: tagPattern, ToolingCommit: toolingCommit,
 	}
 }
 
@@ -717,14 +722,17 @@ func describeAsset(path, name, mediaType string) (releaseAsset, error) {
 
 func createPackageSBOM(index formpackage.PackageIndex, report formpackage.VerificationReport, created time.Time, canonicalIndex []byte, packageDir string) (map[string]any, error) {
 	files := []map[string]any{}
+	fileIDs := []string{}
 	verificationDigests := []string{}
 	appendFile := func(name string, raw []byte) {
 		sha256Value := sha256.Sum256(raw)
 		sha1Value := sha1.Sum(raw)
+		fileID := "SPDXRef-File-" + spdxID(name) + "-" + hex.EncodeToString(sha256Value[:6])
 		verificationDigests = append(verificationDigests, hex.EncodeToString(sha1Value[:]))
+		fileIDs = append(fileIDs, fileID)
 		files = append(files, map[string]any{
 			"fileName":         "./" + name,
-			"SPDXID":           "SPDXRef-File-" + spdxID(name) + "-" + hex.EncodeToString(sha256Value[:6]),
+			"SPDXID":           fileID,
 			"checksums":        []map[string]string{{"algorithm": "SHA256", "checksumValue": hex.EncodeToString(sha256Value[:])}},
 			"licenseConcluded": "NOASSERTION", "licenseInfoInFiles": []string{"NOASSERTION"}, "copyrightText": "NOASSERTION",
 		})
@@ -740,6 +748,12 @@ func createPackageSBOM(index formpackage.PackageIndex, report formpackage.Verifi
 	sort.Strings(verificationDigests)
 	verificationInput := strings.Join(verificationDigests, "")
 	verificationCode := sha1.Sum([]byte(verificationInput))
+	relationships := []map[string]string{{"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES", "relatedSpdxElement": "SPDXRef-Package"}}
+	for _, fileID := range fileIDs {
+		relationships = append(relationships, map[string]string{
+			"spdxElementId": "SPDXRef-Package", "relationshipType": "CONTAINS", "relatedSpdxElement": fileID,
+		})
+	}
 	return map[string]any{
 		"spdxVersion": "SPDX-2.3", "dataLicense": "CC0-1.0", "SPDXID": "SPDXRef-DOCUMENT",
 		"name":              "Takoform Form Package " + index.FormRef.Kind + " " + index.PackageVersion,
@@ -751,12 +765,11 @@ func createPackageSBOM(index formpackage.PackageIndex, report formpackage.Verifi
 			"packageVerificationCode": map[string]string{"packageVerificationCodeValue": hex.EncodeToString(verificationCode[:])},
 			"licenseConcluded":        "NOASSERTION", "licenseDeclared": "NOASSERTION", "copyrightText": "NOASSERTION",
 		}},
-		"files":         files,
-		"relationships": []map[string]string{{"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES", "relatedSpdxElement": "SPDXRef-Package"}},
+		"files": files, "relationships": relationships,
 	}, nil
 }
 
-func createProvenance(tag, workflow, commit string, assets []releaseAsset) statement {
+func createProvenance(tag, workflow, sourceCommit, toolingCommit string, assets []releaseAsset) statement {
 	subjects := make([]statementSubject, 0, len(assets))
 	for _, asset := range assets {
 		subjects = append(subjects, statementSubject{Name: asset.Name, Digest: map[string]string{"sha256": strings.TrimPrefix(asset.Digest, "sha256:")}})
@@ -766,12 +779,15 @@ func createProvenance(tag, workflow, commit string, assets []releaseAsset) state
 		Type: "https://in-toto.io/Statement/v1", Subject: subjects, PredicateType: "https://slsa.dev/provenance/v1",
 		Predicate: map[string]any{
 			"buildDefinition": map[string]any{
-				"buildType":            "https://forms.takoform.com/buildtypes/data-release/v1",
-				"externalParameters":   map[string]string{"tag": tag},
-				"internalParameters":   map[string]string{"canonicalization": canonicalization},
-				"resolvedDependencies": []map[string]any{{"uri": "git+https://" + sourceRepository, "digest": map[string]string{"gitCommit": commit}}},
+				"buildType":          "https://forms.takoform.com/buildtypes/data-release/v1",
+				"externalParameters": map[string]string{"tag": tag},
+				"internalParameters": map[string]string{"canonicalization": canonicalization},
+				"resolvedDependencies": []map[string]any{
+					{"name": "tagged-release-source", "uri": "git+https://" + sourceRepository, "digest": map[string]string{"gitCommit": sourceCommit}},
+					{"name": "protected-main-release-tooling", "uri": "git+https://" + sourceRepository, "digest": map[string]string{"gitCommit": toolingCommit}},
+				},
 			},
-			"runDetails": map[string]any{"builder": map[string]string{"id": "https://" + sourceRepository + "/" + workflow}},
+			"runDetails": map[string]any{"builder": map[string]string{"id": "https://" + sourceRepository + "/" + workflow + "@" + toolingCommit}},
 		},
 	}
 }
@@ -845,6 +861,18 @@ func writeJSON(path string, value any) error {
 		return err
 	}
 	return handle.Close()
+}
+
+func writeCanonicalJSON(path string, value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, canonical, 0o644)
 }
 
 func writeJSONTo(output io.Writer, value any) error {

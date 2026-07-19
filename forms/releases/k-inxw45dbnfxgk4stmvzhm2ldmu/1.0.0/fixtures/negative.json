@@ -1,0 +1,18 @@
+{
+  "connections": {
+    "DATABASE": {
+      "permissions": [
+        "read",
+        "write"
+      ],
+      "projection": "environment",
+      "resource": "SQLDatabase/main"
+    }
+  },
+  "image": "ghcr.io/example/agent@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "name": "agent",
+  "ports": [
+    0
+  ],
+  "publicHttp": true
+}

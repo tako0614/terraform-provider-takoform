@@ -1,0 +1,6 @@
+{
+  "delivery": {
+    "maxRetries": -1
+  },
+  "name": "jobs"
+}

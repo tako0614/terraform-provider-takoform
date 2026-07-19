@@ -33,8 +33,15 @@ The release contains:
   Cosign signed subject and semantic package identity;
 - a deterministic `.tar.gz` transport whose root index has those same bytes
   and whose payload bytes match the index closure;
-- an SPDX 2.3 data-artifact SBOM;
-- an in-toto Statement v1 with SLSA Provenance v1;
+- an RFC 8785 canonical SPDX 2.3 data-artifact SBOM that binds the exact
+  FormRef, package digest, package version, index/payload SHA-256 closure, and
+  SPDX package verification code; the document `DESCRIBES` the package and
+  that package has one deterministic `CONTAINS` relationship for the index
+  and every payload file;
+- an RFC 8785 canonical in-toto Statement v1 with SLSA Provenance v1 that
+  binds the exact index/archive digests, source repository and tag commit,
+  the distinct protected-main release-tooling commit, protected workflow, and
+  canonicalization mode; its builder ID is versioned by that tooling commit;
 - a Sigstore v0.3 bundle containing the ephemeral certificate, signature, and
   transparency-log inclusion evidence;
 - a release manifest and `SHA256SUMS` for the exact final asset inventory; and
@@ -46,6 +53,9 @@ tag, equality to the approved commit, and that commit's ancestry from main,
 then checks the tagged data into a separate untrusted-source directory. Only
 the protected-main release tooling executes. The workflow uses the protected
 `form-package-release` Environment, commit-pinned Actions, and Cosign v3. It
+passes its exact `GITHUB_SHA` as the tooling commit, distinct from the tagged
+package source commit, and both commits are retained in the release manifest,
+publisher policy evidence, and SLSA resolved dependencies. It
 refuses an existing release, signs and immediately verifies the canonical
 index against the exact protected-main workflow identity, creates a draft,
 compares remote and local inventories by the exact release ID created by that
@@ -72,6 +82,14 @@ The bundle carries the signature, certificate, and transparency inclusion
 proof. Air-gapped verification additionally requires a retained,
 operator-managed Sigstore trusted root from the Public Good Instance; the
 distribution endpoint is never a trust root.
+
+Standard-admission readback parses the SBOM and provenance as strict I-JSON,
+rejects non-canonical or duplicate-key bytes and unknown/omitted fields, and
+recomputes their bindings from the signed package index and retained release
+manifest. Asset filenames, media types, and checksums alone are not semantic
+release evidence. Form Package release tests additionally validate generated
+SBOMs offline against the repository-pinned official SPDX 2.3 JSON Schema from
+the SPDX `v2.3` tag.
 
 ## Append-only security revocation
 

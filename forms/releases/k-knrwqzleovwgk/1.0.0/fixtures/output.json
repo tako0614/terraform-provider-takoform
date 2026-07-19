@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "Schedule/nightly",
+  "kind": "Schedule",
+  "name": "nightly",
+  "portability": "portable"
+}

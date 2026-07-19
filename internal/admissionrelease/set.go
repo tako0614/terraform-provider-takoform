@@ -55,6 +55,7 @@ type SetEntry struct {
 	PackageDigest                string              `json:"packageDigest"`
 	ReleaseTag                   string              `json:"releaseTag"`
 	ReleaseCommit                string              `json:"releaseCommit"`
+	ReleaseToolingCommit         string              `json:"releaseToolingCommit"`
 	PackageReleaseManifestPath   string              `json:"packageReleaseManifestPath"`
 	PackageReleaseManifestDigest string              `json:"packageReleaseManifestDigest"`
 	PackageIndexPath             string              `json:"packageIndexPath"`

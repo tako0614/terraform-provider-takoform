@@ -1,0 +1,253 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "DurableWorkflow",
+  "definitionVersion": "1.0.0",
+  "title": "Durable Workflow",
+  "description": "Provider-neutral versioned durable workflow definition and instance-state lifecycle.",
+  "status": "standard",
+  "desiredSchema": {
+    "$defs": {
+      "artifactSource": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "artifactPath": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifactPath"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "artifactSha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "artifactUrl": {
+                "format": "uri",
+                "pattern": "^https://",
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifactUrl",
+              "artifactSha256"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "artifactRef": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "artifactSha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            },
+            "required": [
+              "artifactRef",
+              "artifactSha256"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "connection": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "projection": {
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "resource": {
+            "pattern": "^\\S+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "permissions",
+          "projection"
+        ],
+        "type": "object"
+      },
+      "connections": {
+        "additionalProperties": {
+          "$ref": "#/$defs/connection"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      },
+      "sha256": {
+        "pattern": "^(sha256:)?[A-Fa-f0-9]{64}$",
+        "type": "string"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "connections": {
+        "$ref": "#/$defs/connections"
+      },
+      "entrypoint": {
+        "maxLength": 256,
+        "minLength": 1,
+        "pattern": ".*\\S.*",
+        "type": "string"
+      },
+      "name": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": ".*\\S.*",
+        "type": "string"
+      },
+      "retry": {
+        "additionalProperties": false,
+        "properties": {
+          "initialBackoffSeconds": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxAttempts": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "source": {
+        "$ref": "#/$defs/artifactSource"
+      }
+    },
+    "required": [
+      "name",
+      "source",
+      "entrypoint"
+    ],
+    "type": "object"
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "driftedFields": {
+        "items": {
+          "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "generation": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "imported": {
+        "type": "boolean"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "id",
+      "ready",
+      "generation",
+      "imported",
+      "portability",
+      "driftedFields"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "generation": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "kind": {
+        "const": "DurableWorkflow",
+        "type": "string"
+      },
+      "name": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "kind",
+      "name",
+      "generation",
+      "portability"
+    ],
+    "type": "object"
+  },
+  "immutableFields": [
+    "/name"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh",
+    "drift"
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json",
+      "observedPath": "fixtures/observed.json",
+      "outputPath": "fixtures/output.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-invalid-semantics",
+      "stage": "desired",
+      "inputPath": "fixtures/negative.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

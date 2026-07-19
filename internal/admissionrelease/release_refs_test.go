@@ -35,6 +35,15 @@ func TestRequireTagCommitRejectsMissingAndMismatchedRefs(t *testing.T) {
 	runTestGit(t, root, "add", "fixture.txt")
 	runTestGit(t, root, "commit", "--quiet", "-m", "second")
 	second := strings.TrimSpace(runTestGit(t, root, "rev-parse", "HEAD"))
+	if err := requireCommitAncestor(root, "fixture tooling", first, second); err != nil {
+		t.Fatalf("retained ancestor rejected: %v", err)
+	}
+	if err := requireCommitAncestor(root, "fixture tooling", second, first); err == nil || !strings.Contains(err.Error(), "not an ancestor") {
+		t.Fatalf("non-ancestor tooling commit error = %v", err)
+	}
+	if err := requireCommitAncestor(root, "fixture tooling", strings.Repeat("f", 40), second); err == nil || !strings.Contains(err.Error(), "not retained") {
+		t.Fatalf("missing tooling commit error = %v", err)
+	}
 	if err := requireTagCommit(root, "fixture", tag, second); err == nil || !strings.Contains(err.Error(), "want retained commit") {
 		t.Fatalf("mismatched tag error = %v", err)
 	}

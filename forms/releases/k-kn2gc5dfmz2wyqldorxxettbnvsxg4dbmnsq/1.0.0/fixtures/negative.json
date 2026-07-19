@@ -1,0 +1,16 @@
+{
+  "className": "not a class",
+  "connections": {
+    "DATABASE": {
+      "permissions": [
+        "read",
+        "write"
+      ],
+      "projection": "storage",
+      "resource": "SQLDatabase/main"
+    }
+  },
+  "migrationTag": "v1",
+  "name": "rooms",
+  "storageProfile": "durable_sqlite"
+}

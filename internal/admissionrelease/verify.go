@@ -230,8 +230,8 @@ func validateSet(set Set, candidates CandidateSet) ([]matchedEntry, error) {
 		if !packageReleaseTagPattern.MatchString(entry.ReleaseTag) || entry.ReleaseTag != expectedReleaseTag {
 			return nil, fmt.Errorf("%s releaseTag %q is not the canonical kind release tag", entry.Kind, entry.ReleaseTag)
 		}
-		if !releaseCommitPattern.MatchString(entry.ReleaseCommit) {
-			return nil, fmt.Errorf("%s releaseCommit must be a lowercase 40-hex commit", entry.Kind)
+		if !releaseCommitPattern.MatchString(entry.ReleaseCommit) || !releaseCommitPattern.MatchString(entry.ReleaseToolingCommit) {
+			return nil, fmt.Errorf("%s releaseCommit and releaseToolingCommit must be lowercase 40-hex commits", entry.Kind)
 		}
 		for label, digest := range map[string]string{
 			"evidenceDigest":               entry.EvidenceDigest,

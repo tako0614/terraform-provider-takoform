@@ -69,6 +69,7 @@ jobs:
           go run ./cmd/form-package-release build-package \
             --tag forms/k-iv4gc3lqnrsvg5dpojsq/v1.0.0 \
             --package-dir conformance/form-package-v1/positive/example-store \
+            --tooling-commit "$GITHUB_SHA" \
             --output "$RUNNER_TEMP/form-package-candidate" \
             --allow-untagged-candidate
       - name: Verify isolated release tooling

@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
@@ -69,6 +72,7 @@ type packageReleaseManifest struct {
 	Tag                 string                 `json:"tag"`
 	SourceRepository    string                 `json:"sourceRepository"`
 	SourceCommit        string                 `json:"sourceCommit"`
+	ToolingCommit       string                 `json:"toolingCommit"`
 	Workflow            string                 `json:"workflow"`
 	PackageVersion      string                 `json:"packageVersion"`
 	ReleaseID           string                 `json:"releaseId"`
@@ -85,9 +89,10 @@ type packageReleaseManifest struct {
 }
 
 type releasePublisherPolicy struct {
-	OIDCIssuer string `json:"oidcIssuer"`
-	Identity   string `json:"identity"`
-	TagPattern string `json:"tagPattern"`
+	OIDCIssuer    string `json:"oidcIssuer"`
+	Identity      string `json:"identity"`
+	TagPattern    string `json:"tagPattern"`
+	ToolingCommit string `json:"toolingCommit"`
 }
 
 type releaseAsset struct {
@@ -95,6 +100,97 @@ type releaseAsset struct {
 	MediaType string `json:"mediaType"`
 	Size      int64  `json:"size"`
 	Digest    string `json:"digest"`
+}
+
+type packageSBOM struct {
+	SPDXVersion       string             `json:"spdxVersion"`
+	DataLicense       string             `json:"dataLicense"`
+	SPDXID            string             `json:"SPDXID"`
+	Name              string             `json:"name"`
+	DocumentNamespace string             `json:"documentNamespace"`
+	CreationInfo      spdxCreationInfo   `json:"creationInfo"`
+	Packages          []spdxPackage      `json:"packages"`
+	Files             []spdxFile         `json:"files"`
+	Relationships     []spdxRelationship `json:"relationships"`
+}
+
+type spdxCreationInfo struct {
+	Creators []string `json:"creators"`
+	Created  string   `json:"created"`
+}
+
+type spdxPackage struct {
+	Name                    string                      `json:"name"`
+	SPDXID                  string                      `json:"SPDXID"`
+	VersionInfo             string                      `json:"versionInfo"`
+	DownloadLocation        string                      `json:"downloadLocation"`
+	FilesAnalyzed           bool                        `json:"filesAnalyzed"`
+	PackageVerificationCode spdxPackageVerificationCode `json:"packageVerificationCode"`
+	LicenseConcluded        string                      `json:"licenseConcluded"`
+	LicenseDeclared         string                      `json:"licenseDeclared"`
+	CopyrightText           string                      `json:"copyrightText"`
+}
+
+type spdxPackageVerificationCode struct {
+	Value string `json:"packageVerificationCodeValue"`
+}
+
+type spdxFile struct {
+	FileName           string         `json:"fileName"`
+	SPDXID             string         `json:"SPDXID"`
+	Checksums          []spdxChecksum `json:"checksums"`
+	LicenseConcluded   string         `json:"licenseConcluded"`
+	LicenseInfoInFiles []string       `json:"licenseInfoInFiles"`
+	CopyrightText      string         `json:"copyrightText"`
+}
+
+type spdxChecksum struct {
+	Algorithm     string `json:"algorithm"`
+	ChecksumValue string `json:"checksumValue"`
+}
+
+type spdxRelationship struct {
+	SPDXElementID      string `json:"spdxElementId"`
+	RelationshipType   string `json:"relationshipType"`
+	RelatedSPDXElement string `json:"relatedSpdxElement"`
+}
+
+type packageProvenance struct {
+	Type          string              `json:"_type"`
+	Subject       []provenanceSubject `json:"subject"`
+	PredicateType string              `json:"predicateType"`
+	Predicate     provenancePredicate `json:"predicate"`
+}
+
+type provenanceSubject struct {
+	Name   string            `json:"name"`
+	Digest map[string]string `json:"digest"`
+}
+
+type provenancePredicate struct {
+	BuildDefinition provenanceBuildDefinition `json:"buildDefinition"`
+	RunDetails      provenanceRunDetails      `json:"runDetails"`
+}
+
+type provenanceBuildDefinition struct {
+	BuildType            string                 `json:"buildType"`
+	ExternalParameters   map[string]string      `json:"externalParameters"`
+	InternalParameters   map[string]string      `json:"internalParameters"`
+	ResolvedDependencies []provenanceDependency `json:"resolvedDependencies"`
+}
+
+type provenanceDependency struct {
+	Name   string            `json:"name"`
+	URI    string            `json:"uri"`
+	Digest map[string]string `json:"digest"`
+}
+
+type provenanceRunDetails struct {
+	Builder provenanceBuilder `json:"builder"`
+}
+
+type provenanceBuilder struct {
+	ID string `json:"id"`
 }
 
 // ProviderRegistryReadback is a signed post-publication report. It binds a
@@ -249,6 +345,7 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 	expectedReleaseID := releaseIDForKind(entry.Kind)
 	if manifest.SchemaVersion != packageReleaseSchema || manifest.ReleaseType != packageReleaseType ||
 		manifest.Tag != entry.ReleaseTag || manifest.SourceRepository != sourceRepository || manifest.SourceCommit != entry.ReleaseCommit ||
+		manifest.ToolingCommit != entry.ReleaseToolingCommit ||
 		manifest.Workflow != packageReleaseWorkflow || manifest.PackageVersion != packageVersion ||
 		manifest.ReleaseID != expectedReleaseID || manifest.PackageDigest != entry.PackageDigest || manifest.FormRef != entry.FormRef ||
 		manifest.Canonicalization != "RFC8785" || manifest.SignatureMediaType != sigstoreBundleMediaTypeV03 ||
@@ -261,7 +358,7 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 		return nil, fmt.Errorf("package release signed subject/bundle path drift")
 	}
 	if manifest.PublisherPolicy.OIDCIssuer != packagePublisherIssuer || manifest.PublisherPolicy.Identity != packagePublisherIdentity ||
-		manifest.PublisherPolicy.TagPattern != packagePublisherTagPattern {
+		manifest.PublisherPolicy.TagPattern != packagePublisherTagPattern || manifest.PublisherPolicy.ToolingCommit != manifest.ToolingCommit {
 		return nil, fmt.Errorf("package release publisher policy is not the protected Takoform package workflow")
 	}
 	if len(manifest.Assets) != 5 {
@@ -312,7 +409,8 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 	if err != nil || !bytes.Equal(indexRaw, canonical) || formpackage.DigestBytes(indexRaw) != entry.PackageDigest {
 		return nil, fmt.Errorf("package release index is not the exact canonical admitted package index")
 	}
-	localIndex, err := readRetainedRegularFile(filepath.Join(admissionRoot, "..", "..", filepath.FromSlash(pair.candidate.PackagePath), formpackage.PackageIndexFilename), maxEvidenceBytes)
+	packageRoot := filepath.Join(admissionRoot, "..", "..", filepath.FromSlash(pair.candidate.PackagePath))
+	localIndex, err := readRetainedRegularFile(filepath.Join(packageRoot, formpackage.PackageIndexFilename), maxEvidenceBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +421,182 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 	if err := verifyPackageArchive(assetBytes[assetBase+".tar.gz"], indexRaw); err != nil {
 		return nil, fmt.Errorf("package release archive readback: %w", err)
 	}
+	if err := verifyPackageSBOM(assetBytes[assetBase+"_sbom.spdx.json"], indexRaw, packageRoot, manifest); err != nil {
+		return nil, fmt.Errorf("package release SBOM: %w", err)
+	}
+	if err := verifyPackageProvenance(assetBytes[assetBase+"_provenance.intoto.json"], manifest, assets); err != nil {
+		return nil, fmt.Errorf("package release provenance: %w", err)
+	}
 	return indexRaw, nil
+}
+
+func verifyPackageSBOM(raw, canonicalIndex []byte, packageRoot string, manifest packageReleaseManifest) error {
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
+		return fmt.Errorf("invalid RFC 8785 I-JSON: %w", err)
+	}
+	if !bytes.Equal(raw, canonical) {
+		return fmt.Errorf("bytes are not RFC 8785 canonical")
+	}
+	var document packageSBOM
+	if err := decodeStrictJSON(raw, &document); err != nil {
+		return fmt.Errorf("strict SPDX document: %w", err)
+	}
+	index, err := formpackage.ValidatePackageIndex(canonicalIndex)
+	if err != nil {
+		return err
+	}
+	if document.SPDXVersion != "SPDX-2.3" || document.DataLicense != "CC0-1.0" || document.SPDXID != "SPDXRef-DOCUMENT" ||
+		document.Name != "Takoform Form Package "+manifest.FormRef.Kind+" "+manifest.PackageVersion ||
+		document.DocumentNamespace != "https://forms.takoform.com/spdx/package/"+strings.TrimPrefix(manifest.PackageDigest, "sha256:") ||
+		!reflect.DeepEqual(document.CreationInfo.Creators, []string{"Tool: takoform-form-package-release"}) {
+		return fmt.Errorf("document identity does not bind the exact FormRef and package digest")
+	}
+	if _, err := time.Parse(time.RFC3339, document.CreationInfo.Created); err != nil {
+		return fmt.Errorf("creationInfo.created is not RFC 3339: %w", err)
+	}
+	if len(document.Packages) != 1 {
+		return fmt.Errorf("package closure has %d entries, want exactly 1", len(document.Packages))
+	}
+	verificationCode, err := packageVerificationCode(packageRoot, canonicalIndex, index)
+	if err != nil {
+		return err
+	}
+	wantPackage := spdxPackage{
+		Name: manifest.FormRef.Kind, SPDXID: "SPDXRef-Package", VersionInfo: manifest.PackageVersion,
+		DownloadLocation: "NOASSERTION", FilesAnalyzed: true,
+		PackageVerificationCode: spdxPackageVerificationCode{Value: verificationCode},
+		LicenseConcluded:        "NOASSERTION", LicenseDeclared: "NOASSERTION", CopyrightText: "NOASSERTION",
+	}
+	if document.Packages[0] != wantPackage {
+		return fmt.Errorf("SPDX package does not bind the exact package identity and file verification code")
+	}
+	expectedFiles := make([]struct {
+		path   string
+		digest string
+	}, 0, len(index.Files)+1)
+	expectedFiles = append(expectedFiles, struct {
+		path   string
+		digest string
+	}{path: formpackage.PackageIndexFilename, digest: formpackage.DigestBytes(canonicalIndex)})
+	for _, file := range index.Files {
+		expectedFiles = append(expectedFiles, struct {
+			path   string
+			digest string
+		}{path: file.Path, digest: file.Digest})
+	}
+	if len(document.Files) != len(expectedFiles) {
+		return fmt.Errorf("file closure has %d entries, want %d", len(document.Files), len(expectedFiles))
+	}
+	seenIDs := make(map[string]struct{}, len(document.Files))
+	wantRelationships := make([]spdxRelationship, 0, len(document.Files)+1)
+	wantRelationships = append(wantRelationships, spdxRelationship{
+		SPDXElementID: "SPDXRef-DOCUMENT", RelationshipType: "DESCRIBES", RelatedSPDXElement: "SPDXRef-Package",
+	})
+	for position, expected := range expectedFiles {
+		file := document.Files[position]
+		digest := strings.TrimPrefix(expected.digest, "sha256:")
+		wantID := "SPDXRef-File-" + releaseSPDXID(expected.path) + "-" + digest[:12]
+		if file.FileName != "./"+expected.path || file.SPDXID != wantID ||
+			!reflect.DeepEqual(file.Checksums, []spdxChecksum{{Algorithm: "SHA256", ChecksumValue: digest}}) ||
+			file.LicenseConcluded != "NOASSERTION" || !reflect.DeepEqual(file.LicenseInfoInFiles, []string{"NOASSERTION"}) ||
+			file.CopyrightText != "NOASSERTION" {
+			return fmt.Errorf("file entry %d does not bind %q and its exact SHA-256", position, expected.path)
+		}
+		if _, duplicate := seenIDs[file.SPDXID]; duplicate {
+			return fmt.Errorf("duplicate SPDX file id %q", file.SPDXID)
+		}
+		seenIDs[file.SPDXID] = struct{}{}
+		wantRelationships = append(wantRelationships, spdxRelationship{
+			SPDXElementID: "SPDXRef-Package", RelationshipType: "CONTAINS", RelatedSPDXElement: wantID,
+		})
+	}
+	if !reflect.DeepEqual(document.Relationships, wantRelationships) {
+		return fmt.Errorf("document relationship closure does not exactly DESCRIBE the package and CONTAIN every file in order")
+	}
+	return nil
+}
+
+func packageVerificationCode(packageRoot string, canonicalIndex []byte, index formpackage.PackageIndex) (string, error) {
+	digests := make([]string, 0, len(index.Files)+1)
+	appendDigest := func(raw []byte) {
+		digest := sha1.Sum(raw) // SPDX 2.3 defines the package verification code in terms of SHA-1 file checksums.
+		digests = append(digests, hex.EncodeToString(digest[:]))
+	}
+	appendDigest(canonicalIndex)
+	for _, file := range index.Files {
+		raw, err := readRetainedRegularFile(filepath.Join(packageRoot, filepath.FromSlash(file.Path)), maxReleaseAssetBytes)
+		if err != nil {
+			return "", fmt.Errorf("read local package file %q for SPDX verification: %w", file.Path, err)
+		}
+		if int64(len(raw)) != file.Size || formpackage.DigestBytes(raw) != file.Digest {
+			return "", fmt.Errorf("local package file %q drifted from the signed index", file.Path)
+		}
+		appendDigest(raw)
+	}
+	sort.Strings(digests)
+	code := sha1.Sum([]byte(strings.Join(digests, "")))
+	return hex.EncodeToString(code[:]), nil
+}
+
+func releaseSPDXID(value string) string {
+	var builder strings.Builder
+	for _, current := range value {
+		if unicode.IsLetter(current) || unicode.IsDigit(current) || current == '.' || current == '-' {
+			builder.WriteRune(current)
+		} else {
+			builder.WriteRune('-')
+		}
+	}
+	return builder.String()
+}
+
+func verifyPackageProvenance(raw []byte, manifest packageReleaseManifest, assets map[string]releaseAsset) error {
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
+		return fmt.Errorf("invalid RFC 8785 I-JSON: %w", err)
+	}
+	if !bytes.Equal(raw, canonical) {
+		return fmt.Errorf("bytes are not RFC 8785 canonical")
+	}
+	var statement packageProvenance
+	if err := decodeStrictJSON(raw, &statement); err != nil {
+		return fmt.Errorf("strict in-toto statement: %w", err)
+	}
+	archiveName := strings.TrimSuffix(manifest.SignedSubject, "_package-index.json") + ".tar.gz"
+	expectedSubjects := make([]provenanceSubject, 0, 2)
+	for _, name := range []string{manifest.SignedSubject, archiveName} {
+		asset, ok := assets[name]
+		if !ok {
+			return fmt.Errorf("required provenance subject %q is absent from the release", name)
+		}
+		expectedSubjects = append(expectedSubjects, provenanceSubject{
+			Name: name, Digest: map[string]string{"sha256": strings.TrimPrefix(asset.Digest, "sha256:")},
+		})
+	}
+	sort.Slice(expectedSubjects, func(i, j int) bool { return expectedSubjects[i].Name < expectedSubjects[j].Name })
+	wantPredicate := provenancePredicate{
+		BuildDefinition: provenanceBuildDefinition{
+			BuildType:          "https://forms.takoform.com/buildtypes/data-release/v1",
+			ExternalParameters: map[string]string{"tag": manifest.Tag},
+			InternalParameters: map[string]string{"canonicalization": "RFC8785"},
+			ResolvedDependencies: []provenanceDependency{{
+				Name: "tagged-release-source", URI: "git+https://" + manifest.SourceRepository,
+				Digest: map[string]string{"gitCommit": manifest.SourceCommit},
+			}, {
+				Name: "protected-main-release-tooling", URI: "git+https://" + manifest.SourceRepository,
+				Digest: map[string]string{"gitCommit": manifest.ToolingCommit},
+			}},
+		},
+		RunDetails: provenanceRunDetails{Builder: provenanceBuilder{
+			ID: "https://" + manifest.SourceRepository + "/" + manifest.Workflow + "@" + manifest.ToolingCommit,
+		}},
+	}
+	if statement.Type != "https://in-toto.io/Statement/v1" || statement.PredicateType != "https://slsa.dev/provenance/v1" ||
+		!reflect.DeepEqual(statement.Subject, expectedSubjects) || !reflect.DeepEqual(statement.Predicate, wantPredicate) {
+		return fmt.Errorf("statement does not bind the exact index/archive, source, tag, commit, workflow, and canonicalization")
+	}
+	return nil
 }
 
 func verifyPackageArchive(archiveRaw, canonicalIndex []byte) error {

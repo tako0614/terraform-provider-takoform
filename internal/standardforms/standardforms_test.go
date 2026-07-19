@@ -6,12 +6,42 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
 func TestCommittedStableSetVerifies(t *testing.T) {
 	t.Parallel()
 	if err := Verify(filepath.Join("..", "..")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReleaseSourceRequiresExactReviewedFixtureBytes(t *testing.T) {
+	t.Parallel()
+	fixtureRoot := filepath.Join("..", "..", "conformance", "form-package-v1", "positive", "standard", "object-bucket")
+	releaseRoot := filepath.Join(t.TempDir(), "release")
+	if err := os.CopyFS(releaseRoot, os.DirFS(fixtureRoot)); err != nil {
+		t.Fatal(err)
+	}
+	report, err := formpackage.VerifyDirectory(fixtureRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := InventoryEntry{Kind: "ObjectBucket", FormRef: report.FormRef, PackageDigest: report.PackageDigest}
+	if err := verifyReleaseSource(fixtureRoot, releaseRoot, entry); err != nil {
+		t.Fatalf("exact release source rejected: %v", err)
+	}
+	indexPath := filepath.Join(releaseRoot, formpackage.PackageIndexFilename)
+	indexRaw, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(indexPath, append(indexRaw, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyReleaseSource(fixtureRoot, releaseRoot, entry); err == nil || !strings.Contains(err.Error(), "package-index.json bytes differ") {
+		t.Fatalf("non-exact release source error = %v", err)
 	}
 }
 

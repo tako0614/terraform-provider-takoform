@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "DurableWorkflow/ingest",
+  "kind": "DurableWorkflow",
+  "name": "ingest",
+  "portability": "portable"
+}
