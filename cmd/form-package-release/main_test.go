@@ -181,14 +181,21 @@ func TestFinalizeRequiresTransparencyEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundleName := baseName + "_package-index.sigstore.json"
-	invalid := `{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json","verificationMaterial":{"tlogEntries":[]},"content":{"messageSignature":{}}}`
+	invalid := `{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json","verificationMaterial":{"tlogEntries":[]},"messageSignature":{}}`
 	if err := os.WriteFile(filepath.Join(output, bundleName), []byte(invalid), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := run([]string{"finalize-bundle", "--output", output}, io.Discard); err == nil || !strings.Contains(err.Error(), "transparency-log") {
 		t.Fatalf("expected missing transparency proof rejection, got %v", err)
 	}
-	valid := `{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json","verificationMaterial":{"certificate":{"rawBytes":"AA=="},"tlogEntries":[{"logIndex":"1"}]},"content":{"messageSignature":{"messageDigest":{"algorithm":"SHA2_256","digest":"AA=="},"signature":"AA=="}}}`
+	legacyNested := `{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json","verificationMaterial":{"certificate":{"rawBytes":"AA=="},"tlogEntries":[{"logIndex":"1"}]},"content":{"messageSignature":{"messageDigest":{"algorithm":"SHA2_256","digest":"AA=="},"signature":"AA=="}}}`
+	if err := os.WriteFile(filepath.Join(output, bundleName), []byte(legacyNested), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{"finalize-bundle", "--output", output}, io.Discard); err == nil || !strings.Contains(err.Error(), "message signature") {
+		t.Fatalf("expected nested non-v0.3 message signature rejection, got %v", err)
+	}
+	valid := `{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json","verificationMaterial":{"certificate":{"rawBytes":"AA=="},"tlogEntries":[{"logIndex":"1"}]},"messageSignature":{"messageDigest":{"algorithm":"SHA2_256","digest":"AA=="},"signature":"AA=="}}`
 	if err := os.WriteFile(filepath.Join(output, bundleName), []byte(valid), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -206,6 +213,21 @@ func TestFinalizeRequiresTransparencyEvidence(t *testing.T) {
 	}
 	if !strings.Contains(string(checksums), bundleName) || !strings.Contains(string(checksums), "release-manifest.json") {
 		t.Fatalf("final inventory is incomplete:\n%s", checksums)
+	}
+}
+
+func TestValidateSigstoreBundleAcceptsActualCosignV3MessageSignature(t *testing.T) {
+	fixture := filepath.Join("testdata", "cosign-v3.0.6-message-signature.sigstore.json")
+	if err := validateSigstoreBundle(fixture); err != nil {
+		t.Fatalf("actual Cosign v3.0.6 bundle was rejected: %v", err)
+	}
+	var bundle map[string]any
+	readJSON(t, fixture, &bundle)
+	if _, ok := bundle["messageSignature"].(map[string]any); !ok {
+		t.Fatal("actual Cosign v3.0.6 fixture lacks its top-level messageSignature")
+	}
+	if _, legacyNested := bundle["content"]; legacyNested {
+		t.Fatal("actual Cosign v3.0.6 fixture unexpectedly has a nested content object")
 	}
 }
 
