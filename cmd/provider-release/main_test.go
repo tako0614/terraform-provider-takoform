@@ -295,6 +295,83 @@ func TestSPDXValidationRejectsMissingCreated(t *testing.T) {
 	}
 }
 
+func TestVerifySPDXFilesRequiresPathsAndRejectsInvalidOrTrailingJSON(t *testing.T) {
+	repo := testRepoRoot(t)
+	desc, err := loadDescriptor(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit := strings.TrimSpace(runOutput(t, repo, "git", "rev-parse", "HEAD"))
+	document, err := createSBOM(repo, desc, commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := verifySPDXFiles(repo, nil); err == nil || !strings.Contains(err.Error(), "one or more SPDX JSON paths") {
+		t.Fatalf("verify-sbom accepted no paths: %v", err)
+	}
+
+	valid := filepath.Join(t.TempDir(), "valid.spdx.json")
+	if err := os.WriteFile(valid, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	verified, err := verifySPDXFiles(repo, []string{valid})
+	if err != nil || len(verified) != 1 || verified[0] != filepath.Base(valid) {
+		t.Fatalf("valid SPDX verification = %#v, %v", verified, err)
+	}
+
+	var invalid map[string]any
+	if err := json.Unmarshal(raw, &invalid); err != nil {
+		t.Fatal(err)
+	}
+	invalid["creationInfo"] = "not-an-object"
+	invalidRaw, err := json.Marshal(invalid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidPath := filepath.Join(t.TempDir(), "invalid.spdx.json")
+	if err := os.WriteFile(invalidPath, invalidRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifySPDXFiles(repo, []string{invalidPath}); err == nil {
+		t.Fatal("verify-sbom accepted a document rejected by the pinned SPDX schema")
+	}
+
+	trailing := filepath.Join(t.TempDir(), "trailing.spdx.json")
+	if err := os.WriteFile(trailing, append(append(raw, '\n'), []byte("{}")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifySPDXFiles(repo, []string{trailing}); err == nil || !strings.Contains(err.Error(), "trailing data") {
+		t.Fatalf("verify-sbom accepted trailing JSON: %v", err)
+	}
+}
+
+func TestProviderReleaseWorkflowValidatesFinalSBOMInventoryBeforeClosure(t *testing.T) {
+	workflow, err := os.ReadFile(filepath.Join(testRepoRoot(t), ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	validation := strings.Index(text, "Validate final Syft SBOMs against the pinned SPDX schema")
+	closure := strings.Index(text, "Close and export the unsigned inventory")
+	if validation < 0 || closure < 0 || validation >= closure {
+		t.Fatal("provider release does not validate final SBOMs before closing the unsigned inventory")
+	}
+	for _, required := range []string{
+		"-name '*.zip.spdx.json'",
+		`[[ "${#sboms[@]}" -ne 5 ]]`,
+		`go -C cmd/provider-release run . verify-sbom "${sboms[@]}"`,
+	} {
+		if !strings.Contains(text[validation:closure], required) {
+			t.Fatalf("final SBOM validation step lacks %q", required)
+		}
+	}
+}
+
 func TestOfficialInTotoAndSLSAValidatorsAcceptCandidateProvenance(t *testing.T) {
 	desc := testDescriptor()
 	evidence := sourceEvidence{Commit: strings.Repeat("a", 40), GoVersion: desc.GoVersion}

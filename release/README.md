@@ -39,12 +39,13 @@ Every candidate contains:
 - `provenance.json`, an unsigned in-toto statement describing the build.
 
 `release/version.json` also pins the supported CLI/FQN matrix. Release CI must
-exercise OpenTofu `1.12.1` with
-`registry.opentofu.org/tako0614/takoform` and Terraform `1.15.8` with
-`registry.terraform.io/tako0614/takoform`. Both must expose the same schema and
-complete lifecycle evidence for the exact embedded structural candidate set;
-the two provider addresses are recorded independently and are never rewritten
-as aliases.
+exercise Terraform `1.15.8` with the canonical identity
+`registry.terraform.io/tako0614/takoform` and OpenTofu `1.12.1` with the
+dual-published alternative identity
+`registry.opentofu.org/tako0614/takoform`. Both must expose the same schema and
+complete lifecycle evidence for the exact embedded structural candidate set.
+The addresses remain distinct state identities and switching requires an
+explicit `state replace-provider`; they are never rewritten as aliases.
 
 Provider publication is Phase 1 only. The `v*` workflow runs
 `candidate-publication-check`, which requires `publicationStatus:
@@ -139,11 +140,12 @@ ruleset; the Actions job itself cannot bypass that rule. That push triggers
 `release.yml`, the only
 provider artifact producer. Its read-only build job verifies the signed tag
 with the public key, runs the candidate and pinned GoReleaser/Syft toolchain,
-and exports a checksum-closed unsigned inventory. A fresh protected publication
-job executes no provider or repository Go code: it statically rechecks the tag,
-inventory, Registry absence, and checksums, imports the same Environment key,
-adds only the detached checksum signature, publishes the exact draft assets,
-and records GitHub build provenance.
+validates every final Syft document against the repository-pinned official
+SPDX 2.3 schema, and exports a checksum-closed unsigned inventory. A fresh
+protected publication job executes no provider or repository Go code: it
+statically rechecks the tag, inventory, Registry absence, and checksums, imports
+the same Environment key, adds only the detached checksum signature, publishes
+the exact draft assets, and records GitHub build provenance.
 
 Repository configuration is part of the trust boundary, not a claim made by
 this tree. The workflow references the `provider-release` GitHub Environment,

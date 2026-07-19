@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestLoadCLIMatrixPinsDistinctCanonicalAddresses(t *testing.T) {
+func TestLoadCLIMatrixPinsCanonicalAndDualPublishedAddresses(t *testing.T) {
 	root, err := RepoRoot(".")
 	if err != nil {
 		t.Fatal(err)
@@ -28,6 +28,18 @@ func TestLoadCLIMatrixPinsDistinctCanonicalAddresses(t *testing.T) {
 	}
 	if seen["Terraform"].Version != "1.15.8" || seen["Terraform"].ProviderAddress != TerraformProviderAddress {
 		t.Fatalf("unexpected Terraform matrix entry: %#v", seen["Terraform"])
+	}
+	if CanonicalProviderAddress != TerraformProviderAddress || OpenTofuProviderAddress == CanonicalProviderAddress {
+		t.Fatalf("provider distribution identities collapsed: canonical=%q opentofu=%q", CanonicalProviderAddress, OpenTofuProviderAddress)
+	}
+	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"dual-publishes", "distinct state identities", "state replace-provider"} {
+		if !strings.Contains(string(readme), required) {
+			t.Fatalf("provider distribution guidance lacks %q", required)
+		}
 	}
 }
 

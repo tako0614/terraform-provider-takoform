@@ -29,10 +29,14 @@ resource "takoform_object_bucket" "assets" {
 ```
 
 `endpoint`, `space`, and the sensitive bearer `token` can instead be supplied as `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
-Terraform uses `registry.terraform.io/tako0614/takoform`; OpenTofu uses
-`registry.opentofu.org/tako0614/takoform`. The provider lifecycle matrix proves
-both canonical FQNs independently and never treats them as interchangeable
-state identities. The provider follows the same-origin versioned endpoint advertised by discovery.
+The canonical provider identity is
+`registry.terraform.io/tako0614/takoform`; OpenTofu dual-publishes the same
+reviewed provider under the alternative identity
+`registry.opentofu.org/tako0614/takoform`. The lifecycle matrix proves both
+FQNs independently. They are distinct state identities, so changing between
+them requires an explicit `state replace-provider` after updating
+`required_providers`; matching bytes never makes them silent aliases. The
+provider follows the same-origin versioned endpoint advertised by discovery.
 The historical `/v1` facade requires the explicit `compatibility_fallback = true`
 setting (or `TAKOFORM_COMPATIBILITY_FALLBACK=true`) and is never selected as an
 implicit downgrade.

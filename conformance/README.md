@@ -44,10 +44,13 @@ This is intentionally classified `generic-lifecycle-candidate` with
 `publicationReady: false` and
 `bindingStatus: exact-structural-candidate-set`. It does not publish a
 checked-in passed report or claim standard Form admission. The matrix requires
-OpenTofu `1.12.1` under
-`registry.opentofu.org/tako0614/takoform` and Terraform `1.15.8` under
-`registry.terraform.io/tako0614/takoform`, then requires identical provider
-schema, exact FormRef/package identity, and lifecycle evidence. Immutable
+Terraform `1.15.8` under the canonical identity
+`registry.terraform.io/tako0614/takoform` and OpenTofu `1.12.1` under the
+dual-published alternative identity
+`registry.opentofu.org/tako0614/takoform`, then requires identical provider
+schema, exact FormRef/package identity, and lifecycle evidence. The exact FQN is
+retained as state identity; switching distributions requires
+`state replace-provider` and never occurs as a silent alias. Immutable
 release/readback plus authenticated signed external admission are still
 required before these structural candidates can become portable standards.
 
