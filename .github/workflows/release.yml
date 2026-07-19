@@ -147,6 +147,17 @@ jobs:
           version: v2.17.0
           args: release --clean --skip=publish,sign
 
+      - name: Validate final Syft SBOMs against the pinned SPDX schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t sboms < <(find dist -maxdepth 1 -type f -name '*.zip.spdx.json' -print | sort)
+          if [[ "${#sboms[@]}" -ne 5 ]]; then
+            echo "Expected five final provider SBOMs, got ${#sboms[@]}" >&2
+            exit 1
+          fi
+          go -C cmd/provider-release run . verify-sbom "${sboms[@]}"
+
       - name: Close and export the unsigned inventory
         shell: bash
         run: |

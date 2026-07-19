@@ -173,7 +173,7 @@ type signedTagArtifactEvidence struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: provider-release <verify-source|build|verify-reproducible|verify-tag-artifact> [options]")
+		fail("usage: provider-release <verify-source|build|verify-reproducible|verify-sbom|verify-tag-artifact> [options]")
 	}
 	repo, err := repositoryRoot()
 	check(err)
@@ -217,6 +217,16 @@ func main() {
 			"version":      desc.Version,
 			"platforms":    desc.Platforms,
 			"reproducible": true,
+		})
+	case "verify-sbom":
+		fs := flag.NewFlagSet("verify-sbom", flag.ExitOnError)
+		check(fs.Parse(os.Args[2:]))
+		verified, err := verifySPDXFiles(repo, fs.Args())
+		check(err)
+		writeJSON(os.Stdout, map[string]any{
+			"kind":     "takoform.provider-release-sbom-verification@v1",
+			"schema":   "SPDX-2.3",
+			"verified": verified,
 		})
 	case "verify-tag-artifact":
 		fs := flag.NewFlagSet("verify-tag-artifact", flag.ExitOnError)
@@ -893,6 +903,48 @@ func validateSPDX(repo string, document spdxDocument) error {
 	if err != nil || document.CreationInfo.Created != created.UTC().Format(time.RFC3339) {
 		return fmt.Errorf("creationInfo.created must be a non-empty UTC RFC 3339 timestamp")
 	}
+	raw, err := json.Marshal(document)
+	if err != nil {
+		return err
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	return validateSPDXValue(repo, value)
+}
+
+func validateSPDXFile(repo, path string) error {
+	var document any
+	if err := readStrictJSONFile(path, &document); err != nil {
+		return fmt.Errorf("read SPDX document %s: %w", filepath.Base(path), err)
+	}
+	if err := validateSPDXValue(repo, document); err != nil {
+		return fmt.Errorf("validate SPDX document %s: %w", filepath.Base(path), err)
+	}
+	return nil
+}
+
+func verifySPDXFiles(repo string, requested []string) ([]string, error) {
+	if len(requested) == 0 {
+		return nil, errors.New("verify-sbom requires one or more SPDX JSON paths")
+	}
+	verified := make([]string, 0, len(requested))
+	for _, item := range requested {
+		path := item
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(repo, path)
+		}
+		if err := validateSPDXFile(repo, path); err != nil {
+			return nil, err
+		}
+		verified = append(verified, filepath.Base(path))
+	}
+	sort.Strings(verified)
+	return verified, nil
+}
+
+func validateSPDXValue(repo string, document any) error {
 	schemaPath := filepath.Join(repo, "release", "schemas", "spdx-2.3.schema.json")
 	schemaFile, err := os.Open(schemaPath)
 	if err != nil {
@@ -913,15 +965,7 @@ func validateSPDX(repo string, document spdxDocument) error {
 	if err != nil {
 		return err
 	}
-	raw, err := json.Marshal(document)
-	if err != nil {
-		return err
-	}
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return err
-	}
-	return schema.Validate(value)
+	return schema.Validate(document)
 }
 
 func validateSLSAProvenance(document statement) error {

@@ -32,6 +32,10 @@ const (
 
 	OpenTofuProviderAddress  = "registry.opentofu.org/tako0614/takoform"
 	TerraformProviderAddress = "registry.terraform.io/tako0614/takoform"
+	// CanonicalProviderAddress is the provider handshake and Terraform Registry
+	// identity. OpenTofuProviderAddress is a separately published alternative
+	// state identity, never an alias for this address.
+	CanonicalProviderAddress = TerraformProviderAddress
 )
 
 type CheckEvidence struct {
@@ -529,7 +533,7 @@ func validateMatrix(matrix MatrixReport, requirements []CLIRequirement, installa
 	}
 	if !seen["OpenTofu"] || !seen["Terraform"] ||
 		requirementByProduct["OpenTofu"].ProviderAddress == requirementByProduct["Terraform"].ProviderAddress {
-		return errors.New("provider CLI/FQN matrix must prove two distinct canonical addresses")
+		return errors.New("provider CLI/FQN matrix must preserve the canonical Terraform identity and distinct dual-published OpenTofu identity")
 	}
 	return nil
 }

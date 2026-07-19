@@ -29,9 +29,9 @@ func main() {
 	}
 
 	opts := providerserver.ServeOpts{
-		// Plugin handshake identity for the Terraform Registry release. The
-		// conformance matrix separately proves OpenTofu state under the canonical
-		// registry.opentofu.org FQN without treating the two FQNs as aliases.
+		// Canonical plugin handshake identity for the Terraform Registry release.
+		// OpenTofu separately distributes the same provider under its own FQN;
+		// that FQN remains a distinct state identity and is never a silent alias.
 		Address: "registry.terraform.io/tako0614/takoform",
 		Debug:   debug,
 	}
