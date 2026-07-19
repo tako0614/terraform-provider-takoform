@@ -211,7 +211,7 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := writeJSON(filepath.Join(*outputDir, sbomName), sbom); err != nil {
+	if err := writeCanonicalJSON(filepath.Join(*outputDir, sbomName), sbom); err != nil {
 		return err
 	}
 	sbomAsset, err := describeAsset(filepath.Join(*outputDir, sbomName), sbomName, "application/spdx+json")
@@ -221,7 +221,7 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	assets = append(assets, sbomAsset)
 	provenanceName := base + "_provenance.intoto.json"
 	provenance := createProvenance(*tag, packageWorkflow, evidence.commit, assets[:2])
-	if err := writeJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
+	if err := writeCanonicalJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
 		return err
 	}
 	provenanceAsset, err := describeAsset(filepath.Join(*outputDir, provenanceName), provenanceName, "application/vnd.in-toto+json")
@@ -315,7 +315,7 @@ func runBuildRevocation(arguments []string, output io.Writer) error {
 	}
 	provenanceName := base + "_provenance.intoto.json"
 	provenance := createProvenance(*tag, revokeWorkflow, evidence.commit, []releaseAsset{checkpointAsset, statementAsset})
-	if err := writeJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
+	if err := writeCanonicalJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
 		return err
 	}
 	provenanceAsset, err := describeAsset(filepath.Join(*outputDir, provenanceName), provenanceName, "application/vnd.in-toto+json")
@@ -845,6 +845,18 @@ func writeJSON(path string, value any) error {
 		return err
 	}
 	return handle.Close()
+}
+
+func writeCanonicalJSON(path string, value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, canonical, 0o644)
 }
 
 func writeJSONTo(output io.Writer, value any) error {

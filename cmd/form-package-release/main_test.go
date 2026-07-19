@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"io"
@@ -120,6 +121,19 @@ func TestBuildPackageIsDeterministicAndCanonical(t *testing.T) {
 	var sbom map[string]any
 	sbomPath := filepath.Join(outputs[0], baseName+"_sbom.spdx.json")
 	readJSON(t, sbomPath, &sbom)
+	for _, name := range []string{baseName + "_sbom.spdx.json", baseName + "_provenance.intoto.json"} {
+		raw, err := os.ReadFile(filepath.Join(outputs[0], name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		canonical, err := formpackage.Canonicalize(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(raw, canonical) {
+			t.Fatalf("%s is not the exact RFC 8785 release evidence bytes", name)
+		}
+	}
 	if sbom["spdxVersion"] != "SPDX-2.3" {
 		t.Fatalf("unexpected SBOM: %+v", sbom)
 	}

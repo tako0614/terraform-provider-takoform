@@ -33,8 +33,12 @@ The release contains:
   Cosign signed subject and semantic package identity;
 - a deterministic `.tar.gz` transport whose root index has those same bytes
   and whose payload bytes match the index closure;
-- an SPDX 2.3 data-artifact SBOM;
-- an in-toto Statement v1 with SLSA Provenance v1;
+- an RFC 8785 canonical SPDX 2.3 data-artifact SBOM that binds the exact
+  FormRef, package digest, package version, index/payload SHA-256 closure, and
+  SPDX package verification code;
+- an RFC 8785 canonical in-toto Statement v1 with SLSA Provenance v1 that
+  binds the exact index/archive digests, source repository, tag, commit,
+  protected workflow, and canonicalization mode;
 - a Sigstore v0.3 bundle containing the ephemeral certificate, signature, and
   transparency-log inclusion evidence;
 - a release manifest and `SHA256SUMS` for the exact final asset inventory; and
@@ -72,6 +76,12 @@ The bundle carries the signature, certificate, and transparency inclusion
 proof. Air-gapped verification additionally requires a retained,
 operator-managed Sigstore trusted root from the Public Good Instance; the
 distribution endpoint is never a trust root.
+
+Standard-admission readback parses the SBOM and provenance as strict I-JSON,
+rejects non-canonical or duplicate-key bytes and unknown/omitted fields, and
+recomputes their bindings from the signed package index and retained release
+manifest. Asset filenames, media types, and checksums alone are not semantic
+release evidence.
 
 ## Append-only security revocation
 
