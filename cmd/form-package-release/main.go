@@ -816,11 +816,13 @@ func validateSigstoreBundle(path string) error {
 	if err := json.Unmarshal(raw, &bundle); err != nil {
 		return fmt.Errorf("decode Sigstore bundle: %w", err)
 	}
+	// Bundle v0.3 is the JSON encoding of dev.sigstore.bundle.v1.Bundle.
+	// Its content oneof is encoded as a top-level messageSignature or
+	// dsseEnvelope field, not beneath a synthetic content object.
 	verification, verificationOK := bundle["verificationMaterial"].(map[string]any)
 	tlog, tlogOK := verification["tlogEntries"].([]any)
-	content, contentOK := bundle["content"].(map[string]any)
-	_, signatureOK := content["messageSignature"].(map[string]any)
-	if bundle["mediaType"] != bundleMediaType || !verificationOK || !tlogOK || len(tlog) == 0 || !contentOK || !signatureOK {
+	_, signatureOK := bundle["messageSignature"].(map[string]any)
+	if bundle["mediaType"] != bundleMediaType || !verificationOK || !tlogOK || len(tlog) == 0 || !signatureOK {
 		return fmt.Errorf("Sigstore bundle lacks v0.3 message signature or transparency-log inclusion evidence")
 	}
 	return nil
