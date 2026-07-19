@@ -38,6 +38,11 @@ availability for each exact build-pinned candidate FormRef used by configuration
 provider does not expose target-pool, backend, credential, pricing, billing,
 quota, account, or operator-policy resources.
 
+The only data source is read-only
+[`takoform_interface`](data-sources/interface.md). It selects an exact runtime
+declaration by descriptor `(name, version)` plus a space-scoped portable
+Resource `{kind,name}`, and grants no consumer authorization.
+
 ## Import
 
 Every resource supports `terraform import ADDRESS NAME` and `terraform import ADDRESS SPACE/NAME`. The latter form records the resource space explicitly.

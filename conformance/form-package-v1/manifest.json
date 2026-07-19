@@ -57,6 +57,11 @@
       "kind": "Schedule"
     },
     {
+      "name": "interface-declaration",
+      "path": "positive/interface-declaration",
+      "kind": "ExampleInterfaceService"
+    },
+    {
       "name": "standard-edge-worker-package",
       "path": "positive/standard/edge-worker",
       "kind": "EdgeWorker"
@@ -365,6 +370,54 @@
       "operation": "package-path",
       "value": "forms\\definition.json",
       "wantError": "backslash"
+    },
+    {
+      "name": "interface-literal-without-value",
+      "operation": "definition",
+      "path": "negative/interface-literal-without-value.json",
+      "wantError": "is a literal without a value"
+    },
+    {
+      "name": "interface-literal-with-pointer",
+      "operation": "definition",
+      "path": "negative/interface-literal-with-pointer.json",
+      "wantError": "must not carry a pointer"
+    },
+    {
+      "name": "interface-output-with-value",
+      "operation": "definition",
+      "path": "negative/interface-output-with-value.json",
+      "wantError": "carries a value with source"
+    },
+    {
+      "name": "interface-duplicate-input",
+      "operation": "definition",
+      "path": "negative/interface-duplicate-input.json",
+      "wantError": "duplicate input"
+    },
+    {
+      "name": "interface-unnamespaced-source",
+      "operation": "definition",
+      "path": "negative/interface-unnamespaced-source.json",
+      "wantError": "at '/interfaces/0/inputs/0/source': 'anyOf' failed"
+    },
+    {
+      "name": "interface-invalid-pointer",
+      "operation": "definition",
+      "path": "negative/interface-invalid-pointer.json",
+      "wantError": "at '/interfaces/0/inputs/0/pointer'"
+    },
+    {
+      "name": "interface-document-schema-mismatch",
+      "operation": "definition",
+      "path": "negative/interface-document-schema-mismatch.json",
+      "wantError": "does not satisfy documentSchema"
+    },
+    {
+      "name": "interface-document-required-but-omitted",
+      "operation": "definition",
+      "path": "negative/interface-document-required-but-omitted.json",
+      "wantError": "does not satisfy documentSchema"
     }
   ]
 }

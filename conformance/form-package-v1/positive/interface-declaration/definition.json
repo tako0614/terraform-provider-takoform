@@ -1,0 +1,94 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "ExampleInterfaceService",
+  "definitionVersion": "1.0.0",
+  "title": "Example service with portable interface declarations",
+  "description": "Declares portable runtime interface data without host ledger, authorization, or lifecycle authority.",
+  "status": "compatibility-candidate",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "name": { "type": "string", "minLength": 1, "maxLength": 63 }
+    },
+    "required": ["name"]
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "endpoint": { "type": "string", "format": "uri" }
+    }
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mcp": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": { "type": "string", "format": "uri" },
+          "a/b": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": { "~key": { "type": "string" } }
+          }
+        }
+      },
+      "url": { "type": "string", "format": "uri" }
+    }
+  },
+  "immutableFields": ["/name"],
+  "lifecycleCapabilities": ["create", "update", "observe", "delete"],
+  "interfaces": [
+    {
+      "name": "mcp.server",
+      "version": "2025-11-25",
+      "description": "Required exact declaration with a date-shaped author version.",
+      "required": true,
+      "document": { "title": "Portable MCP" },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "title": { "type": "string", "maxLength": 256 } },
+        "required": ["title"]
+      },
+      "inputs": [
+        { "name": "endpoint", "source": "output", "pointer": "/mcp/endpoint" },
+        { "name": "escaped", "source": "output", "pointer": "/mcp/a~1b/~0key" },
+        { "name": "whole_output", "source": "output", "pointer": "" },
+        { "name": "protocol", "source": "literal", "value": "streamable-http" },
+        { "name": "nullable", "source": "literal", "value": null }
+      ]
+    },
+    {
+      "name": "mcp.server",
+      "version": "1",
+      "description": "Same name at a distinct version proves pair identity.",
+      "document": {},
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "inputs": [
+        { "name": "url", "source": "output", "pointer": "/url" },
+        { "name": "hint", "source": "example-host.surface_hint" }
+      ]
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "basic",
+      "desiredPath": "fixtures/desired.json",
+      "observedPath": "fixtures/observed.json",
+      "outputPath": "fixtures/output.json"
+    }
+  ]
+}

@@ -40,21 +40,42 @@ type RunnerEvidence struct {
 	SHA256  string `json:"sha256"`
 }
 
+type InterfaceDeclarations struct {
+	Optional              bool     `json:"optional"`
+	FeatureFlag           string   `json:"featureFlag"`
+	EndpointKey           string   `json:"endpointKey"`
+	ListPath              string   `json:"listPath"`
+	GetPath               string   `json:"getPath"`
+	DescriptorIdentity    []string `json:"descriptorIdentity"`
+	RuntimeIdentity       []string `json:"runtimeIdentity"`
+	VersionQuery          string   `json:"versionQuery"`
+	OmittedVersionRule    string   `json:"omittedVersionRule"`
+	ResourceKindQuery     string   `json:"resourceKindQuery"`
+	ResourceNameQuery     string   `json:"resourceNameQuery"`
+	OmittedResourceRule   string   `json:"omittedResourceRule"`
+	IdentityAmbiguousCode string   `json:"identityAmbiguousCode"`
+	InstanceAmbiguousCode string   `json:"instanceAmbiguousCode"`
+	DocumentRule          string   `json:"documentRule"`
+	RequiredReadinessRule string   `json:"requiredReadinessRule"`
+	Checks                []string `json:"checks"`
+}
+
 type Contract struct {
-	Format                 string            `json:"format"`
-	APIVersion             string            `json:"apiVersion"`
-	DiscoveryPath          string            `json:"discoveryPath"`
-	APIPath                string            `json:"apiPath"`
-	CompatibilityPath      string            `json:"compatibilityPath"`
-	RunnerInput            RunnerInput       `json:"runnerInput"`
-	Preconditions          map[string]string `json:"preconditions"`
-	IdempotentOperations   []string          `json:"idempotentOperations"`
-	ValidationErrorCode    string            `json:"validationErrorCode"`
-	StableErrorCodes       []string          `json:"stableErrorCodes"`
-	RetryableCodes         []string          `json:"retryableCodes"`
-	RequiredRunnerChecks   []string          `json:"requiredRunnerChecks"`
-	ForbiddenProviderState []string          `json:"forbiddenProviderState"`
-	RunnerEvidence         RunnerEvidence    `json:"runnerEvidence"`
+	Format                 string                `json:"format"`
+	APIVersion             string                `json:"apiVersion"`
+	DiscoveryPath          string                `json:"discoveryPath"`
+	APIPath                string                `json:"apiPath"`
+	CompatibilityPath      string                `json:"compatibilityPath"`
+	RunnerInput            RunnerInput           `json:"runnerInput"`
+	Preconditions          map[string]string     `json:"preconditions"`
+	IdempotentOperations   []string              `json:"idempotentOperations"`
+	ValidationErrorCode    string                `json:"validationErrorCode"`
+	StableErrorCodes       []string              `json:"stableErrorCodes"`
+	RetryableCodes         []string              `json:"retryableCodes"`
+	RequiredRunnerChecks   []string              `json:"requiredRunnerChecks"`
+	InterfaceDeclarations  InterfaceDeclarations `json:"interfaceDeclarations"`
+	ForbiddenProviderState []string              `json:"forbiddenProviderState"`
+	RunnerEvidence         RunnerEvidence        `json:"runnerEvidence"`
 }
 
 type manifest struct {
@@ -125,7 +146,8 @@ func validate(contract Contract) error {
 	wantErrors := []string{
 		"invalid_argument", "unauthenticated", "permission_denied", "form_unknown", "form_not_installed",
 		"form_unavailable", "form_identity_conflict", "resource_not_found", "resource_version_conflict",
-		"resource_busy", "import_conflict", "policy_denied", "backend_unavailable", "internal_error",
+		"resource_busy", "import_conflict", "policy_denied", "backend_unavailable",
+		"interface_identity_ambiguous", "interface_instance_ambiguous", "internal_error",
 	}
 	if !reflect.DeepEqual(contract.StableErrorCodes, wantErrors) {
 		return errors.New("portable host stable error taxonomy drifted")
@@ -137,6 +159,34 @@ func validate(contract Contract) error {
 	}
 	if !reflect.DeepEqual(contract.RequiredRunnerChecks, wantChecks) {
 		return errors.New("portable host required runner checks drifted")
+	}
+	wantDeclarations := InterfaceDeclarations{
+		Optional:              true,
+		FeatureFlag:           "interface_declarations",
+		EndpointKey:           "interfaces",
+		ListPath:              "{api}/interfaces",
+		GetPath:               "{api}/interfaces/{name}",
+		DescriptorIdentity:    []string{"name", "version"},
+		RuntimeIdentity:       []string{"space", "resource.kind", "resource.name", "name", "version"},
+		VersionQuery:          "version",
+		OmittedVersionRule:    "only-when-visible-name-is-unique",
+		ResourceKindQuery:     "resourceKind",
+		ResourceNameQuery:     "resourceName",
+		OmittedResourceRule:   "only-when-visible-instance-is-unique",
+		IdentityAmbiguousCode: "interface_identity_ambiguous",
+		InstanceAmbiguousCode: "interface_instance_ambiguous",
+		DocumentRule:          "copy-exact-declared-document",
+		RequiredReadinessRule: "not-ready-unless-materialized-validated-resolved",
+		Checks: []string{
+			"absent-feature-is-not-an-error", "exact-pair-read", "omitted-version-unique-only",
+			"ambiguous-version-fails-closed", "exact-resource-instance-read",
+			"multi-resource-instance-fails-closed", "document-exact-copy", "document-schema-valid",
+			"required-rejected-without-feature", "required-not-ready-unless-resolved",
+			"optional-omission-not-listed", "authorization-not-implied",
+		},
+	}
+	if !reflect.DeepEqual(contract.InterfaceDeclarations, wantDeclarations) {
+		return errors.New("portable host interface declaration surface drifted")
 	}
 	runnerDigest, err := RunnerEvidenceDigest(contract)
 	if err != nil {
@@ -159,19 +209,20 @@ func validate(contract Contract) error {
 // no execution result; callers must supply and authenticate that separately.
 func RunnerEvidenceDigest(contract Contract) (string, error) {
 	payload := struct {
-		Subject                string            `json:"subject"`
-		APIVersion             string            `json:"apiVersion"`
-		DiscoveryPath          string            `json:"discoveryPath"`
-		APIPath                string            `json:"apiPath"`
-		CompatibilityPath      string            `json:"compatibilityPath"`
-		RunnerInput            RunnerInput       `json:"runnerInput"`
-		Preconditions          map[string]string `json:"preconditions"`
-		IdempotentOperations   []string          `json:"idempotentOperations"`
-		ValidationErrorCode    string            `json:"validationErrorCode"`
-		StableErrorCodes       []string          `json:"stableErrorCodes"`
-		RetryableCodes         []string          `json:"retryableCodes"`
-		RequiredRunnerChecks   []string          `json:"requiredRunnerChecks"`
-		ForbiddenProviderState []string          `json:"forbiddenProviderState"`
+		Subject                string                `json:"subject"`
+		APIVersion             string                `json:"apiVersion"`
+		DiscoveryPath          string                `json:"discoveryPath"`
+		APIPath                string                `json:"apiPath"`
+		CompatibilityPath      string                `json:"compatibilityPath"`
+		RunnerInput            RunnerInput           `json:"runnerInput"`
+		Preconditions          map[string]string     `json:"preconditions"`
+		IdempotentOperations   []string              `json:"idempotentOperations"`
+		ValidationErrorCode    string                `json:"validationErrorCode"`
+		StableErrorCodes       []string              `json:"stableErrorCodes"`
+		RetryableCodes         []string              `json:"retryableCodes"`
+		RequiredRunnerChecks   []string              `json:"requiredRunnerChecks"`
+		InterfaceDeclarations  InterfaceDeclarations `json:"interfaceDeclarations"`
+		ForbiddenProviderState []string              `json:"forbiddenProviderState"`
 	}{
 		Subject:                contract.RunnerEvidence.Subject,
 		APIVersion:             contract.APIVersion,
@@ -185,6 +236,7 @@ func RunnerEvidenceDigest(contract Contract) (string, error) {
 		StableErrorCodes:       contract.StableErrorCodes,
 		RetryableCodes:         contract.RetryableCodes,
 		RequiredRunnerChecks:   contract.RequiredRunnerChecks,
+		InterfaceDeclarations:  contract.InterfaceDeclarations,
 		ForbiddenProviderState: contract.ForbiddenProviderState,
 	}
 	raw, err := json.Marshal(payload)

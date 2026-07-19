@@ -46,4 +46,13 @@ func TestNeutralRunnerEvidenceDigestCoversSubjectAndInputs(t *testing.T) {
 	if mutatedDigest == contract.RunnerEvidence.SHA256 {
 		t.Fatal("runner subject substitution did not change the evidence digest")
 	}
+	mutated = contract
+	mutated.InterfaceDeclarations.RuntimeIdentity = []string{"name", "version"}
+	mutatedDigest, err = RunnerEvidenceDigest(mutated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mutatedDigest == contract.RunnerEvidence.SHA256 {
+		t.Fatal("interface identity substitution did not change the evidence digest")
+	}
 }

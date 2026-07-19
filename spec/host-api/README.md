@@ -67,6 +67,43 @@ retains its historical single observe request. The provider does not call the
 state/output publication endpoint on every Read; refresh is an explicit host
 lifecycle action and may do materially more work than a read-only observation.
 
+## Interface declarations
+
+A host may expose the optional read-only surface defined by
+[`spec/interface-declaration`](../interface-declaration/README.md):
+
+- `GET {api}/interfaces` lists visible declarations;
+- `GET {api}/interfaces/{name}?version={version}&resourceKind={kind}&resourceName={name}`
+  reads the exact runtime declaration.
+
+The host advertises `features.interface_declarations = true` and may advertise
+a same-origin `endpoints.interfaces`. The feature is not part of required host
+negotiation. If `version` is omitted, the read succeeds only when exactly one
+visible declaration has that name. No match is `resource_not_found`; multiple
+versions fail closed as `interface_identity_ambiguous` (HTTP 409). Resource
+selectors must be supplied together. If they are omitted, the read succeeds
+only when one visible Resource instance matches; multiple Resources fail closed
+as `interface_instance_ambiguous` (HTTP 409).
+
+The response carries the exact identity, the exact non-secret descriptor
+`document`, resolved public `values`, a required portable
+`resource: {kind,name}` reference, and optionally the exact
+`InstalledFormReference` that declared it. The host must not invent or alter the
+document. Both document and values must satisfy the same portable data-only
+forbidden-field policy as a Form Definition; a provider rejects the response
+before non-sensitive state if they contain secret/credential/host-authority,
+commercial, or executable field vocabulary. The read says what exists and grants nothing; a host may filter reads
+to already-visible records, but authorization and writes remain host-owned.
+
+A host advertising the feature must enforce `required` readiness semantics. A
+host without the feature remains conforming, but must reject activation of a
+Form whose required declaration it cannot honor rather than reporting the
+Resource Ready. Optional skipped descriptors must not be listed.
+
+Descriptor identity remains `(name, version)`. Runtime declaration identity is
+`(space, resource.kind, resource.name, name, version)`. No host Interface id,
+binding, or authorization object appears on this surface.
+
 Stable errors use
 `{ "error": { "code", "message", "requestId", "retryable", "hostCode?" } }`.
 The versioned portable API normalizes validation failures to

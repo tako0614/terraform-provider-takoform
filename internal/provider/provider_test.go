@@ -8,12 +8,15 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	frameworkdatasource "github.com/hashicorp/terraform-plugin-framework/datasource"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func discoveryHandler(t *testing.T, serviceForms bool) http.HandlerFunc {
@@ -127,8 +130,74 @@ func TestProviderSplitDoesNotExposeTakosumiAdminResources(t *testing.T) {
 		}
 	}
 	p := &takoformProvider{}
-	if dataSources := p.DataSources(context.Background()); len(dataSources) != 0 {
-		t.Fatalf("typed Takoform provider must not expose host-admin data sources: %d", len(dataSources))
+	var dataSourceNames []string
+	for _, factory := range p.DataSources(context.Background()) {
+		var metadata frameworkdatasource.MetadataResponse
+		factory().Metadata(context.Background(), frameworkdatasource.MetadataRequest{ProviderTypeName: "takoform"}, &metadata)
+		dataSourceNames = append(dataSourceNames, metadata.TypeName)
+		for _, term := range forbidden {
+			if strings.Contains(strings.ToLower(metadata.TypeName), term) {
+				t.Fatalf("Takosumi host administration is outside the typed Takoform provider: %s contains %q", metadata.TypeName, term)
+			}
+		}
+	}
+	if !reflect.DeepEqual(dataSourceNames, []string{"takoform_interface"}) {
+		t.Fatalf("data sources = %v, want only the read-only declaration surface", dataSourceNames)
+	}
+}
+
+func TestInterfaceDataSourceIsReadOnlyAndVersionExact(t *testing.T) {
+	var schemaResponse frameworkdatasource.SchemaResponse
+	NewInterfaceDataSource().Schema(context.Background(), frameworkdatasource.SchemaRequest{}, &schemaResponse)
+	for name, attribute := range schemaResponse.Schema.Attributes {
+		switch name {
+		case "name", "space":
+			if !attribute.IsRequired() && !attribute.IsOptional() {
+				t.Errorf("%s must be a selector", name)
+			}
+		case "version", "resource_kind", "resource_name":
+			if !attribute.IsOptional() || !attribute.IsComputed() {
+				t.Errorf("%s must be an optional exact selector and a computed identity result", name)
+			}
+		default:
+			if !attribute.IsComputed() || attribute.IsRequired() || attribute.IsOptional() {
+				t.Errorf("%s must be computed-only", name)
+			}
+		}
+	}
+	for _, forbidden := range []string{
+		"binding", "permission", "grant", "token", "credential", "secret",
+		"policy", "target", "price", "billing", "quota",
+	} {
+		if _, ok := schemaResponse.Schema.Attributes[forbidden]; ok {
+			t.Errorf("declaration read exposes forbidden attribute %s", forbidden)
+		}
+	}
+}
+
+func TestInterfaceDataSourceRejectsUnknownIdentityAndScopeBeforeRead(t *testing.T) {
+	base := interfaceDataSourceModel{
+		Name: types.StringValue("mcp.server"), Space: types.StringNull(), Version: types.StringNull(),
+		ResourceKind: types.StringNull(), ResourceName: types.StringNull(),
+	}
+	tests := []struct {
+		name   string
+		mutate func(*interfaceDataSourceModel)
+	}{
+		{name: "name", mutate: func(value *interfaceDataSourceModel) { value.Name = types.StringUnknown() }},
+		{name: "space", mutate: func(value *interfaceDataSourceModel) { value.Space = types.StringUnknown() }},
+		{name: "version", mutate: func(value *interfaceDataSourceModel) { value.Version = types.StringUnknown() }},
+		{name: "resource_kind", mutate: func(value *interfaceDataSourceModel) { value.ResourceKind = types.StringUnknown() }},
+		{name: "resource_name", mutate: func(value *interfaceDataSourceModel) { value.ResourceName = types.StringUnknown() }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			value := base
+			test.mutate(&value)
+			if got := unknownInterfaceReadField(value); got != test.name {
+				t.Fatalf("unknown field = %q, want %q", got, test.name)
+			}
+		})
 	}
 }
 

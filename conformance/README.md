@@ -125,9 +125,17 @@ Run it with:
 go run ./cmd/form-package conformance
 ```
 
-The current manifest result is 21 positive packages (one ExampleStore, ten
-legacy compatibility candidates, and ten structural standard packages) and 43
-negative cases.
+The corpus also contains `positive/interface-declaration`. It proves exact
+`(name, version)` identity (including two versions with one name), exact
+non-secret document validation, `required` metadata, literal/output/host
+mapping sources, explicit JSON `null`, and RFC 6901 root and escaped pointers.
+Negative cases cover mapping grammar, invalid pointer escapes, and documents
+that do not satisfy their declared schema. Materialization, authorization, and
+lifecycle remain host work.
+
+The current manifest result is 22 positive packages (one ExampleStore, ten
+legacy compatibility candidates, ten structural standard packages, and one
+interface-declaration package) and 51 negative cases.
 Passing this corpus proves the local data contract only. It is not signature,
 publisher, remote-install, host-activation, retention/revocation, lifecycle
 idempotency, or cross-host/kind-standardization evidence. Those later trust and

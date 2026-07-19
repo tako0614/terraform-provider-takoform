@@ -36,7 +36,9 @@ A definition contains:
 - optional immutable JSON Pointer fields;
 - an explicit subset of `create`, `read`, `update`, `delete`, `import`,
   `observe`, `refresh`, and `drift`;
-- optional non-secret Interface document schemas;
+- optional portable Interface descriptors with exact `(name, version)`, an
+  exact non-secret document/schema, `required` readiness metadata, and
+  deterministic literal/output input mappings;
 - optional references to data-only positive desired/observed/output fixtures
   and negative schema fixtures in the same package.
 
