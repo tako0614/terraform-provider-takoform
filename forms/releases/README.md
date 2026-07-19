@@ -15,13 +15,14 @@ and the `forms/<release-id>/v<packageVersion>` tag. Compatibility and test fixtu
 under `conformance/`; copying one here is an explicit reviewed release
 decision, not automatic standardization.
 
-The ten `1.0.0` directories currently staged here are the release-owned source
-copies of the exact structural candidates in
+The ten `1.0.0` directories are the release-owned source copies of the exact
+structural candidates in
 `conformance/form-package-v1/positive/standard/`. The
 `standard-form-conformance verify` gate compares every index and payload byte
 to its reviewed fixture source, then verifies the exact FormRef and package
 digest. Fixture regeneration never updates these directories automatically.
-Their presence makes the protected release workflow reproducible; it does not
-change `forms/standard-package-set.json` from `structural-candidate` or satisfy
-signature, Registry readback, host/provider lifecycle, or signed admission
-requirements.
+All ten now have immutable live GitHub Releases whose exact seven-asset
+inventories are retained and authenticated by `published-package-check`.
+Publication does not change `forms/standard-package-set.json` from
+`structural-candidate` and does not satisfy direct Registry readback,
+host/provider lifecycle, signed admission, or revocation-chain requirements.

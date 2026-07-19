@@ -128,6 +128,10 @@ The source tree and repository settings are both part of the trust boundary:
 - release immutability is enabled before the first publication; and
 - a real tag/release is created only after maintainer authorization.
 
-This repository currently has no live Form Package or revocation release.
-Host fetch/install, publisher-policy verification, activation, and revocation
-enforcement require separate consumer/operator evidence.
+All ten `1.0.0` Form Packages have live immutable releases. Their exact
+seven-asset inventories and production package-publisher trust inputs are
+retained under `admission/v1` and verified offline by
+`standard-form-conformance published-package-check`. No admission activation or
+revocation release exists. Host fetch/install, the remaining role-specific
+publisher authorities, direct Registry readback, portable lifecycle evidence,
+activation, and live revocation proof remain separate consumer/operator work.

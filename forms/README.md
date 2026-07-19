@@ -61,9 +61,13 @@ now validates canonical signed host/provider runner reports, the exact five
 asset Form Package release manifest/readback for every candidate, and a signed
 provider readback backed by the complete direct-Registry OpenTofu/Terraform
 lifecycle matrix. These are implemented validators, not generated evidence.
-No retained production admission set, trust pins, reports, release assets, or
-Registry readback exists yet, so `release-check` still fails closed at the
-first missing live artifact.
+The ten live immutable package releases, their exact release assets, the
+production Sigstore trusted-root snapshot, and the digest-pinned package-index
+publisher policy are retained under `admission/v1` and pass
+`published-package-check`. The final five-role production admission pins,
+host/provider/admission reports, direct Registry readback, and
+`standard-admission-set.json` do not exist yet, so `release-check` still fails
+closed before admission can open.
 
 This ordering is intentional, not a publication bypass: the immutable public
 provider is a typed client for structural candidates, while only the separate

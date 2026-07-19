@@ -71,16 +71,20 @@ extension.
 The FormRef, Form Definition, package-index and revocation schemas, RFC
 8785/I-JSON implementation, closed local verifier, positive/negative corpus,
 release builder, keyless Sigstore workflow, and append-only revocation delivery
-lane now exist. No real package or revocation statement has been released.
-Remote host distribution/install, host-side publisher-policy enforcement,
+lane now exist. All ten `1.0.0` packages have real immutable releases; their
+exact release closures and signed indexes are retained under `admission/v1`
+with a TUF-authenticated production root and digest-pinned protected-main
+package publisher policy. No revocation statement or admission activation has
+been released. Remote host distribution/install, host-side publisher-policy enforcement,
 activation, and revocation consumption still require implementation and live
 evidence. The ten current provider resources have local deterministic `1.0.0 /
 standard` definition candidate bytes and structural fixtures only. Their
 inventory is `structural-candidate`, not `portable-standard`; definition status
-does not admit them. Passed host/provider
-lifecycle reports, portable negative wire-code coverage, signature, immutable
-tag, Registry installation/readback, and authenticated admission evidence are
-still missing. Only authenticated host/provider evidence can classify the exact
+does not admit them. Passed host/provider lifecycle reports, portable negative
+wire-code coverage, Registry installation/readback, authenticated admission
+evidence, and live revocation proof are still missing. Signature and
+immutable-tag evidence now prove package publication only. Only authenticated
+host/provider evidence can classify the exact
 package `portable-standard`. The legacy packages remain compatibility
 candidates.
 
@@ -206,11 +210,17 @@ checkout, and the annotated provider tag must verify against the pinned
 `3510E75E05BBCC303B92D77934FC18AC897FB709` GPG fingerprint. Package index
 Sigstore authentication remains separate from that Git ref-existence fence.
 
-No production trust root, publisher policy, admission set, report, Registry
-readback, or bundle is installed in this repository yet. Their absence is
-intentional and keeps `release-check` fail-closed. Adding the real retained
-files and pin digests is evidence work, not a test-fixture generation step,
-and must not be synthesized from the distribution endpoint during release.
+The production Sigstore trusted-root snapshot, the distinct package-index and
+Registry-readback publisher policies, all ten package-index bundles, and the exact immutable release
+readbacks are installed and digest-pinned by
+`admission/v1/published-package-set.json`. They pass the separate offline
+`published-package-check` but grant no admission authority. The remaining
+admission-evidence, host-report, and provider-report publisher identities are
+explicitly unsettled. Their policies, the final five-role pin manifest, host/provider and
+admission reports, Registry readback, and `standard-admission-set.json` remain
+absent. That absence intentionally keeps `release-check` fail-closed. The
+unsettled role identities must be approved and evidenced, not inferred from a
+distribution endpoint or reused from the package workflow.
 
 ## Rotation and revocation
 

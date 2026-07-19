@@ -330,11 +330,34 @@ func VerifyReleaseReady(root string) error {
 	if err := Verify(root); err != nil {
 		return err
 	}
+	candidates, err := admissionCandidateSet()
+	if err != nil {
+		return err
+	}
+	return admissionrelease.VerifyAdmissionSet(root, candidates)
+}
+
+// VerifyPublishedPackageSet verifies the retained, immutable distribution
+// readback for the complete structural candidate set. Passing this gate proves
+// package publication and its package-index publisher identity only. It does
+// not upgrade any Form to portable-standard or replace release-check.
+func VerifyPublishedPackageSet(root string) error {
+	if err := Verify(root); err != nil {
+		return err
+	}
+	candidates, err := admissionCandidateSet()
+	if err != nil {
+		return err
+	}
+	return admissionrelease.VerifyPublishedPackageSet(root, candidates)
+}
+
+func admissionCandidateSet() (admissionrelease.CandidateSet, error) {
 	candidates := make([]admissionrelease.Candidate, 0, len(Specs))
 	for _, spec := range Specs {
 		ref, err := formregistry.ForKind(spec.Kind)
 		if err != nil {
-			return err
+			return admissionrelease.CandidateSet{}, err
 		}
 		candidates = append(candidates, admissionrelease.Candidate{
 			Kind: spec.Kind, Slug: spec.Slug,
@@ -345,11 +368,11 @@ func VerifyReleaseReady(root string) error {
 			PackageDigest: ref.PackageDigest,
 		})
 	}
-	return admissionrelease.VerifyAdmissionSet(root, admissionrelease.CandidateSet{
+	return admissionrelease.CandidateSet{
 		DefinitionVersion: definitionVersion,
 		PackageVersion:    packageVersion,
 		Entries:           candidates,
-	})
+	}, nil
 }
 
 func desiredSchema(kind string) (map[string]any, error) {

@@ -53,6 +53,18 @@ func TestAdmissionActivationGateFailsClosedWithoutExternalAdmission(t *testing.T
 	}
 }
 
+func TestPublishedPackageSetVerifiesWithoutAdmittingForms(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join("..", "..")
+	if err := VerifyPublishedPackageSet(root); err != nil {
+		t.Fatal(err)
+	}
+	err := VerifyReleaseReady(root)
+	if err == nil || !strings.Contains(err.Error(), "missing admission/v1/standard-admission-set.json") {
+		t.Fatalf("published package readback opened admission: %v", err)
+	}
+}
+
 func TestCandidatePublicationDoesNotActivateStandardForms(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..")
