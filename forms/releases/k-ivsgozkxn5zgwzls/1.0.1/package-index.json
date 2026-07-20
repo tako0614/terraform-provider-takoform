@@ -20,7 +20,7 @@
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
       "size": 374,
-      "digest": "sha256:5ceb7692435a1992b893d4c0bf6e76e3f67891ea3663a2dd1031c24f1d097d30"
+      "digest": "sha256:a1a082c9a7bf6b0fcd212575311436ae8da3480a5b5fef9d73bacf6d1d84f86c"
     },
     {
       "path": "fixtures/negative.json",

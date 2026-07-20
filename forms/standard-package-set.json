@@ -28,7 +28,7 @@
         "definitionVersion": "1.0.1",
         "schemaDigest": "sha256:857d7d1a244cf679a5c1161f0f9ba3b0d17e62843aa18b5a332d54d6cd463fa2"
       },
-      "packageDigest": "sha256:63d1fb1a9be17eff91ecf1fcf5b72f327b411fa467139639aa9e29b35d8da7bf"
+      "packageDigest": "sha256:7ae68ba4f61bd784c31c4818d84c6582fe66b681015a37806d8cc8e7faf6fdbe"
     },
     {
       "kind": "ObjectBucket",
@@ -106,7 +106,7 @@
         "definitionVersion": "1.0.1",
         "schemaDigest": "sha256:b35e64a296f259eb718b1a58f15cca554a193688d3b4ccce4fe6efd612774131"
       },
-      "packageDigest": "sha256:e027245b2f744d9f91756ca26240628ea21ec789c6310b0778aa4b25b6872b2e"
+      "packageDigest": "sha256:e8ac2ea2f1377ef405700e7663d3fc91f85a099c7c6d68f292f1692ca6ad6463"
     },
     {
       "kind": "ContainerService",
