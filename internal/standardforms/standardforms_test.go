@@ -8,12 +8,24 @@ import (
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/indexedsql"
 )
 
 func TestCommittedCandidateSetVerifies(t *testing.T) {
 	t.Parallel()
 	if err := Verify(filepath.Join("..", "..")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestIndexedSchemaClosureRejectsPackagePathTraversal(t *testing.T) {
+	t.Parallel()
+	packageRoot := filepath.Join("..", "..", "conformance", "form-package-v1", "positive", "standard", "sql-database-v2")
+	descriptor := indexedsql.InterfaceDescriptor()
+	schemas := descriptor.Document["schemas"].(map[string]any)
+	schemas["request"].(map[string]any)["packagePath"] = "../request.schema.json"
+	if err := verifyIndexedSchemaClosure(packageRoot, descriptor); err == nil || !strings.Contains(err.Error(), "path traversal") {
+		t.Fatalf("schema closure error = %v, want path traversal rejection", err)
 	}
 }
 

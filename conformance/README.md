@@ -114,7 +114,8 @@ machine-readable set in
 [`../forms/legacy-package-set.json`](../forms/legacy-package-set.json).
 
 `form-package-v1/positive/standard/` contains the separate ten-package `1.0.1 /
-standard` definition candidate set. It does not replace or mutate the legacy compatibility
+standard` definition candidate set and the independent `SQLDatabase@2.0.0`
+successor candidate. Neither replaces or mutates legacy or `1.0.1`
 identities. `go run ./cmd/standard-form-conformance verify` validates package
 bytes and fixtures and inspects the actual provider resource structure. It does
 not run the Terraform protocol lifecycle or a Takosumi host, and this repository
@@ -152,15 +153,20 @@ go run ./cmd/form-package conformance
 
 The corpus also contains `positive/interface-declaration`. It proves exact
 `(name, version)` identity (including two versions with one name), exact
-non-secret document validation, `required` metadata, literal/output/host
+non-secret document validation, `required` metadata,
+literal/output/resource-URI/host
 mapping sources, explicit JSON `null`, and RFC 6901 root and escaped pointers.
 Negative cases cover mapping grammar, invalid pointer escapes, and documents
 that do not satisfy their declared schema. Materialization, authorization, and
 lifecycle remain host work.
 
-The current manifest result is 22 positive packages (one ExampleStore, ten
-legacy compatibility candidates, ten structural standard packages, and one
-interface-declaration package) and 51 negative cases.
+The current manifest result is 23 positive packages (one ExampleStore, ten
+legacy compatibility candidates, ten coordinated `1.0.1` structural standard
+packages, one `SQLDatabase@2.0.0` successor, and one interface-declaration
+package) and 51 negative cases. The separate `data-indexed-v1` corpus adds six
+positive request operations, seven HTTP 200 response shapes, two HTTP 409
+conflict shapes, and bounded negative request/response cases. Its manifest
+pins both canonical schemas and the 200/409 association.
 Passing this corpus proves the local data contract only. It is not signature,
 publisher, remote-install, host-activation, retention/revocation, lifecycle
 idempotency, or cross-host/kind-standardization evidence. Those later trust and

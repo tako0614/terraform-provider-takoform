@@ -166,6 +166,8 @@ func nullServiceShapeCandidateImportModel(spec serviceShapeSpecKind) any {
 		MaxBatchSize:          types.Int64Null(),
 		Engine:                types.StringNull(),
 		MigrationsPath:        types.StringNull(),
+		SchemaVersion:         types.Int64Null(),
+		Tables:                types.ListNull(types.ObjectType{AttrTypes: sqlDatabaseTableAttrTypes}),
 		Image:                 types.StringNull(),
 		Ports:                 types.SetNull(types.Int64Type),
 		PublicHTTP:            types.BoolNull(),
@@ -377,6 +379,17 @@ func characterizeAttribute(t *testing.T, name string, attribute schema.Attribute
 		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
 		result.ValidatorSemantics = semanticFingerprints(value.Validators, true)
 		result.PlanModifierSemantics = semanticFingerprints(value.PlanModifiers, false)
+		if value.Default != nil {
+			var response defaults.BoolResponse
+			value.Default.DefaultBool(context.Background(), defaults.BoolRequest{}, &response)
+			if response.Diagnostics.HasError() {
+				t.Fatalf("default for %s: %v", name, response.Diagnostics)
+			}
+			defaultValue := fmt.Sprint(response.PlanValue.ValueBool())
+			result.Default = &defaultValue
+			semantic := semanticFingerprint(value.Default, true)
+			result.DefaultSemantic = &semantic
+		}
 	case schema.Int64Attribute:
 		result.Type, result.Required, result.Optional, result.Computed = "int64", value.Required, value.Optional, value.Computed
 		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
@@ -390,6 +403,12 @@ func characterizeAttribute(t *testing.T, name string, attribute schema.Attribute
 		result.PlanModifierSemantics = semanticFingerprints(value.PlanModifiers, false)
 	case schema.MapAttribute:
 		result.Type = "map<" + terraformElementType(t, value.ElementType) + ">"
+		result.Required, result.Optional, result.Computed = value.Required, value.Optional, value.Computed
+		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
+		result.ValidatorSemantics = semanticFingerprints(value.Validators, true)
+		result.PlanModifierSemantics = semanticFingerprints(value.PlanModifiers, false)
+	case schema.ListAttribute:
+		result.Type = "list<" + terraformElementType(t, value.ElementType) + ">"
 		result.Required, result.Optional, result.Computed = value.Required, value.Optional, value.Computed
 		result.Validators, result.PlanModifiers = len(value.Validators), len(value.PlanModifiers)
 		result.ValidatorSemantics = semanticFingerprints(value.Validators, true)

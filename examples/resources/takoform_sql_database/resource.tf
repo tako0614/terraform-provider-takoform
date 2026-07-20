@@ -12,9 +12,23 @@ provider "takoform" {
 }
 
 resource "takoform_sql_database" "main" {
-  name            = "main"
-  engine          = "sqlite"
-  migrations_path = "migrations"
+  name = "main"
+
+  tables = [{
+    name = "records"
+    columns = [
+      { name = "id", type = "string" },
+      { name = "tenant_id", type = "string" },
+      { name = "created_at", type = "integer" },
+      { name = "score", type = "number", nullable = true },
+    ]
+    primary_key = ["id"]
+    indexes = [{
+      name    = "by_tenant_created"
+      columns = ["tenant_id", "created_at"]
+      unique  = true
+    }]
+  }]
 }
 
 output "database_resource_version" {

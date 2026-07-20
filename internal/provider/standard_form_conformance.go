@@ -48,7 +48,11 @@ func VerifyStandardFormStructure(kind string, desired map[string]any) error {
 		}
 	}
 	if kind == client.KindSQLDatabase {
-		if err := requireReplace(response.Schema.Attributes["engine"], "engine"); err != nil {
+		replacementField := "engine"
+		if _, usesIndexedTables := desired["tables"]; usesIndexedTables {
+			replacementField = "tables"
+		}
+		if err := requireReplace(response.Schema.Attributes[replacementField], replacementField); err != nil {
 			return fmt.Errorf("provider schema for %s: %w", kind, err)
 		}
 	}
@@ -104,6 +108,18 @@ func requireReplace(attribute schema.Attribute, field string) error {
 			}
 		}
 	case schema.Int64Attribute:
+		for _, modifier := range typed.PlanModifiers {
+			if strings.Contains(strings.ToLower(fmt.Sprintf("%T", modifier)), "requiresreplace") {
+				return nil
+			}
+		}
+	case schema.ListAttribute:
+		for _, modifier := range typed.PlanModifiers {
+			if strings.Contains(strings.ToLower(fmt.Sprintf("%T", modifier)), "requiresreplace") {
+				return nil
+			}
+		}
+	case schema.ListNestedAttribute:
 		for _, modifier := range typed.PlanModifiers {
 			if strings.Contains(strings.ToLower(fmt.Sprintf("%T", modifier)), "requiresreplace") {
 				return nil

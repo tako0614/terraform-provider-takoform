@@ -1,0 +1,10 @@
+{
+  "conflict": {
+    "key": {
+      "id": "r1"
+    },
+    "reason": "revision_conflict",
+    "table": "records"
+  },
+  "operation": "delete"
+}

@@ -1,0 +1,7 @@
+{
+  "index": "by_tenant_created",
+  "offset": 100,
+  "operation": "page",
+  "prefix": {},
+  "table": "records"
+}

@@ -1,0 +1,20 @@
+{
+  "format": "takoform.form-successor@v1",
+  "classification": "structural-candidate",
+  "kind": "SQLDatabase",
+  "supersedesDefinitionVersion": "1.0.1",
+  "definitionVersion": "2.0.0",
+  "packageVersion": "2.0.0",
+  "admissionStatus": "external-required",
+  "publicationReady": false,
+  "path": "conformance/form-package-v1/positive/standard/sql-database-v2",
+  "conformanceCase": "standard-sql-database-v2-package",
+  "dataInterface": "data.indexed@1",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "SQLDatabase",
+    "definitionVersion": "2.0.0",
+    "schemaDigest": "sha256:ba5f10657fd53dec0fecfff2a2c8a7f1dd4cd9cbd3497dcf27ecfdbe7fd09179"
+  },
+  "packageDigest": "sha256:81131224484fca250da8760c5f35592089905b7b4eb1487575ecdbd4f5a66f58"
+}

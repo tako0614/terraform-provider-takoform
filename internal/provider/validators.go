@@ -121,6 +121,34 @@ type int64AtLeastValidator struct {
 	minimum int64
 }
 
+type listSizeBetweenValidator struct {
+	minimum int
+	maximum int
+}
+
+// ListSizeBetween validates a closed portable collection cardinality.
+func ListSizeBetween(minimum, maximum int) validator.List {
+	return listSizeBetweenValidator{minimum: minimum, maximum: maximum}
+}
+
+func (v listSizeBetweenValidator) Description(_ context.Context) string {
+	return fmt.Sprintf("list must contain between %d and %d values", v.minimum, v.maximum)
+}
+
+func (v listSizeBetweenValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v listSizeBetweenValidator) ValidateList(_ context.Context, req validator.ListRequest, resp *validator.ListResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	size := len(req.ConfigValue.Elements())
+	if size < v.minimum || size > v.maximum {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid list size", v.Description(context.Background()))
+	}
+}
+
 // Int64AtLeast validates a lower bound owned by the portable Form schema.
 func Int64AtLeast(minimum int64) validator.Int64 {
 	return int64AtLeastValidator{minimum: minimum}

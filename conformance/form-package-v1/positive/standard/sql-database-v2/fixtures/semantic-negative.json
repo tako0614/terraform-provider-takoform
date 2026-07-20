@@ -1,0 +1,387 @@
+{
+  "format": "takoform.sql-database.semantic-negative@v1",
+  "cases": [
+    {
+      "name": "duplicate-table",
+      "desired": {
+        "name": "main",
+        "schemaVersion": 1,
+        "tables": [
+          {
+            "columns": [
+              {
+                "name": "id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "tenant_id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "nullable": false,
+                "type": "integer"
+              },
+              {
+                "name": "score",
+                "nullable": true,
+                "type": "number"
+              }
+            ],
+            "indexes": [
+              {
+                "columns": [
+                  "tenant_id",
+                  "created_at"
+                ],
+                "name": "by_tenant_created",
+                "unique": true
+              }
+            ],
+            "name": "records",
+            "primaryKey": [
+              "id"
+            ]
+          },
+          {
+            "columns": [
+              {
+                "name": "id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "tenant_id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "nullable": false,
+                "type": "integer"
+              },
+              {
+                "name": "score",
+                "nullable": true,
+                "type": "number"
+              }
+            ],
+            "indexes": [
+              {
+                "columns": [
+                  "tenant_id",
+                  "created_at"
+                ],
+                "name": "by_tenant_created",
+                "unique": true
+              }
+            ],
+            "name": "records",
+            "primaryKey": [
+              "id"
+            ]
+          }
+        ]
+      },
+      "wantError": "duplicate table"
+    },
+    {
+      "name": "unknown-primary-key",
+      "desired": {
+        "name": "main",
+        "schemaVersion": 1,
+        "tables": [
+          {
+            "columns": [
+              {
+                "name": "id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "tenant_id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "nullable": false,
+                "type": "integer"
+              },
+              {
+                "name": "score",
+                "nullable": true,
+                "type": "number"
+              }
+            ],
+            "indexes": [
+              {
+                "columns": [
+                  "tenant_id",
+                  "created_at"
+                ],
+                "name": "by_tenant_created",
+                "unique": true
+              }
+            ],
+            "name": "records",
+            "primaryKey": [
+              "missing"
+            ]
+          }
+        ]
+      },
+      "wantError": "unknown column"
+    },
+    {
+      "name": "nullable-primary-key",
+      "desired": {
+        "name": "main",
+        "schemaVersion": 1,
+        "tables": [
+          {
+            "columns": [
+              {
+                "name": "id",
+                "nullable": true,
+                "type": "string"
+              },
+              {
+                "name": "tenant_id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "nullable": false,
+                "type": "integer"
+              },
+              {
+                "name": "score",
+                "nullable": true,
+                "type": "number"
+              }
+            ],
+            "indexes": [
+              {
+                "columns": [
+                  "tenant_id",
+                  "created_at"
+                ],
+                "name": "by_tenant_created",
+                "unique": true
+              }
+            ],
+            "name": "records",
+            "primaryKey": [
+              "id"
+            ]
+          }
+        ]
+      },
+      "wantError": "must be non-null"
+    },
+    {
+      "name": "number-primary-key",
+      "desired": {
+        "name": "main",
+        "schemaVersion": 1,
+        "tables": [
+          {
+            "columns": [
+              {
+                "name": "id",
+                "nullable": false,
+                "type": "number"
+              },
+              {
+                "name": "tenant_id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "nullable": false,
+                "type": "integer"
+              },
+              {
+                "name": "score",
+                "nullable": true,
+                "type": "number"
+              }
+            ],
+            "indexes": [
+              {
+                "columns": [
+                  "tenant_id",
+                  "created_at"
+                ],
+                "name": "by_tenant_created",
+                "unique": true
+              }
+            ],
+            "name": "records",
+            "primaryKey": [
+              "id"
+            ]
+          }
+        ]
+      },
+      "wantError": "not indexable"
+    },
+    {
+      "name": "duplicate-index",
+      "desired": {
+        "name": "main",
+        "schemaVersion": 1,
+        "tables": [
+          {
+            "columns": [
+              {
+                "name": "id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "tenant_id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "nullable": false,
+                "type": "integer"
+              },
+              {
+                "name": "score",
+                "nullable": true,
+                "type": "number"
+              }
+            ],
+            "indexes": [
+              {
+                "columns": [
+                  "tenant_id",
+                  "created_at"
+                ],
+                "name": "by_tenant_created",
+                "unique": true
+              },
+              {
+                "columns": [
+                  "tenant_id",
+                  "created_at"
+                ],
+                "name": "by_tenant_created",
+                "unique": true
+              }
+            ],
+            "name": "records",
+            "primaryKey": [
+              "id"
+            ]
+          }
+        ]
+      },
+      "wantError": "duplicate index"
+    },
+    {
+      "name": "nullable-index",
+      "desired": {
+        "name": "main",
+        "schemaVersion": 1,
+        "tables": [
+          {
+            "columns": [
+              {
+                "name": "id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "tenant_id",
+                "nullable": true,
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "nullable": false,
+                "type": "integer"
+              },
+              {
+                "name": "score",
+                "nullable": true,
+                "type": "number"
+              }
+            ],
+            "indexes": [
+              {
+                "columns": [
+                  "tenant_id",
+                  "created_at"
+                ],
+                "name": "by_tenant_created",
+                "unique": true
+              }
+            ],
+            "name": "records",
+            "primaryKey": [
+              "id"
+            ]
+          }
+        ]
+      },
+      "wantError": "must be non-null"
+    },
+    {
+      "name": "number-index",
+      "desired": {
+        "name": "main",
+        "schemaVersion": 1,
+        "tables": [
+          {
+            "columns": [
+              {
+                "name": "id",
+                "nullable": false,
+                "type": "string"
+              },
+              {
+                "name": "tenant_id",
+                "nullable": false,
+                "type": "number"
+              },
+              {
+                "name": "created_at",
+                "nullable": false,
+                "type": "integer"
+              },
+              {
+                "name": "score",
+                "nullable": true,
+                "type": "number"
+              }
+            ],
+            "indexes": [
+              {
+                "columns": [
+                  "tenant_id",
+                  "created_at"
+                ],
+                "name": "by_tenant_created",
+                "unique": true
+              }
+            ],
+            "name": "records",
+            "primaryKey": [
+              "id"
+            ]
+          }
+        ]
+      },
+      "wantError": "not indexable"
+    }
+  ]
+}

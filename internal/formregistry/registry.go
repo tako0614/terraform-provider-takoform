@@ -28,7 +28,15 @@ type Ref struct {
 //go:embed candidate-refs.json
 var candidateRefsJSON []byte
 
+// successor-refs.json is generated beside candidate-refs.json and retains
+// additional major-version candidates without replacing supported historical
+// identities for the same Kind.
+//
+//go:embed successor-refs.json
+var successorRefsJSON []byte
+
 var candidateRefs = mustDecodeCandidateRefs(candidateRefsJSON)
+var successorRefs = mustDecodeSuccessorRefs(successorRefsJSON)
 
 func mustDecodeCandidateRefs(raw []byte) map[string]Ref {
 	var refs map[string]Ref
@@ -44,6 +52,25 @@ func mustDecodeCandidateRefs(raw []byte) map[string]Ref {
 	return refs
 }
 
+func mustDecodeSuccessorRefs(raw []byte) map[string]map[string]Ref {
+	var refs map[string]map[string]Ref
+	if err := json.Unmarshal(raw, &refs); err != nil {
+		panic(fmt.Errorf("takoform: decode embedded successor FormRefs: %w", err))
+	}
+	for kind, versions := range refs {
+		if kind == "" || len(versions) == 0 {
+			panic(fmt.Errorf("takoform: embedded successor FormRefs for %q are incomplete", kind))
+		}
+		for version, ref := range versions {
+			if ref.APIVersion != APIVersion || ref.Kind != kind || ref.DefinitionVersion != version ||
+				ref.SchemaDigest == "" || ref.PackageDigest == "" {
+				panic(fmt.Errorf("takoform: embedded successor FormRef for %s@%s is incomplete", kind, version))
+			}
+		}
+	}
+	return refs
+}
+
 // ForKind returns the exact structural-candidate Form identity compiled into
 // this provider build. Availability and admission remain host-owned checks.
 func ForKind(kind string) (Ref, error) {
@@ -52,6 +79,20 @@ func ForKind(kind string) (Ref, error) {
 		return Ref{}, fmt.Errorf("takoform: provider build has no candidate FormRef for kind %q", kind)
 	}
 	return ref, nil
+}
+
+// ForKindVersion returns one exact supported identity without changing the
+// historical default returned by ForKind.
+func ForKindVersion(kind, definitionVersion string) (Ref, error) {
+	if current, ok := candidateRefs[kind]; ok && current.DefinitionVersion == definitionVersion {
+		return current, nil
+	}
+	if versions, ok := successorRefs[kind]; ok {
+		if ref, ok := versions[definitionVersion]; ok {
+			return ref, nil
+		}
+	}
+	return Ref{}, fmt.Errorf("takoform: provider build has no candidate FormRef for %s@%s", kind, definitionVersion)
 }
 
 // All returns a defensive copy of every embedded candidate identity.

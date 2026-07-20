@@ -1,0 +1,21 @@
+{
+  "operation": "batch",
+  "results": [
+    {
+      "item": {
+        "revision": 1,
+        "row": {
+          "created_at": 1,
+          "id": "r1",
+          "score": null,
+          "tenant_id": "t1"
+        }
+      },
+      "operation": "put"
+    },
+    {
+      "deleted": false,
+      "operation": "delete"
+    }
+  ]
+}

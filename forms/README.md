@@ -15,15 +15,29 @@ The provider build pins this all-or-nothing set of exact candidate bytes:
 | `StatefulActorNamespace` | `takoform_stateful_actor_namespace` | `1.0.1 / standard` | `actor.invoke@1` |
 | `Schedule` | `takoform_schedule` | `1.0.1 / standard` | none (consumer only) |
 
+`SQLDatabase@2.0.0` is an independent successor candidate for the same
+`SQLDatabase` Kind. Configuring provider `tables` selects its exact FormRef and
+required `data.indexed@1` Interface; it does not replace or mutate the
+immutable `SQLDatabase@1.0.1` package. The successor inventory is pinned in
+[`sql-database-v2-package.json`](sql-database-v2-package.json), and its package
+and fixtures live under
+[`../conformance/form-package-v1/positive/standard/sql-database-v2/`](../conformance/form-package-v1/positive/standard/sql-database-v2/).
+It remains a structural candidate with `admissionStatus: external-required`
+and `publicationReady: false`. Its complete `/tables` declaration is immutable;
+schema changes replace the Resource because this version defines no portable
+in-place migration operation.
+
 [`standard-package-set.json`](standard-package-set.json) pins every exact
 `(FormRef, packageDigest)` pair. Each independent package lives under
 [`../conformance/form-package-v1/positive/standard/`](../conformance/form-package-v1/positive/standard/)
 and contains canonical desired, observed, output, and negative fixtures. The
-observed fixture carries only lifecycle/import/drift status. The output fixture
-carries only exact kind, name, generation, identity, and portability evidence,
-plus SQLDatabase's portable `engine` value required by `sql.query@1`.
-Desired configuration, runner-local paths, and connection topology are echoed
-into neither contract.
+coordinated `1.0.1` observed fixtures carry only lifecycle/import/drift status.
+Their output fixtures carry only exact kind, name, generation, identity, and
+portability evidence, plus SQLDatabase's portable `engine` value required by
+`sql.query@1`. `SQLDatabase@2.0.0` additionally projects its declared
+`schemaVersion` and `tables`, because those are the non-secret schema needed to
+use `data.indexed@1`; it still does not echo row data. Runner-local paths and
+connection topology are echoed into neither contract.
 This repository does not emit passed Standard Form admission evidence from
 those files.
 
@@ -84,8 +98,13 @@ capacity, billing, or admission authority.
 
 The descriptors are Form-owned data, not host-specific runtime code. Each
 descriptor has an exact closed document schema and only portable `output`
-mappings. SQLDatabase maps `/id`, `/name`, and `/engine` into `sql.query@1`;
-no `takosumi.cloud.*` type is part of the package. A host advertising portable
+mapping. Historical `SQLDatabase@1.0.1` maps `/id`, `/name`, and `/engine` into
+`sql.query@1`. `SQLDatabase@2.0.0` instead maps `/id`, `/name`,
+`/generation`, `/schemaVersion`, and `/tables` into `data.indexed@1`, plus the
+portable host-resolved OAuth `resource_uri` input. Its descriptor pins the
+canonical request/response schema digests, HTTP 200/409 association, ascending
+ordering, and live-keyset cursor contract; no `takosumi.cloud.*` type is part
+of either package. A host advertising portable
 Interface declarations must materialize every required descriptor before the
 Resource can be Ready. InterfaceBinding, consumer authorization, endpoint
 routing, and record lifecycle remain host-owned.

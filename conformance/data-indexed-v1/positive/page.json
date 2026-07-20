@@ -1,0 +1,13 @@
+{
+  "index": "by_tenant_created",
+  "limit": 100,
+  "operation": "page",
+  "prefix": {
+    "tenant_id": "t1"
+  },
+  "range": {
+    "column": "created_at",
+    "gte": 1
+  },
+  "table": "records"
+}

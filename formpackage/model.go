@@ -44,13 +44,14 @@ type FormDefinition struct {
 // central approval for an interface type. A host owns the resulting record,
 // authorization, and lifecycle; this descriptor owns only declared data.
 type InterfaceDescriptor struct {
-	Name           string                      `json:"name"`
-	Version        string                      `json:"version"`
-	Description    string                      `json:"description,omitempty"`
-	Required       bool                        `json:"required,omitempty"`
-	Document       map[string]any              `json:"document,omitempty"`
-	DocumentSchema map[string]any              `json:"documentSchema,omitempty"`
-	Inputs         []InterfaceInputDeclaration `json:"inputs,omitempty"`
+	Name             string                      `json:"name"`
+	Version          string                      `json:"version"`
+	Description      string                      `json:"description,omitempty"`
+	Required         bool                        `json:"required,omitempty"`
+	ResourceURIInput string                      `json:"resourceUriInput,omitempty"`
+	Document         map[string]any              `json:"document,omitempty"`
+	DocumentSchema   map[string]any              `json:"documentSchema,omitempty"`
+	Inputs           []InterfaceInputDeclaration `json:"inputs,omitempty"`
 }
 
 // Portable interface input sources. Any other source must be host-namespaced
@@ -59,12 +60,17 @@ type InterfaceDescriptor struct {
 const (
 	InterfaceInputSourceLiteral = "literal"
 	InterfaceInputSourceOutput  = "output"
+	// InterfaceInputSourceResourceURI asks the host to supply its canonical
+	// OAuth resource URI for this runtime declaration. It is non-secret and
+	// grants no authorization by itself.
+	InterfaceInputSourceResourceURI = "resource_uri"
 )
 
 // InterfaceInputDeclaration is a deterministic mapping from the Form's own
 // output document (or a literal) into one named interface input. Value is raw
 // JSON so an explicit JSON null remains distinguishable from an absent value.
-// It never carries credentials, targets, or host identifiers.
+// It never carries credentials or targets. The resource_uri source is the one
+// explicit host-resolved identifier and remains a non-secret audience fence.
 type InterfaceInputDeclaration struct {
 	Name    string          `json:"name"`
 	Source  string          `json:"source"`
@@ -75,7 +81,7 @@ type InterfaceInputDeclaration struct {
 // PortableInterfaceInputSource reports whether a source is part of the closed
 // portable vocabulary every conforming host must understand.
 func PortableInterfaceInputSource(source string) bool {
-	return source == InterfaceInputSourceLiteral || source == InterfaceInputSourceOutput
+	return source == InterfaceInputSourceLiteral || source == InterfaceInputSourceOutput || source == InterfaceInputSourceResourceURI
 }
 
 type ConformanceFixture struct {

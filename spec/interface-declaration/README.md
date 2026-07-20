@@ -12,6 +12,7 @@ consumer authorization, identity fencing, and lifecycle.
       "name": "mcp.server",
       "version": "2025-11-25",
       "required": true,
+      "resourceUriInput": "resource_uri",
       "document": { "title": "Portable MCP" },
       "documentSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -22,6 +23,7 @@ consumer authorization, identity fencing, and lifecycle.
       },
       "inputs": [
         { "name": "endpoint", "source": "output", "pointer": "/mcp/endpoint" },
+        { "name": "resource_uri", "source": "resource_uri" },
         { "name": "protocol", "source": "literal", "value": "streamable-http" }
       ]
     }
@@ -58,6 +60,7 @@ requests.
 | --- | --- | --- |
 | `literal` | exact declared JSON constant, including `null` | `value`, no `pointer` |
 | `output` | Form's own output document | optional RFC 6901 `pointer`, no `value` |
+| `resource_uri` | host's canonical credential-free HTTPS OAuth resource URI for this declaration | no `pointer` or `value` |
 | `<host>.<token>` | explicitly non-portable host source | optional RFC 6901 `pointer`, no `value` |
 
 The empty pointer selects the whole source document. Non-empty pointers start
@@ -68,6 +71,13 @@ A host-namespaced source prevents this project from becoming a central
 vocabulary gate. A host may reject it, and a host that does not understand it
 must fail closed instead of dropping that input. Host ledger identifiers and
 credentials never appear in a Form Definition.
+
+`resourceUriInput` is optional. When present, it names exactly one input whose
+source is `resource_uri`. The host resolves that input to its canonical OAuth
+resource URI. The resolved value must be an absolute credential-free HTTPS URI
+and may be used as an audience fence. The marker
+does not declare a token, grant consumer access, create an InterfaceBinding, or
+authorize any caller.
 
 ## Required semantics
 

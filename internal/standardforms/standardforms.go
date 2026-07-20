@@ -89,6 +89,10 @@ func Generate(root string) error {
 		}
 		entries = append(entries, entry)
 	}
+	sqlDatabaseV2, err := generateSQLDatabaseV2(root)
+	if err != nil {
+		return err
+	}
 	inventory := Inventory{
 		Format: "takoform.standard-package-set@v1", Classification: "structural-candidate",
 		DefinitionVersion: definitionVersion, PackageVersion: packageVersion, LocalConformance: "structural-only",
@@ -113,7 +117,7 @@ func Generate(root string) error {
 	if err := os.RemoveAll(filepath.Join(root, "conformance", "standard-form-admission-v1")); err != nil {
 		return err
 	}
-	if err := updateConformanceManifest(root, entries); err != nil {
+	if err := updateConformanceManifest(root, entries, sqlDatabaseV2); err != nil {
 		return err
 	}
 	return updatePortableHostContract(root, entries)
@@ -272,6 +276,9 @@ func Verify(root string) error {
 		if err := provider.VerifyStandardFormStructure(entry.Kind, desired); err != nil {
 			return err
 		}
+	}
+	if _, err := verifySQLDatabaseV2(root); err != nil {
+		return err
 	}
 	return VerifyMaterializableCandidate(root)
 }
@@ -777,7 +784,7 @@ func cloneJSONMap(value map[string]any) map[string]any {
 	return result
 }
 
-func updateConformanceManifest(root string, entries []InventoryEntry) error {
+func updateConformanceManifest(root string, entries []InventoryEntry, successors ...InventoryEntry) error {
 	path := filepath.Join(root, "conformance", "form-package-v1", "manifest.json")
 	var manifest struct {
 		SchemaVersion int `json:"schemaVersion"`
@@ -799,6 +806,13 @@ func updateConformanceManifest(root string, entries []InventoryEntry) error {
 	}
 	manifest.Positive = kept
 	for _, entry := range entries {
+		manifest.Positive = append(manifest.Positive, struct {
+			Name string `json:"name"`
+			Path string `json:"path"`
+			Kind string `json:"kind"`
+		}{Name: entry.ConformanceCase, Path: strings.TrimPrefix(entry.Path, "conformance/form-package-v1/"), Kind: entry.Kind})
+	}
+	for _, entry := range successors {
 		manifest.Positive = append(manifest.Positive, struct {
 			Name string `json:"name"`
 			Path string `json:"path"`

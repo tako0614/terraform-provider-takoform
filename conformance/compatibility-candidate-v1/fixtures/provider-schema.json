@@ -731,6 +731,15 @@
           "planModifiers": 0
         },
         {
+          "name": "schema_version",
+          "type": "int64",
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "validators": 0,
+          "planModifiers": 0
+        },
+        {
           "name": "space",
           "type": "string",
           "required": false,
@@ -748,6 +757,193 @@
               "type": "stringplanmodifier.useStateForUnknownModifier",
               "config": "description=Once set, the value of this attribute in state will not change.",
               "description": "Once set, the value of this attribute in state will not change."
+            }
+          ]
+        },
+        {
+          "name": "tables",
+          "type": "list\u003cobject\u003e",
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "validators": 1,
+          "planModifiers": 1,
+          "validatorSemantics": [
+            {
+              "type": "provider.listSizeBetweenValidator",
+              "config": "provider.listSizeBetweenValidator{minimum:1, maximum:16}",
+              "description": "list must contain between 1 and 16 values"
+            }
+          ],
+          "planModifierSemantics": [
+            {
+              "type": "listplanmodifier.requiresReplaceIfModifier",
+              "config": "description=If the value of this attribute changes, Terraform will destroy and recreate the resource.",
+              "description": "If the value of this attribute changes, Terraform will destroy and recreate the resource."
+            }
+          ],
+          "attributes": [
+            {
+              "name": "columns",
+              "type": "list\u003cobject\u003e",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.listSizeBetweenValidator",
+                  "config": "provider.listSizeBetweenValidator{minimum:1, maximum:32}",
+                  "description": "list must contain between 1 and 32 values"
+                }
+              ],
+              "attributes": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "optional": false,
+                  "computed": false,
+                  "validators": 1,
+                  "planModifiers": 0,
+                  "validatorSemantics": [
+                    {
+                      "type": "provider.stringPatternValidator",
+                      "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9_]{0,63}$\", description:\"identifier must start with a letter and contain only letters, digits, or underscore\"}",
+                      "description": "identifier must start with a letter and contain only letters, digits, or underscore"
+                    }
+                  ]
+                },
+                {
+                  "name": "nullable",
+                  "type": "bool",
+                  "required": false,
+                  "optional": true,
+                  "computed": true,
+                  "default": "false",
+                  "defaultSemantic": {
+                    "type": "booldefault.staticBoolDefault",
+                    "config": "booldefault.staticBoolDefault{defaultVal:false}",
+                    "description": "value defaults to false"
+                  },
+                  "validators": 0,
+                  "planModifiers": 0
+                },
+                {
+                  "name": "type",
+                  "type": "string",
+                  "required": true,
+                  "optional": false,
+                  "computed": false,
+                  "validators": 1,
+                  "planModifiers": 0,
+                  "validatorSemantics": [
+                    {
+                      "type": "provider.stringOneOfValidator",
+                      "config": "provider.stringOneOfValidator{allowed:[]string{\"string\", \"integer\", \"number\", \"boolean\"}}",
+                      "description": "value must be one of: string, integer, number, boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "indexes",
+              "type": "list\u003cobject\u003e",
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.listSizeBetweenValidator",
+                  "config": "provider.listSizeBetweenValidator{minimum:0, maximum:8}",
+                  "description": "list must contain between 0 and 8 values"
+                }
+              ],
+              "attributes": [
+                {
+                  "name": "columns",
+                  "type": "list\u003cstring\u003e",
+                  "required": true,
+                  "optional": false,
+                  "computed": false,
+                  "validators": 1,
+                  "planModifiers": 0,
+                  "validatorSemantics": [
+                    {
+                      "type": "provider.listSizeBetweenValidator",
+                      "config": "provider.listSizeBetweenValidator{minimum:1, maximum:4}",
+                      "description": "list must contain between 1 and 4 values"
+                    }
+                  ]
+                },
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "optional": false,
+                  "computed": false,
+                  "validators": 1,
+                  "planModifiers": 0,
+                  "validatorSemantics": [
+                    {
+                      "type": "provider.stringPatternValidator",
+                      "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9_]{0,63}$\", description:\"identifier must start with a letter and contain only letters, digits, or underscore\"}",
+                      "description": "identifier must start with a letter and contain only letters, digits, or underscore"
+                    }
+                  ]
+                },
+                {
+                  "name": "unique",
+                  "type": "bool",
+                  "required": false,
+                  "optional": true,
+                  "computed": true,
+                  "default": "false",
+                  "defaultSemantic": {
+                    "type": "booldefault.staticBoolDefault",
+                    "config": "booldefault.staticBoolDefault{defaultVal:false}",
+                    "description": "value defaults to false"
+                  },
+                  "validators": 0,
+                  "planModifiers": 0
+                }
+              ]
+            },
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.stringPatternValidator",
+                  "config": "provider.stringPatternValidator{pattern:\"^[A-Za-z][A-Za-z0-9_]{0,63}$\", description:\"identifier must start with a letter and contain only letters, digits, or underscore\"}",
+                  "description": "identifier must start with a letter and contain only letters, digits, or underscore"
+                }
+              ]
+            },
+            {
+              "name": "primary_key",
+              "type": "list\u003cstring\u003e",
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "validators": 1,
+              "planModifiers": 0,
+              "validatorSemantics": [
+                {
+                  "type": "provider.listSizeBetweenValidator",
+                  "config": "provider.listSizeBetweenValidator{minimum:1, maximum:4}",
+                  "description": "list must contain between 1 and 4 values"
+                }
+              ]
             }
           ]
         }

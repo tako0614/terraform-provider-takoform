@@ -95,6 +95,8 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 				Name:            types.StringValue("main"),
 				Engine:          types.StringNull(),
 				MigrationsPath:  types.StringNull(),
+				SchemaVersion:   types.Int64Null(),
+				Tables:          types.ListNull(types.ObjectType{AttrTypes: sqlDatabaseTableAttrTypes}),
 				Space:           types.StringNull(),
 				ResourceVersion: types.StringUnknown(),
 				Portability:     types.StringUnknown(),

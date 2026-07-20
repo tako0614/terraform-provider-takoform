@@ -1,0 +1,10 @@
+{
+  "conflict": {
+    "key": {
+      "id": 1.5
+    },
+    "reason": "revision_conflict",
+    "table": "records"
+  },
+  "operation": "put"
+}

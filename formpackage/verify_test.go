@@ -227,6 +227,62 @@ func TestPortableSchemaAllowsProvablyNonObjectCompositionAndClosedReference(t *t
 	}
 }
 
+func TestPortableSchemaAllowsBoundedExactObjectConst(t *testing.T) {
+	t.Parallel()
+	schema := map[string]any{
+		"const": map[string]any{
+			"$schema": "https://json-schema.org/draft/2020-12/schema",
+			"type":    "object",
+			"properties": map[string]any{
+				"value": map[string]any{"$ref": "#/$defs/value"},
+			},
+			"$defs": map[string]any{
+				"value": map[string]any{"type": "string"},
+			},
+		},
+	}
+	if err := validatePortableSchemaStructure(schema, "documentSchema.properties.schema"); err != nil {
+		t.Fatalf("bounded exact object const rejected: %v", err)
+	}
+}
+
+func TestPortableSchemaBoundsExactObjectConst(t *testing.T) {
+	t.Parallel()
+	t.Run("mixed schema keywords", func(t *testing.T) {
+		t.Parallel()
+		schema := map[string]any{
+			"const":       map[string]any{"value": "fixed"},
+			"description": "not an exact one-key const schema",
+		}
+		err := validatePortableSchemaStructure(schema, "documentSchema.properties.schema")
+		if err == nil || !strings.Contains(err.Error(), "single-key schema") {
+			t.Fatalf("validatePortableSchemaStructure error = %v, want single-key exact const rejection", err)
+		}
+	})
+	t.Run("depth", func(t *testing.T) {
+		t.Parallel()
+		literal := map[string]any{"value": "leaf"}
+		for level := 0; level <= maxSchemaProofDepth; level++ {
+			literal = map[string]any{"child": literal}
+		}
+		err := validatePortableSchemaStructure(map[string]any{"const": literal}, "documentSchema.properties.schema")
+		if err == nil || !strings.Contains(err.Error(), "depth limit") {
+			t.Fatalf("validatePortableSchemaStructure error = %v, want exact const depth limit", err)
+		}
+	})
+	t.Run("operation budget", func(t *testing.T) {
+		t.Parallel()
+		literal := make(map[string]any, maxSchemaProofOps)
+		for index := 0; index < maxSchemaProofOps; index++ {
+			literal[fmt.Sprintf("value%d", index)] = index
+		}
+		err := validatePortableSchemaStructure(map[string]any{"const": literal}, "documentSchema.properties.schema")
+		if err == nil || !strings.Contains(err.Error(), "operation budget") {
+			t.Fatalf("validatePortableSchemaStructure error = %v, want exact const operation budget", err)
+		}
+	})
+}
+
 func TestPortableSchemaProofMemoizesSmallSharedDAG(t *testing.T) {
 	t.Parallel()
 	schema := sharedReferenceDAGSchema(10)

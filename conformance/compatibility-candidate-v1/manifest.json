@@ -32,7 +32,7 @@
     },
     {
       "path": "fixtures/provider-schema.json",
-      "sha256": "sha256:4e619222a58562b2e981d07a536191d3b8903f1c130a44bc6f4d6acb769e41f2"
+      "sha256": "sha256:c1dd0b74343e48543f5689cad61476b94f1c80776bc904a8eee03a2af97f8027"
     },
     {
       "path": "schemas/desired.schema.json",
@@ -126,7 +126,7 @@
         "import": "sha256:3320baccd4c2f00342e08b7915efd6071767c584e90bece64eec019b9f1b3b2b",
         "observed": "sha256:5894f43a77e2689a18e4c9700e5aef152b6c6d2841cf8d0b912d3e48e453bf98",
         "output": "sha256:42080089142d9f2ee50bb90cf2e98013a22c90d7622226eea309a8fe777a6f62",
-        "providerSchema": "sha256:423d00f868bab50e0b68c4ba0a856816da2acd48724dcac52c8fc776809c557d"
+        "providerSchema": "sha256:f0b326c54d65a7377e2415dd82e6a2b86a1f467adec3db209c7ad8702617bd4b"
       }
     },
     {

@@ -1,0 +1,109 @@
+{
+  "operation": "batch",
+  "results": [
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    },
+    {
+      "deleted": true,
+      "operation": "delete"
+    }
+  ]
+}
