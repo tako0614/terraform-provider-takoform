@@ -40,6 +40,8 @@ go run ./cmd/provider-lifecycle-conformance verify --cli /path/to/terraform
 go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 go run ./cmd/provider-lifecycle-conformance provider-reports \
   --cli terraform --output-dir /tmp/takoform-provider-reports
+go run ./cmd/provider-lifecycle-conformance provider-reports \
+  --cli tofu --output-dir /tmp/takoform-opentofu-provider-reports
 ```
 
 `provider-reports` first authenticates the exact ten-package retained
@@ -57,7 +59,11 @@ executed full lifecycle checks and writes one strict RFC 8785
 kind. It refuses to write under `admission/`, signs nothing, publishes nothing,
 and does not change `external-required` admission status. Its output directory
 must be new or empty. Authentication and admission remain separate protected
-release decisions.
+release decisions. Each report subject records the executing CLI's exact
+distribution identity: Terraform uses
+`provider:registry.terraform.io/tako0614/takoform`, while OpenTofu uses
+`provider:registry.opentofu.org/tako0614/takoform`. The two addresses are not
+interchangeable Registry sources.
 
 The matrix is intentionally classified `generic-lifecycle-candidate` with
 `publicationReady: false` and

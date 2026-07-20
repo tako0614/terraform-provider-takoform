@@ -4,6 +4,7 @@
 
 - GitHub: `github.com/tako0614/terraform-provider-takoform`
 - Terraform Registry: `registry.terraform.io/tako0614/takoform`
+- OpenTofu Registry: `registry.opentofu.org/tako0614/takoform`
 - Service Form API: `forms.takoform.com/v1alpha1`
 
 ## Usage
