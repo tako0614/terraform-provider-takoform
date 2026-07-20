@@ -3,50 +3,50 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ContainerService",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:ebc6deb0df287aedaf44a151993e61addc67b664bb343a55ecd96a1c2d01c329",
-    "packageDigest": "sha256:49895029074a2d32e886b81380854bd2b959bd20553f4b097a109b8a5f247264"
+    "schemaDigest": "sha256:f39586a6ca97ee474b3e130b0a2a57ba81d40282632cd44fa65631cfbd17c7cf",
+    "packageDigest": "sha256:5adfb7dd11a3f462bb2bad94ba9abbcb097c92afa0987d9cc1fa0783d00f3b05"
   },
   "DurableWorkflow": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "DurableWorkflow",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:b35e64a296f259eb718b1a58f15cca554a193688d3b4ccce4fe6efd612774131",
-    "packageDigest": "sha256:e8ac2ea2f1377ef405700e7663d3fc91f85a099c7c6d68f292f1692ca6ad6463"
+    "schemaDigest": "sha256:9b6e5e0d28d8ea35527ae20756c9ed1eb57907e93ff6a44ae300dbbf72b80d45",
+    "packageDigest": "sha256:05db4bd34b3361eb933ff284f40c1dd17a9f4025c5b5a2ade56a838996a69b90"
   },
   "EdgeWorker": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "EdgeWorker",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:857d7d1a244cf679a5c1161f0f9ba3b0d17e62843aa18b5a332d54d6cd463fa2",
-    "packageDigest": "sha256:7ae68ba4f61bd784c31c4818d84c6582fe66b681015a37806d8cc8e7faf6fdbe"
+    "schemaDigest": "sha256:1d20c21cad95deec873359e218729be53ceaf0a8abfbdcc860be2a4ac0c7c722",
+    "packageDigest": "sha256:63e87939660c898837290f0cc8e64e0098106eb4e7cba97a984762d2beaaabb3"
   },
   "KVStore": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "KVStore",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:c0d0dea9f7cb80243748a31770c9225ed21c55ee5edbad55e41df874287d658f",
-    "packageDigest": "sha256:df4733b0463c2015da0e3fb7f2b39dbfe931ff6cc376a00abf02368548ec792a"
+    "schemaDigest": "sha256:137e97cbce057aac1ef8e9af3f00bb9ca3a3967131bf2d920c252d5249b6e96f",
+    "packageDigest": "sha256:964c0bdc7445440f93f2ee6318eb9bf6356f8d749d12a7eb904e90141e312dca"
   },
   "ObjectBucket": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ObjectBucket",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:259a280a33a5e5f48c46513f374376e49ab3cc6109b10d626397fd7e3623bd04",
-    "packageDigest": "sha256:64e102d55106a1526ba3a6ecd06cd6bf77b3928cd2278a56b53f37afc6189771"
+    "schemaDigest": "sha256:4584b9233ef23231037d941c652eedd67c184deb9e36bec14d41151a28b7c2b4",
+    "packageDigest": "sha256:00f3ed05da56cc795a42043112933ef00e97b531ed123e0c2df3cce70bd1e391"
   },
   "Queue": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "Queue",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:1e3d4732d263bb846ae6ca4a8e202f5e207143498397c390299486c429274243",
-    "packageDigest": "sha256:04710eaf7cb92c50b5c28f1a73f83550510fa4b69ed8672c9dfe0e4514b3aaea"
+    "schemaDigest": "sha256:93308869c7fd95654ee5009efe329d43452d11c59d36f61b5fc79b0a2fbe4646",
+    "packageDigest": "sha256:609958d46da6f74f3a29e0940fb628e9c455c353d41d9457791c5859360ad8cc"
   },
   "SQLDatabase": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "SQLDatabase",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:4dd33ca2d72ba5d767f4a172f1c4e7d53e3b914b8d85d1175ed2777e708ec572",
-    "packageDigest": "sha256:ad344a0baa7f35a075dab98b3e64efcd3600537dfd3365103b492f15dc730af2"
+    "schemaDigest": "sha256:ecd201ad6a2156dabed0f1afbbea242c3f994fce37d2edf6f676342cd6937246",
+    "packageDigest": "sha256:714a6c3de551598788b25e208783c08b7e8059f10fb96873f5a34b321075c401"
   },
   "Schedule": {
     "apiVersion": "forms.takoform.com/v1alpha1",
@@ -59,14 +59,14 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "StatefulActorNamespace",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:a7cdf3f5e77c94ef4cc625cfe5ba501c9d4a8d6475168ff1044475438070dec0",
-    "packageDigest": "sha256:9ad619fb3460bf684e28da2d004370375a0d0e83bd57e5c575115ff042d050ea"
+    "schemaDigest": "sha256:c82fa8458e333ce20160f052c255ee94636219bbdea6a46d4730852411050be4",
+    "packageDigest": "sha256:d6bd34aac538485161ff9045c8a8f9d8dc6193f28f1667cc7bef84a85dbf85d7"
   },
   "VectorIndex": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "VectorIndex",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:b71d50a600f0678205969f667955beca6d61a023dcda71bfc3e9da4c6703d6d0",
-    "packageDigest": "sha256:89c2b60033a1d5befcdda99fa4e8159a26de4035492d89a6293f89d47f110454"
+    "schemaDigest": "sha256:f0db5c150198bec614485074cc10c8ee1533edddf11a7374f1aaa7cdebc77fea",
+    "packageDigest": "sha256:adffdb7d630eb44b03c8f4cd4a8ef2295e66318ea81b1fa88be6dfdd20dd429b"
   }
 }

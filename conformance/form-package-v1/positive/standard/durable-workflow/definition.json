@@ -234,6 +234,57 @@
     "refresh",
     "drift"
   ],
+  "interfaces": [
+    {
+      "name": "workflow.invoke",
+      "version": "1",
+      "description": "Portable durable workflow invocation operations.",
+      "required": true,
+      "document": {
+        "operations": [
+          "cancel",
+          "invoke",
+          "status"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "cancel",
+                "invoke",
+                "status"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
   "conformanceFixtures": [
     {
       "name": "canonical",

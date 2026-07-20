@@ -233,6 +233,53 @@
     "refresh",
     "drift"
   ],
+  "interfaces": [
+    {
+      "name": "http.request",
+      "version": "1",
+      "description": "Portable HTTP request surface exposed by an edge application.",
+      "required": true,
+      "document": {
+        "operations": [
+          "request"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "request"
+              ],
+              "type": "string"
+            },
+            "maxItems": 1,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
   "conformanceFixtures": [
     {
       "name": "canonical",

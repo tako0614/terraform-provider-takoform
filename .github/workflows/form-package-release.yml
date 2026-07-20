@@ -96,6 +96,7 @@ jobs:
           cosign_version="$(cosign version 2>&1)"
           grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
           go test ./formpackage ./cmd/form-package-release
+          go run ./cmd/standard-form-conformance materializability-check
           output="$RUNNER_TEMP/form-package"
           go run ./cmd/form-package-release build-package \
             --repo "$GITHUB_WORKSPACE/release-source" \

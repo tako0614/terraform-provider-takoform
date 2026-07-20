@@ -1,0 +1,54 @@
+{
+  "format": "takoform.standard-runtime-artifact-set@v1",
+  "status": "published-immutable-readback",
+  "source": {
+    "repository": "tako0614/takosumi",
+    "releaseTag": "standard-form-runtime-v1.0.3",
+    "sourceCommit": "b6e6381a4f84986e6aa0f6e05e67d6c10304eae4",
+    "releaseUrl": "https://github.com/tako0614/takosumi/releases/tag/standard-form-runtime-v1.0.3"
+  },
+  "releaseEvidence": [
+    {
+      "name": "runtime-manifest.json",
+      "url": "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.3/runtime-manifest.json",
+      "size": 981,
+      "digest": "sha256:0b23c6bd38c732ef4096ccaa2802167d6c59e3f408f63fd8f5b420e2c107ed09"
+    },
+    {
+      "name": "release-manifest.json",
+      "url": "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.3/release-manifest.json",
+      "size": 1532,
+      "digest": "sha256:26f1ce749f95fac0f98fd5b8c1e42de543ca7b98d816c2692648435e656f6895"
+    },
+    {
+      "name": "release-safety-readback.json",
+      "url": "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.3/release-safety-readback.json",
+      "size": 1856,
+      "digest": "sha256:d774739bf52fd00b7a362b455843cd4fb686e3233e71e5a8bb3b8abe8bebddc5"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "EdgeWorker",
+      "name": "edge-worker.mjs",
+      "url": "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.3/edge-worker.mjs",
+      "size": 283,
+      "digest": "sha256:281b77f65f6258e56d0468a580b1f67baf9f4d71891c2f7259ce24c47bf7d67e"
+    },
+    {
+      "kind": "DurableWorkflow",
+      "name": "durable-workflow.mjs",
+      "url": "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.3/durable-workflow.mjs",
+      "artifactRef": "standard-form-runtime/v1.0.3/durable-workflow.mjs",
+      "size": 138,
+      "digest": "sha256:8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5"
+    },
+    {
+      "kind": "ContainerService",
+      "name": "container-service",
+      "reference": "docker.io/library/nginx@sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317",
+      "platform": "linux/amd64",
+      "digest": "sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317"
+    }
+  ]
+}

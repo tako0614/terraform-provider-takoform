@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "VectorIndex",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:b71d50a600f0678205969f667955beca6d61a023dcda71bfc3e9da4c6703d6d0"
+    "schemaDigest": "sha256:f0db5c150198bec614485074cc10c8ee1533edddf11a7374f1aaa7cdebc77fea"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4161,
-      "digest": "sha256:ba12dfeaf8767a2debd265160afd2c2ffd97a9983f19913a13efb60d1175017b"
+      "size": 5286,
+      "digest": "sha256:4da43d1073a423198a7efa59d7da673a294eb6f4632ae450a443104250e3a43e"
     },
     {
       "path": "fixtures/desired.json",

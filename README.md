@@ -59,6 +59,15 @@ implicit downgrade.
 
 The provider deliberately has no target-pool, backend, credential, pricing, quota, billing, or operator-policy resources. It discovers `features.service_forms` and verifies the exact build-pinned candidate FormRef/package identity against the configured host. Backend placement, admission, and credentials remain host responsibilities; state contains only the canonical resource ID, generation fence, read-only drift status, portability, desired typed fields, and sanitized public outputs.
 
+The `1.0.1` Form definitions also own their portable runtime declaration
+contracts. Nine service Forms expose one required open `(name, version)`
+descriptor (`http.request@1`, `object.storage@1`, `keyvalue.store@1`,
+`sql.query@1`, `queue.messages@1`, `vector.query@1`, `workflow.invoke@1`, or
+`actor.invoke@1`). `Schedule` intentionally exposes none because it consumes
+`workflow.invoke` through its declared Resource connection. These names carry
+no Takosumi Cloud identity, credentials, routing authority, or consumer grant;
+the host materializes and authorizes the resulting Interface record.
+
 See [the portable specification status](spec/README.md), [Form Package contract](spec/form-package/README.md), [interface declaration contract](spec/interface-declaration/README.md), [form inventory](forms/README.md), [conformance status](conformance/README.md), [provider documentation](docs/index.md), and [examples](examples/resources/).
 
 The repository also contains a data-only Form Package library and CLI. It
@@ -96,10 +105,20 @@ remains a separate proof and cannot relabel a newer provider execution. Those
 unsigned subjects grant no admission. The active provider `0.1.1` source
 candidate pins a new complete `1.0.1` Form set whose executable fixture
 references resolve to a separate Takosumi-owned
-`standard-form-runtime-v1.0.2` host-conformance runtime release. The retained
+`standard-form-runtime-v1.0.3` host-conformance runtime release. The retained
 `1.0.0` publication proof stays
 independently verifiable while the new package releases and admission evidence
 are prepared.
+
+The candidate's exact EdgeWorker, DurableWorkflow, and ContainerService bytes
+are pinned in `forms/standard-runtime-artifact-set.json`. Run
+`go run ./cmd/standard-form-conformance materializability-check` to read those
+immutable release/OCI identities back before building any `1.0.1` package.
+This verifies fixture bytes only and grants no host lifecycle or admission.
+All candidate generation, verification, and closed ten-package assembly is
+available through the local Go CLI. GitHub Actions is an optional automation
+and current keyless OIDC signer, not a prerequisite for running the immutable
+local gates.
 
 ## Development
 

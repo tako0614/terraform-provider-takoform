@@ -5,7 +5,7 @@
     "maxAttempts": 0
   },
   "source": {
-    "artifactRef": "standard-form-runtime/v1.0.2/durable-workflow.mjs",
+    "artifactRef": "standard-form-runtime/v1.0.3/durable-workflow.mjs",
     "artifactSha256": "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5"
   }
 }

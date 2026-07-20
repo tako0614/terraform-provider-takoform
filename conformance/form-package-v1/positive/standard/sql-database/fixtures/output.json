@@ -1,4 +1,5 @@
 {
+  "engine": "sqlite",
   "generation": 1,
   "id": "SQLDatabase/main",
   "kind": "SQLDatabase",

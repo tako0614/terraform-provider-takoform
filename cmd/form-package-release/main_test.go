@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"os"
@@ -16,7 +17,106 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
 )
+
+func TestCoordinatedStandardSetBuildFinalizeAndClosedCandidateVerification(t *testing.T) {
+	repo := makeTestRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, "forms"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copyTree(t, filepath.Join(repositoryRoot(t), "forms", "releases"), filepath.Join(repo, "forms", "releases"))
+	copyFile := func(source, target string) {
+		t.Helper()
+		raw, err := os.ReadFile(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	copyFile(filepath.Join(repositoryRoot(t), "forms", "standard-package-set.json"), filepath.Join(repo, "forms", "standard-package-set.json"))
+	gitCommitAll(t, repo, "standard set")
+	for _, spec := range standardforms.Specs {
+		releaseID := mustReleaseID(t, spec.Kind)
+		runCommand(t, repo, "git", "tag", "forms/"+releaseID+"/v1.0.1")
+	}
+	runCommand(t, repo, "git", "tag", "standard-forms/v1.0.1")
+
+	packagesRoot := filepath.Join(t.TempDir(), "packages")
+	if err := os.MkdirAll(packagesRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bundleFixture, err := os.ReadFile(filepath.Join(repositoryRoot(t), "cmd", "form-package-release", "testdata", "cosign-v3.0.6-message-signature.sigstore.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, spec := range standardforms.Specs {
+		releaseID := mustReleaseID(t, spec.Kind)
+		packageOutput := filepath.Join(packagesRoot, releaseID)
+		if err := run([]string{
+			"build-package", "--repo", repo, "--tag", "forms/" + releaseID + "/v1.0.1",
+			"--output", packageOutput, "--tooling-commit", testToolingCommit, "--coordinated-standard-set",
+		}, io.Discard); err != nil {
+			t.Fatal(err)
+		}
+		var manifest releaseManifest
+		readJSON(t, filepath.Join(packageOutput, "release-manifest.json"), &manifest)
+		if manifest.PublisherPolicy.Identity != "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-form-package-set-release.yml@refs/tags/standard-forms/v1.0.1" {
+			t.Fatalf("coordinated package identity drifted: %s", manifest.PublisherPolicy.Identity)
+		}
+		if err := os.WriteFile(filepath.Join(packageOutput, manifest.SignatureBundle), bundleFixture, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := run([]string{"finalize-bundle", "--output", packageOutput}, io.Discard); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	setOutput := filepath.Join(t.TempDir(), "set")
+	if err := run([]string{
+		"build-standard-set", "--repo", repo, "--tag", "standard-forms/v1.0.1",
+		"--packages-root", packagesRoot, "--output", setOutput, "--tooling-commit", testToolingCommit,
+	}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(setOutput, standardSetBundleName), bundleFixture, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{
+		"finalize-standard-set", "--output", setOutput, "--workflow-run-id", "123456",
+		"--built-at", "2026-07-20T00:00:00.000Z",
+	}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	var candidate controllerCandidateManifest
+	readJSON(t, filepath.Join(setOutput, "release-candidate-manifest.json"), &candidate)
+	encoded, err := json.Marshal(candidate.ArtifactDigests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit := strings.TrimSpace(runCommand(t, repo, "git", "rev-parse", "HEAD"))
+	verifyArguments := []string{
+		"verify-standard-set-candidate", "--output", setOutput, "--source-commit", commit,
+		"--workflow-run-id", "123456", "--manifest-digest", digestFile(filepath.Join(setOutput, "release-candidate-manifest.json")),
+		"--artifact-digests-b64", base64.RawURLEncoding.EncodeToString(encoded),
+	}
+	if err := run(verifyArguments, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(setOutput, "takoform-standard-forms_1.0.1.tar.gz")
+	raw, err := os.ReadFile(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(archive, append(raw, 0), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(verifyArguments, io.Discard); err == nil || !strings.Contains(err.Error(), "candidate asset digest drifted") {
+		t.Fatalf("tampered set archive unexpectedly verified: %v", err)
+	}
+}
 
 const testToolingCommit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
