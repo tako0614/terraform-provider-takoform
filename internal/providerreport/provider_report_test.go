@@ -13,6 +13,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
+	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
 
 func TestLoadPublishedFixturesUsesExactRetainedReleaseArchives(t *testing.T) {
@@ -47,6 +48,25 @@ func TestLoadPublishedFixturesUsesExactRetainedReleaseArchives(t *testing.T) {
 	}
 }
 
+func TestLoadCandidateFixturesUsesExactCurrentReleaseSources(t *testing.T) {
+	root, err := providerlifecycle.RepoRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtures, err := LoadCandidateFixtures(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fixtures) != 10 {
+		t.Fatalf("fixture count = %d, want 10", len(fixtures))
+	}
+	for _, fixture := range fixtures {
+		if fixture.Identity.FormRef.Kind != fixture.Kind || fixture.Identity.FormRef.DefinitionVersion != "1.0.1" || !formpackage.ValidDigest(fixture.Identity.FormRef.SchemaDigest) || !formpackage.ValidDigest(fixture.Identity.PackageDigest) {
+			t.Fatalf("invalid current candidate identity: %#v", fixture)
+		}
+	}
+}
+
 func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *testing.T) {
 	if testing.Short() {
 		t.Skip("actual provider protocol integration")
@@ -65,6 +85,14 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 	if len(reports) != 10 {
 		t.Fatalf("report count = %d, want 10", len(reports))
 	}
+	candidates, err := LoadCandidateFixtures(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exactIdentity := make(map[string]standardform.InstalledFormReference, len(candidates))
+	for _, candidate := range candidates {
+		exactIdentity[candidate.Kind] = candidate.Identity
+	}
 	output := filepath.Join(t.TempDir(), "reports")
 	if err := Write(root, output, reports); err != nil {
 		t.Fatal(err)
@@ -75,6 +103,9 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 		}
 		if generated.digest != formpackage.DigestBytes(generated.canonical) {
 			t.Fatalf("invalid canonical digest for %s", generated.kind)
+		}
+		if generated.report.Identity != exactIdentity[generated.kind] || generated.report.Identity.FormRef.DefinitionVersion != "1.0.1" || generated.report.RunnerVersion != "0.1.1" {
+			t.Fatalf("report %s relabeled executed candidate identity: %#v", generated.kind, generated.report)
 		}
 		if _, err := admissionrelease.ValidateCanonicalProviderRunnerReport(generated.canonical, generated.report.Identity, []string{"canonical"}, []string{"reject-invalid-semantics"}); err != nil {
 			t.Fatalf("validate %s canonical report: %v", generated.kind, err)

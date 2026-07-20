@@ -5,7 +5,38 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
+
+func TestStandardFixtureCasesRequireExactExecutedFormIdentity(t *testing.T) {
+	forms := candidateForms()
+	cases := make([]StandardFixtureCase, 0, len(resourceCases))
+	for _, item := range resourceCases {
+		form := forms[item.Kind]
+		cases = append(cases, StandardFixtureCase{
+			Kind: item.Kind,
+			Identity: standardform.InstalledFormReference{
+				FormRef: formpackage.FormRef{
+					APIVersion: form.FormRef.APIVersion, Kind: form.FormRef.Kind,
+					DefinitionVersion: form.FormRef.DefinitionVersion, SchemaDigest: form.FormRef.SchemaDigest,
+				},
+				PackageDigest: form.PackageDigest,
+			},
+			PositiveName: "canonical", Positive: map[string]any{"name": item.Name},
+			NegativeName: "reject-invalid-semantics", Negative: map[string]any{"name": item.Name},
+		})
+	}
+	if _, err := validateAndOrderStandardFixtureCases(cases); err != nil {
+		t.Fatalf("exact current candidate cases: %v", err)
+	}
+	forged := append([]StandardFixtureCase(nil), cases...)
+	forged[0].Identity.FormRef.Kind = resourceCases[1].Kind
+	if _, err := validateAndOrderStandardFixtureCases(forged); err == nil || !strings.Contains(err.Error(), "incomplete or unknown") {
+		t.Fatalf("mislabeled fixture identity was accepted: %v", err)
+	}
+}
 
 func TestLoadCLIMatrixPinsCanonicalAndDualPublishedAddresses(t *testing.T) {
 	root, err := RepoRoot(".")

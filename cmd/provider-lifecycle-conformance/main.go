@@ -97,7 +97,7 @@ func runProviderReports(args []string) {
 	if err := providerreport.Write(root, outputDir, reports); err != nil {
 		fail(err)
 	}
-	fmt.Printf("generated %d unsigned RFC 8785 provider reports from exact published fixtures via %s (%s)\n", len(reports), reports[0].Subject(), providerreport.ProtocolDescription())
+	fmt.Printf("generated %d unsigned RFC 8785 provider reports from exact current candidate release-source fixtures via %s (%s)\n", len(reports), reports[0].Subject(), providerreport.ProtocolDescription())
 	for _, value := range providerreport.SortedReportDigests(reports) {
 		fmt.Println(value)
 	}

@@ -593,7 +593,7 @@ func inspectSource(repo string, desc descriptor, allowDirty, allowUntagged bool)
 	}
 	blockers = append(blockers,
 		"candidate artifacts are unsigned; checksum signing occurs only in the environment-gated signed-tag workflow",
-		"first real Terraform Registry and OpenTofu install proof is pending",
+		fmt.Sprintf("direct Registry install/readback for provider %s is post-publication evidence", desc.Version),
 		"release attestation publication occurs only in the environment-gated signed-tag workflow",
 	)
 	return sourceEvidence{

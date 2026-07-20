@@ -11,13 +11,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
 
-// StandardFixtureCase carries the exact desired fixtures extracted from one
-// authenticated, retained Form Package. Callers are responsible for verifying
-// the package closure before invoking the provider protocol runner.
+// StandardFixtureCase carries exact desired fixtures from one verified Form
+// Package or reviewed release source. Callers are responsible for verifying
+// the exact package closure before invoking the provider protocol runner.
 type StandardFixtureCase struct {
 	Kind         string
+	Identity     standardform.InstalledFormReference
 	PositiveName string
 	Positive     map[string]any
 	NegativeName string
@@ -29,6 +33,7 @@ type StandardFixtureCase struct {
 // configuration diagnostic that occurred before the mock host was mutated.
 type StandardFixtureEvidence struct {
 	Kind              string
+	Identity          standardform.InstalledFormReference
 	PositiveName      string
 	PositivePassed    bool
 	NegativeName      string
@@ -45,7 +50,7 @@ type StandardFixtureRun struct {
 }
 
 // RunStandardFixtures builds the real provider binary and applies each exact
-// retained positive and negative desired fixture through a Terraform-compatible
+// verified positive and negative desired fixture through a Terraform-compatible
 // CLI. Negative fixtures must fail with provider diagnostics before the test
 // Form host receives a mutation.
 func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []StandardFixtureCase) (StandardFixtureRun, error) {
@@ -67,7 +72,17 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 	}
 	defer os.RemoveAll(temp)
 
-	host := newFormHost()
+	forms := make(map[string]client.InstalledFormReference, len(ordered))
+	for _, fixture := range ordered {
+		forms[fixture.Kind] = client.InstalledFormReference{
+			FormRef: client.FormRef{
+				APIVersion: fixture.Identity.FormRef.APIVersion, Kind: fixture.Identity.FormRef.Kind,
+				DefinitionVersion: fixture.Identity.FormRef.DefinitionVersion, SchemaDigest: fixture.Identity.FormRef.SchemaDigest,
+			},
+			PackageDigest: fixture.Identity.PackageDigest,
+		}
+	}
+	host := newFormHostWithForms(forms)
 	server := httptest.NewServer(host)
 	defer server.Close()
 
@@ -151,7 +166,7 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 			return StandardFixtureRun{}, fmt.Errorf("%s retained negative fixture did not produce a provider configuration diagnostic\n%s", fixture.Kind, output)
 		}
 		evidence = append(evidence, StandardFixtureEvidence{
-			Kind: fixture.Kind, PositiveName: fixture.PositiveName, PositivePassed: true,
+			Kind: fixture.Kind, Identity: fixture.Identity, PositiveName: fixture.PositiveName, PositivePassed: true,
 			NegativeName: fixture.NegativeName, NegativeErrorCode: "invalid_argument", NegativePassed: true,
 		})
 	}
@@ -208,7 +223,9 @@ func validateAndOrderStandardFixtureCases(cases []StandardFixtureCase) ([]Standa
 		if _, ok := byKind[fixture.Kind]; ok {
 			return nil, fmt.Errorf("standard fixture set duplicates %s", fixture.Kind)
 		}
-		if _, ok := resourceCaseForKind(fixture.Kind); !ok || strings.TrimSpace(fixture.PositiveName) == "" || strings.TrimSpace(fixture.NegativeName) == "" || fixture.Positive == nil || fixture.Negative == nil {
+		if _, ok := resourceCaseForKind(fixture.Kind); !ok || strings.TrimSpace(fixture.PositiveName) == "" || strings.TrimSpace(fixture.NegativeName) == "" || fixture.Positive == nil || fixture.Negative == nil ||
+			fixture.Identity.FormRef.APIVersion != client.APIVersion || fixture.Identity.FormRef.Kind != fixture.Kind || strings.TrimSpace(fixture.Identity.FormRef.DefinitionVersion) == "" ||
+			!validDigest(fixture.Identity.FormRef.SchemaDigest) || !validDigest(fixture.Identity.PackageDigest) {
 			return nil, fmt.Errorf("standard fixture set contains an incomplete or unknown %q case", fixture.Kind)
 		}
 		byKind[fixture.Kind] = fixture

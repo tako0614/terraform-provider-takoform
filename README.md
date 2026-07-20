@@ -88,12 +88,14 @@ Sigstore trusted root, and package-index workflow policy are retained under
 `published-package-check`. Publication still does not admit a Form: host and
 authenticated provider lifecycle reports, direct Registry readback, signed
 admission evidence, the distinct remaining role authorities, and a live
-revocation-chain proof remain external. Unsigned canonical provider-report
-subjects can be generated from the exact retained package fixtures through the
-real provider protocol, but those subjects grant no admission. No
-`forms/admissions/v*` activation or revocation release has been published.
-The active provider `0.1.1` source candidate pins a new complete `1.0.1` Form
-set whose executable fixture references resolve to a separate Takosumi-owned
+revocation-chain proof remain external. No `forms/admissions/v*` activation or
+revocation release has been published. Unsigned provider-report subjects for a
+provider candidate are generated only from that same candidate's exact
+reviewed release-source fixtures; historical published-package authentication
+remains a separate proof and cannot relabel a newer provider execution. Those
+unsigned subjects grant no admission. The active provider `0.1.1` source
+candidate pins a new complete `1.0.1` Form set whose executable fixture
+references resolve to a separate Takosumi-owned
 host-conformance runtime release. The retained `1.0.0` publication proof stays
 independently verifiable while the new package releases and admission evidence
 are prepared.

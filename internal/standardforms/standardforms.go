@@ -212,7 +212,7 @@ func Verify(root string) error {
 	if err := readJSON(filepath.Join(root, "forms", "standard-package-set.json"), &inventory); err != nil {
 		return err
 	}
-	if inventory.Format != "takoform.standard-package-set@v1" || inventory.Classification != "structural-candidate" || inventory.PublicationReady || inventory.LocalConformance != "structural-only" || inventory.AdmissionStatus != "external-required" || !reflect.DeepEqual(inventory.ExternalRequired, externalRequirements) || len(inventory.Packages) != len(Specs) {
+	if inventory.Format != "takoform.standard-package-set@v1" || inventory.Classification != "structural-candidate" || inventory.DefinitionVersion != definitionVersion || inventory.PackageVersion != packageVersion || inventory.PublicationReady || inventory.LocalConformance != "structural-only" || inventory.AdmissionStatus != "external-required" || !reflect.DeepEqual(inventory.ExternalRequired, externalRequirements) || len(inventory.Packages) != len(Specs) {
 		return fmt.Errorf("standard package inventory identity or release truth is invalid")
 	}
 	if _, err := os.Stat(filepath.Join(root, "conformance", "standard-form-admission-v1")); err == nil {

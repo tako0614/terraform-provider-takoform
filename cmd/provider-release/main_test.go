@@ -181,6 +181,19 @@ func TestInspectSourceAllowsOnlyExplicitDirtyUntaggedCandidate(t *testing.T) {
 	if !evidence.Dirty || evidence.TagPresent || evidence.PublicationReady {
 		t.Fatalf("unsafe candidate evidence %#v", evidence)
 	}
+	want := "direct Registry install/readback for provider " + desc.Version + " is post-publication evidence"
+	if !containsString(evidence.Blockers, want) {
+		t.Fatalf("candidate blockers do not bind the exact provider version: %#v", evidence.Blockers)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDeterministicZip(t *testing.T) {
