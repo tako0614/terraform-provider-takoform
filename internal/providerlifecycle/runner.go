@@ -199,14 +199,7 @@ func run(ctx context.Context, repoRoot, cliPath, installationSource string) (Rep
 	if err := os.WriteFile(cliConfig, []byte(cliConfigBody), 0o600); err != nil {
 		return Report{}, err
 	}
-	env := append(os.Environ(),
-		"TF_CLI_CONFIG_FILE="+cliConfig,
-		"TF_IN_AUTOMATION=1",
-		"CHECKPOINT_DISABLE=1",
-		"TF_PLUGIN_CACHE_DIR=",
-		"TF_CLI_ARGS=",
-		"TF_CLI_ARGS_init=",
-	)
+	env := terraformRunnerEnvironment(cliConfig)
 	configPath := filepath.Join(workDir, "main.tf")
 	if err := os.WriteFile(configPath, []byte(stackConfig(server.URL, identity.ProviderAddress, providerVersion, 1)), 0o600); err != nil {
 		return Report{}, err
@@ -725,7 +718,8 @@ func identifyCLI(ctx context.Context, requested string) (string, CLIIdentity, er
 	if err != nil {
 		return "", CLIIdentity{}, err
 	}
-	versionOutput, err := runCommand(ctx, ".", nil, executable, "version", "-json")
+	identityEnv := sanitizedTerraformBaseEnvironment()
+	versionOutput, err := runCommand(ctx, ".", identityEnv, executable, "version", "-json")
 	if err != nil {
 		return "", CLIIdentity{}, fmt.Errorf("inspect Terraform-compatible CLI version: %w\n%s", err, versionOutput)
 	}
@@ -738,7 +732,7 @@ func identifyCLI(ctx context.Context, requested string) (string, CLIIdentity, er
 	if version.TerraformVersion == "" {
 		return "", CLIIdentity{}, errors.New("inspect Terraform-compatible CLI version JSON: terraform_version is empty")
 	}
-	plainOutput, err := runCommand(ctx, ".", nil, executable, "version")
+	plainOutput, err := runCommand(ctx, ".", identityEnv, executable, "version")
 	if err != nil {
 		return "", CLIIdentity{}, fmt.Errorf("inspect Terraform-compatible CLI product: %w\n%s", err, plainOutput)
 	}

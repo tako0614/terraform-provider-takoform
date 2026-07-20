@@ -7,16 +7,21 @@ import (
 	"os"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
+	"github.com/tako0614/terraform-provider-takoform/internal/providerreport"
 )
 
 func main() {
 	command := "verify"
 	args := os.Args[1:]
-	if len(args) > 0 && (args[0] == "verify" || args[0] == "render" || args[0] == "matrix" || args[0] == "render-matrix" || args[0] == "registry-matrix" || args[0] == "render-registry-matrix") {
+	if len(args) > 0 && (args[0] == "verify" || args[0] == "render" || args[0] == "matrix" || args[0] == "render-matrix" || args[0] == "registry-matrix" || args[0] == "render-registry-matrix" || args[0] == "provider-reports") {
 		// Commands are deliberately limited below; parsing them before --cli keeps
 		// the common `verify --cli /path` invocation terse.
 		command = args[0]
 		args = args[1:]
+	}
+	if command == "provider-reports" {
+		runProviderReports(args)
+		return
 	}
 	if command == "matrix" || command == "render-matrix" || command == "registry-matrix" || command == "render-registry-matrix" {
 		runMatrix(command, args)
@@ -55,6 +60,46 @@ func main() {
 		}
 	default:
 		fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance [verify|render] [--cli PATH]"))
+	}
+}
+
+func runProviderReports(args []string) {
+	cliPath := os.Getenv("TAKOFORM_TERRAFORM_CLI")
+	outputDir := ""
+	for len(args) > 0 {
+		if len(args) < 2 {
+			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance provider-reports --cli PATH --output-dir DIRECTORY"))
+		}
+		switch args[0] {
+		case "--cli":
+			cliPath = args[1]
+		case "--output-dir":
+			outputDir = args[1]
+		default:
+			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance provider-reports --cli PATH --output-dir DIRECTORY"))
+		}
+		args = args[2:]
+	}
+	if cliPath == "" {
+		cliPath = "tofu"
+	}
+	if outputDir == "" {
+		fail(fmt.Errorf("provider-reports requires --output-dir outside admission/"))
+	}
+	root, err := providerlifecycle.RepoRoot(".")
+	if err != nil {
+		fail(err)
+	}
+	reports, err := providerreport.Generate(context.Background(), root, cliPath)
+	if err != nil {
+		fail(err)
+	}
+	if err := providerreport.Write(root, outputDir, reports); err != nil {
+		fail(err)
+	}
+	fmt.Printf("generated %d unsigned RFC 8785 provider reports from exact published fixtures via %s (%s)\n", len(reports), reports[0].Subject(), providerreport.ProtocolDescription())
+	for _, value := range providerreport.SortedReportDigests(reports) {
+		fmt.Println(value)
 	}
 }
 

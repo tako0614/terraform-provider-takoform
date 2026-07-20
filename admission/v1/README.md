@@ -45,6 +45,19 @@ signed host/provider/admission subjects, direct two-Registry provider readback,
 an immutable `forms/admissions/v*` activation release, and real live revocation
 chain proof exist. No revocation statement or checkpoint is fabricated here.
 
+The provider lifecycle runner can generate unsigned per-kind
+`takoform.standard-runner-report@v1` subjects from these exact retained
+archives:
+
+```console
+go run ./cmd/provider-lifecycle-conformance provider-reports \
+  --cli terraform --output-dir /tmp/takoform-provider-reports
+```
+
+The command refuses an output path below this `admission/` tree. Generated
+subjects are evidence candidates only; they are not retained here, signed,
+published, or accepted by `release-check`.
+
 Refresh `trust/trusted-root.json` only as a reviewed rotation from Sigstore TUF:
 
 ```console

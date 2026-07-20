@@ -296,6 +296,31 @@ func readCanonicalRunnerReport(admissionRoot, relative string, maximum int64) (R
 	return report, raw, nil
 }
 
+// ValidateCanonicalProviderRunnerReport verifies an unsigned provider-report
+// subject against one exact published package and its reviewed fixture names.
+// It does not authenticate, retain, sign, publish, or admit the report.
+func ValidateCanonicalProviderRunnerReport(raw []byte, identity standardform.InstalledFormReference, positives, negatives []string) (RunnerReport, error) {
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
+		return RunnerReport{}, err
+	}
+	if !bytes.Equal(raw, canonical) {
+		return RunnerReport{}, fmt.Errorf("provider-report bytes are not RFC 8785 canonical")
+	}
+	var report RunnerReport
+	if err := decodeStrictJSON(raw, &report); err != nil {
+		return RunnerReport{}, err
+	}
+	proof := standardform.ConformanceProof{
+		Subject: report.Subject, RunnerVersion: report.RunnerVersion, Identity: identity, Status: "passed",
+		PositiveFixtures: append([]string(nil), positives...), NegativeFixtures: append([]string(nil), negatives...),
+	}
+	if err := validateRunnerReport(report, roleProviderReport, proof, positives, negatives); err != nil {
+		return RunnerReport{}, err
+	}
+	return report, nil
+}
+
 func validateRunnerReport(report RunnerReport, role string, proof standardform.ConformanceProof, positives, negatives []string) error {
 	if report.Format != runnerReportFormat || report.Role != role || report.Status != "passed" ||
 		strings.TrimSpace(report.Subject) == "" || strings.TrimSpace(report.RunnerVersion) == "" ||

@@ -77,6 +77,38 @@ func TestFindInstalledProviderBinaryRequiresOneExecutableRegularFile(t *testing.
 	}
 }
 
+func TestTerraformRunnerEnvironmentRemovesProviderAndCLITaint(t *testing.T) {
+	for key, value := range map[string]string{
+		"TF_REATTACH_PROVIDERS": "forged-provider", "TF_CLI_ARGS_apply": "-target=forged",
+		"TF_DATA_DIR": "/tmp/forged-data", "TOFU_CLI_CONFIG_FILE": "/tmp/forged-tofurc",
+		"TAKOFORM_ENDPOINT": "https://forged.example.test", "TAKOFORM_TOKEN": "secret", "CHECKPOINT_DISABLE": "0",
+	} {
+		t.Setenv(key, value)
+	}
+	environment := terraformRunnerEnvironment("/tmp/exact-terraformrc")
+	values := map[string]string{}
+	for _, entry := range environment {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok {
+			values[key] = value
+		}
+	}
+	for _, forbidden := range []string{"TF_REATTACH_PROVIDERS", "TF_CLI_ARGS_apply", "TF_DATA_DIR", "TOFU_CLI_CONFIG_FILE", "TAKOFORM_ENDPOINT", "TAKOFORM_TOKEN"} {
+		if _, ok := values[forbidden]; ok {
+			t.Fatalf("sanitized provider runner retained %s", forbidden)
+		}
+	}
+	if values["TF_CLI_CONFIG_FILE"] != "/tmp/exact-terraformrc" || values["TF_IN_AUTOMATION"] != "1" || values["CHECKPOINT_DISABLE"] != "1" {
+		t.Fatalf("sanitized provider runner overrides = %#v", values)
+	}
+	for _, entry := range sanitizedTerraformBaseEnvironment() {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, "TF_") || strings.HasPrefix(key, "TOFU_") || strings.HasPrefix(key, "TAKOFORM_") || key == "CHECKPOINT_DISABLE" {
+			t.Fatalf("sanitized CLI identity environment retained %s", key)
+		}
+	}
+}
+
 func TestValidateMatrixRejectsAddressAliasingAndEvidenceDrift(t *testing.T) {
 	requirements := []CLIRequirement{
 		{Product: "OpenTofu", Version: "1.12.1", ProviderAddress: OpenTofuProviderAddress},

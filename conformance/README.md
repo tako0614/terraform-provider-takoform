@@ -38,9 +38,34 @@ runs the reviewed OpenTofu and Terraform versions as one fail-closed matrix:
 go run ./cmd/provider-lifecycle-conformance verify --cli tofu
 go run ./cmd/provider-lifecycle-conformance verify --cli /path/to/terraform
 go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
+go run ./cmd/provider-lifecycle-conformance provider-reports \
+  --cli terraform --output-dir /tmp/takoform-provider-reports
+go run ./cmd/provider-lifecycle-conformance provider-reports \
+  --cli tofu --output-dir /tmp/takoform-opentofu-provider-reports
 ```
 
-This is intentionally classified `generic-lifecycle-candidate` with
+`provider-reports` first authenticates the exact ten-package retained
+publication closure under `admission/v1/releases/`. It reads each canonical
+positive desired fixture and `reject-invalid-semantics` desired fixture from
+the retained release archive, projects those exact values into the typed
+provider configuration, and executes both through provider protocol v6. The
+positive fixture must apply and delete successfully. The negative fixture must
+return a provider diagnostic before the in-process Form host receives any
+mutation; that rejection is normalized to portable `invalid_argument`.
+
+The command combines those per-package observations with the independently
+executed full lifecycle checks and writes one strict RFC 8785
+`takoform.standard-runner-report@v1` document with `role: provider-report` per
+kind. It refuses to write under `admission/`, signs nothing, publishes nothing,
+and does not change `external-required` admission status. Its output directory
+must be new or empty. Authentication and admission remain separate protected
+release decisions. Each report subject records the executing CLI's exact
+distribution identity: Terraform uses
+`provider:registry.terraform.io/tako0614/takoform`, while OpenTofu uses
+`provider:registry.opentofu.org/tako0614/takoform`. The two addresses are not
+interchangeable Registry sources.
+
+The matrix is intentionally classified `generic-lifecycle-candidate` with
 `publicationReady: false` and
 `bindingStatus: exact-structural-candidate-set`. It does not publish a
 checked-in passed report or claim standard Form admission. The matrix requires
