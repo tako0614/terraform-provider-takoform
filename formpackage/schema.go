@@ -542,6 +542,22 @@ func (validator *portableSchemaValidator) validateUncached(value any, location, 
 			return schemaProofResult{}, fmt.Errorf("%s.%s is forbidden because alternate or recursive resolution scopes cannot be proven closed", location, keyword)
 		}
 	}
+	if len(schema) == 1 {
+		if constant, present := schema["const"]; present {
+			if _, object := constant.(map[string]any); object {
+				maxDepth, err := validator.validateExactObjectConst(constant, location+".const", 0)
+				if err != nil {
+					return schemaProofResult{}, err
+				}
+				return schemaProofResult{mode: objectClosed, maxDepth: maxDepth}, nil
+			}
+		}
+	}
+	if constant, present := schema["const"]; present {
+		if _, object := constant.(map[string]any); object {
+			return schemaProofResult{}, fmt.Errorf("%s exact object const must be a single-key schema so the finite data boundary is unambiguous", location)
+		}
+	}
 
 	properties, hasProperties, err := schemaObjectKeyword(schema, "properties", location)
 	if err != nil {
@@ -688,6 +704,44 @@ func (validator *portableSchemaValidator) validateUncached(value any, location, 
 		return schemaProofResult{}, fmt.Errorf("%s can admit arbitrary object values; declare a non-object type, a closed object, or the reviewed typed-map escape", location)
 	}
 	return schemaProofResult{mode: mode, maxDepth: maxDepth}, nil
+}
+
+// validateExactObjectConst bounds the finite JSON literal carried by an exact
+// object const. The literal is data rather than a nested schema: JSON Schema
+// equality admits only this one object, so inspecting it as schema syntax would
+// be both incorrect and less safe than charging every contained node directly.
+func (validator *portableSchemaValidator) validateExactObjectConst(value any, location string, depth int) (int, error) {
+	if depth > maxSchemaProofDepth {
+		return 0, fmt.Errorf("%s portable schema closure proof exceeds depth limit %d", location, maxSchemaProofDepth)
+	}
+	if err := validator.consumeOperation(location, "exact object const literal"); err != nil {
+		return 0, err
+	}
+	maxDepth := 0
+	recordChild := func(childDepth int) {
+		if childDepth+1 > maxDepth {
+			maxDepth = childDepth + 1
+		}
+	}
+	switch typed := value.(type) {
+	case map[string]any:
+		for name, child := range typed {
+			childDepth, err := validator.validateExactObjectConst(child, location+"."+name, depth+1)
+			if err != nil {
+				return 0, err
+			}
+			recordChild(childDepth)
+		}
+	case []any:
+		for index, child := range typed {
+			childDepth, err := validator.validateExactObjectConst(child, fmt.Sprintf("%s[%d]", location, index), depth+1)
+			if err != nil {
+				return 0, err
+			}
+			recordChild(childDepth)
+		}
+	}
+	return maxDepth, nil
 }
 
 func appendSchemaPointer(pointer string, tokens ...string) string {
@@ -1265,8 +1319,10 @@ func validateDependentRequiredNames(value any, location string) error {
 	return nil
 }
 
-func validateInterfaceInputs(interfaceKey string, inputs []InterfaceInputDeclaration) error {
+func validateInterfaceInputs(interfaceKey, resourceURIInput string, inputs []InterfaceInputDeclaration) error {
 	names := map[string]struct{}{}
+	resourceURIMatches := 0
+	resourceURIInputs := 0
 	for _, input := range inputs {
 		if _, duplicate := names[input.Name]; duplicate {
 			return fmt.Errorf("Interface %q has duplicate input %q", interfaceKey, input.Name)
@@ -1281,9 +1337,24 @@ func validateInterfaceInputs(interfaceKey string, inputs []InterfaceInputDeclara
 			}
 			continue
 		}
+		if input.Source == InterfaceInputSourceResourceURI {
+			resourceURIInputs++
+			if input.Pointer != "" || len(input.Value) > 0 {
+				return fmt.Errorf("Interface %q input %q uses resource_uri and must not carry a pointer or value", interfaceKey, input.Name)
+			}
+			if input.Name == resourceURIInput {
+				resourceURIMatches++
+			}
+		}
 		if len(input.Value) > 0 {
 			return fmt.Errorf("Interface %q input %q carries a value with source %q; only a literal may", interfaceKey, input.Name, input.Source)
 		}
+	}
+	if resourceURIInput != "" && (resourceURIMatches != 1 || resourceURIInputs != 1) {
+		return fmt.Errorf("Interface %q resourceUriInput %q must name exactly one resource_uri input", interfaceKey, resourceURIInput)
+	}
+	if resourceURIInput == "" && resourceURIInputs != 0 {
+		return fmt.Errorf("Interface %q has a resource_uri input without resourceUriInput", interfaceKey)
 	}
 	return nil
 }
@@ -1302,7 +1373,7 @@ func validateDefinitionSemantics(definition FormDefinition) error {
 			return fmt.Errorf("Form Definition has duplicate Interface %q", key)
 		}
 		interfaces[key] = struct{}{}
-		if err := validateInterfaceInputs(key, descriptor.Inputs); err != nil {
+		if err := validateInterfaceInputs(key, descriptor.ResourceURIInput, descriptor.Inputs); err != nil {
 			return err
 		}
 	}

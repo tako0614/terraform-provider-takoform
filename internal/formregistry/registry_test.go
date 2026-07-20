@@ -48,3 +48,44 @@ func TestCandidateRefsMatchStandardPackageSet(t *testing.T) {
 		}
 	}
 }
+
+func TestSuccessorRefsMatchVersionedInventoryWithoutReplacingHistoricalDefault(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "sql-database-v2-package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inventory struct {
+		Kind              string `json:"kind"`
+		DefinitionVersion string `json:"definitionVersion"`
+		FormRef           struct {
+			APIVersion        string `json:"apiVersion"`
+			Kind              string `json:"kind"`
+			DefinitionVersion string `json:"definitionVersion"`
+			SchemaDigest      string `json:"schemaDigest"`
+		} `json:"formRef"`
+		PackageDigest string `json:"packageDigest"`
+	}
+	if err := json.Unmarshal(raw, &inventory); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ForKindVersion(inventory.Kind, inventory.DefinitionVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Ref{
+		APIVersion: inventory.FormRef.APIVersion, Kind: inventory.FormRef.Kind,
+		DefinitionVersion: inventory.FormRef.DefinitionVersion, SchemaDigest: inventory.FormRef.SchemaDigest,
+		PackageDigest: inventory.PackageDigest,
+	}
+	if got != want {
+		t.Fatalf("successor FormRef drifted:\n got %#v\nwant %#v", got, want)
+	}
+	historical, err := ForKind(inventory.Kind)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if historical.DefinitionVersion != "1.0.1" {
+		t.Fatalf("historical default was replaced: %#v", historical)
+	}
+}

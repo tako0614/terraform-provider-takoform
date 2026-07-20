@@ -50,7 +50,7 @@ implicit downgrade.
 | `takoform_object_bucket` | Object storage |
 | `takoform_kv_store` | Key/value storage |
 | `takoform_queue` | Message queue |
-| `takoform_sql_database` | SQL database |
+| `takoform_sql_database` | Bounded indexed database (`2.0.0`), with historical SQL `1.x` state compatibility |
 | `takoform_container_service` | OCI container service |
 | `takoform_vector_index` | Vector index |
 | `takoform_durable_workflow` | Durable workflow |
@@ -67,6 +67,16 @@ descriptor (`http.request@1`, `object.storage@1`, `keyvalue.store@1`,
 `workflow.invoke` through its declared Resource connection. These names carry
 no Takosumi Cloud identity, credentials, routing authority, or consumer grant;
 the host materializes and authorizes the resulting Interface record.
+
+`SQLDatabase@2.0.0` is a separate, unpublished structural successor candidate
+for the same typed resource. Setting `tables` selects its bounded
+`data.indexed@1` contract; the immutable `SQLDatabase@1.0.1` identity remains
+the default for historical state, reads, deletes, and imports. The successor
+pins closed request/response schemas, ascending cross-host ordering, and
+tamper-evident live-keyset cursors. It requires the versioned Form host API and
+fails before network I/O when historical `/v1` compatibility fallback is
+configured. It adds no raw SQL, target, credential, capacity, billing, or host
+implementation authority.
 
 See [the portable specification status](spec/README.md), [Form Package contract](spec/form-package/README.md), [interface declaration contract](spec/interface-declaration/README.md), [form inventory](forms/README.md), [conformance status](conformance/README.md), [provider documentation](docs/index.md), and [examples](examples/resources/).
 

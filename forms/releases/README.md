@@ -29,3 +29,9 @@ The ten `1.0.1` directories are the reviewed release-source copies for the
 active real-materialization candidate. They coexist with `1.0.0` and never
 replace its bytes or tags. Until their exact immutable releases and retained
 readbacks exist, they remain unpublished sources with external admission.
+
+`k-kniuyrdborqweyltmu/2.0.0` is the reviewed source for the independent
+`SQLDatabase@2.0.0` bounded indexed successor. It coexists with both SQLDatabase
+1.x identities and is generated from the exact local successor package. Its
+presence is not a release, Registry publication, admission, or activation
+claim.

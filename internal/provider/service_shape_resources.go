@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/indexedsql"
 )
 
 var (
@@ -63,6 +64,8 @@ type serviceShapeModel struct {
 	MaxBatchSize          types.Int64  `tfsdk:"max_batch_size"`
 	Engine                types.String `tfsdk:"engine"`
 	MigrationsPath        types.String `tfsdk:"migrations_path"`
+	SchemaVersion         types.Int64  `tfsdk:"schema_version"`
+	Tables                types.List   `tfsdk:"tables"`
 	Image                 types.String `tfsdk:"image"`
 	Ports                 types.Set    `tfsdk:"ports"`
 	PublicHTTP            types.Bool   `tfsdk:"public_http"`
@@ -128,6 +131,8 @@ type sqlDatabaseModel struct {
 	Name            types.String `tfsdk:"name"`
 	Engine          types.String `tfsdk:"engine"`
 	MigrationsPath  types.String `tfsdk:"migrations_path"`
+	SchemaVersion   types.Int64  `tfsdk:"schema_version"`
+	Tables          types.List   `tfsdk:"tables"`
 	Space           types.String `tfsdk:"space"`
 	ResourceVersion types.String `tfsdk:"resource_version"`
 	DriftStatus     types.String `tfsdk:"drift_status"`
@@ -272,6 +277,8 @@ func (m sqlDatabaseModel) toServiceShapeModel() serviceShapeModel {
 	base := serviceShapeModelFromCommon(m.ID, m.Name, m.Space, m.ResourceVersion, m.DriftStatus, m.Portability, m.Outputs)
 	base.Engine = m.Engine
 	base.MigrationsPath = m.MigrationsPath
+	base.SchemaVersion = m.SchemaVersion
+	base.Tables = m.Tables
 	return base
 }
 
@@ -281,6 +288,8 @@ func sqlDatabaseModelFromServiceShape(m serviceShapeModel) sqlDatabaseModel {
 		Name:            m.Name,
 		Engine:          m.Engine,
 		MigrationsPath:  m.MigrationsPath,
+		SchemaVersion:   m.SchemaVersion,
+		Tables:          m.Tables,
 		Space:           m.Space,
 		ResourceVersion: m.ResourceVersion,
 		DriftStatus:     m.DriftStatus,
@@ -439,7 +448,7 @@ func NewSQLDatabaseResource() resource.Resource {
 	return &serviceShapeResource{cfg: serviceShapeConfig{
 		typeSuffix:  "sql_database",
 		kind:        client.KindSQLDatabase,
-		description: "Provider-neutral SQL database shape. Engine is an open capability token and requires explicit support from the configured host.",
+		description: "Provider-neutral bounded indexed database. New tables configuration uses SQLDatabase@2.0.0 and data.indexed@1; historical engine state remains read/delete/import compatible.",
 		spec:        specSQLDatabase,
 	}}
 }
@@ -528,7 +537,7 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 			Optional:    true,
 			Computed:    true,
 			Default:     stringdefault.StaticString("sqlite"),
-			Description: "Optional open SQL engine capability token. Defaults to sqlite; the configured host must support it.",
+			Description: "Historical SQLDatabase@1.x engine field. The default sqlite state is omitted when tables selects SQLDatabase@2.0.0; any other engine cannot be combined with tables.",
 			Validators:  []validator.String{StringMatches(portableCapabilityTokenPattern, "engine must use the portable capability-token grammar")},
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.RequiresReplace(),
@@ -536,8 +545,13 @@ func (r *serviceShapeResource) Schema(_ context.Context, _ resource.SchemaReques
 		}
 		attrs["migrations_path"] = schema.StringAttribute{
 			Optional:    true,
-			Description: "Optional OpenTofu-runner-local migrations path. Takoform does not invent product-specific DB migration code.",
+			Description: "Historical SQLDatabase@1.x runner-local migrations path. It cannot be combined with tables.",
 		}
+		attrs["schema_version"] = schema.Int64Attribute{
+			Computed:    true,
+			Description: "Portable indexed schema version. It is 1 for SQLDatabase@2.0.0 and absent for historical 1.x state.",
+		}
+		attrs["tables"] = sqlDatabaseTablesAttribute()
 	case specContainerService:
 		attrs["image"] = schema.StringAttribute{
 			Required:    true,
@@ -732,7 +746,14 @@ func (r *serviceShapeResource) Read(ctx context.Context, req resource.ReadReques
 		resp.Diagnostics.AddAttributeError(path.Root("space"), "Missing space", "Import as SPACE/NAME or configure the provider space before reading this resource.")
 		return
 	}
-	form := r.data.forms[r.cfg.kind]
+	form, ok := r.formForModel(state)
+	if !ok {
+		resp.Diagnostics.AddError(r.cfg.kind+" FormRef missing", "This provider build has no exact FormRef for the resource state.")
+		return
+	}
+	if !r.formTransportAllowed(form, &resp.Diagnostics) {
+		return
+	}
 	res, err := observeResourceForRead(ctx, r.data.client, r.cfg.kind, state.Name.ValueString(), readSpace, form)
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
@@ -795,7 +816,14 @@ func (r *serviceShapeResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 	r.data.serviceFormMutate.Lock()
 	defer r.data.serviceFormMutate.Unlock()
-	form := r.data.forms[r.cfg.kind]
+	form, ok := r.formForModel(state)
+	if !ok {
+		resp.Diagnostics.AddError(r.cfg.kind+" FormRef missing", "This provider build has no exact FormRef for the resource state.")
+		return
+	}
+	if !r.formTransportAllowed(form, &resp.Diagnostics) {
+		return
+	}
 	if err := r.data.client.DeleteResource(ctx, r.cfg.kind, state.Name.ValueString(), deleteSpace, client.MutationFence{ResourceVersion: state.ResourceVersion.ValueString(), Form: form}); err != nil {
 		resp.Diagnostics.AddError("Failed to delete "+r.cfg.kind, err.Error())
 	}
@@ -949,14 +977,54 @@ func (r *serviceShapeResource) assertConfigured(diags *diag.Diagnostics) bool {
 	return true
 }
 
+// formTransportAllowed keeps successor Form identities off the historical
+// /v1 compatibility transport. That transport intentionally omits FormRef
+// fields, so allowing any identity other than the coordinated historical Form
+// would silently execute a different contract.
+func (r *serviceShapeResource) formTransportAllowed(form client.InstalledFormReference, diags *diag.Diagnostics) bool {
+	if !r.data.client.UsesCompatibilityFallback() {
+		return true
+	}
+	historical, ok := r.data.forms[r.cfg.kind]
+	if ok && historical == form {
+		return true
+	}
+	diags.AddError(
+		"Versioned Form host required",
+		fmt.Sprintf(
+			"The historical /v1 compatibility fallback cannot carry exact %s@%s identity. Disable compatibility_fallback and configure a versioned Form host; no request was sent.",
+			form.FormRef.Kind,
+			form.FormRef.DefinitionVersion,
+		),
+	)
+	return false
+}
+
 func (r *serviceShapeResource) put(ctx context.Context, plan *serviceShapeModel, diags *diag.Diagnostics) {
 	body, space, d := plan.toResource(ctx, r.data.defaultSpace, r.cfg.kind, r.cfg.spec)
 	diags.Append(d...)
 	if diags.HasError() {
 		return
 	}
-	form := r.data.forms[r.cfg.kind]
+	form, ok := r.formForModel(*plan)
+	if !ok {
+		diags.AddError(r.cfg.kind+" FormRef missing", "This provider build has no exact FormRef for the planned resource.")
+		return
+	}
+	if !r.formTransportAllowed(form, diags) {
+		return
+	}
 	body.Form = &form
+	if r.cfg.spec == specSQLDatabase {
+		if sqlDatabaseUsesV2(plan.Tables) {
+			plan.SchemaVersion = types.Int64Value(1)
+		} else {
+			// Historical SQLDatabase@1.x has no indexed schema version. Computed
+			// attributes must still be known after apply, so retain an explicit
+			// null instead of the plan's unknown placeholder.
+			plan.SchemaVersion = types.Int64Null()
+		}
+	}
 	if !plan.ResourceVersion.IsNull() && !plan.ResourceVersion.IsUnknown() {
 		body.Metadata.ResourceVersion = plan.ResourceVersion.ValueString()
 	}
@@ -1044,6 +1112,35 @@ func (m serviceShapeModel) toResource(ctx context.Context, defaultSpace, kind st
 			spec["delivery"] = delivery
 		}
 	case specSQLDatabase:
+		if m.Tables.IsUnknown() {
+			diags.AddAttributeError(
+				path.Root("tables"),
+				"Unknown indexed database schema",
+				"tables must be known before apply so Takosumi can select the exact SQLDatabase Form; no request was sent.",
+			)
+			return nil, "", diags
+		}
+		if sqlDatabaseUsesV2(m.Tables) {
+			if engine := knownTrimmedString(m.Engine); engine != "" && engine != "sqlite" {
+				diags.AddAttributeError(path.Root("engine"), "Incompatible SQLDatabase fields", "engine belongs to historical SQLDatabase@1.x and cannot select a non-default engine when tables is configured.")
+				return nil, "", diags
+			}
+			if !m.MigrationsPath.IsNull() && !m.MigrationsPath.IsUnknown() && m.MigrationsPath.ValueString() != "" {
+				diags.AddAttributeError(path.Root("migrations_path"), "Incompatible SQLDatabase fields", "migrations_path belongs to historical SQLDatabase@1.x and cannot be combined with tables.")
+				return nil, "", diags
+			}
+			tables := sqlDatabaseTablesToSpec(ctx, m.Tables, &diags)
+			if diags.HasError() {
+				return nil, "", diags
+			}
+			spec["schemaVersion"] = 1
+			spec["tables"] = tables
+			if err := indexedsql.ValidateDesired(spec); err != nil {
+				diags.AddAttributeError(path.Root("tables"), "Invalid indexed database schema", err.Error())
+				return nil, "", diags
+			}
+			break
+		}
 		engine := knownTrimmedString(m.Engine)
 		if engine == "" {
 			engine = "sqlite"
@@ -1257,6 +1354,22 @@ func refreshServiceShapeSpec(ctx context.Context, res *client.Resource, specKind
 			m.MaxBatchSize = types.Int64Null()
 		}
 	case specSQLDatabase:
+		if raw, ok := res.Spec["tables"]; ok {
+			m.SchemaVersion = types.Int64Value(1)
+			if version := int64FromSpec(res.Spec["schemaVersion"]); !version.IsNull() {
+				m.SchemaVersion = version
+			}
+			tables, d := sqlDatabaseTablesFromSpec(ctx, raw)
+			diags.Append(d...)
+			m.Tables = tables
+			// Keep the historical computed attribute stable in Terraform state;
+			// SQLDatabase@2.0.0 never sends it back to the host.
+			m.Engine = types.StringValue("sqlite")
+			m.MigrationsPath = types.StringNull()
+			break
+		}
+		m.SchemaVersion = types.Int64Null()
+		m.Tables = types.ListNull(types.ObjectType{AttrTypes: sqlDatabaseTableAttrTypes})
 		if v, ok := res.Spec["engine"].(string); ok && v != "" {
 			m.Engine = types.StringValue(v)
 		} else {

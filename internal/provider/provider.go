@@ -266,6 +266,20 @@ func providerCandidateForms() map[string]client.InstalledFormReference {
 	return out
 }
 
+func providerCandidateFormVersion(kind, definitionVersion string) (client.InstalledFormReference, bool) {
+	ref, err := formregistry.ForKindVersion(kind, definitionVersion)
+	if err != nil {
+		return client.InstalledFormReference{}, false
+	}
+	return client.InstalledFormReference{
+		FormRef: client.FormRef{
+			APIVersion: ref.APIVersion, Kind: ref.Kind,
+			DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest,
+		},
+		PackageDigest: ref.PackageDigest,
+	}, true
+}
+
 func parseExplicitBool(value string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "", "0", "false", "no":

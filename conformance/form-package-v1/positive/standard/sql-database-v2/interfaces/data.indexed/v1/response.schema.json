@@ -1,0 +1,318 @@
+{
+  "$defs": {
+    "batchResult": {
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "const": "batch"
+        },
+        "results": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/putResult"
+              },
+              {
+                "$ref": "#/$defs/deleteResult"
+              }
+            ]
+          },
+          "maxItems": 25,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "operation",
+        "results"
+      ],
+      "type": "object"
+    },
+    "deleteResult": {
+      "additionalProperties": false,
+      "properties": {
+        "deleted": {
+          "type": "boolean"
+        },
+        "operation": {
+          "const": "delete"
+        }
+      },
+      "required": [
+        "operation",
+        "deleted"
+      ],
+      "type": "object"
+    },
+    "getResult": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/rowResult"
+            }
+          ]
+        },
+        "operation": {
+          "const": "get"
+        }
+      },
+      "required": [
+        "operation",
+        "item"
+      ],
+      "type": "object"
+    },
+    "getUniqueResult": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/rowResult"
+            }
+          ]
+        },
+        "operation": {
+          "const": "get_unique"
+        }
+      },
+      "required": [
+        "operation",
+        "item"
+      ],
+      "type": "object"
+    },
+    "pageResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/rowResult"
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "nextCursor": {
+          "oneOf": [
+            {
+              "maxLength": 65536,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation": {
+          "const": "page"
+        }
+      },
+      "required": [
+        "operation",
+        "items",
+        "nextCursor"
+      ],
+      "type": "object"
+    },
+    "putResult": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "$ref": "#/$defs/rowResult"
+        },
+        "operation": {
+          "const": "put"
+        }
+      },
+      "required": [
+        "operation",
+        "item"
+      ],
+      "type": "object"
+    },
+    "revisionConflict": {
+      "additionalProperties": false,
+      "properties": {
+        "conflict": {
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "maxProperties": 4,
+              "minProperties": 1,
+              "propertyNames": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "reason": {
+              "const": "revision_conflict"
+            },
+            "table": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason",
+            "table",
+            "key"
+          ],
+          "type": "object"
+        },
+        "operation": {
+          "enum": [
+            "put",
+            "delete",
+            "batch"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "conflict"
+      ],
+      "type": "object"
+    },
+    "rowResult": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "row": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxProperties": 32,
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "row",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "uniqueConflict": {
+      "additionalProperties": false,
+      "properties": {
+        "conflict": {
+          "additionalProperties": false,
+          "properties": {
+            "index": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "type": "string"
+            },
+            "reason": {
+              "const": "unique_conflict"
+            },
+            "table": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason",
+            "table",
+            "index"
+          ],
+          "type": "object"
+        },
+        "operation": {
+          "enum": [
+            "put",
+            "batch"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "conflict"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/getResult"
+    },
+    {
+      "$ref": "#/$defs/getUniqueResult"
+    },
+    {
+      "$ref": "#/$defs/pageResult"
+    },
+    {
+      "$ref": "#/$defs/putResult"
+    },
+    {
+      "$ref": "#/$defs/deleteResult"
+    },
+    {
+      "$ref": "#/$defs/batchResult"
+    },
+    {
+      "$ref": "#/$defs/revisionConflict"
+    },
+    {
+      "$ref": "#/$defs/uniqueConflict"
+    }
+  ]
+}

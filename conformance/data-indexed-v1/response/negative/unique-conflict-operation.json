@@ -1,0 +1,8 @@
+{
+  "conflict": {
+    "index": "by_tenant_created",
+    "reason": "unique_conflict",
+    "table": "records"
+  },
+  "operation": "delete"
+}

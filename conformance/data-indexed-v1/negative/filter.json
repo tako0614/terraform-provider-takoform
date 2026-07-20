@@ -1,0 +1,9 @@
+{
+  "filter": {
+    "active": true
+  },
+  "index": "by_tenant_created",
+  "operation": "page",
+  "prefix": {},
+  "table": "records"
+}

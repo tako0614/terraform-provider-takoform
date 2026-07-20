@@ -1,0 +1,44 @@
+{
+  "name": "main",
+  "schemaVersion": 1,
+  "tables": [
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "type": "string"
+        },
+        {
+          "name": "tenant_id",
+          "nullable": false,
+          "type": "string"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "type": "integer"
+        },
+        {
+          "name": "score",
+          "nullable": true,
+          "type": "number"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "tenant_id",
+            "created_at"
+          ],
+          "name": "by_tenant_created",
+          "unique": true
+        }
+      ],
+      "name": "records",
+      "primaryKey": [
+        "id"
+      ]
+    }
+  ]
+}

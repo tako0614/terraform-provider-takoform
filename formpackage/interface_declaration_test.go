@@ -166,7 +166,7 @@ func TestInterfaceDocumentMustMatchItsSchema(t *testing.T) {
 }
 
 func TestPortableInterfaceInputSource(t *testing.T) {
-	for _, source := range []string{InterfaceInputSourceLiteral, InterfaceInputSourceOutput} {
+	for _, source := range []string{InterfaceInputSourceLiteral, InterfaceInputSourceOutput, InterfaceInputSourceResourceURI} {
 		if !PortableInterfaceInputSource(source) {
 			t.Fatalf("%q must be portable", source)
 		}
@@ -175,6 +175,44 @@ func TestPortableInterfaceInputSource(t *testing.T) {
 		if PortableInterfaceInputSource(source) {
 			t.Fatalf("%q must not be portable", source)
 		}
+	}
+}
+
+func TestInterfaceResourceURIInputIsAValidatedMarkerNotAGrant(t *testing.T) {
+	valid := descriptor("data.indexed", "1", []any{
+		map[string]any{"name": "resource", "source": "output", "pointer": "/id"},
+		map[string]any{"name": "resource_uri", "source": "resource_uri"},
+	})
+	valid["resourceUriInput"] = "resource_uri"
+	definition, err := ValidateDefinition(definitionWithInterfaces(t, []any{valid}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if definition.Interfaces[0].ResourceURIInput != "resource_uri" {
+		t.Fatalf("resourceUriInput did not round-trip: %#v", definition.Interfaces[0])
+	}
+
+	for name, mutate := range map[string]func(map[string]any){
+		"missing named input": func(value map[string]any) { value["resourceUriInput"] = "other" },
+		"missing marker":      func(value map[string]any) { delete(value, "resourceUriInput") },
+		"pointer forbidden": func(value map[string]any) {
+			value["inputs"].([]any)[1].(map[string]any)["pointer"] = "/uri"
+		},
+		"value forbidden": func(value map[string]any) {
+			value["inputs"].([]any)[1].(map[string]any)["value"] = "https://host.invalid"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := descriptor("data.indexed", "1", []any{
+				map[string]any{"name": "resource", "source": "output", "pointer": "/id"},
+				map[string]any{"name": "resource_uri", "source": "resource_uri"},
+			})
+			candidate["resourceUriInput"] = "resource_uri"
+			mutate(candidate)
+			if _, err := ValidateDefinition(definitionWithInterfaces(t, []any{candidate})); err == nil {
+				t.Fatal("invalid resource URI marker unexpectedly passed")
+			}
+		})
 	}
 }
 

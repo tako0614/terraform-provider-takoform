@@ -10,6 +10,7 @@ Current committed surfaces:
 - [`form-definition/`](form-definition/) — exact FormRef and data-only Form Definition contract;
 - [`form-package/`](form-package/) — package-index identity, closed payload rules, and local verifier boundary;
 - [`interface-declaration/`](interface-declaration/) — open `(name, version)` runtime interface descriptors, exact non-secret documents, and deterministic input mappings;
+- [`data-indexed/`](data-indexed/) — bounded primary-key and declared-index operation contract used by `SQLDatabase@2.0.0`;
 - [`trust/`](trust/) — the D-08 provider/Form Package trust decision and its machine-readable fail-closed profile;
 - [`../schemas/host-discovery.schema.json`](../schemas/host-discovery.schema.json) — machine-readable discovery validation;
 - [`../forms/README.md`](../forms/README.md) — the exact ten-kind Stable set and retained legacy inventory;
@@ -37,5 +38,12 @@ signed admission evidence, and live revocation-chain proof are still external
 requirements. Package signatures and immutable tags are now retained
 publication evidence only. Authenticated host and provider evidence is the only
 path to `portable-standard` classification.
+
+The same `SQLDatabase` provider resource can select the independent
+`2.0.0 / standard` successor candidate by configuring bounded `tables`. That
+package requires `data.indexed@1`, remains unpublished and externally
+unadmitted, and does not replace the historical `1.0.1` default identity. Its
+portable contract pins closed request/response unions, exact 200/409 results,
+ascending canonical ordering, and expiring tamper-evident live-keyset cursors.
 
 The project identity is `forms.takoform.com/v1alpha1`; the Terraform provider identity is `registry.terraform.io/tako0614/takoform`.

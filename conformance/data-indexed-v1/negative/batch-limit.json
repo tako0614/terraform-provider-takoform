@@ -1,0 +1,187 @@
+{
+  "mutations": [
+    {
+      "key": {
+        "id": 0
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 1
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 2
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 3
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 4
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 5
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 6
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 7
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 8
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 9
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 10
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 11
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 12
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 13
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 14
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 15
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 16
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 17
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 18
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 19
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 20
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 21
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 22
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 23
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 24
+      },
+      "operation": "delete",
+      "table": "records"
+    },
+    {
+      "key": {
+        "id": 25
+      },
+      "operation": "delete",
+      "table": "records"
+    }
+  ],
+  "operation": "batch"
+}

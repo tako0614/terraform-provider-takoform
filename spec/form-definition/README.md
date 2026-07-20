@@ -38,7 +38,8 @@ A definition contains:
   `observe`, `refresh`, and `drift`;
 - optional portable Interface descriptors with exact `(name, version)`, an
   exact non-secret document/schema, `required` readiness metadata, and
-  deterministic literal/output input mappings;
+  deterministic literal/output input mappings plus an optional host-resolved
+  canonical OAuth `resource_uri` audience input;
 - optional references to data-only positive desired/observed/output fixtures
   and negative schema fixtures in the same package.
 

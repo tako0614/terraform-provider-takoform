@@ -110,6 +110,11 @@
       "name": "standard-schedule-package",
       "path": "positive/standard/schedule",
       "kind": "Schedule"
+    },
+    {
+      "name": "standard-sql-database-v2-package",
+      "path": "positive/standard/sql-database-v2",
+      "kind": "SQLDatabase"
     }
   ],
   "negative": [

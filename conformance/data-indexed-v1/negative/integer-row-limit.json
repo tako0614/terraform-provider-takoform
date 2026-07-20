@@ -1,0 +1,8 @@
+{
+  "operation": "put",
+  "row": {
+    "created_at": -9007199254740992,
+    "id": "r1"
+  },
+  "table": "records"
+}

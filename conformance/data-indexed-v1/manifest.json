@@ -1,0 +1,57 @@
+{
+  "format": "takoform.data-indexed-conformance@v1",
+  "requestSchema": "../../spec/data-indexed/request.schema.json",
+  "responseSchema": "../../spec/data-indexed/response.schema.json",
+  "successStatus": 200,
+  "conflictStatus": 409,
+  "requestPositive": [
+    "positive/batch.json",
+    "positive/delete.json",
+    "positive/get-unique.json",
+    "positive/get.json",
+    "positive/page.json",
+    "positive/put.json"
+  ],
+  "requestNegative": [
+    "negative/batch-limit.json",
+    "negative/cursor-limit.json",
+    "negative/filter.json",
+    "negative/integer-key-limit.json",
+    "negative/integer-row-limit.json",
+    "negative/number-key.json",
+    "negative/offset.json",
+    "negative/order.json",
+    "negative/page-limit.json",
+    "negative/raw-sql.json",
+    "negative/revision-type.json"
+  ],
+  "responseSuccess": [
+    "response/200/batch.json",
+    "response/200/delete.json",
+    "response/200/get-missing.json",
+    "response/200/get-unique.json",
+    "response/200/get.json",
+    "response/200/page.json",
+    "response/200/put.json"
+  ],
+  "responseConflict": [
+    "response/409/revision-conflict.json",
+    "response/409/unique-conflict.json"
+  ],
+  "responseNegative": [
+    "response/negative/batch-empty.json",
+    "response/negative/batch-limit.json",
+    "response/negative/cursor-limit.json",
+    "response/negative/delete-extra.json",
+    "response/negative/get-missing-item.json",
+    "response/negative/item-missing-revision.json",
+    "response/negative/page-limit.json",
+    "response/negative/page-missing-cursor.json",
+    "response/negative/revision-conflict-number-key.json",
+    "response/negative/revision-conflict-operation.json",
+    "response/negative/revision-limit.json",
+    "response/negative/revision-zero.json",
+    "response/negative/unique-conflict-operation.json",
+    "response/negative/untagged.json"
+  ]
+}
