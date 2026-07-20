@@ -50,8 +50,8 @@ func ValidateEvidenceStructure(path string, report formpackage.VerificationRepor
 		!reflect.DeepEqual(evidence.Identity, wantIdentity) || evidence.ApprovedSchemaDigest != report.FormRef.SchemaDigest {
 		return AdmissionEvidence{}, fmt.Errorf("admission evidence exact identity or classification mismatch")
 	}
-	if definition.Status != "standard" || definition.DefinitionVersion != "1.0.0" {
-		return AdmissionEvidence{}, fmt.Errorf("admission evidence requires a 1.0.0 standard definition")
+	if definition.Status != "standard" || definition.DefinitionVersion != report.FormRef.DefinitionVersion {
+		return AdmissionEvidence{}, fmt.Errorf("admission evidence requires the exact standard definition version")
 	}
 	wantLifecycle := []string{"create", "read", "update", "delete", "import", "observe", "refresh", "drift"}
 	if !sameSet(definition.LifecycleCapabilities, wantLifecycle) ||

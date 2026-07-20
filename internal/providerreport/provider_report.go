@@ -1,6 +1,8 @@
 // Package providerreport renders unsigned, canonical provider conformance
-// reports from authenticated published Form Packages and actual provider
-// protocol executions. It does not sign, publish, retain, or admit reports.
+// reports by executing the current provider candidate against the same exact
+// reviewed candidate release-source fixtures it embeds. Historical publication
+// authentication is separate; this package does not sign, publish, retain, or
+// admit reports.
 package providerreport
 
 import (
@@ -8,6 +10,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,11 +57,13 @@ type GeneratedReport struct {
 
 func (report GeneratedReport) Subject() string { return report.report.Subject }
 
-// Generate authenticates the published package set, executes its exact
-// retained desired fixtures plus the full provider lifecycle through the real
-// provider protocol, and returns one unsigned canonical report per kind.
+// Generate verifies the provider's current all-or-nothing candidate and its
+// reviewed release-source bytes, executes those exact fixtures plus the full
+// provider lifecycle through the real provider protocol, and returns one
+// unsigned canonical report per kind. Immutable publication authentication is
+// a separate post-publication gate and must never relabel a different run.
 func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, error) {
-	fixtures, err := LoadPublishedFixtures(root)
+	fixtures, err := LoadCandidateFixtures(root)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +77,7 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 	cases := make([]providerlifecycle.StandardFixtureCase, 0, len(fixtures))
 	for _, fixture := range fixtures {
 		cases = append(cases, providerlifecycle.StandardFixtureCase{
-			Kind: fixture.Kind, PositiveName: fixture.PositiveName, Positive: fixture.Positive,
+			Kind: fixture.Kind, Identity: fixture.Identity, PositiveName: fixture.PositiveName, Positive: fixture.Positive,
 			NegativeName: fixture.NegativeName, Negative: fixture.Negative,
 		})
 	}
@@ -100,7 +105,7 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 			return nil, fmt.Errorf("provider lifecycle omitted %s", fixture.Kind)
 		}
 		exact, ok := fixtureEvidence[fixture.Kind]
-		if !ok || !exact.PositivePassed || !exact.NegativePassed || exact.PositiveName != fixture.PositiveName || exact.NegativeName != fixture.NegativeName || exact.NegativeErrorCode != standardform.InvalidArgumentErrorCode {
+		if !ok || !reflect.DeepEqual(exact.Identity, fixture.Identity) || !exact.PositivePassed || !exact.NegativePassed || exact.PositiveName != fixture.PositiveName || exact.NegativeName != fixture.NegativeName || exact.NegativeErrorCode != standardform.InvalidArgumentErrorCode {
 			return nil, fmt.Errorf("provider protocol fixture evidence is incomplete for %s", fixture.Kind)
 		}
 		checks := resource.Checks
@@ -140,9 +145,9 @@ func Write(repoRoot, outputRoot string, reports []GeneratedReport) error {
 	if len(reports) != 10 {
 		return fmt.Errorf("provider-report set has %d reports, want exactly 10", len(reports))
 	}
-	fixtures, err := LoadPublishedFixtures(repoRoot)
+	fixtures, err := LoadCandidateFixtures(repoRoot)
 	if err != nil {
-		return fmt.Errorf("reverify exact published fixtures before writing provider reports: %w", err)
+		return fmt.Errorf("reverify exact candidate release-source fixtures before writing provider reports: %w", err)
 	}
 	expected := make(map[string]PublishedFixture, len(fixtures))
 	for _, fixture := range fixtures {
@@ -254,8 +259,110 @@ func evalPathWithMissingLeaf(value string) (string, error) {
 	}
 }
 
-// LoadPublishedFixtures verifies the offline immutable publication proof and
-// then reads fixture bytes from the exact retained release archives.
+// LoadCandidateFixtures verifies and loads the exact reviewed release-source
+// bytes embedded by the current provider candidate. It deliberately does not
+// claim publication, signature, Registry readback, or admission authority.
+func LoadCandidateFixtures(root string) ([]PublishedFixture, error) {
+	if err := standardforms.Verify(root); err != nil {
+		return nil, fmt.Errorf("verify exact standard Form candidate: %w", err)
+	}
+	var inventory standardforms.Inventory
+	raw, err := os.ReadFile(filepath.Join(root, "forms", "standard-package-set.json"))
+	if err != nil {
+		return nil, err
+	}
+	if err := decodeStrictJSON(raw, &inventory); err != nil {
+		return nil, err
+	}
+	if inventory.Format != "takoform.standard-package-set@v1" || inventory.Classification != "structural-candidate" || inventory.PublicationReady || inventory.AdmissionStatus != "external-required" || len(inventory.Packages) != len(standardforms.Specs) {
+		return nil, fmt.Errorf("candidate package set does not retain the exact external-admission boundary")
+	}
+	entries := make(map[string]standardforms.InventoryEntry, len(inventory.Packages))
+	for _, entry := range inventory.Packages {
+		if _, duplicate := entries[entry.Kind]; duplicate {
+			return nil, fmt.Errorf("candidate package set duplicates %s", entry.Kind)
+		}
+		entries[entry.Kind] = entry
+	}
+	fixtures := make([]PublishedFixture, 0, len(standardforms.Specs))
+	for _, spec := range standardforms.Specs {
+		entry, ok := entries[spec.Kind]
+		if !ok || entry.FormRef.Kind != spec.Kind || entry.AdmissionStatus != "external-required" {
+			return nil, fmt.Errorf("candidate package set omits exact %s identity", spec.Kind)
+		}
+		releaseID := "k-" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(spec.Kind)))
+		releaseRoot := filepath.Join(root, "forms", "releases", releaseID, inventory.PackageVersion)
+		fixture, err := loadCandidateFixture(releaseRoot, spec.Slug, entry)
+		if err != nil {
+			return nil, fmt.Errorf("%s candidate release-source fixtures: %w", spec.Kind, err)
+		}
+		fixtures = append(fixtures, fixture)
+	}
+	return fixtures, nil
+}
+
+func loadCandidateFixture(root, slug string, entry standardforms.InventoryEntry) (PublishedFixture, error) {
+	report, err := formpackage.VerifyDirectory(root)
+	if err != nil {
+		return PublishedFixture{}, err
+	}
+	if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
+		return PublishedFixture{}, fmt.Errorf("release source identity differs from the current candidate")
+	}
+	indexRaw, err := os.ReadFile(filepath.Join(root, formpackage.PackageIndexFilename))
+	if err != nil {
+		return PublishedFixture{}, err
+	}
+	index, err := formpackage.ValidatePackageIndex(indexRaw)
+	if err != nil {
+		return PublishedFixture{}, err
+	}
+	definitionRaw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(index.DefinitionPath)))
+	if err != nil {
+		return PublishedFixture{}, err
+	}
+	definition, err := formpackage.ValidateDefinition(definitionRaw)
+	if err != nil {
+		return PublishedFixture{}, err
+	}
+	if definition.Kind != entry.Kind || len(definition.ConformanceFixtures) != 1 || len(definition.NegativeFixtures) != 1 {
+		return PublishedFixture{}, fmt.Errorf("definition does not retain exactly one positive and negative fixture")
+	}
+	positive := definition.ConformanceFixtures[0]
+	negative := definition.NegativeFixtures[0]
+	if negative.Stage != "desired" || negative.ExpectedFailure != "schema_validation_failed" {
+		return PublishedFixture{}, fmt.Errorf("negative fixture is not the reviewed desired schema failure")
+	}
+	positiveDesired, err := readJSONMapFile(root, positive.DesiredPath)
+	if err != nil {
+		return PublishedFixture{}, fmt.Errorf("positive desired fixture: %w", err)
+	}
+	negativeDesired, err := readJSONMapFile(root, negative.InputPath)
+	if err != nil {
+		return PublishedFixture{}, fmt.Errorf("negative desired fixture: %w", err)
+	}
+	return PublishedFixture{
+		Kind: entry.Kind, Slug: slug,
+		Identity:     standardform.InstalledFormReference{FormRef: entry.FormRef, PackageDigest: entry.PackageDigest},
+		PositiveName: positive.Name, Positive: positiveDesired, NegativeName: negative.Name, Negative: negativeDesired,
+	}, nil
+}
+
+func readJSONMapFile(root, relative string) (map[string]any, error) {
+	clean := filepath.Clean(filepath.FromSlash(relative))
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("package fixture path escapes its release source")
+	}
+	raw, err := os.ReadFile(filepath.Join(root, clean))
+	if err != nil {
+		return nil, err
+	}
+	return decodeJSONMap(raw)
+}
+
+// LoadPublishedFixtures verifies the historical offline immutable publication
+// proof and reads its retained release archives. It is not an execution input
+// for a newer provider candidate.
 func LoadPublishedFixtures(root string) ([]PublishedFixture, error) {
 	if err := standardforms.VerifyPublishedPackageSet(root); err != nil {
 		return nil, fmt.Errorf("verify exact published package set: %w", err)
@@ -279,7 +386,7 @@ func LoadPublishedFixtures(root string) ([]PublishedFixture, error) {
 			return nil, fmt.Errorf("published package set duplicates %s", entry.Kind)
 		}
 		seen[entry.Kind] = struct{}{}
-		fixture, err := loadPublishedFixture(root, entry)
+		fixture, err := loadPublishedFixture(root, set.PackageVersion, entry)
 		if err != nil {
 			return nil, fmt.Errorf("%s published package fixtures: %w", entry.Kind, err)
 		}
@@ -288,7 +395,7 @@ func LoadPublishedFixtures(root string) ([]PublishedFixture, error) {
 	return fixtures, nil
 }
 
-func loadPublishedFixture(root string, entry admissionrelease.PublishedPackageEntry) (PublishedFixture, error) {
+func loadPublishedFixture(root, packageVersion string, entry admissionrelease.PublishedPackageEntry) (PublishedFixture, error) {
 	indexPath := filepath.Join(root, "admission", "v1", filepath.FromSlash(entry.PackageIndexPath))
 	indexRaw, err := os.ReadFile(indexPath)
 	if err != nil {
@@ -301,7 +408,7 @@ func loadPublishedFixture(root string, entry admissionrelease.PublishedPackageEn
 	if err != nil {
 		return PublishedFixture{}, err
 	}
-	if index.FormRef != entry.FormRef || index.PackageVersion != "1.0.0" {
+	if index.FormRef != entry.FormRef || index.PackageVersion != packageVersion {
 		return PublishedFixture{}, fmt.Errorf("retained package index identity drift")
 	}
 	base := strings.TrimSuffix(path.Base(entry.PackageIndexPath), "_package-index.json")

@@ -4,16 +4,16 @@ The provider build pins this all-or-nothing set of exact candidate bytes:
 
 | Kind | Provider resource | Standard identity |
 | --- | --- | --- |
-| `EdgeWorker` | `takoform_edge_worker` | `1.0.0 / standard` |
-| `ObjectBucket` | `takoform_object_bucket` | `1.0.0 / standard` |
-| `KVStore` | `takoform_kv_store` | `1.0.0 / standard` |
-| `SQLDatabase` | `takoform_sql_database` | `1.0.0 / standard` |
-| `Queue` | `takoform_queue` | `1.0.0 / standard` |
-| `VectorIndex` | `takoform_vector_index` | `1.0.0 / standard` |
-| `DurableWorkflow` | `takoform_durable_workflow` | `1.0.0 / standard` |
-| `ContainerService` | `takoform_container_service` | `1.0.0 / standard` |
-| `StatefulActorNamespace` | `takoform_stateful_actor_namespace` | `1.0.0 / standard` |
-| `Schedule` | `takoform_schedule` | `1.0.0 / standard` |
+| `EdgeWorker` | `takoform_edge_worker` | `1.0.1 / standard` |
+| `ObjectBucket` | `takoform_object_bucket` | `1.0.1 / standard` |
+| `KVStore` | `takoform_kv_store` | `1.0.1 / standard` |
+| `SQLDatabase` | `takoform_sql_database` | `1.0.1 / standard` |
+| `Queue` | `takoform_queue` | `1.0.1 / standard` |
+| `VectorIndex` | `takoform_vector_index` | `1.0.1 / standard` |
+| `DurableWorkflow` | `takoform_durable_workflow` | `1.0.1 / standard` |
+| `ContainerService` | `takoform_container_service` | `1.0.1 / standard` |
+| `StatefulActorNamespace` | `takoform_stateful_actor_namespace` | `1.0.1 / standard` |
+| `Schedule` | `takoform_schedule` | `1.0.1 / standard` |
 
 [`standard-package-set.json`](standard-package-set.json) pins every exact
 `(FormRef, packageDigest)` pair. Each independent package lives under
@@ -57,12 +57,18 @@ The published `1.0.0` packages remain immutable structural candidates, but
 they are deliberately non-admitted: their EdgeWorker, DurableWorkflow, and
 ContainerService desired fixtures contain illustrative artifact locations or
 digests and are not real executable artifacts. A host must not substitute
-those values and report the run as the canonical fixture. The next candidate
-is a coordinated `1.0.1` package set backed by separately released immutable
-runtime artifacts; adopting that set also requires a provider `0.1.1`
-candidate because provider `0.1.0` pins the exact `1.0.0` FormRefs and package
-digests. Neither version is admitted merely by preparing source or release
-tooling.
+those values and report the run as the canonical fixture.
+
+The active coordinated `1.0.1` candidate instead pins the Takosumi-owned,
+host-conformance-only EdgeWorker and DurableWorkflow release identities and
+their real byte digests plus a public Docker Hub linux/amd64 OCI manifest by
+exact digest. Optional connection, delivery, migration-path, and unsupported
+strong-consistency preferences are absent from the canonical desired fixtures;
+their portable schema capabilities remain available. Schedule retains its one
+required `DurableWorkflow/ingest` connection. Provider `0.1.1` pins this exact
+all-or-nothing set; provider `0.1.0` and every `1.0.0` package remain immutable
+historical candidates. Runtime publication, Form Package publication, and
+external lifecycle evidence are still required before admission.
 
 Provider publication and Form admission activation are two different
 authorities. Phase 1's `v*` provider workflow runs
@@ -143,8 +149,8 @@ conversion remains in
 [`legacy-takosumi-wire-mapping.md`](legacy-takosumi-wire-mapping.md).
 
 Only `/name` is asserted immutable in the legacy definitions. The independent
-`VectorIndex@1.0.0` candidate additionally makes `/dimensions` immutable, and
-`SQLDatabase@1.0.0` makes `/engine` immutable; the provider schemas enforce
+`VectorIndex@1.0.1` candidate additionally makes `/dimensions` immutable, and
+`SQLDatabase@1.0.1` makes `/engine` immutable; the provider schemas enforce
 replacement for both fields.
 
 Target pools, credentials, provider selection, backend managers, capacity,

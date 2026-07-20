@@ -65,8 +65,8 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 	)
 
 	releaseID := releaseIDForKind("ObjectBucket")
-	releaseDirectory := path.Join("releases", releaseID, "1.0.0")
-	base := "takoform-form-" + releaseID + "_1.0.0"
+	releaseDirectory := path.Join("releases", releaseID, "1.0.1")
+	base := "takoform-form-" + releaseID + "_1.0.1"
 	indexName := base + "_package-index.json"
 	bundleName := base + "_package-index.sigstore.json"
 	indexRaw, err := os.ReadFile(filepath.Join(packageRoot, formpackage.PackageIndexFilename))
@@ -91,11 +91,11 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 	}
 	releaseCommit := "0123456789abcdef0123456789abcdef01234567"
 	toolingCommit := "89abcdef0123456789abcdef0123456789abcdef"
-	releaseTag := "forms/" + releaseID + "/v1.0.0"
+	releaseTag := "forms/" + releaseID + "/v1.0.1"
 	metadataManifest := packageReleaseManifest{
 		Tag: releaseTag, SourceRepository: sourceRepository, SourceCommit: releaseCommit, Workflow: packageReleaseWorkflow,
 		ToolingCommit:  toolingCommit,
-		PackageVersion: "1.0.0", PackageDigest: packageReport.PackageDigest, FormRef: packageReport.FormRef,
+		PackageVersion: "1.0.1", PackageDigest: packageReport.PackageDigest, FormRef: packageReport.FormRef,
 		Canonicalization: "RFC8785", SignedSubject: indexName,
 	}
 	sbomRaw := buildPackageSBOMFixture(t, packageRoot, indexRaw, metadataManifest)
@@ -122,7 +122,7 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 	manifest := packageReleaseManifest{
 		SchemaVersion: packageReleaseSchema, ReleaseType: packageReleaseType, Tag: releaseTag,
 		SourceRepository: sourceRepository, SourceCommit: releaseCommit, ToolingCommit: toolingCommit, Workflow: packageReleaseWorkflow,
-		PackageVersion: "1.0.0", ReleaseID: releaseID, PackageDigest: packageReport.PackageDigest, FormRef: packageReport.FormRef,
+		PackageVersion: "1.0.1", ReleaseID: releaseID, PackageDigest: packageReport.PackageDigest, FormRef: packageReport.FormRef,
 		Canonicalization: "RFC8785", SignedSubject: indexName, SignatureBundle: bundleName, SignatureMediaType: sigstoreBundleMediaTypeV03,
 		PublisherPolicy: releasePublisherPolicy{
 			OIDCIssuer:    "https://token.actions.githubusercontent.com",
@@ -140,11 +140,11 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 
 	registryRef, registryRaw := writeRegistryFixture(t, root, versionRaw, releaseCommit)
 	set := Set{
-		Format: setFormat, DefinitionVersion: "1.0.0", PackageVersion: "1.0.0", AdmissionReleaseTag: "forms/admissions/v1.0.0",
+		Format: setFormat, DefinitionVersion: "1.0.1", PackageVersion: "1.0.1", AdmissionReleaseTag: "forms/admissions/v1.0.1",
 		ProviderRegistryReadback: registryRef,
 		Entries: []SetEntry{{
 			Kind: "ObjectBucket", Slug: "object-bucket", FormRef: packageReport.FormRef, PackageDigest: packageReport.PackageDigest,
-			ReleaseTag: "forms/" + releaseID + "/v1.0.0", ReleaseCommit: releaseCommit, ReleaseToolingCommit: toolingCommit,
+			ReleaseTag: "forms/" + releaseID + "/v1.0.1", ReleaseCommit: releaseCommit, ReleaseToolingCommit: toolingCommit,
 			PackageReleaseManifestPath: path.Join(releaseDirectory, "release-manifest.json"), PackageReleaseManifestDigest: formpackage.DigestBytes(manifestRaw),
 			PackageIndexPath: path.Join(releaseDirectory, indexName), PackageIndexSigstoreBundle: path.Join(releaseDirectory, bundleName),
 			EvidencePath: "packages/object-bucket/evidence.json", EvidenceDigest: formpackage.DigestBytes(evidenceRaw),
@@ -156,7 +156,7 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 		}},
 	}
 	writeRetainedTestJSON(t, root, setManifestPath, set)
-	candidates := CandidateSet{DefinitionVersion: "1.0.0", PackageVersion: "1.0.0", Entries: []Candidate{{
+	candidates := CandidateSet{DefinitionVersion: "1.0.1", PackageVersion: "1.0.1", Entries: []Candidate{{
 		Kind: "ObjectBucket", Slug: "object-bucket", PackagePath: packagePath, FormRef: packageReport.FormRef, PackageDigest: packageReport.PackageDigest,
 	}}}
 	verifier := &recordingSubjectVerifier{}
@@ -267,7 +267,7 @@ func completeRunnerReport(role, subject string, identity standardform.InstalledF
 		negativeResults = append(negativeResults, result)
 	}
 	report := RunnerReport{
-		Format: runnerReportFormat, Role: role, Subject: subject, RunnerVersion: "fixture-1.0.0", Identity: identity, Status: "passed",
+		Format: runnerReportFormat, Role: role, Subject: subject, RunnerVersion: "fixture-1.0.1", Identity: identity, Status: "passed",
 		Lifecycle:        standardform.LifecycleAudit{Create: true, Read: true, Update: true, Delete: true, Import: true, Observe: true, Refresh: true, Drift: true},
 		PositiveFixtures: positiveResults, NegativeFixtures: negativeResults,
 	}
@@ -304,7 +304,7 @@ func TestHostRunnerReportBindsExactExecutedPackageFixtures(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	identity := standardform.InstalledFormReference{
 		FormRef: formpackage.FormRef{
-			APIVersion: "forms.takoform.com/v1alpha1", Kind: "ObjectBucket", DefinitionVersion: "1.0.0", SchemaDigest: digest,
+			APIVersion: "forms.takoform.com/v1alpha1", Kind: "ObjectBucket", DefinitionVersion: "1.0.1", SchemaDigest: digest,
 		},
 		PackageDigest: digest,
 	}

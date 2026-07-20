@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	definitionVersion = "1.0.0"
-	packageVersion    = "1.0.0"
+	definitionVersion = "1.0.1"
+	packageVersion    = "1.0.1"
 )
 
 type Spec struct {
@@ -212,7 +212,7 @@ func Verify(root string) error {
 	if err := readJSON(filepath.Join(root, "forms", "standard-package-set.json"), &inventory); err != nil {
 		return err
 	}
-	if inventory.Format != "takoform.standard-package-set@v1" || inventory.Classification != "structural-candidate" || inventory.PublicationReady || inventory.LocalConformance != "structural-only" || inventory.AdmissionStatus != "external-required" || !reflect.DeepEqual(inventory.ExternalRequired, externalRequirements) || len(inventory.Packages) != len(Specs) {
+	if inventory.Format != "takoform.standard-package-set@v1" || inventory.Classification != "structural-candidate" || inventory.DefinitionVersion != definitionVersion || inventory.PackageVersion != packageVersion || inventory.PublicationReady || inventory.LocalConformance != "structural-only" || inventory.AdmissionStatus != "external-required" || !reflect.DeepEqual(inventory.ExternalRequired, externalRequirements) || len(inventory.Packages) != len(Specs) {
 		return fmt.Errorf("standard package inventory identity or release truth is invalid")
 	}
 	if _, err := os.Stat(filepath.Join(root, "conformance", "standard-form-admission-v1")); err == nil {
@@ -232,7 +232,7 @@ func Verify(root string) error {
 		if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
 			return fmt.Errorf("%s inventory digest drift", entry.Kind)
 		}
-		releaseID := "k-" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(entry.Kind)))
+		releaseID := releaseIDForKind(entry.Kind)
 		releaseRoot := filepath.Join(root, "forms", "releases", releaseID, packageVersion)
 		if err := verifyReleaseSource(packageRoot, releaseRoot, entry); err != nil {
 			return fmt.Errorf("%s release source: %w", entry.Kind, err)
@@ -255,6 +255,10 @@ func Verify(root string) error {
 		}
 	}
 	return nil
+}
+
+func releaseIDForKind(kind string) string {
+	return "k-" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(kind)))
 }
 
 func verifyReleaseSource(fixtureRoot, releaseRoot string, entry InventoryEntry) error {
@@ -342,14 +346,57 @@ func VerifyReleaseReady(root string) error {
 // package publication and its package-index publisher identity only. It does
 // not upgrade any Form to portable-standard or replace release-check.
 func VerifyPublishedPackageSet(root string) error {
-	if err := Verify(root); err != nil {
-		return err
-	}
-	candidates, err := admissionCandidateSet()
+	candidates, err := publishedPackageCandidateSet(root)
 	if err != nil {
 		return err
 	}
 	return admissionrelease.VerifyPublishedPackageSet(root, candidates)
+}
+
+// publishedPackageCandidateSet reconstructs the historical immutable set from
+// its retained release sources. The active provider candidate may advance to a
+// later all-or-nothing set before that new set is published, but the previous
+// publication proof must remain independently verifiable throughout the
+// candidate window.
+func publishedPackageCandidateSet(root string) (admissionrelease.CandidateSet, error) {
+	var published admissionrelease.PublishedPackageSet
+	if err := readJSON(filepath.Join(root, "admission", "v1", "published-package-set.json"), &published); err != nil {
+		return admissionrelease.CandidateSet{}, err
+	}
+	if len(published.Entries) != len(Specs) {
+		return admissionrelease.CandidateSet{}, fmt.Errorf("published package set has %d entries, want %d", len(published.Entries), len(Specs))
+	}
+	byKind := make(map[string]admissionrelease.PublishedPackageEntry, len(published.Entries))
+	for _, entry := range published.Entries {
+		if _, duplicate := byKind[entry.Kind]; duplicate {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("published package set duplicates %s", entry.Kind)
+		}
+		byKind[entry.Kind] = entry
+	}
+	candidates := make([]admissionrelease.Candidate, 0, len(Specs))
+	for _, spec := range Specs {
+		entry, ok := byKind[spec.Kind]
+		if !ok || entry.Slug != spec.Slug {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("published package set omits exact %s/%s identity", spec.Kind, spec.Slug)
+		}
+		packagePath := filepath.ToSlash(filepath.Join("forms", "releases", releaseIDForKind(spec.Kind), published.PackageVersion))
+		report, err := formpackage.VerifyDirectory(filepath.Join(root, filepath.FromSlash(packagePath)))
+		if err != nil {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s historical published package source: %w", spec.Kind, err)
+		}
+		if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s historical published package source identity drift", spec.Kind)
+		}
+		candidates = append(candidates, admissionrelease.Candidate{
+			Kind: spec.Kind, Slug: spec.Slug, PackagePath: packagePath,
+			FormRef: entry.FormRef, PackageDigest: entry.PackageDigest,
+		})
+	}
+	return admissionrelease.CandidateSet{
+		DefinitionVersion: published.DefinitionVersion,
+		PackageVersion:    published.PackageVersion,
+		Entries:           candidates,
+	}, nil
 }
 
 func admissionCandidateSet() (admissionrelease.CandidateSet, error) {
@@ -508,35 +555,37 @@ func canonicalDesired(kind string) (map[string]any, error) {
 	switch kind {
 	case "EdgeWorker":
 		return map[string]any{
-			"name": "edge", "source": map[string]any{"artifactUrl": "https://artifacts.example.test/edge.js", "artifactSha256": strings.Repeat("a", 64)},
-			"compatibilityDate": "2026-07-16", "compatibilityFlags": []any{"nodejs_compat"}, "profiles": []any{"workers"},
-			"connections": connections("ASSETS", "ObjectBucket/assets", []any{"read", "write"}, "binding"),
+			"name": "edge", "source": map[string]any{
+				"artifactUrl":    "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.1/edge-worker.mjs",
+				"artifactSha256": "281b77f65f6258e56d0468a580b1f67baf9f4d71891c2f7259ce24c47bf7d67e",
+			},
+			"compatibilityDate": "2026-07-20", "compatibilityFlags": []any{"nodejs_compat"}, "profiles": []any{"workers"},
 		}, nil
 	case "ObjectBucket":
 		return map[string]any{"name": "assets", "storageClass": "standard", "interfaces": []any{"s3_api"}}, nil
 	case "KVStore":
-		return map[string]any{"name": "cache", "consistency": "strong"}, nil
+		return map[string]any{"name": "cache", "consistency": "eventual"}, nil
 	case "SQLDatabase":
-		return map[string]any{"name": "main", "engine": "sqlite", "migrationsPath": "migrations"}, nil
+		return map[string]any{"name": "main", "engine": "sqlite"}, nil
 	case "Queue":
-		return map[string]any{"name": "jobs", "delivery": map[string]any{"maxRetries": 5, "maxBatchSize": 10}}, nil
+		return map[string]any{"name": "jobs"}, nil
 	case "VectorIndex":
-		return map[string]any{"name": "embeddings", "dimensions": 1536, "metric": "cosine", "connections": connections("DATABASE", "SQLDatabase/main", []any{"read"}, "metadata")}, nil
+		return map[string]any{"name": "embeddings", "dimensions": 1536, "metric": "cosine"}, nil
 	case "DurableWorkflow":
 		return map[string]any{
-			"name": "ingest", "source": map[string]any{"artifactRef": "artifact:workflow:ingest", "artifactSha256": strings.Repeat("b", 64)},
+			"name": "ingest", "source": map[string]any{
+				"artifactRef":    "standard-form-runtime/v1.0.1/durable-workflow.mjs",
+				"artifactSha256": "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5",
+			},
 			"entrypoint": "IngestWorkflow", "retry": map[string]any{"maxAttempts": 3, "initialBackoffSeconds": 5},
-			"connections": connections("JOBS", "Queue/jobs", []any{"consume"}, "binding"),
 		}, nil
 	case "ContainerService":
 		return map[string]any{
-			"name": "agent", "image": "ghcr.io/example/agent@sha256:" + strings.Repeat("c", 64), "ports": []any{8080}, "publicHttp": true,
-			"connections": connections("DATABASE", "SQLDatabase/main", []any{"read", "write"}, "environment"),
+			"name": "agent", "image": "docker.io/library/nginx@sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317", "ports": []any{80}, "publicHttp": true,
 		}, nil
 	case "StatefulActorNamespace":
 		return map[string]any{
 			"name": "rooms", "className": "RoomActor", "storageProfile": "durable_sqlite", "migrationTag": "v1",
-			"connections": connections("DATABASE", "SQLDatabase/main", []any{"read", "write"}, "storage"),
 		}, nil
 	case "Schedule":
 		return map[string]any{

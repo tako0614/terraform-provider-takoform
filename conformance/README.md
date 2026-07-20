@@ -113,7 +113,7 @@ extension and one kind-specific invalid fixture, and cross-check the exact
 machine-readable set in
 [`../forms/legacy-package-set.json`](../forms/legacy-package-set.json).
 
-`form-package-v1/positive/standard/` contains the separate ten-package `1.0.0 /
+`form-package-v1/positive/standard/` contains the separate ten-package `1.0.1 /
 standard` definition candidate set. It does not replace or mutate the legacy compatibility
 identities. `go run ./cmd/standard-form-conformance verify` validates package
 bytes and fixtures and inspects the actual provider resource structure. It does

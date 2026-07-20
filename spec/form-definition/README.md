@@ -108,7 +108,7 @@ such as `authorization`, `oauthClient`, `sessionCookie`, `apiKeyValue`,
 `privateKeyPem`, `invoice`, `paymentMethod`, `currency`, `taxCode`,
 `serviceOfferingId`, `managerIdentifier`, and `region` do not.
 
-The provider's ten kinds now have independent exact `1.0.0 / standard`
+The provider's ten kinds now have independent exact `1.0.1 / standard`
 definition candidates and local structural fixtures. Their package-set
 classification remains `structural-candidate`; `status: standard` pins proposed
 final definition bytes and is not admission. Their earlier `0.0.0-legacy.1`

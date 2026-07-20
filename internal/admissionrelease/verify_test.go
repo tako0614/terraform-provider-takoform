@@ -117,13 +117,20 @@ func TestVerifyAdmissionSetRejectsStructurallyValidEvidenceWithoutReportClosure(
 		t.Fatal(err)
 	}
 
-	candidates := CandidateSet{DefinitionVersion: "1.0.0", PackageVersion: "1.0.0", Entries: []Candidate{{
+	candidates := CandidateSet{DefinitionVersion: "1.0.1", PackageVersion: "1.0.1", Entries: []Candidate{{
 		Kind: "ObjectBucket", Slug: "object-bucket", PackagePath: packagePath, FormRef: report.FormRef, PackageDigest: report.PackageDigest,
 	}}}
 	set := testSet()
+	set.DefinitionVersion = "1.0.1"
+	set.PackageVersion = "1.0.1"
+	set.AdmissionReleaseTag = "forms/admissions/v1.0.1"
 	set.Entries[0].FormRef = report.FormRef
 	set.Entries[0].PackageDigest = report.PackageDigest
 	set.Entries[0].EvidenceDigest = formpackage.DigestBytes(canonical)
+	set.Entries[0].ReleaseTag = "forms/" + releaseIDForKind("ObjectBucket") + "/v1.0.1"
+	set.Entries[0].PackageReleaseManifestPath = "releases/k-j5rguzldorbhky3lmv2a/1.0.1/release-manifest.json"
+	set.Entries[0].PackageIndexPath = "releases/k-j5rguzldorbhky3lmv2a/1.0.1/takoform-form-k-j5rguzldorbhky3lmv2a_1.0.1_package-index.json"
+	set.Entries[0].PackageIndexSigstoreBundle = "releases/k-j5rguzldorbhky3lmv2a/1.0.1/takoform-form-k-j5rguzldorbhky3lmv2a_1.0.1_package-index.sigstore.json"
 	writeRetainedTestJSON(t, root, setManifestPath, set)
 	writeRetainedTestFile(t, root, admissionRootPath+"/"+set.Entries[0].EvidencePath, canonical)
 

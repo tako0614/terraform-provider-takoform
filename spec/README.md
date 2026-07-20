@@ -26,7 +26,7 @@ and their retained package indexes pass offline production-root/publisher-policy
 verification. No revocation checkpoint or admission activation has been
 published. Remote host fetch/install, host publisher-policy verification,
 activation, and revocation enforcement remain consumer/operator work. The
-current ten provider resources pin independent exact `1.0.0 / standard`
+current ten provider resources pin independent exact `1.0.1 / standard`
 definition candidates with local structural verification. Their inventory is
 `structural-candidate`, not `portable-standard`; definition status pins proposed
 final bytes and does not perform admission. The historical

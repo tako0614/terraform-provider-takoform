@@ -961,11 +961,15 @@ type formHost struct {
 }
 
 func newFormHost() *formHost {
+	return newFormHostWithForms(candidateForms())
+}
+
+func newFormHostWithForms(forms map[string]client.InstalledFormReference) *formHost {
 	counts := map[string]*lifecycleCounts{}
 	for _, item := range resourceCases {
 		counts[item.Kind] = &lifecycleCounts{}
 	}
-	return &formHost{forms: candidateForms(), resources: map[string]client.Resource{}, counts: counts}
+	return &formHost{forms: forms, resources: map[string]client.Resource{}, counts: counts}
 }
 
 func (h *formHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {

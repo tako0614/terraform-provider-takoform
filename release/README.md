@@ -163,10 +163,11 @@ and are available to Actions only as `GPG_PRIVATE_KEY` and `PASSPHRASE`.
 The HCP organization `takoform` has claimed the public Terraform Registry
 namespace `tako0614`; its GitHub App installation is limited to
 `tako0614/terraform-provider-takoform`. Registry key ID `34FC18AC897FB709` is
-registered and matches the full pinned fingerprint above. The first real
-Registry and OpenTofu/network-mirror install proof remains pending and requires
-an explicitly authorized first publication. Existing version paths must never
-be overwritten; corrections use a new semver.
+registered and matches the full pinned fingerprint above. Provider `0.1.0` is
+published and its direct OpenTofu lifecycle has been verified. Terraform
+Registry indexing remains externally blocked on namespace Terms acceptance.
+Existing version paths must never be overwritten; the coordinated Form
+`1.0.1` candidate therefore uses provider `0.1.1`.
 
 Key rotation is additive and review-gated: create a distinct repo-external key,
 change the pinned fingerprint/public key in one reviewed commit, register that
