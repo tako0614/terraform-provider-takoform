@@ -86,12 +86,12 @@ func TestCurrentCandidatePinsRealRuntimeAndMaterializableDefaults(t *testing.T) 
 		t.Fatal(err)
 	}
 	edgeSource := edge["source"].(map[string]any)
-	if edgeSource["artifactUrl"] != "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.1/edge-worker.mjs" || edgeSource["artifactSha256"] != "281b77f65f6258e56d0468a580b1f67baf9f4d71891c2f7259ce24c47bf7d67e" {
+	if edgeSource["artifactUrl"] != "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.2/edge-worker.mjs" || edgeSource["artifactSha256"] != "281b77f65f6258e56d0468a580b1f67baf9f4d71891c2f7259ce24c47bf7d67e" {
 		t.Fatalf("EdgeWorker runtime identity drift: %#v", edgeSource)
 	}
 	workflow, _ := canonicalDesired("DurableWorkflow")
 	workflowSource := workflow["source"].(map[string]any)
-	if workflowSource["artifactRef"] != "standard-form-runtime/v1.0.1/durable-workflow.mjs" || workflowSource["artifactSha256"] != "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5" {
+	if workflowSource["artifactRef"] != "standard-form-runtime/v1.0.2/durable-workflow.mjs" || workflowSource["artifactSha256"] != "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5" {
 		t.Fatalf("DurableWorkflow runtime identity drift: %#v", workflowSource)
 	}
 	container, _ := canonicalDesired("ContainerService")

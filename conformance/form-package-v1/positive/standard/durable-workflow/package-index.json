@@ -20,13 +20,13 @@
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
       "size": 308,
-      "digest": "sha256:f98f56b6c4cda50b34ccf4363d8a622c05cba9cfbc74a1a688915e9bb983eef1"
+      "digest": "sha256:af9c49a6438df8606e35aa471c1a88246d13c852eb4544ff64fe40fa3d621593"
     },
     {
       "path": "fixtures/negative.json",
       "mediaType": "application/json",
       "size": 276,
-      "digest": "sha256:0c3b60a1020afc9de57f6a258b86edaa942214317ca2494db1e4a5c3313ab89c"
+      "digest": "sha256:aec98be1490e54b31ee1d0c9bd1e69ffec29f73eda6904345277fb98afe2fe86"
     },
     {
       "path": "fixtures/observed.json",

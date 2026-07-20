@@ -556,7 +556,7 @@ func canonicalDesired(kind string) (map[string]any, error) {
 	case "EdgeWorker":
 		return map[string]any{
 			"name": "edge", "source": map[string]any{
-				"artifactUrl":    "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.1/edge-worker.mjs",
+				"artifactUrl":    "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.2/edge-worker.mjs",
 				"artifactSha256": "281b77f65f6258e56d0468a580b1f67baf9f4d71891c2f7259ce24c47bf7d67e",
 			},
 			"compatibilityDate": "2026-07-20", "compatibilityFlags": []any{"nodejs_compat"}, "profiles": []any{"workers"},
@@ -574,7 +574,7 @@ func canonicalDesired(kind string) (map[string]any, error) {
 	case "DurableWorkflow":
 		return map[string]any{
 			"name": "ingest", "source": map[string]any{
-				"artifactRef":    "standard-form-runtime/v1.0.1/durable-workflow.mjs",
+				"artifactRef":    "standard-form-runtime/v1.0.2/durable-workflow.mjs",
 				"artifactSha256": "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5",
 			},
 			"entrypoint": "IngestWorkflow", "retry": map[string]any{"maxAttempts": 3, "initialBackoffSeconds": 5},

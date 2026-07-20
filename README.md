@@ -96,7 +96,8 @@ remains a separate proof and cannot relabel a newer provider execution. Those
 unsigned subjects grant no admission. The active provider `0.1.1` source
 candidate pins a new complete `1.0.1` Form set whose executable fixture
 references resolve to a separate Takosumi-owned
-host-conformance runtime release. The retained `1.0.0` publication proof stays
+`standard-form-runtime-v1.0.2` host-conformance runtime release. The retained
+`1.0.0` publication proof stays
 independently verifiable while the new package releases and admission evidence
 are prepared.
 

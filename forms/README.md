@@ -60,9 +60,10 @@ digests and are not real executable artifacts. A host must not substitute
 those values and report the run as the canonical fixture.
 
 The active coordinated `1.0.1` candidate instead pins the Takosumi-owned,
-host-conformance-only EdgeWorker and DurableWorkflow release identities and
-their real byte digests plus a public Docker Hub linux/amd64 OCI manifest by
-exact digest. Optional connection, delivery, migration-path, and unsupported
+host-conformance-only `standard-form-runtime-v1.0.2` EdgeWorker and
+DurableWorkflow release identities and their real byte digests plus a public
+Docker Hub linux/amd64 OCI manifest by exact digest. Optional connection,
+delivery, migration-path, and unsupported
 strong-consistency preferences are absent from the canonical desired fixtures;
 their portable schema capabilities remain available. Schedule retains its one
 required `DurableWorkflow/ingest` connection. Provider `0.1.1` pins this exact
