@@ -85,10 +85,12 @@ GitHub Releases. Their exact seven-asset inventories, Git refs, production
 Sigstore trusted root, and package-index workflow policy are retained under
 [`admission/v1/`](admission/v1/) and pass the offline
 `published-package-check`. Publication still does not admit a Form: host and
-provider lifecycle reports, direct Registry readback, signed admission
-evidence, the distinct remaining role authorities, and a live revocation-chain
-proof remain external. No `forms/admissions/v*` activation or revocation
-release has been published.
+authenticated provider lifecycle reports, direct Registry readback, signed
+admission evidence, the distinct remaining role authorities, and a live
+revocation-chain proof remain external. Unsigned canonical provider-report
+subjects can be generated from the exact retained package fixtures through the
+real provider protocol, but those subjects grant no admission. No
+`forms/admissions/v*` activation or revocation release has been published.
 
 ## Development
 
@@ -102,6 +104,8 @@ go test ./...
 go run ./cmd/conformance verify
 go run ./cmd/migration-proof
 go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
+go run ./cmd/provider-lifecycle-conformance provider-reports \
+  --cli terraform --output-dir /tmp/takoform-provider-reports
 go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
 go run ./cmd/standard-form-conformance candidate-publication-check

@@ -50,6 +50,9 @@ jobs:
           go vet ./...
           go test ./...
           go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
+          go run ./cmd/provider-lifecycle-conformance provider-reports \
+            --cli terraform --output-dir "$RUNNER_TEMP/provider-reports"
+          test "$(find "$RUNNER_TEMP/provider-reports" -name provider-report.json -type f | wc -l)" -eq 10
           go run ./cmd/conformance verify
           go run ./cmd/migration-proof
           go run ./cmd/form-package conformance
