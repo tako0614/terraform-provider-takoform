@@ -123,6 +123,57 @@
     "refresh",
     "drift"
   ],
+  "interfaces": [
+    {
+      "name": "queue.messages",
+      "version": "1",
+      "description": "Portable queue delivery operations.",
+      "required": true,
+      "document": {
+        "operations": [
+          "acknowledge",
+          "receive",
+          "send"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "acknowledge",
+                "receive",
+                "send"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
   "conformanceFixtures": [
     {
       "name": "canonical",

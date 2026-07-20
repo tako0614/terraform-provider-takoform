@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ContainerService",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:ebc6deb0df287aedaf44a151993e61addc67b664bb343a55ecd96a1c2d01c329"
+    "schemaDigest": "sha256:f39586a6ca97ee474b3e130b0a2a57ba81d40282632cd44fa65631cfbd17c7cf"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4270,
-      "digest": "sha256:ff465f0869204bca2638a567ca8fc7e16234b204ff9990c25b47b5202fec537c"
+      "size": 5335,
+      "digest": "sha256:ddc4f5ded0e96a48088ad59bafe9ee90a5e905db68ced655bb9990f74b5c8191"
     },
     {
       "path": "fixtures/desired.json",

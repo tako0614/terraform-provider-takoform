@@ -84,6 +84,9 @@ func Generate(root string) error {
 		if err != nil {
 			return err
 		}
+		if err := syncCandidateReleaseSource(root, entry); err != nil {
+			return err
+		}
 		entries = append(entries, entry)
 	}
 	inventory := Inventory{
@@ -116,6 +119,18 @@ func Generate(root string) error {
 	return updatePortableHostContract(root, entries)
 }
 
+func syncCandidateReleaseSource(root string, entry InventoryEntry) error {
+	source := filepath.Join(root, filepath.FromSlash(entry.Path))
+	destination := filepath.Join(root, "forms", "releases", releaseIDForKind(entry.Kind), packageVersion)
+	if err := os.RemoveAll(destination); err != nil {
+		return err
+	}
+	if err := os.CopyFS(destination, os.DirFS(source)); err != nil {
+		return fmt.Errorf("sync %s candidate release source: %w", entry.Kind, err)
+	}
+	return nil
+}
+
 func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 	desiredSchema, err := desiredSchema(spec.Kind)
 	if err != nil {
@@ -132,6 +147,7 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 		DesiredSchema: desiredSchema, ObservedSchema: observedSchema(), OutputSchema: outputSchema(spec.Kind),
 		ImmutableFields:       append([]string(nil), spec.Immutable...),
 		LifecycleCapabilities: []string{"create", "read", "update", "delete", "import", "observe", "refresh", "drift"},
+		Interfaces:            standardInterfaceDescriptors(spec.Kind),
 		ConformanceFixtures: []formpackage.ConformanceFixture{{
 			Name: "canonical", DesiredPath: "fixtures/desired.json", ObservedPath: "fixtures/observed.json", OutputPath: "fixtures/output.json",
 		}},
@@ -146,6 +162,9 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 	output := map[string]any{
 		"generation": 1, "id": spec.Kind + "/" + name, "kind": spec.Kind, "name": name,
 		"portability": "portable",
+	}
+	if spec.Kind == "SQLDatabase" {
+		output["engine"] = desired["engine"]
 	}
 	negative, err := negativeDesired(spec.Kind, desired)
 	if err != nil {
@@ -254,7 +273,7 @@ func Verify(root string) error {
 			return err
 		}
 	}
-	return nil
+	return VerifyMaterializableCandidate(root)
 }
 
 func releaseIDForKind(kind string) string {
@@ -535,17 +554,77 @@ func observedSchema() map[string]any {
 }
 
 func outputSchema(kind string) map[string]any {
+	required := []string{"id", "kind", "name", "generation", "portability"}
+	properties := map[string]any{
+		"id":          map[string]any{"type": "string", "minLength": 1},
+		"kind":        map[string]any{"type": "string", "const": kind},
+		"name":        map[string]any{"type": "string", "minLength": 1},
+		"generation":  map[string]any{"type": "integer", "minimum": 1},
+		"portability": map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
+	}
+	if kind == "SQLDatabase" {
+		required = append(required, "engine")
+		properties["engine"] = tokenSchema("sqlite")
+	}
 	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-		"required": []string{"id", "kind", "name", "generation", "portability"},
-		"properties": map[string]any{
-			"id":          map[string]any{"type": "string", "minLength": 1},
-			"kind":        map[string]any{"type": "string", "const": kind},
-			"name":        map[string]any{"type": "string", "minLength": 1},
-			"generation":  map[string]any{"type": "integer", "minimum": 1},
-			"portability": map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
+		"required": required, "properties": properties,
+	}
+}
+
+// standardInterfaceDescriptors owns only portable, data-only declarations.
+// Hosts still own runtime records, routing, authorization, and lifecycle. A
+// Schedule consumes DurableWorkflow rather than exposing a runtime surface, so
+// it intentionally has no descriptor.
+func standardInterfaceDescriptors(kind string) []formpackage.InterfaceDescriptor {
+	type interfaceSpec struct {
+		name        string
+		description string
+		operations  []string
+	}
+	interfaces := map[string]interfaceSpec{
+		"EdgeWorker":             {name: "http.request", description: "Portable HTTP request surface exposed by an edge application.", operations: []string{"request"}},
+		"ObjectBucket":           {name: "object.storage", description: "Portable object storage operations.", operations: []string{"delete", "get", "list", "put"}},
+		"KVStore":                {name: "keyvalue.store", description: "Portable key/value operations.", operations: []string{"delete", "get", "list", "put"}},
+		"SQLDatabase":            {name: "sql.query", description: "Portable SQL query and transaction operations.", operations: []string{"execute", "query", "transaction"}},
+		"Queue":                  {name: "queue.messages", description: "Portable queue delivery operations.", operations: []string{"acknowledge", "receive", "send"}},
+		"VectorIndex":            {name: "vector.query", description: "Portable vector index operations.", operations: []string{"delete", "query", "upsert"}},
+		"DurableWorkflow":        {name: "workflow.invoke", description: "Portable durable workflow invocation operations.", operations: []string{"cancel", "invoke", "status"}},
+		"ContainerService":       {name: "http.request", description: "Portable HTTP request surface exposed by a container service.", operations: []string{"request"}},
+		"StatefulActorNamespace": {name: "actor.invoke", description: "Portable stateful actor invocation operations.", operations: []string{"invoke"}},
+	}
+	spec, ok := interfaces[kind]
+	if !ok {
+		return nil
+	}
+	operationValues := make([]any, 0, len(spec.operations))
+	for _, operation := range spec.operations {
+		operationValues = append(operationValues, operation)
+	}
+	descriptor := formpackage.InterfaceDescriptor{
+		Name: spec.name, Version: "1", Description: spec.description, Required: true,
+		Document: map[string]any{"operations": operationValues},
+		DocumentSchema: map[string]any{
+			"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+			"required": []string{"operations"},
+			"properties": map[string]any{
+				"operations": map[string]any{
+					"type": "array", "minItems": len(operationValues), "maxItems": len(operationValues), "uniqueItems": true,
+					"items": map[string]any{"type": "string", "enum": operationValues},
+				},
+			},
+		},
+		Inputs: []formpackage.InterfaceInputDeclaration{
+			{Name: "resource", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/id"},
+			{Name: "name", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/name"},
 		},
 	}
+	if kind == "SQLDatabase" {
+		descriptor.Inputs = append(descriptor.Inputs, formpackage.InterfaceInputDeclaration{
+			Name: "engine", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/engine",
+		})
+	}
+	return []formpackage.InterfaceDescriptor{descriptor}
 }
 
 func canonicalDesired(kind string) (map[string]any, error) {
@@ -556,10 +635,11 @@ func canonicalDesired(kind string) (map[string]any, error) {
 	case "EdgeWorker":
 		return map[string]any{
 			"name": "edge", "source": map[string]any{
-				"artifactUrl":    "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.2/edge-worker.mjs",
+				"artifactUrl":    "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.3/edge-worker.mjs",
 				"artifactSha256": "281b77f65f6258e56d0468a580b1f67baf9f4d71891c2f7259ce24c47bf7d67e",
 			},
 			"compatibilityDate": "2026-07-20", "compatibilityFlags": []any{"nodejs_compat"}, "profiles": []any{"workers"},
+			"connections": connections("ASSETS", "ObjectBucket/edge-assets", []any{"read", "write"}, "object.binding.v1"),
 		}, nil
 	case "ObjectBucket":
 		return map[string]any{"name": "assets", "storageClass": "standard", "interfaces": []any{"s3_api"}}, nil
@@ -574,7 +654,7 @@ func canonicalDesired(kind string) (map[string]any, error) {
 	case "DurableWorkflow":
 		return map[string]any{
 			"name": "ingest", "source": map[string]any{
-				"artifactRef":    "standard-form-runtime/v1.0.2/durable-workflow.mjs",
+				"artifactRef":    "standard-form-runtime/v1.0.3/durable-workflow.mjs",
 				"artifactSha256": "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5",
 			},
 			"entrypoint": "IngestWorkflow", "retry": map[string]any{"maxAttempts": 3, "initialBackoffSeconds": 5},

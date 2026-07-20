@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "SQLDatabase",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:4dd33ca2d72ba5d767f4a172f1c4e7d53e3b914b8d85d1175ed2777e708ec572"
+    "schemaDigest": "sha256:ecd201ad6a2156dabed0f1afbbea242c3f994fce37d2edf6f676342cd6937246"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 2990,
-      "digest": "sha256:50180fc9486d0cb498800fb2b4ef0efdedece978f8aaf95e1eb6e2fa1c7bce59"
+      "size": 4399,
+      "digest": "sha256:63be975c7bdd6d4af01515e7b0292f3ead849df2e3cf68a42b2ca36050659668"
     },
     {
       "path": "fixtures/desired.json",
@@ -37,8 +37,8 @@
     {
       "path": "fixtures/output.json",
       "mediaType": "application/json",
-      "size": 122,
-      "digest": "sha256:ab023f8c2ff14d12bef7c63dd1f1f48f2e4bd63ddec25dbde21754c4577bd9a5"
+      "size": 144,
+      "digest": "sha256:79a164d7ec7c6e5a46d85a1ceb5d10b0a8ecb6bfb2743fea602f25e9430dd2fc"
     }
   ]
 }

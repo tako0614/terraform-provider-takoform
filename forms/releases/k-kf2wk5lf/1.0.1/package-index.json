@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "Queue",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:1e3d4732d263bb846ae6ca4a8e202f5e207143498397c390299486c429274243"
+    "schemaDigest": "sha256:93308869c7fd95654ee5009efe329d43452d11c59d36f61b5fc79b0a2fbe4646"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 3046,
-      "digest": "sha256:a7d790b38c9cedab60a884c4c0bcf927edf5bb0ad65bd057beef394c0c95a175"
+      "size": 4185,
+      "digest": "sha256:e46357ad862b846aab34f46bd32b0e330ce3dda6b1375e67dffecc1b105c1c23"
     },
     {
       "path": "fixtures/desired.json",

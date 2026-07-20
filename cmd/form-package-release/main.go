@@ -35,6 +35,7 @@ const (
 	canonicalization = "RFC8785"
 	sourceRepository = "github.com/tako0614/terraform-provider-takoform"
 	packageWorkflow  = ".github/workflows/form-package-release.yml"
+	setWorkflow      = ".github/workflows/standard-form-package-set-release.yml"
 	revokeWorkflow   = ".github/workflows/form-package-revocation.yml"
 	bundleMediaType  = "application/vnd.dev.sigstore.bundle.v0.3+json"
 )
@@ -117,6 +118,14 @@ func run(arguments []string, output io.Writer) error {
 		return runBuildRevocation(arguments[1:], output)
 	case "finalize-bundle":
 		return runFinalize(arguments[1:], output)
+	case "build-standard-set":
+		return runBuildStandardSet(arguments[1:], output)
+	case "finalize-standard-set":
+		return runFinalizeStandardSet(arguments[1:], output)
+	case "verify-standard-set-candidate":
+		return runVerifyStandardSetCandidate(arguments[1:], output)
+	case "build-standard-set-readback":
+		return runBuildStandardSetReadback(arguments[1:], output)
 	case "check-revocations":
 		return runCheckRevocations(arguments[1:])
 	default:
@@ -125,7 +134,7 @@ func run(arguments []string, output io.Writer) error {
 }
 
 func usageError() error {
-	return errors.New("usage: form-package-release <build-package|build-revocation|finalize-bundle|check-revocations> [options]")
+	return errors.New("usage: form-package-release <build-package|build-revocation|finalize-bundle|build-standard-set|finalize-standard-set|verify-standard-set-candidate|build-standard-set-readback|check-revocations> [options]")
 }
 
 func runBuildPackage(arguments []string, output io.Writer) error {
@@ -138,6 +147,7 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	toolingCommit := flags.String("tooling-commit", "", "exact protected-main release-tooling commit")
 	allowUntagged := flags.Bool("allow-untagged-candidate", false, "permit non-publishable local candidate without an attached tag")
 	allowDirty := flags.Bool("allow-dirty-candidate", false, "permit non-publishable local candidate from a dirty tree")
+	coordinatedSet := flags.Bool("coordinated-standard-set", false, "bind this package to the root-activated standard set workflow")
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || *tag == "" || *outputDir == "" || !commitPattern.MatchString(*toolingCommit) {
 		return usageError()
 	}
@@ -183,14 +193,24 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 		return err
 	}
 	base := "takoform-form-" + releaseID + "_" + version
+	workflow := packageWorkflow
+	tagPattern := "refs/tags/forms/k-*/v*"
+	if *coordinatedSet {
+		workflow = setWorkflow
+		tagPattern = "refs/tags/standard-forms/v*"
+	}
+	policy := publisherPolicy(workflow, tagPattern, *toolingCommit)
+	if *coordinatedSet {
+		policy.Identity = "https://" + sourceRepository + "/" + workflow + "@refs/tags/standard-forms/v" + version
+	}
 	manifest := releaseManifest{
 		SchemaVersion: 1, ReleaseType: "form-package", Tag: *tag,
 		SourceRepository: sourceRepository, SourceCommit: evidence.commit, ToolingCommit: *toolingCommit,
-		Workflow: packageWorkflow, PackageVersion: version, ReleaseID: releaseID,
+		Workflow: workflow, PackageVersion: version, ReleaseID: releaseID,
 		PackageDigest: report.PackageDigest, FormRef: report.FormRef,
 		Canonicalization: canonicalization, SignedSubject: base + "_package-index.json",
 		SignatureBundle: base + "_package-index.sigstore.json", SignatureMediaType: bundleMediaType,
-		PublisherPolicy:  publisherPolicy(packageWorkflow, "refs/tags/forms/k-*/v*", *toolingCommit),
+		PublisherPolicy:  policy,
 		PublicationReady: false, PublicationBlockers: evidence.blockers,
 	}
 	if err := createOutput(*outputDir); err != nil {
@@ -224,7 +244,7 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	}
 	assets = append(assets, sbomAsset)
 	provenanceName := base + "_provenance.intoto.json"
-	provenance := createProvenance(*tag, packageWorkflow, evidence.commit, *toolingCommit, assets[:2])
+	provenance := createProvenance(*tag, workflow, evidence.commit, *toolingCommit, assets[:2])
 	if err := writeCanonicalJSON(filepath.Join(*outputDir, provenanceName), provenance); err != nil {
 		return err
 	}

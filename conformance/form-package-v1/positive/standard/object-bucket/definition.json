@@ -125,6 +125,59 @@
     "refresh",
     "drift"
   ],
+  "interfaces": [
+    {
+      "name": "object.storage",
+      "version": "1",
+      "description": "Portable object storage operations.",
+      "required": true,
+      "document": {
+        "operations": [
+          "delete",
+          "get",
+          "list",
+          "put"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "delete",
+                "get",
+                "list",
+                "put"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
   "conformanceFixtures": [
     {
       "name": "canonical",

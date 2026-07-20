@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "KVStore",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:c0d0dea9f7cb80243748a31770c9225ed21c55ee5edbad55e41df874287d658f"
+    "schemaDigest": "sha256:137e97cbce057aac1ef8e9af3f00bb9ca3a3967131bf2d920c252d5249b6e96f"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 2884,
-      "digest": "sha256:1f2a4fa2d039b03157c67c4b1da32307639cca6bc14a998f76a7d5cd856024f6"
+      "size": 4040,
+      "digest": "sha256:ed10aff5c09b512b4799d34bdbc7ee720427b97c55f515f230e7d191cc141557"
     },
     {
       "path": "fixtures/desired.json",

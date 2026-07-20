@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "StatefulActorNamespace",
     "definitionVersion": "1.0.1",
-    "schemaDigest": "sha256:a7cdf3f5e77c94ef4cc625cfe5ba501c9d4a8d6475168ff1044475438070dec0"
+    "schemaDigest": "sha256:c82fa8458e333ce20160f052c255ee94636219bbdea6a46d4730852411050be4"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4341,
-      "digest": "sha256:07ab61542a3b279aa0fe140960109ec6ae4470bd4f7da73cfbeff4476679ad91"
+      "size": 5389,
+      "digest": "sha256:c066f57936dcdb20e2f8f187fb9c800073bc9f9e5dc57f0f55b383b90f9420e5"
     },
     {
       "path": "fixtures/desired.json",

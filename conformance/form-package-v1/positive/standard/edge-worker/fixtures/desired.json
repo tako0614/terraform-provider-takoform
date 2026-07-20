@@ -3,12 +3,22 @@
   "compatibilityFlags": [
     "nodejs_compat"
   ],
+  "connections": {
+    "ASSETS": {
+      "permissions": [
+        "read",
+        "write"
+      ],
+      "projection": "object.binding.v1",
+      "resource": "ObjectBucket/edge-assets"
+    }
+  },
   "name": "edge",
   "profiles": [
     "workers"
   ],
   "source": {
     "artifactSha256": "281b77f65f6258e56d0468a580b1f67baf9f4d71891c2f7259ce24c47bf7d67e",
-    "artifactUrl": "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.2/edge-worker.mjs"
+    "artifactUrl": "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.3/edge-worker.mjs"
   }
 }

@@ -75,6 +75,11 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "engine": {
+        "default": "sqlite",
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
       "generation": {
         "minimum": 1,
         "type": "integer"
@@ -101,7 +106,8 @@
       "kind",
       "name",
       "generation",
-      "portability"
+      "portability",
+      "engine"
     ],
     "type": "object"
   },
@@ -118,6 +124,62 @@
     "observe",
     "refresh",
     "drift"
+  ],
+  "interfaces": [
+    {
+      "name": "sql.query",
+      "version": "1",
+      "description": "Portable SQL query and transaction operations.",
+      "required": true,
+      "document": {
+        "operations": [
+          "execute",
+          "query",
+          "transaction"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "execute",
+                "query",
+                "transaction"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        },
+        {
+          "name": "engine",
+          "source": "output",
+          "pointer": "/engine"
+        }
+      ]
+    }
   ],
   "conformanceFixtures": [
     {

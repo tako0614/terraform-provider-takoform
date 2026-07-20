@@ -169,6 +169,53 @@
     "refresh",
     "drift"
   ],
+  "interfaces": [
+    {
+      "name": "actor.invoke",
+      "version": "1",
+      "description": "Portable stateful actor invocation operations.",
+      "required": true,
+      "document": {
+        "operations": [
+          "invoke"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "invoke"
+              ],
+              "type": "string"
+            },
+            "maxItems": 1,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
   "conformanceFixtures": [
     {
       "name": "canonical",

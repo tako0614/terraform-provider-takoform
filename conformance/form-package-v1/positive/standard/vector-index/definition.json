@@ -164,6 +164,57 @@
     "refresh",
     "drift"
   ],
+  "interfaces": [
+    {
+      "name": "vector.query",
+      "version": "1",
+      "description": "Portable vector index operations.",
+      "required": true,
+      "document": {
+        "operations": [
+          "delete",
+          "query",
+          "upsert"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "delete",
+                "query",
+                "upsert"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
   "conformanceFixtures": [
     {
       "name": "canonical",
