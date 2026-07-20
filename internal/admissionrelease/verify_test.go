@@ -94,8 +94,17 @@ func TestVerifyAdmissionSetRejectsStructurallyValidEvidenceWithoutReportClosure(
 			Interfaces:   standardform.InterfaceAudit{Reviewed: true, BindingAuthorityExternal: true, SecretFreeDocuments: true},
 		},
 		Fixtures: standardform.Fixtures{
-			Positive: []standardform.PositiveFixture{{Name: "canonical", Desired: map[string]any{}, Observed: map[string]any{}, Output: map[string]any{}}},
-			Negative: []standardform.NegativeFixture{{Name: "reject-invalid-semantics", Stage: "desired", Input: map[string]any{}, ExpectedErrorCode: standardform.InvalidArgumentErrorCode}},
+			Positive: []standardform.PositiveFixture{{
+				Name:     "canonical",
+				Desired:  map[string]any{"interfaces": []any{"s3_api"}, "name": "assets", "storageClass": "standard"},
+				Observed: map[string]any{"driftedFields": []any{}, "generation": float64(1), "id": "ObjectBucket/assets", "imported": true, "portability": "portable", "ready": true},
+				Output:   map[string]any{"generation": float64(1), "id": "ObjectBucket/assets", "kind": "ObjectBucket", "name": "assets", "portability": "portable"},
+			}},
+			Negative: []standardform.NegativeFixture{{
+				Name: "reject-invalid-semantics", Stage: "desired",
+				Input:             map[string]any{"interfaces": []any{"s3_api"}, "name": "assets", "storageClass": "cold"},
+				ExpectedErrorCode: standardform.InvalidArgumentErrorCode,
+			}},
 		},
 		Conformance: standardform.Conformance{Host: proof, Provider: proof},
 	}

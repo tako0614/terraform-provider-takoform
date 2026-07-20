@@ -44,26 +44,67 @@ const (
 // host runner or provider runner for one exact Form Package. It contains no
 // credential, target, placement, billing, or operator authority.
 type RunnerReport struct {
-	Format           string                              `json:"format"`
-	Role             string                              `json:"role"`
-	Subject          string                              `json:"subject"`
-	RunnerVersion    string                              `json:"runnerVersion"`
-	Identity         standardform.InstalledFormReference `json:"identity"`
-	Status           string                              `json:"status"`
-	Lifecycle        standardform.LifecycleAudit         `json:"lifecycle"`
-	PositiveFixtures []PositiveFixtureResult             `json:"positiveFixtures"`
-	NegativeFixtures []NegativeFixtureResult             `json:"negativeFixtures"`
+	Format                  string                              `json:"format"`
+	Role                    string                              `json:"role"`
+	Subject                 string                              `json:"subject"`
+	RunnerVersion           string                              `json:"runnerVersion"`
+	Identity                standardform.InstalledFormReference `json:"identity"`
+	Status                  string                              `json:"status"`
+	Lifecycle               standardform.LifecycleAudit         `json:"lifecycle"`
+	ExecutionEvidence       *HostExecutionEvidence              `json:"executionEvidence,omitempty"`
+	ExecutionEvidenceDigest string                              `json:"executionEvidenceDigest,omitempty"`
+	PositiveFixtures        []PositiveFixtureResult             `json:"positiveFixtures"`
+	NegativeFixtures        []NegativeFixtureResult             `json:"negativeFixtures"`
+}
+
+type HostExecutionEvidence struct {
+	APIVersion          string                              `json:"apiVersion"`
+	Identity            standardform.InstalledFormReference `json:"identity"`
+	EndpointOrigin      string                              `json:"endpointOrigin"`
+	Status              string                              `json:"status"`
+	Checks              []string                            `json:"checks"`
+	Fixtures            HostExecutionFixtures               `json:"fixtures"`
+	CanonicalResourceID string                              `json:"canonicalResourceId"`
+}
+
+type HostExecutionFixtures struct {
+	Positive []HostPositiveExecutionFixture `json:"positive"`
+	Negative []HostNegativeExecutionFixture `json:"negative"`
+}
+
+type HostPositiveExecutionFixture struct {
+	Name                 string `json:"name"`
+	InputDigest          string `json:"inputDigest"`
+	PackageFixtureDigest string `json:"packageFixtureDigest"`
+}
+
+type HostNegativeExecutionFixture struct {
+	Name                 string `json:"name"`
+	Stage                string `json:"stage"`
+	InputDigest          string `json:"inputDigest"`
+	PackageFixtureDigest string `json:"packageFixtureDigest"`
+	HTTPStatus           int    `json:"httpStatus"`
+	ErrorCode            string `json:"errorCode"`
 }
 
 type PositiveFixtureResult struct {
-	Name   string `json:"name"`
-	Passed bool   `json:"passed"`
+	Name                 string `json:"name"`
+	PackageFixtureDigest string `json:"packageFixtureDigest,omitempty"`
+	EffectiveInputDigest string `json:"effectiveInputDigest,omitempty"`
+	Passed               bool   `json:"passed"`
 }
 
 type NegativeFixtureResult struct {
-	Name      string `json:"name"`
-	ErrorCode string `json:"errorCode"`
-	Passed    bool   `json:"passed"`
+	Name                 string `json:"name"`
+	PackageFixtureDigest string `json:"packageFixtureDigest,omitempty"`
+	EffectiveInputDigest string `json:"effectiveInputDigest,omitempty"`
+	ErrorCode            string `json:"errorCode"`
+	Passed               bool   `json:"passed"`
+}
+
+type fixtureDigestBinding struct {
+	PackageFixtureDigest string
+	EffectiveInputDigest string
 }
 
 type packageReleaseManifest struct {
@@ -315,13 +356,19 @@ func ValidateCanonicalProviderRunnerReport(raw []byte, identity standardform.Ins
 		Subject: report.Subject, RunnerVersion: report.RunnerVersion, Identity: identity, Status: "passed",
 		PositiveFixtures: append([]string(nil), positives...), NegativeFixtures: append([]string(nil), negatives...),
 	}
-	if err := validateRunnerReport(report, roleProviderReport, proof, positives, negatives); err != nil {
+	if err := validateRunnerReport(report, roleProviderReport, proof, positives, negatives, nil, nil); err != nil {
 		return RunnerReport{}, err
 	}
 	return report, nil
 }
 
-func validateRunnerReport(report RunnerReport, role string, proof standardform.ConformanceProof, positives, negatives []string) error {
+func validateRunnerReport(
+	report RunnerReport,
+	role string,
+	proof standardform.ConformanceProof,
+	positives, negatives []string,
+	positiveBindings, negativeBindings map[string]fixtureDigestBinding,
+) error {
 	if report.Format != runnerReportFormat || report.Role != role || report.Status != "passed" ||
 		strings.TrimSpace(report.Subject) == "" || strings.TrimSpace(report.RunnerVersion) == "" ||
 		report.Subject != proof.Subject || report.RunnerVersion != proof.RunnerVersion ||
@@ -339,6 +386,15 @@ func validateRunnerReport(report RunnerReport, role string, proof standardform.C
 			return fmt.Errorf("%s positive fixture is empty or failed", role)
 		}
 		positiveNames = append(positiveNames, result.Name)
+		if role == roleHostReport {
+			binding, ok := positiveBindings[result.Name]
+			if !ok || result.PackageFixtureDigest != binding.PackageFixtureDigest ||
+				result.EffectiveInputDigest != binding.EffectiveInputDigest {
+				return fmt.Errorf("%s positive fixture %q does not bind the exact package and effective input bytes", role, result.Name)
+			}
+		} else if result.PackageFixtureDigest != "" || result.EffectiveInputDigest != "" {
+			return fmt.Errorf("%s provider report must not claim host execution input bindings", role)
+		}
 	}
 	negativeNames := make([]string, 0, len(report.NegativeFixtures))
 	for _, result := range report.NegativeFixtures {
@@ -346,12 +402,104 @@ func validateRunnerReport(report RunnerReport, role string, proof standardform.C
 			return fmt.Errorf("%s negative fixture did not return %q", role, standardform.InvalidArgumentErrorCode)
 		}
 		negativeNames = append(negativeNames, result.Name)
+		if role == roleHostReport {
+			binding, ok := negativeBindings[result.Name]
+			if !ok || result.PackageFixtureDigest != binding.PackageFixtureDigest ||
+				result.EffectiveInputDigest != binding.EffectiveInputDigest {
+				return fmt.Errorf("%s negative fixture %q does not bind the exact package and effective input bytes", role, result.Name)
+			}
+		} else if result.PackageFixtureDigest != "" || result.EffectiveInputDigest != "" {
+			return fmt.Errorf("%s provider report must not claim host execution input bindings", role)
+		}
+	}
+	if role == roleHostReport {
+		if err := validateHostExecutionEvidence(report); err != nil {
+			return fmt.Errorf("%s execution evidence: %w", role, err)
+		}
+	} else if report.ExecutionEvidence != nil || report.ExecutionEvidenceDigest != "" {
+		return fmt.Errorf("%s provider report must not claim host execution evidence", role)
 	}
 	if !sameStringSet(positiveNames, positives) || !sameStringSet(negativeNames, negatives) ||
 		!sameStringSet(proof.PositiveFixtures, positives) || !sameStringSet(proof.NegativeFixtures, negatives) {
 		return fmt.Errorf("%s runner report fixture closure does not match admission evidence", role)
 	}
 	return nil
+}
+
+func validateHostExecutionEvidence(report RunnerReport) error {
+	evidence := report.ExecutionEvidence
+	if evidence == nil || !formpackage.ValidDigest(report.ExecutionEvidenceDigest) {
+		return fmt.Errorf("embedded evidence and its canonical digest are required")
+	}
+	raw, err := json.Marshal(evidence)
+	if err != nil {
+		return err
+	}
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
+		return err
+	}
+	if formpackage.DigestBytes(canonical) != report.ExecutionEvidenceDigest {
+		return fmt.Errorf("embedded evidence digest mismatch")
+	}
+	if evidence.APIVersion != "takosumi.portable-form-host-conformance/v1" || evidence.Status != "passed" ||
+		!reflect.DeepEqual(evidence.Identity, report.Identity) || strings.TrimSpace(evidence.EndpointOrigin) == "" ||
+		report.Subject != "host:"+evidence.EndpointOrigin || strings.TrimSpace(evidence.CanonicalResourceID) == "" {
+		return fmt.Errorf("embedded evidence identity mismatch")
+	}
+	requiredChecks := []string{"apply", "read", "update", "delete-idempotency", "import-idempotency", "observe", "refresh", "drift"}
+	for _, required := range requiredChecks {
+		if !containsString(evidence.Checks, required) {
+			return fmt.Errorf("embedded evidence lacks %s", required)
+		}
+	}
+	positive := make(map[string]HostPositiveExecutionFixture, len(evidence.Fixtures.Positive))
+	for _, fixture := range evidence.Fixtures.Positive {
+		if fixture.Name == "" || !formpackage.ValidDigest(fixture.InputDigest) || !formpackage.ValidDigest(fixture.PackageFixtureDigest) {
+			return fmt.Errorf("embedded positive fixture is invalid")
+		}
+		if _, duplicate := positive[fixture.Name]; duplicate {
+			return fmt.Errorf("embedded positive fixture %q is duplicated", fixture.Name)
+		}
+		positive[fixture.Name] = fixture
+	}
+	negative := make(map[string]HostNegativeExecutionFixture, len(evidence.Fixtures.Negative))
+	for _, fixture := range evidence.Fixtures.Negative {
+		if fixture.Name == "" || fixture.Stage != "desired" || fixture.HTTPStatus != 400 || fixture.ErrorCode != standardform.InvalidArgumentErrorCode ||
+			!formpackage.ValidDigest(fixture.InputDigest) || !formpackage.ValidDigest(fixture.PackageFixtureDigest) {
+			return fmt.Errorf("embedded negative fixture is invalid")
+		}
+		if _, duplicate := negative[fixture.Name]; duplicate {
+			return fmt.Errorf("embedded negative fixture %q is duplicated", fixture.Name)
+		}
+		negative[fixture.Name] = fixture
+	}
+	if len(positive) != len(report.PositiveFixtures) || len(negative) != len(report.NegativeFixtures) {
+		return fmt.Errorf("embedded fixture closure differs from the report")
+	}
+	for _, fixture := range report.PositiveFixtures {
+		executed, ok := positive[fixture.Name]
+		if !ok || executed.PackageFixtureDigest != fixture.PackageFixtureDigest || executed.InputDigest != fixture.EffectiveInputDigest {
+			return fmt.Errorf("embedded positive fixture %q differs from the report", fixture.Name)
+		}
+	}
+	for _, fixture := range report.NegativeFixtures {
+		executed, ok := negative[fixture.Name]
+		if !ok || executed.PackageFixtureDigest != fixture.PackageFixtureDigest || executed.InputDigest != fixture.EffectiveInputDigest ||
+			executed.ErrorCode != fixture.ErrorCode {
+			return fmt.Errorf("embedded negative fixture %q differs from the report", fixture.Name)
+		}
+	}
+	return nil
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packageVersion string) ([]byte, error) {

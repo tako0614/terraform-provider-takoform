@@ -47,7 +47,9 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 	positiveNames := []string{"canonical"}
 	negativeNames := []string{"reject-invalid-semantics"}
 
-	host := completeRunnerReport(roleHostReport, "host:https://host.example.test", identity, positiveNames, negativeNames)
+	positiveBinding := testFixtureDigestBinding(t, packageRoot, "fixtures/desired.json")
+	negativeBinding := testFixtureDigestBinding(t, packageRoot, "fixtures/negative.json")
+	host := completeRunnerReport(roleHostReport, "host:https://host.example.test", identity, positiveNames, negativeNames, positiveBinding, negativeBinding)
 	provider := completeRunnerReport(roleProviderReport, "provider:registry.terraform.io/tako0614/takoform", identity, positiveNames, negativeNames)
 	hostRaw := writeCanonicalTestJSON(t, root, "admission/v1/packages/object-bucket/host-report.json", host)
 	providerRaw := writeCanonicalTestJSON(t, root, "admission/v1/packages/object-bucket/provider-report.json", provider)
@@ -244,20 +246,126 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 	}
 }
 
-func completeRunnerReport(role, subject string, identity standardform.InstalledFormReference, positives, negatives []string) RunnerReport {
+func completeRunnerReport(role, subject string, identity standardform.InstalledFormReference, positives, negatives []string, bindings ...fixtureDigestBinding) RunnerReport {
 	positiveResults := make([]PositiveFixtureResult, 0, len(positives))
-	for _, name := range positives {
-		positiveResults = append(positiveResults, PositiveFixtureResult{Name: name, Passed: true})
+	for index, name := range positives {
+		result := PositiveFixtureResult{Name: name, Passed: true}
+		if role == roleHostReport && index < len(bindings) {
+			result.PackageFixtureDigest = bindings[index].PackageFixtureDigest
+			result.EffectiveInputDigest = bindings[index].EffectiveInputDigest
+		}
+		positiveResults = append(positiveResults, result)
 	}
 	negativeResults := make([]NegativeFixtureResult, 0, len(negatives))
-	for _, name := range negatives {
-		negativeResults = append(negativeResults, NegativeFixtureResult{Name: name, ErrorCode: standardform.InvalidArgumentErrorCode, Passed: true})
+	for index, name := range negatives {
+		result := NegativeFixtureResult{Name: name, ErrorCode: standardform.InvalidArgumentErrorCode, Passed: true}
+		bindingIndex := len(positives) + index
+		if role == roleHostReport && bindingIndex < len(bindings) {
+			result.PackageFixtureDigest = bindings[bindingIndex].PackageFixtureDigest
+			result.EffectiveInputDigest = bindings[bindingIndex].EffectiveInputDigest
+		}
+		negativeResults = append(negativeResults, result)
 	}
-	return RunnerReport{
+	report := RunnerReport{
 		Format: runnerReportFormat, Role: role, Subject: subject, RunnerVersion: "fixture-1.0.0", Identity: identity, Status: "passed",
 		Lifecycle:        standardform.LifecycleAudit{Create: true, Read: true, Update: true, Delete: true, Import: true, Observe: true, Refresh: true, Drift: true},
 		PositiveFixtures: positiveResults, NegativeFixtures: negativeResults,
 	}
+	if role == roleHostReport {
+		positiveExecution := make([]HostPositiveExecutionFixture, 0, len(report.PositiveFixtures))
+		for _, fixture := range report.PositiveFixtures {
+			positiveExecution = append(positiveExecution, HostPositiveExecutionFixture{
+				Name: fixture.Name, InputDigest: fixture.EffectiveInputDigest, PackageFixtureDigest: fixture.PackageFixtureDigest,
+			})
+		}
+		negativeExecution := make([]HostNegativeExecutionFixture, 0, len(report.NegativeFixtures))
+		for _, fixture := range report.NegativeFixtures {
+			negativeExecution = append(negativeExecution, HostNegativeExecutionFixture{
+				Name: fixture.Name, Stage: "desired", InputDigest: fixture.EffectiveInputDigest,
+				PackageFixtureDigest: fixture.PackageFixtureDigest, HTTPStatus: 400, ErrorCode: fixture.ErrorCode,
+			})
+		}
+		report.ExecutionEvidence = &HostExecutionEvidence{
+			APIVersion: "takosumi.portable-form-host-conformance/v1", Identity: identity,
+			EndpointOrigin: "https://host.example.test", Status: "passed",
+			Checks:              []string{"apply", "read", "update", "delete-idempotency", "import-idempotency", "observe", "refresh", "drift"},
+			Fixtures:            HostExecutionFixtures{Positive: positiveExecution, Negative: negativeExecution},
+			CanonicalResourceID: "tkrn:test:ObjectBucket:assets",
+		}
+		raw, _ := json.Marshal(report.ExecutionEvidence)
+		canonical, _ := formpackage.Canonicalize(raw)
+		report.ExecutionEvidenceDigest = formpackage.DigestBytes(canonical)
+	}
+	return report
+}
+
+func TestHostRunnerReportBindsExactExecutedPackageFixtures(t *testing.T) {
+	t.Parallel()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	identity := standardform.InstalledFormReference{
+		FormRef: formpackage.FormRef{
+			APIVersion: "forms.takoform.com/v1alpha1", Kind: "ObjectBucket", DefinitionVersion: "1.0.0", SchemaDigest: digest,
+		},
+		PackageDigest: digest,
+	}
+	binding := fixtureDigestBinding{PackageFixtureDigest: digest, EffectiveInputDigest: digest}
+	report := completeRunnerReport(roleHostReport, "host:https://host.example.test", identity, []string{"canonical"}, []string{"reject-invalid-semantics"}, binding, binding)
+	proof := standardform.ConformanceProof{
+		Subject: report.Subject, RunnerVersion: report.RunnerVersion, Identity: identity, Status: "passed",
+		PositiveFixtures: []string{"canonical"}, NegativeFixtures: []string{"reject-invalid-semantics"}, EvidenceDigest: digest,
+	}
+	bindings := map[string]fixtureDigestBinding{"canonical": binding}
+	negativeBindings := map[string]fixtureDigestBinding{"reject-invalid-semantics": binding}
+	if err := validateRunnerReport(report, roleHostReport, proof, proof.PositiveFixtures, proof.NegativeFixtures, bindings, negativeBindings); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*RunnerReport){
+		"execution evidence":      func(candidate *RunnerReport) { candidate.ExecutionEvidenceDigest = "" },
+		"opaque execution digest": func(candidate *RunnerReport) { candidate.ExecutionEvidenceDigest = "sha256:" + strings.Repeat("d", 64) },
+		"package fixture": func(candidate *RunnerReport) {
+			candidate.PositiveFixtures[0].PackageFixtureDigest = "sha256:" + strings.Repeat("b", 64)
+		},
+		"effective input": func(candidate *RunnerReport) {
+			candidate.NegativeFixtures[0].EffectiveInputDigest = "sha256:" + strings.Repeat("c", 64)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := report
+			candidate.PositiveFixtures = append([]PositiveFixtureResult(nil), report.PositiveFixtures...)
+			candidate.NegativeFixtures = append([]NegativeFixtureResult(nil), report.NegativeFixtures...)
+			mutate(&candidate)
+			if err := validateRunnerReport(candidate, roleHostReport, proof, proof.PositiveFixtures, proof.NegativeFixtures, bindings, negativeBindings); err == nil {
+				t.Fatal("tampered host execution binding accepted")
+			}
+		})
+	}
+	substituted := report
+	substituted.PositiveFixtures = append([]PositiveFixtureResult(nil), report.PositiveFixtures...)
+	copyEvidence := *report.ExecutionEvidence
+	copyEvidence.Fixtures.Positive = append([]HostPositiveExecutionFixture(nil), report.ExecutionEvidence.Fixtures.Positive...)
+	substituted.ExecutionEvidence = &copyEvidence
+	substitutedDigest := "sha256:" + strings.Repeat("e", 64)
+	substituted.PositiveFixtures[0].PackageFixtureDigest = substitutedDigest
+	substituted.ExecutionEvidence.Fixtures.Positive[0].PackageFixtureDigest = substitutedDigest
+	raw, _ := json.Marshal(substituted.ExecutionEvidence)
+	canonical, _ := formpackage.Canonicalize(raw)
+	substituted.ExecutionEvidenceDigest = formpackage.DigestBytes(canonical)
+	if err := validateRunnerReport(substituted, roleHostReport, proof, proof.PositiveFixtures, proof.NegativeFixtures, bindings, negativeBindings); err == nil || !strings.Contains(err.Error(), "exact package") {
+		t.Fatalf("self-consistent arbitrary package fixture digest accepted: %v", err)
+	}
+}
+
+func testFixtureDigestBinding(t *testing.T, packageRoot, relative string) fixtureDigestBinding {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(packageRoot, filepath.FromSlash(relative)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalDigest, err := formpackage.DigestCanonicalJSON(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fixtureDigestBinding{PackageFixtureDigest: formpackage.DigestBytes(raw), EffectiveInputDigest: canonicalDigest}
 }
 
 func completeAdmissionEvidence(identity standardform.InstalledFormReference, host RunnerReport, hostDigest string, provider RunnerReport, providerDigest string) standardform.AdmissionEvidence {
@@ -284,8 +392,17 @@ func completeAdmissionEvidence(identity standardform.InstalledFormReference, hos
 			Interfaces:   standardform.InterfaceAudit{Reviewed: true, BindingAuthorityExternal: true, SecretFreeDocuments: true},
 		},
 		Fixtures: standardform.Fixtures{
-			Positive: []standardform.PositiveFixture{{Name: "canonical", Desired: map[string]any{}, Observed: map[string]any{}, Output: map[string]any{}}},
-			Negative: []standardform.NegativeFixture{{Name: "reject-invalid-semantics", Stage: "desired", Input: map[string]any{}, ExpectedErrorCode: standardform.InvalidArgumentErrorCode}},
+			Positive: []standardform.PositiveFixture{{
+				Name:     "canonical",
+				Desired:  map[string]any{"interfaces": []any{"s3_api"}, "name": "assets", "storageClass": "standard"},
+				Observed: map[string]any{"driftedFields": []any{}, "generation": float64(1), "id": "ObjectBucket/assets", "imported": true, "portability": "portable", "ready": true},
+				Output:   map[string]any{"generation": float64(1), "id": "ObjectBucket/assets", "kind": "ObjectBucket", "name": "assets", "portability": "portable"},
+			}},
+			Negative: []standardform.NegativeFixture{{
+				Name: "reject-invalid-semantics", Stage: "desired",
+				Input:             map[string]any{"interfaces": []any{"s3_api"}, "name": "assets", "storageClass": "cold"},
+				ExpectedErrorCode: standardform.InvalidArgumentErrorCode,
+			}},
 		},
 		Conformance: standardform.Conformance{Host: proof(host, hostDigest), Provider: proof(provider, providerDigest)},
 	}
