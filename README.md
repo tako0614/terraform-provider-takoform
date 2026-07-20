@@ -92,6 +92,11 @@ revocation-chain proof remain external. Unsigned canonical provider-report
 subjects can be generated from the exact retained package fixtures through the
 real provider protocol, but those subjects grant no admission. No
 `forms/admissions/v*` activation or revocation release has been published.
+The active provider `0.1.1` source candidate pins a new complete `1.0.1` Form
+set whose executable fixture references resolve to a separate Takosumi-owned
+host-conformance runtime release. The retained `1.0.0` publication proof stays
+independently verifiable while the new package releases and admission evidence
+are prepared.
 
 ## Development
 
@@ -116,8 +121,9 @@ go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
 `matrix` is the local `dev_overrides` regression gate. The separate
 `render-registry-matrix` command performs a version-pinned direct Registry
-install and exists for signed post-publication readback only; it is expected to
-fail before the first provider version is public.
+install and exists for signed post-publication readback only. Provider `0.1.0`
+has completed direct OpenTofu installation; Terraform Registry indexing still
+depends on namespace Terms acceptance.
 
 Provider publication and Standard Form admission are separate releases. The
 provider `v*` workflow can publish only while the descriptor and inventory are
@@ -128,10 +134,10 @@ runner, Registry, and admission evidence and is the only activation authority.
 Provider releases use the fail-closed signed `v*` tag workflow documented in
 [release/README.md](release/README.md). The signing key is pinned by fingerprint;
 the private key remains outside the repository. The `tako0614` public namespace
-and pinned signing key are registered. Do not create a release tag until the
-release descriptor and provider compatibility gates are complete and the
-maintainer explicitly authorizes the first publication. The first real
-Registry/OpenTofu install proof remains post-publication evidence.
+and pinned signing key are registered. Do not create a new release tag until
+the release descriptor and provider compatibility gates are complete. Existing
+version paths are immutable; the coordinated `1.0.1` Form pin therefore uses
+provider `0.1.1`.
 
 ## License
 

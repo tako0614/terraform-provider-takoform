@@ -279,7 +279,7 @@ func LoadPublishedFixtures(root string) ([]PublishedFixture, error) {
 			return nil, fmt.Errorf("published package set duplicates %s", entry.Kind)
 		}
 		seen[entry.Kind] = struct{}{}
-		fixture, err := loadPublishedFixture(root, entry)
+		fixture, err := loadPublishedFixture(root, set.PackageVersion, entry)
 		if err != nil {
 			return nil, fmt.Errorf("%s published package fixtures: %w", entry.Kind, err)
 		}
@@ -288,7 +288,7 @@ func LoadPublishedFixtures(root string) ([]PublishedFixture, error) {
 	return fixtures, nil
 }
 
-func loadPublishedFixture(root string, entry admissionrelease.PublishedPackageEntry) (PublishedFixture, error) {
+func loadPublishedFixture(root, packageVersion string, entry admissionrelease.PublishedPackageEntry) (PublishedFixture, error) {
 	indexPath := filepath.Join(root, "admission", "v1", filepath.FromSlash(entry.PackageIndexPath))
 	indexRaw, err := os.ReadFile(indexPath)
 	if err != nil {
@@ -301,7 +301,7 @@ func loadPublishedFixture(root string, entry admissionrelease.PublishedPackageEn
 	if err != nil {
 		return PublishedFixture{}, err
 	}
-	if index.FormRef != entry.FormRef || index.PackageVersion != "1.0.0" {
+	if index.FormRef != entry.FormRef || index.PackageVersion != packageVersion {
 		return PublishedFixture{}, fmt.Errorf("retained package index identity drift")
 	}
 	base := strings.TrimSuffix(path.Base(entry.PackageIndexPath), "_package-index.json")

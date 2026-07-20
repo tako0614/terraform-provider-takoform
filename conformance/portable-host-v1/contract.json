@@ -11,10 +11,10 @@
       "formRef": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "ObjectBucket",
-        "definitionVersion": "1.0.0",
-        "schemaDigest": "sha256:cef08a0fad637c322e1059c138d11d490cb3b95b2d328a6d35801c0cdec3bdb8"
+        "definitionVersion": "1.0.1",
+        "schemaDigest": "sha256:259a280a33a5e5f48c46513f374376e49ab3cc6109b10d626397fd7e3623bd04"
       },
-      "packageDigest": "sha256:a0e82691a448b22df329d14866b7e8acd3550fc9ee1c172c597f7d4f8e57cbf5"
+      "packageDigest": "sha256:64e102d55106a1526ba3a6ecd06cd6bf77b3928cd2278a56b53f37afc6189771"
     },
     "desired": {
       "interfaces": [
@@ -85,8 +85,17 @@
     "endpointKey": "interfaces",
     "listPath": "{api}/interfaces",
     "getPath": "{api}/interfaces/{name}",
-    "descriptorIdentity": ["name", "version"],
-    "runtimeIdentity": ["space", "resource.kind", "resource.name", "name", "version"],
+    "descriptorIdentity": [
+      "name",
+      "version"
+    ],
+    "runtimeIdentity": [
+      "space",
+      "resource.kind",
+      "resource.name",
+      "name",
+      "version"
+    ],
     "versionQuery": "version",
     "omittedVersionRule": "only-when-visible-name-is-unique",
     "resourceKindQuery": "resourceKind",
@@ -124,6 +133,6 @@
   ],
   "runnerEvidence": {
     "subject": "takoform.portable-host-black-box-runner@v1",
-    "sha256": "sha256:b9073cbc45d5630aa88bf9beca20ac6df32ec080a11e5e00774c41b63f6e2020"
+    "sha256": "sha256:5a015a7b90ecab01ba37a15f2abe9f1d7ed10e3ba1b60b70a2e1ea73a693929e"
   }
 }

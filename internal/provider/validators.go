@@ -95,7 +95,7 @@ func (v stringPatternValidator) ValidateString(_ context.Context, req validator.
 type stringOCIDigestReferenceValidator struct{}
 
 // StringOCIDigestReference requires an immutable OCI image digest rather than
-// a mutable tag. The exact rule mirrors ContainerService@1.0.0.
+// a mutable tag. The exact rule mirrors the current ContainerService standard.
 func StringOCIDigestReference() validator.String {
 	return stringOCIDigestReferenceValidator{}
 }

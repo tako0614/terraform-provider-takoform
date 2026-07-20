@@ -77,7 +77,7 @@ with a TUF-authenticated production root and digest-pinned protected-main
 package publisher policy. No revocation statement or admission activation has
 been released. Remote host distribution/install, host-side publisher-policy enforcement,
 activation, and revocation consumption still require implementation and live
-evidence. The ten current provider resources have local deterministic `1.0.0 /
+evidence. The ten current provider resources have local deterministic `1.0.1 /
 standard` definition candidate bytes and structural fixtures only. Their
 inventory is `structural-candidate`, not `portable-standard`; definition status
 does not admit them. Passed host/provider lifecycle reports, portable negative

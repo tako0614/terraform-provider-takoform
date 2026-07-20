@@ -10,7 +10,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-func TestCommittedStableSetVerifies(t *testing.T) {
+func TestCommittedCandidateSetVerifies(t *testing.T) {
 	t.Parallel()
 	if err := Verify(filepath.Join("..", "..")); err != nil {
 		t.Fatal(err)
@@ -59,9 +59,60 @@ func TestPublishedPackageSetVerifiesWithoutAdmittingForms(t *testing.T) {
 	if err := VerifyPublishedPackageSet(root); err != nil {
 		t.Fatal(err)
 	}
+	var current Inventory
+	if err := readJSON(filepath.Join(root, "forms", "standard-package-set.json"), &current); err != nil {
+		t.Fatal(err)
+	}
+	var published struct {
+		DefinitionVersion string `json:"definitionVersion"`
+		PackageVersion    string `json:"packageVersion"`
+	}
+	if err := readJSON(filepath.Join(root, "admission", "v1", "published-package-set.json"), &published); err != nil {
+		t.Fatal(err)
+	}
+	if current.DefinitionVersion != "1.0.1" || current.PackageVersion != "1.0.1" || published.DefinitionVersion != "1.0.0" || published.PackageVersion != "1.0.0" {
+		t.Fatalf("candidate/publication window drift: current=%s/%s published=%s/%s", current.DefinitionVersion, current.PackageVersion, published.DefinitionVersion, published.PackageVersion)
+	}
 	err := VerifyReleaseReady(root)
 	if err == nil || !strings.Contains(err.Error(), "missing admission/v1/standard-admission-set.json") {
 		t.Fatalf("published package readback opened admission: %v", err)
+	}
+}
+
+func TestCurrentCandidatePinsRealRuntimeAndMaterializableDefaults(t *testing.T) {
+	t.Parallel()
+	edge, err := canonicalDesired("EdgeWorker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	edgeSource := edge["source"].(map[string]any)
+	if edgeSource["artifactUrl"] != "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.1/edge-worker.mjs" || edgeSource["artifactSha256"] != "281b77f65f6258e56d0468a580b1f67baf9f4d71891c2f7259ce24c47bf7d67e" {
+		t.Fatalf("EdgeWorker runtime identity drift: %#v", edgeSource)
+	}
+	workflow, _ := canonicalDesired("DurableWorkflow")
+	workflowSource := workflow["source"].(map[string]any)
+	if workflowSource["artifactRef"] != "standard-form-runtime/v1.0.1/durable-workflow.mjs" || workflowSource["artifactSha256"] != "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5" {
+		t.Fatalf("DurableWorkflow runtime identity drift: %#v", workflowSource)
+	}
+	container, _ := canonicalDesired("ContainerService")
+	if container["image"] != "docker.io/library/nginx@sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317" {
+		t.Fatalf("ContainerService OCI identity drift: %#v", container["image"])
+	}
+	for _, kind := range []string{"EdgeWorker", "VectorIndex", "DurableWorkflow", "ContainerService", "StatefulActorNamespace"} {
+		desired, _ := canonicalDesired(kind)
+		if _, present := desired["connections"]; present {
+			t.Fatalf("%s canonical fixture retains an optional unsupported connection", kind)
+		}
+	}
+	kv, _ := canonicalDesired("KVStore")
+	queue, _ := canonicalDesired("Queue")
+	database, _ := canonicalDesired("SQLDatabase")
+	if kv["consistency"] != "eventual" || queue["delivery"] != nil || database["migrationsPath"] != nil {
+		t.Fatalf("canonical managed-target defaults are not materializable: kv=%#v queue=%#v database=%#v", kv, queue, database)
+	}
+	schedule, _ := canonicalDesired("Schedule")
+	if _, present := schedule["connections"]; !present {
+		t.Fatal("Schedule canonical fixture lost its required workflow connection")
 	}
 }
 
