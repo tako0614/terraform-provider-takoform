@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -96,6 +97,10 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedS
 		if err != nil {
 			return fmt.Errorf("%s retained admission structure: %w", pair.entry.Kind, err)
 		}
+		positiveBindings, negativeBindings, err := bindExactPackageFixtures(packageRoot, definition, evidence)
+		if err != nil {
+			return fmt.Errorf("%s retained admission fixture closure: %w", pair.entry.Kind, err)
+		}
 
 		directory := path.Dir(pair.entry.EvidencePath)
 		subjects = append(subjects, RetainedSubject{
@@ -130,7 +135,7 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedS
 			if formpackage.DigestBytes(reportRaw) != retained.digest || retained.proof.EvidenceDigest != retained.digest {
 				return fmt.Errorf("%s %s digest does not match the admission proof", pair.entry.Kind, retained.role)
 			}
-			if err := validateRunnerReport(runnerReport, retained.role, retained.proof, positiveNames, negativeNames); err != nil {
+			if err := validateRunnerReport(runnerReport, retained.role, retained.proof, positiveNames, negativeNames, positiveBindings, negativeBindings); err != nil {
 				return fmt.Errorf("%s: %w", pair.entry.Kind, err)
 			}
 			subjects = append(subjects, RetainedSubject{
@@ -172,6 +177,107 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedS
 	}
 	if err := verifier.VerifyRetainedSubjects(admissionRoot, set, subjects); err != nil {
 		return fmt.Errorf("Form admission activation is blocked: authenticate retained standard-admission closure: %w", err)
+	}
+	return nil
+}
+
+func bindExactPackageFixtures(
+	packageRoot string,
+	definition formpackage.FormDefinition,
+	evidence standardform.AdmissionEvidence,
+) (map[string]fixtureDigestBinding, map[string]fixtureDigestBinding, error) {
+	positiveEvidence := make(map[string]standardform.PositiveFixture, len(evidence.Fixtures.Positive))
+	for _, fixture := range evidence.Fixtures.Positive {
+		positiveEvidence[fixture.Name] = fixture
+	}
+	negativeEvidence := make(map[string]standardform.NegativeFixture, len(evidence.Fixtures.Negative))
+	for _, fixture := range evidence.Fixtures.Negative {
+		negativeEvidence[fixture.Name] = fixture
+	}
+	positive := make(map[string]fixtureDigestBinding, len(definition.ConformanceFixtures))
+	for _, fixture := range definition.ConformanceFixtures {
+		retained, ok := positiveEvidence[fixture.Name]
+		if !ok {
+			return nil, nil, fmt.Errorf("positive fixture %q is missing from admission evidence", fixture.Name)
+		}
+		desiredRaw, desired, err := readFixtureObject(packageRoot, fixture.DesiredPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("positive fixture %q desired: %w", fixture.Name, err)
+		}
+		if !reflect.DeepEqual(retained.Desired, desired) {
+			return nil, nil, fmt.Errorf("positive fixture %q desired does not equal the retained package fixture", fixture.Name)
+		}
+		if err := requireFixtureObject(packageRoot, fixture.ObservedPath, retained.Observed, fixture.Name+" observed"); err != nil {
+			return nil, nil, err
+		}
+		if err := requireFixtureObject(packageRoot, fixture.OutputPath, retained.Output, fixture.Name+" output"); err != nil {
+			return nil, nil, err
+		}
+		effectiveDigest, err := formpackage.DigestCanonicalJSON(desiredRaw)
+		if err != nil {
+			return nil, nil, err
+		}
+		positive[fixture.Name] = fixtureDigestBinding{
+			PackageFixtureDigest: formpackage.DigestBytes(desiredRaw),
+			EffectiveInputDigest: effectiveDigest,
+		}
+	}
+	negative := make(map[string]fixtureDigestBinding, len(definition.NegativeFixtures))
+	for _, fixture := range definition.NegativeFixtures {
+		retained, ok := negativeEvidence[fixture.Name]
+		if !ok {
+			return nil, nil, fmt.Errorf("negative fixture %q is missing from admission evidence", fixture.Name)
+		}
+		inputRaw, input, err := readFixtureObject(packageRoot, fixture.InputPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("negative fixture %q input: %w", fixture.Name, err)
+		}
+		if retained.Stage != fixture.Stage || !reflect.DeepEqual(retained.Input, input) {
+			return nil, nil, fmt.Errorf("negative fixture %q does not equal the retained package fixture", fixture.Name)
+		}
+		effectiveDigest, err := formpackage.DigestCanonicalJSON(inputRaw)
+		if err != nil {
+			return nil, nil, err
+		}
+		negative[fixture.Name] = fixtureDigestBinding{
+			PackageFixtureDigest: formpackage.DigestBytes(inputRaw),
+			EffectiveInputDigest: effectiveDigest,
+		}
+	}
+	if len(positive) != len(positiveEvidence) || len(negative) != len(negativeEvidence) {
+		return nil, nil, fmt.Errorf("admission evidence fixture names do not equal the retained package closure")
+	}
+	return positive, negative, nil
+}
+
+func readFixtureObject(packageRoot, relative string) ([]byte, map[string]any, error) {
+	if strings.TrimSpace(relative) == "" {
+		return nil, nil, fmt.Errorf("fixture path is empty")
+	}
+	raw, err := os.ReadFile(filepath.Join(packageRoot, filepath.FromSlash(relative)))
+	if err != nil {
+		return nil, nil, err
+	}
+	var value map[string]any
+	if err := decodeStrictJSON(raw, &value); err != nil {
+		return nil, nil, err
+	}
+	return raw, value, nil
+}
+
+func requireFixtureObject(packageRoot, relative string, retained map[string]any, label string) error {
+	if relative == "" {
+		if len(retained) != 0 {
+			return fmt.Errorf("%s exists without a retained package path", label)
+		}
+		return nil
+	}
+	_, value, err := readFixtureObject(packageRoot, relative)
+	if err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	if !reflect.DeepEqual(retained, value) {
+		return fmt.Errorf("%s does not equal the retained package fixture", label)
 	}
 	return nil
 }

@@ -43,6 +43,27 @@ inventory therefore says `classification: structural-candidate`,
 status/identity; neither echoes the desired document, connection topology, or
 runner-local artifact locations.
 
+Host runner reports embed a non-secret execution summary and its RFC 8785
+SHA-256 plus, for every positive and negative case, both the exact package
+fixture-file digest and the effective canonical input digest. The admission
+validator recomputes the summary digest, checks its lifecycle/fixture parity,
+re-reads the package, and requires the retained admission desired, observed,
+output, and negative documents to equal its fixture closure. Public reports
+therefore prove what bytes ran without echoing artifact URLs, local paths,
+desired values, or connection documents. Provider reports do not claim this
+host-only execution binding.
+
+The published `1.0.0` packages remain immutable structural candidates, but
+they are deliberately non-admitted: their EdgeWorker, DurableWorkflow, and
+ContainerService desired fixtures contain illustrative artifact locations or
+digests and are not real executable artifacts. A host must not substitute
+those values and report the run as the canonical fixture. The next candidate
+is a coordinated `1.0.1` package set backed by separately released immutable
+runtime artifacts; adopting that set also requires a provider `0.1.1`
+candidate because provider `0.1.0` pins the exact `1.0.0` FormRefs and package
+digests. Neither version is admitted merely by preparing source or release
+tooling.
+
 Provider publication and Form admission activation are two different
 authorities. Phase 1's `v*` provider workflow runs
 `candidate-publication-check`: it may publish the exact provider build to the
