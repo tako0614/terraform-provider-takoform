@@ -1,0 +1,21 @@
+{
+  "apiVersion": "compositions.takoform.com/v1alpha1",
+  "kind": "CapsuleComposition",
+  "metadata": {
+    "name": "yurucommu-standalone",
+    "version": "1.0.0",
+    "title": "Yurucommu",
+    "description": "Install the Yurucommu social application as one Capsule."
+  },
+  "components": [
+    {
+      "id": "yurucommu",
+      "title": "Yurucommu",
+      "source": {
+        "url": "https://github.com/tako0614/yurucommu.git",
+        "ref": "b993b9a1711deb6e68f9521ad129775ad4f2d1a2",
+        "path": "."
+      }
+    }
+  ]
+}

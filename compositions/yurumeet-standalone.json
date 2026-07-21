@@ -1,0 +1,21 @@
+{
+  "apiVersion": "compositions.takoform.com/v1alpha1",
+  "kind": "CapsuleComposition",
+  "metadata": {
+    "name": "yurumeet-standalone",
+    "version": "1.0.0",
+    "title": "Yurumeet",
+    "description": "Install the Yurumeet talk-first application as one Capsule."
+  },
+  "components": [
+    {
+      "id": "yurumeet",
+      "title": "Yurumeet",
+      "source": {
+        "url": "https://github.com/tako0614/yurumeet.git",
+        "ref": "8fb9421689488f0c5c33f067cc0412b3bcad86d1",
+        "path": "."
+      }
+    }
+  ]
+}

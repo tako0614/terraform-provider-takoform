@@ -1,0 +1,36 @@
+{
+  "apiVersion": "compositions.takoform.com/v1alpha1",
+  "kind": "CapsuleComposition",
+  "metadata": {
+    "name": "takos-office-with-storage",
+    "version": "1.0.0",
+    "title": "Takos Office with storage",
+    "description": "Install Takos Office and Takos Storage as independent Capsules with a requested storage interface connection."
+  },
+  "components": [
+    {
+      "id": "office",
+      "title": "Takos Office",
+      "source": {
+        "url": "https://github.com/tako0614/takos-office.git",
+        "ref": "a36990f4e461e5a8d5523d181fa3f04c7dc312e9",
+        "path": "."
+      }
+    },
+    {
+      "id": "storage",
+      "title": "Takos Storage",
+      "source": {
+        "url": "https://github.com/tako0614/takos-storage.git",
+        "ref": "d9853f014f0a5f133315288596705d2759ca1a32",
+        "path": "."
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": {"component": "storage", "interface": "storage.object"},
+      "to": {"component": "office", "interface": "storage.object"}
+    }
+  ]
+}
