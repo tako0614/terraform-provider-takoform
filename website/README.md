@@ -21,11 +21,10 @@ npx wrangler dev
 
 ## Deploy
 
-```console
-bun run release:safety:plan -- --surface takoform-website
-bun run release:safety:verify -- --surface takoform-website --envelope <absolute-private-path>
-bun run release:safety:run -- --surface takoform-website --envelope <absolute-private-path> --execute
-```
+Production deployment is intentionally blocked until the ecosystem release
+controller registers a fixed `takoform-website` adapter. Do not run
+`wrangler deploy` directly or infer publication from this source directory.
+Local preview does not satisfy that release gate.
 
 `wrangler.jsonc` attaches the `takoform.com` and `www.takoform.com` custom
 domains; the zone must exist in the deploying Cloudflare account.
