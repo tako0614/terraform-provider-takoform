@@ -952,8 +952,10 @@ type lifecycleCounts struct {
 // The declaration the in-process conformance host reports. It matches the
 // portable-host contract's optional interface surface.
 const (
-	conformanceInterfaceName    = "s3.api"
-	conformanceInterfaceVersion = "2025-11-25"
+	conformanceInterfaceName         = "s3.api"
+	conformanceInterfaceVersion      = "2025-11-25"
+	conformanceInterfaceKind         = "ObjectBucket"
+	conformanceInterfaceResourceName = "assets"
 )
 
 type formHost struct {
@@ -1071,6 +1073,7 @@ func (h *formHost) handleInterfaces(w http.ResponseWriter, r *http.Request, name
 	declared := []client.DeclaredInterface{{
 		Name:     conformanceInterfaceName,
 		Version:  conformanceInterfaceVersion,
+		Resource: client.InterfaceResourceRef{Kind: conformanceInterfaceKind, Name: conformanceInterfaceResourceName},
 		Document: map[string]any{"title": "Portable assets bucket"},
 		Values:   map[string]any{"endpoint": "https://example.test/s3"},
 	}}

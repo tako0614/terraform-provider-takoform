@@ -36,6 +36,9 @@ The manifest may contain only a closed document with `metadata`, `components`,
 and optional `connections`. It cannot carry commands, artifacts, provider
 configuration, credentials, secrets, targets, capacity, pricing, billing,
 quota, account data, authorization, host InstallConfigs, or lifecycle policy.
+Every `source.ref` is a full lowercase 40- or 64-hex Git commit object ID;
+branches, tags, abbreviated IDs, and other movable refs are rejected so the
+manifest digest selects the exact reviewed Capsule source.
 
 A host treats every component as a normal Source/Capsule flow: it applies its
 own source policy, asks for ProviderConnection and CredentialRecipe choices,

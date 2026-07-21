@@ -42,6 +42,18 @@ func TestVerifyRejectsHostAuthority(t *testing.T) {
 	}
 }
 
+func TestVerifyRejectsMovableGitRef(t *testing.T) {
+	raw := []byte(`{
+    "apiVersion":"compositions.takoform.com/v1alpha1",
+    "kind":"CapsuleComposition",
+    "metadata":{"name":"movable","version":"1.0.0","title":"Movable"},
+    "components":[{"id":"app","title":"App","source":{"url":"https://example.com/app.git","ref":"main","path":"."}}]
+  }`)
+	if _, _, err := Verify(raw); err == nil {
+		t.Fatal("Verify() accepted a movable Git ref")
+	}
+}
+
 func TestInitialCompositionsVerify(t *testing.T) {
 	for _, name := range []string{
 		"yurucommu-standalone.json",

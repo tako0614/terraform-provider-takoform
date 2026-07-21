@@ -16,6 +16,7 @@ var (
 	nameRE      = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 	versionRE   = regexp.MustCompile(`^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
 	interfaceRE = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,127}$`)
+	commitIDRE  = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 )
 
 // Verify parses a closed Composition Manifest and returns its RFC 8785 digest.
@@ -99,8 +100,8 @@ func validateSource(source Source) error {
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 		return fmt.Errorf("source.url must be a credential-free https URL")
 	}
-	if strings.TrimSpace(source.Ref) == "" || len(source.Ref) > 128 || strings.ContainsAny(source.Ref, "\r\n\x00") {
-		return fmt.Errorf("source.ref is required and must be a safe Git ref")
+	if !commitIDRE.MatchString(source.Ref) {
+		return fmt.Errorf("source.ref must be a full lowercase Git commit object ID")
 	}
 	if source.Path == "" {
 		return fmt.Errorf("source.path is required")
