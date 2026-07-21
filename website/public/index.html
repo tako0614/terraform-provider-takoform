@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Takoform — Vendor-neutral resources for Terraform &amp; OpenTofu</title>
+<meta name="description" content="Takoform is an open-source specification and Terraform/OpenTofu provider. Describe what you need — a bucket, a queue, a database — and a conforming host picks and operates the actual backend.">
+<meta property="og:title" content="Takoform — Vendor-neutral resources for Terraform &amp; OpenTofu">
+<meta property="og:description" content="Describe what you need — a bucket, a queue, a database — and a conforming host picks and operates the actual backend. The same code and state work on any host.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Takoform">
+<meta property="og:url" content="https://takoform.com/">
+<meta property="og:image" content="https://takoform.com/tako.png">
+<meta name="twitter:card" content="summary">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="ja_JP">
+<link rel="canonical" href="https://takoform.com/">
+<link rel="icon" type="image/png" href="/tako.png">
+<link rel="apple-touch-icon" href="/tako.png">
+<link rel="stylesheet" href="/styles.css">
+<script>
+(function () {
+  var TITLES = {
+    en: "Takoform — Vendor-neutral resources for Terraform & OpenTofu",
+    ja: "Takoform — ベンダー名を書かない Terraform / OpenTofu リソース"
+  };
+  var DESCRIPTIONS = {
+    en: "Takoform is an open-source specification and Terraform/OpenTofu provider. Describe what you need — a bucket, a queue, a database — and a conforming host picks and operates the actual backend.",
+    ja: "Takoform は、サービスをベンダー中立に書くためのオープンな仕様と Terraform/OpenTofu プロバイダです。必要なものだけをコードに書き、対応したホストがバックエンドを選んで運用します。"
+  };
+  function apply(lang) {
+    document.documentElement.setAttribute("data-lang", lang);
+    document.documentElement.lang = lang;
+    document.title = TITLES[lang];
+    var desc = document.querySelector('meta[name="description"]');
+    if (desc) desc.setAttribute("content", DESCRIPTIONS[lang]);
+  }
+  window.setLang = function (lang) {
+    try { localStorage.setItem("takoform-lang", lang); } catch (e) {}
+    apply(lang);
+  };
+  var saved = null;
+  try { saved = localStorage.getItem("takoform-lang"); } catch (e) {}
+  var lang = saved === "ja" || saved === "en"
+    ? saved
+    : ((navigator.language || "").toLowerCase().indexOf("ja") === 0 ? "ja" : "en");
+  apply(lang);
+})();
+</script>
+<noscript><style>.lang-switch, .footer-lang { display: none; }</style></noscript>
+</head>
+<body>
+
+<!-- ==================== English ==================== -->
+<div class="l10n" lang="en">
+
+<header class="site-header">
+  <nav class="container nav">
+    <a class="brand" href="/">
+      <span class="brand-name">Takoform</span>
+    </a>
+    <div class="nav-links">
+      <a href="#why">Why</a>
+      <a href="#how">How it works</a>
+      <a href="#resources">Resources</a>
+      <a href="#spec">Spec</a>
+      <a href="#status">Status</a>
+      <a class="btn btn-ghost" href="https://github.com/tako0614/terraform-provider-takoform">GitHub</a>
+      <button type="button" class="lang-switch" lang="ja" onclick="setLang('ja')">日本語</button>
+    </div>
+  </nav>
+</header>
+
+<main>
+
+<section class="hero">
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="dot"></span> forms.takoform.com/v1alpha1 · pre-release</p>
+      <h1>Take the vendor out of your Terraform code.</h1>
+      <p class="lede">
+        Takoform is an open-source specification and a Terraform/OpenTofu provider.
+        You describe what you need — a bucket, a queue, a database — and a
+        conforming host picks and operates the actual backend. The same code and
+        state work on any host.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform">View on GitHub</a>
+        <a class="btn btn-ghost" href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec">Read the specification</a>
+      </div>
+      <ul class="badges">
+        <li>MIT license</li>
+        <li>10 standard resources today, more planned</li>
+        <li>Definitions are data, not code</li>
+      </ul>
+    </div>
+    <div class="hero-code">
+      <figure class="code-card">
+        <figcaption><span class="traffic"></span>main.tf</figcaption>
+<pre><code><span class="k">terraform</span> {
+  <span class="k">required_providers</span> {
+    takoform = {
+      <span class="a">source</span> = <span class="s">"registry.terraform.io/tako0614/takoform"</span>
+    }
+  }
+}
+
+<span class="k">provider</span> <span class="s">"takoform"</span> {
+  <span class="a">endpoint</span> = <span class="s">"https://forms.example.com"</span>
+  <span class="a">space</span>    = <span class="s">"prod"</span>
+}
+
+<span class="k">resource</span> <span class="s">"takoform_object_bucket"</span> <span class="s">"assets"</span> {
+  <span class="a">name</span>       = <span class="s">"assets"</span>
+  <span class="a">interfaces</span> = [<span class="s">"s3_api"</span>]
+}</code></pre>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="why" class="section">
+  <div class="container">
+    <h2>Why</h2>
+    <p class="section-lede">
+      Terraform code usually names a vendor. Writing <code>aws_s3_bucket</code>
+      ties the module and its state to AWS, and moving to another cloud means
+      rewriting. Takoform resources name only what you need, so the choice of
+      backend stays on the host side.
+    </p>
+    <div class="compare">
+      <div class="compare-row bad">
+        <code>aws_s3_bucket</code>
+        <span>Works on AWS only. Moving elsewhere means rewriting the module and migrating state by hand.</span>
+      </div>
+      <div class="compare-row good">
+        <code>takoform_object_bucket</code>
+        <span>Works on any conforming host. Moving is a host-side change, not a rewrite.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" class="section alt">
+  <div class="container">
+    <h2>How it works</h2>
+    <p class="section-lede">
+      The provider's job ends at delivering your configuration to a host.
+      A host is any platform that implements the Takoform API — anyone can run one.
+      The host does the creating, changing, and deleting.
+    </p>
+    <div class="cards three">
+      <article class="card">
+        <span class="step">01</span>
+        <h3>Write</h3>
+        <p>
+          Describe what you need with typed <code>takoform_*</code> resources.
+          Vendor names never appear in your code.
+        </p>
+      </article>
+      <article class="card">
+        <span class="step">02</span>
+        <h3>Apply</h3>
+        <p>
+          On apply, the provider sends the configuration to the host over HTTP.
+          Nothing is changed during plan.
+        </p>
+      </article>
+      <article class="card">
+        <span class="step">03</span>
+        <h3>The host runs it</h3>
+        <p>
+          The host chooses the backend, holds the credentials, and makes the
+          changes. Your state keeps IDs and public outputs only — no secrets.
+        </p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="resources" class="section">
+  <div class="container">
+    <h2>The standard resources</h2>
+    <p class="section-lede">
+      The first set covers ten building blocks that most applications need.
+    </p>
+    <div class="resource-grid">
+      <div class="resource"><code>takoform_edge_worker</code><span>Prebuilt edge Worker</span></div>
+      <div class="resource"><code>takoform_object_bucket</code><span>Object storage</span></div>
+      <div class="resource"><code>takoform_kv_store</code><span>Key/value storage</span></div>
+      <div class="resource"><code>takoform_queue</code><span>Message queue</span></div>
+      <div class="resource"><code>takoform_sql_database</code><span>SQL database</span></div>
+      <div class="resource"><code>takoform_container_service</code><span>Container service</span></div>
+      <div class="resource"><code>takoform_vector_index</code><span>Vector index</span></div>
+      <div class="resource"><code>takoform_durable_workflow</code><span>Durable workflow</span></div>
+      <div class="resource"><code>takoform_stateful_actor_namespace</code><span>Stateful actors</span></div>
+      <div class="resource"><code>takoform_schedule</code><span>Scheduled invocation</span></div>
+    </div>
+    <div class="grow-card">
+      <div class="grow-copy">
+        <h3>More are coming</h3>
+        <p>
+          Ten is the starting point, not the limit. The specification can define
+          any kind of service in the same data-only format, and new resources are
+          added as specification and test additions. If something you need is
+          missing, propose it on GitHub.
+        </p>
+      </div>
+      <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform/issues">Propose a resource</a>
+    </div>
+    <p class="fineprint">
+      The provider deliberately has no settings for backends, credentials, prices,
+      or billing. Those belong to the host.
+    </p>
+  </div>
+</section>
+
+<section id="principles" class="section alt">
+  <div class="container">
+    <h2>Design principles</h2>
+    <div class="cards four">
+      <article class="card">
+        <h3>Definitions are data</h3>
+        <p>
+          Resource definitions and their test fixtures are plain JSON. They
+          contain no executable code, and the verifier rejects anything that does.
+        </p>
+      </article>
+      <article class="card">
+        <h3>Verify, then trust</h3>
+        <p>
+          Releases are signed and pinned by digest. Anything that cannot be
+          verified is rejected instead of being accepted by default.
+        </p>
+      </article>
+      <article class="card">
+        <h3>The host operates</h3>
+        <p>
+          Backend choice, credentials, and operations belong to the host. The
+          provider only submits what you asked for.
+        </p>
+      </article>
+      <article class="card">
+        <h3>Both lifecycles tested</h3>
+        <p>
+          Terraform and OpenTofu are tested separately, end to end — not assumed
+          to behave the same.
+        </p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="spec" class="section">
+  <div class="container">
+    <h2>The specification</h2>
+    <p class="section-lede">
+      Everything the provider and a host agree on is written down as data-only documents.
+    </p>
+    <ul class="spec-list">
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/host-api"><code>spec/host-api</code></a>
+        <span>How the provider talks to a host: discovery, preview, apply, observe, delete.</span>
+      </li>
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/form-definition"><code>spec/form-definition</code></a>
+        <span>How a service type is defined as data, and how definitions are identified.</span>
+      </li>
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/form-package"><code>spec/form-package</code></a>
+        <span>How definitions are packaged, distributed, and verified.</span>
+      </li>
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/interface-declaration"><code>spec/interface-declaration</code></a>
+        <span>How a service declares what it exposes at runtime. The host still owns the record and who may use it.</span>
+      </li>
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/trust"><code>spec/trust</code></a>
+        <span>How releases are signed, and what gets rejected.</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section id="status" class="section alt">
+  <div class="container">
+    <h2>Current status</h2>
+    <p class="section-lede">
+      What works today and what does not yet, as of the latest commit.
+    </p>
+    <div class="status-grid">
+      <div class="status-col done">
+        <h3>Working today</h3>
+        <ul>
+          <li>The schemas and an offline package verifier</li>
+          <li>Ten resources with create, update, delete, import, and drift detection</li>
+          <li>Lifecycle tests on both Terraform and OpenTofu</li>
+          <li>A signed release pipeline</li>
+        </ul>
+      </div>
+      <div class="status-col pending">
+        <h3>Not yet</h3>
+        <ul>
+          <li>No package has been published yet</li>
+          <li>Not on the Terraform or OpenTofu registries yet</li>
+          <li>The standard definitions are still candidates</li>
+          <li>Host-side install and revocation handling are still to come</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2>Run it locally</h2>
+    <figure class="code-card wide">
+      <figcaption><span class="traffic"></span>shell</figcaption>
+<pre><code><span class="c"># clone and run the test suites</span>
+git clone https://github.com/tako0614/terraform-provider-takoform
+cd terraform-provider-takoform
+
+go test ./...
+go run ./cmd/conformance verify
+go run ./cmd/form-package conformance
+go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform</code></pre>
+    </figure>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-brand">
+      <span>Takoform</span>
+    </div>
+    <ul class="footer-links">
+      <li><a href="https://github.com/tako0614/terraform-provider-takoform">Source</a></li>
+      <li><a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec">Specification</a></li>
+      <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/master/SECURITY.md">Security policy</a></li>
+      <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/master/LICENSE">MIT License</a></li>
+      <li><button type="button" class="footer-lang" lang="ja" onclick="setLang('ja')">日本語</button></li>
+    </ul>
+    <p class="footer-ids">
+      <code>github.com/tako0614/terraform-provider-takoform</code>
+      <code>registry.terraform.io/tako0614/takoform</code>
+      <code>forms.takoform.com/v1alpha1</code>
+    </p>
+  </div>
+</footer>
+
+</div>
+
+<!-- ==================== 日本語 ==================== -->
+<div class="l10n" lang="ja">
+
+<header class="site-header">
+  <nav class="container nav">
+    <a class="brand" href="/">
+      <span class="brand-name">Takoform</span>
+    </a>
+    <div class="nav-links">
+      <a href="#why-ja">なぜ</a>
+      <a href="#how-ja">しくみ</a>
+      <a href="#resources-ja">リソース</a>
+      <a href="#spec-ja">仕様</a>
+      <a href="#status-ja">現状</a>
+      <a class="btn btn-ghost" href="https://github.com/tako0614/terraform-provider-takoform">GitHub</a>
+      <button type="button" class="lang-switch" lang="en" onclick="setLang('en')">English</button>
+    </div>
+  </nav>
+</header>
+
+<main>
+
+<section class="hero">
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="dot"></span> forms.takoform.com/v1alpha1 · pre-release</p>
+      <h1>Terraform のコードから、<br>ベンダー名をなくす。</h1>
+      <p class="lede">Takoform は、サービスをベンダー中立に書くためのオープンな仕様と、その Terraform/OpenTofu プロバイダです。コードに書くのはバケット・キュー・データベースといった必要なものだけ。どのバックエンドで動かすかは、対応したホストが決めて運用します。コードと state は書き換えずに移行できます。</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform">GitHub で見る</a>
+        <a class="btn btn-ghost" href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec">仕様を読む</a>
+      </div>
+      <ul class="badges">
+        <li>MIT ライセンス</li>
+        <li>標準リソースは 10 種類。今後追加していきます</li>
+        <li>定義はデータのみで、コードを含みません</li>
+      </ul>
+    </div>
+    <div class="hero-code">
+      <figure class="code-card">
+        <figcaption><span class="traffic"></span>main.tf</figcaption>
+<pre><code><span class="k">terraform</span> {
+  <span class="k">required_providers</span> {
+    takoform = {
+      <span class="a">source</span> = <span class="s">"registry.terraform.io/tako0614/takoform"</span>
+    }
+  }
+}
+
+<span class="k">provider</span> <span class="s">"takoform"</span> {
+  <span class="a">endpoint</span> = <span class="s">"https://forms.example.com"</span>
+  <span class="a">space</span>    = <span class="s">"prod"</span>
+}
+
+<span class="k">resource</span> <span class="s">"takoform_object_bucket"</span> <span class="s">"assets"</span> {
+  <span class="a">name</span>       = <span class="s">"assets"</span>
+  <span class="a">interfaces</span> = [<span class="s">"s3_api"</span>]
+}</code></pre>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="why-ja" class="section">
+  <div class="container">
+    <h2>なぜ作ったか</h2>
+    <p class="section-lede">Terraform のコードには、ふつうベンダー名が入ります。<code>aws_s3_bucket</code> と書いた時点でそのモジュールと state は AWS 専用になり、別のクラウドへ移すには書き直すしかありません。Takoform のリソースは必要なものしか書かないので、どこで動かすかをあとから変えられます。</p>
+    <div class="compare">
+      <div class="compare-row bad">
+        <code>aws_s3_bucket</code>
+        <span>AWS でしか使えません。移行にはモジュールの書き直しと state の移し替えが必要です。</span>
+      </div>
+      <div class="compare-row good">
+        <code>takoform_object_bucket</code>
+        <span>対応したホストならどこでも使えます。移行先の変更はホスト側の設定だけで済みます。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how-ja" class="section alt">
+  <div class="container">
+    <h2>しくみ</h2>
+    <p class="section-lede">プロバイダがやるのは、書かれた内容をホストに届けるところまでです。作る・変える・消すの実作業はホストが行います。ホストとは Takoform の API を実装した実行基盤のことで、仕様に沿っていればだれでも実装できます。</p>
+    <div class="cards three">
+      <article class="card">
+        <span class="step">01</span>
+        <h3>書く</h3>
+        <p>型の決まった <code>takoform_*</code> リソースで、必要なものを書きます。コードにベンダー名は出てきません。</p>
+      </article>
+      <article class="card">
+        <span class="step">02</span>
+        <h3>送る</h3>
+        <p>apply すると、プロバイダは書かれた内容を HTTP でホストに送ります。plan の段階では何も変更しません。</p>
+      </article>
+      <article class="card">
+        <span class="step">03</span>
+        <h3>ホストが動かす</h3>
+        <p>バックエンドの選択、認証情報の管理、実際の変更はホストの仕事です。state に残るのは ID と公開情報だけで、シークレットは含まれません。</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="resources-ja" class="section">
+  <div class="container">
+    <h2>標準リソース</h2>
+    <p class="section-lede">最初のセットとして、多くのアプリケーションで使う 10 種類を定義しています。</p>
+    <div class="resource-grid">
+      <div class="resource"><code>takoform_edge_worker</code><span>エッジで動かす Worker</span></div>
+      <div class="resource"><code>takoform_object_bucket</code><span>オブジェクトストレージ</span></div>
+      <div class="resource"><code>takoform_kv_store</code><span>Key/Value ストレージ</span></div>
+      <div class="resource"><code>takoform_queue</code><span>メッセージキュー</span></div>
+      <div class="resource"><code>takoform_sql_database</code><span>SQL データベース</span></div>
+      <div class="resource"><code>takoform_container_service</code><span>コンテナサービス</span></div>
+      <div class="resource"><code>takoform_vector_index</code><span>ベクトルインデックス</span></div>
+      <div class="resource"><code>takoform_durable_workflow</code><span>長時間実行ワークフロー</span></div>
+      <div class="resource"><code>takoform_stateful_actor_namespace</code><span>状態を持つアクター</span></div>
+      <div class="resource"><code>takoform_schedule</code><span>スケジュール実行</span></div>
+    </div>
+    <div class="grow-card">
+      <div class="grow-copy">
+        <h3>ここで終わりではありません</h3>
+        <p>仕様は、どんな種類のサービスでも同じデータ形式で定義できるようになっています。新しいリソースは、仕様と検証テストを追加するかたちで増やしていきます。足りないものがあれば GitHub で提案してください。</p>
+      </div>
+      <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform/issues">リソースを提案する</a>
+    </div>
+    <p class="fineprint">このプロバイダには、バックエンドの指定・認証情報・価格・課金の設定はあえてありません。それらはホスト側で管理します。</p>
+  </div>
+</section>
+
+<section id="principles-ja" class="section alt">
+  <div class="container">
+    <h2>設計方針</h2>
+    <div class="cards four">
+      <article class="card">
+        <h3>定義はデータだけ</h3>
+        <p>リソースの定義もテストデータも、ただの JSON です。実行コードは含められず、含まれていれば検証で弾かれます。</p>
+      </article>
+      <article class="card">
+        <h3>検証してから信頼する</h3>
+        <p>リリースには署名が付き、内容はハッシュで固定されます。検証できないものは受け入れず、エラーにします。</p>
+      </article>
+      <article class="card">
+        <h3>運用はホストに任せる</h3>
+        <p>バックエンドの選択も、認証情報も、実際の操作もホストの担当です。プロバイダは頼まれた内容を送るだけです。</p>
+      </article>
+      <article class="card">
+        <h3>両方でテストする</h3>
+        <p>Terraform と OpenTofu を同じものとは見なさず、それぞれで一連の動作をテストしています。</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="spec-ja" class="section">
+  <div class="container">
+    <h2>仕様</h2>
+    <p class="section-lede">プロバイダとホストの間の取り決めは、4 つのドキュメントにすべて書いてあります。</p>
+    <ul class="spec-list">
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/host-api"><code>spec/host-api</code></a>
+        <span>ホストの見つけ方と、preview / apply / observe / delete のやりとり。</span>
+      </li>
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/form-definition"><code>spec/form-definition</code></a>
+        <span>サービスの種類をデータとして定義する方法と、その識別のしかた。</span>
+      </li>
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/form-package"><code>spec/form-package</code></a>
+        <span>定義をパッケージにして配布・検証する方法。</span>
+      </li>
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/trust"><code>spec/trust</code></a>
+        <span>リリースへの署名と、何を受け入れて何を拒否するか。</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section id="status-ja" class="section alt">
+  <div class="container">
+    <h2>いまの状態</h2>
+    <p class="section-lede">できていることと、まだできていないことをそのまま書いています。</p>
+    <div class="status-grid">
+      <div class="status-col done">
+        <h3>できていること</h3>
+        <ul>
+          <li>スキーマ一式と、オフラインで動くパッケージ検証ツール</li>
+          <li>作成・更新・削除・import・drift 検出まで対応した 10 種類のリソース</li>
+          <li>Terraform / OpenTofu それぞれでのライフサイクルテスト</li>
+          <li>署名付きリリースのしくみ</li>
+        </ul>
+      </div>
+      <div class="status-col pending">
+        <h3>まだできていないこと</h3>
+        <ul>
+          <li>パッケージはまだ公開していません</li>
+          <li>Terraform / OpenTofu の Registry にはまだ載っていません</li>
+          <li>標準の定義はまだ候補の段階です</li>
+          <li>ホスト側の取り込み・失効の処理はこれからです</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2>手元で動かす</h2>
+    <figure class="code-card wide">
+      <figcaption><span class="traffic"></span>shell</figcaption>
+<pre><code><span class="c"># clone してテスト一式を実行する</span>
+git clone https://github.com/tako0614/terraform-provider-takoform
+cd terraform-provider-takoform
+
+go test ./...
+go run ./cmd/conformance verify
+go run ./cmd/form-package conformance
+go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform</code></pre>
+    </figure>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-brand">
+      <span>Takoform</span>
+    </div>
+    <ul class="footer-links">
+      <li><a href="https://github.com/tako0614/terraform-provider-takoform">ソースコード</a></li>
+      <li><a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec">仕様</a></li>
+      <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/master/SECURITY.md">セキュリティポリシー</a></li>
+      <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/master/LICENSE">MIT ライセンス</a></li>
+      <li><button type="button" class="footer-lang" lang="en" onclick="setLang('en')">English</button></li>
+    </ul>
+    <p class="footer-ids">
+      <code>github.com/tako0614/terraform-provider-takoform</code>
+      <code>registry.terraform.io/tako0614/takoform</code>
+      <code>forms.takoform.com/v1alpha1</code>
+    </p>
+  </div>
+</footer>
+
+</div>
+
+</body>
+</html>

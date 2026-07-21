@@ -949,6 +949,13 @@ type lifecycleCounts struct {
 	create, read, update, observe, refresh, nativeImport, cliImport, delete, driftState int
 }
 
+// The declaration the in-process conformance host reports. It matches the
+// portable-host contract's optional interface surface.
+const (
+	conformanceInterfaceName    = "s3.api"
+	conformanceInterfaceVersion = "2025-11-25"
+)
+
 type formHost struct {
 	mu                sync.Mutex
 	forms             map[string]client.InstalledFormReference
@@ -980,14 +987,23 @@ func (h *formHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		origin := "http://" + r.Host
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"api_versions": []string{client.APIVersion},
-			"features":     map[string]bool{"service_forms": true, "exact_form_ref": true, "optimistic_concurrency": true, "idempotent_lifecycle": true},
-			"endpoints":    map[string]string{"api": origin + "/apis/forms.takoform.com/v1alpha1"},
+			"features": map[string]bool{
+				"service_forms": true, "exact_form_ref": true, "optimistic_concurrency": true, "idempotent_lifecycle": true,
+				// Optional surface, advertised so the matrix covers the
+				// declaration read without needing an external host.
+				client.FeatureInterfaceDeclarations: true,
+			},
+			"endpoints": map[string]string{"api": origin + "/apis/forms.takoform.com/v1alpha1"},
 		})
 		return
 	}
 	const base = "/apis/forms.takoform.com/v1alpha1"
 	if r.URL.Path == base+"/forms" {
 		h.handleForms(w, r)
+		return
+	}
+	if r.URL.Path == base+"/interfaces" || strings.HasPrefix(r.URL.Path, base+"/interfaces/") {
+		h.handleInterfaces(w, r, strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, base+"/interfaces"), "/"))
 		return
 	}
 	if r.URL.Path == base+"/resources/preview" {
@@ -1042,6 +1058,33 @@ func (h *formHost) handleForms(w http.ResponseWriter, r *http.Request) {
 		Identity: form, DefinitionKnown: true, Installed: true, Executable: true, Activated: true, AvailableToPrincipal: true,
 		Operations: []string{"create", "read", "update", "delete", "import", "refresh"},
 	}}})
+}
+
+// handleInterfaces answers what this host declares. It is read-only and says
+// nothing about who may consume a declaration: no binding, permission, or
+// token is expressed here or anywhere else in the portable protocol.
+func (h *formHost) handleInterfaces(w http.ResponseWriter, r *http.Request, name string) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	declared := []client.DeclaredInterface{{
+		Name:     conformanceInterfaceName,
+		Version:  conformanceInterfaceVersion,
+		Document: map[string]any{"title": "Portable assets bucket"},
+		Values:   map[string]any{"endpoint": "https://example.test/s3"},
+	}}
+	if name == "" {
+		_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": declared})
+		return
+	}
+	for _, item := range declared {
+		if item.Name == name {
+			_ = json.NewEncoder(w).Encode(item)
+			return
+		}
+	}
+	http.Error(w, `{"error":{"code":"resource_not_found","message":"unknown interface","retryable":false}}`, http.StatusNotFound)
 }
 
 func (h *formHost) handlePreview(w http.ResponseWriter, r *http.Request) {
