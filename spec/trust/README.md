@@ -107,8 +107,12 @@ read-only job with no protected Environment, OIDC token, attestation, or
 repository-write permission. Only its canonical matrix crosses the job
 boundary. The protected authentication job starts from a fresh exact-commit
 checkout, compares that artifact byte-for-byte with reviewed source, and signs
-the readback; a separate publication job consumes only the signed,
-checksum-closed activation inventory.
+the readback. It emits a non-published checksum-closed candidate. The separate
+publication job consumes those exact bytes only after the ecosystem's fixed
+release-safety controller binds the candidate run, authorization, adapter,
+artifact set, target fingerprint, and ordered health checks. The final release
+contains the controller readback before it becomes stable and is accepted only
+after repository-enforced immutability is read back.
 
 ## Offline standard-admission verification
 
