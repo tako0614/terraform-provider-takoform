@@ -80,7 +80,7 @@ go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
 go run ./cmd/admission-readback registry \
   --matrix admission/v1/registry/provider-lifecycle-matrix.json \
   --provider-release-commit "$(git rev-list -n 1 "$(jq -r .tag release/version.json)")" \
-  > admission/v1/registry/provider-readback.json
+  --output admission/v1/registry/provider-readback.json
 ```
 
 That mode pins the exact descriptor version in generated configuration, runs

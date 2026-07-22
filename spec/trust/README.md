@@ -222,9 +222,12 @@ readbacks are installed and digest-pinned by
 `admission/v1/published-package-set.json`. They pass the separate offline
 `published-package-check` but grant no admission authority. The remaining
 admission-evidence, host-report, and provider-report publisher identities are
-explicitly unsettled. Their policies, the final five-role pin manifest, host/provider and
-admission reports, Registry readback, and `standard-admission-set.json` remain
-absent. That absence intentionally keeps `release-check` fail-closed. The
+explicitly unsettled. Their policies, the final five-role pin manifest,
+host/provider and admission reports, signed Registry readback bundle, and
+`standard-admission-set.json` remain absent. The canonical unsigned Registry
+matrix/readback for provider `v0.1.3` are retained, but grant nothing until the
+protected candidate reproduces and authenticates them. The incomplete closure
+intentionally keeps `release-check` fail-closed. The
 unsettled role identities must be approved and evidenced, not inferred from a
 distribution endpoint or reused from the package workflow.
 
