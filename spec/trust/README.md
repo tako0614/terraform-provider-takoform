@@ -73,10 +73,10 @@ extension.
 The FormRef, Form Definition, package-index and revocation schemas, RFC
 8785/I-JSON implementation, closed local verifier, positive/negative corpus,
 release builder, keyless Sigstore workflow, and append-only revocation delivery
-lane now exist. All ten `1.0.0` packages have real immutable releases; their
+lane now exist. All ten `1.0.1` packages have real immutable releases; their
 exact release closures and signed indexes are retained under `admission/v1`
-with a TUF-authenticated production root and digest-pinned protected-main
-package publisher policy. No revocation statement or admission activation has
+with a TUF-authenticated production root and a digest-pinned, version-bound
+aggregate package publisher policy. No revocation statement or admission activation has
 been released. Remote host distribution/install, host-side publisher-policy enforcement,
 activation, and revocation consumption still require implementation and live
 evidence. The ten current provider resources have local deterministic `1.0.1 /
@@ -199,9 +199,11 @@ RFC 8785 canonical, strictly decoded evidence: the verifier recomputes the
 SPDX file closure and package verification code and requires SLSA subjects,
 source repository, tag, tagged-source commit, distinct protected-main tooling
 commit, commit-versioned workflow builder, and canonicalization parameters to
-match the exact retained package release. The publisher policy evidence keeps
-the certificate identity at `@refs/heads/main` and pins the same tooling
-commit. Unknown, duplicate, omitted, or substituted metadata fails closed.
+match the exact retained package release. The `1.0.1` publisher policy evidence
+pins the aggregate
+`standard-form-package-set-release.yml@refs/tags/standard-forms/v1.0.1`
+certificate identity and the same release commit. Unknown, duplicate, omitted,
+or substituted metadata fails closed.
 The canonical `takoform.provider-registry-readback@v1` similarly binds the
 provider version/tag/commit, current release descriptor, candidate-set and
 schema digests, both CLI/FQN/binary identities, and the exact direct-install
@@ -220,16 +222,16 @@ The production Sigstore trusted-root snapshot, the distinct package-index and
 Registry-readback publisher policies, all ten package-index bundles, and the exact immutable release
 readbacks are installed and digest-pinned by
 `admission/v1/published-package-set.json`. They pass the separate offline
-`published-package-check` but grant no admission authority. The remaining
-admission-evidence, host-report, and provider-report publisher identities are
-explicitly unsettled. Their policies, the final five-role pin manifest,
-host/provider and admission reports, signed Registry readback bundle, and
+`published-package-check` but grant no admission authority. Exact mutually
+distinct admission-evidence, host-report, and provider-report policies and the
+five-role offline pin manifest are now retained. The signed host/provider and
+admission reports, signed Registry readback bundle, and
 `standard-admission-set.json` remain absent. The canonical unsigned Registry
 matrix/readback for provider `v0.1.3` are retained, but grant nothing until the
 protected candidate reproduces and authenticates them. The incomplete closure
 intentionally keeps `release-check` fail-closed. The
-unsettled role identities must be approved and evidenced, not inferred from a
-distribution endpoint or reused from the package workflow.
+approved role identities must still produce exact authenticated evidence; a
+distribution endpoint or a different workflow identity cannot substitute it.
 
 ## Rotation and revocation
 

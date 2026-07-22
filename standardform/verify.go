@@ -1,6 +1,7 @@
 package standardform
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,8 +30,19 @@ func ValidateEvidenceStructure(path string, report formpackage.VerificationRepor
 	if err != nil {
 		return AdmissionEvidence{}, err
 	}
-	if _, err := formpackage.Canonicalize(raw); err != nil {
+	return ValidateEvidenceBytes(raw, report, definition)
+}
+
+// ValidateEvidenceBytes validates exact RFC 8785 admission-evidence bytes.
+// It is the in-memory counterpart of ValidateEvidenceStructure for deterministic
+// evidence builders; it never signs, retains, publishes, or admits the subject.
+func ValidateEvidenceBytes(raw []byte, report formpackage.VerificationReport, definition formpackage.FormDefinition) (AdmissionEvidence, error) {
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
 		return AdmissionEvidence{}, fmt.Errorf("admission evidence: %w", err)
+	}
+	if !bytes.Equal(raw, canonical) {
+		return AdmissionEvidence{}, fmt.Errorf("admission evidence bytes are not RFC 8785 canonical")
 	}
 	var untyped any
 	if err := json.Unmarshal(raw, &untyped); err != nil {

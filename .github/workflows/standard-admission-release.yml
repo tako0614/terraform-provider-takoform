@@ -94,7 +94,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   EXPECTED_COSIGN_VERSION: "v3.0.6"
   EXPECTED_GPG_FINGERPRINT: "3510E75E05BBCC303B92D77934FC18AC897FB709"
-  RELEASE_SAFETY_CONTROLLER_COMMIT: "97c02c8409013be2276e551ea5d53d5ceb34fe16"
+  RELEASE_SAFETY_CONTROLLER_COMMIT: "c493777b9d0e7684ddabfcb4aea13f9120330241"
   RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:92c78f124b752a67b220e33da872beb46cebc25d3107b6dc79af52f847d97d5b"
 
 jobs:
@@ -304,20 +304,110 @@ jobs:
           const version = process.env.VERSION;
           const commit = process.env.SOURCE_COMMIT;
           const tag = process.env.RELEASE_TAG;
-          const sha = (name) => crypto.createHash("sha256").update(fs.readFileSync(path.join(out, name))).digest("hex");
+          const repository = "https://github.com/tako0614/terraform-provider-takoform";
+          const digest = (raw) => `sha256:${crypto.createHash("sha256").update(raw).digest("hex")}`;
+          const digestFile = (name) => digest(fs.readFileSync(name));
+          const hexDigest = (value) => {
+            if (!/^sha256:[0-9a-f]{64}$/.test(value)) throw new Error(`invalid SHA-256 digest: ${value}`);
+            return value.slice("sha256:".length);
+          };
+          const safeRelativePath = (value) => {
+            if (typeof value !== "string" || value.length === 0 || value.includes("\\") || value.startsWith("/") || path.posix.normalize(value) !== value || value.split("/").includes("..")) throw new Error(`unsafe retained path: ${value}`);
+            return value;
+          };
+          const spdxID = (value) => value.replace(/[^A-Za-z0-9.-]/g, "-");
+          const set = JSON.parse(fs.readFileSync("admission/v1/standard-admission-set.json", "utf8"));
+          if (set.format !== "takoform.standard-admission-set@v2" || set.definitionVersion !== version || set.packageVersion !== version || set.admissionReleaseTag !== tag || !Array.isArray(set.entries) || set.entries.length !== 10) throw new Error("standard admission set does not contain the exact ten-package release");
+
+          const packages = [];
+          const subjects = [];
+          const packageDependencies = [];
+          const addSubject = (entry, role, subjectPath, subjectDigest) => {
+            const relative = safeRelativePath(subjectPath);
+            const raw = fs.readFileSync(path.join("admission/v1", relative));
+            if (digest(raw) !== subjectDigest) throw new Error(`${role}:${entry.kind} retained subject digest drift`);
+            subjects.push({ kind: entry.kind, slug: entry.slug, role, path: relative, digest: subjectDigest, raw });
+          };
+          for (const entry of set.entries) {
+            if (typeof entry.kind !== "string" || typeof entry.slug !== "string" || !/^sha256:[0-9a-f]{64}$/.test(entry.packageDigest) || typeof entry.releaseTag !== "string" || !/^sha256:[0-9a-f]{64}$/.test(entry.packageReleaseManifestDigest)) throw new Error("invalid standard admission package entry");
+            packages.push({
+              name: `Takoform Form Package ${entry.kind}`,
+              SPDXID: `SPDXRef-FormPackage-${spdxID(entry.slug)}`,
+              versionInfo: version,
+              downloadLocation: `${repository}/releases/tag/${entry.releaseTag}`,
+              filesAnalyzed: false,
+              checksums: [{ algorithm: "SHA256", checksumValue: hexDigest(entry.packageDigest) }],
+              licenseConcluded: "NOASSERTION", licenseDeclared: "NOASSERTION", copyrightText: "NOASSERTION",
+            });
+            const releaseManifestPath = safeRelativePath(entry.packageReleaseManifestPath);
+            if (digestFile(path.join("admission/v1", releaseManifestPath)) !== entry.packageReleaseManifestDigest) throw new Error(`${entry.kind} package release manifest digest drift`);
+            packageDependencies.push({
+              name: `form-package:${entry.kind}`,
+              uri: `${repository}/releases/tag/${entry.releaseTag}`,
+              digest: { sha256: hexDigest(entry.packageReleaseManifestDigest) },
+            });
+            addSubject(entry, "package-index", entry.packageIndexPath, entry.packageDigest);
+            addSubject(entry, "admission-evidence", entry.evidencePath, entry.evidenceDigest);
+            addSubject(entry, "host-report", entry.hostReportPath, entry.hostReportDigest);
+            addSubject(entry, "provider-report", entry.providerReportPath, entry.providerReportDigest);
+          }
+          addSubject({ kind: "provider", slug: "provider" }, "registry-readback", set.providerRegistryReadback.path, set.providerRegistryReadback.digest);
+          if (new Set(packages.map(({ SPDXID }) => SPDXID)).size !== 10 || subjects.length !== 41 || new Set(subjects.map(({ role, kind }) => `${role}:${kind}`)).size !== 41 || new Set(subjects.map(({ path: subjectPath }) => subjectPath)).size !== 41) throw new Error("standard admission retained-subject closure is not exact");
+          packages.sort((a, b) => a.SPDXID.localeCompare(b.SPDXID));
+          subjects.sort((a, b) => a.path.localeCompare(b.path));
+          packageDependencies.sort((a, b) => a.name.localeCompare(b.name));
+
+          const files = subjects.map((subject) => ({
+            fileName: `./v1/${subject.path}`,
+            SPDXID: `SPDXRef-Retained-${spdxID(subject.role)}-${spdxID(subject.slug)}-${hexDigest(subject.digest).slice(0, 12)}`,
+            checksums: [{ algorithm: "SHA256", checksumValue: hexDigest(subject.digest) }],
+            licenseConcluded: "NOASSERTION", licenseInfoInFiles: ["NOASSERTION"], copyrightText: "NOASSERTION",
+          }));
+          if (new Set(files.map(({ SPDXID }) => SPDXID)).size !== files.length) throw new Error("duplicate retained-subject SPDX identifier");
+          const verificationDigests = subjects.map(({ raw }) => crypto.createHash("sha1").update(raw).digest("hex")).sort();
+          const verificationCode = crypto.createHash("sha1").update(verificationDigests.join(""), "utf8").digest("hex");
+          const rootPackage = {
+            name: "Takoform standard Form admission", SPDXID: "SPDXRef-Admission", versionInfo: version,
+            downloadLocation: `${repository}/releases/tag/${tag}`, filesAnalyzed: true,
+            packageVerificationCode: { packageVerificationCodeValue: verificationCode },
+            licenseConcluded: "NOASSERTION", licenseDeclared: "NOASSERTION", copyrightText: "NOASSERTION",
+          };
+          const relationships = [{ spdxElementId: "SPDXRef-DOCUMENT", relationshipType: "DESCRIBES", relatedSpdxElement: rootPackage.SPDXID }];
+          for (const pkg of packages) relationships.push({ spdxElementId: rootPackage.SPDXID, relationshipType: "DEPENDS_ON", relatedSpdxElement: pkg.SPDXID });
+          for (const file of files) relationships.push({ spdxElementId: rootPackage.SPDXID, relationshipType: "CONTAINS", relatedSpdxElement: file.SPDXID });
           const sbom = {
             spdxVersion: "SPDX-2.3", dataLicense: "CC0-1.0", SPDXID: "SPDXRef-DOCUMENT",
             name: `Takoform standard Form admission ${version}`,
             documentNamespace: `https://forms.takoform.com/spdx/admission/${version}/${commit}`,
             creationInfo: { creators: ["Tool: standard-admission-release"], created: "1970-01-01T00:00:00Z" },
-            packages: [{ name: "Takoform standard Form admission", SPDXID: "SPDXRef-Package", versionInfo: version, downloadLocation: "NOASSERTION", filesAnalyzed: false, licenseConcluded: "NOASSERTION", licenseDeclared: "NOASSERTION", copyrightText: "NOASSERTION" }],
+            packages: [rootPackage, ...packages], files, relationships,
           };
           fs.writeFileSync(path.join(out, `takoform-standard-admission_${version}_sbom.spdx.json`), `${JSON.stringify(sbom)}\n`);
+          const sbomName = `takoform-standard-admission_${version}_sbom.spdx.json`;
+          const outputSubjects = ["fresh-provider-lifecycle-matrix.json", "standard-admission-set.json", "standard-admission-set.sigstore.json", "takoform-standard-admission-v1.tar.gz", sbomName]
+            .map((name) => ({ name, digest: { sha256: hexDigest(digestFile(path.join(out, name))) } }));
+          const pinsPath = "admission/v1/trust/offline-sigstore-pins.json";
+          const pinsDigest = digestFile(pinsPath);
+          const subjectDependencies = subjects.map((subject) => ({
+            name: `retained-subject:${subject.role}:${subject.kind}`,
+            uri: `git+${repository}.git@${commit}#admission/v1/${subject.path}`,
+            digest: { sha256: hexDigest(subject.digest) },
+          }));
           const provenance = {
             _type: "https://in-toto.io/Statement/v1",
-            subject: ["standard-admission-set.json", "takoform-standard-admission-v1.tar.gz"].map((name) => ({ name, digest: { sha256: sha(name) } })),
+            subject: outputSubjects,
             predicateType: "https://slsa.dev/provenance/v1",
-            predicate: { buildDefinition: { buildType: "https://forms.takoform.com/build/standard-admission/v1", externalParameters: { sourceCommit: commit, tag, workflow: ".github/workflows/standard-admission-release.yml" }, internalParameters: {}, resolvedDependencies: [] }, runDetails: { builder: { id: "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-admission-release.yml@refs/heads/main" }, metadata: { invocationId: process.env.GITHUB_RUN_ID } } },
+            predicate: { buildDefinition: {
+              buildType: "https://forms.takoform.com/build/standard-admission/v1",
+              externalParameters: { sourceCommit: commit, tag, version, workflow: ".github/workflows/standard-admission-release.yml" },
+              internalParameters: { canonicalization: "RFC8785", packageCount: 10, retainedSubjectCount: 41, standardAdmissionSetDigest: digestFile("admission/v1/standard-admission-set.json"), offlineSigstorePinsDigest: pinsDigest },
+              resolvedDependencies: [
+                { name: "tagged-admission-source", uri: `git+${repository}.git`, digest: { gitCommit: commit } },
+                { name: "protected-main-release-tooling", uri: `git+${repository}.git`, digest: { gitCommit: commit } },
+                { name: "offline-sigstore-pins", uri: `git+${repository}.git@${commit}#${pinsPath}`, digest: { sha256: hexDigest(pinsDigest) } },
+                ...packageDependencies, ...subjectDependencies,
+              ],
+            }, runDetails: { builder: { id: `${repository}/.github/workflows/standard-admission-release.yml@refs/heads/main` }, metadata: { invocationId: process.env.GITHUB_RUN_ID } } },
           };
           fs.writeFileSync(path.join(out, `takoform-standard-admission_${version}_provenance.intoto.json`), `${JSON.stringify(provenance)}\n`);
           NODE
@@ -348,7 +438,7 @@ jobs:
             sbomDigests: [byName.get(`takoform-standard-admission_${version}_sbom.spdx.json`)],
             provenanceDigests: [byName.get(`takoform-standard-admission_${version}_provenance.intoto.json`)],
             configDigest: byName.get("standard-admission-set.json"),
-            policyDigest: sha(fs.readFileSync("admission/v1/trust/registry-readback-policy.json")),
+            policyDigest: sha(fs.readFileSync("admission/v1/trust/offline-sigstore-pins.json")),
             toolchainDigest: sha(Buffer.from("go1.26.5\ncosign-v3.0.6\nopentofu1.12.1\nterraform1.15.8\n", "utf8")),
           };
           fs.writeFileSync(path.join(out, "release-candidate-manifest.json"), `${JSON.stringify(candidate)}\n`);
@@ -435,14 +525,69 @@ jobs:
           const fs = require("node:fs");
           const path = require("node:path");
           const candidate = JSON.parse(fs.readFileSync("candidate/release-candidate-manifest.json"));
+          const sha = (raw) => `sha256:${crypto.createHash("sha256").update(raw).digest("hex")}`;
+          const digestFile = (name) => sha(fs.readFileSync(name));
           const expectedNames = ["SHA256SUMS", "fresh-provider-lifecycle-matrix.json", "standard-admission-set.json", "standard-admission-set.sigstore.json", "takoform-standard-admission-v1.tar.gz", `takoform-standard-admission_${process.env.VERSION}_provenance.intoto.json`, `takoform-standard-admission_${process.env.VERSION}_sbom.spdx.json`].sort();
           const decoded = JSON.parse(Buffer.from(process.env.ARTIFACT_DIGESTS_B64, "base64url"));
           const actualFiles = fs.readdirSync("candidate").sort();
-          if (candidate.kind !== "takos.release-candidate-manifest@v1" || candidate.surfaceId !== "takoform-standard-form-admission" || candidate.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || candidate.sourceCommit !== process.env.SOURCE_COMMIT || candidate.version !== process.env.VERSION || candidate.tag !== process.env.RELEASE_TAG || candidate.workflowRunId !== process.env.CANDIDATE_RUN_ID || JSON.stringify(candidate.releaseAssets.map(({name}) => name).sort()) !== JSON.stringify(expectedNames) || JSON.stringify(actualFiles) !== JSON.stringify(["release-candidate-manifest.json", ...expectedNames].sort()) || JSON.stringify(candidate.artifactDigests) !== JSON.stringify(decoded)) process.exit(1);
+          const candidateKeys = ["artifactDigests", "builtAt", "configDigest", "kind", "ociImages", "policyDigest", "provenanceDigests", "releaseAssets", "repository", "sbomDigests", "sourceCommit", "surfaceId", "tag", "toolchainDigest", "version", "workflowRunId"].sort();
+          if (JSON.stringify(Object.keys(candidate).sort()) !== JSON.stringify(candidateKeys) || candidate.kind !== "takos.release-candidate-manifest@v1" || candidate.surfaceId !== "takoform-standard-form-admission" || candidate.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || candidate.sourceCommit !== process.env.SOURCE_COMMIT || candidate.version !== process.env.VERSION || candidate.tag !== process.env.RELEASE_TAG || candidate.workflowRunId !== process.env.CANDIDATE_RUN_ID || !Array.isArray(candidate.ociImages) || candidate.ociImages.length !== 0 || JSON.stringify(candidate.releaseAssets.map(({name}) => name).sort()) !== JSON.stringify(expectedNames) || JSON.stringify(actualFiles) !== JSON.stringify(["release-candidate-manifest.json", ...expectedNames].sort())) process.exit(1);
           for (const asset of candidate.releaseAssets) {
-            const digest = `sha256:${crypto.createHash("sha256").update(fs.readFileSync(path.join("candidate", asset.name))).digest("hex")}`;
+            if (JSON.stringify(Object.keys(asset).sort()) !== JSON.stringify(["digest", "name"])) process.exit(1);
+            const digest = digestFile(path.join("candidate", asset.name));
             if (digest !== asset.digest) process.exit(1);
           }
+          const byName = new Map(candidate.releaseAssets.map(({ name, digest }) => [name, digest]));
+          const sbomName = `takoform-standard-admission_${process.env.VERSION}_sbom.spdx.json`;
+          const provenanceName = `takoform-standard-admission_${process.env.VERSION}_provenance.intoto.json`;
+          const toolchainDigest = sha(Buffer.from("go1.26.5\ncosign-v3.0.6\nopentofu1.12.1\nterraform1.15.8\n", "utf8"));
+          if (JSON.stringify(candidate.artifactDigests) !== JSON.stringify(candidate.releaseAssets.map(({ digest }) => digest)) || JSON.stringify(candidate.artifactDigests) !== JSON.stringify(decoded) || JSON.stringify(candidate.sbomDigests) !== JSON.stringify([byName.get(sbomName)]) || JSON.stringify(candidate.provenanceDigests) !== JSON.stringify([byName.get(provenanceName)]) || candidate.configDigest !== byName.get("standard-admission-set.json") || candidate.policyDigest !== digestFile("admission/v1/trust/offline-sigstore-pins.json") || candidate.toolchainDigest !== toolchainDigest) process.exit(1);
+
+          const set = JSON.parse(fs.readFileSync("candidate/standard-admission-set.json", "utf8"));
+          if (set.format !== "takoform.standard-admission-set@v2" || set.definitionVersion !== process.env.VERSION || set.packageVersion !== process.env.VERSION || set.admissionReleaseTag !== process.env.RELEASE_TAG || !Array.isArray(set.entries) || set.entries.length !== 10) process.exit(1);
+          const expectedPackages = new Map();
+          const expectedSubjects = new Map();
+          const addSubject = (kind, role, subjectPath, digest) => {
+            if (!/^sha256:[0-9a-f]{64}$/.test(digest) || expectedSubjects.has(subjectPath)) process.exit(1);
+            expectedSubjects.set(subjectPath, { kind, role, digest });
+          };
+          for (const entry of set.entries) {
+            if (expectedPackages.has(entry.kind) || !/^sha256:[0-9a-f]{64}$/.test(entry.packageDigest) || !/^sha256:[0-9a-f]{64}$/.test(entry.packageReleaseManifestDigest)) process.exit(1);
+            expectedPackages.set(entry.kind, entry);
+            addSubject(entry.kind, "package-index", entry.packageIndexPath, entry.packageDigest);
+            addSubject(entry.kind, "admission-evidence", entry.evidencePath, entry.evidenceDigest);
+            addSubject(entry.kind, "host-report", entry.hostReportPath, entry.hostReportDigest);
+            addSubject(entry.kind, "provider-report", entry.providerReportPath, entry.providerReportDigest);
+          }
+          addSubject("provider", "registry-readback", set.providerRegistryReadback.path, set.providerRegistryReadback.digest);
+          if (expectedPackages.size !== 10 || expectedSubjects.size !== 41) process.exit(1);
+
+          const sbom = JSON.parse(fs.readFileSync(path.join("candidate", sbomName), "utf8"));
+          if (sbom.spdxVersion !== "SPDX-2.3" || sbom.packages.length !== 11 || sbom.files.length !== 41 || sbom.relationships.length !== 52) process.exit(1);
+          const sbomFiles = new Map(sbom.files.map((file) => [file.fileName.replace(/^\.\/v1\//, ""), `sha256:${file.checksums?.find(({ algorithm }) => algorithm === "SHA256")?.checksumValue}`]));
+          if (sbomFiles.size !== 41) process.exit(1);
+          for (const [subjectPath, subject] of expectedSubjects) if (sbomFiles.get(subjectPath) !== subject.digest) process.exit(1);
+          const componentPackages = sbom.packages.filter(({ SPDXID }) => SPDXID !== "SPDXRef-Admission");
+          if (componentPackages.length !== 10) process.exit(1);
+          for (const pkg of componentPackages) {
+            const entry = [...expectedPackages.values()].find(({ slug }) => pkg.SPDXID === `SPDXRef-FormPackage-${slug.replace(/[^A-Za-z0-9.-]/g, "-")}`);
+            if (!entry || pkg.versionInfo !== process.env.VERSION || `sha256:${pkg.checksums?.find(({ algorithm }) => algorithm === "SHA256")?.checksumValue}` !== entry.packageDigest) process.exit(1);
+          }
+
+          const provenance = JSON.parse(fs.readFileSync(path.join("candidate", provenanceName), "utf8"));
+          const provenanceSubjects = new Map(provenance.subject.map(({ name, digest }) => [name, `sha256:${digest.sha256}`]));
+          const expectedProvenanceSubjects = ["fresh-provider-lifecycle-matrix.json", "standard-admission-set.json", "standard-admission-set.sigstore.json", "takoform-standard-admission-v1.tar.gz", sbomName];
+          if (provenance._type !== "https://in-toto.io/Statement/v1" || provenance.predicateType !== "https://slsa.dev/provenance/v1" || provenanceSubjects.size !== expectedProvenanceSubjects.length) process.exit(1);
+          for (const name of expectedProvenanceSubjects) if (provenanceSubjects.get(name) !== byName.get(name)) process.exit(1);
+          const definition = provenance.predicate.buildDefinition;
+          if (definition.internalParameters.packageCount !== 10 || definition.internalParameters.retainedSubjectCount !== 41 || definition.internalParameters.standardAdmissionSetDigest !== candidate.configDigest || definition.internalParameters.offlineSigstorePinsDigest !== candidate.policyDigest) process.exit(1);
+          const dependencies = definition.resolvedDependencies;
+          const packageDependencies = new Map(dependencies.filter(({ name }) => name.startsWith("form-package:")).map((item) => [item.name.slice("form-package:".length), `sha256:${item.digest.sha256}`]));
+          const subjectDependencies = new Map(dependencies.filter(({ name }) => name.startsWith("retained-subject:")).map((item) => [item.name.slice("retained-subject:".length), `sha256:${item.digest.sha256}`]));
+          const rootDependencies = new Map(dependencies.filter(({ name }) => !name.startsWith("form-package:") && !name.startsWith("retained-subject:")).map((item) => [item.name, item.digest]));
+          if (dependencies.length !== 54 || packageDependencies.size !== 10 || subjectDependencies.size !== 41 || rootDependencies.size !== 3 || rootDependencies.get("tagged-admission-source")?.gitCommit !== process.env.SOURCE_COMMIT || rootDependencies.get("protected-main-release-tooling")?.gitCommit !== process.env.SOURCE_COMMIT || `sha256:${rootDependencies.get("offline-sigstore-pins")?.sha256}` !== candidate.policyDigest) process.exit(1);
+          for (const [kind, entry] of expectedPackages) if (packageDependencies.get(kind) !== entry.packageReleaseManifestDigest) process.exit(1);
+          for (const subject of expectedSubjects.values()) if (subjectDependencies.get(`${subject.role}:${subject.kind}`) !== subject.digest) process.exit(1);
           NODE
           (cd candidate && sha256sum --check --strict SHA256SUMS)
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/standard-admission-release.yml@refs/heads/main"

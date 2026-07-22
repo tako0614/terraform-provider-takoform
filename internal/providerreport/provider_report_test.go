@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -118,6 +119,54 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 			t.Fatalf("written %s provider-report bytes drifted", generated.kind)
 		}
 	}
+	sourceCommit := strings.Repeat("a", 40)
+	exportRoot := filepath.Join(t.TempDir(), "provider-report-candidate")
+	inventory, err := Export(root, exportRoot, sourceCommit, reports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inventory.Format != directoryInventoryFormat || inventory.Status != "candidate-only" || inventory.ProofType != "provider" || inventory.Source.Commit != sourceCommit || inventory.Source.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || inventory.DefinitionVersion != "1.0.1" || inventory.PackageVersion != "1.0.1" || inventory.RunnerVersion != "0.1.3" || len(inventory.Reports) != 10 {
+		t.Fatalf("invalid exported provider-report manifest: %#v", inventory)
+	}
+	verified, err := VerifyDirectory(root, exportRoot, sourceCommit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(inventory, verified) {
+		t.Fatal("verified provider-report manifest differs from export")
+	}
+	for _, descriptor := range inventory.Reports {
+		if descriptor.Path != filepath.ToSlash(filepath.Join("packages", descriptor.Slug, "provider-report.json")) {
+			t.Fatalf("non-canonical provider-report path: %#v", descriptor)
+		}
+		if descriptor.BundlePath != filepath.ToSlash(filepath.Join("packages", descriptor.Slug, "provider-report.sigstore.json")) {
+			t.Fatalf("non-canonical provider-report bundle path: %#v", descriptor)
+		}
+	}
+	if _, err := VerifyDirectory(root, exportRoot, strings.Repeat("b", 40)); err == nil || !strings.Contains(err.Error(), "rederived exact report closure") {
+		t.Fatalf("source substitution error = %v", err)
+	}
+	extra := filepath.Join(exportRoot, "unexpected")
+	if err := os.WriteFile(extra, []byte("unexpected"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyDirectory(root, exportRoot, sourceCommit); err == nil || !strings.Contains(err.Error(), "file closure differs") {
+		t.Fatalf("extra-file closure error = %v", err)
+	}
+	if err := os.Remove(extra); err != nil {
+		t.Fatal(err)
+	}
+	reportPath := filepath.Join(exportRoot, filepath.FromSlash(inventory.Reports[0].Path))
+	reportRaw, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(reportPath, append(reportRaw, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyDirectory(root, exportRoot, sourceCommit); err == nil || !strings.Contains(err.Error(), "provider-report") {
+		t.Fatalf("non-canonical report error = %v", err)
+	}
 	if err := Write(root, filepath.Join(root, "admission", "v1", "unsigned-provider-reports"), reports); err == nil || !strings.Contains(err.Error(), "admission tree") {
 		t.Fatalf("admission-tree write error = %v", err)
 	}
@@ -137,6 +186,58 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 	forged[0].report.Subject = "provider:forged.example.test/example/provider"
 	if err := Write(root, filepath.Join(t.TempDir(), "forged"), forged); err == nil || !strings.Contains(err.Error(), "differs from canonical bytes") {
 		t.Fatalf("forged report write error = %v", err)
+	}
+}
+
+func TestStandardProviderReportWorkflowSeparatesExecutionAndSigningAuthority(t *testing.T) {
+	t.Parallel()
+	root, err := providerlifecycle.RepoRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "standard-provider-report.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(raw)
+	for _, required := range []string{
+		"permissions: {}",
+		"environment: standard-provider-report",
+		"id-token: write",
+		"artifact-ids: ${{ needs.generate.outputs.artifact_id }}",
+		"digest-mismatch: error",
+		"takoform.standard-provider-report-candidate@v1",
+		"takoform.standard-provider-report-signed-candidate@v1",
+		"status:\"candidate-only\"",
+		"proofType:\"provider\"",
+		"bundlePath,bundleDigest",
+		"provider-report-manifest.json",
+		"signed-provider-report-candidate.json",
+		"SHA256SUMS",
+		"takoform-standard-provider-report-candidate-1.0.1-${{ needs.generate.outputs.source_commit_short }}",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Errorf("workflow omits %q", required)
+		}
+	}
+	if strings.Count(workflow, "actions/checkout@") != 1 {
+		t.Fatal("the checkout-free signer must not execute repository source")
+	}
+	signer := strings.Split(workflow, "\n  sign:\n")
+	if len(signer) != 2 || strings.Contains(signer[1], "actions/checkout@") || strings.Contains(signer[1], "contents: write") || strings.Contains(signer[1], "contents: read") || strings.Contains(signer[1], "gh release") {
+		t.Fatal("signer permissions or mutation boundary drifted")
+	}
+	for _, forbidden := range []string{"unsignedArtifact:", "sigstoreBundlePath", "sigstoreBundleDigest"} {
+		if strings.Contains(workflow, forbidden) {
+			t.Fatalf("workflow reintroduced non-canonical signed handoff field %q", forbidden)
+		}
+	}
+	qualityRaw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "quality.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(qualityRaw), `--source-commit "${GITHUB_SHA}"`) {
+		t.Fatal("quality workflow does not bind provider reports to its exact source commit")
 	}
 }
 
