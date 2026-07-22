@@ -59,13 +59,17 @@ GITHUB_TOKEN=... go run ./cmd/published-package-set download \
   --output-root /tmp/takoform-published-package-snapshot
 ```
 
-Passing this gate proves publication only. `forms/standard-package-set.json`
-therefore remains `structural-candidate` / `external-required`, and
-`standard-admission-set.json` is intentionally absent. The final
-`release-check` remains fail-closed until signed host/provider/admission
-subjects, the authenticated direct two-Registry provider readback,
-an immutable `forms/admissions/v*` activation release, and real live revocation
-chain proof exist. No revocation statement or checkpoint is fabricated here.
+Passing the package gate proves publication only.
+`standard-admission-set.json` now retains the exact signed host, provider, and
+admission closure plus the direct two-Registry provider readback. Its Form
+definition/package version remains `1.0.1`; the independent immutable admission
+activation stream advances to `forms/admissions/v1.0.2` without republishing or
+re-signing those exact package/evidence subjects. `admission-closure-check`
+proves only the candidate's offline five-role closure. Public `release-check`
+remains fail-closed unless the signed tag, completed controller promotion run,
+immutable activation Release, exact eight-asset inventory, and retained
+controller readback all exist and read back exactly. No revocation statement
+or checkpoint is fabricated here.
 
 The provider lifecycle runner can generate unsigned per-kind
 `takoform.standard-runner-report@v1` subjects from these exact retained

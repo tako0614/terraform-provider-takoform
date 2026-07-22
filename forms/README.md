@@ -114,10 +114,13 @@ authorities. Phase 1's `v*` provider workflow runs
 `candidate-publication-check`: it may publish the exact provider build to the
 Public Registry while this inventory remains `external-required` and while no
 Form becomes admitted or activated. Phase 2's protected
-`forms/admissions/v*` workflow runs `release-check` only after that same
-provider version can be installed directly from both canonical Registry FQNs.
-That activation gate opens only after every external requirement is
-authenticated. It verifies
+`forms/admissions/v*` workflow runs the closure-only
+`admission-closure-check` after that same provider version can be installed
+directly from both canonical Registry FQNs. After protected promotion, public
+`release-check` additionally requires the completed controller run, exact
+immutable eight-asset Release, and retained controller readback. That
+activation gate opens only after every external requirement is authenticated.
+The offline closure verifies
 retained RFC 8785 admission-evidence bytes against an offline Sigstore v0.3
 bundle, a digest-pinned trusted root, and role-specific digest-pinned exact
 Fulcio publisher policies. It requires a Rekor inclusion proof, a signed
@@ -126,18 +129,19 @@ contacting GitHub or another distribution endpoint. The same fail-closed chain
 now validates canonical signed host/provider runner reports, the exact five
 asset Form Package release manifest/readback for every candidate, and a signed
 provider readback backed by the complete direct-Registry OpenTofu/Terraform
-lifecycle matrix. These are implemented validators, not generated evidence.
-The ten live immutable package releases, their exact release assets, the
-production Sigstore trusted-root snapshot, and the digest-pinned package-index
-publisher policy are retained under `admission/v1` and pass
-`published-package-check`. The exact provider `v0.1.3` OpenTofu `1.12.1` and
-Terraform `1.15.8` direct Registry matrix and canonical unsigned readback are
-now retained under `admission/v1/registry`. The protected admission candidate
-must reproduce the matrix byte-for-byte and keyless-sign the readback before
-it may consume it. The final five-role production admission pins, the signed
-Registry bundle, host/provider/admission reports, and
-`standard-admission-set.json` do not exist yet, so `release-check` still fails
-closed before admission can open.
+  lifecycle matrix. These are implemented validators, not generated evidence.
+The ten live immutable `1.0.1` package releases, their exact release assets, the
+production Sigstore trusted-root snapshot, the five distinct publisher
+policies, and the signed host/provider/admission reports are retained under
+`admission/v1`. The exact provider `v0.1.3` OpenTofu `1.12.1` and Terraform
+`1.15.8` direct Registry matrix/readback are retained under
+`admission/v1/registry`, and `standard-admission-set.json` binds the complete
+closure. The protected admission candidate must reproduce the matrix
+byte-for-byte and keyless-sign the readback. Admission release semver is
+independent from the retained Form definition/package semver:
+`forms/admissions/v1.0.2` binds the exact `1.0.1` packages. `release-check`
+opens admission only when that matching immutable activation Release exists
+and reads back exactly.
 
 This ordering is intentional, not a publication bypass: the immutable public
 provider is a typed client for structural candidates, while only the separate

@@ -100,25 +100,23 @@ append-only lane signs cumulative, hash-chained checkpoints for exact-digest
 security revocations. See
 [the Form Package release boundary](release/form-packages.md).
 
-All ten `1.0.0` structural-candidate Form Packages now have immutable live
+All ten `1.0.1` structural-candidate Form Packages now have immutable live
 GitHub Releases. Their exact seven-asset inventories, Git refs, production
 Sigstore trusted root, and package-index workflow policy are retained under
 [`admission/v1/`](admission/v1/) and pass the offline
-`published-package-check`. Publication still does not admit a Form: host and
-authenticated provider lifecycle reports, direct Registry readback, signed
-admission evidence, the distinct remaining role authorities, and a live
-revocation-chain proof remain external. No `forms/admissions/v*` activation or
-revocation release has been published. Unsigned provider-report subjects for a
-provider candidate are generated only from that same candidate's exact
-reviewed release-source fixtures; historical published-package authentication
-remains a separate proof and cannot relabel a newer provider execution. Those
-unsigned subjects grant no admission. The active provider `0.1.3` source
-candidate pins a new complete `1.0.1` Form set whose executable fixture
+`published-package-check`. Signed host/provider/admission reports and the exact
+direct Registry readback are retained as a five-role closure, but those source
+bytes alone do not admit a Form. Only the matching immutable
+`forms/admissions/v1.0.2` activation Release can activate them. The public
+`release-check` verifies that immutable Release, its exact eight assets, the
+completed controller promotion run, and the retained controller readback;
+candidate-only `admission-closure-check` grants no activation. The Release binds the
+existing definition/package `1.0.1` bytes; these independent version streams
+avoid republishing or re-signing an unchanged package closure. The
+active provider `0.1.3` source candidate pins that complete `1.0.1` Form set,
+whose executable fixture
 references resolve to a separate Takosumi-owned
-`standard-form-runtime-v1.0.3` host-conformance runtime release. The retained
-`1.0.0` publication proof stays
-independently verifiable while the new package releases and admission evidence
-are prepared.
+`standard-form-runtime-v1.0.3` host-conformance runtime release.
 
 The candidate's exact EdgeWorker, DurableWorkflow, and ContainerService bytes
 are pinned in `forms/standard-runtime-artifact-set.json`. Run
@@ -168,8 +166,10 @@ candidate.
 Provider publication and Standard Form admission are separate releases. The
 provider `v*` workflow can publish only while the descriptor and inventory are
 candidate-only; this never changes admission status. A later protected
-`forms/admissions/v*` workflow runs `release-check` over real signed package,
-runner, Registry, and admission evidence and is the only activation authority.
+`forms/admissions/v*` workflow runs `admission-closure-check` over real signed
+package, runner, Registry, and admission evidence. After controller-authorized
+promotion, public `release-check` requires the completed protected workflow and
+exact immutable Release readback; only that combined authority activates admission.
 
 Provider releases use the fail-closed signed `v*` tag workflow documented in
 [release/README.md](release/README.md). The signing key is pinned by fingerprint;

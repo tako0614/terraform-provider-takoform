@@ -2,6 +2,8 @@ package standardforms
 
 import (
 	"bytes"
+	"context"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,7 +63,7 @@ func TestReleaseSourceRequiresExactReviewedFixtureBytes(t *testing.T) {
 func TestAdmissionActivationGateFailsClosedWithoutImmutableReleaseRef(t *testing.T) {
 	root := filepath.Join("..", "..")
 	checkout := cloneCurrentSourceWithoutTags(t, root)
-	err := VerifyReleaseReady(checkout)
+	err := VerifyReleaseReady(context.Background(), checkout, http.DefaultClient, "")
 	if err == nil || !strings.Contains(err.Error(), "immutable release refs: admission release tag") {
 		t.Fatalf("release gate error = %v", err)
 	}
