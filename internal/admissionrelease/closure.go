@@ -24,21 +24,25 @@ import (
 )
 
 const (
-	runnerReportFormat         = "takoform.standard-runner-report@v1"
-	registryReadbackFormat     = "takoform.provider-registry-readback@v1"
-	packageReleaseSchema       = 1
-	packageReleaseType         = "form-package"
-	sourceRepository           = "github.com/tako0614/terraform-provider-takoform"
-	packageReleaseWorkflow     = ".github/workflows/form-package-release.yml"
-	packageIndexMediaType      = "application/vnd.takoform.package-index.v1+json"
-	packagePublisherIssuer     = "https://token.actions.githubusercontent.com"
-	packagePublisherIdentity   = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
-	packagePublisherTagPattern = "refs/tags/forms/k-*/v*"
-	registryProviderAddress    = "registry.terraform.io/tako0614/takoform"
-	maxReportBytes             = 16 << 20
-	maxReleaseManifestBytes    = 4 << 20
-	maxReleaseAssetBytes       = 64 << 20
+	runnerReportFormat             = "takoform.standard-runner-report@v1"
+	registryReadbackFormat         = "takoform.provider-registry-readback@v1"
+	packageReleaseSchema           = 1
+	packageReleaseType             = "form-package"
+	sourceRepository               = "github.com/tako0614/terraform-provider-takoform"
+	packageReleaseWorkflow         = ".github/workflows/standard-form-package-set-release.yml"
+	packageIndexMediaType          = "application/vnd.takoform.package-index.v1+json"
+	packagePublisherIssuer         = "https://token.actions.githubusercontent.com"
+	packagePublisherIdentityPrefix = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-form-package-set-release.yml@refs/tags/standard-forms/v"
+	packagePublisherTagPattern     = "refs/tags/standard-forms/v*"
+	registryProviderAddress        = "registry.terraform.io/tako0614/takoform"
+	maxReportBytes                 = 16 << 20
+	maxReleaseManifestBytes        = 4 << 20
+	maxReleaseAssetBytes           = 64 << 20
 )
+
+func packagePublisherIdentity(packageVersion string) string {
+	return packagePublisherIdentityPrefix + packageVersion
+}
 
 // RunnerReport is the signed, portable summary emitted independently by a
 // host runner or provider runner for one exact Form Package. It contains no
@@ -530,7 +534,7 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 		entry.PackageIndexSigstoreBundle != path.Join(manifestDir, manifest.SignatureBundle) {
 		return nil, fmt.Errorf("package release signed subject/bundle path drift")
 	}
-	if manifest.PublisherPolicy.OIDCIssuer != packagePublisherIssuer || manifest.PublisherPolicy.Identity != packagePublisherIdentity ||
+	if manifest.PublisherPolicy.OIDCIssuer != packagePublisherIssuer || manifest.PublisherPolicy.Identity != packagePublisherIdentity(packageVersion) ||
 		manifest.PublisherPolicy.TagPattern != packagePublisherTagPattern || manifest.PublisherPolicy.ToolingCommit != manifest.ToolingCommit {
 		return nil, fmt.Errorf("package release publisher policy is not the protected Takoform package workflow")
 	}

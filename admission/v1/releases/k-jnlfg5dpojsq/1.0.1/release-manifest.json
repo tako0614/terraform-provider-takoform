@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "releaseType": "form-package",
+  "tag": "forms/k-jnlfg5dpojsq/v1.0.1",
+  "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
+  "sourceCommit": "3f5e4e0dd7ac060dfec926d31c5f2d4c80758789",
+  "toolingCommit": "3f5e4e0dd7ac060dfec926d31c5f2d4c80758789",
+  "workflow": ".github/workflows/standard-form-package-set-release.yml",
+  "packageVersion": "1.0.1",
+  "releaseId": "k-jnlfg5dpojsq",
+  "packageDigest": "sha256:964c0bdc7445440f93f2ee6318eb9bf6356f8d749d12a7eb904e90141e312dca",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "KVStore",
+    "definitionVersion": "1.0.1",
+    "schemaDigest": "sha256:137e97cbce057aac1ef8e9af3f00bb9ca3a3967131bf2d920c252d5249b6e96f"
+  },
+  "canonicalization": "RFC8785",
+  "signedSubject": "takoform-form-k-jnlfg5dpojsq_1.0.1_package-index.json",
+  "signatureBundle": "takoform-form-k-jnlfg5dpojsq_1.0.1_package-index.sigstore.json",
+  "signatureMediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+  "publisherPolicy": {
+    "oidcIssuer": "https://token.actions.githubusercontent.com",
+    "identity": "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-form-package-set-release.yml@refs/tags/standard-forms/v1.0.1",
+    "tagPattern": "refs/tags/standard-forms/v*",
+    "toolingCommit": "3f5e4e0dd7ac060dfec926d31c5f2d4c80758789"
+  },
+  "assets": [
+    {
+      "name": "takoform-form-k-jnlfg5dpojsq_1.0.1.tar.gz",
+      "mediaType": "application/gzip",
+      "size": 1910,
+      "digest": "sha256:798c1bd06f0e0761d44b3f49afe8bf563f8a2f03adf56d1a7eec689f3c16fadd"
+    },
+    {
+      "name": "takoform-form-k-jnlfg5dpojsq_1.0.1_package-index.json",
+      "mediaType": "application/vnd.takoform.package-index.v1+json",
+      "size": 1149,
+      "digest": "sha256:964c0bdc7445440f93f2ee6318eb9bf6356f8d749d12a7eb904e90141e312dca"
+    },
+    {
+      "name": "takoform-form-k-jnlfg5dpojsq_1.0.1_package-index.sigstore.json",
+      "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+      "size": 11491,
+      "digest": "sha256:549229cadd97b7b6c9350be61420ba22f26b37c2949798479e075bcdab77bd48"
+    },
+    {
+      "name": "takoform-form-k-jnlfg5dpojsq_1.0.1_provenance.intoto.json",
+      "mediaType": "application/vnd.in-toto+json",
+      "size": 1164,
+      "digest": "sha256:0f84e7d8a672a7a3e64478004167cc0db56948ad04e15c692f95b0df0a6f0a6b"
+    },
+    {
+      "name": "takoform-form-k-jnlfg5dpojsq_1.0.1_sbom.spdx.json",
+      "mediaType": "application/spdx+json",
+      "size": 3524,
+      "digest": "sha256:61954c0bf1d3eac43745308012c04919c5bdeb7f87385c30ec3c84c67483dc53"
+    }
+  ],
+  "publicationReady": true,
+  "publicationBlockers": []
+}
