@@ -6,7 +6,7 @@
   },
   "packageIndexPolicy": {
     "path": "trust/package-index-policy.json",
-    "digest": "sha256:7caea552e607cb386b9e06bb23251754bf588577ed5708577634ec7b5aea3237"
+    "digest": "sha256:3cbb521526a2a9b0ce8947ccd7931d8af49a6acb45e946daa4dbc6f75afdfb8e"
   },
   "registryReadbackPolicy": {
     "path": "trust/registry-readback-policy.json",

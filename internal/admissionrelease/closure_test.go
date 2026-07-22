@@ -126,8 +126,8 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 		Canonicalization: "RFC8785", SignedSubject: indexName, SignatureBundle: bundleName, SignatureMediaType: sigstoreBundleMediaTypeV03,
 		PublisherPolicy: releasePublisherPolicy{
 			OIDCIssuer:    "https://token.actions.githubusercontent.com",
-			Identity:      "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main",
-			TagPattern:    "refs/tags/forms/k-*/v*",
+			Identity:      packagePublisherIdentity("1.0.1"),
+			TagPattern:    packagePublisherTagPattern,
 			ToolingCommit: toolingCommit,
 		},
 		Assets: releaseAssets, PublicationReady: true, PublicationBlockers: []string{},

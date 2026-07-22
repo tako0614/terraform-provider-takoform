@@ -82,7 +82,7 @@ func TestPublishedPackageSetVerifiesWithoutAdmittingForms(t *testing.T) {
 	if err := readJSON(filepath.Join(root, "admission", "v1", "published-package-set.json"), &published); err != nil {
 		t.Fatal(err)
 	}
-	if current.DefinitionVersion != "1.0.1" || current.PackageVersion != "1.0.1" || published.DefinitionVersion != "1.0.0" || published.PackageVersion != "1.0.0" {
+	if current.DefinitionVersion != "1.0.1" || current.PackageVersion != "1.0.1" || published.DefinitionVersion != "1.0.1" || published.PackageVersion != "1.0.1" {
 		t.Fatalf("candidate/publication window drift: current=%s/%s published=%s/%s", current.DefinitionVersion, current.PackageVersion, published.DefinitionVersion, published.PackageVersion)
 	}
 	err := VerifyReleaseReady(root)

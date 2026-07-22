@@ -99,7 +99,7 @@ func VerifyPublishedPackageSet(root string, candidates CandidateSet) error {
 	}
 
 	admissionRoot := path.Join(root, admissionRootPath)
-	_, verifier, err := loadPublishedPackageTrust(admissionRoot, set.Trust)
+	_, verifier, err := loadPublishedPackageTrust(admissionRoot, set.Trust, set.PackageVersion)
 	if err != nil {
 		return fmt.Errorf("published-package trust: %w", err)
 	}
@@ -237,7 +237,7 @@ func validatePublishedReleasePaths(entry SetEntry, checksumsPath, packageVersion
 	return nil
 }
 
-func loadPublishedPackageTrust(admissionRoot string, ref PublishedPackageTrustRef) (PublishedPackageTrust, *offlineRoleVerifier, error) {
+func loadPublishedPackageTrust(admissionRoot string, ref PublishedPackageTrustRef, packageVersion string) (PublishedPackageTrust, *offlineRoleVerifier, error) {
 	raw, err := readRetainedRelativeFile(admissionRoot, ref.Path, maxOfflineSigstorePinsBytes)
 	if err != nil {
 		return PublishedPackageTrust{}, nil, err
@@ -285,7 +285,7 @@ func loadPublishedPackageTrust(admissionRoot string, ref PublishedPackageTrustRe
 	if err := decodeStrictJSON(policyRaw, &policy); err != nil {
 		return PublishedPackageTrust{}, nil, err
 	}
-	if policy.OIDCIssuer != packagePublisherIssuer || policy.CertificateIdentity != packagePublisherIdentity {
+	if policy.OIDCIssuer != packagePublisherIssuer || policy.CertificateIdentity != packagePublisherIdentity(packageVersion) {
 		return PublishedPackageTrust{}, nil, fmt.Errorf("package-index policy is not the protected package release workflow")
 	}
 	registryPolicyRaw, err := readPinnedRetainedFile(admissionRoot, "registry-readback publisher policy", trust.RegistryReadbackPolicy, maxPublisherPolicyBytes)
