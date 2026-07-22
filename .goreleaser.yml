@@ -55,8 +55,6 @@ archives:
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
   algorithm: sha256
-  extra_files:
-    - glob: .release-tmp/*_manifest.json
 
 signs:
   - artifacts: checksum

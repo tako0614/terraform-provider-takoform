@@ -14,9 +14,11 @@ The provider follows the Terraform Registry contract:
 
 - a signed immutable `v*` tag selects the source commit;
 - deterministic GitHub Release assets are identified by SHA-256;
-- the binary checksum file is signed with the RSA OpenPGP key whose full
-  fingerprint is pinned in `release/version.json` and `profile.json`;
-- SPDX 2.3 and SLSA provenance cover the exact release assets;
+- the archive-only provider checksum file is signed with the RSA OpenPGP key
+  whose full fingerprint is pinned in `release/version.json` and
+  `profile.json`;
+- SPDX 2.3 and SLSA provenance cover the exact release assets separately and
+  are never projected as Registry provider packages;
 - an existing version is never overwritten;
 - the `tako0614` public namespace and pinned key ID `34FC18AC897FB709` are
   registered, while the first clean Terraform Registry/OpenTofu install proof

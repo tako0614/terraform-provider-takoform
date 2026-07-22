@@ -177,13 +177,20 @@ jobs:
           } | sort > "$expected"
           find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/actual-unsigned-assets.txt"
           diff -u "$expected" "$RUNNER_TEMP/actual-unsigned-assets.txt"
-          mapfile -t unsigned < "$expected"
+          terraform_checksum_targets="$RUNNER_TEMP/terraform-registry-checksum-assets.txt"
+          opentofu_checksum_targets="$RUNNER_TEMP/opentofu-registry-checksum-assets.txt"
+          go -C cmd/provider-release run . registry-checksum-targets --product Terraform > "$terraform_checksum_targets"
+          go -C cmd/provider-release run . registry-checksum-targets --product OpenTofu > "$opentofu_checksum_targets"
+          diff -u "$terraform_checksum_targets" "$opentofu_checksum_targets"
+          expected_registry_checksums="$RUNNER_TEMP/expected-registry-checksum-assets.txt"
+          install -m 0644 "$terraform_checksum_targets" "$expected_registry_checksums"
+          mapfile -t checksum_targets < "$expected_registry_checksums"
           checksum="terraform-provider-takoform_${version}_SHA256SUMS"
-          (cd "$output" && for name in "${unsigned[@]}"; do sha256sum "$name"; done > "$checksum")
+          (cd "$output" && for name in "${checksum_targets[@]}"; do sha256sum "$name"; done > "$checksum")
           (cd "$output" && sha256sum --check --strict "$checksum")
           awk 'NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 ~ /\// { exit 1 } { print $2 }' "$output/$checksum" \
             | sort > "$RUNNER_TEMP/checksum-assets.txt"
-          diff -u "$expected" "$RUNNER_TEMP/checksum-assets.txt"
+          diff -u "$expected_registry_checksums" "$RUNNER_TEMP/checksum-assets.txt"
 
       - name: Upload only the closed unsigned inventory
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -241,6 +248,7 @@ jobs:
           test -f "$checksum"
           test -f "$manifest"
           expected_unsigned="$RUNNER_TEMP/expected-unsigned-assets.txt"
+          expected_registry_checksums="$RUNNER_TEMP/expected-registry-checksum-assets.txt"
           {
             for platform in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64 windows_amd64; do
               archive="terraform-provider-takoform_${version}_${platform}.zip"
@@ -248,6 +256,11 @@ jobs:
             done
             printf '%s\n' "$(basename "$manifest")"
           } | sort > "$expected_unsigned"
+          {
+            for platform in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64 windows_amd64; do
+              printf '%s\n' "terraform-provider-takoform_${version}_${platform}.zip"
+            done
+          } | sort > "$expected_registry_checksums"
           {
             cat "$expected_unsigned"
             printf '%s\n' "$(basename "$checksum")"
@@ -257,7 +270,7 @@ jobs:
           (cd "$output" && sha256sum --check --strict "$(basename "$checksum")")
           awk 'NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 ~ /\// { exit 1 } { print $2 }' "$checksum" \
             | sort > "$RUNNER_TEMP/checksum-assets.txt"
-          diff -u "$expected_unsigned" "$RUNNER_TEMP/checksum-assets.txt"
+          diff -u "$expected_registry_checksums" "$RUNNER_TEMP/checksum-assets.txt"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "A GitHub release already owns $GITHUB_REF_NAME; refusing overwrite" >&2
             exit 1
