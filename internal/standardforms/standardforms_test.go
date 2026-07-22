@@ -3,6 +3,7 @@ package standardforms
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,15 +58,16 @@ func TestReleaseSourceRequiresExactReviewedFixtureBytes(t *testing.T) {
 	}
 }
 
-func TestAdmissionActivationGateFailsClosedWithoutExternalAdmission(t *testing.T) {
-	t.Parallel()
-	err := VerifyReleaseReady(filepath.Join("..", ".."))
-	if err == nil || !strings.Contains(err.Error(), "missing admission/v1/standard-admission-set.json") {
+func TestAdmissionActivationGateFailsClosedWithoutImmutableReleaseRef(t *testing.T) {
+	root := filepath.Join("..", "..")
+	checkout := cloneCurrentSourceWithoutTags(t, root)
+	err := VerifyReleaseReady(checkout)
+	if err == nil || !strings.Contains(err.Error(), "immutable release refs: admission release tag") {
 		t.Fatalf("release gate error = %v", err)
 	}
 }
 
-func TestPublishedPackageSetVerifiesWithoutAdmittingForms(t *testing.T) {
+func TestPublishedPackageSetVerifiesIndependentlyOfAdmission(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..")
 	if err := VerifyPublishedPackageSet(root); err != nil {
@@ -85,10 +87,27 @@ func TestPublishedPackageSetVerifiesWithoutAdmittingForms(t *testing.T) {
 	if current.DefinitionVersion != "1.0.1" || current.PackageVersion != "1.0.1" || published.DefinitionVersion != "1.0.1" || published.PackageVersion != "1.0.1" {
 		t.Fatalf("candidate/publication window drift: current=%s/%s published=%s/%s", current.DefinitionVersion, current.PackageVersion, published.DefinitionVersion, published.PackageVersion)
 	}
-	err := VerifyReleaseReady(root)
-	if err == nil || !strings.Contains(err.Error(), "missing admission/v1/standard-admission-set.json") {
-		t.Fatalf("published package readback opened admission: %v", err)
+}
+
+func cloneCurrentSourceWithoutTags(t *testing.T, source string) string {
+	t.Helper()
+	absolute, err := filepath.Abs(source)
+	if err != nil {
+		t.Fatal(err)
 	}
+	checkout := filepath.Join(t.TempDir(), "checkout")
+	commands := [][]string{
+		{"init", "--quiet", checkout},
+		{"-C", checkout, "fetch", "--quiet", "--no-tags", "--depth=1", absolute, "HEAD"},
+		{"-C", checkout, "checkout", "--quiet", "--detach", "FETCH_HEAD"},
+	}
+	for _, arguments := range commands {
+		command := exec.Command("git", arguments...)
+		if output, commandErr := command.CombinedOutput(); commandErr != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(arguments, " "), commandErr, output)
+		}
+	}
+	return checkout
 }
 
 func TestCurrentCandidatePinsRealRuntimeAndMaterializableDefaults(t *testing.T) {
