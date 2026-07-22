@@ -95,14 +95,22 @@ commit.
 
 Phase 2 is the separate protected
 `.github/workflows/standard-admission-release.yml` lane selected by an exact
-`forms/admissions/v*` tag at the current protected-main commit. It runs the
+`forms/admissions/v*` tag at the current protected-main commit. Candidate mode
+runs from protected `main` and proves that the signed annotated admission tag
+resolves to that exact commit. It runs the
 offline `release-check` after rerunning both direct Registry installs in an
 isolated read-only job with no Environment, token-minting, attestation, or
 repository-write authority. That job exports only the canonical matrix. A
 fresh exact-commit checkout in the protected authentication job compares the
-artifact to reviewed source before signing anything. A separate write-authorized
-job reverifies the signed inventory and publishes a distinct immutable GitHub
-Release. Only that release is Form admission activation. It needs a separately reviewed
+artifact to reviewed source before signing anything and emits one
+checksum-closed Actions candidate without creating a Release. A separate
+write-authorized promotion accepts only the ecosystem release-safety
+controller's fixed envelope, adapter, authorization, artifact, health-check,
+and target digests. It reverifies the exact candidate bytes, includes the
+controller readback before making one new draft stable, and reads
+repository-enforced immutability back. An existing admission version is never
+overwritten; a failure after stability requires a new version. Only that
+immutable GitHub Release is Form admission activation. It needs a separately reviewed
 `standard-admission-release` Environment; provider signing credentials are not
 reused.
 

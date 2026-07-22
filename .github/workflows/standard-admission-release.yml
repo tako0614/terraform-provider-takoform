@@ -3,319 +3,560 @@ name: Activate Standard Form admission
 on:
   workflow_dispatch:
     inputs:
+      phase:
+        description: Build one authenticated candidate or promote its exact bytes
+        required: true
+        default: candidate
+        type: choice
+        options:
+          - candidate
+          - promote
+      version:
+        description: Immutable admission release version
+        required: true
+        type: string
+      release_id:
+        description: Private-envelope release identifier (promote only)
+        required: false
+        default: ""
+        type: string
       tag:
-        description: Exact existing forms/admissions/v<semver> tag
-        required: true
+        description: Exact forms/admissions/v<semver> tag (promote only)
+        required: false
+        default: ""
         type: string
-      expected_commit:
-        description: Exact approved 40-character protected-main commit
-        required: true
+      source_commit:
+        description: Exact reviewed source commit (promote only)
+        required: false
+        default: ""
         type: string
+      candidate_run_id:
+        description: Successful closed candidate workflow run id (promote only)
+        required: false
+        default: ""
+        type: string
+      candidate_manifest_digest:
+        description: SHA-256 of release-candidate-manifest.json (promote only)
+        required: false
+        default: ""
+        type: string
+      envelope_digest:
+        description: SHA-256 of the operator-private release envelope
+        required: false
+        default: ""
+        type: string
+      controller_commit:
+        description: Pinned ecosystem release-safety controller commit
+        required: false
+        default: ""
+        type: string
+      controller_digest:
+        description: Pinned ecosystem release-safety controller digest
+        required: false
+        default: ""
+        type: string
+      adapter_digest:
+        description: Pinned fixed-adapter SHA-256 digest
+        required: false
+        default: ""
+        type: string
+      authorization_digest:
+        description: Controller technical-authorization evidence digest
+        required: false
+        default: ""
+        type: string
+      artifact_digests_b64:
+        description: Base64url ordered envelope artifact digest JSON
+        required: false
+        default: ""
+        type: string
+      health_checks_b64:
+        description: Base64url required envelope health-check JSON
+        required: false
+        default: ""
+        type: string
+      target_fingerprint:
+        description: Expected deterministic immutable release target fingerprint
+        required: false
+        default: ""
+        type: string
+
+run-name: ${{ inputs.phase == 'promote' && format('release-safety:standard-form-admission:{0}:{1}', inputs.release_id, inputs.envelope_digest) || format('standard-form-admission-candidate:{0}:{1}', inputs.version, github.sha) }}
+
+concurrency:
+  group: standard-form-admission-${{ inputs.version }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
-
-concurrency:
-  group: standard-admission-release-${{ inputs.tag }}
-  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   EXPECTED_COSIGN_VERSION: "v3.0.6"
   EXPECTED_GPG_FINGERPRINT: "3510E75E05BBCC303B92D77934FC18AC897FB709"
+  RELEASE_SAFETY_CONTROLLER_COMMIT: "97c02c8409013be2276e551ea5d53d5ceb34fe16"
+  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:92c78f124b752a67b220e33da872beb46cebc25d3107b6dc79af52f847d97d5b"
 
 jobs:
-  direct-registry-readback:
+  validate:
+    name: Validate source tag and controller bindings
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     permissions:
       contents: read
+    outputs:
+      version: ${{ steps.source.outputs.version }}
+      tag: ${{ steps.source.outputs.tag }}
+      source_commit: ${{ steps.source.outputs.source_commit }}
+      source_commit_short: ${{ steps.source.outputs.source_commit_short }}
     steps:
-      - name: Check out read-only lifecycle tooling
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Validate protected main, admission tag, and fixed authority
+        id: source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PHASE: ${{ inputs.phase }}
+          VERSION: ${{ inputs.version }}
+          REQUESTED_RELEASE_ID: ${{ inputs.release_id }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          REQUESTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_MANIFEST_DIGEST: ${{ inputs.candidate_manifest_digest }}
+          ENVELOPE_DIGEST: ${{ inputs.envelope_digest }}
+          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+          CONTROLLER_DIGEST: ${{ inputs.controller_digest }}
+          ADAPTER_DIGEST: ${{ inputs.adapter_digest }}
+          AUTHORIZATION_DIGEST: ${{ inputs.authorization_digest }}
+          ARTIFACT_DIGESTS_B64: ${{ inputs.artifact_digests_b64 }}
+          HEALTH_CHECKS_B64: ${{ inputs.health_checks_b64 }}
+          TARGET_FINGERPRINT: ${{ inputs.target_fingerprint }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_RUN_ATTEMPT}" = "1" || {
+            echo "Release runs are immutable; dispatch a new version/attempt." >&2
+            exit 1
+          }
+          [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]
+          release_tag="forms/admissions/v${VERSION}"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_tag}")"
+          tag_object_sha="$(jq -er '.object.sha' <<<"${ref_json}")"
+          jq -e '.object.type == "tag"' <<<"${ref_json}" >/dev/null
+          tag_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}")"
+          jq -e --arg source "${GITHUB_SHA}" \
+            '.object.type == "commit" and .object.sha == $source and .verification.verified == true' \
+            <<<"${tag_json}" >/dev/null
+
+          promotion_values=(REQUESTED_RELEASE_ID REQUESTED_TAG REQUESTED_SOURCE_COMMIT CANDIDATE_RUN_ID CANDIDATE_MANIFEST_DIGEST ENVELOPE_DIGEST CONTROLLER_COMMIT CONTROLLER_DIGEST ADAPTER_DIGEST AUTHORIZATION_DIGEST ARTIFACT_DIGESTS_B64 HEALTH_CHECKS_B64 TARGET_FINGERPRINT)
+          if [[ "${PHASE}" = candidate ]]; then
+            test "${GITHUB_REF}" = "refs/heads/main"
+            test "$(git rev-parse refs/remotes/origin/main)" = "${GITHUB_SHA}"
+            for name in "${promotion_values[@]}"; do test -z "${!name}"; done
+            if gh release view "${release_tag}" >/dev/null 2>&1; then
+              echo "Admission ${release_tag} already exists; publish a new version." >&2
+              exit 1
+            fi
+          elif [[ "${PHASE}" = promote ]]; then
+            test "${GITHUB_REF}" = "refs/tags/${release_tag}"
+            for name in "${promotion_values[@]}"; do test -n "${!name}"; done
+            test "${REQUESTED_TAG}" = "${release_tag}"
+            test "${REQUESTED_SOURCE_COMMIT}" = "${GITHUB_SHA}"
+            [[ "${CANDIDATE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+            [[ "${CONTROLLER_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+            for value in "${CANDIDATE_MANIFEST_DIGEST}" "${ENVELOPE_DIGEST}" "${CONTROLLER_DIGEST}" "${ADAPTER_DIGEST}" "${AUTHORIZATION_DIGEST}" "${TARGET_FINGERPRINT}"; do
+              [[ "${value}" =~ ^sha256:[0-9a-f]{64}$ ]]
+            done
+            test "${CONTROLLER_COMMIT}" = "${RELEASE_SAFETY_CONTROLLER_COMMIT}"
+            test "${ADAPTER_DIGEST}" = "${RELEASE_SAFETY_ADAPTER_DIGEST}"
+          else
+            echo "Unsupported release phase: ${PHASE}" >&2
+            exit 1
+          fi
+          {
+            echo "version=${VERSION}"
+            echo "tag=${release_tag}"
+            echo "source_commit=${GITHUB_SHA}"
+            echo "source_commit_short=${GITHUB_SHA:0:12}"
+          } >> "${GITHUB_OUTPUT}"
+
+  direct-registry-readback:
+    name: Isolated OpenTofu and Terraform Registry readback
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: validate
+    if: inputs.phase == 'candidate' && needs.validate.result == 'success'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate.outputs.source_commit }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.26.5"
           cache: true
-
       - uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # pinned: v2
         with:
           tofu_version: 1.12.1
           tofu_wrapper: false
-
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # pinned: v4.0.1
         with:
           terraform_version: 1.15.8
           terraform_wrapper: false
-
-      - name: Verify candidate publication remains separate from admission
-        run: go run ./cmd/standard-form-conformance candidate-publication-check
-
-      - name: Execute untrusted Registry provider only in this read-only job
-        shell: bash
+      - name: Render the exact public Registry lifecycle matrix
         run: |
           set -euo pipefail
-          output="$RUNNER_TEMP/provider-lifecycle-matrix.json"
+          go run ./cmd/standard-form-conformance candidate-publication-check
           go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
-            --opentofu tofu --terraform terraform > "$output"
-          jq -S -c . "$output" > "$RUNNER_TEMP/provider-lifecycle-matrix.canonical.json"
-
-      - name: Export only the fresh canonical matrix
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            --opentofu tofu --terraform terraform > "${RUNNER_TEMP}/matrix.json"
+          jq -S -c . "${RUNNER_TEMP}/matrix.json" > "${RUNNER_TEMP}/provider-lifecycle-matrix.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: direct-registry-readback-${{ github.sha }}
-          path: ${{ runner.temp }}/provider-lifecycle-matrix.canonical.json
+          name: direct-registry-readback-${{ needs.validate.outputs.source_commit }}
+          path: ${{ runner.temp }}/provider-lifecycle-matrix.json
           if-no-files-found: error
           retention-days: 1
 
-  authenticate:
-    needs: direct-registry-readback
+  candidate:
+    name: Authenticate and close the admission candidate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    needs: [validate, direct-registry-readback]
+    if: inputs.phase == 'candidate' && needs.direct-registry-readback.result == 'success'
     environment: standard-admission-release
     permissions:
       contents: read
       id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
-      - name: Check out the exact protected-main admission source
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.validate.outputs.source_commit }}
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Verify the exact activation tag and source commit
-        id: source
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
-          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF" != "refs/heads/main" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
-            echo "Admission activation must execute the current protected main commit" >&2
-            exit 1
-          fi
-          if [[ ! "$RELEASE_TAG" =~ ^forms/admissions/v[0-9][0-9A-Za-z.+-]*$ ]]; then
-            echo "Admission activation requires an exact forms/admissions/v* tag" >&2
-            exit 1
-          fi
-          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ || "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
-            echo "expected_commit must equal the current protected-main commit" >&2
-            exit 1
-          fi
-          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
-          test "$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$EXPECTED_COMMIT"
-          test "$(jq -r .admissionReleaseTag admission/v1/standard-admission-set.json)" = "$RELEASE_TAG"
-          {
-            echo "tag=$RELEASE_TAG"
-            echo "commit=$EXPECTED_COMMIT"
-          } >> "$GITHUB_OUTPUT"
-
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.26.5"
           cache: true
-
-      - name: Install pinned Cosign v3
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
-
-      - name: Import only the pinned provider verification key
-        shell: bash
-        run: |
-          set -euo pipefail
-          fingerprints="$(gpg --batch --with-colons --import-options show-only --import release/keys/provider-signing-key.asc | awk -F: '$1 == "fpr" { print $10 }')"
-          test "$fingerprints" = "$EXPECTED_GPG_FINGERPRINT"
-          gpg --batch --import release/keys/provider-signing-key.asc
-
-      - name: Download the isolated direct Registry readback
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: direct-registry-readback-${{ github.sha }}
+          name: direct-registry-readback-${{ needs.validate.outputs.source_commit }}
           path: ${{ runner.temp }}/direct-registry-readback
 
-      - name: Compare the isolated readback to reviewed source
+      - name: Authenticate the reviewed Registry readback and full closure
         shell: bash
         run: |
           set -euo pipefail
-          fresh="$RUNNER_TEMP/direct-registry-readback/provider-lifecycle-matrix.canonical.json"
-          jq -S -c . admission/v1/registry/provider-lifecycle-matrix.json > "$RUNNER_TEMP/retained.canonical.json"
-          diff -u "$RUNNER_TEMP/retained.canonical.json" "$fresh"
-
-      - name: Authenticate this run's exact Registry readback
-        shell: bash
-        run: |
-          set -euo pipefail
-          cosign_version="$(cosign version 2>&1)"
-          grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
+          fresh="${RUNNER_TEMP}/direct-registry-readback/provider-lifecycle-matrix.json"
+          jq -S -c . admission/v1/registry/provider-lifecycle-matrix.json > "${RUNNER_TEMP}/retained-matrix.json"
+          diff -u "${RUNNER_TEMP}/retained-matrix.json" "${fresh}"
+          fingerprints="$(gpg --batch --with-colons --import-options show-only --import release/keys/provider-signing-key.asc | awk -F: '$1 == "fpr" { print $10 }')"
+          test "${fingerprints}" = "${EXPECTED_GPG_FINGERPRINT}"
+          gpg --batch --import release/keys/provider-signing-key.asc
           subject="admission/v1/registry/provider-readback.json"
           bundle="admission/v1/registry/provider-readback.sigstore.json"
-          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/standard-admission-release.yml@refs/heads/main"
-          provider_tag="$(jq -r .tag release/version.json)"
-          test "$(jq -r .providerReleaseTag "$subject")" = "$provider_tag"
-          git show-ref --verify --quiet "refs/tags/$provider_tag"
-          test "$(git rev-list -n 1 "refs/tags/$provider_tag")" = "$(jq -r .providerReleaseCommit "$subject")"
-          test ! -e "$bundle"
-          cosign sign-blob "$subject" --bundle "$bundle" --yes
-          cosign verify-blob "$subject" --bundle "$bundle" \
-            --certificate-identity "$identity" \
+          test ! -e "${bundle}"
+          grep -F "${EXPECTED_COSIGN_VERSION}" <<<"$(cosign version 2>&1)"
+          cosign sign-blob "${subject}" --bundle "${bundle}" --yes
+          cosign verify-blob "${subject}" --bundle "${bundle}" \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/standard-admission-release.yml@refs/heads/main" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          go run ./cmd/standard-form-conformance published-package-check
+          go run ./cmd/standard-form-conformance release-check
 
-      - name: Verify the complete signed admission closure offline
-        run: go run ./cmd/standard-form-conformance release-check
-
-      - name: Build and sign the exact activation inventory
+      - name: Build, sign, and checksum the immutable candidate inventory
         id: build
         shell: bash
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.validate.outputs.source_commit }}
         run: |
           set -euo pipefail
-          cosign_version="$(cosign version 2>&1)"
-          grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
-          output="$RUNNER_TEMP/standard-admission"
-          mkdir -p "$output"
-          install -m 0644 admission/v1/standard-admission-set.json "$output/standard-admission-set.json"
-          install -m 0644 "$RUNNER_TEMP/direct-registry-readback/provider-lifecycle-matrix.canonical.json" "$output/fresh-provider-lifecycle-matrix.json"
+          output="${RUNNER_TEMP}/standard-admission-candidate"
+          mkdir -p "${output}"
+          install -m 0644 admission/v1/standard-admission-set.json "${output}/standard-admission-set.json"
+          install -m 0644 "${RUNNER_TEMP}/direct-registry-readback/provider-lifecycle-matrix.json" "${output}/fresh-provider-lifecycle-matrix.json"
           tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner -C admission -cf - v1 \
-            | gzip -n > "$output/takoform-standard-admission-v1.tar.gz"
-          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/standard-admission-release.yml@refs/heads/main"
-          cosign sign-blob "$output/standard-admission-set.json" \
-            --bundle "$output/standard-admission-set.sigstore.json" --yes
-          cosign verify-blob "$output/standard-admission-set.json" \
-            --bundle "$output/standard-admission-set.sigstore.json" \
-            --certificate-identity "$identity" \
+            | gzip -n > "${output}/takoform-standard-admission-v1.tar.gz"
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/standard-admission-release.yml@refs/heads/main"
+          cosign sign-blob "${output}/standard-admission-set.json" \
+            --bundle "${output}/standard-admission-set.sigstore.json" --yes
+          cosign verify-blob "${output}/standard-admission-set.json" \
+            --bundle "${output}/standard-admission-set.sigstore.json" \
+            --certificate-identity "${identity}" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
-          (cd "$output" && sha256sum \
+
+          OUTPUT="${output}" node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const out = process.env.OUTPUT;
+          const version = process.env.VERSION;
+          const commit = process.env.SOURCE_COMMIT;
+          const tag = process.env.RELEASE_TAG;
+          const sha = (name) => crypto.createHash("sha256").update(fs.readFileSync(path.join(out, name))).digest("hex");
+          const sbom = {
+            spdxVersion: "SPDX-2.3", dataLicense: "CC0-1.0", SPDXID: "SPDXRef-DOCUMENT",
+            name: `Takoform standard Form admission ${version}`,
+            documentNamespace: `https://forms.takoform.com/spdx/admission/${version}/${commit}`,
+            creationInfo: { creators: ["Tool: standard-admission-release"], created: "1970-01-01T00:00:00Z" },
+            packages: [{ name: "Takoform standard Form admission", SPDXID: "SPDXRef-Package", versionInfo: version, downloadLocation: "NOASSERTION", filesAnalyzed: false, licenseConcluded: "NOASSERTION", licenseDeclared: "NOASSERTION", copyrightText: "NOASSERTION" }],
+          };
+          fs.writeFileSync(path.join(out, `takoform-standard-admission_${version}_sbom.spdx.json`), `${JSON.stringify(sbom)}\n`);
+          const provenance = {
+            _type: "https://in-toto.io/Statement/v1",
+            subject: ["standard-admission-set.json", "takoform-standard-admission-v1.tar.gz"].map((name) => ({ name, digest: { sha256: sha(name) } })),
+            predicateType: "https://slsa.dev/provenance/v1",
+            predicate: { buildDefinition: { buildType: "https://forms.takoform.com/build/standard-admission/v1", externalParameters: { sourceCommit: commit, tag, workflow: ".github/workflows/standard-admission-release.yml" }, internalParameters: {}, resolvedDependencies: [] }, runDetails: { builder: { id: "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-admission-release.yml@refs/heads/main" }, metadata: { invocationId: process.env.GITHUB_RUN_ID } } },
+          };
+          fs.writeFileSync(path.join(out, `takoform-standard-admission_${version}_provenance.intoto.json`), `${JSON.stringify(provenance)}\n`);
+          NODE
+          (cd "${output}" && sha256sum \
             fresh-provider-lifecycle-matrix.json \
             standard-admission-set.json \
             standard-admission-set.sigstore.json \
-            takoform-standard-admission-v1.tar.gz > SHA256SUMS)
+            takoform-standard-admission-v1.tar.gz \
+            "takoform-standard-admission_${VERSION}_provenance.intoto.json" \
+            "takoform-standard-admission_${VERSION}_sbom.spdx.json" > SHA256SUMS)
 
-      - name: Export the authenticated activation inventory
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+          OUTPUT="${output}" node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const out = process.env.OUTPUT;
+          const sha = (bytes) => `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`;
+          const files = fs.readdirSync(out).sort();
+          const releaseAssets = files.map((name) => ({ name, digest: sha(fs.readFileSync(path.join(out, name))) }));
+          const byName = new Map(releaseAssets.map((entry) => [entry.name, entry.digest]));
+          const version = process.env.VERSION;
+          const candidate = {
+            kind: "takos.release-candidate-manifest@v1", surfaceId: "takoform-standard-form-admission",
+            repository: "https://github.com/tako0614/terraform-provider-takoform.git", sourceCommit: process.env.SOURCE_COMMIT,
+            version, tag: process.env.RELEASE_TAG, workflowRunId: process.env.GITHUB_RUN_ID,
+            builtAt: new Date().toISOString().replace(/\.\d{3}Z$/, ".000Z"), ociImages: [], releaseAssets,
+            artifactDigests: releaseAssets.map(({ digest }) => digest),
+            sbomDigests: [byName.get(`takoform-standard-admission_${version}_sbom.spdx.json`)],
+            provenanceDigests: [byName.get(`takoform-standard-admission_${version}_provenance.intoto.json`)],
+            configDigest: byName.get("standard-admission-set.json"),
+            policyDigest: sha(fs.readFileSync("admission/v1/trust/registry-readback-policy.json")),
+            toolchainDigest: sha(Buffer.from("go1.26.5\ncosign-v3.0.6\nopentofu1.12.1\nterraform1.15.8\n", "utf8")),
+          };
+          fs.writeFileSync(path.join(out, "release-candidate-manifest.json"), `${JSON.stringify(candidate)}\n`);
+          NODE
+          echo "output=${output}" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
-          name: authenticated-standard-admission-${{ github.sha }}
-          path: ${{ runner.temp }}/standard-admission
+          subject-path: |
+            ${{ steps.build.outputs.output }}/standard-admission-set.json
+            ${{ steps.build.outputs.output }}/takoform-standard-admission-v1.tar.gz
+      - uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-path: ${{ steps.build.outputs.output }}/takoform-standard-admission-v1.tar.gz
+          sbom-path: ${{ steps.build.outputs.output }}/takoform-standard-admission_${{ needs.validate.outputs.version }}_sbom.spdx.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: takoform-standard-form-admission-candidate-${{ needs.validate.outputs.version }}-${{ needs.validate.outputs.source_commit_short }}
+          path: ${{ steps.build.outputs.output }}/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 90
 
-  publish:
-    needs: authenticate
+  promote:
+    name: Publish the controller-authorized admission release
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    needs: validate
+    if: inputs.phase == 'promote' && needs.validate.result == 'success'
     environment: standard-admission-release
     permissions:
+      actions: read
       contents: write
-      id-token: write
-      attestations: write
     steps:
-      - name: Download only the authenticated activation inventory
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: authenticated-standard-admission-${{ github.sha }}
-          path: ${{ runner.temp }}/standard-admission
-
-      - name: Install pinned Cosign v3
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
-
-      - name: Reverify the exact authenticated inventory
-        id: inventory
-        shell: bash
-        run: |
-          set -euo pipefail
-          output="$RUNNER_TEMP/standard-admission"
-          (cd "$output" && sha256sum --check --strict SHA256SUMS)
-          find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/actual-assets.txt"
-          printf '%s\n' \
-            SHA256SUMS \
-            fresh-provider-lifecycle-matrix.json \
-            standard-admission-set.json \
-            standard-admission-set.sigstore.json \
-            takoform-standard-admission-v1.tar.gz | sort > "$RUNNER_TEMP/expected-assets.txt"
-          diff -u "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/actual-assets.txt"
-          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/standard-admission-release.yml@refs/heads/main"
-          cosign verify-blob "$output/standard-admission-set.json" \
-            --bundle "$output/standard-admission-set.sigstore.json" \
-            --certificate-identity "$identity" \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
-          echo "output=$output" >> "$GITHUB_OUTPUT"
-
-      - name: Refuse an existing activation release
+      - name: Refuse stale or non-controller-authorized promotion
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          AUTHORIZATION_DIGEST: ${{ inputs.authorization_digest }}
+          EXPECTED_AUTHORIZATION_DIGEST: ${{ secrets.RELEASE_SAFETY_AUTHORIZATION_DIGEST }}
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "An activation release already owns $RELEASE_TAG; refusing overwrite" >&2
+          [[ "${EXPECTED_AUTHORIZATION_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "${AUTHORIZATION_DIGEST}" = "${EXPECTED_AUTHORIZATION_DIGEST}"
+          created_at="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)"
+          age_seconds="$(($(date -u +%s) - $(date -u -d "${created_at}" +%s)))"
+          (( age_seconds >= 0 && age_seconds <= 300 ))
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
+      - name: Verify the exact candidate run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}")"
+          jq -e --arg source "${SOURCE_COMMIT}" '.head_sha == $source and .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success" and .run_attempt == 1 and (.path | endswith("/.github/workflows/standard-admission-release.yml") or . == ".github/workflows/standard-admission-release.yml")' <<<"${run_json}" >/dev/null
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: takoform-standard-form-admission-candidate-${{ inputs.version }}-${{ needs.validate.outputs.source_commit_short }}
+          path: candidate
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+      - name: Verify envelope bindings and every candidate byte
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_MANIFEST_DIGEST: ${{ inputs.candidate_manifest_digest }}
+          ARTIFACT_DIGESTS_B64: ${{ inputs.artifact_digests_b64 }}
+        run: |
+          set -euo pipefail
+          test "sha256:$(sha256sum candidate/release-candidate-manifest.json | cut -d' ' -f1)" = "${CANDIDATE_MANIFEST_DIGEST}"
+          node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const candidate = JSON.parse(fs.readFileSync("candidate/release-candidate-manifest.json"));
+          const expectedNames = ["SHA256SUMS", "fresh-provider-lifecycle-matrix.json", "standard-admission-set.json", "standard-admission-set.sigstore.json", "takoform-standard-admission-v1.tar.gz", `takoform-standard-admission_${process.env.VERSION}_provenance.intoto.json`, `takoform-standard-admission_${process.env.VERSION}_sbom.spdx.json`].sort();
+          const decoded = JSON.parse(Buffer.from(process.env.ARTIFACT_DIGESTS_B64, "base64url"));
+          const actualFiles = fs.readdirSync("candidate").sort();
+          if (candidate.kind !== "takos.release-candidate-manifest@v1" || candidate.surfaceId !== "takoform-standard-form-admission" || candidate.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || candidate.sourceCommit !== process.env.SOURCE_COMMIT || candidate.version !== process.env.VERSION || candidate.tag !== process.env.RELEASE_TAG || candidate.workflowRunId !== process.env.CANDIDATE_RUN_ID || JSON.stringify(candidate.releaseAssets.map(({name}) => name).sort()) !== JSON.stringify(expectedNames) || JSON.stringify(actualFiles) !== JSON.stringify(["release-candidate-manifest.json", ...expectedNames].sort()) || JSON.stringify(candidate.artifactDigests) !== JSON.stringify(decoded)) process.exit(1);
+          for (const asset of candidate.releaseAssets) {
+            const digest = `sha256:${crypto.createHash("sha256").update(fs.readFileSync(path.join("candidate", asset.name))).digest("hex")}`;
+            if (digest !== asset.digest) process.exit(1);
+          }
+          NODE
+          (cd candidate && sha256sum --check --strict SHA256SUMS)
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/standard-admission-release.yml@refs/heads/main"
+          cosign verify-blob candidate/standard-admission-set.json --bundle candidate/standard-admission-set.sigstore.json \
+            --certificate-identity "${identity}" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          gh attestation verify candidate/standard-admission-set.json --repo "${GITHUB_REPOSITORY}"
+          gh attestation verify candidate/takoform-standard-admission-v1.tar.gz --repo "${GITHUB_REPOSITORY}"
+      - name: Preflight immutability, signed tag, and target fingerprint
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RULESET_AUDIT_TOKEN: ${{ secrets.RELEASE_SAFETY_RULESET_AUDIT_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          TARGET_FINGERPRINT: ${{ inputs.target_fingerprint }}
+        run: |
+          set -euo pipefail
+          test -n "${RULESET_AUDIT_TOKEN}"
+          test "$(GH_TOKEN="${RULESET_AUDIT_TOKEN}" gh api "repos/${GITHUB_REPOSITORY}/immutable-releases" --jq .enabled)" = true
+          ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}")"
+          object="$(jq -er .object.sha <<<"${ref_json}")"
+          jq -e '.object.type == "tag"' <<<"${ref_json}" >/dev/null
+          tag_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${object}")"
+          jq -e --arg source "${SOURCE_COMMIT}" '.object.type == "commit" and .object.sha == $source and .verification.verified == true' <<<"${tag_json}" >/dev/null
+          computed="$(RELEASE_TAG="${RELEASE_TAG}" node -e 'const c=require("node:crypto"); const sorted=(v)=>Array.isArray(v)?v.map(sorted):v&&typeof v==="object"?Object.fromEntries(Object.keys(v).sort().map(k=>[k,sorted(v[k])])):v; const t={release:{tag:process.env.RELEASE_TAG,url:`https://github.com/tako0614/terraform-provider-takoform/releases/tag/${process.env.RELEASE_TAG}`},ociImages:[]}; process.stdout.write(`sha256:${c.createHash("sha256").update(JSON.stringify(sorted(t))).digest("hex")}`)')"
+          test "${computed}" = "${TARGET_FINGERPRINT}"
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Admission release already exists; retained readback must be used." >&2
             exit 1
           fi
-
-      - name: Create this run's activation draft
-        id: draft
+      - name: Build the envelope-bound readback
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+          CONTROLLER_DIGEST: ${{ inputs.controller_digest }}
+          ADAPTER_DIGEST: ${{ inputs.adapter_digest }}
+          ARTIFACT_DIGESTS_B64: ${{ inputs.artifact_digests_b64 }}
+          HEALTH_CHECKS_B64: ${{ inputs.health_checks_b64 }}
+          TARGET_FINGERPRINT: ${{ inputs.target_fingerprint }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          response="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
-            -f tag_name="$RELEASE_TAG" -f name="$RELEASE_TAG" -F draft=true \
-            -f body='Takoform Standard Form admission activation. Provider publication alone does not grant this status.')"
-          release_id="$(jq -r .id <<<"$response")"
-          test "$release_id" != "null"
-          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
-
-      - name: Upload and verify the exact activation inventory
+          node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const decode = (name) => JSON.parse(Buffer.from(process.env[name], "base64url"));
+          const checks = decode("HEALTH_CHECKS_B64");
+          const names = ["published Form Package closure readback", "OpenTofu and Terraform Registry admission readback", "signed portable-standard admission closure readback", "immutable admission release asset readback"];
+          if (JSON.stringify(checks.map(({name}) => name)) !== JSON.stringify(names) || checks.some((c) => c.status !== "required" || !/^sha256:[0-9a-f]{64}$/.test(c.bindingDigest))) process.exit(1);
+          const result = {
+            kind: "takos.release-safety-adapter-result@v1", status: "promoted", surfaceId: "takoform-standard-form-admission",
+            sourceCommit: process.env.SOURCE_COMMIT, controllerCommit: process.env.CONTROLLER_COMMIT,
+            controllerDigest: process.env.CONTROLLER_DIGEST, adapterDigest: process.env.ADAPTER_DIGEST,
+            artifactDigests: decode("ARTIFACT_DIGESTS_B64"), targetFingerprint: process.env.TARGET_FINGERPRINT,
+            attestationDigest: `sha256:${crypto.createHash("sha256").update(fs.readFileSync("candidate/standard-admission-set.sigstore.json")).digest("hex")}`,
+            releaseTag: process.env.RELEASE_TAG, releaseUrl: `https://github.com/tako0614/terraform-provider-takoform/releases/tag/${process.env.RELEASE_TAG}`,
+            workflowRunId: process.env.GITHUB_RUN_ID, readbackAt: new Date().toISOString().replace(/\.\d{3}Z$/, ".000Z"),
+            healthChecks: checks.map((check) => ({...check, status: "passed"})),
+          };
+          fs.writeFileSync("release-safety-readback.json", `${JSON.stringify(result)}\n`);
+          NODE
+      - name: Create, verify, and publish this run's draft
+        id: release
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          output="${{ steps.inventory.outputs.output }}"
-          while IFS= read -r asset; do
-            gh release upload "$RELEASE_TAG" "$asset"
-          done < <(find "$output" -maxdepth 1 -type f -print | sort)
-          find "$output" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/expected-assets.txt"
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[].name' | sort > "$RUNNER_TEMP/actual-assets.txt"
-          diff -u "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/actual-assets.txt"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .draft)" = "true"
-
-      - name: Attest the activation inventory
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
-        with:
-          subject-path: ${{ steps.inventory.outputs.output }}/*
-
-      - name: Publish this run's verified activation
+          release="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" -f tag_name="${RELEASE_TAG}" -f name="${RELEASE_TAG}" -F draft=true -F prerelease=false -f body='Takoform portable-standard admission. Provider and package publication alone do not grant this status.')"
+          release_id="$(jq -er .id <<<"${release}")"
+          echo "release_id=${release_id}" >> "${GITHUB_OUTPUT}"
+          test "$(jq -r '.assets | length' <<<"${release}")" = 0
+          while IFS= read -r name; do gh release upload "${RELEASE_TAG}" "candidate/${name}"; done < <(jq -r '.releaseAssets[].name' candidate/release-candidate-manifest.json)
+          gh release upload "${RELEASE_TAG}" release-safety-readback.json
+          actual="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" --jq '.[].name' | sort)"
+          expected="$( { jq -r '.releaseAssets[].name' candidate/release-candidate-manifest.json; echo release-safety-readback.json; } | sort )"
+          diff -u <(printf '%s\n' "${expected}") <(printf '%s\n' "${actual}")
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F draft=false >/dev/null
+      - name: Read back immutable admission and every exact byte
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          finalized="$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false)"
-          test "$(jq -r .draft <<<"$finalized")" = "false"
-
-      - name: Remove partial activation draft after failure
+          release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          jq -e --arg tag "${RELEASE_TAG}" '.tag_name == $tag and .draft == false and .prerelease == false and .immutable == true' <<<"${release}" >/dev/null
+          readback="$(mktemp -d)"
+          while IFS=$'\t' read -r name digest; do
+            url="$(jq -er --arg name "${name}" '.assets[] | select(.name == $name) | .url' <<<"${release}")"
+            gh api "${url}" --header 'Accept: application/octet-stream' > "${readback}/${name}"
+            test "sha256:$(sha256sum "${readback}/${name}" | cut -d' ' -f1)" = "${digest}"
+          done < <(jq -r '.releaseAssets[] | [.name, .digest] | @tsv' candidate/release-candidate-manifest.json)
+          readback_url="$(jq -er '.assets[] | select(.name == "release-safety-readback.json") | .url' <<<"${release}")"
+          gh api "${readback_url}" --header 'Accept: application/octet-stream' > "${readback}/release-safety-readback.json"
+          cmp -s release-safety-readback.json "${readback}/release-safety-readback.json"
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/standard-admission-release.yml@refs/heads/main"
+          cosign verify-blob "${readback}/standard-admission-set.json" --bundle "${readback}/standard-admission-set.sigstore.json" \
+            --certificate-identity "${identity}" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          gh attestation verify "${readback}/standard-admission-set.json" --repo "${GITHUB_REPOSITORY}"
+          gh attestation verify "${readback}/takoform-standard-admission-v1.tar.gz" --repo "${GITHUB_REPOSITORY}"
+      - name: Remove only this run's unpublished draft after failure
         if: ${{ always() && !success() }}
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [[ -z "$RELEASE_ID" ]]; then
-            exit 0
-          fi
-          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" 2>/dev/null || true)"
-          if [[ -n "$release_json" && "$(jq -r .draft <<<"$release_json")" == "true" && "$(jq -r .tag_name <<<"$release_json")" == "$RELEASE_TAG" ]]; then
-            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
+          if [[ -z "${RELEASE_ID}" ]]; then exit 0; fi
+          release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" 2>/dev/null || true)"
+          if [[ -n "${release}" && "$(jq -r .tag_name <<<"${release}")" = "${RELEASE_TAG}" && "$(jq -r .draft <<<"${release}")" = true ]]; then
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"
           fi
