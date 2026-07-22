@@ -260,6 +260,7 @@ jobs:
             for platform in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64 windows_amd64; do
               printf '%s\n' "terraform-provider-takoform_${version}_${platform}.zip"
             done
+            printf '%s\n' "terraform-provider-takoform_${version}_manifest.json"
           } | sort > "$expected_registry_checksums"
           {
             cat "$expected_unsigned"

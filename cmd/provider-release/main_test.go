@@ -60,7 +60,7 @@ func TestReleaseDescriptorRejectsAliasedCLIMatrix(t *testing.T) {
 	}
 }
 
-func TestRegistryChecksumTargetsAreArchiveOnlyForTerraformAndOpenTofu(t *testing.T) {
+func TestRegistryChecksumTargetsContainArchivesAndManifestForTerraformAndOpenTofu(t *testing.T) {
 	repo := testRepoRoot(t)
 	desc, err := loadDescriptor(repo)
 	if err != nil {
@@ -71,6 +71,7 @@ func TestRegistryChecksumTargetsAreArchiveOnlyForTerraformAndOpenTofu(t *testing
 		"terraform-provider-takoform_" + desc.Version + "_darwin_arm64.zip",
 		"terraform-provider-takoform_" + desc.Version + "_linux_amd64.zip",
 		"terraform-provider-takoform_" + desc.Version + "_linux_arm64.zip",
+		"terraform-provider-takoform_" + desc.Version + "_manifest.json",
 		"terraform-provider-takoform_" + desc.Version + "_windows_amd64.zip",
 	}
 	var first []string
@@ -83,8 +84,9 @@ func TestRegistryChecksumTargetsAreArchiveOnlyForTerraformAndOpenTofu(t *testing
 			t.Fatalf("%s checksum targets = %v, want %v", product, got, want)
 		}
 		for _, name := range got {
-			if !strings.HasSuffix(name, ".zip") || strings.Contains(name, ".spdx.json") || strings.Contains(name, "_manifest.json") {
-				t.Fatalf("%s checksum manifest contains non-provider package %q", product, name)
+			manifest := "terraform-provider-takoform_" + desc.Version + "_manifest.json"
+			if strings.Contains(name, ".spdx.json") || (!strings.HasSuffix(name, ".zip") && name != manifest) {
+				t.Fatalf("%s checksum manifest contains non-Registry asset %q", product, name)
 			}
 		}
 		if first == nil {
@@ -436,6 +438,7 @@ func TestProviderReleaseWorkflowSeparatesRegistryChecksumsFromEvidenceInventory(
 		"expected-registry-checksum-assets.txt",
 		`diff -u "$terraform_checksum_targets" "$opentofu_checksum_targets"`,
 		`diff -u "$expected_registry_checksums" "$RUNNER_TEMP/checksum-assets.txt"`,
+		`printf '%s\n' "terraform-provider-takoform_${version}_manifest.json"`,
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("provider release workflow lacks Registry checksum contract %q", required)
@@ -456,8 +459,8 @@ func TestProviderReleaseWorkflowSeparatesRegistryChecksumsFromEvidenceInventory(
 		t.Fatal("cannot locate GoReleaser checksum contract")
 	}
 	checksumBlock := config[checksumStart:signsStart]
-	if strings.Contains(checksumBlock, "extra_files") || strings.Contains(checksumBlock, "manifest.json") || strings.Contains(checksumBlock, "spdx") {
-		t.Fatalf("GoReleaser checksum contract includes non-provider evidence:\n%s", checksumBlock)
+	if !strings.Contains(checksumBlock, "extra_files") || !strings.Contains(checksumBlock, "*_manifest.json") || strings.Contains(checksumBlock, "spdx") {
+		t.Fatalf("GoReleaser checksum contract must include only archives plus the Registry manifest:\n%s", checksumBlock)
 	}
 	if !strings.Contains(config, "sboms:\n") || !strings.Contains(config, "release:\n") || !strings.Contains(config, ".release-tmp/*_manifest.json") {
 		t.Fatal("SBOM or Registry manifest evidence was removed instead of being separately attached")

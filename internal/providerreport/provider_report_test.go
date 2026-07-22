@@ -104,7 +104,7 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 		if generated.digest != formpackage.DigestBytes(generated.canonical) {
 			t.Fatalf("invalid canonical digest for %s", generated.kind)
 		}
-		if generated.report.Identity != exactIdentity[generated.kind] || generated.report.Identity.FormRef.DefinitionVersion != "1.0.1" || generated.report.RunnerVersion != "0.1.2" {
+		if generated.report.Identity != exactIdentity[generated.kind] || generated.report.Identity.FormRef.DefinitionVersion != "1.0.1" || generated.report.RunnerVersion != "0.1.3" {
 			t.Fatalf("report %s relabeled executed candidate identity: %#v", generated.kind, generated.report)
 		}
 		if _, err := admissionrelease.ValidateCanonicalProviderRunnerReport(generated.canonical, generated.report.Identity, []string{"canonical"}, []string{"reject-invalid-semantics"}); err != nil {

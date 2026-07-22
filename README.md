@@ -112,7 +112,7 @@ revocation release has been published. Unsigned provider-report subjects for a
 provider candidate are generated only from that same candidate's exact
 reviewed release-source fixtures; historical published-package authentication
 remains a separate proof and cannot relabel a newer provider execution. Those
-unsigned subjects grant no admission. The active provider `0.1.2` source
+unsigned subjects grant no admission. The active provider `0.1.3` source
 candidate pins a new complete `1.0.1` Form set whose executable fixture
 references resolve to a separate Takosumi-owned
 `standard-form-runtime-v1.0.3` host-conformance runtime release. The retained
@@ -154,12 +154,13 @@ go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 `matrix` is the local `dev_overrides` regression gate. The separate
 `render-registry-matrix` command performs a version-pinned direct Registry
 install and exists for signed post-publication readback only. The Terraform
-namespace and signing key are registered. Provider `v0.1.1` remains an
-immutable GitHub Release, but its Terraform Registry ingestion was rejected
-because its checksum manifest projected SBOM evidence as provider packages.
-The archive-only `v0.1.2` candidate is the non-overwriting successor; direct
-Terraform and OpenTofu Registry install/readback remain post-publication
-evidence.
+namespace and signing key are registered. Providers `v0.1.1` and `v0.1.2`
+remain immutable GitHub Releases. Terraform Registry rejected `v0.1.1`
+because its checksum manifest projected SPDX evidence as provider packages,
+and rejected `v0.1.2` because it omitted the required Registry metadata
+manifest checksum. The exact six-entry `v0.1.3` candidate is the
+non-overwriting successor; direct Terraform and OpenTofu Registry
+install/readback remain post-publication evidence.
 
 Provider publication and Standard Form admission are separate releases. The
 provider `v*` workflow can publish only while the descriptor and inventory are
@@ -173,7 +174,7 @@ the private key remains outside the repository. The `tako0614` public namespace
 and pinned signing key are registered. Do not create a new release tag until
 the release descriptor and provider compatibility gates are complete. Existing
 version paths are immutable; the coordinated `1.0.1` Form pin therefore uses
-provider `0.1.2`.
+provider `0.1.3`.
 
 ## License
 
