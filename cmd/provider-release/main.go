@@ -173,7 +173,7 @@ type signedTagArtifactEvidence struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: provider-release <verify-source|build|verify-reproducible|verify-sbom|verify-tag-artifact> [options]")
+		fail("usage: provider-release <verify-source|build|verify-reproducible|verify-sbom|registry-checksum-targets|verify-tag-artifact> [options]")
 	}
 	repo, err := repositoryRoot()
 	check(err)
@@ -228,6 +228,15 @@ func main() {
 			"schema":   "SPDX-2.3",
 			"verified": verified,
 		})
+	case "registry-checksum-targets":
+		fs := flag.NewFlagSet("registry-checksum-targets", flag.ExitOnError)
+		product := fs.String("product", "", "exact CLI product: OpenTofu or Terraform")
+		check(fs.Parse(os.Args[2:]))
+		targets, err := registryChecksumTargets(desc, *product)
+		check(err)
+		for _, target := range targets {
+			fmt.Fprintln(os.Stdout, target)
+		}
 	case "verify-tag-artifact":
 		fs := flag.NewFlagSet("verify-tag-artifact", flag.ExitOnError)
 		artifactPath := fs.String("artifact", "", "downloaded provider-signed-tag artifact directory")
@@ -243,6 +252,36 @@ func main() {
 	default:
 		fail("unknown command: " + os.Args[1])
 	}
+}
+
+// registryChecksumTargets returns the only files that may be named by the
+// provider Registry checksum manifest. GitHub Release evidence such as SPDX
+// SBOMs, the Registry metadata manifest, and workflow provenance remains in
+// the separately attested release inventory and must never be projected as a
+// provider package by either Registry.
+func registryChecksumTargets(desc descriptor, product string) ([]string, error) {
+	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
+		return nil, err
+	}
+	found := false
+	for _, entry := range desc.CLIMatrix {
+		if entry.Product == product {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("unsupported Registry checksum product %q", product)
+	}
+	targets := make([]string, 0, len(desc.Platforms))
+	for _, platform := range desc.Platforms {
+		if !regexp.MustCompile(`^[a-z0-9]+_[a-z0-9]+$`).MatchString(platform) {
+			return nil, fmt.Errorf("invalid Registry checksum platform %q", platform)
+		}
+		targets = append(targets, fmt.Sprintf("terraform-provider-takoform_%s_%s.zip", desc.Version, platform))
+	}
+	sort.Strings(targets)
+	return targets, nil
 }
 
 func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflightPath, expectedRunID, expectedRunAttempt, expectedCommit string, materializeRef bool) (signedTagArtifactEvidence, error) {

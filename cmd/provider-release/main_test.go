@@ -60,6 +60,44 @@ func TestReleaseDescriptorRejectsAliasedCLIMatrix(t *testing.T) {
 	}
 }
 
+func TestRegistryChecksumTargetsAreArchiveOnlyForTerraformAndOpenTofu(t *testing.T) {
+	repo := testRepoRoot(t)
+	desc, err := loadDescriptor(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"terraform-provider-takoform_" + desc.Version + "_darwin_amd64.zip",
+		"terraform-provider-takoform_" + desc.Version + "_darwin_arm64.zip",
+		"terraform-provider-takoform_" + desc.Version + "_linux_amd64.zip",
+		"terraform-provider-takoform_" + desc.Version + "_linux_arm64.zip",
+		"terraform-provider-takoform_" + desc.Version + "_windows_amd64.zip",
+	}
+	var first []string
+	for _, product := range []string{"Terraform", "OpenTofu"} {
+		got, err := registryChecksumTargets(desc, product)
+		if err != nil {
+			t.Fatalf("%s checksum targets: %v", product, err)
+		}
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Fatalf("%s checksum targets = %v, want %v", product, got, want)
+		}
+		for _, name := range got {
+			if !strings.HasSuffix(name, ".zip") || strings.Contains(name, ".spdx.json") || strings.Contains(name, "_manifest.json") {
+				t.Fatalf("%s checksum manifest contains non-provider package %q", product, name)
+			}
+		}
+		if first == nil {
+			first = got
+		} else if strings.Join(first, "\n") != strings.Join(got, "\n") {
+			t.Fatalf("Terraform and OpenTofu checksum contracts diverged: %v != %v", first, got)
+		}
+	}
+	if _, err := registryChecksumTargets(desc, "Other"); err == nil || !strings.Contains(err.Error(), "unsupported Registry checksum product") {
+		t.Fatalf("unknown Registry product was accepted: %v", err)
+	}
+}
+
 func TestValidSignatureFingerprintParsesGPGStatusOnly(t *testing.T) {
 	const fingerprint = "3510E75E05BBCC303B92D77934FC18AC897FB709"
 	status := "[GNUPG:] GOODSIG 34FC18AC897FB709 Takoform\n[GNUPG:] VALIDSIG " + fingerprint + " 2026-07-16 0 4 0 1 10 00 " + fingerprint + "\n"
@@ -382,6 +420,47 @@ func TestProviderReleaseWorkflowValidatesFinalSBOMInventoryBeforeClosure(t *test
 		if !strings.Contains(text[validation:closure], required) {
 			t.Fatalf("final SBOM validation step lacks %q", required)
 		}
+	}
+}
+
+func TestProviderReleaseWorkflowSeparatesRegistryChecksumsFromEvidenceInventory(t *testing.T) {
+	repo := testRepoRoot(t)
+	workflow, err := os.ReadFile(filepath.Join(repo, ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	for _, required := range []string{
+		"registry-checksum-targets --product Terraform",
+		"registry-checksum-targets --product OpenTofu",
+		"expected-registry-checksum-assets.txt",
+		`diff -u "$terraform_checksum_targets" "$opentofu_checksum_targets"`,
+		`diff -u "$expected_registry_checksums" "$RUNNER_TEMP/checksum-assets.txt"`,
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("provider release workflow lacks Registry checksum contract %q", required)
+		}
+	}
+	if strings.Contains(text, `for name in "${unsigned[@]}"; do sha256sum "$name"`) {
+		t.Fatal("provider release still checksums the full evidence inventory")
+	}
+
+	goreleaser, err := os.ReadFile(filepath.Join(repo, ".goreleaser.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := string(goreleaser)
+	checksumStart := strings.Index(config, "checksum:\n")
+	signsStart := strings.Index(config, "\nsigns:\n")
+	if checksumStart < 0 || signsStart <= checksumStart {
+		t.Fatal("cannot locate GoReleaser checksum contract")
+	}
+	checksumBlock := config[checksumStart:signsStart]
+	if strings.Contains(checksumBlock, "extra_files") || strings.Contains(checksumBlock, "manifest.json") || strings.Contains(checksumBlock, "spdx") {
+		t.Fatalf("GoReleaser checksum contract includes non-provider evidence:\n%s", checksumBlock)
+	}
+	if !strings.Contains(config, "sboms:\n") || !strings.Contains(config, "release:\n") || !strings.Contains(config, ".release-tmp/*_manifest.json") {
+		t.Fatal("SBOM or Registry manifest evidence was removed instead of being separately attached")
 	}
 }
 

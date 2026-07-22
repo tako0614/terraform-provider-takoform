@@ -32,11 +32,21 @@ Phase 2 admission closure.
 Every candidate contains:
 
 - one deterministic archive for each configured platform;
-- `SHA256SUMS`;
+- `SHA256SUMS`, whose signed Registry package closure contains only the five
+  provider ZIP archives;
 - `manifest.json` with archive and binary digests, source commit, embedded
   version evidence, and publication blockers;
 - `sbom.spdx.json` generated from the exact Go module graph;
 - `provenance.json`, an unsigned in-toto statement describing the build.
+
+The public GitHub Release inventory is deliberately broader than the signed
+provider-package checksum manifest. Per-archive SPDX documents, the Registry
+metadata manifest, and workflow provenance/attestations remain immutable
+release assets and are verified separately; they are not provider packages and
+must not be listed in `SHA256SUMS`. Both the Terraform and OpenTofu direct
+Registry contracts use the same archive-only checksum target set. Provider
+`v0.1.1` remains immutable; its rejected Registry ingestion is superseded by
+the new `v0.1.2` candidate rather than by replacing any published byte.
 
 `release/version.json` also pins the supported CLI/FQN matrix. Release CI must
 exercise Terraform `1.15.8` with the canonical identity
@@ -141,7 +151,8 @@ ruleset; the Actions job itself cannot bypass that rule. That push triggers
 provider artifact producer. Its read-only build job verifies the signed tag
 with the public key, runs the candidate and pinned GoReleaser/Syft toolchain,
 validates every final Syft document against the repository-pinned official
-SPDX 2.3 schema, and exports a checksum-closed unsigned inventory. A fresh
+SPDX 2.3 schema, exports an exact unsigned evidence inventory, and closes the
+five provider archives under the Registry checksum manifest. A fresh
 protected publication job executes no provider or repository Go code: it
 statically rechecks the tag, inventory, Registry absence, and checksums, imports
 the same Environment key, adds only the detached checksum signature, publishes
@@ -163,11 +174,13 @@ and are available to Actions only as `GPG_PRIVATE_KEY` and `PASSPHRASE`.
 The HCP organization `takoform` has claimed the public Terraform Registry
 namespace `tako0614`; its GitHub App installation is limited to
 `tako0614/terraform-provider-takoform`. Registry key ID `34FC18AC897FB709` is
-registered and matches the full pinned fingerprint above. Provider `0.1.0` is
-published and its direct OpenTofu lifecycle has been verified. Terraform
-Registry indexing remains externally blocked on namespace Terms acceptance.
-Existing version paths must never be overwritten; the coordinated Form
-`1.0.1` candidate therefore uses provider `0.1.1`.
+registered and matches the full pinned fingerprint above. Provider `v0.1.1`
+remains an immutable GitHub Release, but its Terraform Registry ingestion was
+rejected because its checksum manifest projected SBOM evidence as provider
+packages. Existing version paths must never be overwritten; the corrected
+archive-only candidate is `v0.1.2`, and direct Terraform/OpenTofu Registry
+install evidence remains post-publication. The coordinated Form `1.0.1`
+candidate therefore uses provider `0.1.2`.
 
 Key rotation is additive and review-gated: create a distinct repo-external key,
 change the pinned fingerprint/public key in one reviewed commit, register that
