@@ -83,7 +83,7 @@ strong-consistency preferences are absent from the canonical desired fixtures;
 their portable schema capabilities remain available. EdgeWorker retains one
 reviewed `ObjectBucket/edge-assets` connection projected as
 `object.binding.v1`; Schedule retains its one required
-`DurableWorkflow/ingest` connection. Provider `0.1.1` pins this exact
+`DurableWorkflow/ingest` connection. Provider `0.1.2` pins this exact
 all-or-nothing set; provider `0.1.0` and every `1.0.0` package remain immutable
 historical candidates. Runtime publication, Form Package publication, and
 external lifecycle evidence are still required before admission.
