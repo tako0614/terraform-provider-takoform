@@ -130,8 +130,12 @@ lifecycle matrix. These are implemented validators, not generated evidence.
 The ten live immutable package releases, their exact release assets, the
 production Sigstore trusted-root snapshot, and the digest-pinned package-index
 publisher policy are retained under `admission/v1` and pass
-`published-package-check`. The final five-role production admission pins,
-host/provider/admission reports, direct Registry readback, and
+`published-package-check`. The exact provider `v0.1.3` OpenTofu `1.12.1` and
+Terraform `1.15.8` direct Registry matrix and canonical unsigned readback are
+now retained under `admission/v1/registry`. The protected admission candidate
+must reproduce the matrix byte-for-byte and keyless-sign the readback before
+it may consume it. The final five-role production admission pins, the signed
+Registry bundle, host/provider/admission reports, and
 `standard-admission-set.json` do not exist yet, so `release-check` still fails
 closed before admission can open.
 
@@ -159,7 +163,7 @@ go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
 go run ./cmd/admission-readback registry \
   --matrix admission/v1/registry/provider-lifecycle-matrix.json \
   --provider-release-commit "$(git rev-list -n 1 "$(jq -r .tag release/version.json)")" \
-  > admission/v1/registry/provider-readback.json
+  --output admission/v1/registry/provider-readback.json
 ```
 
 The command pins the provider version from `release/version.json`, runs

@@ -1,0 +1,531 @@
+{
+  "format": "takoform.provider-cli-fqn-matrix@v2",
+  "classification": "supported-cli-fqn-candidate-matrix",
+  "publicationReady": false,
+  "releaseDescriptorSha256": "sha256:318c61241a97d01acb321d339c2fc4fd1dbfeed7b85cc135f22ddc7ed6efc14b",
+  "candidateSetSha256": "sha256:a5c89434f0a90dc539ee0da545d69f6fdebe33bd1edc4178f80cdb8af14c3c03",
+  "providerSchemaSha256": "sha256:c04f4c8225f72e23008bacc93857badb7da07b45f287bb6546f0913231cc0ca8",
+  "installationSource": "direct-registry-install",
+  "reports": [
+    {
+      "format": "takoform.provider-lifecycle-candidate@v3",
+      "classification": "generic-lifecycle-candidate",
+      "publicationReady": false,
+      "bindingStatus": "exact-structural-candidate-set",
+      "runnerSubject": "takoform.provider-binary-cli-runner@v1",
+      "protocol": "Terraform provider protocol v6 + versioned Form host HTTP",
+      "installationSource": "direct-registry-install",
+      "candidateSetSha256": "sha256:a5c89434f0a90dc539ee0da545d69f6fdebe33bd1edc4178f80cdb8af14c3c03",
+      "providerSchemaSha256": "sha256:c04f4c8225f72e23008bacc93857badb7da07b45f287bb6546f0913231cc0ca8",
+      "providerBinary": {
+        "version": "0.1.3",
+        "sha256": "sha256:44671a1196345245b7e523bebd60a618ff4075ca3b81d357e81093556f6c7cf5"
+      },
+      "cli": {
+        "product": "OpenTofu",
+        "version": "1.12.1",
+        "providerAddress": "registry.opentofu.org/tako0614/takoform",
+        "executableName": "tofu",
+        "executableSha256": "sha256:b6cb308bd699c8b53882319986f339eeaa44f925a68f12d5b0a14e6caceedf23"
+      },
+      "resources": [
+        {
+          "kind": "ContainerService",
+          "resourceType": "takoform_container_service",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "DurableWorkflow",
+          "resourceType": "takoform_durable_workflow",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "EdgeWorker",
+          "resourceType": "takoform_edge_worker",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "KVStore",
+          "resourceType": "takoform_kv_store",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "ObjectBucket",
+          "resourceType": "takoform_object_bucket",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "Queue",
+          "resourceType": "takoform_queue",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "SQLDatabase",
+          "resourceType": "takoform_sql_database",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "Schedule",
+          "resourceType": "takoform_schedule",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "StatefulActorNamespace",
+          "resourceType": "takoform_stateful_actor_namespace",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "VectorIndex",
+          "resourceType": "takoform_vector_index",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        }
+      ],
+      "negativeChecks": [
+        {
+          "name": "response-name-substitution-rejected",
+          "kind": "ObjectBucket",
+          "fixture": "versioned host observe response with substituted metadata.name",
+          "passed": true
+        },
+        {
+          "name": "response-package-digest-substitution-rejected",
+          "kind": "KVStore",
+          "fixture": "versioned host observe response with substituted exact FormRef packageDigest",
+          "passed": true
+        }
+      ],
+      "immutableReplace": [
+        {
+          "kind": "EdgeWorker",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "ObjectBucket",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "KVStore",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "Queue",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "SQLDatabase",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "ContainerService",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "VectorIndex",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "DurableWorkflow",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "StatefulActorNamespace",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "Schedule",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "SQLDatabase",
+          "field": "/engine",
+          "passed": true
+        },
+        {
+          "kind": "VectorIndex",
+          "field": "/dimensions",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "format": "takoform.provider-lifecycle-candidate@v3",
+      "classification": "generic-lifecycle-candidate",
+      "publicationReady": false,
+      "bindingStatus": "exact-structural-candidate-set",
+      "runnerSubject": "takoform.provider-binary-cli-runner@v1",
+      "protocol": "Terraform provider protocol v6 + versioned Form host HTTP",
+      "installationSource": "direct-registry-install",
+      "candidateSetSha256": "sha256:a5c89434f0a90dc539ee0da545d69f6fdebe33bd1edc4178f80cdb8af14c3c03",
+      "providerSchemaSha256": "sha256:c04f4c8225f72e23008bacc93857badb7da07b45f287bb6546f0913231cc0ca8",
+      "providerBinary": {
+        "version": "0.1.3",
+        "sha256": "sha256:44671a1196345245b7e523bebd60a618ff4075ca3b81d357e81093556f6c7cf5"
+      },
+      "cli": {
+        "product": "Terraform",
+        "version": "1.15.8",
+        "providerAddress": "registry.terraform.io/tako0614/takoform",
+        "executableName": "terraform",
+        "executableSha256": "sha256:8b6cb96cd46080ee1287baf646c70078715a99123b9b3a6ce2a7fe3892ec703a"
+      },
+      "resources": [
+        {
+          "kind": "ContainerService",
+          "resourceType": "takoform_container_service",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "DurableWorkflow",
+          "resourceType": "takoform_durable_workflow",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "EdgeWorker",
+          "resourceType": "takoform_edge_worker",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "KVStore",
+          "resourceType": "takoform_kv_store",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "ObjectBucket",
+          "resourceType": "takoform_object_bucket",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "Queue",
+          "resourceType": "takoform_queue",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "SQLDatabase",
+          "resourceType": "takoform_sql_database",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "Schedule",
+          "resourceType": "takoform_schedule",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "StatefulActorNamespace",
+          "resourceType": "takoform_stateful_actor_namespace",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        },
+        {
+          "kind": "VectorIndex",
+          "resourceType": "takoform_vector_index",
+          "checks": {
+            "create": true,
+            "read": true,
+            "update": true,
+            "observe": true,
+            "refresh": true,
+            "nativeImport": true,
+            "cliImport": true,
+            "delete": true,
+            "driftState": true,
+            "nameReplace": true
+          }
+        }
+      ],
+      "negativeChecks": [
+        {
+          "name": "response-name-substitution-rejected",
+          "kind": "ObjectBucket",
+          "fixture": "versioned host observe response with substituted metadata.name",
+          "passed": true
+        },
+        {
+          "name": "response-package-digest-substitution-rejected",
+          "kind": "KVStore",
+          "fixture": "versioned host observe response with substituted exact FormRef packageDigest",
+          "passed": true
+        }
+      ],
+      "immutableReplace": [
+        {
+          "kind": "EdgeWorker",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "ObjectBucket",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "KVStore",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "Queue",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "SQLDatabase",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "ContainerService",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "VectorIndex",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "DurableWorkflow",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "StatefulActorNamespace",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "Schedule",
+          "field": "/name",
+          "passed": true
+        },
+        {
+          "kind": "SQLDatabase",
+          "field": "/engine",
+          "passed": true
+        },
+        {
+          "kind": "VectorIndex",
+          "field": "/dimensions",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

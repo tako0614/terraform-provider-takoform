@@ -158,9 +158,11 @@ namespace and signing key are registered. Providers `v0.1.1` and `v0.1.2`
 remain immutable GitHub Releases. Terraform Registry rejected `v0.1.1`
 because its checksum manifest projected SPDX evidence as provider packages,
 and rejected `v0.1.2` because it omitted the required Registry metadata
-manifest checksum. The exact six-entry `v0.1.3` candidate is the
-non-overwriting successor; direct Terraform and OpenTofu Registry
-install/readback remain post-publication evidence.
+manifest checksum. The exact six-entry `v0.1.3` release is the
+non-overwriting successor. Direct Terraform `1.15.8` and OpenTofu `1.12.1`
+Registry installs now pass the full lifecycle matrix, and the canonical
+unsigned readback is retained for the separately authenticated admission
+candidate.
 
 Provider publication and Standard Form admission are separate releases. The
 provider `v*` workflow can publish only while the descriptor and inventory are
