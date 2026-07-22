@@ -480,6 +480,7 @@ jobs:
     environment: standard-admission-release
     permissions:
       actions: read
+      attestations: read
       contents: write
     steps:
       - name: Refuse stale or non-controller-authorized promotion
@@ -521,6 +522,7 @@ jobs:
       - name: Verify envelope bindings and every candidate byte
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
           RELEASE_TAG: ${{ inputs.tag }}
           SOURCE_COMMIT: ${{ inputs.source_commit }}
