@@ -139,7 +139,7 @@ policies, and the signed host/provider/admission reports are retained under
 closure. The protected admission candidate must reproduce the matrix
 byte-for-byte and keyless-sign the readback. Admission release semver is
 independent from the retained Form definition/package semver:
-`forms/admissions/v1.0.3` binds the exact `1.0.1` packages. `release-check`
+`forms/admissions/v1.0.4` binds the exact `1.0.1` packages. `release-check`
 opens admission only when that matching immutable activation Release exists
 and reads back exactly.
 

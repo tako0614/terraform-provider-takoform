@@ -100,6 +100,29 @@ func TestStandardAdmissionCandidateManifestShapeRemainsControllerCompatible(t *t
 	}
 }
 
+func TestStandardAdmissionPromotionAuthenticatesAttestationReadback(t *testing.T) {
+	t.Parallel()
+	workflow := readStandardAdmissionWorkflow(t)
+
+	promote := strings.Index(workflow, "\n  promote:")
+	start := strings.Index(workflow, "- name: Verify envelope bindings and every candidate byte")
+	end := strings.Index(workflow, "- name: Preflight immutability, signed tag, and target fingerprint")
+	if promote < 0 || start <= promote || end <= start {
+		t.Fatal("locate promotion candidate-verification step")
+	}
+	if !strings.Contains(workflow[promote:start], "attestations: read") {
+		t.Fatal("promotion job must grant read-only GitHub attestation access")
+	}
+	step := workflow[start:end]
+	if !strings.Contains(step, `GH_TOKEN: ${{ github.token }}`) {
+		t.Fatal("promotion candidate-verification step must authenticate GitHub attestation readback")
+	}
+	if !strings.Contains(step, `gh attestation verify candidate/standard-admission-set.json`) ||
+		!strings.Contains(step, `gh attestation verify candidate/takoform-standard-admission-v1.tar.gz`) {
+		t.Fatal("promotion candidate-verification step must verify both GitHub attestations")
+	}
+}
+
 func readStandardAdmissionWorkflow(t *testing.T) string {
 	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)
