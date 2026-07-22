@@ -32,21 +32,23 @@ Phase 2 admission closure.
 Every candidate contains:
 
 - one deterministic archive for each configured platform;
-- `SHA256SUMS`, whose signed Registry package closure contains only the five
-  provider ZIP archives;
+- `SHA256SUMS`, whose signed Registry closure contains the five provider ZIP
+  archives and the exact Registry metadata manifest;
 - `manifest.json` with archive and binary digests, source commit, embedded
   version evidence, and publication blockers;
 - `sbom.spdx.json` generated from the exact Go module graph;
 - `provenance.json`, an unsigned in-toto statement describing the build.
 
 The public GitHub Release inventory is deliberately broader than the signed
-provider-package checksum manifest. Per-archive SPDX documents, the Registry
-metadata manifest, and workflow provenance/attestations remain immutable
-release assets and are verified separately; they are not provider packages and
-must not be listed in `SHA256SUMS`. Both the Terraform and OpenTofu direct
-Registry contracts use the same archive-only checksum target set. Provider
-`v0.1.1` remains immutable; its rejected Registry ingestion is superseded by
-the new `v0.1.2` candidate rather than by replacing any published byte.
+Registry checksum manifest. Per-archive SPDX documents and workflow
+provenance/attestations remain immutable release evidence and are verified
+separately; they must not be listed in `SHA256SUMS`. The Registry metadata
+manifest is not an installable package, but the public Registry ingress
+contract requires its digest in the signed checksum file. Both Terraform and
+OpenTofu use the same six-entry checksum target set. Providers `v0.1.1` and
+`v0.1.2` remain immutable: `v0.1.1` included SPDX evidence in `SHA256SUMS`,
+while `v0.1.2` omitted the required Registry manifest. The corrected `v0.1.3`
+candidate supersedes both without replacing any published byte.
 
 `release/version.json` also pins the supported CLI/FQN matrix. Release CI must
 exercise Terraform `1.15.8` with the canonical identity
@@ -152,7 +154,8 @@ provider artifact producer. Its read-only build job verifies the signed tag
 with the public key, runs the candidate and pinned GoReleaser/Syft toolchain,
 validates every final Syft document against the repository-pinned official
 SPDX 2.3 schema, exports an exact unsigned evidence inventory, and closes the
-five provider archives under the Registry checksum manifest. A fresh
+five provider archives plus Registry metadata manifest under the signed
+checksum file. A fresh
 protected publication job executes no provider or repository Go code: it
 statically rechecks the tag, inventory, Registry absence, and checksums, imports
 the same Environment key, adds only the detached checksum signature, publishes
@@ -174,13 +177,14 @@ and are available to Actions only as `GPG_PRIVATE_KEY` and `PASSPHRASE`.
 The HCP organization `takoform` has claimed the public Terraform Registry
 namespace `tako0614`; its GitHub App installation is limited to
 `tako0614/terraform-provider-takoform`. Registry key ID `34FC18AC897FB709` is
-registered and matches the full pinned fingerprint above. Provider `v0.1.1`
-remains an immutable GitHub Release, but its Terraform Registry ingestion was
-rejected because its checksum manifest projected SBOM evidence as provider
-packages. Existing version paths must never be overwritten; the corrected
-archive-only candidate is `v0.1.2`, and direct Terraform/OpenTofu Registry
-install evidence remains post-publication. The coordinated Form `1.0.1`
-candidate therefore uses provider `0.1.2`.
+registered and matches the full pinned fingerprint above. Providers `v0.1.1`
+and `v0.1.2` remain immutable GitHub Releases. Terraform Registry rejected the
+first because its checksum manifest projected SPDX evidence as provider
+packages, and rejected the second because the required Registry metadata
+manifest was absent from `SHA256SUMS`. Existing version paths must never be
+overwritten; the corrected six-entry candidate is `v0.1.3`, and direct
+Terraform/OpenTofu Registry install evidence remains post-publication. The
+coordinated Form `1.0.1` candidate therefore uses provider `0.1.3`.
 
 Key rotation is additive and review-gated: create a distinct repo-external key,
 change the pinned fingerprint/public key in one reviewed commit, register that

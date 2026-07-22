@@ -254,11 +254,11 @@ func main() {
 	}
 }
 
-// registryChecksumTargets returns the only files that may be named by the
-// provider Registry checksum manifest. GitHub Release evidence such as SPDX
-// SBOMs, the Registry metadata manifest, and workflow provenance remains in
-// the separately attested release inventory and must never be projected as a
-// provider package by either Registry.
+// registryChecksumTargets returns the exact files required by the public
+// provider Registry checksum contract: every installable archive and the
+// Registry metadata manifest. GitHub Release evidence such as SPDX SBOMs and
+// workflow provenance remains in the separately attested release inventory
+// and must never be projected as a provider package by either Registry.
 func registryChecksumTargets(desc descriptor, product string) ([]string, error) {
 	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
 		return nil, err
@@ -280,6 +280,7 @@ func registryChecksumTargets(desc descriptor, product string) ([]string, error) 
 		}
 		targets = append(targets, fmt.Sprintf("terraform-provider-takoform_%s_%s.zip", desc.Version, platform))
 	}
+	targets = append(targets, fmt.Sprintf("terraform-provider-takoform_%s_manifest.json", desc.Version))
 	sort.Strings(targets)
 	return targets, nil
 }
