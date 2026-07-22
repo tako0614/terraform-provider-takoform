@@ -107,7 +107,7 @@ Sigstore trusted root, and package-index workflow policy are retained under
 `published-package-check`. Signed host/provider/admission reports and the exact
 direct Registry readback are retained as a five-role closure, but those source
 bytes alone do not admit a Form. Only the matching immutable
-`forms/admissions/v1.0.2` activation Release can activate them. The public
+`forms/admissions/v1.0.3` activation Release can activate them. The public
 `release-check` verifies that immutable Release, its exact eight assets, the
 completed controller promotion run, and the retained controller readback;
 candidate-only `admission-closure-check` grants no activation. The Release binds the
