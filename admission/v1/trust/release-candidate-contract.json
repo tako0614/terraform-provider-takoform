@@ -1,0 +1,132 @@
+{
+  "format": "takoform.standard-admission-release-candidate-contract@v1",
+  "candidateManifest": {
+    "keys": [
+      "artifactDigests",
+      "builtAt",
+      "configDigest",
+      "kind",
+      "ociImages",
+      "policyDigest",
+      "provenanceDigests",
+      "releaseAssets",
+      "repository",
+      "sbomDigests",
+      "sourceCommit",
+      "surfaceId",
+      "tag",
+      "toolchainDigest",
+      "version",
+      "workflowRunId"
+    ],
+    "kind": "takos.release-candidate-manifest@v1",
+    "ociImageCount": 0,
+    "releaseAssets": [
+      "SHA256SUMS",
+      "fresh-provider-lifecycle-matrix.json",
+      "standard-admission-set.json",
+      "standard-admission-set.sigstore.json",
+      "takoform-standard-admission-v1.tar.gz",
+      "takoform-standard-admission_{admissionReleaseVersion}_provenance.intoto.json",
+      "takoform-standard-admission_{admissionReleaseVersion}_sbom.spdx.json"
+    ],
+    "provenanceDigestCount": 1,
+    "sbomDigestCount": 1
+  },
+  "standardAdmissionSet": {
+    "format": "takoform.standard-admission-set@v2",
+    "entryCount": 10,
+    "kinds": [
+      "EdgeWorker",
+      "ObjectBucket",
+      "KVStore",
+      "SQLDatabase",
+      "Queue",
+      "VectorIndex",
+      "DurableWorkflow",
+      "ContainerService",
+      "StatefulActorNamespace",
+      "Schedule"
+    ],
+    "definitionVersion": "exact-semver",
+    "packageVersion": "exact-semver",
+    "definitionAndPackageVersionsMustMatch": true,
+    "admissionReleaseVersionIsIndependent": true,
+    "admissionReleaseTagTemplate": "forms/admissions/v{admissionReleaseVersion}"
+  },
+  "retainedSubjects": {
+    "count": 41,
+    "perPackageRoles": [
+      "package-index",
+      "admission-evidence",
+      "host-report",
+      "provider-report"
+    ],
+    "singletonRoles": [
+      {
+        "kind": "provider",
+        "role": "registry-readback"
+      }
+    ]
+  },
+  "provenance": {
+    "statementType": "https://in-toto.io/Statement/v1",
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "buildType": "https://forms.takoform.com/build/standard-admission/v1",
+    "externalParameterVersionBindings": {
+      "version": "candidate.version",
+      "admissionReleaseVersion": "candidate.version",
+      "definitionVersion": "standardAdmissionSet.definitionVersion",
+      "packageVersion": "standardAdmissionSet.packageVersion"
+    },
+    "subjectNames": [
+      "fresh-provider-lifecycle-matrix.json",
+      "standard-admission-set.json",
+      "standard-admission-set.sigstore.json",
+      "takoform-standard-admission-v1.tar.gz",
+      "takoform-standard-admission_{admissionReleaseVersion}_sbom.spdx.json"
+    ],
+    "packageCount": 10,
+    "retainedSubjectCount": 41,
+    "resolvedDependencyCount": 54,
+    "resolvedDependencyPartitions": {
+      "formPackage": 10,
+      "retainedSubject": 41,
+      "root": 3
+    },
+    "rootDependencyNames": [
+      "tagged-admission-source",
+      "protected-main-release-tooling",
+      "offline-sigstore-pins"
+    ]
+  },
+  "sbom": {
+    "spdxVersion": "SPDX-2.3",
+    "dataLicense": "CC0-1.0",
+    "rootPackageSpdxId": "SPDXRef-Admission",
+    "packageCount": 11,
+    "componentPackageCount": 10,
+    "fileCount": 41,
+    "relationshipCount": 52,
+    "rootPackageVersionSource": "candidate.version",
+    "componentPackageVersionSource": "standardAdmissionSet.packageVersion"
+  },
+  "registryMatrix": {
+    "format": "takoform.provider-cli-fqn-matrix@v2",
+    "installationSource": "direct-registry-install",
+    "productSetIsExactAndUnique": true,
+    "products": [
+      {
+        "product": "OpenTofu",
+        "executableName": "tofu",
+        "providerAddress": "registry.opentofu.org/tako0614/takoform"
+      },
+      {
+        "product": "Terraform",
+        "executableName": "terraform",
+        "providerAddress": "registry.terraform.io/tako0614/takoform"
+      }
+    ],
+    "archiveAndDirectRegistryMatrixMustBeByteIdentical": true
+  }
+}

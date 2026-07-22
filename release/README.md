@@ -97,8 +97,8 @@ Phase 2 is the separate protected
 `.github/workflows/standard-admission-release.yml` lane selected by an exact
 `forms/admissions/v*` tag at the current protected-main commit. Candidate mode
 runs from protected `main` and proves that the signed annotated admission tag
-resolves to that exact commit. It runs the
-offline `release-check` after rerunning both direct Registry installs in an
+resolves to that exact commit. It runs the closure-only
+`admission-closure-check` after rerunning both direct Registry installs in an
 isolated read-only job with no Environment, token-minting, attestation, or
 repository-write authority. That job exports only the canonical matrix. A
 fresh exact-commit checkout in the protected authentication job compares the
@@ -108,13 +108,23 @@ write-authorized promotion accepts only the ecosystem release-safety
 controller's fixed envelope, adapter, authorization, artifact, health-check,
 and target digests. It reverifies the exact candidate bytes, includes the
 controller readback before making one new draft stable, and reads
-repository-enforced immutability back. An existing admission version is never
+repository-enforced immutability back. The fixed controller then runs public
+`release-check` against that completed successful promotion run and immutable
+eight-asset Release. An existing admission version is never
 overwritten; a failure after stability requires a new version. Only that
 immutable GitHub Release is Form admission activation. It needs a separately reviewed
 `standard-admission-release` Environment; provider signing credentials are not
 reused.
 
-`release-check` also resolves the admission tag, provider tag, and every
+The admission release semver is independent from the exact Form definition and
+Form Package semvers it activates. For example, admission `1.0.2` may activate
+the already immutable definition/package `1.0.1` closure. The release SBOM and
+provenance bind all three versions explicitly: the root package uses the
+admission release version, while the ten component packages use the retained
+Form Package version. The retained Registry matrix, the fresh direct-Registry
+matrix, and the matrix inside the release archive must be byte-identical.
+
+`admission-closure-check` also resolves the admission tag, provider tag, and every
 package tag from fetched local Git refs and requires their exact retained
 commits. The provider tag must be annotated and signed by the pinned provider
 GPG fingerprint; import only `release/keys/provider-signing-key.asc` before an

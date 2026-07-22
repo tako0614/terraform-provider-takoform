@@ -11,8 +11,8 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "materializability-check" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "published-package-check" && os.Args[1] != "release-check") {
-		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|materializability-check|candidate-publication-check|published-package-check|release-check")
+	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "materializability-check" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "published-package-check" && os.Args[1] != "admission-closure-check" && os.Args[1] != "release-check") {
+		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|materializability-check|candidate-publication-check|published-package-check|admission-closure-check|release-check")
 		os.Exit(2)
 	}
 	var err error
@@ -28,8 +28,12 @@ func main() {
 		err = standardforms.VerifyCandidatePublication(".")
 	} else if os.Args[1] == "published-package-check" {
 		err = standardforms.VerifyPublishedPackageSet(".")
+	} else if os.Args[1] == "admission-closure-check" {
+		err = standardforms.VerifyAdmissionClosure(".")
 	} else {
-		err = standardforms.VerifyReleaseReady(".")
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		err = standardforms.VerifyReleaseReady(ctx, ".", &http.Client{Timeout: 30 * time.Second}, os.Getenv("GITHUB_TOKEN"))
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "standard-form-conformance:", err)

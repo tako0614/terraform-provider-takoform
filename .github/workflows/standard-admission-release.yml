@@ -12,7 +12,7 @@ on:
           - candidate
           - promote
       version:
-        description: Immutable admission release version
+        description: Immutable stable admission release version (independent from Form definition/package version)
         required: true
         type: string
       release_id:
@@ -94,8 +94,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   EXPECTED_COSIGN_VERSION: "v3.0.6"
   EXPECTED_GPG_FINGERPRINT: "3510E75E05BBCC303B92D77934FC18AC897FB709"
-  RELEASE_SAFETY_CONTROLLER_COMMIT: "c493777b9d0e7684ddabfcb4aea13f9120330241"
-  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:92c78f124b752a67b220e33da872beb46cebc25d3107b6dc79af52f847d97d5b"
+  RELEASE_SAFETY_CONTROLLER_COMMIT: "08bd710cd25dc7640dafbb2acda20033aef19ebf"
+  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:e2aeb34d06f1b614b2c4b3bad06d8d8843f32b3f09497c95466f509feba62a04"
 
 jobs:
   validate:
@@ -141,7 +141,7 @@ jobs:
             echo "Release runs are immutable; dispatch a new version/attempt." >&2
             exit 1
           }
-          [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]
+          [[ "${VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
           release_tag="forms/admissions/v${VERSION}"
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_tag}")"
@@ -257,8 +257,14 @@ jobs:
         run: |
           set -euo pipefail
           fresh="${RUNNER_TEMP}/direct-registry-readback/provider-lifecycle-matrix.json"
-          jq -S -c . admission/v1/registry/provider-lifecycle-matrix.json > "${RUNNER_TEMP}/retained-matrix.json"
-          diff -u "${RUNNER_TEMP}/retained-matrix.json" "${fresh}"
+          cmp admission/v1/registry/provider-lifecycle-matrix.json "${fresh}"
+          FRESH="${fresh}" node <<'NODE'
+          const fs = require("node:fs");
+          const contract = JSON.parse(fs.readFileSync("admission/v1/trust/release-candidate-contract.json", "utf8"));
+          const matrix = JSON.parse(fs.readFileSync(process.env.FRESH, "utf8"));
+          const actual = matrix.reports?.map(({ cli }) => ({ product: cli?.product, executableName: cli?.executableName, providerAddress: cli?.providerAddress }));
+          if (matrix.format !== contract.registryMatrix.format || matrix.installationSource !== contract.registryMatrix.installationSource || JSON.stringify(actual) !== JSON.stringify(contract.registryMatrix.products) || new Set(actual.map(({ product }) => product)).size !== actual.length) throw new Error("direct Registry matrix does not contain the exact unique OpenTofu and Terraform products");
+          NODE
           fingerprints="$(gpg --batch --with-colons --import-options show-only --import release/keys/provider-signing-key.asc | awk -F: '$1 == "fpr" { print $10 }')"
           test "${fingerprints}" = "${EXPECTED_GPG_FINGERPRINT}"
           gpg --batch --import release/keys/provider-signing-key.asc
@@ -271,7 +277,7 @@ jobs:
             --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/standard-admission-release.yml@refs/heads/main" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
           go run ./cmd/standard-form-conformance published-package-check
-          go run ./cmd/standard-form-conformance release-check
+          go run ./cmd/standard-form-conformance admission-closure-check
 
       - name: Build, sign, and checksum the immutable candidate inventory
         id: build
@@ -288,6 +294,8 @@ jobs:
           install -m 0644 "${RUNNER_TEMP}/direct-registry-readback/provider-lifecycle-matrix.json" "${output}/fresh-provider-lifecycle-matrix.json"
           tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner -C admission -cf - v1 \
             | gzip -n > "${output}/takoform-standard-admission-v1.tar.gz"
+          tar -xOzf "${output}/takoform-standard-admission-v1.tar.gz" v1/registry/provider-lifecycle-matrix.json > "${RUNNER_TEMP}/archived-provider-lifecycle-matrix.json"
+          cmp "${output}/fresh-provider-lifecycle-matrix.json" "${RUNNER_TEMP}/archived-provider-lifecycle-matrix.json"
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/standard-admission-release.yml@refs/heads/main"
           cosign sign-blob "${output}/standard-admission-set.json" \
             --bundle "${output}/standard-admission-set.sigstore.json" --yes
@@ -316,8 +324,10 @@ jobs:
             return value;
           };
           const spdxID = (value) => value.replace(/[^A-Za-z0-9.-]/g, "-");
+          const contract = JSON.parse(fs.readFileSync("admission/v1/trust/release-candidate-contract.json", "utf8"));
+          const stableVersion = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
           const set = JSON.parse(fs.readFileSync("admission/v1/standard-admission-set.json", "utf8"));
-          if (set.format !== "takoform.standard-admission-set@v2" || set.definitionVersion !== version || set.packageVersion !== version || set.admissionReleaseTag !== tag || !Array.isArray(set.entries) || set.entries.length !== 10) throw new Error("standard admission set does not contain the exact ten-package release");
+          if (set.format !== contract.standardAdmissionSet.format || !stableVersion.test(set.definitionVersion) || !stableVersion.test(set.packageVersion) || set.definitionVersion !== set.packageVersion || set.admissionReleaseTag !== tag || !Array.isArray(set.entries) || set.entries.length !== contract.standardAdmissionSet.entryCount || JSON.stringify(set.entries.map(({ kind }) => kind)) !== JSON.stringify(contract.standardAdmissionSet.kinds)) throw new Error("standard admission set does not contain the exact versioned ten-package closure");
 
           const packages = [];
           const subjects = [];
@@ -333,7 +343,7 @@ jobs:
             packages.push({
               name: `Takoform Form Package ${entry.kind}`,
               SPDXID: `SPDXRef-FormPackage-${spdxID(entry.slug)}`,
-              versionInfo: version,
+              versionInfo: set.packageVersion,
               downloadLocation: `${repository}/releases/tag/${entry.releaseTag}`,
               filesAnalyzed: false,
               checksums: [{ algorithm: "SHA256", checksumValue: hexDigest(entry.packageDigest) }],
@@ -352,7 +362,7 @@ jobs:
             addSubject(entry, "provider-report", entry.providerReportPath, entry.providerReportDigest);
           }
           addSubject({ kind: "provider", slug: "provider" }, "registry-readback", set.providerRegistryReadback.path, set.providerRegistryReadback.digest);
-          if (new Set(packages.map(({ SPDXID }) => SPDXID)).size !== 10 || subjects.length !== 41 || new Set(subjects.map(({ role, kind }) => `${role}:${kind}`)).size !== 41 || new Set(subjects.map(({ path: subjectPath }) => subjectPath)).size !== 41) throw new Error("standard admission retained-subject closure is not exact");
+          if (new Set(packages.map(({ SPDXID }) => SPDXID)).size !== contract.provenance.packageCount || subjects.length !== contract.retainedSubjects.count || new Set(subjects.map(({ role, kind }) => `${role}:${kind}`)).size !== contract.retainedSubjects.count || new Set(subjects.map(({ path: subjectPath }) => subjectPath)).size !== contract.retainedSubjects.count) throw new Error("standard admission retained-subject closure is not exact");
           packages.sort((a, b) => a.SPDXID.localeCompare(b.SPDXID));
           subjects.sort((a, b) => a.path.localeCompare(b.path));
           packageDependencies.sort((a, b) => a.name.localeCompare(b.name));
@@ -399,8 +409,8 @@ jobs:
             predicateType: "https://slsa.dev/provenance/v1",
             predicate: { buildDefinition: {
               buildType: "https://forms.takoform.com/build/standard-admission/v1",
-              externalParameters: { sourceCommit: commit, tag, version, workflow: ".github/workflows/standard-admission-release.yml" },
-              internalParameters: { canonicalization: "RFC8785", packageCount: 10, retainedSubjectCount: 41, standardAdmissionSetDigest: digestFile("admission/v1/standard-admission-set.json"), offlineSigstorePinsDigest: pinsDigest },
+              externalParameters: { sourceCommit: commit, tag, version, admissionReleaseVersion: version, definitionVersion: set.definitionVersion, packageVersion: set.packageVersion, workflow: ".github/workflows/standard-admission-release.yml" },
+              internalParameters: { canonicalization: "RFC8785", packageCount: contract.provenance.packageCount, retainedSubjectCount: contract.provenance.retainedSubjectCount, standardAdmissionSetDigest: digestFile("admission/v1/standard-admission-set.json"), offlineSigstorePinsDigest: pinsDigest },
               resolvedDependencies: [
                 { name: "tagged-admission-source", uri: `git+${repository}.git`, digest: { gitCommit: commit } },
                 { name: "protected-main-release-tooling", uri: `git+${repository}.git`, digest: { gitCommit: commit } },
@@ -527,11 +537,13 @@ jobs:
           const candidate = JSON.parse(fs.readFileSync("candidate/release-candidate-manifest.json"));
           const sha = (raw) => `sha256:${crypto.createHash("sha256").update(raw).digest("hex")}`;
           const digestFile = (name) => sha(fs.readFileSync(name));
-          const expectedNames = ["SHA256SUMS", "fresh-provider-lifecycle-matrix.json", "standard-admission-set.json", "standard-admission-set.sigstore.json", "takoform-standard-admission-v1.tar.gz", `takoform-standard-admission_${process.env.VERSION}_provenance.intoto.json`, `takoform-standard-admission_${process.env.VERSION}_sbom.spdx.json`].sort();
+          const contract = JSON.parse(fs.readFileSync("admission/v1/trust/release-candidate-contract.json", "utf8"));
+          const expandVersion = (value) => value.replace("{admissionReleaseVersion}", process.env.VERSION);
+          const expectedNames = contract.candidateManifest.releaseAssets.map(expandVersion).sort();
           const decoded = JSON.parse(Buffer.from(process.env.ARTIFACT_DIGESTS_B64, "base64url"));
           const actualFiles = fs.readdirSync("candidate").sort();
-          const candidateKeys = ["artifactDigests", "builtAt", "configDigest", "kind", "ociImages", "policyDigest", "provenanceDigests", "releaseAssets", "repository", "sbomDigests", "sourceCommit", "surfaceId", "tag", "toolchainDigest", "version", "workflowRunId"].sort();
-          if (JSON.stringify(Object.keys(candidate).sort()) !== JSON.stringify(candidateKeys) || candidate.kind !== "takos.release-candidate-manifest@v1" || candidate.surfaceId !== "takoform-standard-form-admission" || candidate.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || candidate.sourceCommit !== process.env.SOURCE_COMMIT || candidate.version !== process.env.VERSION || candidate.tag !== process.env.RELEASE_TAG || candidate.workflowRunId !== process.env.CANDIDATE_RUN_ID || !Array.isArray(candidate.ociImages) || candidate.ociImages.length !== 0 || JSON.stringify(candidate.releaseAssets.map(({name}) => name).sort()) !== JSON.stringify(expectedNames) || JSON.stringify(actualFiles) !== JSON.stringify(["release-candidate-manifest.json", ...expectedNames].sort())) process.exit(1);
+          const candidateKeys = [...contract.candidateManifest.keys].sort();
+          if (JSON.stringify(Object.keys(candidate).sort()) !== JSON.stringify(candidateKeys) || candidate.kind !== contract.candidateManifest.kind || candidate.surfaceId !== "takoform-standard-form-admission" || candidate.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || candidate.sourceCommit !== process.env.SOURCE_COMMIT || candidate.version !== process.env.VERSION || candidate.tag !== process.env.RELEASE_TAG || candidate.workflowRunId !== process.env.CANDIDATE_RUN_ID || !Array.isArray(candidate.ociImages) || candidate.ociImages.length !== contract.candidateManifest.ociImageCount || JSON.stringify(candidate.releaseAssets.map(({name}) => name).sort()) !== JSON.stringify(expectedNames) || JSON.stringify(actualFiles) !== JSON.stringify(["release-candidate-manifest.json", ...expectedNames].sort())) process.exit(1);
           for (const asset of candidate.releaseAssets) {
             if (JSON.stringify(Object.keys(asset).sort()) !== JSON.stringify(["digest", "name"])) process.exit(1);
             const digest = digestFile(path.join("candidate", asset.name));
@@ -541,10 +553,11 @@ jobs:
           const sbomName = `takoform-standard-admission_${process.env.VERSION}_sbom.spdx.json`;
           const provenanceName = `takoform-standard-admission_${process.env.VERSION}_provenance.intoto.json`;
           const toolchainDigest = sha(Buffer.from("go1.26.5\ncosign-v3.0.6\nopentofu1.12.1\nterraform1.15.8\n", "utf8"));
-          if (JSON.stringify(candidate.artifactDigests) !== JSON.stringify(candidate.releaseAssets.map(({ digest }) => digest)) || JSON.stringify(candidate.artifactDigests) !== JSON.stringify(decoded) || JSON.stringify(candidate.sbomDigests) !== JSON.stringify([byName.get(sbomName)]) || JSON.stringify(candidate.provenanceDigests) !== JSON.stringify([byName.get(provenanceName)]) || candidate.configDigest !== byName.get("standard-admission-set.json") || candidate.policyDigest !== digestFile("admission/v1/trust/offline-sigstore-pins.json") || candidate.toolchainDigest !== toolchainDigest) process.exit(1);
+          if (JSON.stringify(candidate.artifactDigests) !== JSON.stringify(candidate.releaseAssets.map(({ digest }) => digest)) || JSON.stringify(candidate.artifactDigests) !== JSON.stringify(decoded) || candidate.sbomDigests.length !== contract.candidateManifest.sbomDigestCount || JSON.stringify(candidate.sbomDigests) !== JSON.stringify([byName.get(sbomName)]) || candidate.provenanceDigests.length !== contract.candidateManifest.provenanceDigestCount || JSON.stringify(candidate.provenanceDigests) !== JSON.stringify([byName.get(provenanceName)]) || candidate.configDigest !== byName.get("standard-admission-set.json") || candidate.configDigest !== digestFile("admission/v1/standard-admission-set.json") || candidate.policyDigest !== digestFile("admission/v1/trust/offline-sigstore-pins.json") || candidate.toolchainDigest !== toolchainDigest) process.exit(1);
 
           const set = JSON.parse(fs.readFileSync("candidate/standard-admission-set.json", "utf8"));
-          if (set.format !== "takoform.standard-admission-set@v2" || set.definitionVersion !== process.env.VERSION || set.packageVersion !== process.env.VERSION || set.admissionReleaseTag !== process.env.RELEASE_TAG || !Array.isArray(set.entries) || set.entries.length !== 10) process.exit(1);
+          const stableVersion = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+          if (set.format !== contract.standardAdmissionSet.format || !stableVersion.test(set.definitionVersion) || !stableVersion.test(set.packageVersion) || set.definitionVersion !== set.packageVersion || set.admissionReleaseTag !== process.env.RELEASE_TAG || !Array.isArray(set.entries) || set.entries.length !== contract.standardAdmissionSet.entryCount || JSON.stringify(set.entries.map(({ kind }) => kind)) !== JSON.stringify(contract.standardAdmissionSet.kinds)) process.exit(1);
           const expectedPackages = new Map();
           const expectedSubjects = new Map();
           const addSubject = (kind, role, subjectPath, digest) => {
@@ -560,35 +573,47 @@ jobs:
             addSubject(entry.kind, "provider-report", entry.providerReportPath, entry.providerReportDigest);
           }
           addSubject("provider", "registry-readback", set.providerRegistryReadback.path, set.providerRegistryReadback.digest);
-          if (expectedPackages.size !== 10 || expectedSubjects.size !== 41) process.exit(1);
+          if (expectedPackages.size !== contract.provenance.packageCount || expectedSubjects.size !== contract.retainedSubjects.count) process.exit(1);
 
           const sbom = JSON.parse(fs.readFileSync(path.join("candidate", sbomName), "utf8"));
-          if (sbom.spdxVersion !== "SPDX-2.3" || sbom.packages.length !== 11 || sbom.files.length !== 41 || sbom.relationships.length !== 52) process.exit(1);
+          if (sbom.spdxVersion !== contract.sbom.spdxVersion || sbom.dataLicense !== contract.sbom.dataLicense || sbom.packages.length !== contract.sbom.packageCount || sbom.files.length !== contract.sbom.fileCount || sbom.relationships.length !== contract.sbom.relationshipCount) process.exit(1);
           const sbomFiles = new Map(sbom.files.map((file) => [file.fileName.replace(/^\.\/v1\//, ""), `sha256:${file.checksums?.find(({ algorithm }) => algorithm === "SHA256")?.checksumValue}`]));
-          if (sbomFiles.size !== 41) process.exit(1);
+          if (sbomFiles.size !== contract.sbom.fileCount) process.exit(1);
           for (const [subjectPath, subject] of expectedSubjects) if (sbomFiles.get(subjectPath) !== subject.digest) process.exit(1);
-          const componentPackages = sbom.packages.filter(({ SPDXID }) => SPDXID !== "SPDXRef-Admission");
-          if (componentPackages.length !== 10) process.exit(1);
+          const rootPackages = sbom.packages.filter(({ SPDXID }) => SPDXID === contract.sbom.rootPackageSpdxId);
+          if (rootPackages.length !== 1 || rootPackages[0].versionInfo !== process.env.VERSION) process.exit(1);
+          const componentPackages = sbom.packages.filter(({ SPDXID }) => SPDXID !== contract.sbom.rootPackageSpdxId);
+          if (componentPackages.length !== contract.sbom.componentPackageCount || new Set(componentPackages.map(({ SPDXID }) => SPDXID)).size !== componentPackages.length) process.exit(1);
           for (const pkg of componentPackages) {
             const entry = [...expectedPackages.values()].find(({ slug }) => pkg.SPDXID === `SPDXRef-FormPackage-${slug.replace(/[^A-Za-z0-9.-]/g, "-")}`);
-            if (!entry || pkg.versionInfo !== process.env.VERSION || `sha256:${pkg.checksums?.find(({ algorithm }) => algorithm === "SHA256")?.checksumValue}` !== entry.packageDigest) process.exit(1);
+            if (!entry || pkg.versionInfo !== set.packageVersion || `sha256:${pkg.checksums?.find(({ algorithm }) => algorithm === "SHA256")?.checksumValue}` !== entry.packageDigest) process.exit(1);
           }
+          const relationshipKeys = sbom.relationships.map(({ spdxElementId, relationshipType, relatedSpdxElement }) => `${spdxElementId}\0${relationshipType}\0${relatedSpdxElement}`);
+          const expectedRelationshipKeys = [`SPDXRef-DOCUMENT\0DESCRIBES\0${contract.sbom.rootPackageSpdxId}`];
+          for (const pkg of componentPackages) expectedRelationshipKeys.push(`${contract.sbom.rootPackageSpdxId}\0DEPENDS_ON\0${pkg.SPDXID}`);
+          for (const file of sbom.files) expectedRelationshipKeys.push(`${contract.sbom.rootPackageSpdxId}\0CONTAINS\0${file.SPDXID}`);
+          if (new Set(relationshipKeys).size !== relationshipKeys.length || JSON.stringify(relationshipKeys.sort()) !== JSON.stringify(expectedRelationshipKeys.sort())) process.exit(1);
 
           const provenance = JSON.parse(fs.readFileSync(path.join("candidate", provenanceName), "utf8"));
           const provenanceSubjects = new Map(provenance.subject.map(({ name, digest }) => [name, `sha256:${digest.sha256}`]));
-          const expectedProvenanceSubjects = ["fresh-provider-lifecycle-matrix.json", "standard-admission-set.json", "standard-admission-set.sigstore.json", "takoform-standard-admission-v1.tar.gz", sbomName];
-          if (provenance._type !== "https://in-toto.io/Statement/v1" || provenance.predicateType !== "https://slsa.dev/provenance/v1" || provenanceSubjects.size !== expectedProvenanceSubjects.length) process.exit(1);
+          const expectedProvenanceSubjects = contract.provenance.subjectNames.map(expandVersion);
+          if (provenance._type !== contract.provenance.statementType || provenance.predicateType !== contract.provenance.predicateType || provenance.subject.length !== expectedProvenanceSubjects.length || provenanceSubjects.size !== expectedProvenanceSubjects.length) process.exit(1);
           for (const name of expectedProvenanceSubjects) if (provenanceSubjects.get(name) !== byName.get(name)) process.exit(1);
           const definition = provenance.predicate.buildDefinition;
-          if (definition.internalParameters.packageCount !== 10 || definition.internalParameters.retainedSubjectCount !== 41 || definition.internalParameters.standardAdmissionSetDigest !== candidate.configDigest || definition.internalParameters.offlineSigstorePinsDigest !== candidate.policyDigest) process.exit(1);
+          const parameters = definition.externalParameters;
+          const builderId = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-admission-release.yml@refs/heads/main";
+          if (definition.buildType !== contract.provenance.buildType || parameters.sourceCommit !== process.env.SOURCE_COMMIT || parameters.tag !== process.env.RELEASE_TAG || parameters.version !== process.env.VERSION || parameters.admissionReleaseVersion !== process.env.VERSION || parameters.definitionVersion !== set.definitionVersion || parameters.packageVersion !== set.packageVersion || parameters.workflow !== ".github/workflows/standard-admission-release.yml" || provenance.predicate.runDetails?.builder?.id !== builderId || definition.internalParameters.packageCount !== contract.provenance.packageCount || definition.internalParameters.retainedSubjectCount !== contract.provenance.retainedSubjectCount || definition.internalParameters.standardAdmissionSetDigest !== candidate.configDigest || definition.internalParameters.offlineSigstorePinsDigest !== candidate.policyDigest) process.exit(1);
           const dependencies = definition.resolvedDependencies;
           const packageDependencies = new Map(dependencies.filter(({ name }) => name.startsWith("form-package:")).map((item) => [item.name.slice("form-package:".length), `sha256:${item.digest.sha256}`]));
           const subjectDependencies = new Map(dependencies.filter(({ name }) => name.startsWith("retained-subject:")).map((item) => [item.name.slice("retained-subject:".length), `sha256:${item.digest.sha256}`]));
           const rootDependencies = new Map(dependencies.filter(({ name }) => !name.startsWith("form-package:") && !name.startsWith("retained-subject:")).map((item) => [item.name, item.digest]));
-          if (dependencies.length !== 54 || packageDependencies.size !== 10 || subjectDependencies.size !== 41 || rootDependencies.size !== 3 || rootDependencies.get("tagged-admission-source")?.gitCommit !== process.env.SOURCE_COMMIT || rootDependencies.get("protected-main-release-tooling")?.gitCommit !== process.env.SOURCE_COMMIT || `sha256:${rootDependencies.get("offline-sigstore-pins")?.sha256}` !== candidate.policyDigest) process.exit(1);
+          if (dependencies.length !== contract.provenance.resolvedDependencyCount || packageDependencies.size !== contract.provenance.resolvedDependencyPartitions.formPackage || subjectDependencies.size !== contract.provenance.resolvedDependencyPartitions.retainedSubject || rootDependencies.size !== contract.provenance.resolvedDependencyPartitions.root || JSON.stringify([...rootDependencies.keys()]) !== JSON.stringify(contract.provenance.rootDependencyNames) || rootDependencies.get("tagged-admission-source")?.gitCommit !== process.env.SOURCE_COMMIT || rootDependencies.get("protected-main-release-tooling")?.gitCommit !== process.env.SOURCE_COMMIT || `sha256:${rootDependencies.get("offline-sigstore-pins")?.sha256}` !== candidate.policyDigest) process.exit(1);
           for (const [kind, entry] of expectedPackages) if (packageDependencies.get(kind) !== entry.packageReleaseManifestDigest) process.exit(1);
           for (const subject of expectedSubjects.values()) if (subjectDependencies.get(`${subject.role}:${subject.kind}`) !== subject.digest) process.exit(1);
           NODE
+          cmp candidate/fresh-provider-lifecycle-matrix.json admission/v1/registry/provider-lifecycle-matrix.json
+          tar -xOzf candidate/takoform-standard-admission-v1.tar.gz v1/registry/provider-lifecycle-matrix.json > "${RUNNER_TEMP}/promoted-archived-provider-lifecycle-matrix.json"
+          cmp candidate/fresh-provider-lifecycle-matrix.json "${RUNNER_TEMP}/promoted-archived-provider-lifecycle-matrix.json"
           (cd candidate && sha256sum --check --strict SHA256SUMS)
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/standard-admission-release.yml@refs/heads/main"
           cosign verify-blob candidate/standard-admission-set.json --bundle candidate/standard-admission-set.sigstore.json \

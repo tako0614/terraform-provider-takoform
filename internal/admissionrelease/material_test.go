@@ -65,6 +65,9 @@ func TestValidateCanonicalHostRunnerReportBindsExactFixtureBytes(t *testing.T) {
 func TestBuildCanonicalSetReturnsCanonicalBytes(t *testing.T) {
 	t.Parallel()
 	want := testSet()
+	// Admission activation has its own immutable release stream. It may advance
+	// without republishing the exact Form definition/package closure.
+	want.AdmissionReleaseTag = "forms/admissions/v1.0.2"
 	set, raw, err := BuildCanonicalSet(
 		testCandidates(),
 		want.AdmissionReleaseTag,
@@ -85,7 +88,7 @@ func TestBuildCanonicalSetReturnsCanonicalBytes(t *testing.T) {
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Format != setFormat || decoded.Entries[0].Kind != set.Entries[0].Kind {
+	if decoded.Format != setFormat || decoded.DefinitionVersion != "1.0.0" || decoded.PackageVersion != "1.0.0" || decoded.AdmissionReleaseTag != "forms/admissions/v1.0.2" || decoded.Entries[0].Kind != set.Entries[0].Kind {
 		t.Fatalf("unexpected set: %#v", decoded)
 	}
 }

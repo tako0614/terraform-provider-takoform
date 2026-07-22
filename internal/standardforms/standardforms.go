@@ -351,12 +351,13 @@ func VerifyCandidatePublication(root string) error {
 	return nil
 }
 
-// VerifyReleaseReady is the fail-closed Phase 2 Form-admission activation
-// gate. Structural candidates are verified first, then the exact retained
+// VerifyAdmissionClosure is the fail-closed Phase 2 candidate-closure gate.
+// Structural candidates are verified first, then the exact retained
 // standard-admission reports and distribution readbacks must close over the
-// compiled set and pass offline authentication. It is deliberately not part
-// of Phase 1 candidate-only provider publication.
-func VerifyReleaseReady(root string) error {
+// compiled set and pass offline authentication. Passing this check does not
+// activate admission: VerifyReleaseReady separately requires the matching
+// controller-authorized immutable GitHub Release and its live readback.
+func VerifyAdmissionClosure(root string) error {
 	if err := Verify(root); err != nil {
 		return err
 	}

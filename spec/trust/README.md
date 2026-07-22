@@ -211,8 +211,8 @@ matrix digest. `cmd/admission-readback` renders this unsigned canonical subject
 from a validated direct matrix; only the protected activation workflow signs
 it.
 
-Before authentication opens, `release-check` resolves the admission tag,
-provider tag, and every Form Package tag from fetched local Git refs and
+Before authentication opens, `admission-closure-check` resolves the admission
+tag, provider tag, and every Form Package tag from fetched local Git refs and
 requires the exact retained commit. The admission tag must point at the current
 checkout, and the annotated provider tag must verify against the pinned
 `3510E75E05BBCC303B92D77934FC18AC897FB709` GPG fingerprint. Package index
@@ -225,11 +225,15 @@ readbacks are installed and digest-pinned by
 `published-package-check` but grant no admission authority. Exact mutually
 distinct admission-evidence, host-report, and provider-report policies and the
 five-role offline pin manifest are now retained. The signed host/provider and
-admission reports, signed Registry readback bundle, and
-`standard-admission-set.json` remain absent. The canonical unsigned Registry
-matrix/readback for provider `v0.1.3` are retained, but grant nothing until the
-protected candidate reproduces and authenticates them. The incomplete closure
-intentionally keeps `release-check` fail-closed. The
+admission reports and `standard-admission-set.json` are now retained. The
+canonical Registry matrix/readback for provider `v0.1.3` are also retained, but
+grant nothing until the protected candidate reproduces the exact matrix bytes,
+keyless-signs the readback, and the immutable admission activation Release is
+published. The admission release version is independent from the bound Form
+definition/package versions; advancing activation does not republish package
+bytes. Public `release-check` then requires the completed protected controller
+promotion, immutable exact-asset Release, and retained controller readback;
+missing or mismatched live activation state keeps it fail-closed. The
 approved role identities must still produce exact authenticated evidence; a
 distribution endpoint or a different workflow identity cannot substitute it.
 
