@@ -1,6 +1,11 @@
 package standardform
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
+)
 
 func TestEvidenceForbiddenAuthorityFields(t *testing.T) {
 	t.Parallel()
@@ -34,5 +39,16 @@ func TestPortableNegativeErrorCode(t *testing.T) {
 		if validPortableNegativeErrorCode(internalOrCompatibilityCode) {
 			t.Fatalf("non-portable wire code %q accepted", internalOrCompatibilityCode)
 		}
+	}
+}
+
+func TestValidateEvidenceBytesRejectsNonCanonicalInputBeforeClaims(t *testing.T) {
+	t.Parallel()
+	_, err := ValidateEvidenceBytes(
+		[]byte(`{ "apiVersion": "forms.takoform.com/standard-admission/v1alpha1" }`),
+		formpackage.VerificationReport{}, formpackage.FormDefinition{},
+	)
+	if err == nil || !strings.Contains(err.Error(), "not RFC 8785 canonical") {
+		t.Fatalf("err = %v, want canonical-byte rejection", err)
 	}
 }

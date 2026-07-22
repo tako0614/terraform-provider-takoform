@@ -76,6 +76,15 @@ type offlineRetainedSubjectVerifier struct {
 	roles map[string]*offlineRoleVerifier
 }
 
+// VerifyOfflineTrust loads the repository-retained Sigstore root and all five
+// role policies, checks every byte pin, and enforces mutually distinct
+// publisher identities. It deliberately verifies trust configuration only; it
+// does not discover remote trust, authenticate a subject, or grant admission.
+func VerifyOfflineTrust(admissionRoot string) error {
+	_, err := loadOfflineRetainedSubjectVerifier(admissionRoot)
+	return err
+}
+
 func loadOfflineRetainedSubjectVerifier(admissionRoot string) (RetainedSubjectVerifier, error) {
 	pinsRaw, err := readRetainedRelativeFile(admissionRoot, offlineSigstorePinsPath, maxOfflineSigstorePinsBytes)
 	if err != nil {

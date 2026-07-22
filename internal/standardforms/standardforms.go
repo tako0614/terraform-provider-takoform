@@ -360,7 +360,7 @@ func VerifyReleaseReady(root string) error {
 	if err := Verify(root); err != nil {
 		return err
 	}
-	candidates, err := admissionCandidateSet()
+	candidates, err := AdmissionCandidateSet()
 	if err != nil {
 		return err
 	}
@@ -425,7 +425,10 @@ func publishedPackageCandidateSet(root string) (admissionrelease.CandidateSet, e
 	}, nil
 }
 
-func admissionCandidateSet() (admissionrelease.CandidateSet, error) {
+// AdmissionCandidateSet returns the exact all-or-nothing structural candidate
+// compiled into the provider. Callers may use it to build non-publishable
+// admission material, but the returned identities grant no admission status.
+func AdmissionCandidateSet() (admissionrelease.CandidateSet, error) {
 	candidates := make([]admissionrelease.Candidate, 0, len(Specs))
 	for _, spec := range Specs {
 		ref, err := formregistry.ForKind(spec.Kind)

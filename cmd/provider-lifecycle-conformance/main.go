@@ -13,7 +13,7 @@ import (
 func main() {
 	command := "verify"
 	args := os.Args[1:]
-	if len(args) > 0 && (args[0] == "verify" || args[0] == "render" || args[0] == "matrix" || args[0] == "render-matrix" || args[0] == "registry-matrix" || args[0] == "render-registry-matrix" || args[0] == "provider-reports") {
+	if len(args) > 0 && (args[0] == "verify" || args[0] == "render" || args[0] == "matrix" || args[0] == "render-matrix" || args[0] == "registry-matrix" || args[0] == "render-registry-matrix" || args[0] == "provider-reports" || args[0] == "verify-provider-reports") {
 		// Commands are deliberately limited below; parsing them before --cli keeps
 		// the common `verify --cli /path` invocation terse.
 		command = args[0]
@@ -21,6 +21,10 @@ func main() {
 	}
 	if command == "provider-reports" {
 		runProviderReports(args)
+		return
+	}
+	if command == "verify-provider-reports" {
+		runVerifyProviderReports(args)
 		return
 	}
 	if command == "matrix" || command == "render-matrix" || command == "registry-matrix" || command == "render-registry-matrix" {
@@ -66,17 +70,20 @@ func main() {
 func runProviderReports(args []string) {
 	cliPath := os.Getenv("TAKOFORM_TERRAFORM_CLI")
 	outputDir := ""
+	sourceCommit := ""
 	for len(args) > 0 {
 		if len(args) < 2 {
-			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance provider-reports --cli PATH --output-dir DIRECTORY"))
+			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance provider-reports --cli PATH --output-dir DIRECTORY --source-commit COMMIT"))
 		}
 		switch args[0] {
 		case "--cli":
 			cliPath = args[1]
 		case "--output-dir":
 			outputDir = args[1]
+		case "--source-commit":
+			sourceCommit = args[1]
 		default:
-			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance provider-reports --cli PATH --output-dir DIRECTORY"))
+			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance provider-reports --cli PATH --output-dir DIRECTORY --source-commit COMMIT"))
 		}
 		args = args[2:]
 	}
@@ -86,6 +93,9 @@ func runProviderReports(args []string) {
 	if outputDir == "" {
 		fail(fmt.Errorf("provider-reports requires --output-dir outside admission/"))
 	}
+	if sourceCommit == "" {
+		fail(fmt.Errorf("provider-reports requires --source-commit"))
+	}
 	root, err := providerlifecycle.RepoRoot(".")
 	if err != nil {
 		fail(err)
@@ -94,13 +104,44 @@ func runProviderReports(args []string) {
 	if err != nil {
 		fail(err)
 	}
-	if err := providerreport.Write(root, outputDir, reports); err != nil {
+	if _, err := providerreport.Export(root, outputDir, sourceCommit, reports); err != nil {
 		fail(err)
 	}
 	fmt.Printf("generated %d unsigned RFC 8785 provider reports from exact current candidate release-source fixtures via %s (%s)\n", len(reports), reports[0].Subject(), providerreport.ProtocolDescription())
 	for _, value := range providerreport.SortedReportDigests(reports) {
 		fmt.Println(value)
 	}
+}
+
+func runVerifyProviderReports(args []string) {
+	inputDir := ""
+	sourceCommit := ""
+	for len(args) > 0 {
+		if len(args) < 2 {
+			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance verify-provider-reports --input-dir DIRECTORY --source-commit COMMIT"))
+		}
+		switch args[0] {
+		case "--input-dir":
+			inputDir = args[1]
+		case "--source-commit":
+			sourceCommit = args[1]
+		default:
+			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance verify-provider-reports --input-dir DIRECTORY --source-commit COMMIT"))
+		}
+		args = args[2:]
+	}
+	if inputDir == "" || sourceCommit == "" {
+		fail(fmt.Errorf("verify-provider-reports requires --input-dir and --source-commit"))
+	}
+	root, err := providerlifecycle.RepoRoot(".")
+	if err != nil {
+		fail(err)
+	}
+	inventory, err := providerreport.VerifyDirectory(root, inputDir, sourceCommit)
+	if err != nil {
+		fail(err)
+	}
+	fmt.Printf("verified %d exact unsigned RFC 8785 provider reports for %s at %s\n", len(inventory.Reports), inventory.Subject, inventory.Source.Commit)
 }
 
 func runMatrix(command string, args []string) {

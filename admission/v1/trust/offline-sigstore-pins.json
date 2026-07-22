@@ -1,0 +1,27 @@
+{
+  "format": "takoform.offline-sigstore-pins@v2",
+  "trustedRoot": {
+    "path": "trust/trusted-root.json",
+    "digest": "sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"
+  },
+  "admissionEvidencePolicy": {
+    "path": "trust/publisher-policy.json",
+    "digest": "sha256:afa5a1aab67a8c4eda82e0c5c21da4ecc49e610f05c40fdf545b07605ab1ecaf"
+  },
+  "hostReportPolicy": {
+    "path": "trust/host-report-policy.json",
+    "digest": "sha256:c6245b8eb2566dea15c8ae81769cc1d4e4ed0c022230a2e4afee41f48e3b2791"
+  },
+  "providerReportPolicy": {
+    "path": "trust/provider-report-policy.json",
+    "digest": "sha256:a03e1b339340d8c602dcbd86dc7d61d85b663d72e938135758a8276cb4b279c3"
+  },
+  "packageIndexPolicy": {
+    "path": "trust/package-index-policy.json",
+    "digest": "sha256:3cbb521526a2a9b0ce8947ccd7931d8af49a6acb45e946daa4dbc6f75afdfb8e"
+  },
+  "registryReadbackPolicy": {
+    "path": "trust/registry-readback-policy.json",
+    "digest": "sha256:58972b142dfd1b418b93c6982a51d1c4a8028bad2e89835ad0d2900385c18abd"
+  }
+}

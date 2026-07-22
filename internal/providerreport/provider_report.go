@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -29,12 +30,16 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
 
+var sourceCommitPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
 const (
-	reportFormat     = "takoform.standard-runner-report@v1"
-	providerRole     = "provider-report"
-	providerProtocol = "Terraform provider protocol v6 + versioned Form host HTTP"
-	maxArchiveBytes  = 64 << 20
-	maxPayloadBytes  = 16 << 20
+	reportFormat             = "takoform.standard-runner-report@v1"
+	providerRole             = "provider-report"
+	providerProtocol         = "Terraform provider protocol v6 + versioned Form host HTTP"
+	directoryInventoryFormat = "takoform.standard-provider-report-candidate@v1"
+	directoryInventoryName   = "provider-report-manifest.json"
+	maxArchiveBytes          = 64 << 20
+	maxPayloadBytes          = 16 << 20
 )
 
 type PublishedFixture struct {
@@ -55,7 +60,341 @@ type GeneratedReport struct {
 	digest    string
 }
 
+// DirectoryInventory is the canonical, unsigned closure passed from the
+// provider-execution job to a separately protected keyless signer. It grants no
+// admission or publication authority. The signer still authenticates every
+// report independently and later admission tooling verifies its Sigstore
+// bundle against the dedicated provider-report policy.
+type DirectoryInventory struct {
+	Format            string                      `json:"format"`
+	Status            string                      `json:"status"`
+	ProofType         string                      `json:"proofType"`
+	Subject           string                      `json:"subject"`
+	DefinitionVersion string                      `json:"definitionVersion"`
+	PackageVersion    string                      `json:"packageVersion"`
+	RunnerVersion     string                      `json:"runnerVersion"`
+	Source            DirectorySource             `json:"source"`
+	Reports           []DirectoryReportDescriptor `json:"reports"`
+}
+
+type DirectorySource struct {
+	Repository string `json:"repository"`
+	Commit     string `json:"commit"`
+}
+
+// DirectoryReportDescriptor binds one exact canonical report subject to its
+// stable kind/slug path. All fields are recomputed by VerifyDirectory; callers
+// must not treat a decoded inventory as verified on its own.
+type DirectoryReportDescriptor struct {
+	Kind       string                              `json:"kind"`
+	Slug       string                              `json:"slug"`
+	Path       string                              `json:"path"`
+	BundlePath string                              `json:"bundlePath"`
+	Digest     string                              `json:"digest"`
+	Identity   standardform.InstalledFormReference `json:"identity"`
+}
+
+type providerReleaseDescriptor struct {
+	Version   string `json:"version"`
+	CLIMatrix []struct {
+		ProviderAddress string `json:"providerAddress"`
+	} `json:"cliMatrix"`
+}
+
+type standardPackageSetDescriptor struct {
+	Format            string `json:"format"`
+	DefinitionVersion string `json:"definitionVersion"`
+	PackageVersion    string `json:"packageVersion"`
+}
+
 func (report GeneratedReport) Subject() string { return report.report.Subject }
+
+// Export writes one complete unsigned report handoff into a new empty
+// directory. It deliberately stays outside admission/, contains no signature,
+// and refuses overwrite.
+func Export(repoRoot, outputRoot, sourceCommit string, reports []GeneratedReport) (DirectoryInventory, error) {
+	if err := Write(repoRoot, filepath.Join(outputRoot, "packages"), reports); err != nil {
+		return DirectoryInventory{}, err
+	}
+	candidateRaw, err := readBoundedRegularFile(filepath.Join(repoRoot, "forms", "standard-package-set.json"), maxPayloadBytes)
+	if err != nil {
+		return DirectoryInventory{}, fmt.Errorf("read exact standard package set: %w", err)
+	}
+	inventory, err := buildDirectoryInventory(repoRoot, sourceCommit, reports, candidateRaw)
+	if err != nil {
+		return DirectoryInventory{}, err
+	}
+	raw, err := json.Marshal(inventory)
+	if err != nil {
+		return DirectoryInventory{}, err
+	}
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
+		return DirectoryInventory{}, err
+	}
+	if err := writeExclusiveFile(filepath.Join(outputRoot, directoryInventoryName), canonical); err != nil {
+		return DirectoryInventory{}, fmt.Errorf("write provider-report inventory: %w", err)
+	}
+	return VerifyDirectory(repoRoot, outputRoot, sourceCommit)
+}
+
+// VerifyDirectory rederives the complete handoff from the reviewed candidate
+// and rejects missing, extra, symlinked, non-canonical, substituted, or
+// oversized files. It performs no signing, network access, retention, or
+// admission mutation.
+func VerifyDirectory(repoRoot, inputRoot, sourceCommit string) (DirectoryInventory, error) {
+	fixtures, err := LoadCandidateFixtures(repoRoot)
+	if err != nil {
+		return DirectoryInventory{}, fmt.Errorf("verify exact candidate fixtures: %w", err)
+	}
+	candidateRaw, err := readBoundedRegularFile(filepath.Join(repoRoot, "forms", "standard-package-set.json"), maxPayloadBytes)
+	if err != nil {
+		return DirectoryInventory{}, fmt.Errorf("read reviewed standard package set: %w", err)
+	}
+	inventoryRaw, err := readBoundedRegularFile(filepath.Join(inputRoot, directoryInventoryName), maxPayloadBytes)
+	if err != nil {
+		return DirectoryInventory{}, fmt.Errorf("read provider-report inventory: %w", err)
+	}
+	canonicalInventory, err := formpackage.Canonicalize(inventoryRaw)
+	if err != nil || !bytes.Equal(inventoryRaw, canonicalInventory) {
+		if err == nil {
+			err = fmt.Errorf("bytes are not RFC 8785 canonical")
+		}
+		return DirectoryInventory{}, fmt.Errorf("provider-report inventory: %w", err)
+	}
+	var inventory DirectoryInventory
+	if err := decodeStrictJSON(inventoryRaw, &inventory); err != nil {
+		return DirectoryInventory{}, fmt.Errorf("decode provider-report inventory: %w", err)
+	}
+
+	fixtureByKind := make(map[string]PublishedFixture, len(fixtures))
+	for _, fixture := range fixtures {
+		fixtureByKind[fixture.Kind] = fixture
+	}
+	if len(inventory.Reports) != len(fixtures) {
+		return DirectoryInventory{}, fmt.Errorf("provider-report inventory has %d reports, want %d", len(inventory.Reports), len(fixtures))
+	}
+	generated := make([]GeneratedReport, 0, len(inventory.Reports))
+	seenKinds := make(map[string]struct{}, len(inventory.Reports))
+	expectedFiles := map[string]struct{}{
+		directoryInventoryName: {},
+	}
+	for _, descriptor := range inventory.Reports {
+		fixture, ok := fixtureByKind[descriptor.Kind]
+		if !ok || descriptor.Slug != fixture.Slug {
+			return DirectoryInventory{}, fmt.Errorf("provider-report inventory contains unknown or substituted %s/%s", descriptor.Kind, descriptor.Slug)
+		}
+		if _, duplicate := seenKinds[descriptor.Kind]; duplicate {
+			return DirectoryInventory{}, fmt.Errorf("provider-report inventory duplicates %s", descriptor.Kind)
+		}
+		seenKinds[descriptor.Kind] = struct{}{}
+		expectedPath := path.Join("packages", fixture.Slug, "provider-report.json")
+		expectedBundlePath := path.Join("packages", fixture.Slug, "provider-report.sigstore.json")
+		if descriptor.Path != expectedPath || descriptor.BundlePath != expectedBundlePath {
+			return DirectoryInventory{}, fmt.Errorf("%s provider-report paths are %q/%q, want %q/%q", descriptor.Kind, descriptor.Path, descriptor.BundlePath, expectedPath, expectedBundlePath)
+		}
+		reportRaw, err := readBoundedRegularFile(filepath.Join(inputRoot, filepath.FromSlash(descriptor.Path)), maxPayloadBytes)
+		if err != nil {
+			return DirectoryInventory{}, fmt.Errorf("read %s provider-report: %w", descriptor.Kind, err)
+		}
+		parsed, err := admissionrelease.ValidateCanonicalProviderRunnerReport(reportRaw, fixture.Identity, []string{fixture.PositiveName}, []string{fixture.NegativeName})
+		if err != nil {
+			return DirectoryInventory{}, fmt.Errorf("verify %s provider-report: %w", descriptor.Kind, err)
+		}
+		if descriptor.Digest != formpackage.DigestBytes(reportRaw) || !reflect.DeepEqual(descriptor.Identity, parsed.Identity) {
+			return DirectoryInventory{}, fmt.Errorf("%s provider-report descriptor does not bind its exact canonical subject", descriptor.Kind)
+		}
+		generated = append(generated, GeneratedReport{
+			kind: descriptor.Kind, slug: descriptor.Slug, report: parsed,
+			canonical: reportRaw, digest: descriptor.Digest,
+		})
+		expectedFiles[descriptor.Path] = struct{}{}
+	}
+	expectedInventory, err := buildDirectoryInventory(repoRoot, sourceCommit, generated, candidateRaw)
+	if err != nil {
+		return DirectoryInventory{}, err
+	}
+	if !reflect.DeepEqual(inventory, expectedInventory) {
+		return DirectoryInventory{}, fmt.Errorf("provider-report inventory differs from the rederived exact report closure")
+	}
+	actualFiles, err := listRegularFiles(inputRoot)
+	if err != nil {
+		return DirectoryInventory{}, err
+	}
+	if !reflect.DeepEqual(actualFiles, sortedStringKeys(expectedFiles)) {
+		return DirectoryInventory{}, fmt.Errorf("provider-report directory file closure differs: got %v want %v", actualFiles, sortedStringKeys(expectedFiles))
+	}
+	return inventory, nil
+}
+
+func buildDirectoryInventory(repoRoot, sourceCommit string, reports []GeneratedReport, candidateRaw []byte) (DirectoryInventory, error) {
+	if !sourceCommitPattern.MatchString(sourceCommit) {
+		return DirectoryInventory{}, fmt.Errorf("provider-report source commit must be lowercase 40-hex")
+	}
+	version, subjects, err := loadProviderReleaseIdentity(repoRoot)
+	if err != nil {
+		return DirectoryInventory{}, err
+	}
+	var packageSet standardPackageSetDescriptor
+	if err := json.Unmarshal(candidateRaw, &packageSet); err != nil {
+		return DirectoryInventory{}, fmt.Errorf("decode standard package set identity: %w", err)
+	}
+	if packageSet.Format != "takoform.standard-package-set@v1" || strings.TrimSpace(packageSet.DefinitionVersion) == "" || strings.TrimSpace(packageSet.PackageVersion) == "" {
+		return DirectoryInventory{}, fmt.Errorf("standard package set lacks the exact definition/package version identity")
+	}
+	allowed := make(map[string]struct{}, len(subjects))
+	for _, subject := range subjects {
+		allowed[subject] = struct{}{}
+	}
+	descriptors := make([]DirectoryReportDescriptor, 0, len(reports))
+	seen := make(map[string]struct{}, len(reports))
+	subject := ""
+	for _, generated := range reports {
+		if _, duplicate := seen[generated.kind]; duplicate {
+			return DirectoryInventory{}, fmt.Errorf("provider-report set duplicates %s", generated.kind)
+		}
+		seen[generated.kind] = struct{}{}
+		if generated.report.RunnerVersion != version {
+			return DirectoryInventory{}, fmt.Errorf("%s provider report runner version is %q, want %q", generated.kind, generated.report.RunnerVersion, version)
+		}
+		if _, ok := allowed[generated.report.Subject]; !ok {
+			return DirectoryInventory{}, fmt.Errorf("%s provider report subject %q is not a supported exact CLI provider address", generated.kind, generated.report.Subject)
+		}
+		if subject == "" {
+			subject = generated.report.Subject
+		} else if generated.report.Subject != subject {
+			return DirectoryInventory{}, fmt.Errorf("provider-report set mixes runner subjects")
+		}
+		descriptors = append(descriptors, DirectoryReportDescriptor{
+			Kind: generated.kind, Slug: generated.slug,
+			Path:       path.Join("packages", generated.slug, "provider-report.json"),
+			BundlePath: path.Join("packages", generated.slug, "provider-report.sigstore.json"), Digest: generated.digest,
+			Identity: generated.report.Identity,
+		})
+	}
+	if len(descriptors) != len(standardforms.Specs) {
+		return DirectoryInventory{}, fmt.Errorf("provider-report set has %d reports, want exactly %d", len(descriptors), len(standardforms.Specs))
+	}
+	sort.Slice(descriptors, func(i, j int) bool { return descriptors[i].Slug < descriptors[j].Slug })
+	return DirectoryInventory{
+		Format: directoryInventoryFormat, Status: "candidate-only", ProofType: "provider", Subject: subject,
+		DefinitionVersion: packageSet.DefinitionVersion, PackageVersion: packageSet.PackageVersion,
+		RunnerVersion: version,
+		Source:        DirectorySource{Repository: "https://github.com/tako0614/terraform-provider-takoform.git", Commit: sourceCommit},
+		Reports:       descriptors,
+	}, nil
+}
+
+func loadProviderReleaseIdentity(root string) (string, []string, error) {
+	raw, err := readBoundedRegularFile(filepath.Join(root, "release", "version.json"), maxPayloadBytes)
+	if err != nil {
+		return "", nil, fmt.Errorf("read provider release descriptor: %w", err)
+	}
+	var descriptor providerReleaseDescriptor
+	if err := decodeStrictJSON(raw, &descriptor); err != nil {
+		// The public descriptor intentionally contains additional release fields;
+		// decode only the two identity-bearing fields without weakening their
+		// validation below.
+		var permissive struct {
+			Version   string `json:"version"`
+			CLIMatrix []struct {
+				ProviderAddress string `json:"providerAddress"`
+			} `json:"cliMatrix"`
+		}
+		if jsonErr := json.Unmarshal(raw, &permissive); jsonErr != nil {
+			return "", nil, fmt.Errorf("decode provider release descriptor: %w", jsonErr)
+		}
+		descriptor.Version = permissive.Version
+		descriptor.CLIMatrix = permissive.CLIMatrix
+	}
+	if strings.TrimSpace(descriptor.Version) == "" || len(descriptor.CLIMatrix) != 2 {
+		return "", nil, fmt.Errorf("provider release descriptor lacks the exact supported CLI matrix")
+	}
+	subjects := make([]string, 0, len(descriptor.CLIMatrix))
+	seen := map[string]struct{}{}
+	for _, cli := range descriptor.CLIMatrix {
+		if strings.TrimSpace(cli.ProviderAddress) == "" {
+			return "", nil, fmt.Errorf("provider release descriptor contains an empty provider address")
+		}
+		subject := "provider:" + cli.ProviderAddress
+		if _, duplicate := seen[subject]; duplicate {
+			return "", nil, fmt.Errorf("provider release descriptor duplicates %q", subject)
+		}
+		seen[subject] = struct{}{}
+		subjects = append(subjects, subject)
+	}
+	sort.Strings(subjects)
+	return descriptor.Version, subjects, nil
+}
+
+func readBoundedRegularFile(filename string, maximum int64) ([]byte, error) {
+	info, err := os.Lstat(filename)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > maximum {
+		return nil, fmt.Errorf("%q is not a bounded regular file", filename)
+	}
+	return os.ReadFile(filename)
+}
+
+func writeExclusiveFile(filename string, raw []byte) error {
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	_, writeErr := file.Write(raw)
+	closeErr := file.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
+}
+
+func listRegularFiles(root string) ([]string, error) {
+	files := []string{}
+	err := filepath.WalkDir(root, func(current string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if current == root {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("provider-report directory contains symlink %q", current)
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > maxPayloadBytes {
+			return fmt.Errorf("provider-report directory contains non-regular or oversized file %q", current)
+		}
+		relative, err := filepath.Rel(root, current)
+		if err != nil {
+			return err
+		}
+		files = append(files, filepath.ToSlash(relative))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+func sortedStringKeys(values map[string]struct{}) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
 
 // Generate verifies the provider's current all-or-nothing candidate and its
 // reviewed release-source bytes, executes those exact fixtures plus the full
