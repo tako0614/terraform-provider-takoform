@@ -65,6 +65,11 @@ on:
         required: false
         default: ""
         type: string
+      authorization_secret_name:
+        description: One-use Environment secret name created for this exact promotion dispatch
+        required: false
+        default: ""
+        type: string
       artifact_digests_b64:
         description: Base64url ordered envelope artifact digest JSON
         required: false
@@ -94,8 +99,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   EXPECTED_COSIGN_VERSION: "v3.0.6"
   EXPECTED_GPG_FINGERPRINT: "3510E75E05BBCC303B92D77934FC18AC897FB709"
-  RELEASE_SAFETY_CONTROLLER_COMMIT: "5aed42c307892c73369fd150909a46e8b60edea8"
-  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:b8faa8cdd4090c145640a27f4328faf8e6a36ca7194c8dbcff16e8ae99db828b"
+  RELEASE_SAFETY_CONTROLLER_COMMIT: "02847b87c4f8ca65ddd64d685ad71606f62ef73a"
+  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:e1062551860c9d289261a2ad00779ee0edfd88a49757e4842da633d16eecc2ca"
 
 jobs:
   validate:
@@ -132,6 +137,7 @@ jobs:
           CONTROLLER_DIGEST: ${{ inputs.controller_digest }}
           ADAPTER_DIGEST: ${{ inputs.adapter_digest }}
           AUTHORIZATION_DIGEST: ${{ inputs.authorization_digest }}
+          AUTHORIZATION_SECRET_NAME: ${{ inputs.authorization_secret_name }}
           ARTIFACT_DIGESTS_B64: ${{ inputs.artifact_digests_b64 }}
           HEALTH_CHECKS_B64: ${{ inputs.health_checks_b64 }}
           TARGET_FINGERPRINT: ${{ inputs.target_fingerprint }}
@@ -152,7 +158,7 @@ jobs:
             '.object.type == "commit" and .object.sha == $source and .verification.verified == true' \
             <<<"${tag_json}" >/dev/null
 
-          promotion_values=(REQUESTED_RELEASE_ID REQUESTED_TAG REQUESTED_SOURCE_COMMIT CANDIDATE_RUN_ID CANDIDATE_MANIFEST_DIGEST ENVELOPE_DIGEST CONTROLLER_COMMIT CONTROLLER_DIGEST ADAPTER_DIGEST AUTHORIZATION_DIGEST ARTIFACT_DIGESTS_B64 HEALTH_CHECKS_B64 TARGET_FINGERPRINT)
+          promotion_values=(REQUESTED_RELEASE_ID REQUESTED_TAG REQUESTED_SOURCE_COMMIT CANDIDATE_RUN_ID CANDIDATE_MANIFEST_DIGEST ENVELOPE_DIGEST CONTROLLER_COMMIT CONTROLLER_DIGEST ADAPTER_DIGEST AUTHORIZATION_DIGEST AUTHORIZATION_SECRET_NAME ARTIFACT_DIGESTS_B64 HEALTH_CHECKS_B64 TARGET_FINGERPRINT)
           if [[ "${PHASE}" = candidate ]]; then
             test "${GITHUB_REF}" = "refs/heads/main"
             test "$(git rev-parse refs/remotes/origin/main)" = "${GITHUB_SHA}"
@@ -173,6 +179,7 @@ jobs:
             done
             test "${CONTROLLER_COMMIT}" = "${RELEASE_SAFETY_CONTROLLER_COMMIT}"
             test "${ADAPTER_DIGEST}" = "${RELEASE_SAFETY_ADAPTER_DIGEST}"
+            [[ "${AUTHORIZATION_SECRET_NAME}" =~ ^RELEASE_SAFETY_AUTHORIZATION_[0-9A-F]{32}$ ]]
           else
             echo "Unsupported release phase: ${PHASE}" >&2
             exit 1
@@ -483,24 +490,78 @@ jobs:
       attestations: read
       contents: write
     steps:
-      - name: Refuse stale or non-controller-authorized promotion
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          AUTHORIZATION_DIGEST: ${{ inputs.authorization_digest }}
-          EXPECTED_AUTHORIZATION_DIGEST: ${{ secrets.RELEASE_SAFETY_AUTHORIZATION_DIGEST }}
-        run: |
-          set -euo pipefail
-          [[ "${EXPECTED_AUTHORIZATION_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
-          test "${AUTHORIZATION_DIGEST}" = "${EXPECTED_AUTHORIZATION_DIGEST}"
-          created_at="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)"
-          age_seconds="$(($(date -u +%s) - $(date -u -d "${created_at}" +%s)))"
-          (( age_seconds >= 0 && age_seconds <= 300 ))
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ inputs.source_commit }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Refuse stale or non-controller-authorized promotion
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PHASE: ${{ inputs.phase }}
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_MANIFEST_DIGEST: ${{ inputs.candidate_manifest_digest }}
+          AUTHORIZATION_DIGEST: ${{ inputs.authorization_digest }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          ENVELOPE_DIGEST: ${{ inputs.envelope_digest }}
+          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+          CONTROLLER_DIGEST: ${{ inputs.controller_digest }}
+          ADAPTER_DIGEST: ${{ inputs.adapter_digest }}
+          AUTHORIZATION_SECRET_NAME: ${{ inputs.authorization_secret_name }}
+          ARTIFACT_DIGESTS_B64: ${{ inputs.artifact_digests_b64 }}
+          HEALTH_CHECKS_B64: ${{ inputs.health_checks_b64 }}
+          TARGET_FINGERPRINT: ${{ inputs.target_fingerprint }}
+          AUTHORIZATION_SECRET_JSON: ${{ secrets[inputs.authorization_secret_name] }}
+        run: |
+          set -euo pipefail
+          test -n "${AUTHORIZATION_SECRET_JSON}"
+          promotion_input_digest="$(node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const contract = JSON.parse(fs.readFileSync("release/standard-admission-promotion-input-contract.json", "utf8"));
+          const canonical = (value) => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
+          const inputs = {
+            phase: process.env.PHASE,
+            release_id: process.env.RELEASE_ID,
+            version: process.env.VERSION,
+            tag: process.env.TAG,
+            source_commit: process.env.SOURCE_COMMIT,
+            candidate_run_id: process.env.CANDIDATE_RUN_ID,
+            candidate_manifest_digest: process.env.CANDIDATE_MANIFEST_DIGEST,
+            envelope_digest: process.env.ENVELOPE_DIGEST,
+            controller_commit: process.env.CONTROLLER_COMMIT,
+            controller_digest: process.env.CONTROLLER_DIGEST,
+            adapter_digest: process.env.ADAPTER_DIGEST,
+            authorization_digest: process.env.AUTHORIZATION_DIGEST,
+            authorization_secret_name: process.env.AUTHORIZATION_SECRET_NAME,
+            artifact_digests_b64: process.env.ARTIFACT_DIGESTS_B64,
+            health_checks_b64: process.env.HEALTH_CHECKS_B64,
+            target_fingerprint: process.env.TARGET_FINGERPRINT,
+          };
+          if (contract.format !== "takoform.standard-admission-promotion-input-contract@v1" || JSON.stringify(Object.keys(inputs).sort()) !== JSON.stringify([...contract.keys].sort()) || Object.values(inputs).some((value) => typeof value !== "string" || value.length === 0)) process.exit(1);
+          process.stdout.write(`sha256:${crypto.createHash("sha256").update(JSON.stringify(canonical(inputs))).digest("hex")}`);
+          NODE
+          )"
+          jq -e --arg digest "${AUTHORIZATION_DIGEST}" --arg release_id "${RELEASE_ID}" --arg envelope "${ENVELOPE_DIGEST}" --arg promotion_input_digest "${promotion_input_digest}" '
+            keys == ["authorizationDigest", "envelopeDigest", "expiresAt", "format", "promotionInputDigest", "releaseId"] and
+            .format == "takos.release-safety-one-use-authorization@v1" and
+            .authorizationDigest == $digest and .releaseId == $release_id and .envelopeDigest == $envelope and
+            .promotionInputDigest == $promotion_input_digest and
+            (.expiresAt | type == "string")
+          ' <<<"${AUTHORIZATION_SECRET_JSON}" >/dev/null
+          created_at="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)"
+          now_epoch="$(date -u +%s)"
+          created_epoch="$(date -u -d "${created_at}" +%s)"
+          expires_at="$(jq -er .expiresAt <<<"${AUTHORIZATION_SECRET_JSON}")"
+          expires_epoch="$(date -u -d "${expires_at}" +%s)"
+          age_seconds="$((now_epoch - created_epoch))"
+          remaining_seconds="$((expires_epoch - now_epoch))"
+          (( age_seconds >= 0 && age_seconds <= 300 ))
+          (( remaining_seconds > 0 && remaining_seconds <= 300 ))
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
       - name: Verify the exact candidate run
         shell: bash
@@ -622,18 +683,15 @@ jobs:
             --certificate-identity "${identity}" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
           gh attestation verify candidate/standard-admission-set.json --repo "${GITHUB_REPOSITORY}"
           gh attestation verify candidate/takoform-standard-admission-v1.tar.gz --repo "${GITHUB_REPOSITORY}"
-      - name: Preflight immutability, signed tag, and target fingerprint
+      - name: Preflight signed tag and deterministic target
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RULESET_AUDIT_TOKEN: ${{ secrets.RELEASE_SAFETY_RULESET_AUDIT_TOKEN }}
           RELEASE_TAG: ${{ inputs.tag }}
           SOURCE_COMMIT: ${{ inputs.source_commit }}
           TARGET_FINGERPRINT: ${{ inputs.target_fingerprint }}
         run: |
           set -euo pipefail
-          test -n "${RULESET_AUDIT_TOKEN}"
-          test "$(GH_TOKEN="${RULESET_AUDIT_TOKEN}" gh api "repos/${GITHUB_REPOSITORY}/immutable-releases" --jq .enabled)" = true
           ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}")"
           object="$(jq -er .object.sha <<<"${ref_json}")"
           jq -e '.object.type == "tag"' <<<"${ref_json}" >/dev/null

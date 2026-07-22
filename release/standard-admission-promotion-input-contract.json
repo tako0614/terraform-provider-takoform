@@ -1,0 +1,21 @@
+{
+  "format": "takoform.standard-admission-promotion-input-contract@v1",
+  "keys": [
+    "phase",
+    "release_id",
+    "version",
+    "tag",
+    "source_commit",
+    "candidate_run_id",
+    "candidate_manifest_digest",
+    "envelope_digest",
+    "controller_commit",
+    "controller_digest",
+    "adapter_digest",
+    "authorization_digest",
+    "authorization_secret_name",
+    "artifact_digests_b64",
+    "health_checks_b64",
+    "target_fingerprint"
+  ]
+}

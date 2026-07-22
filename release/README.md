@@ -106,9 +106,17 @@ artifact to reviewed source before signing anything and emits one
 checksum-closed Actions candidate without creating a Release. A separate
 write-authorized promotion accepts only the ecosystem release-safety
 controller's fixed envelope, adapter, authorization, artifact, health-check,
-and target digests. It reverifies the exact candidate bytes, includes the
-controller readback before making one new draft stable, and reads
-repository-enforced immutability back. The fixed controller then runs public
+and target digests. Before dispatch, that controller reads back the exact
+`standard-admission-release` Environment branch/tag policies, immutable-release
+setting, and no-bypass admission-tag ruleset. It then installs only the exact
+release/envelope-bound authorization as a randomly named one-use Environment
+secret with an absolute five-minute expiry, then removes that exact secret
+after the workflow completes. A failed or interrupted cleanup blocks the next
+dispatch; no long-lived ruleset-audit token is stored in Actions. The workflow
+reverifies the signed tag, deterministic target, exact
+candidate bytes, and controller authorization, includes the controller
+readback before making one new draft stable, and reads every immutable byte
+back. The fixed controller then runs public
 `release-check` against that completed successful promotion run and immutable
 eight-asset Release. An existing admission version is never
 overwritten; a failure after stability requires a new version. Only that
