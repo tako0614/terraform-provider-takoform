@@ -54,17 +54,27 @@ func TestBuildRejectsUnboundSourceAndWorkflowRunIdentitiesBeforeReadingArtifacts
 	}{
 		{
 			name:    "invalid host source commit",
-			options: BuildOptions{SourceCommit: validCommit, HostSourceCommit: "main", HostWorkflowRunID: "1", ProviderWorkflowRunID: "2"},
+			options: BuildOptions{SourceCommit: validCommit, HostSourceCommit: "main", HostTakoformSourceCommit: validCommit, ProviderSourceCommit: validCommit, HostWorkflowRunID: "1", ProviderWorkflowRunID: "2"},
 			want:    "host source commit",
 		},
 		{
 			name:    "missing host workflow run id",
-			options: BuildOptions{SourceCommit: validCommit, HostSourceCommit: validCommit, ProviderWorkflowRunID: "2"},
+			options: BuildOptions{SourceCommit: validCommit, HostSourceCommit: validCommit, HostTakoformSourceCommit: validCommit, ProviderSourceCommit: validCommit, ProviderWorkflowRunID: "2"},
 			want:    "host workflow run id",
 		},
 		{
+			name:    "missing host Takoform source commit",
+			options: BuildOptions{SourceCommit: validCommit, HostSourceCommit: validCommit, ProviderSourceCommit: validCommit, HostWorkflowRunID: "1", ProviderWorkflowRunID: "2"},
+			want:    "host Takoform source commit",
+		},
+		{
+			name:    "missing provider source commit",
+			options: BuildOptions{SourceCommit: validCommit, HostSourceCommit: validCommit, HostTakoformSourceCommit: validCommit, HostWorkflowRunID: "1", ProviderWorkflowRunID: "2"},
+			want:    "provider source commit",
+		},
+		{
 			name:    "invalid provider workflow run id",
-			options: BuildOptions{SourceCommit: validCommit, HostSourceCommit: validCommit, HostWorkflowRunID: "1", ProviderWorkflowRunID: "02"},
+			options: BuildOptions{SourceCommit: validCommit, HostSourceCommit: validCommit, HostTakoformSourceCommit: validCommit, ProviderSourceCommit: validCommit, HostWorkflowRunID: "1", ProviderWorkflowRunID: "02"},
 			want:    "provider workflow run id",
 		},
 	}
@@ -86,9 +96,15 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 	workflow := string(raw)
 	for _, required := range []string{
 		"permissions: {}",
-		"TAKOSUMI_ACTIONS_READ_TOKEN",
-		"host_source_commit=",
+		"ref: ${{ inputs.snapshot_commit }}",
+		"test \"$(git rev-parse HEAD^{tree})\" = \"${SNAPSHOT_TREE}\"",
+		"git merge-base --is-ancestor \"${SNAPSHOT_COMMIT}\" \"${current_main}\"",
+		"git rev-parse \"${SNAPSHOT_COMMIT}:${HOST_CANDIDATE_PATH}\"",
+		"git rev-parse \"${SNAPSHOT_COMMIT}:${PROVIDER_CANDIDATE_PATH}\"",
+		"--trusted-root admission/v1/trust/trusted-root.json",
 		"--host-source-commit \"${HOST_SOURCE_COMMIT}\"",
+		"--host-takoform-source-commit \"${HOST_TAKOFORM_SOURCE_COMMIT}\"",
+		"--provider-source-commit \"${PROVIDER_SOURCE_COMMIT}\"",
 		"--host-run-id \"${HOST_RUN_ID}\"",
 		"--provider-run-id \"${PROVIDER_RUN_ID}\"",
 		"environment: standard-admission-evidence",
@@ -107,6 +123,11 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 	}
 	if strings.Contains(jobs[0], "id-token: write") {
 		t.Fatal("assembly job received OIDC signing authority")
+	}
+	for _, forbidden := range []string{"TAKOSUMI_ACTIONS_READ_TOKEN", "gh run download", "actions/runs/${HOST_RUN_ID}", "actions/runs/${PROVIDER_RUN_ID}"} {
+		if strings.Contains(workflow, forbidden) {
+			t.Fatalf("workflow reintroduced expiring artifact or cross-repository secret dependency %q", forbidden)
+		}
 	}
 	if strings.Contains(jobs[1], "actions/checkout@") || strings.Contains(jobs[1], "contents: read") || strings.Contains(jobs[1], "contents: write") {
 		t.Fatal("signer regained source checkout or repository content authority")

@@ -52,15 +52,17 @@ var (
 )
 
 type BuildOptions struct {
-	Root                  string
-	HostReports           string
-	ProviderReports       string
-	OutputDir             string
-	AdmissionVersion      string
-	SourceCommit          string
-	HostSourceCommit      string
-	HostWorkflowRunID     string
-	ProviderWorkflowRunID string
+	Root                     string
+	HostReports              string
+	ProviderReports          string
+	OutputDir                string
+	AdmissionVersion         string
+	SourceCommit             string
+	HostSourceCommit         string
+	HostTakoformSourceCommit string
+	ProviderSourceCommit     string
+	HostWorkflowRunID        string
+	ProviderWorkflowRunID    string
 }
 
 type sourceRef struct {
@@ -142,6 +144,12 @@ func Build(options BuildOptions) error {
 	if !commitPattern.MatchString(options.HostSourceCommit) {
 		return fmt.Errorf("host source commit must be lowercase 40-hex")
 	}
+	if !commitPattern.MatchString(options.HostTakoformSourceCommit) {
+		return fmt.Errorf("host Takoform source commit must be lowercase 40-hex")
+	}
+	if !commitPattern.MatchString(options.ProviderSourceCommit) {
+		return fmt.Errorf("provider source commit must be lowercase 40-hex")
+	}
 	for label, value := range map[string]string{
 		"host workflow run id": options.HostWorkflowRunID, "provider workflow run id": options.ProviderWorkflowRunID,
 	} {
@@ -170,6 +178,9 @@ func Build(options BuildOptions) error {
 	if err := standardforms.VerifyPublishedPackageSet(root); err != nil {
 		return fmt.Errorf("published package closure: %w", err)
 	}
+	if err := admissionrelease.VerifyOfflineTrust(filepath.Join(root, "admission", "v1")); err != nil {
+		return fmt.Errorf("offline admission trust: %w", err)
+	}
 	published, err := loadPublishedSet(root, candidates)
 	if err != nil {
 		return err
@@ -178,11 +189,11 @@ func Build(options BuildOptions) error {
 	if err != nil {
 		return err
 	}
-	hosts, err := loadArtifactSet(options.HostReports, "host-report", candidates, options.SourceCommit, options.HostSourceCommit, options.HostWorkflowRunID, "", providerVersion)
+	hosts, err := loadArtifactSet(options.HostReports, "host-report", candidates, options.HostTakoformSourceCommit, options.HostSourceCommit, options.HostWorkflowRunID, "", providerVersion)
 	if err != nil {
 		return fmt.Errorf("host report candidate: %w", err)
 	}
-	providers, err := loadArtifactSet(options.ProviderReports, "provider-report", candidates, options.SourceCommit, options.SourceCommit, options.ProviderWorkflowRunID, providerSubject, providerVersion)
+	providers, err := loadArtifactSet(options.ProviderReports, "provider-report", candidates, options.ProviderSourceCommit, options.ProviderSourceCommit, options.ProviderWorkflowRunID, providerSubject, providerVersion)
 	if err != nil {
 		return fmt.Errorf("provider report candidate: %w", err)
 	}

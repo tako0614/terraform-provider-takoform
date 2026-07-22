@@ -232,6 +232,13 @@ func TestStandardProviderReportWorkflowSeparatesExecutionAndSigningAuthority(t *
 			t.Fatalf("workflow reintroduced non-canonical signed handoff field %q", forbidden)
 		}
 	}
+	qualityRaw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "quality.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(qualityRaw), `--source-commit "${GITHUB_SHA}"`) {
+		t.Fatal("quality workflow does not bind provider reports to its exact source commit")
+	}
 }
 
 func mustJSON(t *testing.T, value any) []byte {

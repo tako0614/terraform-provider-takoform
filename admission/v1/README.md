@@ -86,6 +86,16 @@ evidence candidates until the admission-material workflow authenticates the
 complete host/provider closure and a reviewed source change retains the exact
 bytes; no workflow in this phase publishes a release.
 
+Report promotion is retain-first. A separate reviewed commit stores each exact
+23-file signed host/provider candidate under `admission/v1/candidates/`. The
+evidence workflow accepts an immutable snapshot commit/tree, both candidate Git
+trees, their source commits and workflow run IDs, and exact manifest digests.
+It requires the historical Takoform execution commits and snapshot to be
+ancestors of protected current main, revalidates the current package closure,
+and verifies every retained bundle against the pinned offline trusted root.
+It never downloads an expiring Actions artifact and requires no cross-repository
+token or secret.
+
 Refresh `trust/trusted-root.json` only as a reviewed rotation from Sigstore TUF:
 
 ```console

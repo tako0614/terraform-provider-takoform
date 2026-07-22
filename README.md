@@ -143,7 +143,8 @@ go run ./cmd/conformance verify
 go run ./cmd/migration-proof
 go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 go run ./cmd/provider-lifecycle-conformance provider-reports \
-  --cli terraform --output-dir /tmp/takoform-provider-reports
+  --cli terraform --output-dir /tmp/takoform-provider-reports \
+  --source-commit "$(git rev-parse HEAD)"
 go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
 go run ./cmd/standard-form-conformance candidate-publication-check

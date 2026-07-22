@@ -39,9 +39,11 @@ go run ./cmd/provider-lifecycle-conformance verify --cli tofu
 go run ./cmd/provider-lifecycle-conformance verify --cli /path/to/terraform
 go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 go run ./cmd/provider-lifecycle-conformance provider-reports \
-  --cli terraform --output-dir /tmp/takoform-provider-reports
+  --cli terraform --output-dir /tmp/takoform-provider-reports \
+  --source-commit "$(git rev-parse HEAD)"
 go run ./cmd/provider-lifecycle-conformance provider-reports \
-  --cli tofu --output-dir /tmp/takoform-opentofu-provider-reports
+  --cli tofu --output-dir /tmp/takoform-opentofu-provider-reports \
+  --source-commit "$(git rev-parse HEAD)"
 ```
 
 `provider-reports` first authenticates the exact ten-package retained

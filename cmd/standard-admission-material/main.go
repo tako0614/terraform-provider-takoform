@@ -33,12 +33,12 @@ func run(args []string, output io.Writer) error {
 		}
 		values[key] = args[1]
 	}
-	for _, key := range []string{"host-reports", "provider-reports", "output-dir", "admission-version", "host-source-commit", "host-run-id", "provider-run-id"} {
+	for _, key := range []string{"host-reports", "provider-reports", "output-dir", "admission-version", "host-source-commit", "host-takoform-source-commit", "provider-source-commit", "host-run-id", "provider-run-id"} {
 		if values[key] == "" {
 			return usageError()
 		}
 	}
-	if len(values) != 7 {
+	if len(values) != 9 {
 		return usageError()
 	}
 	root, err := providerlifecycle.RepoRoot(".")
@@ -51,10 +51,19 @@ func run(args []string, output io.Writer) error {
 		return fmt.Errorf("resolve source commit: %w", err)
 	}
 	commit := strings.TrimSpace(string(raw))
+	for label, ancestor := range map[string]string{
+		"host Takoform source commit": values["host-takoform-source-commit"],
+		"provider source commit":      values["provider-source-commit"],
+	} {
+		if err := exec.Command("git", "-C", root, "merge-base", "--is-ancestor", ancestor, commit).Run(); err != nil {
+			return fmt.Errorf("%s is not an ancestor of current source %s", label, commit)
+		}
+	}
 	if err := admissionmaterial.Build(admissionmaterial.BuildOptions{
 		Root: root, HostReports: values["host-reports"], ProviderReports: values["provider-reports"],
 		OutputDir: values["output-dir"], AdmissionVersion: values["admission-version"], SourceCommit: commit,
-		HostSourceCommit: values["host-source-commit"], HostWorkflowRunID: values["host-run-id"], ProviderWorkflowRunID: values["provider-run-id"],
+		HostSourceCommit: values["host-source-commit"], HostTakoformSourceCommit: values["host-takoform-source-commit"], ProviderSourceCommit: values["provider-source-commit"],
+		HostWorkflowRunID: values["host-run-id"], ProviderWorkflowRunID: values["provider-run-id"],
 	}); err != nil {
 		return err
 	}
@@ -63,5 +72,5 @@ func run(args []string, output io.Writer) error {
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: standard-admission-material build --host-reports DIR --provider-reports DIR --output-dir DIR --admission-version VERSION --host-source-commit COMMIT --host-run-id ID --provider-run-id ID")
+	return fmt.Errorf("usage: standard-admission-material build --host-reports DIR --provider-reports DIR --output-dir DIR --admission-version VERSION --host-source-commit COMMIT --host-takoform-source-commit COMMIT --provider-source-commit COMMIT --host-run-id ID --provider-run-id ID")
 }
