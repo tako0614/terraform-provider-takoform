@@ -63,7 +63,7 @@ Passing the package gate proves publication only.
 `standard-admission-set.json` now retains the exact signed host, provider, and
 admission closure plus the direct two-Registry provider readback. Its Form
 definition/package version remains `1.0.1`; the independent immutable admission
-activation stream advances to `forms/admissions/v1.0.2` without republishing or
+activation stream advances to `forms/admissions/v1.0.3` without republishing or
 re-signing those exact package/evidence subjects. `admission-closure-check`
 proves only the candidate's offline five-role closure. Public `release-check`
 remains fail-closed unless the signed tag, completed controller promotion run,
