@@ -1,7 +1,7 @@
 # `data.indexed@1`
 
-`data.indexed@1` is the portable bounded data plane required by
-`SQLDatabase@2.0.0`. It operates only on tables, primary keys, and indexes
+`data.indexed@1` is the portable bounded data plane declared by
+`IndexedStore`. It operates only on tables, primary keys, and indexes
 declared in the Resource's exact Form desired state. It is not a general SQL
 API.
 
@@ -144,7 +144,7 @@ not need to normalize floating-point ordering or equality. Every `integer` or
 `-9,007,199,254,740,991..9,007,199,254,740,991` so JSON implementations agree
 on the portable numeric range and exact integer identity.
 
-The complete `tables` declaration is immutable in `SQLDatabase@2.0.0`.
+The complete key declaration is immutable in `IndexedStore`.
 Changing it replaces the Resource. This version does not define an in-place
 schema migration operation.
 

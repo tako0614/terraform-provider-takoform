@@ -1,6 +1,6 @@
 # Takoform Provider
 
-`takoform` is a thin Terraform/OpenTofu provider for portable Service Forms. It gives HCL authors ten statically typed service resources and sends their desired state to any conforming Takoform host. The host—not this provider—selects and operates the concrete backend.
+`takoform` is a thin Terraform/OpenTofu provider for portable Service Forms. It gives HCL authors 34 statically typed service resources and sends their desired state to any conforming Takoform host. The host—not this provider—selects and operates the concrete backend.
 
 - GitHub: `github.com/tako0614/terraform-provider-takoform`
 - Terraform Registry: `registry.terraform.io/tako0614/takoform`
@@ -24,8 +24,8 @@ provider "takoform" {
 }
 
 resource "takoform_object_bucket" "assets" {
-  name       = "assets"
-  interfaces = ["s3_api"]
+  name          = "assets"
+  storage_class = "standard"
 }
 ```
 
@@ -43,37 +43,32 @@ unversioned lane to downgrade into.
 
 ## Resources
 
-| Resource | Portable intent |
-| --- | --- |
-| `takoform_edge_worker` | Prebuilt edge Worker artifact |
-| `takoform_object_bucket` | Object storage |
-| `takoform_kv_store` | Key/value storage |
-| `takoform_queue` | Message queue |
-| `takoform_sql_database` | Bounded indexed database (`2.0.0`), with historical SQL `1.x` state compatibility |
-| `takoform_container_service` | OCI container service |
-| `takoform_vector_index` | Vector index |
-| `takoform_durable_workflow` | Durable workflow |
-| `takoform_stateful_actor_namespace` | Stateful actor namespace |
-| `takoform_schedule` | Cron-triggered invocation |
+The portable Form set covers compute and application, data and storage,
+analytics and inference, network and delivery, and operations and integration.
+The complete list — every kind, its resource type, its version, its declared
+runtime interfaces, and its immutable fields — is generated into
+[the Form inventory](forms/README.md), and each resource has its own
+[reference document](docs/resources/) and [example](examples/resources/).
 
-The provider deliberately has no target-pool, backend, credential, pricing, quota, billing, or operator-policy resources. It discovers `features.service_forms` and verifies the exact build-pinned candidate FormRef/package identity against the configured host. Backend placement, admission, and credentials remain host responsibilities; state contains only the canonical resource ID, generation fence, read-only drift status, portability, desired typed fields, and sanitized public outputs.
+Every Form is declared once, as data, in `internal/formcatalog`. The Terraform
+schema, the wire spec, the Draft 2020-12 desired schema inside the Form
+Definition, the conformance fixtures, the examples, and the reference docs are
+all derived from that single declaration, so a Form cannot exist on one surface
+and be missing from another.
 
-The `1.0.1` Form definitions also own their portable runtime declaration
-contracts. Nine service Forms expose one required open `(name, version)`
-descriptor (`http.request@1`, `object.storage@1`, `keyvalue.store@1`,
-`sql.query@1`, `queue.messages@1`, `vector.query@1`, `workflow.invoke@1`, or
-`actor.invoke@1`). `Schedule` intentionally exposes none because it consumes
-`workflow.invoke` through its declared Resource connection. These names carry
-no host or Cloud identity, credentials, routing authority, or consumer grant;
-the host materializes and authorizes the resulting Interface record.
+The provider deliberately has no target-pool, backend, credential, pricing,
+quota, billing, or operator-policy resources. It discovers
+`features.service_forms` and verifies the exact build-pinned candidate
+FormRef/package identity against the configured host. Backend placement,
+admission, and credentials remain host responsibilities; state contains only
+the canonical resource ID, generation fence, read-only drift status,
+portability, desired typed fields, and sanitized public outputs.
 
-`SQLDatabase@2.0.0` is a separate, unpublished structural successor candidate
-for the same typed resource. Setting `tables` selects its bounded
-`data.indexed@1` contract; the immutable `SQLDatabase@1.0.1` identity remains
-the default for historical state, reads, deletes, and imports. The successor
-pins closed request/response schemas, ascending cross-host ordering, and
-tamper-evident live-keyset cursors. It adds no raw SQL, target, credential,
-capacity, billing, or host implementation authority.
+A Form may declare the runtime interfaces its service exposes, with open
+author-defined `(name, version)` identities such as `http.request@1`,
+`object.storage@1`, or `model.invoke@1`. A declaration says what exists. It
+carries no credential and grants no consumer anything: the host materializes
+the record and authorizes its use.
 
 See [the portable specification status](spec/README.md), [Form Package contract](spec/form-package/README.md), [interface declaration contract](spec/interface-declaration/README.md), [form inventory](forms/README.md), [conformance status](conformance/README.md), [provider documentation](docs/index.md), and [examples](examples/resources/).
 
@@ -97,33 +92,20 @@ append-only lane signs cumulative, hash-chained checkpoints for exact-digest
 security revocations. See
 [the Form Package release boundary](release/form-packages.md).
 
-All ten `1.0.1` structural-candidate Form Packages now have immutable live
-GitHub Releases. Their exact seven-asset inventories, Git refs, production
-Sigstore trusted root, and package-index workflow policy are retained under
-[`admission/v1/`](admission/v1/) and pass the offline
-`published-package-check`. Signed host/provider/admission reports and the exact
-direct Registry readback are retained as a five-role closure, but those source
-bytes alone do not admit a Form. Only the matching immutable
-`forms/admissions/v1.0.4` activation Release can activate them. The public
-`release-check` verifies that immutable Release, its exact eight assets, the
-completed controller promotion run, and the retained controller readback;
-candidate-only `admission-closure-check` grants no activation. The Release binds the
-existing definition/package `1.0.1` bytes; these independent version streams
-avoid republishing or re-signing an unchanged package closure. The
-active provider `0.1.3` source candidate pins that complete `1.0.1` Form set,
-whose executable fixture
-references resolve to a separate host-published
-`standard-form-runtime-v1.0.3` conformance runtime release.
+The previously published generation is retired, not erased. Its ten `1.0.1`
+Form Packages have immutable live GitHub Releases whose exact asset
+inventories, Git refs, production Sigstore trusted root, and package-index
+workflow policy are retained under [`admission/v1/`](admission/v1/) and still
+pass the offline `published-package-check`. Those bytes are never rewritten,
+re-signed, or reshaped; [`forms/retired-package-set.json`](forms/retired-package-set.json)
+records exactly what they were.
 
-The candidate's exact EdgeWorker, DurableWorkflow, and ContainerService bytes
-are pinned in `forms/standard-runtime-artifact-set.json`. Run
-`go run ./cmd/standard-form-conformance materializability-check` to read those
-immutable release/OCI identities back before building any `1.0.1` package.
-This verifies fixture bytes only and grants no host lifecycle or admission.
-All candidate generation, verification, and closed ten-package assembly is
-available through the local Go CLI. GitHub Actions is an optional automation
-and current keyless OIDC signer, not a prerequisite for running the immutable
-local gates.
+The rebuilt Forms have no published release, no Registry readback, and no
+admission evidence of their own, so every publication gate fails closed and
+this build refuses to reissue the retired generation's proofs under a new
+provider identity. All candidate generation and verification runs through the
+local Go CLI; GitHub Actions is an optional automation and the current keyless
+OIDC signer, not a prerequisite for the local gates.
 
 ## Development
 
@@ -134,7 +116,6 @@ newer patched toolchain declared by the release descriptor.
 gofmt -w .
 go vet ./...
 go test ./...
-go run ./cmd/conformance verify
 go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 go run ./cmd/provider-lifecycle-conformance provider-reports \
   --cli terraform --output-dir /tmp/takoform-provider-reports \

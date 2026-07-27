@@ -20,6 +20,9 @@ func generatePublishedSurfaces(root string) error {
 	if err := generateExamples(root); err != nil {
 		return err
 	}
+	if err := generateFormInventoryDoc(root); err != nil {
+		return err
+	}
 	return generateResourceDocs(root)
 }
 
@@ -342,4 +345,81 @@ func generateRetiredInventory(root string) error {
 		Packages: packages,
 	}
 	return writeJSON(filepath.Join(root, filepath.FromSlash(RetiredInventoryPath)), inventory)
+}
+
+// generateFormInventoryDoc writes the human-readable Form inventory. It is
+// generated so the published list of Forms can never disagree with the
+// declaration the packages are built from.
+func generateFormInventoryDoc(root string) error {
+	var builder strings.Builder
+	builder.WriteString(`# Portable Form inventory
+
+This is the complete portable Service Form set of this release, generated from
+the one declaration in ` + "`internal/formcatalog`" + `. Every Form describes what a
+caller wants. None of them names a target, a credential, a placement, a price,
+or an implementation: those stay with the host that realizes the Form.
+
+`)
+	labels := []struct{ domain, title string }{
+		{"compute", "Compute and application"},
+		{"data", "Data and storage"},
+		{"analytics", "Analytics and inference"},
+		{"network", "Network and delivery"},
+		{"operations", "Operations and integration"},
+	}
+	for _, label := range labels {
+		fmt.Fprintf(&builder, "## %s\n\n| Kind | Resource | Version | Portable intent |\n| --- | --- | --- | --- |\n", label.title)
+		for _, kind := range formcatalog.Kinds {
+			if kind.Domain != label.domain {
+				continue
+			}
+			fmt.Fprintf(&builder, "| `%s` | `%s` | `%s` | %s |\n", kind.Kind, kind.ResourceType, kind.Version(), kind.Description)
+		}
+		builder.WriteString("\n")
+	}
+	builder.WriteString(`## Declared runtime interfaces
+
+A Form may declare the runtime interfaces its service exposes. The names are
+author-defined and open: there is no registry, no allowlist, and no central
+approval. A declaration states what exists and how its non-secret values are
+filled; the host creates the record, authorizes consumers, and owns its
+lifecycle.
+
+| Kind | Interface |
+| --- | --- |
+`)
+	for _, kind := range formcatalog.Kinds {
+		for _, declared := range kind.Interfaces {
+			fmt.Fprintf(&builder, "| `%s` | `%s@1` (%s) |\n", kind.Kind, declared.Name, strings.Join(declared.Operations, ", "))
+		}
+	}
+	builder.WriteString(`
+## Immutable fields
+
+Every Form fixes its ` + "`/name`" + `. A Form that additionally fixes a field states so
+in its definition, and the provider enforces replacement for exactly those
+fields; the protocol lifecycle proves both.
+
+| Kind | Immutable |
+| --- | --- |
+`)
+	for _, kind := range formcatalog.Kinds {
+		fmt.Fprintf(&builder, "| `%s` | `%s` |\n", kind.Kind, strings.Join(kind.ImmutableFields(), "`, `"))
+	}
+	builder.WriteString(`
+## Status
+
+This inventory is ` + "`structural-candidate`" + `: the packages verify locally, the
+provider derives the same schema from the same declaration, and the protocol
+lifecycle runs against an in-process host. None of that admits a Form. Signed
+release bytes, a conforming host's signed lifecycle report, Registry
+installation and readback, and signed admission evidence are external
+requirements, tracked in [` + "`standard-package-set.json`" + `](standard-package-set.json).
+
+The previously published generation is retired, not erased: its immutable bytes
+and admission evidence stay verifiable through
+[` + "`retired-package-set.json`" + `](retired-package-set.json). Those releases are never
+rewritten, re-signed, or reshaped.
+`)
+	return os.WriteFile(filepath.Join(root, "forms", "README.md"), []byte(builder.String()), 0o644)
 }

@@ -2,7 +2,7 @@
 
 The current Phase 0 evidence is executable Go characterization:
 
-- `internal/provider/*_test.go` asserts the exact ten-resource registration, typed schema behavior, validation, CRUD, import, state refresh, and the absence of plan-time remote mutation;
+- `internal/provider/*_test.go` asserts that the resource set is exactly the declared Form set, and covers typed schema behavior, validation, CRUD, import, state refresh, and the absence of plan-time remote mutation;
 - `internal/client/client_test.go` asserts discovery, capability negotiation, preview/apply evidence, error envelopes, observation, and deletion;
 - `examples/resources/` contains one formatted HCL example for every registered resource.
 
@@ -12,19 +12,18 @@ Run:
 go test ./...
 go vet ./...
 tofu fmt -check -recursive examples
-go run ./cmd/conformance verify
 ```
 
 ## Actual provider protocol lifecycle candidate
 
 `cmd/provider-lifecycle-conformance` builds the real provider binary and drives
-all ten typed resources through a Terraform-compatible CLI against an in-process
+every declared typed resource through a Terraform-compatible CLI against an in-process
 versioned Form host. The generic candidate covers create, read plus observe,
 mutable update with state-generation fencing, explicit refresh, native import,
 CLI import, drift mapping, delete, exact response-identity rejection, and
 replacement plans for immutable names, SQL engine, and vector dimensions.
 The data-only candidate report binds the CLI product/version, exact canonical
-provider FQN, provider schema digest, embedded ten-Form candidate-set digest,
+provider FQN, provider schema digest, embedded candidate-set digest,
 release-descriptor provider version/binary digest, CLI executable basename,
 and CLI binary SHA-256 without leaking a host-local path. CI
 runs the reviewed OpenTofu and Terraform versions as one fail-closed matrix:
@@ -41,7 +40,7 @@ go run ./cmd/provider-lifecycle-conformance provider-reports \
   --source-commit "$(git rev-parse HEAD)"
 ```
 
-`provider-reports` first authenticates the exact ten-package retained
+`provider-reports` first authenticates the exact retained
 publication closure under `admission/v1/releases/`. It reads each canonical
 positive desired fixture and `reject-invalid-semantics` desired fixture from
 the retained release archive, projects those exact values into the typed
@@ -76,27 +75,15 @@ retained as state identity; switching distributions requires
 release/readback plus authenticated signed external admission are still
 required before these structural candidates can become portable standards.
 
-## Phase 0/1 golden characterization
+## Schema derivation gate
 
-`compatibility-candidate-v1/` freezes the current ten-kind provider/client
-behavior as deterministic offline evidence. It contains JSON Schemas and
-fixtures for the provider schema, desired and observed Resource envelopes,
-sanitized output projection, provider import IDs, provider/API errors, and host
-discovery. The discovery dependency schema is vendored into the same evidence
-set. `cmd/conformance` uses the pinned Draft 2020-12 implementation to compile
-every schema and validate every fixture without network or parent-directory
-resolution. It rejects unknown or escaping references, file or per-kind digest
-drift, an incomplete kind set, malformed evidence, publication-ready claims,
-and portable-standard claims.
-
-The case digest uses Go `encoding/json` normalization only to detect fixture
-drift. It is not a portable canonical serialization algorithm and is not a
-definition identity. This evidence is neither a signed package nor a standard
-form release. The actual provider and HTTP client parity tests consume these
-fixtures so checked-in evidence cannot drift away from the current executable
-wire behavior. Provider parity fingerprints validator allow-lists/configuration,
-default behavior, and concrete plan-modifier semantics in addition to attribute
-types and flags, and invokes every real resource `ImportState` handler.
+The provider schema, the Form Definition, and the conformance fixtures are all
+derived from one declaration, so drift between them is a build failure rather
+than something a checked-in fixture corpus has to notice later.
+`go run ./cmd/standard-form-conformance verify` regenerates nothing: it reads
+the committed packages, re-verifies their bytes, and inspects the actual
+provider resource schema for every declared Form, including that each field the
+definition calls immutable really forces replacement.
 
 ## Data-only Form Package v1 corpus
 
@@ -107,10 +94,10 @@ desired/observed schemas, and no host authority fields. Tests pin every
 package/schema digest and reject an unknown host extension and one
 kind-specific invalid fixture.
 
-`form-package-v1/positive/standard/` contains the separate ten-package `1.0.1 /
-standard` definition candidate set and the independent `SQLDatabase@2.0.0`
-successor candidate. Neither replaces or mutates a published `1.0.1`
-identity. `go run ./cmd/standard-form-conformance verify` validates package
+`form-package-v1/positive/standard/` contains the generated package for every
+declared Form. None of them replaces or mutates a published identity: a
+retained kind token starts a new major line instead.
+`go run ./cmd/standard-form-conformance verify` validates package
 bytes and fixtures and inspects the actual provider resource structure. It does
 not run the Terraform protocol lifecycle or a conforming host, and this repository
 intentionally contains no locally synthesized passed admission JSON.
@@ -154,13 +141,12 @@ Negative cases cover mapping grammar, invalid pointer escapes, and documents
 that do not satisfy their declared schema. Materialization, authorization, and
 lifecycle remain host work.
 
-The current manifest result is 23 positive packages (one ExampleStore, ten
-legacy compatibility candidates, ten coordinated `1.0.1` structural standard
-packages, one `SQLDatabase@2.0.0` successor, and one interface-declaration
-package) and 51 negative cases. The separate `data-indexed-v1` corpus adds six
-positive request operations, seven HTTP 200 response shapes, two HTTP 409
-conflict shapes, and bounded negative request/response cases. Its manifest
-pins both canonical schemas and the 200/409 association.
+The current manifest result is 36 positive packages (one ExampleStore, one
+interface-declaration package, and one generated package per declared Form) and
+51 negative cases. The separate `data-indexed-v1` corpus adds six positive
+request operations, seven HTTP 200 response shapes, two HTTP 409 conflict
+shapes, and bounded negative request/response cases. Its manifest pins both
+canonical schemas and the 200/409 association.
 Passing this corpus proves the local data contract only. It is not signature,
 publisher, remote-install, host-activation, retention/revocation, lifecycle
 idempotency, or cross-host/kind-standardization evidence. Those later trust and
