@@ -12,7 +12,7 @@
     },
     {
       "path": "fixtures/discovery.json",
-      "sha256": "sha256:759f8231028a8673d4571822ef7d9dd01ff9debac2f4713da1398fa6dc1a213d"
+      "sha256": "sha256:8a18b64552e8d042954db31ba750676b9c599fd07f75dfecbd65adf77e8d5a13"
     },
     {
       "path": "fixtures/error.json",
@@ -40,7 +40,7 @@
     },
     {
       "path": "schemas/discovery.schema.json",
-      "sha256": "sha256:2cbefd8c92d774b184a3669f09f84e806b89387c56489738cc54e5cba1143f57"
+      "sha256": "sha256:0244d72be819022cdc83bd2fc85a27f51ad0cea472fbb6a6ef099d856a611749"
     },
     {
       "path": "schemas/error.schema.json",
@@ -48,7 +48,7 @@
     },
     {
       "path": "schemas/host-discovery.schema.json",
-      "sha256": "sha256:1fa37de1f19c24742599bdb9d3aa947ba3d2a3880a3574b8e5d47171d658bdc4"
+      "sha256": "sha256:ca81552dd47779d0569d88045ae7a3f63c4e6f7e3e28b75d7c7bc2badd90a282"
     },
     {
       "path": "schemas/import.schema.json",
@@ -67,7 +67,7 @@
       "sha256": "sha256:88b79ad6e14a0fb70463e6f05c4b5bb3f8ab8f1d926bd6745cc87e7358c492f5"
     }
   ],
-  "discoveryCaseDigest": "sha256:d891af109436c985356dca2034c2ab642f364c4eb27fff10fabf2c7ce9ac32c1",
+  "discoveryCaseDigest": "sha256:fa974003265991107cd30b9fbf043584f4c15b018e5f991debeed16d365e0e9c",
   "kinds": [
     {
       "kind": "EdgeWorker",

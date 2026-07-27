@@ -49,7 +49,7 @@ var externalRequirements = []string{
 	"immutable-release-tag",
 	"registry-install-readback",
 	"sigstore-signature-and-provenance",
-	"takosumi-portable-host-lifecycle-proof",
+	"conforming-host-lifecycle-proof",
 	"terraform-provider-protocol-lifecycle-proof",
 	"portable-invalid-argument-negative-lifecycle-proof",
 	"signed-standard-admission-evidence",

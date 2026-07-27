@@ -751,9 +751,6 @@ func (r *serviceShapeResource) Read(ctx context.Context, req resource.ReadReques
 		resp.Diagnostics.AddError(r.cfg.kind+" FormRef missing", "This provider build has no exact FormRef for the resource state.")
 		return
 	}
-	if !r.formTransportAllowed(form, &resp.Diagnostics) {
-		return
-	}
 	res, err := observeResourceForRead(ctx, r.data.client, r.cfg.kind, state.Name.ValueString(), readSpace, form)
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
@@ -819,9 +816,6 @@ func (r *serviceShapeResource) Delete(ctx context.Context, req resource.DeleteRe
 	form, ok := r.formForModel(state)
 	if !ok {
 		resp.Diagnostics.AddError(r.cfg.kind+" FormRef missing", "This provider build has no exact FormRef for the resource state.")
-		return
-	}
-	if !r.formTransportAllowed(form, &resp.Diagnostics) {
 		return
 	}
 	if err := r.data.client.DeleteResource(ctx, r.cfg.kind, state.Name.ValueString(), deleteSpace, client.MutationFence{ResourceVersion: state.ResourceVersion.ValueString(), Form: form}); err != nil {
@@ -967,37 +961,7 @@ func (r *serviceShapeResource) assertConfigured(diags *diag.Diagnostics) bool {
 		diags.AddError(r.cfg.kind+" FormRef missing", "This provider build has no exact candidate "+r.cfg.kind+" FormRef. This is a provider bug.")
 		return false
 	}
-	if r.data.client.UsesCompatibilityFallback() && !r.data.capabilities.SupportsResource(r.cfg.kind) {
-		diags.AddError(
-			r.cfg.kind+" not supported",
-			"The configured endpoint does not advertise the "+r.cfg.kind+" Service Form.",
-		)
-		return false
-	}
 	return true
-}
-
-// formTransportAllowed keeps successor Form identities off the historical
-// /v1 compatibility transport. That transport intentionally omits FormRef
-// fields, so allowing any identity other than the coordinated historical Form
-// would silently execute a different contract.
-func (r *serviceShapeResource) formTransportAllowed(form client.InstalledFormReference, diags *diag.Diagnostics) bool {
-	if !r.data.client.UsesCompatibilityFallback() {
-		return true
-	}
-	historical, ok := r.data.forms[r.cfg.kind]
-	if ok && historical == form {
-		return true
-	}
-	diags.AddError(
-		"Versioned Form host required",
-		fmt.Sprintf(
-			"The historical /v1 compatibility fallback cannot carry exact %s@%s identity. Disable compatibility_fallback and configure a versioned Form host; no request was sent.",
-			form.FormRef.Kind,
-			form.FormRef.DefinitionVersion,
-		),
-	)
-	return false
 }
 
 func (r *serviceShapeResource) put(ctx context.Context, plan *serviceShapeModel, diags *diag.Diagnostics) {
@@ -1009,9 +973,6 @@ func (r *serviceShapeResource) put(ctx context.Context, plan *serviceShapeModel,
 	form, ok := r.formForModel(*plan)
 	if !ok {
 		diags.AddError(r.cfg.kind+" FormRef missing", "This provider build has no exact FormRef for the planned resource.")
-		return
-	}
-	if !r.formTransportAllowed(form, diags) {
 		return
 	}
 	body.Form = &form
@@ -1027,9 +988,6 @@ func (r *serviceShapeResource) put(ctx context.Context, plan *serviceShapeModel,
 	}
 	if !plan.ResourceVersion.IsNull() && !plan.ResourceVersion.IsUnknown() {
 		body.Metadata.ResourceVersion = plan.ResourceVersion.ValueString()
-	}
-	if r.data.client.UsesCompatibilityFallback() {
-		body.Metadata.ManagedBy = client.ManagedByOpenTofu
 	}
 	r.data.serviceFormMutate.Lock()
 	defer r.data.serviceFormMutate.Unlock()

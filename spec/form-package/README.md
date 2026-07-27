@@ -9,10 +9,10 @@ One package contains exactly one Form Definition and therefore exactly one
 FormRef. There is no `packageId` and no multi-form `definitions` collection in
 this contract. A compatibility set, catalog, or host migration map is an
 external data object that points to multiple exact `(FormRef, packageDigest)`
-pairs; it is not a wider Form Package. For example, extracting the current ten
-provider candidates requires ten independent packages, using valid SemVer such
-as `0.0.0-legacy.1`, rather than one package carrying ten definitions or a
-non-SemVer `legacy-v1` version.
+pairs; it is not a wider Form Package. For example, publishing the current
+provider candidate set requires one independent package per Form, each with a
+valid SemVer `packageVersion`, rather than one package carrying every
+definition or a non-SemVer collection version.
 
 ## Index and identity
 

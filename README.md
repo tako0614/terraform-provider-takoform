@@ -38,9 +38,8 @@ FQNs independently. They are distinct state identities, so changing between
 them requires an explicit `state replace-provider` after updating
 `required_providers`; matching bytes never makes them silent aliases. The
 provider follows the same-origin versioned endpoint advertised by discovery.
-The historical `/v1` facade requires the explicit `compatibility_fallback = true`
-setting (or `TAKOFORM_COMPATIBILITY_FALLBACK=true`) and is never selected as an
-implicit downgrade.
+A host that advertises no versioned endpoint is rejected; there is no
+unversioned lane to downgrade into.
 
 ## Resources
 
@@ -73,10 +72,8 @@ for the same typed resource. Setting `tables` selects its bounded
 `data.indexed@1` contract; the immutable `SQLDatabase@1.0.1` identity remains
 the default for historical state, reads, deletes, and imports. The successor
 pins closed request/response schemas, ascending cross-host ordering, and
-tamper-evident live-keyset cursors. It requires the versioned Form host API and
-fails before network I/O when historical `/v1` compatibility fallback is
-configured. It adds no raw SQL, target, credential, capacity, billing, or host
-implementation authority.
+tamper-evident live-keyset cursors. It adds no raw SQL, target, credential,
+capacity, billing, or host implementation authority.
 
 See [the portable specification status](spec/README.md), [Form Package contract](spec/form-package/README.md), [interface declaration contract](spec/interface-declaration/README.md), [form inventory](forms/README.md), [conformance status](conformance/README.md), [provider documentation](docs/index.md), and [examples](examples/resources/).
 
@@ -138,7 +135,6 @@ gofmt -w .
 go vet ./...
 go test ./...
 go run ./cmd/conformance verify
-go run ./cmd/migration-proof
 go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 go run ./cmd/provider-lifecycle-conformance provider-reports \
   --cli terraform --output-dir /tmp/takoform-provider-reports \

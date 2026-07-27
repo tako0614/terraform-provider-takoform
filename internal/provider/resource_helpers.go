@@ -11,15 +11,10 @@ import (
 )
 
 // observeResourceForRead keeps Terraform's ordinary state refresh separate
-// from the host's explicit state/output publication operation. Versioned hosts
-// first return the current desired-generation fence via exact GET; observe then
+// from the host's explicit state/output publication operation. A host first
+// returns the current desired-generation fence via exact GET; observe then
 // performs the read-only native drift check against that exact generation.
-// Compatibility hosts retain their historical single observe request.
 func observeResourceForRead(ctx context.Context, c *client.Client, kind, name, space string, form client.InstalledFormReference) (*client.Resource, error) {
-	if c.UsesCompatibilityFallback() {
-		return c.ObserveResource(ctx, kind, name, space)
-	}
-
 	current, err := c.GetResource(ctx, kind, name, space, form)
 	if err != nil {
 		return nil, err

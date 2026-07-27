@@ -180,25 +180,16 @@ does not sign them or change admission state.
 
 Each definition keeps `status: standard` so the exact proposed final bytes can
 be exercised and digest-pinned without a later status mutation. That field does
-not admit the package set. Only externally authenticated Takosumi host and
+not admit the package set. Only externally authenticated conforming-host and
 Terraform provider lifecycle reports can produce admission evidence classified
 `portable-standard`; until then this inventory is neither admitted nor
 conformant.
 
-## Legacy compatibility identities
+## Immutable fields
 
-The historical packages under
-[`../conformance/form-package-v1/positive/legacy/`](../conformance/form-package-v1/positive/legacy/)
-remain immutable `0.0.0-legacy.1 / compatibility-candidate` identities. They
-were not edited or promoted into this definition candidate set. Their exact digests remain in
-[`legacy-package-set.json`](legacy-package-set.json), and the historical wire
-conversion remains in
-[`legacy-takosumi-wire-mapping.md`](legacy-takosumi-wire-mapping.md).
-
-Only `/name` is asserted immutable in the legacy definitions. The independent
-`VectorIndex@1.0.1` candidate additionally makes `/dimensions` immutable, and
-`SQLDatabase@1.0.1` makes `/engine` immutable; the provider schemas enforce
-replacement for both fields.
+Every definition asserts `/name` immutable. `VectorIndex` additionally makes
+`/dimensions` immutable and `SQLDatabase` makes `/engine` immutable; the
+provider schemas enforce replacement for both fields.
 
 Target pools, credentials, provider selection, backend managers, capacity,
 pricing, billing, quota, and execution authority are outside every portable

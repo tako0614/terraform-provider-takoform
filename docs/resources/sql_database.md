@@ -21,10 +21,8 @@ compatibility path; they are not sent for a `tables` resource. A plain import
 continues to select the historical identity because an import ID does not
 contain a Form version.
 
-`SQLDatabase@2.0.0` requires the versioned Form host API. The provider rejects
-its create, read, update, and delete operations before network I/O when
-historical `compatibility_fallback` is enabled. Historical 1.x resources retain
-their existing fallback behavior.
+`SQLDatabase@2.0.0` uses the same versioned Form host API as every other
+resource.
 
 ## Arguments
 

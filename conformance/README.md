@@ -13,12 +13,7 @@ go test ./...
 go vet ./...
 tofu fmt -check -recursive examples
 go run ./cmd/conformance verify
-go run ./cmd/migration-proof
 ```
-
-Provider publication uses `go run ./cmd/migration-proof --require-complete`.
-Unlike the structural local command, release mode exits nonzero for every
-`external-required` phase or remaining external blocker.
 
 ## Actual provider protocol lifecycle candidate
 
@@ -106,19 +101,16 @@ types and flags, and invokes every real resource `ImportState` handler.
 ## Data-only Form Package v1 corpus
 
 [`form-package-v1/`](form-package-v1/) is a separate corpus for the portable
-package layer. It includes one valid closed ExampleStore package plus ten
-independent `0.0.0-legacy.1` compatibility packages for the current typed
-provider inventory. Each legacy package has one exact FormRef, one definition,
-one positive desired fixture, closed desired/observed schemas, and no host
-authority fields. Tests pin every package/schema digest, reject an unknown host
-extension and one kind-specific invalid fixture, and cross-check the exact
-machine-readable set in
-[`../forms/legacy-package-set.json`](../forms/legacy-package-set.json).
+package layer. It includes one valid closed ExampleStore package. Each package
+has one exact FormRef, one definition, one positive desired fixture, closed
+desired/observed schemas, and no host authority fields. Tests pin every
+package/schema digest and reject an unknown host extension and one
+kind-specific invalid fixture.
 
 `form-package-v1/positive/standard/` contains the separate ten-package `1.0.1 /
 standard` definition candidate set and the independent `SQLDatabase@2.0.0`
-successor candidate. Neither replaces or mutates legacy or `1.0.1`
-identities. `go run ./cmd/standard-form-conformance verify` validates package
+successor candidate. Neither replaces or mutates a published `1.0.1`
+identity. `go run ./cmd/standard-form-conformance verify` validates package
 bytes and fixtures and inspects the actual provider resource structure. It does
 not run the Terraform protocol lifecycle or a Takosumi host, and this repository
 intentionally contains no locally synthesized passed admission JSON.
@@ -174,21 +166,10 @@ publisher, remote-install, host-activation, retention/revocation, lifecycle
 idempotency, or cross-host/kind-standardization evidence. Those later trust and
 host conformance layers remain unimplemented.
 
-## Portable host and provider migration evidence
+## Portable host evidence
 
 `portable-host-v1/` pins the versioned discovery/API paths, exact ObjectBucket
 FormRef/package identity, concurrency/idempotency rules, stable error taxonomy,
 and required cross-repo black-box runner checks. The provider client consumes
 the same contract in adversarial HTTP tests.
 
-`provider-migration-v1/` contains a redacted backup for the six types actually
-exposed by the old Takosumi provider, a separate all-ten Takoform golden state,
-an explicit provider/type mapping, and structural backup/import/rollback
-evidence. The four new-only kinds are not represented as fictional
-`takosumi_*` migrations. The verifier rejects provider-address aliasing and
-secret, price, or backend data in new state. It also compares state lineage,
-schema version, and every overlapping desired attribute across the six mapped
-resources. Live old/new and rollback refresh no-op proof remains explicitly
-external because it requires the pinned old provider artifact, its exact lock
-and HCL migration input, and a reachable operator migration host; the release
-workflow therefore stays fail-closed until those phases have machine evidence.

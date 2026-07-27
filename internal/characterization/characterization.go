@@ -178,7 +178,6 @@ type DiscoveryFixture struct {
 	Format         string          `json:"format"`
 	Classification string          `json:"classification"`
 	Host           json.RawMessage `json:"host"`
-	Capabilities   json.RawMessage `json:"capabilities"`
 }
 
 type VerificationReport struct {
@@ -671,27 +670,23 @@ func validateDiscovery(value DiscoveryFixture) error {
 	var host struct {
 		APIVersions []string        `json:"api_versions"`
 		Features    map[string]bool `json:"features"`
+		Endpoints   struct {
+			API string `json:"api"`
+		} `json:"endpoints"`
 	}
 	if err := json.Unmarshal(value.Host, &host); err != nil {
 		return err
 	}
-	if len(host.APIVersions) != 1 || host.APIVersions[0] != APIVersion || !host.Features["service_forms"] {
+	if len(host.APIVersions) != 1 || host.APIVersions[0] != APIVersion {
 		return errors.New("discovery fixture does not advertise the frozen candidate API")
 	}
-	var caps struct {
-		APIVersion string          `json:"apiVersion"`
-		Resources  map[string]bool `json:"resources"`
-	}
-	if err := json.Unmarshal(value.Capabilities, &caps); err != nil {
-		return err
-	}
-	if caps.APIVersion != APIVersion || len(caps.Resources) != len(ExpectedKinds) {
-		return errors.New("capabilities fixture has unexpected identity or kind count")
-	}
-	for _, identity := range ExpectedKinds {
-		if !caps.Resources[identity.Kind] {
-			return fmt.Errorf("capabilities fixture does not enable %s", identity.Kind)
+	for _, feature := range []string{"service_forms", "exact_form_ref", "optimistic_concurrency", "idempotent_lifecycle"} {
+		if !host.Features[feature] {
+			return fmt.Errorf("discovery fixture does not advertise features.%s", feature)
 		}
+	}
+	if strings.TrimSpace(host.Endpoints.API) == "" {
+		return errors.New("discovery fixture does not advertise a versioned endpoints.api")
 	}
 	return nil
 }

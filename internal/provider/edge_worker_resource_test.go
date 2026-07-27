@@ -73,7 +73,19 @@ func TestRefreshEdgeWorkerSpecClearsAbsentOptionalFields(t *testing.T) {
 func TestEdgeWorkerCreateAcceptsEndpointDefinedProfileTokens(t *testing.T) {
 	ctx := context.Background()
 	var gotProfiles []any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	form := providerCandidateForms()[client.KindEdgeWorker]
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		base := "/apis/forms.takoform.com/v1alpha1"
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/.well-known/takoform":
+			writeProviderDiscovery(t, w, srv.URL)
+			return
+		case r.Method == http.MethodGet && r.URL.Path == base+"/forms":
+			writeProviderFormAvailability(t, w, form)
+			return
+		}
 		var req client.Resource
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Errorf("decode request: %v", err)
@@ -85,16 +97,14 @@ func TestEdgeWorkerCreateAcceptsEndpointDefinedProfileTokens(t *testing.T) {
 			t.Errorf("expected profiles list in request, got %#v", req.Spec["profiles"])
 		}
 		gotProfiles = rawProfiles
-		if r.Method == http.MethodPost && r.URL.Path == "/v1/resources/preview" {
+		if r.Method == http.MethodPost && r.URL.Path == base+"/resources/preview" {
 			_ = json.NewEncoder(w).Encode(client.PreviewResourceResult{
-				Resource:              req,
-				PlanDigest:            "sha256:plan",
-				SpecDigest:            "sha256:spec",
-				ResolutionFingerprint: "sha256:resolution",
+				Resource: req,
+				Review:   client.PreviewReview{PlanDigest: "sha256:plan", SpecDigest: "sha256:spec"},
 			})
 			return
 		}
-		if r.Method != http.MethodPut || r.URL.Path != "/v1/resources/EdgeWorker/api" {
+		if r.Method != http.MethodPut || r.URL.Path != base+"/resources/EdgeWorker/api" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 			http.NotFound(w, r)
 			return
@@ -110,19 +120,16 @@ func TestEdgeWorkerCreateAcceptsEndpointDefinedProfileTokens(t *testing.T) {
 			Outputs: map[string]any{"url": "https://api.example.com"},
 		}
 		raw, _ := json.Marshal(req)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("ETag", `"1"`)
 		_, _ = w.Write(raw)
 	}))
 	defer srv.Close()
 
 	r := &edgeWorkerResource{
 		data: &providerData{
-			client:       client.NewCompatibilityFallback(srv.URL, "", srv.Client()),
+			client:       mustDiscoveredProviderClient(t, srv),
 			forms:        providerCandidateForms(),
 			defaultSpace: "prod",
-			capabilities: client.ProductCapabilities{
-				Resources: map[string]bool{client.KindEdgeWorker: true},
-			},
 		},
 	}
 	var schemaResp frameworkresource.SchemaResponse

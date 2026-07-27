@@ -30,10 +30,8 @@ activation, and revocation enforcement remain consumer/operator work. The
 current ten provider resources pin independent exact `1.0.1 / standard`
 definition candidates with local structural verification. Their inventory is
 `structural-candidate`, not `portable-standard`; definition status pins proposed
-final bytes and does not perform admission. The historical
-`0.0.0-legacy.1` packages remain frozen compatibility candidates and were not
-renamed or promoted. Passed Takosumi host and Terraform provider lifecycle
-evidence, portable negative wire-code coverage, Registry installation/readback,
+final bytes and does not perform admission. Passed conforming-host and
+Terraform provider lifecycle evidence, portable negative wire-code coverage, Registry installation/readback,
 signed admission evidence, and live revocation-chain proof are still external
 requirements. Package signatures and immutable tags are now retained
 publication evidence only. Authenticated host and provider evidence is the only

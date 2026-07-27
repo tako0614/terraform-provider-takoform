@@ -422,9 +422,8 @@ func writeVersionedDiscovery(t *testing.T, w http.ResponseWriter, origin string)
 		"api_versions": []string{APIVersion},
 		"features":     map[string]bool{"service_forms": true, "exact_form_ref": true, "optimistic_concurrency": true, "idempotent_lifecycle": true},
 		"endpoints": map[string]string{
-			"api":               origin + "/apis/forms.takoform.com/v1alpha1",
-			"forms":             origin + "/apis/forms.takoform.com/v1alpha1/forms",
-			"compatibility_api": origin + "/v1",
+			"api":   origin + "/apis/forms.takoform.com/v1alpha1",
+			"forms": origin + "/apis/forms.takoform.com/v1alpha1/forms",
 		},
 	})
 }

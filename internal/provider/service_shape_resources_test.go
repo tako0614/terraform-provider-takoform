@@ -180,20 +180,28 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 			putCount := 0
 			previewCount := 0
 			var gotName string
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var srv *httptest.Server
+			srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				base := "/apis/forms.takoform.com/v1alpha1"
+				if r.Method == http.MethodGet && r.URL.Path == "/.well-known/takoform" {
+					writeProviderDiscovery(t, w, srv.URL)
+					return
+				}
+				if r.Method == http.MethodGet && r.URL.Path == base+"/forms" {
+					writeProviderFormAvailability(t, w, providerCandidateForms()[tt.kind])
+					return
+				}
 				var got client.Resource
 				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 					t.Errorf("decode request: %v", err)
 				}
 				gotName, _ = got.Spec["name"].(string)
-				if r.Method == http.MethodPost && r.URL.Path == "/v1/resources/preview" {
+				if r.Method == http.MethodPost && r.URL.Path == base+"/resources/preview" {
 					previewCount++
 					w.Header().Set("Content-Type", "application/json")
 					_ = json.NewEncoder(w).Encode(client.PreviewResourceResult{
-						Resource:              got,
-						PlanDigest:            "sha256:plan",
-						SpecDigest:            "sha256:spec",
-						ResolutionFingerprint: "sha256:resolution",
+						Resource: got,
+						Review:   client.PreviewReview{PlanDigest: "sha256:plan", SpecDigest: "sha256:spec"},
 					})
 					return
 				}
@@ -201,23 +209,25 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 					t.Errorf("expected PUT, got %s", r.Method)
 				}
 				putCount++
-				wantPath := "/v1/resources/" + tt.kind + "/" + gotName
+				wantPath := base + "/resources/" + tt.kind + "/" + gotName
 				if r.URL.Path != wantPath {
 					t.Errorf("unexpected path %q, want %q", r.URL.Path, wantPath)
 				}
 				if got.Kind != tt.kind {
 					t.Errorf("expected kind %q, got %q", tt.kind, got.Kind)
 				}
-				if got.Metadata.ManagedBy != client.ManagedByOpenTofu {
-					t.Errorf("expected managedBy=opentofu, got %q", got.Metadata.ManagedBy)
+				if got.Metadata.ManagedBy != "" {
+					t.Errorf("portable apply must not claim manager authority, got %q", got.Metadata.ManagedBy)
 				}
 				if gotName == "" {
 					t.Errorf("expected spec.name to be set, got %#v", got.Spec["name"])
 				}
 				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("ETag", `"1"`)
 				_ = json.NewEncoder(w).Encode(client.Resource{
 					APIVersion: client.APIVersion,
 					Kind:       tt.kind,
+					Form:       ptrForm(providerCandidateForms()[tt.kind]),
 					Metadata: client.Metadata{
 						Name:  gotName,
 						Space: "prod",
@@ -239,12 +249,9 @@ func TestServiceShapeCreatePutsEachResourceOnce(t *testing.T) {
 
 			r := &serviceShapeResource{
 				data: &providerData{
-					client:       client.NewCompatibilityFallback(srv.URL, "", srv.Client()),
+					client:       mustDiscoveredProviderClient(t, srv),
 					defaultSpace: "prod",
 					forms:        providerCandidateForms(),
-					capabilities: client.ProductCapabilities{
-						Resources: map[string]bool{tt.kind: true},
-					},
 				},
 				cfg: serviceShapeConfig{
 					kind: tt.kind,
@@ -480,7 +487,7 @@ func TestNewServiceShapesRejectInvalidSpecsBeforeRemoteCalls(t *testing.T) {
 	}
 }
 
-func TestCompatibilityServiceShapeImportReadObservesTypedStateAndOutputs(t *testing.T) {
+func TestServiceShapeImportReadObservesTypedStateAndOutputs(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
 		name     string
@@ -537,26 +544,51 @@ func TestCompatibilityServiceShapeImportReadObservesTypedStateAndOutputs(t *test
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/observe") {
-					t.Errorf("expected Resource observe, got %s %s", r.Method, r.URL.Path)
+			var srv *httptest.Server
+			observed := false
+			srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/.well-known/takoform" {
+					writeProviderDiscovery(t, w, srv.URL)
+					return
 				}
-				_ = json.NewEncoder(w).Encode(client.Resource{
+				resource := client.Resource{
 					APIVersion: client.APIVersion, Kind: tt.kind,
+					Form:     ptrForm(providerCandidateForms()[tt.kind]),
 					Metadata: client.Metadata{Name: tt.spec["name"].(string), Space: "prod"},
 					Spec:     tt.spec,
 					Status: &client.Status{Resolution: client.Resolution{
 						SelectedImplementation: "operator.test", Target: "target-a", Locked: true, Portability: "portable",
 					}, Outputs: map[string]any{"endpoint": "https://service.example.test"}, Conditions: []client.Condition{{Type: "Drifted", Status: "False"}}},
-				})
+				}
+				w.Header().Set("ETag", `"1"`)
+				switch {
+				case r.Method == http.MethodGet:
+					assertProviderExactQuery(t, r, providerCandidateForms()[tt.kind])
+					_ = json.NewEncoder(w).Encode(resource)
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/observe"):
+					observed = true
+					if r.Header.Get("If-Match") != `"1"` {
+						t.Errorf("observe is not generation fenced: If-Match=%q", r.Header.Get("If-Match"))
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"resource": resource, "observation": map[string]any{"status": "current"},
+					})
+				default:
+					t.Errorf("expected exact read then observe, got %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+				}
 			}))
 			defer srv.Close()
+			t.Cleanup(func() {
+				if !observed {
+					t.Error("typed read did not reach the fenced observe operation")
+				}
+			})
 
 			shape := &serviceShapeResource{
 				data: &providerData{
-					client: client.NewCompatibilityFallback(srv.URL, "", srv.Client()), defaultSpace: "prod",
-					forms:        providerCandidateForms(),
-					capabilities: client.ProductCapabilities{Resources: map[string]bool{tt.kind: true}},
+					client: mustDiscoveredProviderClient(t, srv), defaultSpace: "prod",
+					forms: providerCandidateForms(),
 				},
 				cfg: serviceShapeConfig{kind: tt.kind, spec: tt.specKind},
 			}

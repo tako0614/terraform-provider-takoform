@@ -86,7 +86,6 @@ func TestSQLDatabaseV2PutSelectsSuccessorAndOmitsLegacyFields(t *testing.T) {
 	resource := &serviceShapeResource{
 		data: &providerData{
 			client: formClient, defaultSpace: "prod", forms: forms,
-			capabilities: client.ProductCapabilities{Resources: map[string]bool{client.KindSQLDatabase: true}},
 		},
 		cfg: serviceShapeConfig{kind: client.KindSQLDatabase, spec: specSQLDatabase},
 	}
@@ -191,104 +190,6 @@ func TestSQLDatabaseV2TablesSchemaRequiresReplacement(t *testing.T) {
 	tables, ok := response.Schema.Attributes["tables"].(frameworkschema.ListNestedAttribute)
 	if !ok || len(tables.PlanModifiers) != 1 {
 		t.Fatalf("tables plan modifiers = %#v, want one RequiresReplace modifier", tables.PlanModifiers)
-	}
-}
-
-func TestSQLDatabaseV2RejectsCompatibilityFallbackBeforeNetwork(t *testing.T) {
-	ctx := context.Background()
-	requestCount := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		requestCount++
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case request.Method == http.MethodPost && request.URL.Path == "/v1/resources/preview":
-			_ = json.NewEncoder(w).Encode(client.PreviewResourceResult{PlanDigest: "sha256:legacy-plan"})
-		case request.Method == http.MethodPut && request.URL.Path == "/v1/resources/SQLDatabase/main":
-			_ = json.NewEncoder(w).Encode(client.Resource{
-				APIVersion: client.APIVersion,
-				Kind:       client.KindSQLDatabase,
-				Metadata: client.Metadata{
-					Name: "main", Space: "prod",
-				},
-				Spec: map[string]any{"name": "main", "engine": "sqlite"},
-			})
-		default:
-			http.Error(w, "unexpected route", http.StatusNotFound)
-		}
-	}))
-	defer server.Close()
-
-	shape := &serviceShapeResource{
-		data: &providerData{
-			client: client.NewCompatibilityFallback(server.URL, "", server.Client()), defaultSpace: "prod",
-			forms: providerCandidateForms(),
-			capabilities: client.ProductCapabilities{Resources: map[string]bool{
-				client.KindSQLDatabase: true,
-			}},
-		},
-		cfg: serviceShapeConfig{kind: client.KindSQLDatabase, spec: specSQLDatabase},
-	}
-	var schemaResponse frameworkresource.SchemaResponse
-	shape.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
-	if schemaResponse.Diagnostics.HasError() {
-		t.Fatalf("schema diagnostics: %v", schemaResponse.Diagnostics)
-	}
-
-	tables := testSQLDatabaseV2Tables(t, canonicalSQLDatabaseV2Tables())
-	plan := tfsdk.Plan{Schema: schemaResponse.Schema}
-	if diagnostics := plan.Set(ctx, sqlDatabaseModel{
-		ID: types.StringUnknown(), Name: types.StringValue("main"), Engine: types.StringValue("sqlite"),
-		MigrationsPath: types.StringNull(), SchemaVersion: types.Int64Unknown(), Tables: tables,
-		Space: types.StringNull(), ResourceVersion: types.StringUnknown(), DriftStatus: types.StringUnknown(),
-		Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
-	}); diagnostics.HasError() {
-		t.Fatalf("initialize plan: %v", diagnostics)
-	}
-	state := tfsdk.State{Schema: schemaResponse.Schema}
-	if diagnostics := state.Set(ctx, sqlDatabaseModel{
-		ID: types.StringValue("tkrn:prod:SQLDatabase:main"), Name: types.StringValue("main"),
-		Engine: types.StringValue("sqlite"), MigrationsPath: types.StringNull(),
-		SchemaVersion: types.Int64Value(1), Tables: tables, Space: types.StringValue("prod"),
-		ResourceVersion: types.StringValue("1"), DriftStatus: types.StringValue("current"),
-		Portability: types.StringValue("portable"), Outputs: types.MapValueMust(types.StringType, map[string]attr.Value{}),
-	}); diagnostics.HasError() {
-		t.Fatalf("initialize state: %v", diagnostics)
-	}
-
-	createResponse := frameworkresource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema}}
-	shape.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
-	assertVersionedHostRequired(t, createResponse.Diagnostics)
-
-	readResponse := frameworkresource.ReadResponse{State: state}
-	shape.Read(ctx, frameworkresource.ReadRequest{State: state}, &readResponse)
-	assertVersionedHostRequired(t, readResponse.Diagnostics)
-
-	updateResponse := frameworkresource.UpdateResponse{State: tfsdk.State{Schema: schemaResponse.Schema}}
-	shape.Update(ctx, frameworkresource.UpdateRequest{Plan: plan, State: state}, &updateResponse)
-	assertVersionedHostRequired(t, updateResponse.Diagnostics)
-
-	deleteResponse := frameworkresource.DeleteResponse{}
-	shape.Delete(ctx, frameworkresource.DeleteRequest{State: state}, &deleteResponse)
-	assertVersionedHostRequired(t, deleteResponse.Diagnostics)
-
-	if requestCount != 0 {
-		t.Fatalf("SQLDatabase@2.0.0 compatibility fallback sent %d requests, want zero", requestCount)
-	}
-
-	legacy := serviceShapeModel{
-		Name: types.StringValue("main"), Engine: types.StringValue("sqlite"),
-		MigrationsPath: types.StringNull(), SchemaVersion: types.Int64Unknown(),
-		Tables: types.ListNull(types.ObjectType{AttrTypes: sqlDatabaseTableAttrTypes}),
-		Space:  types.StringNull(), ResourceVersion: types.StringUnknown(),
-		Portability: types.StringUnknown(), Outputs: types.MapUnknown(types.StringType),
-	}
-	var legacyDiagnostics diag.Diagnostics
-	shape.put(ctx, &legacy, &legacyDiagnostics)
-	if legacyDiagnostics.HasError() {
-		t.Fatalf("historical SQLDatabase compatibility fallback diagnostics: %v", legacyDiagnostics)
-	}
-	if requestCount != 2 {
-		t.Fatalf("historical SQLDatabase compatibility fallback requests = %d, want preview + apply", requestCount)
 	}
 }
 

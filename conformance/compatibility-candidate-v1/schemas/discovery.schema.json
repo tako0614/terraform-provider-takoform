@@ -3,24 +3,11 @@
   "$id": "https://forms.takoform.com/conformance/compatibility-candidate-v1/discovery.schema.json",
   "title": "Takoform compatibility candidate discovery fixtures",
   "type": "object",
-  "required": ["format", "classification", "host", "capabilities"],
+  "required": ["format", "classification", "host"],
   "properties": {
     "format": { "const": "takoform.compatibility-candidate.discovery@v1" },
     "classification": { "const": "compatibility-candidate" },
-    "host": { "$ref": "host-discovery.schema.json" },
-    "capabilities": {
-      "type": "object",
-      "required": ["apiVersion", "resources", "adapters", "compat", "identity", "commercial"],
-      "properties": {
-        "apiVersion": { "const": "forms.takoform.com/v1alpha1" },
-        "resources": { "type": "object", "minProperties": 10, "maxProperties": 10, "additionalProperties": { "const": true } },
-        "adapters": { "type": "object" },
-        "compat": { "type": "object" },
-        "identity": { "type": "object" },
-        "commercial": { "type": "object" }
-      },
-      "additionalProperties": false
-    }
+    "host": { "$ref": "host-discovery.schema.json" }
   },
   "additionalProperties": false
 }

@@ -21,69 +21,33 @@ import (
 
 func discoveryHandler(t *testing.T, serviceForms bool) http.HandlerFunc {
 	t.Helper()
+	return versionedDiscoveryHandler(t, "forms.takoform.com/v1alpha1", serviceForms)
+}
+
+// versionedDiscoveryHandler serves the only discovery document a conforming
+// host may serve: a versioned same-origin API base plus the required feature
+// set. There is no unversioned capability document to fall back to.
+func versionedDiscoveryHandler(t *testing.T, discoveryVersion string, serviceForms bool) http.HandlerFunc {
+	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		switch r.URL.Path {
-		case "/.well-known/takoform":
-			body = map[string]any{
-				"api_versions": []string{"forms.takoform.com/v1alpha1"},
-				"features": map[string]bool{
-					"service_forms": serviceForms,
-				},
-				"endpoints": map[string]string{},
-			}
-		case "/v1/capabilities":
-			body = map[string]any{
-				"apiVersion": "forms.takoform.com/v1alpha1",
-				"resources": map[string]bool{
-					"EdgeWorker":             serviceForms,
-					"ObjectBucket":           serviceForms,
-					"KVStore":                serviceForms,
-					"Queue":                  serviceForms,
-					"SQLDatabase":            serviceForms,
-					"ContainerService":       serviceForms,
-					"VectorIndex":            serviceForms,
-					"DurableWorkflow":        serviceForms,
-					"StatefulActorNamespace": serviceForms,
-					"Schedule":               serviceForms,
-				},
-			}
-		default:
+		if r.URL.Path != "/.well-known/takoform" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 			http.NotFound(w, r)
 			return
 		}
-		raw, _ := json.Marshal(body)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(raw)
-	}
-}
-
-func versionedDiscoveryHandler(t *testing.T, discoveryVersion string, capabilityVersion string) http.HandlerFunc {
-	t.Helper()
-	return func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		switch r.URL.Path {
-		case "/.well-known/takoform":
-			body = map[string]any{
-				"api_versions": []string{discoveryVersion},
-				"features": map[string]bool{
-					"service_forms": true,
-				},
-				"endpoints": map[string]string{},
-			}
-		case "/v1/capabilities":
-			body = map[string]any{
-				"apiVersion": capabilityVersion,
-				"resources": map[string]bool{
-					"EdgeWorker":       false,
-					"ContainerService": false,
-				},
-			}
-		default:
-			t.Errorf("unexpected path %q", r.URL.Path)
-			http.NotFound(w, r)
-			return
+		origin := "http://" + r.Host
+		body := map[string]any{
+			"api_versions": []string{discoveryVersion},
+			"features": map[string]bool{
+				"service_forms":          serviceForms,
+				"exact_form_ref":         true,
+				"optimistic_concurrency": true,
+				"idempotent_lifecycle":   true,
+			},
+			"endpoints": map[string]string{
+				"api":   origin + "/apis/forms.takoform.com/v1alpha1",
+				"forms": origin + "/apis/forms.takoform.com/v1alpha1/forms",
+			},
 		}
 		raw, _ := json.Marshal(body)
 		w.Header().Set("Content-Type", "application/json")
@@ -219,9 +183,9 @@ func TestProviderStateExcludesBackendCredentialAndPriceAuthority(t *testing.T) {
 	}
 }
 
-func TestConfigureClientUsesAdvertisedVersionedEndpointWithoutV1Capabilities(t *testing.T) {
+func TestConfigureClientUsesOnlyTheAdvertisedVersionedEndpoint(t *testing.T) {
 	var server *httptest.Server
-	legacyRequests := 0
+	unversionedRequests := 0
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/.well-known/takoform":
@@ -229,25 +193,43 @@ func TestConfigureClientUsesAdvertisedVersionedEndpointWithoutV1Capabilities(t *
 				"api_versions": []string{"forms.takoform.com/v1alpha1"},
 				"features":     map[string]bool{"service_forms": true, "exact_form_ref": true, "optimistic_concurrency": true, "idempotent_lifecycle": true},
 				"endpoints": map[string]string{
-					"api":               server.URL + "/apis/forms.takoform.com/v1alpha1",
-					"forms":             server.URL + "/apis/forms.takoform.com/v1alpha1/forms",
-					"compatibility_api": server.URL + "/v1",
+					"api":   server.URL + "/apis/forms.takoform.com/v1alpha1",
+					"forms": server.URL + "/apis/forms.takoform.com/v1alpha1/forms",
 				},
 			})
-		case "/v1/capabilities":
-			legacyRequests++
-			http.Error(w, "legacy endpoint must not be called", http.StatusInternalServerError)
 		default:
+			if strings.HasPrefix(r.URL.Path, "/v1/") {
+				unversionedRequests++
+			}
 			http.NotFound(w, r)
 		}
 	}))
 	defer server.Close()
-	configured, err := configureClient(context.Background(), server.URL, "token", server.Client())
-	if err != nil {
+	if _, err := configureClient(context.Background(), server.URL, "token", server.Client()); err != nil {
 		t.Fatal(err)
 	}
-	if configured.UsesCompatibilityFallback() || legacyRequests != 0 {
-		t.Fatalf("unexpected compatibility fallback=%v legacyRequests=%d", configured.UsesCompatibilityFallback(), legacyRequests)
+	if unversionedRequests != 0 {
+		t.Fatalf("provider configuration touched %d unversioned endpoints", unversionedRequests)
+	}
+}
+
+// TestConfigureClientRejectsHostsWithoutAVersionedEndpoint proves the provider
+// fails closed instead of downgrading to an unversioned Resource API.
+func TestConfigureClientRejectsHostsWithoutAVersionedEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/takoform" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"api_versions": []string{"forms.takoform.com/v1alpha1"},
+			"features":     map[string]bool{"service_forms": true},
+			"endpoints":    map[string]string{},
+		})
+	}))
+	defer server.Close()
+	if _, err := configureClient(context.Background(), server.URL, "token", server.Client()); err == nil {
+		t.Fatal("expected a fail-closed configuration error")
 	}
 }
 
@@ -369,88 +351,11 @@ func providerResourceTypeNames(t *testing.T) []string {
 	return got
 }
 
-func TestConfigureClient_AcceptsContainerServiceOnlyCapabilities(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		switch r.URL.Path {
-		case "/.well-known/takoform":
-			body = map[string]any{
-				"api_versions": []string{"forms.takoform.com/v1alpha1"},
-				"features": map[string]bool{
-					"service_forms": true,
-				},
-				"endpoints": map[string]string{},
-			}
-		case "/v1/capabilities":
-			body = map[string]any{
-				"apiVersion": "forms.takoform.com/v1alpha1",
-				"resources": map[string]bool{
-					"EdgeWorker":       false,
-					"ContainerService": true,
-				},
-			}
-		default:
-			t.Errorf("unexpected path %q", r.URL.Path)
-			http.NotFound(w, r)
-			return
-		}
-		raw, _ := json.Marshal(body)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(raw)
-	}))
-	defer srv.Close()
-
-	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client(), true)
-	if err != nil {
-		t.Fatalf("configureClient: %v", err)
-	}
-	if !c.Capabilities.SupportsResource("ContainerService") {
-		t.Fatalf("expected ContainerService capability cached")
-	}
-}
-
-func TestConfigureClient_AcceptsServiceFormAPIWithNoEnabledForms(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		switch r.URL.Path {
-		case "/.well-known/takoform":
-			body = map[string]any{
-				"api_versions": []string{"forms.takoform.com/v1alpha1"},
-				"features": map[string]bool{
-					"service_forms": true,
-				},
-				"endpoints": map[string]string{},
-			}
-		case "/v1/capabilities":
-			body = map[string]any{
-				"apiVersion": "forms.takoform.com/v1alpha1",
-				"resources":  map[string]bool{},
-			}
-		default:
-			t.Errorf("unexpected path %q", r.URL.Path)
-			http.NotFound(w, r)
-			return
-		}
-		raw, _ := json.Marshal(body)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(raw)
-	}))
-	defer srv.Close()
-
-	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client(), true)
-	if err != nil {
-		t.Fatalf("configureClient: %v", err)
-	}
-	if c == nil {
-		t.Fatalf("expected a client")
-	}
-}
-
 func TestConfigureClient_AcceptsServiceForms(t *testing.T) {
 	srv := httptest.NewServer(discoveryHandler(t, true))
 	defer srv.Close()
 
-	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client(), true)
+	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client())
 	if err != nil {
 		t.Fatalf("configureClient: %v", err)
 	}
@@ -463,7 +368,7 @@ func TestConfigureClient_RejectsWhenServiceFormsFalse(t *testing.T) {
 	srv := httptest.NewServer(discoveryHandler(t, false))
 	defer srv.Close()
 
-	_, err := configureClient(context.Background(), srv.URL, "", srv.Client(), true)
+	_, err := configureClient(context.Background(), srv.URL, "", srv.Client())
 	if err == nil {
 		t.Fatalf("expected configuration to fail when service_forms is false")
 	}
@@ -473,28 +378,15 @@ func TestConfigureClient_RejectsWhenServiceFormsFalse(t *testing.T) {
 }
 
 func TestConfigureClient_RejectsUnsupportedDiscoveryVersion(t *testing.T) {
-	srv := httptest.NewServer(versionedDiscoveryHandler(t, "forms.takoform.com/v0", "forms.takoform.com/v1alpha1"))
+	srv := httptest.NewServer(versionedDiscoveryHandler(t, "forms.takoform.com/v0", true))
 	defer srv.Close()
 
-	_, err := configureClient(context.Background(), srv.URL, "", srv.Client(), true)
+	_, err := configureClient(context.Background(), srv.URL, "", srv.Client())
 	if err == nil {
 		t.Fatalf("expected configuration to fail on unsupported discovery api version")
 	}
 	if !strings.Contains(err.Error(), "does not advertise API version") {
 		t.Fatalf("expected api version diagnostic, got: %v", err)
-	}
-}
-
-func TestConfigureClient_RejectsUnsupportedCapabilitiesVersion(t *testing.T) {
-	srv := httptest.NewServer(versionedDiscoveryHandler(t, "forms.takoform.com/v1alpha1", "forms.takoform.com/v0"))
-	defer srv.Close()
-
-	_, err := configureClient(context.Background(), srv.URL, "", srv.Client(), true)
-	if err == nil {
-		t.Fatalf("expected configuration to fail on unsupported capabilities api version")
-	}
-	if !strings.Contains(err.Error(), "unsupported capabilities apiVersion") {
-		t.Fatalf("expected capabilities apiVersion diagnostic, got: %v", err)
 	}
 }
 
@@ -523,23 +415,5 @@ func TestFirstNonEmpty(t *testing.T) {
 	}
 	if got := firstNonEmpty("", ""); got != "" {
 		t.Fatalf("expected empty, got %q", got)
-	}
-}
-
-func TestParseExplicitBool(t *testing.T) {
-	for _, value := range []string{"", "0", "false", "FALSE", "no"} {
-		got, err := parseExplicitBool(value)
-		if err != nil || got {
-			t.Fatalf("parseExplicitBool(%q) = %v, %v", value, got, err)
-		}
-	}
-	for _, value := range []string{"1", "true", "TRUE", "yes"} {
-		got, err := parseExplicitBool(value)
-		if err != nil || !got {
-			t.Fatalf("parseExplicitBool(%q) = %v, %v", value, got, err)
-		}
-	}
-	if _, err := parseExplicitBool("fallback-please"); err == nil {
-		t.Fatal("expected invalid compatibility fallback value to fail closed")
 	}
 }

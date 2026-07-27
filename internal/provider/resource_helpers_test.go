@@ -91,35 +91,6 @@ func TestVersionedTypedReadsStopOnExactGet404(t *testing.T) {
 	}
 }
 
-func TestCompatibilityTypedReadsUseObserveOnly(t *testing.T) {
-	for _, kind := range typedResourceKinds() {
-		kind := kind
-		t.Run(kind, func(t *testing.T) {
-			requests := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requests++
-				if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/resources/"+kind+"/fixture/observe") {
-					t.Errorf("compatibility read = %s %s, want observe only", r.Method, r.URL.Path)
-				}
-				_ = json.NewEncoder(w).Encode(client.Resource{
-					APIVersion: client.APIVersion, Kind: kind,
-					Metadata: client.Metadata{Name: "fixture", Space: "prod"},
-					Status:   &client.Status{Conditions: []client.Condition{{Type: "Drifted", Status: "False"}}},
-				})
-			}))
-			defer server.Close()
-			observed, err := observeResourceForRead(context.Background(), client.NewCompatibilityFallback(server.URL, "", server.Client()), kind, "fixture", "prod", providerCandidateForms()[kind])
-			if err != nil {
-				t.Fatal(err)
-			}
-			assertTypedDriftState(t, kind, observed, "current")
-			if requests != 1 {
-				t.Fatalf("requests = %d, want one observe", requests)
-			}
-		})
-	}
-}
-
 func typedResourceKinds() []string {
 	return []string{
 		client.KindEdgeWorker, client.KindObjectBucket, client.KindKVStore, client.KindQueue,
@@ -170,6 +141,36 @@ func writeProviderDiscovery(t *testing.T, w http.ResponseWriter, origin string) 
 			"api": origin + "/apis/forms.takoform.com/v1alpha1",
 		},
 	})
+}
+
+func ptrForm(form client.InstalledFormReference) *client.InstalledFormReference {
+	return &form
+}
+
+// writeProviderFormAvailability answers the exact-availability probe every
+// versioned mutation performs before it sends desired state.
+func writeProviderFormAvailability(t *testing.T, w http.ResponseWriter, forms ...client.InstalledFormReference) {
+	t.Helper()
+	available := make([]client.FormAvailability, 0, len(forms))
+	for _, form := range forms {
+		available = append(available, client.FormAvailability{
+			Identity: form, DefinitionKnown: true, Installed: true, Executable: true,
+			Activated: true, AvailableToPrincipal: true,
+			Operations: []string{"create", "read", "update", "delete", "import", "observe", "refresh"},
+		})
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"forms": available})
+}
+
+// mustDiscoveredProviderClient returns a client that has negotiated the
+// versioned API base, which every provider resource requires.
+func mustDiscoveredProviderClient(t *testing.T, server *httptest.Server) *client.Client {
+	t.Helper()
+	c := client.New(server.URL, "", server.Client())
+	if _, err := c.Discover(context.Background()); err != nil {
+		t.Fatalf("discover test host: %v", err)
+	}
+	return c
 }
 
 func assertProviderExactQuery(t *testing.T, r *http.Request, form client.InstalledFormReference) {

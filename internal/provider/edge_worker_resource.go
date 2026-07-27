@@ -274,13 +274,6 @@ func (r *edgeWorkerResource) assertConfigured(diags *diag.Diagnostics) bool {
 		diags.AddError("EdgeWorker FormRef missing", "This provider build has no exact candidate EdgeWorker FormRef. This is a provider bug.")
 		return false
 	}
-	if r.data.client.UsesCompatibilityFallback() && !r.data.capabilities.SupportsResource(client.KindEdgeWorker) {
-		diags.AddError(
-			"EdgeWorker not supported",
-			"The configured endpoint does not advertise the EdgeWorker Service Form.",
-		)
-		return false
-	}
 	return true
 }
 
@@ -294,9 +287,6 @@ func (r *edgeWorkerResource) put(ctx context.Context, plan *edgeWorkerModel, dia
 	body.Form = &form
 	if !plan.ResourceVersion.IsNull() && !plan.ResourceVersion.IsUnknown() {
 		body.Metadata.ResourceVersion = plan.ResourceVersion.ValueString()
-	}
-	if r.data.client.UsesCompatibilityFallback() {
-		body.Metadata.ManagedBy = client.ManagedByOpenTofu
 	}
 	r.data.serviceFormMutate.Lock()
 	defer r.data.serviceFormMutate.Unlock()

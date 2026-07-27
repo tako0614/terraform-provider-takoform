@@ -22,6 +22,8 @@ const runtimeArtifactSetPath = "forms/standard-runtime-artifact-set.json"
 
 var (
 	sha256DigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+	repositorySlug      = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
+	commitSHA1          = regexp.MustCompile(`^[a-f0-9]{40}$`)
 	unsafeFixtureString = regexp.MustCompile(`(?i)(?:example\.(?:com|test)|\.test(?:/|$)|localhost|127\.0\.0\.1)`)
 )
 
@@ -249,17 +251,25 @@ func readRuntimeArtifactSet(root string) (RuntimeArtifactSet, error) {
 }
 
 func verifyRuntimeArtifactSet(set RuntimeArtifactSet) error {
-	if set.Format != "takoform.standard-runtime-artifact-set@v1" || set.Status != "published-immutable-readback" ||
-		set.Source.Repository != "tako0614/takosumi" || set.Source.ReleaseTag != "standard-form-runtime-v1.0.3" ||
-		!regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(set.Source.SourceCommit) ||
-		set.Source.ReleaseURL != "https://github.com/tako0614/takosumi/releases/tag/"+set.Source.ReleaseTag {
+	if set.Format != "takoform.standard-runtime-artifact-set@v1" || set.Status != "published-immutable-readback" {
+		return fmt.Errorf("standard runtime artifact set identity is invalid")
+	}
+	// The conformance runtime is published by whichever host proved the
+	// candidate set. This repository pins the exact immutable bytes, never the
+	// publisher: a Takoform standard may not require one named host.
+	if !repositorySlug.MatchString(set.Source.Repository) || strings.TrimSpace(set.Source.ReleaseTag) == "" ||
+		!commitSHA1.MatchString(set.Source.SourceCommit) {
 		return fmt.Errorf("standard runtime artifact source identity is invalid")
+	}
+	downloadPrefix, err := releaseDownloadPrefix(set.Source.ReleaseURL, set.Source.ReleaseTag)
+	if err != nil {
+		return err
 	}
 	expectedEvidence := map[string]struct{}{
 		"runtime-manifest.json": {}, "release-manifest.json": {}, "release-safety-readback.json": {},
 	}
 	for _, evidence := range set.ReleaseEvidence {
-		if _, ok := expectedEvidence[evidence.Name]; !ok || evidence.Size <= 0 || !sha256DigestPattern.MatchString(evidence.Digest) || !exactReleaseAssetURL(evidence.URL, set.Source.ReleaseTag, evidence.Name) {
+		if _, ok := expectedEvidence[evidence.Name]; !ok || evidence.Size <= 0 || !sha256DigestPattern.MatchString(evidence.Digest) || evidence.URL != downloadPrefix+evidence.Name {
 			return fmt.Errorf("invalid runtime release evidence %s", evidence.Name)
 		}
 		delete(expectedEvidence, evidence.Name)
@@ -278,11 +288,12 @@ func verifyRuntimeArtifactSet(set RuntimeArtifactSet) error {
 		seen[artifact.Kind] = struct{}{}
 		switch artifact.Kind {
 		case "EdgeWorker":
-			if artifact.Name != "edge-worker.mjs" || artifact.Size <= 0 || !exactReleaseAssetURL(artifact.URL, set.Source.ReleaseTag, artifact.Name) || artifact.Reference != "" || artifact.ArtifactRef != "" {
+			if artifact.Name != "edge-worker.mjs" || artifact.Size <= 0 || artifact.URL != downloadPrefix+artifact.Name || artifact.Reference != "" || artifact.ArtifactRef != "" {
 				return fmt.Errorf("invalid EdgeWorker runtime artifact")
 			}
 		case "DurableWorkflow":
-			if artifact.Name != "durable-workflow.mjs" || artifact.Size <= 0 || !exactReleaseAssetURL(artifact.URL, set.Source.ReleaseTag, artifact.Name) || artifact.ArtifactRef != "standard-form-runtime/v1.0.3/durable-workflow.mjs" || artifact.Reference != "" {
+			if artifact.Name != "durable-workflow.mjs" || artifact.Size <= 0 || artifact.URL != downloadPrefix+artifact.Name ||
+				artifact.ArtifactRef != "standard-form-runtime/"+set.Source.ReleaseTag[len("standard-form-runtime-"):]+"/durable-workflow.mjs" || artifact.Reference != "" {
 				return fmt.Errorf("invalid DurableWorkflow runtime artifact")
 			}
 		case "ContainerService":
@@ -296,9 +307,15 @@ func verifyRuntimeArtifactSet(set RuntimeArtifactSet) error {
 	return nil
 }
 
-func exactReleaseAssetURL(value, tag, name string) bool {
-	want := "https://github.com/tako0614/takosumi/releases/download/" + tag + "/" + name
-	return value == want
+// releaseDownloadPrefix derives the exact asset prefix from the declared
+// immutable release page. Every asset URL must live under the same release, so
+// one host cannot mix bytes from another origin into a proven set.
+func releaseDownloadPrefix(releaseURL, tag string) (string, error) {
+	const tagSegment = "/releases/tag/"
+	if !strings.HasPrefix(releaseURL, "https://") || !strings.HasSuffix(releaseURL, tagSegment+tag) {
+		return "", fmt.Errorf("standard runtime release URL must be an https release page ending in %s%s", tagSegment, tag)
+	}
+	return strings.TrimSuffix(releaseURL, tagSegment+tag) + "/releases/download/" + tag + "/", nil
 }
 
 func rejectUnsafeFixtureStrings(kind string, value any) error {

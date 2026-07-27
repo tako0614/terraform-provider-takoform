@@ -112,9 +112,8 @@ such as `authorization`, `oauthClient`, `sessionCookie`, `apiKeyValue`,
 The provider's ten kinds now have independent exact `1.0.1 / standard`
 definition candidates and local structural fixtures. Their package-set
 classification remains `structural-candidate`; `status: standard` pins proposed
-final definition bytes and is not admission. Their earlier `0.0.0-legacy.1`
-characterization packages remain compatibility candidates. Both sets are ten
-exact one-definition packages, never one multi-definition package. Portable
+final definition bytes and is not admission. Every package is an exact
+one-definition package, never one multi-definition package. Portable
 host/provider admission evidence is externally supplied and is not synthesized
 by the package generator; only authenticated evidence may classify an exact
 package `portable-standard`.

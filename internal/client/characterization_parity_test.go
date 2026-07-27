@@ -12,32 +12,29 @@ import (
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/characterization"
+	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
 )
 
 func TestCompatibilityCandidateDiscoveryParity(t *testing.T) {
 	t.Parallel()
 	fixture := mustLoadDiscoveryFixture(t)
 	var host Discovery
-	var capabilities ProductCapabilities
 	mustUnmarshal(t, fixture.Host, &host)
-	mustUnmarshal(t, fixture.Capabilities, &capabilities)
 
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/.well-known/takoform":
-			candidate := host
-			candidate.Endpoints.Capabilities = server.URL + "/v1/capabilities"
-			writeJSON(t, w, candidate)
-		case "/v1/capabilities":
-			writeJSON(t, w, capabilities)
-		default:
+		if request.URL.Path != "/.well-known/takoform" {
 			http.NotFound(w, request)
+			return
 		}
+		candidate := host
+		candidate.Endpoints.API = server.URL + "/apis/" + APIVersion
+		candidate.Endpoints.Forms = candidate.Endpoints.API + "/forms"
+		writeJSON(t, w, candidate)
 	}))
 	defer server.Close()
 
-	client := NewCompatibilityFallback(server.URL, "fixture-token", server.Client())
+	client := New(server.URL, "fixture-token", server.Client())
 	discovered, err := client.Discover(context.Background())
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
@@ -45,16 +42,9 @@ func TestCompatibilityCandidateDiscoveryParity(t *testing.T) {
 	if !discovered.SupportsServiceForms() || len(discovered.APIVersions) != 1 || discovered.APIVersions[0] != APIVersion {
 		t.Fatalf("discovery drifted: %#v", discovered)
 	}
-	gotCapabilities, err := client.GetCapabilities(context.Background())
-	if err != nil {
-		t.Fatalf("GetCapabilities: %v", err)
-	}
-	if len(gotCapabilities.Resources) != len(characterization.ExpectedKinds) {
-		t.Fatalf("capabilities advertise %d resources, want %d", len(gotCapabilities.Resources), len(characterization.ExpectedKinds))
-	}
-	for _, identity := range characterization.ExpectedKinds {
-		if !gotCapabilities.SupportsResource(identity.Kind) {
-			t.Errorf("capabilities do not advertise %s", identity.Kind)
+	for _, feature := range []string{"exact_form_ref", "optimistic_concurrency", "idempotent_lifecycle"} {
+		if !discovered.HasFeature(feature) {
+			t.Errorf("characterized discovery does not advertise features.%s", feature)
 		}
 	}
 }
@@ -68,17 +58,30 @@ func TestCompatibilityCandidateDeployWireParity(t *testing.T) {
 		identity := identity
 		t.Run(identity.Kind, func(t *testing.T) {
 			want := desired[identity.Kind]
+			form := mustCandidateForm(t, identity.Kind)
+			want.Form = &form
 			response := observed[identity.Kind]
+			response.Form = &form
 			previewSeen := false
 			applySeen := false
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+				base := "/apis/" + APIVersion
 				switch {
-				case request.Method == http.MethodPost && request.URL.Path == "/v1/resources/preview":
+				case request.Method == http.MethodGet && request.URL.Path == "/.well-known/takoform":
+					writeVersionedDiscovery(t, w, server.URL)
+				case request.Method == http.MethodGet && request.URL.Path == base+"/forms":
+					writeJSON(t, w, map[string]any{"forms": []FormAvailability{{
+						Identity: form, DefinitionKnown: true, Installed: true, Executable: true,
+						Activated: true, AvailableToPrincipal: true,
+						Operations: []string{"create", "read", "update", "delete", "import", "observe", "refresh"},
+					}}})
+				case request.Method == http.MethodPost && request.URL.Path == base+"/resources/preview":
 					previewSeen = true
 					var body Resource
 					mustDecodeRequest(t, request, &body)
 					assertSameCandidateJSON(t, body, want)
-					writeJSON(t, w, PreviewResourceResult{Resource: body, PlanDigest: "fixture-plan-digest"})
+					writeJSON(t, w, PreviewResourceResult{Resource: body, Review: PreviewReview{PlanDigest: "fixture-plan-digest"}})
 				case request.Method == http.MethodPut && request.URL.Path == resourcePath(identity.Kind, want.Metadata.Name):
 					applySeen = true
 					var body struct {
@@ -87,9 +90,10 @@ func TestCompatibilityCandidateDeployWireParity(t *testing.T) {
 					}
 					mustDecodeRequest(t, request, &body)
 					assertSameCandidateJSON(t, body.Resource, want)
-					if body.Review.PlanDigest != "fixture-plan-digest" || body.Review.QuoteID != "" || body.Review.QuoteDigest != "" {
+					if body.Review.PlanDigest != "fixture-plan-digest" {
 						t.Errorf("review evidence drifted: %#v", body.Review)
 					}
+					w.Header().Set("ETag", `"1"`)
 					writeJSON(t, w, response)
 				default:
 					http.Error(w, "unexpected request", http.StatusNotFound)
@@ -97,7 +101,10 @@ func TestCompatibilityCandidateDeployWireParity(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewCompatibilityFallback(server.URL, "fixture-token", server.Client())
+			client := New(server.URL, "fixture-token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatalf("Discover: %v", err)
+			}
 			got, err := client.PutResource(context.Background(), identity.Kind, want.Metadata.Name, &want)
 			if err != nil {
 				t.Fatalf("PutResource: %v", err)
@@ -117,20 +124,40 @@ func TestCompatibilityCandidateObserveWireParity(t *testing.T) {
 		identity := identity
 		t.Run(identity.Kind, func(t *testing.T) {
 			want := observed[identity.Kind]
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-				if request.Method != http.MethodPost || request.URL.Path != resourcePath(identity.Kind, want.Metadata.Name)+"/observe" || request.URL.Query().Get("space") != want.Metadata.Space {
+			form := mustCandidateForm(t, identity.Kind)
+			want.Form = &form
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+				switch {
+				case request.Method == http.MethodGet && request.URL.Path == "/.well-known/takoform":
+					writeVersionedDiscovery(t, w, server.URL)
+				case request.Method == http.MethodPost && request.URL.Path == resourcePath(identity.Kind, want.Metadata.Name)+"/observe":
+					if request.URL.Query().Get("space") != want.Metadata.Space {
+						http.Error(w, "unexpected space", http.StatusNotFound)
+						return
+					}
+					if request.Header.Get("If-Match") != `"1"` {
+						t.Errorf("observe is not generation fenced: If-Match=%q", request.Header.Get("If-Match"))
+					}
+					w.Header().Set("ETag", `"1"`)
+					writeJSON(t, w, map[string]any{"resource": want, "observation": map[string]any{"status": "current"}})
+				default:
 					http.Error(w, "unexpected request", http.StatusNotFound)
-					return
 				}
-				writeJSON(t, w, want)
 			}))
 			defer server.Close()
 
-			client := NewCompatibilityFallback(server.URL, "fixture-token", server.Client())
-			got, err := client.ObserveResource(context.Background(), identity.Kind, want.Metadata.Name, want.Metadata.Space)
+			client := New(server.URL, "fixture-token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatalf("Discover: %v", err)
+			}
+			got, err := client.ObserveResource(context.Background(), identity.Kind, want.Metadata.Name, want.Metadata.Space,
+				MutationFence{ResourceVersion: "1", Form: form})
 			if err != nil {
 				t.Fatalf("ObserveResource: %v", err)
 			}
+			got.Status.DriftStatus = ""
+			got.Metadata.ResourceVersion = want.Metadata.ResourceVersion
 			assertSameCandidateJSON(t, *got, want)
 		})
 	}
@@ -146,7 +173,13 @@ func TestCompatibilityCandidateAPIErrorParity(t *testing.T) {
 	for _, fixture := range document.Cases {
 		fixture := fixture
 		t.Run(fixture.Kind, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			form := mustCandidateForm(t, fixture.Kind)
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+				if request.URL.Path == "/.well-known/takoform" {
+					writeVersionedDiscovery(t, w, server.URL)
+					return
+				}
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(fixture.API.Status)
 				if _, err := w.Write(fixture.API.Body); err != nil {
@@ -155,8 +188,11 @@ func TestCompatibilityCandidateAPIErrorParity(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewCompatibilityFallback(server.URL, "fixture-token", server.Client())
-			_, err := client.GetResource(context.Background(), fixture.Kind, "fixture", "fixture-space")
+			client := New(server.URL, "fixture-token", server.Client())
+			if _, err := client.Discover(context.Background()); err != nil {
+				t.Fatalf("Discover: %v", err)
+			}
+			_, err := client.GetResource(context.Background(), fixture.Kind, "fixture", "fixture-space", form)
 			var apiError *APIError
 			if !errors.As(err, &apiError) {
 				t.Fatalf("GetResource error = %T %v, want *APIError", err, err)
@@ -165,6 +201,21 @@ func TestCompatibilityCandidateAPIErrorParity(t *testing.T) {
 				t.Fatalf("API error drifted: %#v", apiError)
 			}
 		})
+	}
+}
+
+func mustCandidateForm(t *testing.T, kind string) InstalledFormReference {
+	t.Helper()
+	ref, err := formregistry.ForKind(kind)
+	if err != nil {
+		t.Fatalf("candidate FormRef for %s: %v", kind, err)
+	}
+	return InstalledFormReference{
+		FormRef: FormRef{
+			APIVersion: ref.APIVersion, Kind: ref.Kind,
+			DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest,
+		},
+		PackageDigest: ref.PackageDigest,
 	}
 }
 
@@ -195,7 +246,7 @@ func mustLoadResourceFixtures(t *testing.T, category string) map[string]Resource
 }
 
 func resourcePath(kind, name string) string {
-	return "/v1/resources/" + url.PathEscape(kind) + "/" + url.PathEscape(name)
+	return "/apis/" + APIVersion + "/resources/" + url.PathEscape(kind) + "/" + url.PathEscape(name)
 }
 
 func mustUnmarshal(t *testing.T, raw []byte, target any) {
@@ -242,9 +293,6 @@ func assertSameCandidateJSON(t *testing.T, got, want any) {
 func TestCompatibilityCandidateAPIVersionConstant(t *testing.T) {
 	if APIVersion != characterization.APIVersion {
 		t.Fatalf("client APIVersion = %q, candidate fixture = %q", APIVersion, characterization.APIVersion)
-	}
-	if ManagedByOpenTofu != "opentofu" {
-		t.Fatalf("managedBy = %q, want opentofu", ManagedByOpenTofu)
 	}
 	for _, identity := range characterization.ExpectedKinds {
 		if identity.Kind == "" || identity.ResourceType == "" {

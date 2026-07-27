@@ -33,12 +33,12 @@ func run(args []string, output io.Writer) error {
 		}
 		values[key] = args[1]
 	}
-	for _, key := range []string{"host-reports", "provider-reports", "output-dir", "admission-version", "host-source-commit", "host-takoform-source-commit", "provider-source-commit", "host-run-id", "provider-run-id"} {
+	for _, key := range []string{"host-id", "host-reports", "provider-reports", "output-dir", "admission-version", "host-source-commit", "host-takoform-source-commit", "provider-source-commit", "host-run-id", "provider-run-id"} {
 		if values[key] == "" {
 			return usageError()
 		}
 	}
-	if len(values) != 9 {
+	if len(values) != 10 {
 		return usageError()
 	}
 	root, err := providerlifecycle.RepoRoot(".")
@@ -64,6 +64,7 @@ func run(args []string, output io.Writer) error {
 		OutputDir: values["output-dir"], AdmissionVersion: values["admission-version"], SourceCommit: commit,
 		HostSourceCommit: values["host-source-commit"], HostTakoformSourceCommit: values["host-takoform-source-commit"], ProviderSourceCommit: values["provider-source-commit"],
 		HostWorkflowRunID: values["host-run-id"], ProviderWorkflowRunID: values["provider-run-id"],
+		HostID: values["host-id"],
 	}); err != nil {
 		return err
 	}
@@ -72,5 +73,5 @@ func run(args []string, output io.Writer) error {
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: standard-admission-material build --host-reports DIR --provider-reports DIR --output-dir DIR --admission-version VERSION --host-source-commit COMMIT --host-takoform-source-commit COMMIT --provider-source-commit COMMIT --host-run-id ID --provider-run-id ID")
+	return fmt.Errorf("usage: standard-admission-material build --host-id ID --host-reports DIR --provider-reports DIR --output-dir DIR --admission-version VERSION --host-source-commit COMMIT --host-takoform-source-commit COMMIT --provider-source-commit COMMIT --host-run-id ID --provider-run-id ID")
 }
