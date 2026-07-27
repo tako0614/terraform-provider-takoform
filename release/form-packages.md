@@ -4,6 +4,30 @@ The repository has two keyless, data-only release lanes. They do not share the
 Terraform provider's GPG key, `v*` tag namespace, or `provider-release`
 Environment.
 
+## Releasing the rebuilt Form set
+
+Forms carry independent versions, so there is no single set version to release
+them under. Each Form is released on its own tag, from its own reviewed release
+source, and is published or not published independently of every other Form.
+
+[`forms/release-plan.json`](../forms/release-plan.json) is the derived list of
+those releases, regenerated with the packages and verified by
+`standard-form-conformance verify`. Print the dispatch list with:
+
+```console
+go run ./cmd/standard-form-conformance release-plan
+```
+
+For each Form: create its exact `forms/<release-id>/v<semver>` tag on the
+reviewed commit, then dispatch the protected `Release Form Package` workflow
+with that tag. The workflow refuses a tag that already owns a release, so a
+published version is never overwritten.
+
+Publishing proves published bytes and their publisher identity. It admits
+nothing: a Form becomes a portable standard only with a conforming host's
+signed lifecycle report, Registry installation readback, and signed admission
+evidence, none of which this repository can synthesize.
+
 ## Package source and tag
 
 A release source is one already-valid closed package directory:

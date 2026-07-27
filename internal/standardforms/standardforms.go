@@ -151,6 +151,9 @@ func Generate(root string) error {
 	if err := generateRetiredInventory(root); err != nil {
 		return err
 	}
+	if err := generateReleasePlan(root, entries); err != nil {
+		return err
+	}
 	return generatePublishedSurfaces(root)
 }
 
@@ -303,6 +306,9 @@ func Verify(root string) error {
 		if err := provider.VerifyStandardFormStructure(entry.Kind, desired); err != nil {
 			return err
 		}
+	}
+	if err := VerifyReleasePlan(root); err != nil {
+		return err
 	}
 	return VerifyMaterializableCandidate(root)
 }
