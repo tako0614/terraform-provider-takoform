@@ -578,3 +578,15 @@ h2 {
   .compare-row { flex-direction: column; gap: 6px; }
   .grow-card { padding: 22px 20px; }
 }
+
+.resource-domain {
+  margin: 1.75rem 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.72;
+}
+
+.resource-domain:first-of-type {
+  margin-top: 0.5rem;
+}
