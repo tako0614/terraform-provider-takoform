@@ -117,16 +117,6 @@ func (h Host) validate() error {
 	return nil
 }
 
-// ByCertificateIdentity selects the accepted host that signed a candidate.
-func (p Policy) ByCertificateIdentity(identity string) (Host, error) {
-	for _, host := range p.Hosts {
-		if host.CertificateIdentity == identity {
-			return host, nil
-		}
-	}
-	return Host{}, fmt.Errorf("no conforming host in %s signs with identity %q", PolicyPath, identity)
-}
-
 // ByHostID selects an accepted host by its reviewed identifier.
 func (p Policy) ByHostID(hostID string) (Host, error) {
 	for _, host := range p.Hosts {

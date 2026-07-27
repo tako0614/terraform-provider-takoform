@@ -1,9 +1,18 @@
 # `data.indexed@1`
 
-`data.indexed@1` is the portable bounded data plane declared by
-`IndexedStore`. It operates only on tables, primary keys, and indexes
-declared in the Resource's exact Form desired state. It is not a general SQL
-API.
+`data.indexed@1` is a portable bounded data plane. It operates only on the
+keys and indexes a Resource's exact Form desired state declares, and it is not
+a general SQL API.
+
+Requirement keywords are used as described in
+[`../conformance.md`](../conformance.md).
+
+**Status.** `IndexedStore` declares the `data.indexed@1` interface name, but no
+Form in this release requires the table-shaped desired state this operation
+contract was written against. The schemas here are therefore a proposed
+operation contract, implemented by `internal/indexedsql` and held to its
+retained request/response corpus by `go test ./internal/indexedsql`. A Form
+that requires it is a separate reviewed change.
 
 ## Interface declaration
 
@@ -144,7 +153,7 @@ not need to normalize floating-point ordering or equality. Every `integer` or
 `-9,007,199,254,740,991..9,007,199,254,740,991` so JSON implementations agree
 on the portable numeric range and exact integer identity.
 
-The complete key declaration is immutable in `IndexedStore`.
+A Form that adopts this contract MUST declare its key and index structure immutable.
 Changing it replaces the Resource. This version does not define an in-place
 schema migration operation.
 

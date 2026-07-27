@@ -430,7 +430,7 @@ func (r *formResource) put(ctx context.Context, values formValues, state *tfsdk.
 		diags.AddError("Failed to apply "+r.kind.Kind, err.Error())
 		return
 	}
-	diags.Append(r.setState(ctx, state, res, space, values)...)
+	diags.Append(r.setState(ctx, state, res, space, values, false)...)
 }
 
 func (r *formResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -461,7 +461,10 @@ func (r *formResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		resp.Diagnostics.AddError("Failed to read "+r.kind.Kind, err.Error())
 		return
 	}
-	resp.Diagnostics.Append(r.setState(ctx, &resp.State, res, space, values)...)
+	// A read is the only place host-observed desired state may replace what
+	// was configured: that is what makes import populate state and what makes
+	// an out-of-band change visible as a plan diff.
+	resp.Diagnostics.Append(r.setState(ctx, &resp.State, res, space, values, true)...)
 }
 
 func (r *formResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -502,7 +505,7 @@ func (r *formResource) ImportState(ctx context.Context, req resource.ImportState
 // setState writes host-owned observation back into Terraform state. Desired
 // values stay exactly as configured; only identity, fence, drift, portability,
 // and sanitized outputs come from the host.
-func (r *formResource) setState(ctx context.Context, state *tfsdk.State, res *client.Resource, space string, values formValues) diag.Diagnostics {
+func (r *formResource) setState(ctx context.Context, state *tfsdk.State, res *client.Resource, space string, values formValues, refresh bool) diag.Diagnostics {
 	var diags diag.Diagnostics
 	diags.Append(state.SetAttribute(ctx, path.Root("name"), types.StringValue(res.Metadata.Name))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("space"), types.StringValue(space))...)
@@ -528,7 +531,7 @@ func (r *formResource) setState(ctx context.Context, state *tfsdk.State, res *cl
 
 	if r.kind.Artifact {
 		source := artifactSourceValuesFromSpec(res.Spec["source"])
-		if values.Artifact.Path.IsNull() && values.Artifact.URL.IsNull() && values.Artifact.Ref.IsNull() {
+		if refresh || (values.Artifact.Path.IsNull() && values.Artifact.URL.IsNull() && values.Artifact.Ref.IsNull()) {
 			values.Artifact = source
 		}
 		diags.Append(state.SetAttribute(ctx, path.Root("artifact_path"), values.Artifact.Path)...)
@@ -538,7 +541,7 @@ func (r *formResource) setState(ctx context.Context, state *tfsdk.State, res *cl
 	}
 	if r.kind.Connections != formcatalog.ConnectionsAbsent {
 		connections := values.Connections
-		if connections.IsNull() || connections.IsUnknown() {
+		if refresh || connections.IsNull() || connections.IsUnknown() {
 			refreshed, connectionDiags := resourceConnectionsFromSpec(ctx, res.Spec["connections"])
 			diags.Append(connectionDiags...)
 			connections = refreshed
@@ -547,10 +550,13 @@ func (r *formResource) setState(ctx context.Context, state *tfsdk.State, res *cl
 	}
 	for _, field := range r.kind.Fields {
 		value := values.Fields[field.HCL]
-		if value == nil || value.IsUnknown() {
+		if refresh || value == nil || value.IsUnknown() {
 			value = fieldValueFromSpec(ctx, field, res.Spec[field.Wire], &diags)
 		}
-		if value.IsNull() && field.Default != "" {
+		// A portable default is the value a host applies when the field is
+		// absent, so state must show it rather than a null the next plan would
+		// try to fill.
+		if value.IsNull() && field.Type == formcatalog.TypeString && field.Default != "" {
 			value = types.StringValue(field.Default)
 		}
 		diags.Append(state.SetAttribute(ctx, path.Root(field.HCL), value)...)

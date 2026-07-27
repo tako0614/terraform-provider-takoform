@@ -53,7 +53,8 @@ jobs:
           go run ./cmd/provider-lifecycle-conformance provider-reports \
             --cli terraform --output-dir "$RUNNER_TEMP/provider-reports" \
             --source-commit "${GITHUB_SHA}"
-          test "$(find "$RUNNER_TEMP/provider-reports" -name provider-report.json -type f | wc -l)" -eq 10
+          declared="$(jq '.packages | length' forms/standard-package-set.json)"
+          test "$(find "$RUNNER_TEMP/provider-reports" -name provider-report.json -type f | wc -l)" -eq "${declared}"
           go run ./cmd/form-package conformance
           go run ./cmd/standard-form-conformance verify
           go run ./cmd/standard-form-conformance candidate-publication-check

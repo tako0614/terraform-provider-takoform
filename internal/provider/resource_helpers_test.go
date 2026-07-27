@@ -125,7 +125,7 @@ func assertTypedDriftState(t *testing.T, kind string, observed *client.Resource,
 	resource.Schema(context.Background(), frameworkresource.SchemaRequest{}, &response)
 	state := tfsdk.State{Schema: response.Schema, Raw: tftypes.NewValue(response.Schema.Type().TerraformType(context.Background()), nil)}
 	values := formValues{Fields: map[string]attr.Value{}, Artifact: nullArtifactSourceValues()}
-	if diags := resource.setState(context.Background(), &state, observed, "prod", values); diags.HasError() {
+	if diags := resource.setState(context.Background(), &state, observed, "prod", values, true); diags.HasError() {
 		t.Fatalf("status diagnostics: %v", diags)
 	}
 	var drift types.String

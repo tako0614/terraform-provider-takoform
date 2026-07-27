@@ -1,7 +1,7 @@
 ---
 page_title: "Provider: Takoform"
 description: |-
-  The Takoform provider manages ten portable, statically typed Service Forms through any conforming host.
+  The Takoform provider manages portable, statically typed Service Forms through any conforming host.
 ---
 
 # Takoform Provider

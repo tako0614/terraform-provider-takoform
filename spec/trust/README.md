@@ -74,14 +74,14 @@ extension.
 The FormRef, Form Definition, package-index and revocation schemas, RFC
 8785/I-JSON implementation, closed local verifier, positive/negative corpus,
 release builder, keyless Sigstore workflow, and append-only revocation delivery
-lane now exist. All ten `1.0.1` packages have real immutable releases; their
+lane now exist. The retired `1.0.1` packages have real immutable releases; their
 exact release closures and signed indexes are retained under `admission/v1`
 with a TUF-authenticated production root and a digest-pinned, version-bound
 aggregate package publisher policy. No revocation statement or admission activation has
 been released. Remote host distribution/install, host-side publisher-policy enforcement,
 activation, and revocation consumption still require implementation and live
-evidence. The ten current provider resources have local deterministic `1.0.1 /
-standard` definition candidate bytes and structural fixtures only. Their
+evidence. The current provider resources have local deterministic `standard`
+definition candidate bytes and structural fixtures only. Their
 inventory is `structural-candidate`, not `portable-standard`; definition status
 does not admit them. Passed host/provider lifecycle reports, portable negative
 wire-code coverage, Registry installation/readback, authenticated admission
@@ -220,7 +220,7 @@ checkout, and the annotated provider tag must verify against the pinned
 Sigstore authentication remains separate from that Git ref-existence fence.
 
 The production Sigstore trusted-root snapshot, the distinct package-index and
-Registry-readback publisher policies, all ten package-index bundles, and the exact immutable release
+Registry-readback publisher policies, every retired package-index bundle, and the exact immutable release
 readbacks are installed and digest-pinned by
 `admission/v1/published-package-set.json`. They pass the separate offline
 `published-package-check` but grant no admission authority. Exact mutually

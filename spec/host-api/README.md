@@ -34,7 +34,7 @@ read/lifecycle URLs carry all five fields as query parameters. A host MUST NOT s
 the requested Resource `metadata.name` / `metadata.space`, and a provider MUST
 fail closed when it observes such a substitution.
 
-The provider release's ten exact standard references are pinned by
+The provider release's exact standard references are pinned by
 [`forms/standard-package-set.json`](../../forms/standard-package-set.json).
 
 ## Resource lifecycle

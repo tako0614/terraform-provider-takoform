@@ -29,7 +29,7 @@ identity, and `https://token.actions.githubusercontent.com`. Report a missing
 transparency-log proof, a changed release asset, an unexpected workflow
 identity, a checkpoint rollback/omission/prefix rewrite, or a revocation that
 does not retain package bytes for observe/delete as a supply-chain
-vulnerability. The ten `1.0.0` Form Package releases are live and immutable,
+vulnerability. The retired `1.0.0` and `1.0.1` Form Package releases are live and immutable,
 and their exact retained release closures pass offline package-index
 verification. No admission activation or revocation release has been published
 yet.

@@ -121,34 +121,6 @@ type int64AtLeastValidator struct {
 	minimum int64
 }
 
-type listSizeBetweenValidator struct {
-	minimum int
-	maximum int
-}
-
-// ListSizeBetween validates a closed portable collection cardinality.
-func ListSizeBetween(minimum, maximum int) validator.List {
-	return listSizeBetweenValidator{minimum: minimum, maximum: maximum}
-}
-
-func (v listSizeBetweenValidator) Description(_ context.Context) string {
-	return fmt.Sprintf("list must contain between %d and %d values", v.minimum, v.maximum)
-}
-
-func (v listSizeBetweenValidator) MarkdownDescription(ctx context.Context) string {
-	return v.Description(ctx)
-}
-
-func (v listSizeBetweenValidator) ValidateList(_ context.Context, req validator.ListRequest, resp *validator.ListResponse) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-	size := len(req.ConfigValue.Elements())
-	if size < v.minimum || size > v.maximum {
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid list size", v.Description(context.Background()))
-	}
-}
-
 // Int64AtLeast validates a lower bound owned by the portable Form schema.
 func Int64AtLeast(minimum int64) validator.Int64 {
 	return int64AtLeastValidator{minimum: minimum}
@@ -234,10 +206,6 @@ func (v stringTokenValidator) ValidateString(_ context.Context, req validator.St
 	}
 }
 
-type setStringsTokenValidator struct {
-	minItems int
-}
-
 type setStringsPatternValidator struct {
 	minItems    int
 	pattern     string
@@ -280,52 +248,6 @@ func (v setStringsPatternValidator) ValidateSet(ctx context.Context, req validat
 		}
 		if !matched {
 			resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", v.description)
-		}
-	}
-}
-
-// SetStringsToken validates an extensible set of non-empty capability tokens.
-// The configured host remains the authority for whether a token is executable;
-// the provider checks only portable wire syntax.
-func SetStringsToken(minItems int) validator.Set {
-	return setStringsTokenValidator{minItems: minItems}
-}
-
-func (v setStringsTokenValidator) Description(_ context.Context) string {
-	return fmt.Sprintf("at least %d non-empty token(s) without whitespace", v.minItems)
-}
-
-func (v setStringsTokenValidator) MarkdownDescription(ctx context.Context) string {
-	return v.Description(ctx)
-}
-
-func (v setStringsTokenValidator) ValidateSet(ctx context.Context, req validator.SetRequest, resp *validator.SetResponse) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-	var elems []types.String
-	resp.Diagnostics.Append(req.ConfigValue.ElementsAs(ctx, &elems, false)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if len(elems) < v.minItems {
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Too few values",
-			fmt.Sprintf("at least %d value(s) required, got %d", v.minItems, len(elems)),
-		)
-	}
-	for _, elem := range elems {
-		if elem.IsNull() || elem.IsUnknown() {
-			continue
-		}
-		value := elem.ValueString()
-		if strings.TrimSpace(value) == "" || strings.ContainsFunc(value, unicode.IsSpace) {
-			resp.Diagnostics.AddAttributeError(
-				req.Path,
-				"Invalid value",
-				fmt.Sprintf("%q must be a non-empty token without whitespace", value),
-			)
 		}
 	}
 }

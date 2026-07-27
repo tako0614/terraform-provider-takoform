@@ -1,0 +1,66 @@
+package hostpolicy
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// TestReviewedPolicyLoads proves the committed allowlist is valid and that
+// Takosumi is one entry in it rather than the definition of a valid proof.
+func TestReviewedPolicyLoads(t *testing.T) {
+	policy, err := Load(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(policy.Hosts) == 0 {
+		t.Fatal("no conforming host is accepted")
+	}
+	for _, host := range policy.Hosts {
+		if _, err := policy.ByHostID(host.HostID); err != nil {
+			t.Fatalf("%s is not selectable: %v", host.HostID, err)
+		}
+	}
+	if _, err := policy.ByHostID("no-such-host"); err == nil {
+		t.Fatal("an unlisted host was selectable")
+	}
+}
+
+// TestPolicyRejectsUnusableEntries keeps the allowlist fail-closed: a malformed
+// entry must not silently widen who may sign admission input.
+func TestPolicyRejectsUnusableEntries(t *testing.T) {
+	valid := `{"format":"takoform.conforming-host-policy@v1","hosts":[{"hostId":"h","title":"H",` +
+		`"manifestFormat":"m","signedFormat":"s","certificateIdentity":"https://example.invalid/w.yml@refs/heads/main",` +
+		`"workflow":".github/workflows/w.yml","sourceRepository":"https://example.invalid/h.git","proofType":"p",` +
+		`"subject":"host:https://h.invalid","runnerVersionPrefix":"1.0.0+git.",` +
+		`"evidenceApiVersion":"h.portable-form-host-conformance/v1"}]}`
+	for name, mutation := range map[string]func(string) string{
+		"unknown field": func(s string) string { return strings.Replace(s, `"hostId":"h"`, `"hostId":"h","extra":1`, 1) },
+		"wrong format":  func(s string) string { return strings.Replace(s, "conforming-host-policy@v1", "other@v1", 1) },
+		"plaintext identity": func(s string) string {
+			return strings.Replace(s, "https://example.invalid/w.yml", "http://example.invalid/w.yml", 1)
+		},
+		"unscoped subject": func(s string) string { return strings.Replace(s, `"subject":"host:`, `"subject":"`, 1) },
+		"unnamespaced evidence": func(s string) string {
+			return strings.Replace(s, "h.portable-form-host-conformance/v1", "portable/v1", 1)
+		},
+		"missing runner prefix": func(s string) string {
+			return strings.Replace(s, `"runnerVersionPrefix":"1.0.0+git."`, `"runnerVersionPrefix":""`, 1)
+		},
+		"non-git source": func(s string) string {
+			return strings.Replace(s, "https://example.invalid/h.git", "https://example.invalid/h", 1)
+		},
+	} {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "admission", "v1"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(PolicyPath)), []byte(mutation(valid)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Load(root); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}

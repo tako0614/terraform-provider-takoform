@@ -110,8 +110,8 @@ such as `authorization`, `oauthClient`, `sessionCookie`, `apiKeyValue`,
 `privateKeyPem`, `invoice`, `paymentMethod`, `currency`, `taxCode`,
 `serviceOfferingId`, `managerIdentifier`, and `region` do not.
 
-The provider's ten kinds now have independent exact `1.0.1 / standard`
-definition candidates and local structural fixtures. Their package-set
+Every declared Form has an independent exact `standard` definition candidate
+and local structural fixtures. Their package-set
 classification remains `structural-candidate`; `status: standard` pins proposed
 final definition bytes and is not admission. Every package is an exact
 one-definition package, never one multi-definition package. Portable
