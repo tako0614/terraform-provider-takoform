@@ -1,0 +1,8 @@
+{
+  "configuration": {
+    "1 invalid key": "value"
+  },
+  "entityClass": "RoomEntity",
+  "migrationTag": "v1",
+  "name": "stateful-entity"
+}

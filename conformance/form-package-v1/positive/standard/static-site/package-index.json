@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "StaticSite",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:beaf832f2d0e6eff6a9a6ebd5bbfc540540d248b140df30b826f94fd76a59f57"
+    "schemaDigest": "sha256:04447bb460c3c398066cd7d5f2f57f0e36224046205c288c10fe4dd4cf0a1dba"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5685,
-      "digest": "sha256:33c976a94e0380ee01678777fec42cba86baf321115c67e39f7a3cd565c06499"
+      "size": 5711,
+      "digest": "sha256:28e9616cc66eca41a253bd5e94772aa5b2b64b7d1e15d62f577e3fa6ba8c2441"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,7 +23,7 @@
       "digest": "sha256:06de2aa3f49375e72bccc4f15083c263c65ce6a9eb9895d51616acffc5791ee3"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-cache_control_seconds.json",
       "mediaType": "application/json",
       "size": 260,
       "digest": "sha256:837dfe96b1d13b0ce7e3550866e3ad3aa08d2ace01a1cda6cb1f18568c59420f"

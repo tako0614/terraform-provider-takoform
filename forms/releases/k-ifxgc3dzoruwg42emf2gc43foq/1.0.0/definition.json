@@ -221,9 +221,15 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-partition_field",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-partition_field.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-retention_days",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-retention_days.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

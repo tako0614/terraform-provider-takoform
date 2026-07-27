@@ -90,6 +90,10 @@ func TestImportThenReadPopulatesEveryDeclaredField(t *testing.T) {
 				case formcatalog.TypeStringSet, formcatalog.TypeIntSet:
 					readResponse.State.GetAttribute(ctx, path.Root(field.HCL), &set)
 					isNull = set.IsNull()
+				case formcatalog.TypeStringMap:
+					var mapped types.Map
+					readResponse.State.GetAttribute(ctx, path.Root(field.HCL), &mapped)
+					isNull = mapped.IsNull()
 				default:
 					readResponse.State.GetAttribute(ctx, path.Root(field.HCL), &value)
 					isNull = value.IsNull()

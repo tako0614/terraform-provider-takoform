@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "AnalyticsDataset",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:a8fa22d648505ac2adf8dfdceb6d27498d4d8538aee1c275ec51ecb2df6c2d5d"
+    "schemaDigest": "sha256:0e47748c22ddee2611e4f374fb04b5246fff597f42252c521ec52c4be565548d"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5219,
-      "digest": "sha256:0a8fa2a34af833ac9bf559109f9078f24798d33f9a5ad7870d9d3153be5a380e"
+      "size": 5423,
+      "digest": "sha256:2a7a553cfa50821e5085fe51813c617dbf8ccbe04cbc46bb450f565267e3ac95"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,10 +23,16 @@
       "digest": "sha256:28179f4128f8cbd99650226b49432cc9d8e731b1da0f2e167596a252b5896927"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-partition_field.json",
       "mediaType": "application/json",
       "size": 93,
       "digest": "sha256:89643843c478e133a9bbd38396a7f5dda0fc1f81b640ea75ed221b71aab1df81"
+    },
+    {
+      "path": "fixtures/negative-retention_days.json",
+      "mediaType": "application/json",
+      "size": 89,
+      "digest": "sha256:9445852b9d5cc41581409f0dab9c8179b27739e8523657e514a1c57c8d681c44"
     },
     {
       "path": "fixtures/observed.json",

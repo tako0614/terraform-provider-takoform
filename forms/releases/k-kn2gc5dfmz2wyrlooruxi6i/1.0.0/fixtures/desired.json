@@ -1,4 +1,7 @@
 {
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
   "entityClass": "RoomEntity",
   "migrationTag": "v1",
   "name": "stateful-entity"

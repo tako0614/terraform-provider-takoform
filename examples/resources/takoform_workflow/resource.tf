@@ -18,6 +18,7 @@ resource "takoform_workflow" "example" {
   entrypoint              = "IngestWorkflow"
   max_attempts            = 3
   initial_backoff_seconds = 5
+  configuration           = { "LOG_LEVEL" = "info" }
 }
 
 output "workflow_outputs" {

@@ -177,9 +177,15 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-hostname",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-hostname.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-path_prefix",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-path_prefix.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

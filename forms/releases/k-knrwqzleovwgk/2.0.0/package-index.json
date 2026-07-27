@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "Schedule",
     "definitionVersion": "2.0.0",
-    "schemaDigest": "sha256:0da58b51a9c1d8592e01184d052dc4bb43d4649201151645053f53486215967a"
+    "schemaDigest": "sha256:764cceb52c1fe97d96ee4999a57e623f011f6a9ce4a4f7a4bc585bf075aa5efb"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4147,
-      "digest": "sha256:8b09942719bb53b73e8c607516818afe171c12646fe1b620a0cae3abc58e15c7"
+      "size": 4317,
+      "digest": "sha256:06fd04077137454ac37cfd9fbe44b45b066985a8beb492ddb82a634bf664a1f7"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,10 +23,16 @@
       "digest": "sha256:c6b4cc854db85b312efbbbea02d5bb6f804f17f7b6ceb1317008af7ba275bf33"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-cron.json",
       "mediaType": "application/json",
       "size": 247,
       "digest": "sha256:667dddab0854ee5f6766e93f2193257c45925e074a517ed69926a555c6451b21"
+    },
+    {
+      "path": "fixtures/negative-timezone.json",
+      "mediaType": "application/json",
+      "size": 260,
+      "digest": "sha256:08a4883ff4dda379ba9b06922dc155fe868bbfa6ddaf08979f7d0569e8a81677"
     },
     {
       "path": "fixtures/observed.json",

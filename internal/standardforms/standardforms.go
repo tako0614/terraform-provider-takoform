@@ -172,9 +172,19 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 		return InventoryEntry{}, fmt.Errorf("no declared Form for %s", spec.Kind)
 	}
 	desired := kind.CanonicalDesired()
-	negative, err := kind.NegativeDesired()
+	negatives, err := kind.NegativeCases()
 	if err != nil {
 		return InventoryEntry{}, err
+	}
+	negativeFixtures := make([]formpackage.NegativeFixture, 0, len(negatives))
+	negativeFiles := make(map[string]any, len(negatives))
+	for _, negative := range negatives {
+		path := "fixtures/negative-" + negative.Field.HCL + ".json"
+		negativeFiles[path] = negative.Desired
+		negativeFixtures = append(negativeFixtures, formpackage.NegativeFixture{
+			Name: "reject-" + negative.Field.HCL, Stage: "desired",
+			InputPath: path, ExpectedFailure: "schema_validation_failed",
+		})
 	}
 	definition := formpackage.FormDefinition{
 		APIVersion: formpackage.FormAPIVersion, Kind: spec.Kind, DefinitionVersion: spec.Version,
@@ -186,17 +196,18 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 		ConformanceFixtures: []formpackage.ConformanceFixture{{
 			Name: "canonical", DesiredPath: "fixtures/desired.json", ObservedPath: "fixtures/observed.json", OutputPath: "fixtures/output.json",
 		}},
-		NegativeFixtures: []formpackage.NegativeFixture{{
-			Name: "reject-invalid-semantics", Stage: "desired", InputPath: "fixtures/negative.json", ExpectedFailure: "schema_validation_failed",
-		}},
+		NegativeFixtures: negativeFixtures,
 	}
 	packageRoot := filepath.Join(root, "conformance", "form-package-v1", "positive", "standard", spec.Slug)
 	if err := os.RemoveAll(packageRoot); err != nil {
 		return InventoryEntry{}, err
 	}
 	files := map[string]any{
-		"definition.json": definition, "fixtures/desired.json": desired, "fixtures/negative.json": negative,
+		"definition.json": definition, "fixtures/desired.json": desired,
 		"fixtures/observed.json": kind.CanonicalObserved(), "fixtures/output.json": kind.CanonicalOutput(),
+	}
+	for path, value := range negativeFiles {
+		files[path] = value
 	}
 	for relative, value := range files {
 		if err := writeJSON(filepath.Join(packageRoot, filepath.FromSlash(relative)), value); err != nil {

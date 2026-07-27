@@ -1,5 +1,8 @@
 {
   "bootDiskGib": 20,
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
   "image": "portable-conformance/v1/base-linux",
   "machineClass": "general.small",
   "name": "compute-instance"

@@ -178,9 +178,15 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-domain",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-domain.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-default_ttl_seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-default_ttl_seconds.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

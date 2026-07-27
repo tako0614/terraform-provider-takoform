@@ -1033,6 +1033,17 @@ func hclValue(value any) string {
 		}
 		sort.Strings(members)
 		return "[" + strings.Join(members, ", ") + "]"
+	case map[string]any:
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		entries := make([]string, 0, len(keys))
+		for _, key := range keys {
+			entries = append(entries, fmt.Sprintf("%q = %s", key, hclValue(typed[key])))
+		}
+		return "{ " + strings.Join(entries, ", ") + " }"
 	default:
 		if number, ok := asInt64(value); ok {
 			return fmt.Sprintf("%d", number)

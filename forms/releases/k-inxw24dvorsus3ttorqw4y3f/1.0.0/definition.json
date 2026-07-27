@@ -54,6 +54,18 @@
         "minimum": 1,
         "type": "integer"
       },
+      "configuration": {
+        "additionalProperties": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      },
       "connections": {
         "$ref": "#/$defs/connections"
       },
@@ -182,9 +194,27 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-machine_class",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-machine_class.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-boot_disk_gib",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-boot_disk_gib.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-instance_count",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-instance_count.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-configuration",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-configuration.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

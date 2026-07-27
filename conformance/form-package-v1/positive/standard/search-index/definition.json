@@ -184,9 +184,15 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-fields",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-fields.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-language",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-language.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

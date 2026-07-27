@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "RateLimitPolicy",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:46f489d30d169cbd7bdfe5c62683fb574b7fe66b79505c5cdc324bd9d0c1214d"
+    "schemaDigest": "sha256:ff9c07aa7ea940fcfb62ad601f8049df7950feeb2ad8c8d07685eee94ba3d963"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4244,
-      "digest": "sha256:7308769d541aaf00aa1ee41012b8182f6274cb0c6fcb01518f84abe1f9aff97a"
+      "size": 4610,
+      "digest": "sha256:ffb682242825bedb7e83f6cef103301f9cf74f9fe7a281a2f0ec197f01850191"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,10 +23,22 @@
       "digest": "sha256:75c7cfd7db02b9e75771f0fdb48742f2ea831ee405e0990132e3d11be7af3352"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-burst.json",
+      "mediaType": "application/json",
+      "size": 276,
+      "digest": "sha256:defe3f3bea4c7ed80c40a405b51289f83459a7d732dc4cd722ca042e2cec2efb"
+    },
+    {
+      "path": "fixtures/negative-requests_per_minute.json",
       "mediaType": "application/json",
       "size": 275,
       "digest": "sha256:684bdaf766adae3a0b24496d07a932c891794d9fa54f312571d0d52248980d3d"
+    },
+    {
+      "path": "fixtures/negative-scope.json",
+      "mediaType": "application/json",
+      "size": 292,
+      "digest": "sha256:8a2f673b0c7a6048af659aea72abaec5675f91293ed191340ff9e07bff66afd6"
     },
     {
       "path": "fixtures/observed.json",

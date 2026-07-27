@@ -393,3 +393,35 @@ func (v int64AtMostValidator) ValidateInt64(_ context.Context, req validator.Int
 		resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", v.Description(context.Background()))
 	}
 }
+
+// MapKeysMatch rejects a configuration key that is not portable. Map keys are
+// held to the same grammar as declared fields so a host never has to guess
+// what an author meant by a key it cannot parse.
+func MapKeysMatch(pattern, description string) validator.Map {
+	return mapKeysPatternValidator{pattern: regexp.MustCompile(pattern), description: description}
+}
+
+type mapKeysPatternValidator struct {
+	pattern     *regexp.Regexp
+	description string
+}
+
+func (v mapKeysPatternValidator) Description(_ context.Context) string { return v.description }
+
+func (v mapKeysPatternValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v mapKeysPatternValidator) ValidateMap(ctx context.Context, req validator.MapRequest, resp *validator.MapResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	var entries map[string]string
+	resp.Diagnostics.Append(req.ConfigValue.ElementsAs(ctx, &entries, false)...)
+	for key := range entries {
+		if !v.pattern.MatchString(key) {
+			resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", v.description)
+			return
+		}
+	}
+}

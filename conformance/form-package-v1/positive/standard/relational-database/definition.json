@@ -9,6 +9,10 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "databaseName": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
       "engine": {
         "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
         "type": "string"
@@ -17,10 +21,17 @@
         "minLength": 1,
         "type": "string"
       },
+      "highAvailability": {
+        "type": "boolean"
+      },
       "name": {
         "maxLength": 128,
         "minLength": 1,
         "pattern": ".*\\S.*",
+        "type": "string"
+      },
+      "sizeClass": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
         "type": "string"
       },
       "storageGib": {
@@ -115,6 +126,7 @@
     "type": "object"
   },
   "immutableFields": [
+    "/databaseName",
     "/engine",
     "/name"
   ],
@@ -194,9 +206,27 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-engine",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-engine.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-storage_gib",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-storage_gib.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-size_class",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-size_class.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-database_name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-database_name.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

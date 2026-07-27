@@ -19,6 +19,9 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 - `engine` (String, required, forces replacement) — Open engine capability token. Changing it replaces the database.
 - `engine_version` (String, optional) — Optional engine version requested from the host.
 - `storage_gib` (Number, optional) — Optional storage request in gibibytes. At least 1.
+- `size_class` (String, optional) — Open capability token describing the requested compute size.
+- `database_name` (String, optional, forces replacement) — Initial logical database created inside the instance. Changing it replaces the database.
+- `high_availability` (Bool, optional) — Whether the host should keep a standby able to take over.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
 ## Read-only attributes

@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -109,6 +110,16 @@ func fieldAttribute(field formcatalog.Field) schema.Attribute {
 		}
 		if field.Immutable {
 			attribute.PlanModifiers = []planmodifier.Set{setplanmodifier.RequiresReplace()}
+		}
+		return attribute
+	case formcatalog.TypeStringMap:
+		attribute := schema.MapAttribute{
+			Optional: !field.Required, Required: field.Required, Description: field.Doc,
+			ElementType: types.StringType,
+			Validators:  []validator.Map{MapKeysMatch(formcatalog.PortableMapKeyPattern, field.HCL+" keys must use the portable map-key grammar")},
+		}
+		if field.Immutable {
+			attribute.PlanModifiers = []planmodifier.Map{mapplanmodifier.RequiresReplace()}
 		}
 		return attribute
 	default:
@@ -288,6 +299,10 @@ func (r *formResource) valuesFrom(ctx context.Context, getter interface {
 			var value types.Set
 			diags.Append(getter.GetAttribute(ctx, path.Root(field.HCL), &value)...)
 			values.Fields[field.HCL] = value
+		case formcatalog.TypeStringMap:
+			var value types.Map
+			diags.Append(getter.GetAttribute(ctx, path.Root(field.HCL), &value)...)
+			values.Fields[field.HCL] = value
 		default:
 			var value types.String
 			diags.Append(getter.GetAttribute(ctx, path.Root(field.HCL), &value)...)
@@ -331,6 +346,12 @@ func (r *formResource) toResource(ctx context.Context, values formValues) (*clie
 				continue
 			}
 			spec[field.Wire] = trimmed
+		case types.Map:
+			var entries map[string]string
+			diags.Append(typed.ElementsAs(ctx, &entries, false)...)
+			if len(entries) > 0 {
+				spec[field.Wire] = entries
+			}
 		case types.Set:
 			if field.Type == formcatalog.TypeIntSet {
 				var members []int64
@@ -587,6 +608,13 @@ func fieldValueFromSpec(ctx context.Context, field formcatalog.Field, raw any, d
 		set, setDiags := types.SetValueFrom(ctx, types.StringType, toStringSlice(raw))
 		diags.Append(setDiags...)
 		return set
+	case formcatalog.TypeStringMap:
+		if raw == nil {
+			return types.MapNull(types.StringType)
+		}
+		mapped, mapDiags := types.MapValueFrom(ctx, types.StringType, toStringMap(raw))
+		diags.Append(mapDiags...)
+		return mapped
 	default:
 		return optionalStringFromAny(raw)
 	}

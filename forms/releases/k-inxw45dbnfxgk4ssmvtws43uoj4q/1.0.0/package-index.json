@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ContainerRegistry",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:3847d37dd2f73a980a133b431a40221e7e5cc26a6428a3ce8ac9ac864cceefc5"
+    "schemaDigest": "sha256:3e5b9495cf5a6124ac616ad913ad565c8fe112da249ec1d517d1f24b67cef8b3"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4086,
-      "digest": "sha256:650404747a4ff2a8ff5c279f3a97ca6cfbce626d88248761c559befab1c982e3"
+      "size": 4090,
+      "digest": "sha256:2dba4500cb398b8f4d32d8659153cf059ecd1c478c04658cda8e218116f7a4f9"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,7 +23,7 @@
       "digest": "sha256:6d5bec4f3bed8089f377316c29e17a747264205974d21f51f7d120541881cee3"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-visibility.json",
       "mediaType": "application/json",
       "size": 88,
       "digest": "sha256:b2a047bb2afc10acc3a37112eda44a82ef231a71417f297b9413e954c8744fde"

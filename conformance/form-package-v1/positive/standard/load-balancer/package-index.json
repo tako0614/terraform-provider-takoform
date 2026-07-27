@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "LoadBalancer",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:650a14470e1638850f0671e2b506307739832fbaa2ef6bd86fa5b538f16f7575"
+    "schemaDigest": "sha256:28840ae7b597e55ee0b7aaa03210b042a0ff93f11d4c0e4848a51ad6cd1f26fb"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5384,
-      "digest": "sha256:c448f929cbdf4614f0a843b1257eb014eec67ac41ad33d3a3e7e2fe588c4fc09"
+      "size": 6133,
+      "digest": "sha256:fec0bc14e069e25a42d9ae691efa258ddc7ec0872813111ef6f8e8aa528b3efa"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,7 +23,25 @@
       "digest": "sha256:df57e426f1fbef6eccd5f92d22ba859040f20468fbb4328545ee12811ce9febd"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-health_check_path.json",
+      "mediaType": "application/json",
+      "size": 307,
+      "digest": "sha256:91747dd68cbe2550225c1e18bfe730ac9f3849778517a8828bd102833f31b690"
+    },
+    {
+      "path": "fixtures/negative-idle_timeout_seconds.json",
+      "mediaType": "application/json",
+      "size": 329,
+      "digest": "sha256:c13a491e99707f854f0b0846ece32880f2a23294a14e2351cfecba5612551ca2"
+    },
+    {
+      "path": "fixtures/negative-listen_port.json",
+      "mediaType": "application/json",
+      "size": 300,
+      "digest": "sha256:42bebd777a67c173a4e0edd4ccc5df0b6258e3aa00431c19c44b96918beb40af"
+    },
+    {
+      "path": "fixtures/negative-protocol.json",
       "mediaType": "application/json",
       "size": 301,
       "digest": "sha256:b92de2460329652cec3330b2137075efd53dd865b1ee18be0aa9d0dcdb806e3c"

@@ -15,6 +15,7 @@ resource "takoform_stateful_entity" "example" {
   name          = "stateful-entity"
   entity_class  = "RoomEntity"
   migration_tag = "v1"
+  configuration = { "LOG_LEVEL" = "info" }
 }
 
 output "stateful_entity_outputs" {

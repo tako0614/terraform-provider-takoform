@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "IdentityClient",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:ceadfbbb3a0d7cd18a9122464eeb73b2b96c7c90705d8f13c2f395b168905ad6"
+    "schemaDigest": "sha256:fddb15faf0bf637236173ab03a7eba1facd49da7be31f36847fd2fe211dce31b"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4523,
-      "digest": "sha256:d856013cc8771654271992dcade1f18b0290bc9b978b3bab2cd6e177c9b4c5a3"
+      "size": 4901,
+      "digest": "sha256:79591fdb8ff4fc86665212e374d9cdec06d774a75ae58549c49787b1c535621b"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,7 +23,19 @@
       "digest": "sha256:a7d00222ed8c2db83a7e52437cb4654e274db173a4ab94b9f1e18edb93f5ccf5"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-auth_method.json",
+      "mediaType": "application/json",
+      "size": 202,
+      "digest": "sha256:9b2be92e725add57468d0b5f16fcd274c1af4d4d1d1e49e10d18a41e4e455203"
+    },
+    {
+      "path": "fixtures/negative-grant_types.json",
+      "mediaType": "application/json",
+      "size": 188,
+      "digest": "sha256:4ee017e1961cdaeb8af60496133764d352e6b67a57152e750f9eda57d201e4f2"
+    },
+    {
+      "path": "fixtures/negative-redirect_uris.json",
       "mediaType": "application/json",
       "size": 184,
       "digest": "sha256:9264000d53b158531d2c2e7565c9dd533841456be30886404c74f249eba89270"

@@ -192,9 +192,15 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-storage_class",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-storage_class.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-access_protocols",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-access_protocols.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

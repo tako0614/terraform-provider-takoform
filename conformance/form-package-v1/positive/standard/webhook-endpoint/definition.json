@@ -231,9 +231,15 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-path",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-path.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-allowed_methods",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-allowed_methods.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

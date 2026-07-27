@@ -112,3 +112,17 @@ func toInt64Slice(raw any) []int64 {
 	}
 	return out
 }
+
+func toStringMap(raw any) map[string]string {
+	values, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		if text, ok := value.(string); ok {
+			out[key] = text
+		}
+	}
+	return out
+}

@@ -6,27 +6,63 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ContainerService",
     "definitionVersion": "2.0.0",
-    "schemaDigest": "sha256:51bc955845beac06f7a1621b997e02ac95ac254826017ba2f624a0292c01633b"
+    "schemaDigest": "sha256:284106ac86bde3de42029e4d31ad31faded8ed88302ee6fce14627ce90aebf72"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5493,
-      "digest": "sha256:c277e25b03ea4d6f24940ff2fa78c9028d99d003033b4a9be4a31ca2d1fb69e1"
+      "size": 7134,
+      "digest": "sha256:4427435c4530230fc5a1871baa00ce58ccdda4175ffd69dd8f58476168261503"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 191,
-      "digest": "sha256:749fe3b0d16d9a93cc5b9cfff9cf1d152965f5f914990fbb678bce5a0e67e284"
+      "size": 258,
+      "digest": "sha256:fbcd2ff17ca622a86fb6dc9adec79fe96c935ac411d54942a9c04b46a0f5cdc1"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-configuration.json",
       "mediaType": "application/json",
-      "size": 126,
-      "digest": "sha256:a0a8b100a549d791c75871b36023d48e3bd2b14a5d2cc58ba29e306633e09ab1"
+      "size": 263,
+      "digest": "sha256:814105514f9e514439814fdbd01c71a7e7a00b4cf2891339d9f0390f7ecc4927"
+    },
+    {
+      "path": "fixtures/negative-cpu_millicores.json",
+      "mediaType": "application/json",
+      "size": 280,
+      "digest": "sha256:7df76e089e200382059a48f8a98d9d9d70cb29fb98c1a2cf2c546ac31c4a298d"
+    },
+    {
+      "path": "fixtures/negative-health_check_path.json",
+      "mediaType": "application/json",
+      "size": 296,
+      "digest": "sha256:6ccf2286fb4103f821eff031b354e0773a2f10f26686750616139bb415cc9304"
+    },
+    {
+      "path": "fixtures/negative-image.json",
+      "mediaType": "application/json",
+      "size": 193,
+      "digest": "sha256:749fcdc480a6ec8e014c2664214ef2025f1ac91d272061667b166fab2375d3ac"
+    },
+    {
+      "path": "fixtures/negative-memory_mib.json",
+      "mediaType": "application/json",
+      "size": 276,
+      "digest": "sha256:3c3f085594b17b103a4d852c38981de7f77d473aea7688254257c155acc74353"
+    },
+    {
+      "path": "fixtures/negative-ports.json",
+      "mediaType": "application/json",
+      "size": 257,
+      "digest": "sha256:faafe4ab486cd780e3b5423ff0dcf9f51cf962c80c239d41ef6b8a710fdd0918"
+    },
+    {
+      "path": "fixtures/negative-replicas.json",
+      "mediaType": "application/json",
+      "size": 258,
+      "digest": "sha256:7e85f8bb7bc8b6037f8f3d1952a3c43f3505a9f74b4cdadec86200276618e684"
     },
     {
       "path": "fixtures/observed.json",

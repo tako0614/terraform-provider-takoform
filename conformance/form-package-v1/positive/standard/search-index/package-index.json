@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "SearchIndex",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:6bda890d38478af930c91f788a45822dea86c9c8fd2afe7363b576d49eaf5bf6"
+    "schemaDigest": "sha256:a28d5201b9533410ffc9e5ffe3a99569c7292fda78e94dde1c7dd7e9643f17e4"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4218,
-      "digest": "sha256:cf5d6904d77cc07b116a1bf76335c11c5ca0533e4ff0fbfc6dd7257f56751394"
+      "size": 4392,
+      "digest": "sha256:7ac2f6d8a183dcce0f4b7242a518eb05b28e81784160cbede807e0cc05db6722"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,7 +23,13 @@
       "digest": "sha256:2d570a7e20bed03fc71ed26644976ff964c8f4700ada143cce2509cfc174146a"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-fields.json",
+      "mediaType": "application/json",
+      "size": 86,
+      "digest": "sha256:c4877f82546c0e912b15b1477e7e2e592a9c039cceae750699250f2cc36fceb9"
+    },
+    {
+      "path": "fixtures/negative-language.json",
       "mediaType": "application/json",
       "size": 101,
       "digest": "sha256:a4da0b6daa0c1ae5bd4321a28d09e46a1e4568245e10793b29939bfa7543bf04"

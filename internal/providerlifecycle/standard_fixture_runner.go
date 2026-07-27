@@ -25,8 +25,13 @@ type StandardFixtureCase struct {
 	Identity     standardform.InstalledFormReference
 	PositiveName string
 	Positive     map[string]any
-	NegativeName string
-	Negative     map[string]any
+	Negatives    []StandardNegativeFixture
+}
+
+// StandardNegativeFixture is one rejectable input a Form declares.
+type StandardNegativeFixture struct {
+	Name    string
+	Desired map[string]any
 }
 
 // StandardFixtureEvidence records only provider-protocol observations. The
@@ -37,7 +42,7 @@ type StandardFixtureEvidence struct {
 	Identity          standardform.InstalledFormReference
 	PositiveName      string
 	PositivePassed    bool
-	NegativeName      string
+	NegativeNames     []string
 	NegativeErrorCode string
 	NegativePassed    bool
 }
@@ -142,33 +147,37 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 			return StandardFixtureRun{}, fmt.Errorf("%s retained positive fixture cleanup: %w\n%s", fixture.Kind, err, output)
 		}
 
-		negativeDir := filepath.Join(temp, "negative", item.ResourceType)
-		if err := os.MkdirAll(negativeDir, 0o755); err != nil {
-			return StandardFixtureRun{}, err
-		}
-		negativeConfig, err := standardFixtureConfig(server.URL, identity.ProviderAddress, providerVersion, item.ResourceType, fixture.Negative)
-		if err != nil {
-			return StandardFixtureRun{}, fmt.Errorf("render %s negative fixture: %w", fixture.Kind, err)
-		}
-		if err := os.WriteFile(filepath.Join(negativeDir, "main.tf"), []byte(negativeConfig), 0o600); err != nil {
-			return StandardFixtureRun{}, err
-		}
-		before := host.mutationCount(fixture.Kind)
-		output, negativeErr := runCommand(ctx, repoRoot, env, cli, "-chdir="+negativeDir, "apply", "-auto-approve", "-input=false", "-no-color")
-		after := host.mutationCount(fixture.Kind)
-		if negativeErr == nil {
-			return StandardFixtureRun{}, fmt.Errorf("%s retained negative fixture unexpectedly passed provider protocol", fixture.Kind)
-		}
-		if after != before {
-			return StandardFixtureRun{}, fmt.Errorf("%s retained negative fixture reached the Form host mutation path", fixture.Kind)
-		}
-		diagnosticField, diagnosticDetail, ok := standardNegativeDiagnostic(fixture.Kind)
-		if !ok || !strings.Contains(output, "Error:") || !strings.Contains(output, diagnosticField) || !strings.Contains(output, diagnosticDetail) || strings.Contains(output, "Unsupported argument") || strings.Contains(output, "Invalid expression") {
-			return StandardFixtureRun{}, fmt.Errorf("%s retained negative fixture did not produce a provider configuration diagnostic\n%s", fixture.Kind, output)
+		negativeNames := make([]string, 0, len(fixture.Negatives))
+		for index, negative := range fixture.Negatives {
+			negativeDir := filepath.Join(temp, "negative", item.ResourceType, fmt.Sprintf("%d", index))
+			if err := os.MkdirAll(negativeDir, 0o755); err != nil {
+				return StandardFixtureRun{}, err
+			}
+			negativeConfig, err := standardFixtureConfig(server.URL, identity.ProviderAddress, providerVersion, item.ResourceType, negative.Desired)
+			if err != nil {
+				return StandardFixtureRun{}, fmt.Errorf("render %s %s fixture: %w", fixture.Kind, negative.Name, err)
+			}
+			if err := os.WriteFile(filepath.Join(negativeDir, "main.tf"), []byte(negativeConfig), 0o600); err != nil {
+				return StandardFixtureRun{}, err
+			}
+			before := host.mutationCount(fixture.Kind)
+			output, negativeErr := runCommand(ctx, repoRoot, env, cli, "-chdir="+negativeDir, "apply", "-auto-approve", "-input=false", "-no-color")
+			after := host.mutationCount(fixture.Kind)
+			if negativeErr == nil {
+				return StandardFixtureRun{}, fmt.Errorf("%s %s unexpectedly passed provider protocol", fixture.Kind, negative.Name)
+			}
+			if after != before {
+				return StandardFixtureRun{}, fmt.Errorf("%s %s reached the Form host mutation path", fixture.Kind, negative.Name)
+			}
+			diagnosticField, diagnosticDetail, ok := standardNegativeDiagnostic(fixture.Kind, negative.Name)
+			if !ok || !strings.Contains(output, "Error:") || !strings.Contains(output, diagnosticField) || !strings.Contains(output, diagnosticDetail) || strings.Contains(output, "Unsupported argument") || strings.Contains(output, "Invalid expression") {
+				return StandardFixtureRun{}, fmt.Errorf("%s %s did not produce a provider configuration diagnostic\n%s", fixture.Kind, negative.Name, output)
+			}
+			negativeNames = append(negativeNames, negative.Name)
 		}
 		evidence = append(evidence, StandardFixtureEvidence{
 			Kind: fixture.Kind, Identity: fixture.Identity, PositiveName: fixture.PositiveName, PositivePassed: true,
-			NegativeName: fixture.NegativeName, NegativeErrorCode: "invalid_argument", NegativePassed: true,
+			NegativeNames: negativeNames, NegativeErrorCode: "invalid_argument", NegativePassed: true,
 		})
 	}
 
@@ -182,13 +191,14 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 //
 // The negative case therefore always tests a constraint the Form states,
 // rather than a separately maintained list that can drift away from it.
-func standardNegativeDiagnostic(kind string) (string, string, bool) {
+func standardNegativeDiagnostic(kind, fixtureName string) (string, string, bool) {
 	declared, ok := formcatalog.ByKind(kind)
 	if !ok {
 		return "", "", false
 	}
+	attribute := strings.TrimPrefix(fixtureName, "reject-")
 	for _, field := range declared.Fields {
-		if field.CounterExample == nil {
+		if field.HCL != attribute {
 			continue
 		}
 		return field.HCL, expectedDiagnosticDetail(field), true
@@ -197,17 +207,24 @@ func standardNegativeDiagnostic(kind string) (string, string, bool) {
 }
 
 func expectedDiagnosticDetail(field formcatalog.Field) string {
+	// The expectation is derived from the same counter-example the fixture
+	// carries, declared or derived, so the two can never describe different
+	// violations.
+	counter, ok := field.CounterExampleValue()
+	if !ok {
+		return "Invalid value"
+	}
 	if len(field.Enum) > 0 {
-		if value, ok := field.CounterExample.(string); ok {
+		if value, ok := counter.(string); ok {
 			return fmt.Sprintf("%q is not a valid value", value)
 		}
-		if members, ok := field.CounterExample.([]any); ok && len(members) > 0 {
+		if members, ok := counter.([]any); ok && len(members) > 0 {
 			return fmt.Sprintf("%q is not a valid value", fmt.Sprint(members[0]))
 		}
 	}
 	switch field.Type {
 	case formcatalog.TypeInt:
-		if number, ok := asInt64(field.CounterExample); ok {
+		if number, ok := asInt64(counter); ok {
 			if field.Min != nil && number < *field.Min {
 				return fmt.Sprintf("value must be at least %d", *field.Min)
 			}
@@ -216,7 +233,7 @@ func expectedDiagnosticDetail(field formcatalog.Field) string {
 			}
 		}
 	case formcatalog.TypeIntSet:
-		if members, ok := field.CounterExample.([]any); ok && len(members) > 0 {
+		if members, ok := counter.([]any); ok && len(members) > 0 {
 			if number, ok := asInt64(members[0]); ok {
 				return fmt.Sprintf("%d must be between %d and %d", number, boundOrDefault(field.Min, 0), boundOrDefault(field.Max, 0))
 			}
@@ -265,7 +282,7 @@ func validateAndOrderStandardFixtureCases(cases []StandardFixtureCase) ([]Standa
 		if _, ok := byKind[fixture.Kind]; ok {
 			return nil, fmt.Errorf("standard fixture set duplicates %s", fixture.Kind)
 		}
-		if _, ok := resourceCaseForKind(fixture.Kind); !ok || strings.TrimSpace(fixture.PositiveName) == "" || strings.TrimSpace(fixture.NegativeName) == "" || fixture.Positive == nil || fixture.Negative == nil ||
+		if _, ok := resourceCaseForKind(fixture.Kind); !ok || strings.TrimSpace(fixture.PositiveName) == "" || len(fixture.Negatives) == 0 || fixture.Positive == nil ||
 			fixture.Identity.FormRef.APIVersion != client.APIVersion || fixture.Identity.FormRef.Kind != fixture.Kind || strings.TrimSpace(fixture.Identity.FormRef.DefinitionVersion) == "" ||
 			!validDigest(fixture.Identity.FormRef.SchemaDigest) || !validDigest(fixture.Identity.PackageDigest) {
 			return nil, fmt.Errorf("standard fixture set contains an incomplete or unknown %q case", fixture.Kind)
@@ -332,22 +349,6 @@ func renderStandardDesired(desired map[string]any) (string, error) {
 			}
 			for sourceName, sourceValue := range source {
 				projected[camelToSnakeFixture(sourceName)] = sourceValue
-			}
-		case "delivery":
-			delivery, ok := value.(map[string]any)
-			if !ok {
-				return "", fmt.Errorf("delivery is not an object")
-			}
-			for deliveryName, deliveryValue := range delivery {
-				projected[camelToSnakeFixture(deliveryName)] = deliveryValue
-			}
-		case "retry":
-			retry, ok := value.(map[string]any)
-			if !ok {
-				return "", fmt.Errorf("retry is not an object")
-			}
-			for retryName, retryValue := range retry {
-				projected[camelToSnakeFixture(retryName)] = retryValue
 			}
 		case "connections":
 			connections, ok := value.(map[string]any)
@@ -436,7 +437,10 @@ func renderHCLValue(value any) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			parts = append(parts, key+" = "+rendered)
+			// A configuration key is author-defined, so it may not be a bare
+			// HCL identifier. Quoting keeps a rejected key a validation
+			// diagnostic instead of a parse error.
+			parts = append(parts, strconv.Quote(key)+" = "+rendered)
 		}
 		return "{ " + strings.Join(parts, ", ") + " }", nil
 	default:

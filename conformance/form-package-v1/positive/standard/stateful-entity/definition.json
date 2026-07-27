@@ -50,6 +50,18 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "configuration": {
+        "additionalProperties": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      },
       "connections": {
         "$ref": "#/$defs/connections"
       },
@@ -223,9 +235,21 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-entity_class",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-entity_class.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-persistence",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-persistence.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-configuration",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-configuration.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

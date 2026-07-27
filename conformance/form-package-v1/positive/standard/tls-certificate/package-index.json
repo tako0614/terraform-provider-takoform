@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "TlsCertificate",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:7116861d19aabeee2646896e63d55ed98ed964c177cdda860e0c9b6605b047d6"
+    "schemaDigest": "sha256:ad317fb03534f86efdef49cc092bf4ed5b660eeb8d65163a7feed71a117e5c27"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4368,
-      "digest": "sha256:3fb24c6f5ee76a574355fddf89ba368e20d9ca55e526a048292eea0ac90e80a4"
+      "size": 4554,
+      "digest": "sha256:a22b46c5464d87734bcf8926bf494baeaa1945c0670140f3327306cb687640e8"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,7 +23,13 @@
       "digest": "sha256:7e424fc3f4d7fc3e225427adeebf6a16707214630dcfa2caed6a2c51deb1b27b"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-domains.json",
+      "mediaType": "application/json",
+      "size": 105,
+      "digest": "sha256:0b82ca48e60578c485a3c28afc42db76e9eaa0212f6b5aeefbe898ab45e476ed"
+    },
+    {
+      "path": "fixtures/negative-key_algorithm.json",
       "mediaType": "application/json",
       "size": 117,
       "digest": "sha256:97f6e2fa6f2c39a2ece364413d58d98783d8cef79a3fb5d4dec00bf274f4fdeb"

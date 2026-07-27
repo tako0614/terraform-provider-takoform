@@ -6,27 +6,39 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "Workflow",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:edb6ac196c4fc16826e7fc00460572155d04a90bb1524ba49d79b38325412b34"
+    "schemaDigest": "sha256:63417f9bcacc1a193411238c9559c17fd84c51dcfc2ddb6849e19037f05fac0d"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 6792,
-      "digest": "sha256:0eae5d3fe8763299d6ed7944082cce3bc2ee5266e962cb31976324d4f6379149"
+      "size": 7537,
+      "digest": "sha256:adcf7e2833e92cfe91fa074288afd3d48bc19653c45e1638feff6a042690c78f"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 276,
-      "digest": "sha256:554da06da403d86adea2816a2982b4a3ad33d8f71f35b2303f411d1e47f62876"
+      "size": 326,
+      "digest": "sha256:b62b6e938ec9f7ee211c253b373227552e602c40dadf23bb64852c4f3a6359e0"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-configuration.json",
       "mediaType": "application/json",
-      "size": 276,
-      "digest": "sha256:838e45231abc72562f4f22847b70a80036d5c8d5c1722328456f3bf023c2480c"
+      "size": 331,
+      "digest": "sha256:50e66cfb3ffdbe621c9107a066024226bd8962d5dd6b009c1a5d466af2a5962c"
+    },
+    {
+      "path": "fixtures/negative-initial_backoff_seconds.json",
+      "mediaType": "application/json",
+      "size": 327,
+      "digest": "sha256:d311714631be3ce6e0bf8548358483db540389ea0f81d6dceb818aad35672507"
+    },
+    {
+      "path": "fixtures/negative-max_attempts.json",
+      "mediaType": "application/json",
+      "size": 326,
+      "digest": "sha256:623b7f28c5bf0d419cfcbce9d2ebb57e0f65b3b709c8dfcdd658229b8602b1db"
     },
     {
       "path": "fixtures/observed.json",

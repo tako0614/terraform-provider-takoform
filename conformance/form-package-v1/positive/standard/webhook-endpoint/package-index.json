@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "WebhookEndpoint",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:9c993ff6d15d1ebade5ae5cc27dc1e9f69f16ee9ea27dcbdabac000e6ceec8c8"
+    "schemaDigest": "sha256:dca3f22bf8f621c686c671a35fd6e694784a0f77acca8efe5cc123962947c7ff"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5441,
-      "digest": "sha256:c75cb6b790e15ac9bc6bd7d2a0b230472c9840bf5805ee42ccc617a21b71e0ee"
+      "size": 5625,
+      "digest": "sha256:3520eef3e6d253354022785e60b9c90ee4d69363bd60cc7521147270e36b04de"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,10 +23,16 @@
       "digest": "sha256:21cb37b8f96f411a22cc153957f2fec0c19ec49c523f0b6e0b746e8dfb420683"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-allowed_methods.json",
       "mediaType": "application/json",
       "size": 263,
       "digest": "sha256:ff8326c0f4b6ab7e6ab246e44686e59f39a8a6b38b7e838a3eed8d4f7e8777ac"
+    },
+    {
+      "path": "fixtures/negative-path.json",
+      "mediaType": "application/json",
+      "size": 269,
+      "digest": "sha256:b0c16980c2e776211a75f5e07b8efb7b398e6037bf5229628b1db9f757f8b7ea"
     },
     {
       "path": "fixtures/observed.json",

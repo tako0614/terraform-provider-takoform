@@ -131,6 +131,17 @@ func quoteHCL(value any) string {
 		}
 		sort.Strings(members)
 		return "[" + strings.Join(members, ", ") + "]"
+	case map[string]any:
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		entries := make([]string, 0, len(keys))
+		for _, key := range keys {
+			entries = append(entries, fmt.Sprintf("%q = %s", key, quoteHCL(typed[key])))
+		}
+		return "{ " + strings.Join(entries, ", ") + " }"
 	default:
 		return fmt.Sprintf("%q", fmt.Sprint(value))
 	}
@@ -236,6 +247,8 @@ func docType(field formcatalog.Field) string {
 		return "Set of Number"
 	case formcatalog.TypeStringSet:
 		return "Set of String"
+	case formcatalog.TypeStringMap:
+		return "Map of String"
 	default:
 		return "String"
 	}

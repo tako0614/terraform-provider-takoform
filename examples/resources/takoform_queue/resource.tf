@@ -12,8 +12,10 @@ provider "takoform" {
 }
 
 resource "takoform_queue" "example" {
-  name        = "queue"
-  max_retries = 5
+  name                      = "queue"
+  max_retries               = 5
+  message_retention_seconds = 345600
+  ordering                  = "best_effort"
 }
 
 output "queue_outputs" {

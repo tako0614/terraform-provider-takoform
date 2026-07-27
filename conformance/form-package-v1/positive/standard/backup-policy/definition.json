@@ -179,9 +179,21 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-cron",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-cron.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-retention_days",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-retention_days.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-timezone",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-timezone.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

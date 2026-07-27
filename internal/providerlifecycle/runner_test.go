@@ -25,7 +25,9 @@ func TestStandardFixtureCasesRequireExactExecutedFormIdentity(t *testing.T) {
 				PackageDigest: form.PackageDigest,
 			},
 			PositiveName: "canonical", Positive: map[string]any{"name": item.Name},
-			NegativeName: "reject-invalid-semantics", Negative: map[string]any{"name": item.Name},
+			Negatives: []StandardNegativeFixture{{
+				Name: "reject-name", Desired: map[string]any{"name": item.Name},
+			}},
 		})
 	}
 	if _, err := validateAndOrderStandardFixtureCases(cases); err != nil {

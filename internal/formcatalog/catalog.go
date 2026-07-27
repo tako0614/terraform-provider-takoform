@@ -23,6 +23,10 @@ const (
 	TypeBool      FieldType = "boolean"
 	TypeStringSet FieldType = "string-set"
 	TypeIntSet    FieldType = "int-set"
+	// TypeStringMap is a non-secret configuration map. Its keys are checked
+	// with the same data-only forbidden-field policy as declared fields, so a
+	// credential cannot be smuggled in as configuration.
+	TypeStringMap FieldType = "string-map"
 )
 
 // Grammar names a reviewed portable string grammar. Free-form strings carry
@@ -75,8 +79,9 @@ type Field struct {
 
 	// Example is the value used by the canonical conformance fixture.
 	Example any
-	// CounterExample is a value that must be rejected. Exactly one field per
-	// Form carries it, and it drives the generated negative fixture.
+	// CounterExample is a value that must be rejected. Every field that states
+	// a constraint should carry one: each becomes its own negative fixture, so
+	// a constraint a Form declares is a constraint something proves.
 	CounterExample any
 	// AltExample is a second valid value. Every immutable field carries one so
 	// the lifecycle can prove that changing it really replaces the resource.
@@ -144,6 +149,9 @@ var Kinds = []Kind{
 				Doc: "Optional per-request timeout preference in seconds."},
 			{HCL: "concurrency", Wire: "concurrency", Type: TypeInt, Min: i64(1),
 				Doc: "Optional concurrent-request preference.", CounterExample: 0},
+			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
+				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
+				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
 		},
 		Interfaces: []Interface{{Name: "http.request", Description: "Portable HTTP request surface exposed by an application.", Operations: []string{"request"}}},
 	},
@@ -166,6 +174,13 @@ var Kinds = []Kind{
 				Doc: "Optional CPU request in millicores."},
 			{HCL: "memory_mib", Wire: "memoryMib", Type: TypeInt, Min: i64(1),
 				Doc: "Optional memory request in mebibytes."},
+			{HCL: "replicas", Wire: "replicas", Type: TypeInt, Min: i64(1),
+				Doc: "Requested number of identical running instances.", Example: 2},
+			{HCL: "health_check_path", Wire: "healthCheckPath", Type: TypeString, Grammar: GrammarPath,
+				Doc: "Optional HTTP path a host polls to decide whether an instance is serving."},
+			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
+				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
+				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
 		},
 		Interfaces: []Interface{{Name: "http.request", Description: "Portable HTTP request surface exposed by a container service.", Operations: []string{"request"}}},
 	},
@@ -184,6 +199,9 @@ var Kinds = []Kind{
 				Doc: "Boot disk size in gibibytes.", Example: 20},
 			{HCL: "instance_count", Wire: "instanceCount", Type: TypeInt, Min: i64(1),
 				Doc: "Optional identical-instance count preference."},
+			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
+				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
+				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
 		},
 	},
 	{
@@ -224,6 +242,9 @@ var Kinds = []Kind{
 				Doc: "Optional maximum attempts per workflow run.", Example: 3, CounterExample: 0},
 			{HCL: "initial_backoff_seconds", Wire: "initialBackoffSeconds", Type: TypeInt, Min: i64(0),
 				Doc: "Optional initial retry backoff in seconds.", Example: 5},
+			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
+				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
+				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
 		},
 		Interfaces: []Interface{{Name: "workflow.invoke", Description: "Portable durable workflow invocation operations.", Operations: []string{"cancel", "invoke", "status"}}},
 	},
@@ -241,6 +262,9 @@ var Kinds = []Kind{
 			{HCL: "migration_tag", Wire: "migrationTag", Type: TypeString,
 				Doc: "Optional namespace migration tag. It never identifies one entity instance.", Example: "v1",
 				AltExample: "v2"},
+			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
+				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
+				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
 		},
 		Interfaces: []Interface{{Name: "entity.invoke", Description: "Portable stateful entity invocation operations.", Operations: []string{"invoke"}}},
 	},
@@ -335,6 +359,13 @@ var Kinds = []Kind{
 				Doc: "Optional engine version requested from the host.", Example: "16", AltExample: "17"},
 			{HCL: "storage_gib", Wire: "storageGib", Type: TypeInt, Min: i64(1),
 				Doc: "Optional storage request in gibibytes."},
+			{HCL: "size_class", Wire: "sizeClass", Type: TypeString, Grammar: GrammarToken,
+				Doc: "Open capability token describing the requested compute size.", Example: "db.small"},
+			{HCL: "database_name", Wire: "databaseName", Type: TypeString, Immutable: true, Grammar: GrammarToken,
+				Doc:     "Initial logical database created inside the instance. Changing it replaces the database.",
+				Example: "app", AltExample: "app_v2"},
+			{HCL: "high_availability", Wire: "highAvailability", Type: TypeBool,
+				Doc: "Whether the host should keep a standby able to take over."},
 		},
 		Interfaces: []Interface{{
 			Name: "sql.query", Description: "Portable SQL query and transaction operations.",
@@ -363,6 +394,7 @@ var Kinds = []Kind{
 		Kind: "Queue", DefinitionVersion: "2.0.0", Slug: "queue", ResourceType: "takoform_queue",
 		Domain: "data", Title: "Queue",
 		Description: "Portable asynchronous delivery with at-least-once semantics.",
+		Connections: ConnectionsOptional,
 		Fields: []Field{
 			{HCL: "max_retries", Wire: "maxRetries", Type: TypeInt, Min: i64(0),
 				Doc: "Optional delivery retry preference.", Example: 5, CounterExample: -1},
@@ -370,6 +402,14 @@ var Kinds = []Kind{
 				Doc: "Optional consumer batch size preference."},
 			{HCL: "visibility_timeout_seconds", Wire: "visibilityTimeoutSeconds", Type: TypeInt, Min: i64(0),
 				Doc: "Optional time a received message stays invisible to other consumers."},
+			{HCL: "message_retention_seconds", Wire: "messageRetentionSeconds", Type: TypeInt, Min: i64(1),
+				Doc: "Optional time an unacknowledged message is retained, in seconds.", Example: 345600},
+			{HCL: "max_message_bytes", Wire: "maxMessageBytes", Type: TypeInt, Min: i64(1),
+				Doc: "Optional largest accepted message size in bytes."},
+			{HCL: "delivery_delay_seconds", Wire: "deliveryDelaySeconds", Type: TypeInt, Min: i64(0),
+				Doc: "Optional delay before a sent message becomes receivable."},
+			{HCL: "ordering", Wire: "ordering", Type: TypeString, Enum: []string{"best_effort", "strict"},
+				Doc: "Whether the host must preserve send order.", Example: "best_effort"},
 		},
 		Interfaces: []Interface{{Name: "queue.messages", Description: "Portable queue delivery operations.", Operations: []string{"acknowledge", "receive", "send"}}},
 	},
@@ -521,6 +561,10 @@ var Kinds = []Kind{
 				Doc: "Port the listener accepts connections on.", Example: 443},
 			{HCL: "health_check_path", Wire: "healthCheckPath", Type: TypeString, Grammar: GrammarPath,
 				Doc: "Optional HTTP path polled to decide backend health.", Example: "/healthz"},
+			{HCL: "internal", Wire: "internal", Type: TypeBool,
+				Doc: "Whether the listener is reachable only from inside the host's private network."},
+			{HCL: "idle_timeout_seconds", Wire: "idleTimeoutSeconds", Type: TypeInt, Min: i64(1), Max: i64(4000),
+				Doc: "Optional time an idle connection is held open, in seconds."},
 		},
 		Interfaces: []Interface{{Name: "network.endpoint", Description: "Portable network endpoint status operations.", Operations: []string{"status"}}},
 	},

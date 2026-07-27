@@ -144,6 +144,14 @@ func (f Field) jsonSchema() map[string]any {
 		return arraySchema(items, f.MinItems)
 	case TypeStringSet:
 		return arraySchema(f.stringSchema(), f.MinItems)
+	case TypeStringMap:
+		// A pure typed map is the only open-key escape the portable schema
+		// policy allows, and its keys are held to the same forbidden-field
+		// vocabulary as declared fields.
+		return map[string]any{
+			"type": "object", "propertyNames": portableMapKeys(),
+			"additionalProperties": map[string]any{"type": "string", "maxLength": 4096},
+		}
 	default:
 		schema := f.stringSchema()
 		if f.Default != "" {
@@ -209,19 +217,40 @@ func (k Kind) CanonicalDesired() map[string]any {
 	return desired
 }
 
-// NegativeDesired builds the exact input a conforming host must reject. It
-// mutates one declared counter-example, so the negative case always tests a
-// constraint this Form actually states.
-func (k Kind) NegativeDesired() (map[string]any, error) {
+// NegativeCase is one input a conforming host must reject, named after the
+// field whose constraint it violates.
+type NegativeCase struct {
+	Field   Field
+	Desired map[string]any
+}
+
+// NegativeCases builds one rejectable input per declared counter-example, so
+// every constraint a Form states has something that proves it is enforced.
+func (k Kind) NegativeCases() ([]NegativeCase, error) {
+	var cases []NegativeCase
 	for _, field := range k.Fields {
-		if field.CounterExample == nil {
+		counter, ok := field.counterExample()
+		if !ok {
 			continue
 		}
-		negative := cloneValue(k.CanonicalDesired()).(map[string]any)
-		negative[field.Wire] = cloneValue(field.CounterExample)
-		return negative, nil
+		desired := cloneValue(k.CanonicalDesired()).(map[string]any)
+		desired[field.Wire] = cloneValue(counter)
+		cases = append(cases, NegativeCase{Field: field, Desired: desired})
 	}
-	return nil, fmt.Errorf("%s declares no counter-example field", k.Kind)
+	if len(cases) == 0 {
+		return nil, fmt.Errorf("%s declares no counter-example field", k.Kind)
+	}
+	return cases, nil
+}
+
+// NegativeDesired is the first rejectable input, retained for callers that
+// only need to know a Form has one.
+func (k Kind) NegativeDesired() (map[string]any, error) {
+	cases, err := k.NegativeCases()
+	if err != nil {
+		return nil, err
+	}
+	return cases[0].Desired, nil
 }
 
 // FixtureName is the Resource name used by this Form's fixtures.
@@ -403,5 +432,84 @@ func cloneValue(value any) any {
 		return out
 	default:
 		return value
+	}
+}
+
+// PortableMapKeyPattern is the key grammar every portable typed map uses.
+const PortableMapKeyPattern = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
+
+// counterExample returns the value this field's constraint must reject.
+//
+// A declared CounterExample wins; otherwise one is derived from the constraint
+// the field already states. Deriving rather than hand-writing means a field
+// cannot state a constraint and quietly ship no proof that it is enforced, and
+// a wrong derivation fails loudly at generation because the package verifier
+// requires every negative fixture to be rejected by the schema.
+func (f Field) CounterExampleValue() (any, bool) { return f.counterExample() }
+
+func (f Field) counterExample() (any, bool) {
+	if f.CounterExample != nil {
+		return f.CounterExample, true
+	}
+	switch f.Type {
+	case TypeBool:
+		return nil, false
+	case TypeInt:
+		if f.Min != nil {
+			return *f.Min - 1, true
+		}
+		if f.Max != nil {
+			return *f.Max + 1, true
+		}
+		return nil, false
+	case TypeIntSet:
+		if f.Min != nil {
+			return []any{*f.Min - 1}, true
+		}
+		if f.Max != nil {
+			return []any{*f.Max + 1}, true
+		}
+		return nil, false
+	case TypeStringMap:
+		// Keys carry the portable map-key grammar, so a key that cannot be
+		// parsed is the constraint worth proving.
+		return map[string]any{"1 invalid key": "value"}, true
+	case TypeStringSet:
+		if member, ok := invalidStringValue(f); ok {
+			return []any{member}, true
+		}
+		return nil, false
+	default:
+		return invalidStringValue(f)
+	}
+}
+
+func invalidStringValue(f Field) (any, bool) {
+	if len(f.Enum) > 0 {
+		return "not-a-declared-choice", true
+	}
+	switch f.Grammar {
+	case GrammarToken, GrammarClass:
+		return "not a token", true
+	case GrammarTimezone:
+		return "not a timezone", true
+	case GrammarCron:
+		return "0 0 * *", true
+	case GrammarHostname, GrammarDomain:
+		return "not a hostname", true
+	case GrammarPath:
+		return "relative/path", true
+	case GrammarCIDR:
+		return "10.0.0.0", true
+	case GrammarOCIDigest:
+		return "registry.invalid/image:latest", true
+	case GrammarMailbox:
+		return "no-at-sign", true
+	case GrammarHTTPSURL:
+		return "http://insecure.invalid/callback", true
+	case GrammarRecordData:
+		return " ", true
+	default:
+		return nil, false
 	}
 }

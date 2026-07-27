@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "DnsRecord",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:94aad9abc8989db915f67a5bf048a3f15ff5a72b8f27ea16074151f216a7e71e"
+    "schemaDigest": "sha256:786d77482d9d78b4320d0a132af81c43247bc1ea09a781c515de18476301732e"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4538,
-      "digest": "sha256:984f443d20fdcfbe472725ef3582b3b29719d6e12f39f0d81383c40c0be8cbd0"
+      "size": 4902,
+      "digest": "sha256:dcd7ac52e1c0e54c932c26e5bf706874b9a656d555bc2655fcf79a316342e6e4"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,10 +23,22 @@
       "digest": "sha256:358b29a90c73b5b05eca19fd3ab15eea52dc41d51c080594737a28c548de5380"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-record_type.json",
       "mediaType": "application/json",
       "size": 326,
       "digest": "sha256:4379d653ff09b12477860fd7b7404b9164f5464db621bdd5ace25d78efec50ab"
+    },
+    {
+      "path": "fixtures/negative-ttl_seconds.json",
+      "mediaType": "application/json",
+      "size": 326,
+      "digest": "sha256:c82415684f7074a2729d1da1c36cf7a5f23fe5ce6eb653cfcf9129a3138f0c18"
+    },
+    {
+      "path": "fixtures/negative-values.json",
+      "mediaType": "application/json",
+      "size": 293,
+      "digest": "sha256:3008e80b2e3f9b0c009d13c06aae6d775f7c2f05f1e584b2270181f9169c32ca"
     },
     {
       "path": "fixtures/observed.json",

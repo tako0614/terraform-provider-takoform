@@ -16,6 +16,7 @@ resource "takoform_compute_instance" "example" {
   machine_class = "general.small"
   image         = "portable-conformance/v1/base-linux"
   boot_disk_gib = 20
+  configuration = { "LOG_LEVEL" = "info" }
 }
 
 output "compute_instance_outputs" {

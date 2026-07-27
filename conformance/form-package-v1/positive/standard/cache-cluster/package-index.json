@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "CacheCluster",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:1b881f81ad5a94d0f69be46d0079ef8b0458ca16998b77d42306bbe7e036cdc7"
+    "schemaDigest": "sha256:557bcd34c86ed64455ada08571e5e5b2a95797ec2d53324ae947d431f036c6a6"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4255,
-      "digest": "sha256:7fe899b53cb97d8589dc4800f805fa1d9820b98194d63d49719132097a25dfe3"
+      "size": 4651,
+      "digest": "sha256:f49b396ab9a644be1049f7d3d30c15d116c33a2191b2e595cca8530f6f3a14c1"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,7 +23,19 @@
       "digest": "sha256:3d9d8ba2c660409658e7cd51e065d0b17ba0704a4df14706ba966574eae123e4"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-default_ttl_seconds.json",
+      "mediaType": "application/json",
+      "size": 130,
+      "digest": "sha256:28f3457b905be9e531c73292004152635dba6ad46350b5fce7ebd7fbda8a0a69"
+    },
+    {
+      "path": "fixtures/negative-eviction_policy.json",
+      "mediaType": "application/json",
+      "size": 105,
+      "digest": "sha256:11616f0dc8902a44d0085d2ceed3e582e4fde4bccbe6650555c4e45cb92f4722"
+    },
+    {
+      "path": "fixtures/negative-size_class.json",
       "mediaType": "application/json",
       "size": 103,
       "digest": "sha256:61ea4834aabe2a417f99827cedadf6c44411d5207310d53e7b0ab232e47b2a53"

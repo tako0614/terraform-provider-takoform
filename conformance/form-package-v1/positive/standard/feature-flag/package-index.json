@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "FeatureFlag",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:a77a935e43a5a8cc7903a9da5af0c8d984045bc7f915a81a62d57e4672a702a6"
+    "schemaDigest": "sha256:34a907d029ba1cfbe1b2ef15730f9ad9bed210a7d87685880e8346d68a6794e7"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4128,
-      "digest": "sha256:03341f83a1ef9939b169804ccbf167e64bf82c3919459f2685d54af97fb64ecf"
+      "size": 4326,
+      "digest": "sha256:44fc92596e37993ff2ae4da8e2c1632fcbdd1d40108c32f52757a1ffaf6a5feb"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,10 +23,16 @@
       "digest": "sha256:6d2ab90e2ef887a68b79aa91ed9ce37b7a35447336b3546633c600b26448afd4"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-flag_key.json",
       "mediaType": "application/json",
       "size": 101,
       "digest": "sha256:c43f727be7aed1cf2d39a1f12b406dc13c1665f15ea694cbe227f3b41b08c7bb"
+    },
+    {
+      "path": "fixtures/negative-rollout_percentage.json",
+      "mediaType": "application/json",
+      "size": 104,
+      "digest": "sha256:e864a1560a31273e0c0148f3d59a263295eb55c44e5f35d5b760db0aef0a5f09"
     },
     {
       "path": "fixtures/observed.json",

@@ -1,8 +1,0 @@
-{
-  "image": "docker.io/library/nginx:latest",
-  "name": "container-service",
-  "ports": [
-    80
-  ],
-  "publicHttp": true
-}

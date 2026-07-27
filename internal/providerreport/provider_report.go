@@ -48,8 +48,7 @@ type PublishedFixture struct {
 	Identity     standardform.InstalledFormReference
 	PositiveName string
 	Positive     map[string]any
-	NegativeName string
-	Negative     map[string]any
+	Negatives    []NamedFixture
 }
 
 type GeneratedReport struct {
@@ -103,6 +102,20 @@ type providerReleaseDescriptor struct {
 type standardPackageSetDescriptor struct {
 	Format     string `json:"format"`
 	Generation string `json:"generation"`
+}
+
+// NamedFixture is one rejectable input and the name the Form gave it.
+type NamedFixture struct {
+	Name    string
+	Desired map[string]any
+}
+
+func negativeNames(fixtures []NamedFixture) []string {
+	names := make([]string, 0, len(fixtures))
+	for _, fixture := range fixtures {
+		names = append(names, fixture.Name)
+	}
+	return names
 }
 
 func (report GeneratedReport) Subject() string { return report.report.Subject }
@@ -195,7 +208,7 @@ func VerifyDirectory(repoRoot, inputRoot, sourceCommit string) (DirectoryInvento
 		if err != nil {
 			return DirectoryInventory{}, fmt.Errorf("read %s provider-report: %w", descriptor.Kind, err)
 		}
-		parsed, err := admissionrelease.ValidateCanonicalProviderRunnerReport(reportRaw, fixture.Identity, []string{fixture.PositiveName}, []string{fixture.NegativeName})
+		parsed, err := admissionrelease.ValidateCanonicalProviderRunnerReport(reportRaw, fixture.Identity, []string{fixture.PositiveName}, negativeNames(fixture.Negatives))
 		if err != nil {
 			return DirectoryInventory{}, fmt.Errorf("verify %s provider-report: %w", descriptor.Kind, err)
 		}
@@ -415,7 +428,7 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 	for _, fixture := range fixtures {
 		cases = append(cases, providerlifecycle.StandardFixtureCase{
 			Kind: fixture.Kind, Identity: fixture.Identity, PositiveName: fixture.PositiveName, Positive: fixture.Positive,
-			NegativeName: fixture.NegativeName, Negative: fixture.Negative,
+			Negatives: toLifecycleFixtures(fixture.Negatives),
 		})
 	}
 	fixtureRun, err := providerlifecycle.RunStandardFixtures(ctx, root, cliPath, cases)
@@ -442,7 +455,8 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 			return nil, fmt.Errorf("provider lifecycle omitted %s", fixture.Kind)
 		}
 		exact, ok := fixtureEvidence[fixture.Kind]
-		if !ok || !reflect.DeepEqual(exact.Identity, fixture.Identity) || !exact.PositivePassed || !exact.NegativePassed || exact.PositiveName != fixture.PositiveName || exact.NegativeName != fixture.NegativeName || exact.NegativeErrorCode != standardform.InvalidArgumentErrorCode {
+		if !ok || !reflect.DeepEqual(exact.Identity, fixture.Identity) || !exact.PositivePassed || exact.PositiveName != fixture.PositiveName ||
+			!sameFixtureNames(exact.NegativeNames, negativeNames(fixture.Negatives)) || exact.NegativeErrorCode != standardform.InvalidArgumentErrorCode {
 			return nil, fmt.Errorf("provider protocol fixture evidence is incomplete for %s", fixture.Kind)
 		}
 		checks := resource.Checks
@@ -455,7 +469,7 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 				Import: checks.NativeImport && checks.CLIImport, Observe: checks.Observe, Refresh: checks.Refresh, Drift: checks.DriftState,
 			},
 			PositiveFixtures: []admissionrelease.PositiveFixtureResult{{Name: exact.PositiveName, Passed: true}},
-			NegativeFixtures: []admissionrelease.NegativeFixtureResult{{Name: exact.NegativeName, ErrorCode: exact.NegativeErrorCode, Passed: true}},
+			NegativeFixtures: negativeFixtureResults(exact.NegativeNames, exact.NegativeErrorCode),
 		}
 		raw, err := json.Marshal(report)
 		if err != nil {
@@ -465,7 +479,7 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 		if err != nil {
 			return nil, err
 		}
-		if _, err := admissionrelease.ValidateCanonicalProviderRunnerReport(canonical, fixture.Identity, []string{fixture.PositiveName}, []string{fixture.NegativeName}); err != nil {
+		if _, err := admissionrelease.ValidateCanonicalProviderRunnerReport(canonical, fixture.Identity, []string{fixture.PositiveName}, negativeNames(fixture.Negatives)); err != nil {
 			return nil, fmt.Errorf("%s canonical provider-report: %w", fixture.Kind, err)
 		}
 		generated = append(generated, GeneratedReport{
@@ -500,7 +514,7 @@ func Write(repoRoot, outputRoot string, reports []GeneratedReport) error {
 			return fmt.Errorf("provider-report set duplicates %s", generated.kind)
 		}
 		seen[generated.kind] = struct{}{}
-		parsed, err := admissionrelease.ValidateCanonicalProviderRunnerReport(generated.canonical, fixture.Identity, []string{fixture.PositiveName}, []string{fixture.NegativeName})
+		parsed, err := admissionrelease.ValidateCanonicalProviderRunnerReport(generated.canonical, fixture.Identity, []string{fixture.PositiveName}, negativeNames(fixture.Negatives))
 		if err != nil {
 			return fmt.Errorf("%s provider-report revalidation: %w", generated.kind, err)
 		}
@@ -662,26 +676,31 @@ func loadCandidateFixture(root, slug string, entry standardforms.InventoryEntry)
 	if err != nil {
 		return PublishedFixture{}, err
 	}
-	if definition.Kind != entry.Kind || len(definition.ConformanceFixtures) != 1 || len(definition.NegativeFixtures) != 1 {
-		return PublishedFixture{}, fmt.Errorf("definition does not retain exactly one positive and negative fixture")
+	if definition.Kind != entry.Kind || len(definition.ConformanceFixtures) != 1 || len(definition.NegativeFixtures) == 0 {
+		return PublishedFixture{}, fmt.Errorf("definition does not retain one positive fixture and at least one negative fixture")
 	}
 	positive := definition.ConformanceFixtures[0]
-	negative := definition.NegativeFixtures[0]
-	if negative.Stage != "desired" || negative.ExpectedFailure != "schema_validation_failed" {
-		return PublishedFixture{}, fmt.Errorf("negative fixture is not the reviewed desired schema failure")
+	for _, negative := range definition.NegativeFixtures {
+		if negative.Stage != "desired" || negative.ExpectedFailure != "schema_validation_failed" {
+			return PublishedFixture{}, fmt.Errorf("negative fixture is not the reviewed desired schema failure")
+		}
 	}
 	positiveDesired, err := readJSONMapFile(root, positive.DesiredPath)
 	if err != nil {
 		return PublishedFixture{}, fmt.Errorf("positive desired fixture: %w", err)
 	}
-	negativeDesired, err := readJSONMapFile(root, negative.InputPath)
-	if err != nil {
-		return PublishedFixture{}, fmt.Errorf("negative desired fixture: %w", err)
+	negatives := make([]NamedFixture, 0, len(definition.NegativeFixtures))
+	for _, negative := range definition.NegativeFixtures {
+		desired, err := readJSONMapFile(root, negative.InputPath)
+		if err != nil {
+			return PublishedFixture{}, fmt.Errorf("negative desired fixture: %w", err)
+		}
+		negatives = append(negatives, NamedFixture{Name: negative.Name, Desired: desired})
 	}
 	return PublishedFixture{
 		Kind: entry.Kind, Slug: slug,
 		Identity:     standardform.InstalledFormReference{FormRef: entry.FormRef, PackageDigest: entry.PackageDigest},
-		PositiveName: positive.Name, Positive: positiveDesired, NegativeName: negative.Name, Negative: negativeDesired,
+		PositiveName: positive.Name, Positive: positiveDesired, Negatives: negatives,
 	}, nil
 }
 
@@ -779,32 +798,37 @@ func loadPublishedFixture(root, packageVersion string, entry admissionrelease.Pu
 	if err != nil {
 		return PublishedFixture{}, err
 	}
-	if definition.Kind != entry.Kind || len(definition.ConformanceFixtures) != 1 || len(definition.NegativeFixtures) != 1 {
-		return PublishedFixture{}, fmt.Errorf("definition does not retain exactly one positive and negative fixture")
+	if definition.Kind != entry.Kind || len(definition.ConformanceFixtures) != 1 || len(definition.NegativeFixtures) == 0 {
+		return PublishedFixture{}, fmt.Errorf("definition does not retain one positive fixture and at least one negative fixture")
 	}
 	positive := definition.ConformanceFixtures[0]
-	negative := definition.NegativeFixtures[0]
-	if negative.Stage != "desired" || negative.ExpectedFailure != "schema_validation_failed" {
-		return PublishedFixture{}, fmt.Errorf("negative fixture is not the reviewed desired schema failure")
+	for _, negative := range definition.NegativeFixtures {
+		if negative.Stage != "desired" || negative.ExpectedFailure != "schema_validation_failed" {
+			return PublishedFixture{}, fmt.Errorf("negative fixture is not the reviewed desired schema failure")
+		}
 	}
 	if _, ok := listed[positive.DesiredPath]; !ok {
 		return PublishedFixture{}, fmt.Errorf("positive desired fixture is not listed")
-	}
-	if _, ok := listed[negative.InputPath]; !ok {
-		return PublishedFixture{}, fmt.Errorf("negative desired fixture is not listed")
 	}
 	positiveDesired, err := decodeJSONMap(archiveFiles[positive.DesiredPath])
 	if err != nil {
 		return PublishedFixture{}, fmt.Errorf("positive desired fixture: %w", err)
 	}
-	negativeDesired, err := decodeJSONMap(archiveFiles[negative.InputPath])
-	if err != nil {
-		return PublishedFixture{}, fmt.Errorf("negative desired fixture: %w", err)
+	negatives := make([]NamedFixture, 0, len(definition.NegativeFixtures))
+	for _, negative := range definition.NegativeFixtures {
+		if _, ok := listed[negative.InputPath]; !ok {
+			return PublishedFixture{}, fmt.Errorf("negative desired fixture is not listed")
+		}
+		desired, err := decodeJSONMap(archiveFiles[negative.InputPath])
+		if err != nil {
+			return PublishedFixture{}, fmt.Errorf("negative desired fixture: %w", err)
+		}
+		negatives = append(negatives, NamedFixture{Name: negative.Name, Desired: desired})
 	}
 	return PublishedFixture{
 		Kind: entry.Kind, Slug: entry.Slug,
 		Identity:     standardform.InstalledFormReference{FormRef: entry.FormRef, PackageDigest: entry.PackageDigest},
-		PositiveName: positive.Name, Positive: positiveDesired, NegativeName: negative.Name, Negative: negativeDesired,
+		PositiveName: positive.Name, Positive: positiveDesired, Negatives: negatives,
 	}, nil
 }
 
@@ -906,4 +930,39 @@ func SortedReportDigests(reports []GeneratedReport) []string {
 
 func ProtocolDescription() string {
 	return providerProtocol
+}
+
+func toLifecycleFixtures(fixtures []NamedFixture) []providerlifecycle.StandardNegativeFixture {
+	out := make([]providerlifecycle.StandardNegativeFixture, 0, len(fixtures))
+	for _, fixture := range fixtures {
+		out = append(out, providerlifecycle.StandardNegativeFixture{Name: fixture.Name, Desired: fixture.Desired})
+	}
+	return out
+}
+
+func negativeFixtureResults(names []string, errorCode string) []admissionrelease.NegativeFixtureResult {
+	results := make([]admissionrelease.NegativeFixtureResult, 0, len(names))
+	for _, name := range names {
+		results = append(results, admissionrelease.NegativeFixtureResult{Name: name, ErrorCode: errorCode, Passed: true})
+	}
+	return results
+}
+
+func sameFixtureNames(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	seen := make(map[string]int, len(left))
+	for _, name := range left {
+		seen[name]++
+	}
+	for _, name := range right {
+		seen[name]--
+	}
+	for _, count := range seen {
+		if count != 0 {
+			return false
+		}
+	}
+	return true
 }

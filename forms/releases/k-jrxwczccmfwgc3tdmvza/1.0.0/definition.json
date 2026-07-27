@@ -57,6 +57,14 @@
         "pattern": "^/[A-Za-z0-9._~!$\u0026'()*+,;=:@%/-]*$",
         "type": "string"
       },
+      "idleTimeoutSeconds": {
+        "maximum": 4000,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "internal": {
+        "type": "boolean"
+      },
       "listenPort": {
         "maximum": 65535,
         "minimum": 1,
@@ -231,9 +239,27 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-protocol",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-protocol.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-listen_port",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-listen_port.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-health_check_path",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-health_check_path.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-idle_timeout_seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-idle_timeout_seconds.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

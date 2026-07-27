@@ -1,4 +1,6 @@
 {
   "maxRetries": 5,
-  "name": "queue"
+  "messageRetentionSeconds": 345600,
+  "name": "queue",
+  "ordering": "best_effort"
 }

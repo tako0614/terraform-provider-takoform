@@ -6,27 +6,45 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ComputeInstance",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:fd6172299535387c7955c849604cd788da013e58c25a8d46057495e1ae055f56"
+    "schemaDigest": "sha256:cb1e06538f410edb2e7881c64ad0eaa77926f0e1fe2b4715246c695b18512a81"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4307,
-      "digest": "sha256:f33998f5879c1165e1f3f1385fd6223f3cc3195929bd0443ad55edeb5b8565a9"
+      "size": 5224,
+      "digest": "sha256:dc46cbf19dcfc9f0cd4b6efdebf6c1adeda3244b32b34be2d3d142d5c13ce2c3"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 138,
-      "digest": "sha256:793601aa22389c3db550dedbe2086e5bed09391d948e9bb23ab0fc6610216230"
+      "size": 188,
+      "digest": "sha256:5a68ba059e3237be896f7e975f253f8ef84d480fd9e553164afe6521f658d94f"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-boot_disk_gib.json",
       "mediaType": "application/json",
-      "size": 136,
-      "digest": "sha256:b217d67b6975f28fdbe43036bf8f69663a9ff51295972893611eb4056c7d0b92"
+      "size": 187,
+      "digest": "sha256:ff848f1637f1943dfbe4e1f316f89fcd6e83ac76ec670a072060c8f09958d193"
+    },
+    {
+      "path": "fixtures/negative-configuration.json",
+      "mediaType": "application/json",
+      "size": 193,
+      "digest": "sha256:863f40c1772a5c96a4e888286c783728d75ea8f5a608d6a55d0e2138aae2e808"
+    },
+    {
+      "path": "fixtures/negative-instance_count.json",
+      "mediaType": "application/json",
+      "size": 210,
+      "digest": "sha256:fb6e37066b3b7c3092bd809311de858b10645c6f9bc6b2c37f7c4a80e65aa9be"
+    },
+    {
+      "path": "fixtures/negative-machine_class.json",
+      "mediaType": "application/json",
+      "size": 186,
+      "digest": "sha256:4c8326faabe6fb9da3f25706067bca523999972df2e93c77b94e91d79da9496c"
     },
     {
       "path": "fixtures/observed.json",

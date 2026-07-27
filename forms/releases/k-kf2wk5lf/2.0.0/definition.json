@@ -6,10 +6,62 @@
   "description": "Portable asynchronous delivery with at-least-once semantics.",
   "status": "standard",
   "desiredSchema": {
+    "$defs": {
+      "connection": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "projection": {
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "resource": {
+            "pattern": "^\\S+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "permissions",
+          "projection",
+          "resource"
+        ],
+        "type": "object"
+      },
+      "connections": {
+        "additionalProperties": {
+          "$ref": "#/$defs/connection"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      }
+    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "connections": {
+        "$ref": "#/$defs/connections"
+      },
+      "deliveryDelaySeconds": {
+        "minimum": 0,
+        "type": "integer"
+      },
       "maxBatchSize": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "maxMessageBytes": {
         "minimum": 1,
         "type": "integer"
       },
@@ -17,10 +69,21 @@
         "minimum": 0,
         "type": "integer"
       },
+      "messageRetentionSeconds": {
+        "minimum": 1,
+        "type": "integer"
+      },
       "name": {
         "maxLength": 128,
         "minLength": 1,
         "pattern": ".*\\S.*",
+        "type": "string"
+      },
+      "ordering": {
+        "enum": [
+          "best_effort",
+          "strict"
+        ],
         "type": "string"
       },
       "visibilityTimeoutSeconds": {
@@ -182,9 +245,45 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-max_retries",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-max_retries.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-max_batch_size",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-max_batch_size.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-visibility_timeout_seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-visibility_timeout_seconds.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-message_retention_seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-message_retention_seconds.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-max_message_bytes",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-max_message_bytes.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-delivery_delay_seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-delivery_delay_seconds.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-ordering",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-ordering.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

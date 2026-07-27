@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "PrivateNetwork",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:ecebd28ab32a22559e8fd35e92a6c43d4a91b664fadb6fc166a10d4cdafbaeaa"
+    "schemaDigest": "sha256:0ef85acd5cb728235e1a86f5decab3df48a1812e00b648c626843e0e6cb56e63"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4117,
-      "digest": "sha256:aa461a23a1770c60f2082523417b67843278c05b9210413669603a81ed81a34f"
+      "size": 4127,
+      "digest": "sha256:2bb7a3b4d7d09548a67a028a68f322e56bf4eb7e42a3d3bb188dcb24919f0fd2"
     },
     {
       "path": "fixtures/desired.json",
@@ -23,7 +23,7 @@
       "digest": "sha256:680d27778c29237889d11c8cfadf806f9695c903a1b44841958112dceecc6d36"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-address_space.json",
       "mediaType": "application/json",
       "size": 88,
       "digest": "sha256:c4f8f60ab0514d18169382d84dd3fe21abf7e6797ad34d45fa6a95123329eb73"

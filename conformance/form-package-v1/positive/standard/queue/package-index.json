@@ -6,27 +6,63 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "Queue",
     "definitionVersion": "2.0.0",
-    "schemaDigest": "sha256:62c6a8ff7e0eb86445b2dc466dae8bce954d26a445f19793eb6c7846e86ed586"
+    "schemaDigest": "sha256:abe4e886e073856dfb4577d3b3cfb551fbceaac74a4c06f87944570bf3f360f6"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4122,
-      "digest": "sha256:2e851a65b2f5eda333f37110b6c2d0f9fbde6bb6c7ec4ac675934a2b4ee481a2"
+      "size": 6845,
+      "digest": "sha256:8d49e47893076e5f6f83b70be0972cde1e053ea914d2769c491c3a91a442d81e"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 41,
-      "digest": "sha256:45d88a8126912ef1ffa1d0573121a060ee0d8d302d00a33b02496899f71fe961"
+      "size": 107,
+      "digest": "sha256:a8d7336ba7dbfea066968d1b500488d88eb1e86c9d453d3e358fb06ac622d09c"
     },
     {
-      "path": "fixtures/negative.json",
+      "path": "fixtures/negative-delivery_delay_seconds.json",
       "mediaType": "application/json",
-      "size": 42,
-      "digest": "sha256:bddbc6c97a87f3ee7453825b5170b236327b4cba36a64c0daff86724d85b49a2"
+      "size": 137,
+      "digest": "sha256:e7dcfb1c3e1564648e8c8d2817d9aa29c6fa470a7c61ed5fe736d5eb8a63d59b"
+    },
+    {
+      "path": "fixtures/negative-max_batch_size.json",
+      "mediaType": "application/json",
+      "size": 128,
+      "digest": "sha256:a0d46018c048bcd951e0b15fcdab60d167062140c9f42ca95839eb671d734f46"
+    },
+    {
+      "path": "fixtures/negative-max_message_bytes.json",
+      "mediaType": "application/json",
+      "size": 131,
+      "digest": "sha256:3f0c7f39c4ed4f89490d4a16cc32512280a8d1b860310cdc8945f89bf98673f0"
+    },
+    {
+      "path": "fixtures/negative-max_retries.json",
+      "mediaType": "application/json",
+      "size": 108,
+      "digest": "sha256:ba3d2be86f0e65015dc46fdbf1ea827ef0b136de1ef8bb19083525b41c36df5f"
+    },
+    {
+      "path": "fixtures/negative-message_retention_seconds.json",
+      "mediaType": "application/json",
+      "size": 102,
+      "digest": "sha256:595bab2816a1d49b83bd77a768033852fe8d1aac4c923875f4ea157b4efc92b9"
+    },
+    {
+      "path": "fixtures/negative-ordering.json",
+      "mediaType": "application/json",
+      "size": 117,
+      "digest": "sha256:7c7e7e224bf95a896a9e82af816cdf0960188e6ee128258a99839e3b36f43f80"
+    },
+    {
+      "path": "fixtures/negative-visibility_timeout_seconds.json",
+      "mediaType": "application/json",
+      "size": 141,
+      "digest": "sha256:2aef3f7aa0d76c7ba0a57aaa7bc8d4a9963e5f8df5a83571bd9814a6c47430e0"
     },
     {
       "path": "fixtures/observed.json",

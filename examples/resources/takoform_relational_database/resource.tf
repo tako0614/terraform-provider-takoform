@@ -15,6 +15,8 @@ resource "takoform_relational_database" "example" {
   name           = "relational-database"
   engine         = "postgres"
   engine_version = "16"
+  size_class     = "db.small"
+  database_name  = "app"
 }
 
 output "relational_database_outputs" {

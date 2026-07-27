@@ -1,4 +1,7 @@
 {
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
   "connections": {
     "assets": {
       "permissions": [

@@ -121,7 +121,7 @@ fields; the protocol lifecycle proves both.
 | `ObjectLifecycleRule` | `/name` |
 | `KeyValueStore` | `/name` |
 | `CacheCluster` | `/name` |
-| `RelationalDatabase` | `/engine`, `/name` |
+| `RelationalDatabase` | `/databaseName`, `/engine`, `/name` |
 | `IndexedStore` | `/name`, `/partitionKey`, `/sortKey` |
 | `Queue` | `/name` |
 | `StreamTopic` | `/name`, `/partitions` |

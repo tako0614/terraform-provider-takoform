@@ -50,12 +50,28 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "configuration": {
+        "additionalProperties": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      },
       "connections": {
         "$ref": "#/$defs/connections"
       },
       "cpuMillicores": {
         "minimum": 1,
         "type": "integer"
+      },
+      "healthCheckPath": {
+        "pattern": "^/[A-Za-z0-9._~!$\u0026'()*+,;=:@%/-]*$",
+        "type": "string"
       },
       "image": {
         "pattern": "^[^@\\s]+@sha256:[A-Fa-f0-9]{64}$",
@@ -82,6 +98,10 @@
       },
       "publicHttp": {
         "type": "boolean"
+      },
+      "replicas": {
+        "minimum": 1,
+        "type": "integer"
       }
     },
     "required": [
@@ -235,9 +255,45 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-image",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-image.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-ports",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-ports.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-cpu_millicores",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-cpu_millicores.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-memory_mib",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-memory_mib.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-replicas",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-replicas.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-health_check_path",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-health_check_path.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-configuration",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-configuration.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

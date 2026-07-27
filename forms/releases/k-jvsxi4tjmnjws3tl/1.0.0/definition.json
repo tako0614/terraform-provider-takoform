@@ -220,9 +220,15 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-retention_days",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-retention_days.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-resolution_seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-resolution_seconds.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

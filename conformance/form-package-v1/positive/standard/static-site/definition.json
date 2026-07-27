@@ -244,9 +244,9 @@
   ],
   "negativeConformanceFixtures": [
     {
-      "name": "reject-invalid-semantics",
+      "name": "reject-cache_control_seconds",
       "stage": "desired",
-      "inputPath": "fixtures/negative.json",
+      "inputPath": "fixtures/negative-cache_control_seconds.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

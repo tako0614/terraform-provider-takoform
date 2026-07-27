@@ -1,0 +1,8 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "entityClass": "not a class",
+  "migrationTag": "v1",
+  "name": "stateful-entity"
+}

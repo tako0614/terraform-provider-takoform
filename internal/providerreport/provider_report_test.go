@@ -37,11 +37,13 @@ func TestLoadPublishedFixturesUsesExactRetainedReleaseArchives(t *testing.T) {
 			t.Fatalf("invalid exact fixture identity: %#v", fixture)
 		}
 		seen[fixture.Kind] = true
-		if fixture.PositiveName != "canonical" || fixture.NegativeName != "reject-invalid-semantics" || fixture.Positive == nil || fixture.Negative == nil {
+		if fixture.PositiveName != "canonical" || fixture.Positive == nil || len(fixture.Negatives) == 0 {
 			t.Fatalf("invalid retained fixture closure for %s", fixture.Kind)
 		}
-		if bytes.Equal(mustJSON(t, fixture.Positive), mustJSON(t, fixture.Negative)) {
-			t.Fatalf("%s positive and negative fixture unexpectedly match", fixture.Kind)
+		for _, negative := range fixture.Negatives {
+			if negative.Desired == nil || bytes.Equal(mustJSON(t, fixture.Positive), mustJSON(t, negative.Desired)) {
+				t.Fatalf("%s %s does not differ from the canonical fixture", fixture.Kind, negative.Name)
+			}
 		}
 	}
 	for _, spec := range standardforms.RetiredKinds {
@@ -118,7 +120,14 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 		if generated.report.Identity != exactIdentity[generated.kind] || generated.report.Identity.FormRef.DefinitionVersion != declared.Version() || generated.report.RunnerVersion != providerReleaseVersion(t, root) {
 			t.Fatalf("report %s relabeled executed candidate identity: %#v", generated.kind, generated.report)
 		}
-		if _, err := admissionrelease.ValidateCanonicalProviderRunnerReport(generated.canonical, generated.report.Identity, []string{"canonical"}, []string{"reject-invalid-semantics"}); err != nil {
+		declaredNegatives := make([]string, 0, len(generated.report.NegativeFixtures))
+		for _, negative := range generated.report.NegativeFixtures {
+			declaredNegatives = append(declaredNegatives, negative.Name)
+		}
+		if len(declaredNegatives) == 0 {
+			t.Fatalf("%s report proves no rejected input", generated.kind)
+		}
+		if _, err := admissionrelease.ValidateCanonicalProviderRunnerReport(generated.canonical, generated.report.Identity, []string{"canonical"}, declaredNegatives); err != nil {
 			t.Fatalf("validate %s canonical report: %v", generated.kind, err)
 		}
 		written, err := os.ReadFile(filepath.Join(output, generated.slug, "provider-report.json"))

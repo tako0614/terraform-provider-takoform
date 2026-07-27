@@ -21,6 +21,9 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 - `public_http` (Bool, optional) — Whether this container asks for public HTTP exposure.
 - `cpu_millicores` (Number, optional) — Optional CPU request in millicores. At least 1.
 - `memory_mib` (Number, optional) — Optional memory request in mebibytes. At least 1.
+- `replicas` (Number, optional) — Requested number of identical running instances. At least 1.
+- `health_check_path` (String, optional) — Optional HTTP path a host polls to decide whether an instance is serving.
+- `configuration` (Map of String, optional) — Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.
 - `connections` (List of Object, optional) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
