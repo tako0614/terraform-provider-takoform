@@ -135,10 +135,9 @@ remain immutable GitHub Releases. Terraform Registry rejected `v0.1.1`
 because its checksum manifest projected SPDX evidence as provider packages,
 and rejected `v0.1.2` because it omitted the required Registry metadata
 manifest checksum. The exact six-entry `v0.1.3` release is the
-non-overwriting successor. Direct Terraform `1.15.8` and OpenTofu `1.12.1`
-Registry installs now pass the full lifecycle matrix, and the canonical
-unsigned readback is retained for the separately authenticated admission
-candidate.
+non-overwriting successor, and its retained Registry readback belongs to the
+Forms it shipped. The rebuilt Form set takes the next minor line, `0.2.0`,
+which has no release and no readback of its own yet.
 
 Provider publication and Standard Form admission are separate releases. The
 provider `v*` workflow can publish only while the descriptor and inventory are
@@ -153,8 +152,8 @@ Provider releases use the fail-closed signed `v*` tag workflow documented in
 the private key remains outside the repository. The `tako0614` public namespace
 and pinned signing key are registered. Do not create a new release tag until
 the release descriptor and provider compatibility gates are complete. Existing
-version paths are immutable; the coordinated `1.0.1` Form pin therefore uses
-provider `0.1.3`.
+version paths are immutable, so the retired coordinated `1.0.1` Form pin keeps
+provider `0.1.3` and the rebuilt set starts at `0.2.0`.
 
 ## License
 
