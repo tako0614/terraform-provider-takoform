@@ -115,7 +115,7 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 		if !ok {
 			t.Fatalf("report names undeclared kind %s", generated.kind)
 		}
-		if generated.report.Identity != exactIdentity[generated.kind] || generated.report.Identity.FormRef.DefinitionVersion != declared.Version() || generated.report.RunnerVersion != "0.1.3" {
+		if generated.report.Identity != exactIdentity[generated.kind] || generated.report.Identity.FormRef.DefinitionVersion != declared.Version() || generated.report.RunnerVersion != providerReleaseVersion(t, root) {
 			t.Fatalf("report %s relabeled executed candidate identity: %#v", generated.kind, generated.report)
 		}
 		if _, err := admissionrelease.ValidateCanonicalProviderRunnerReport(generated.canonical, generated.report.Identity, []string{"canonical"}, []string{"reject-invalid-semantics"}); err != nil {
@@ -135,7 +135,7 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if inventory.Format != directoryInventoryFormat || inventory.Status != "candidate-only" || inventory.ProofType != "provider" || inventory.Source.Commit != sourceCommit || inventory.Source.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || inventory.Generation == "" || inventory.RunnerVersion != "0.1.3" || len(inventory.Reports) != len(formcatalog.Kinds) {
+	if inventory.Format != directoryInventoryFormat || inventory.Status != "candidate-only" || inventory.ProofType != "provider" || inventory.Source.Commit != sourceCommit || inventory.Source.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || inventory.Generation == "" || inventory.RunnerVersion != providerReleaseVersion(t, root) || len(inventory.Reports) != len(formcatalog.Kinds) {
 		t.Fatalf("invalid exported provider-report manifest: %#v", inventory)
 	}
 	verified, err := VerifyDirectory(root, exportRoot, sourceCommit)
@@ -262,4 +262,24 @@ func mustJSON(t *testing.T, value any) []byte {
 		t.Fatal(err)
 	}
 	return raw
+}
+
+// providerReleaseVersion reads the reviewed release descriptor, so a version
+// bump does not need this test edited to keep proving the binding.
+func providerReleaseVersion(t *testing.T, root string) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(root, "release", "version.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var descriptor struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(raw, &descriptor); err != nil {
+		t.Fatal(err)
+	}
+	if descriptor.Version == "" {
+		t.Fatal("release descriptor has no version")
+	}
+	return descriptor.Version
 }

@@ -1,5 +1,5 @@
 {
-  "format": "takoform.offline-sigstore-pins@v2",
+  "format": "takoform.offline-sigstore-pins@v3",
   "trustedRoot": {
     "path": "trust/trusted-root.json",
     "digest": "sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"
@@ -23,5 +23,9 @@
   "registryReadbackPolicy": {
     "path": "trust/registry-readback-policy.json",
     "digest": "sha256:58972b142dfd1b418b93c6982a51d1c4a8028bad2e89835ad0d2900385c18abd"
+  },
+  "conformingHosts": {
+    "path": "conforming-hosts.json",
+    "digest": "sha256:b7a6ea27ccd0ab05089fb753eab29238834d1bdb10ff89501bea34595d208982"
   }
 }

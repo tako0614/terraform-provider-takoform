@@ -37,8 +37,8 @@ The group graduates to `v1beta1` when all of the following hold:
 
 1. two or more independently operated hosts pass the host conformance class
    against the same Form set, with signed evidence;
-2. the machine-readable host contract has covered every operation for one
-   release cycle with no breaking change;
+2. [`host-api/operations.json`](host-api/operations.json) has covered every
+   operation for one release cycle with no breaking change;
 3. the interface declaration surface has at least one host materializing a
    declared interface end to end;
 4. a published Form Package has been installed, activated, and read back by a

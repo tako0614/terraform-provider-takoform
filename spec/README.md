@@ -14,7 +14,7 @@ Current committed surfaces:
 - [`conformance.md`](conformance.md) — requirement keywords and the four conformance classes;
 - [`versioning.md`](versioning.md) — independent version streams, stability, and deprecation;
 - [`schemas/`](schemas/) — the normative machine-readable schemas;
-- [`host-api/`](host-api/) — the minimal discovery, capability, preview, apply, observe, and delete contract used by the provider candidate;
+- [`host-api/`](host-api/) — the discovery, availability, preview, apply, read, import, observe, refresh, and delete contract, with [`operations.json`](host-api/operations.json) as its machine-readable form;
 - [`form-definition/`](form-definition/) — exact FormRef and data-only Form Definition contract;
 - [`form-package/`](form-package/) — package-index identity, closed payload rules, and local verifier boundary;
 - [`interface-declaration/`](interface-declaration/) — open `(name, version)` runtime interface descriptors, exact non-secret documents, and deterministic input mappings;

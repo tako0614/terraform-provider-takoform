@@ -8,6 +8,8 @@
 package hostpolicy
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -20,6 +22,11 @@ import (
 const PolicyPath = "admission/v1/conforming-hosts.json"
 
 const policyFormat = "takoform.conforming-host-policy@v1"
+
+// pinsPath is the reviewed trust manifest that records this allowlist's exact
+// bytes. Widening who may sign admission input is a change tamper-evidence has
+// to cover, so the allowlist is read through its pin rather than beside it.
+const pinsPath = "admission/v1/trust/offline-sigstore-pins.json"
 
 var (
 	hostIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
@@ -51,10 +58,14 @@ type Policy struct {
 	Hosts       []Host `json:"hosts"`
 }
 
-// Load reads and validates the policy under a repository root.
+// Load reads the allowlist, proves it is the exact pinned bytes, and validates
+// every entry.
 func Load(root string) (Policy, error) {
 	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(PolicyPath)))
 	if err != nil {
+		return Policy{}, err
+	}
+	if err := verifyPinnedBytes(root, raw); err != nil {
 		return Policy{}, err
 	}
 	var policy Policy
@@ -125,4 +136,28 @@ func (p Policy) ByHostID(hostID string) (Host, error) {
 		}
 	}
 	return Host{}, fmt.Errorf("no conforming host in %s has hostId %q", PolicyPath, hostID)
+}
+
+func verifyPinnedBytes(root string, raw []byte) error {
+	pinsRaw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(pinsPath)))
+	if err != nil {
+		return fmt.Errorf("read %s: %w", pinsPath, err)
+	}
+	var pins struct {
+		ConformingHosts struct {
+			Path   string `json:"path"`
+			Digest string `json:"digest"`
+		} `json:"conformingHosts"`
+	}
+	if err := json.Unmarshal(pinsRaw, &pins); err != nil {
+		return fmt.Errorf("decode %s: %w", pinsPath, err)
+	}
+	if pins.ConformingHosts.Path != "conforming-hosts.json" {
+		return fmt.Errorf("%s does not pin the conforming-host allowlist", pinsPath)
+	}
+	sum := sha256.Sum256(raw)
+	if actual := "sha256:" + hex.EncodeToString(sum[:]); actual != pins.ConformingHosts.Digest {
+		return fmt.Errorf("%s digest %s does not match its pin %s", PolicyPath, actual, pins.ConformingHosts.Digest)
+	}
+	return nil
 }

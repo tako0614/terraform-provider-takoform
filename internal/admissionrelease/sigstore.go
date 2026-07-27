@@ -13,12 +13,13 @@ import (
 )
 
 const (
-	offlineSigstorePinsFormat           = "takoform.offline-sigstore-pins@v2"
+	offlineSigstorePinsFormat           = "takoform.offline-sigstore-pins@v3"
 	publisherPolicyFormat               = "takoform.sigstore-publisher-policy@v1"
 	offlineSigstorePinsPath             = "trust/offline-sigstore-pins.json"
 	canonicalTrustedRootPath            = "trust/trusted-root.json"
 	canonicalPublisherPolicyPath        = "trust/publisher-policy.json"
 	canonicalHostReportPolicyPath       = "trust/host-report-policy.json"
+	canonicalConformingHostsPath        = "conforming-hosts.json"
 	canonicalProviderReportPolicyPath   = "trust/provider-report-policy.json"
 	canonicalPackageIndexPolicyPath     = "trust/package-index-policy.json"
 	canonicalRegistryReadbackPolicyPath = "trust/registry-readback-policy.json"
@@ -48,6 +49,10 @@ type OfflineSigstorePins struct {
 	ProviderReportPolicy    RetainedFile `json:"providerReportPolicy"`
 	PackageIndexPolicy      RetainedFile `json:"packageIndexPolicy"`
 	RegistryReadbackPolicy  RetainedFile `json:"registryReadbackPolicy"`
+	// ConformingHosts pins the reviewed allowlist of hosts whose signed
+	// lifecycle reports admission accepts. Widening who may sign admission
+	// input is exactly the kind of change tamper-evidence has to cover.
+	ConformingHosts RetainedFile `json:"conformingHosts"`
 }
 
 // RetainedFile identifies one repository-retained trust input by exact bytes.
@@ -163,6 +168,7 @@ func validateOfflineSigstorePins(pins OfflineSigstorePins) error {
 		{label: "providerReportPolicy", retained: pins.ProviderReportPolicy},
 		{label: "packageIndexPolicy", retained: pins.PackageIndexPolicy},
 		{label: "registryReadbackPolicy", retained: pins.RegistryReadbackPolicy},
+		{label: "conformingHosts", retained: pins.ConformingHosts},
 	} {
 		label, retained := item.label, item.retained
 		if err := validateRelativePath(retained.Path); err != nil {
@@ -185,6 +191,7 @@ func validateOfflineSigstorePins(pins OfflineSigstorePins) error {
 		{label: "providerReportPolicy", got: pins.ProviderReportPolicy.Path, want: canonicalProviderReportPolicyPath},
 		{label: "packageIndexPolicy", got: pins.PackageIndexPolicy.Path, want: canonicalPackageIndexPolicyPath},
 		{label: "registryReadbackPolicy", got: pins.RegistryReadbackPolicy.Path, want: canonicalRegistryReadbackPolicyPath},
+		{label: "conformingHosts", got: pins.ConformingHosts.Path, want: canonicalConformingHostsPath},
 	} {
 		if item.got != item.want {
 			return fmt.Errorf("%s path is %q, want %q", item.label, item.got, item.want)

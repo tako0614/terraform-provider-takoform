@@ -349,23 +349,33 @@ func validateReport(report Report, installationSource string) error {
 			return fmt.Errorf("provider lifecycle candidate is incomplete for %s", resource.Kind)
 		}
 	}
-	expectedNegative := map[string]string{
-		"response-name-substitution-rejected":           resourceCases[0].Kind,
-		"response-package-digest-substitution-rejected": resourceCases[1].Kind,
+	// The two substitution negatives must name two distinct declared Forms.
+	// Pinning which Forms would make the evidence depend on catalogue order,
+	// so the requirement is the property, not the position.
+	expectedNegative := map[string]struct{}{
+		"response-name-substitution-rejected":           {},
+		"response-package-digest-substitution-rejected": {},
 	}
 	if len(report.NegativeChecks) != len(expectedNegative) {
 		return errors.New("provider lifecycle negative fixture is incomplete")
 	}
+	negativeKinds := map[string]struct{}{}
 	seenNegative := make(map[string]struct{}, len(report.NegativeChecks))
 	for _, evidence := range report.NegativeChecks {
-		expectedKind, known := expectedNegative[evidence.Name]
-		if !known || evidence.Kind != expectedKind || strings.TrimSpace(evidence.Fixture) == "" || !evidence.Passed {
+		if _, known := expectedNegative[evidence.Name]; !known || strings.TrimSpace(evidence.Fixture) == "" || !evidence.Passed {
 			return errors.New("provider lifecycle negative fixture is incomplete")
+		}
+		if _, declared := formcatalog.ByKind(evidence.Kind); !declared {
+			return fmt.Errorf("provider lifecycle negative fixture names undeclared kind %q", evidence.Kind)
 		}
 		if _, duplicate := seenNegative[evidence.Name]; duplicate {
 			return fmt.Errorf("provider lifecycle duplicates negative fixture %q", evidence.Name)
 		}
 		seenNegative[evidence.Name] = struct{}{}
+		negativeKinds[evidence.Kind] = struct{}{}
+	}
+	if len(negativeKinds) != len(expectedNegative) {
+		return errors.New("provider lifecycle substitution negatives did not cover two distinct Forms")
 	}
 	if len(report.ImmutableReplace) != len(resourceCases)+len(declaredImmutableFieldPointers()) {
 		return errors.New("provider lifecycle immutable replacement evidence is incomplete")

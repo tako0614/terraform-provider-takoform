@@ -7,6 +7,12 @@ desired state, optimistic concurrency, mutation replay, and stable errors.
 Requirement keywords are used as described in
 [`../conformance.md`](../conformance.md).
 
+[`operations.json`](operations.json) is the machine-readable form of this
+contract: every operation with its method, path, exact-identity query, required
+precondition, idempotency, and the stable error taxonomy. The reference client
+is driven against it by `go test ./internal/client`, so this document describes
+behaviour that actually happens rather than behaviour that was intended.
+
 ## Discovery and endpoint selection
 
 A conforming host MUST answer `GET /.well-known/takoform` with:

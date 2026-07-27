@@ -1,6 +1,9 @@
 package hostpolicy
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,11 +33,7 @@ func TestReviewedPolicyLoads(t *testing.T) {
 // TestPolicyRejectsUnusableEntries keeps the allowlist fail-closed: a malformed
 // entry must not silently widen who may sign admission input.
 func TestPolicyRejectsUnusableEntries(t *testing.T) {
-	valid := `{"format":"takoform.conforming-host-policy@v1","hosts":[{"hostId":"h","title":"H",` +
-		`"manifestFormat":"m","signedFormat":"s","certificateIdentity":"https://example.invalid/w.yml@refs/heads/main",` +
-		`"workflow":".github/workflows/w.yml","sourceRepository":"https://example.invalid/h.git","proofType":"p",` +
-		`"subject":"host:https://h.invalid","runnerVersionPrefix":"1.0.0+git.",` +
-		`"evidenceApiVersion":"h.portable-form-host-conformance/v1"}]}`
+	valid := validTestPolicy
 	for name, mutation := range map[string]func(string) string{
 		"unknown field": func(s string) string { return strings.Replace(s, `"hostId":"h"`, `"hostId":"h","extra":1`, 1) },
 		"wrong format":  func(s string) string { return strings.Replace(s, "conforming-host-policy@v1", "other@v1", 1) },
@@ -52,15 +51,45 @@ func TestPolicyRejectsUnusableEntries(t *testing.T) {
 			return strings.Replace(s, "https://example.invalid/h.git", "https://example.invalid/h", 1)
 		},
 	} {
-		root := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(root, "admission", "v1"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(PolicyPath)), []byte(mutation(valid)), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		root := writePinnedPolicy(t, mutation(valid))
 		if _, err := Load(root); err == nil {
 			t.Errorf("%s was accepted", name)
 		}
 	}
+}
+
+// TestLoadRejectsUnpinnedAllowlist proves the allowlist cannot be widened
+// without the reviewed trust manifest recording the new bytes.
+func TestLoadRejectsUnpinnedAllowlist(t *testing.T) {
+	root := writePinnedPolicy(t, validTestPolicy)
+	widened := strings.Replace(validTestPolicy, `"hostId":"h"`, `"hostId":"h2"`, 1)
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(PolicyPath)), []byte(widened), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(root); err == nil || !strings.Contains(err.Error(), "does not match its pin") {
+		t.Fatalf("unpinned allowlist error = %v", err)
+	}
+}
+
+const validTestPolicy = `{"format":"takoform.conforming-host-policy@v1","hosts":[{"hostId":"h","title":"H",` +
+	`"manifestFormat":"m","signedFormat":"s","certificateIdentity":"https://example.invalid/w.yml@refs/heads/main",` +
+	`"workflow":".github/workflows/w.yml","sourceRepository":"https://example.invalid/h.git","proofType":"p",` +
+	`"subject":"host:https://h.invalid","runnerVersionPrefix":"1.0.0+git.",` +
+	`"evidenceApiVersion":"h.portable-form-host-conformance/v1"}]}`
+
+func writePinnedPolicy(t *testing.T, policy string) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "admission", "v1", "trust"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(PolicyPath)), []byte(policy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256([]byte(policy))
+	pins := fmt.Sprintf(`{"conformingHosts":{"path":"conforming-hosts.json","digest":"sha256:%s"}}`, hex.EncodeToString(sum[:]))
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(pinsPath)), []byte(pins), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
 }
