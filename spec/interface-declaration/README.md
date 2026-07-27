@@ -1,9 +1,12 @@
 # Interface declaration v1alpha1
 
-A Form Definition may declare runtime interfaces its service exposes. The
+A Form Definition MAY declare runtime interfaces its service exposes. The
 portable declaration says what exists, the exact non-secret document, its
 schema, and how public values are resolved. The host owns the resulting record,
 consumer authorization, identity fencing, and lifecycle.
+
+Requirement keywords are used as described in
+[`../conformance.md`](../conformance.md).
 
 ```json
 {

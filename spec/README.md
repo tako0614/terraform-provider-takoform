@@ -4,8 +4,16 @@ This directory is the portable specification surface for the standalone
 Takoform project. It records both the provider characterization boundary and
 the implemented data-only Form Package core.
 
+Requirement keywords, conformance classes, and what a passing check does and
+does not prove are defined in [`conformance.md`](conformance.md). How the API
+group, Form definitions, packages, and the provider are versioned — and what
+`v1alpha1` must satisfy to graduate — is in [`versioning.md`](versioning.md).
+
 Current committed surfaces:
 
+- [`conformance.md`](conformance.md) — requirement keywords and the four conformance classes;
+- [`versioning.md`](versioning.md) — independent version streams, stability, and deprecation;
+- [`schemas/`](schemas/) — the normative machine-readable schemas;
 - [`host-api/`](host-api/) — the minimal discovery, capability, preview, apply, observe, and delete contract used by the provider candidate;
 - [`form-definition/`](form-definition/) — exact FormRef and data-only Form Definition contract;
 - [`form-package/`](form-package/) — package-index identity, closed payload rules, and local verifier boundary;

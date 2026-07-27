@@ -1,7 +1,8 @@
 # Release trust profile
 
 This directory records the D-08 trust decision for Takoform provider and Form
-Package artifacts. It does not make either artifact publishable. The
+Package artifacts. Requirement keywords are used as described in
+[`../conformance.md`](../conformance.md). It does not make either artifact publishable. The
 machine-readable authority is [`profile.json`](profile.json); implementation
 and live distribution evidence must satisfy it before a release descriptor can
 become publishable.
@@ -19,17 +20,17 @@ The provider follows the Terraform Registry contract:
   `profile.json`;
 - SPDX 2.3 and SLSA provenance cover the exact release assets separately and
   are never projected as Registry provider packages;
-- an existing version is never overwritten;
+- an existing version MUST NOT be overwritten;
 - the `tako0614` public namespace and pinned key ID `34FC18AC897FB709` are
   registered, while the first clean Terraform Registry/OpenTofu install proof
   remains a post-publication external gate.
 
 Form Packages do not reuse the provider GPG key. The standard Takoform
 publisher uses a keyless Sigstore blob signature and bundle bound to the exact
-repository, protected workflow, and `forms/*/v*` tag. The bundle must carry a
+repository, protected workflow, and `forms/*/v*` tag. The bundle MUST carry a
 transparency-log inclusion proof so an operator can verify retained artifacts
 without trusting the distribution endpoint at verification time. A third-party
-publisher has no ambient trust: an operator must install a separate publisher
+publisher has no ambient trust: an operator MUST install a separate publisher
 policy for its exact issuer and source identity.
 
 ## Canonical package identity
@@ -41,7 +42,7 @@ Unicode, non-finite numbers, and negative zero. The exact identity is
 lists the digest, media type, and size of every data payload.
 
 An archive is only a transport container; archive metadata is not the semantic
-package identity. A verifier must validate the signed canonical index and every
+package identity. A verifier MUST validate the signed canonical index and every
 referenced payload before exposing a definition. It rejects unlisted files,
 path traversal, links, devices, executable files, credentials, operator
 configuration, target/capacity data, prices, billing fields, and executable

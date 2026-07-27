@@ -1,7 +1,8 @@
 # Form Definition v1alpha1
 
 A Form Definition is a deterministic, data-only description of one portable
-service shape. Its normative Draft 2020-12 schema is
+service shape. Requirement keywords are used as described in
+[`../conformance.md`](../conformance.md). Its normative Draft 2020-12 schema is
 [`../../formpackage/schemas/form-definition.schema.json`](../../formpackage/schemas/form-definition.schema.json).
 
 ## Exact FormRef
@@ -20,10 +21,10 @@ extensions:
 
 The normative schema is
 [`../../formpackage/schemas/form-ref.schema.json`](../../formpackage/schemas/form-ref.schema.json).
-`kind` is a PascalCase portable kind, `definitionVersion` is SemVer, and
-`schemaDigest` is SHA-256 over the definition's RFC 8785 canonical bytes. The
-definition repeats the first three identity fields; a verifier rejects any
-mismatch.
+`kind` MUST be a PascalCase portable kind, `definitionVersion` MUST be SemVer,
+and `schemaDigest` MUST be SHA-256 over the definition's RFC 8785 canonical
+bytes. The definition MUST repeat the first three identity fields, and a
+verifier MUST reject any mismatch.
 
 ## Definition fields
 
@@ -53,7 +54,7 @@ Inline `$id`, `$anchor`, `$dynamicAnchor`, `$recursiveAnchor`, and
 must still name Draft 2020-12. These limits keep the verifier's JSON Pointer
 proof and the compiler aligned on one resolution base and one dialect.
 
-Object schemas are closed by default and must set
+Object schemas are closed by default and MUST set
 `"additionalProperties": false`. A pure typed map is the only open-key
 escape. It must explicitly use `"type": "object"`, must not mix fixed or
 dependent properties, must reject `patternProperties`, and must use a schema
