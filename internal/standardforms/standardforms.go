@@ -102,6 +102,11 @@ type InventoryEntry struct {
 }
 
 func Generate(root string) error {
+	// A retired Form leaves nothing behind: its package directory goes with it,
+	// so the corpus can never advertise a kind the provider no longer implements.
+	if err := pruneRetiredPackages(root); err != nil {
+		return err
+	}
 	entries := make([]InventoryEntry, 0, len(Specs))
 	for _, spec := range Specs {
 		entry, err := generatePackage(root, spec)
@@ -562,4 +567,28 @@ func writeJSON(path string, value any) error {
 		return err
 	}
 	return os.WriteFile(path, append(raw, '\n'), 0o644)
+}
+
+func pruneRetiredPackages(root string) error {
+	standardRoot := filepath.Join(root, "conformance", "form-package-v1", "positive", "standard")
+	entries, err := os.ReadDir(standardRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	declared := make(map[string]struct{}, len(Specs))
+	for _, spec := range Specs {
+		declared[spec.Slug] = struct{}{}
+	}
+	for _, entry := range entries {
+		if _, keep := declared[entry.Name()]; keep {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(standardRoot, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }

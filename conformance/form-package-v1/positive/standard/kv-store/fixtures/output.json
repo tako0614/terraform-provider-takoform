@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "KVStore/cache",
-  "kind": "KVStore",
-  "name": "cache",
-  "portability": "portable"
-}
