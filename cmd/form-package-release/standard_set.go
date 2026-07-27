@@ -171,11 +171,11 @@ func runBuildStandardSet(arguments []string, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if inventory.PackageVersion != version || inventory.DefinitionVersion != version || len(inventory.Packages) != len(standardforms.Specs) {
+	if inventory.PackageVersion != version || inventory.DefinitionVersion != version || len(inventory.Packages) != len(standardforms.RetiredKinds) {
 		return fmt.Errorf("standard package inventory does not match set version %s", version)
 	}
 	packages := make([]standardSetPackage, 0, len(inventory.Packages))
-	for index, spec := range standardforms.Specs {
+	for index, spec := range standardforms.RetiredKinds {
 		entry := inventory.Packages[index]
 		if entry.Kind != spec.Kind {
 			return fmt.Errorf("standard package inventory order changed at %d", index)
@@ -438,17 +438,23 @@ func standardSetVersion(tag string) (string, error) {
 	return match[1], nil
 }
 
+// readStandardSetInventory reads the coordinated single-version set this lane
+// can release: the retired published generation.
+//
+// The rebuilt portable Forms carry independent per-kind versions, so one
+// "set version" no longer describes them. Releasing that generation needs a
+// per-Form lane, which is a separate reviewed change.
 func readStandardSetInventory(repo string) (standardSetInventory, error) {
 	var inventory standardSetInventory
-	raw, err := os.ReadFile(filepath.Join(repo, "forms", "standard-package-set.json"))
+	raw, err := os.ReadFile(filepath.Join(repo, "forms", "retired-package-set.json"))
 	if err != nil {
 		return standardSetInventory{}, err
 	}
 	if err := json.Unmarshal(raw, &inventory); err != nil {
 		return standardSetInventory{}, err
 	}
-	if inventory.Format != "takoform.standard-package-set@v1" {
-		return standardSetInventory{}, fmt.Errorf("unexpected standard package inventory format")
+	if inventory.Format != "takoform.retired-package-set@v1" {
+		return standardSetInventory{}, fmt.Errorf("unexpected retired package inventory format")
 	}
 	return inventory, nil
 }
@@ -690,12 +696,12 @@ func createControllerCandidate(root string, manifest standardSetReleaseManifest,
 
 func verifyStandardSetManifest(set standardSetManifest, version, sourceCommit string) error {
 	if set.Format != standardSetFormat || set.Repository != sourceRepository || set.SourceCommit != sourceCommit || set.Version != version ||
-		set.Tag != "standard-forms/v"+version || set.PackageCount != len(standardforms.Specs) || len(set.Packages) != len(standardforms.Specs) ||
+		set.Tag != "standard-forms/v"+version || set.PackageCount != len(standardforms.RetiredKinds) || len(set.Packages) != len(standardforms.RetiredKinds) ||
 		set.ActivationAuthority.Type != "immutable-root-release" || set.ActivationAuthority.Tag != set.Tag || set.ActivationAuthority.PartialPackageReleasesActive ||
 		set.ActivationAuthority.ReleaseURL != "https://"+sourceRepository+"/releases/tag/"+set.Tag {
 		return fmt.Errorf("standard set manifest identity or activation authority is invalid")
 	}
-	for index, spec := range standardforms.Specs {
+	for index, spec := range standardforms.RetiredKinds {
 		pkg := set.Packages[index]
 		if pkg.Kind != spec.Kind || pkg.FormRef.Kind != spec.Kind || pkg.FormRef.DefinitionVersion != version || pkg.Tag != "forms/"+pkg.ReleaseID+"/v"+version ||
 			!sha256Pattern.MatchString(pkg.PackageDigest) || !sha256Pattern.MatchString(pkg.ReleaseManifestDigest) || len(pkg.Assets) < 6 {

@@ -1,0 +1,56 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "Workflow",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:63417f9bcacc1a193411238c9559c17fd84c51dcfc2ddb6849e19037f05fac0d"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 7537,
+      "digest": "sha256:adcf7e2833e92cfe91fa074288afd3d48bc19653c45e1638feff6a042690c78f"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 326,
+      "digest": "sha256:b62b6e938ec9f7ee211c253b373227552e602c40dadf23bb64852c4f3a6359e0"
+    },
+    {
+      "path": "fixtures/negative-configuration.json",
+      "mediaType": "application/json",
+      "size": 331,
+      "digest": "sha256:50e66cfb3ffdbe621c9107a066024226bd8962d5dd6b009c1a5d466af2a5962c"
+    },
+    {
+      "path": "fixtures/negative-initial_backoff_seconds.json",
+      "mediaType": "application/json",
+      "size": 327,
+      "digest": "sha256:d311714631be3ce6e0bf8548358483db540389ea0f81d6dceb818aad35672507"
+    },
+    {
+      "path": "fixtures/negative-max_attempts.json",
+      "mediaType": "application/json",
+      "size": 326,
+      "digest": "sha256:623b7f28c5bf0d419cfcbce9d2ebb57e0f65b3b709c8dfcdd658229b8602b1db"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 140,
+      "digest": "sha256:fd0a37895e24c38b59d55dcb56e171e52c02f262754a68f029eb4a95a723bf94"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 124,
+      "digest": "sha256:7f65dbe8342741fb60afc0a1fb6ea697e058178fdce50de97449717c8b92d376"
+    }
+  ]
+}

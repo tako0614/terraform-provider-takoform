@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "WebhookEndpoint/webhook-endpoint",
+  "kind": "WebhookEndpoint",
+  "name": "webhook-endpoint",
+  "portability": "portable"
+}

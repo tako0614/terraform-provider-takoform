@@ -1,0 +1,56 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "IndexedStore",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:9d1a6a8153510c280249404b773774086ae44824a2cb82c3cf9e8f051744c85c"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 4835,
+      "digest": "sha256:51e10ec231047d31dfa88c1608fb08974bad3b051a6a595fa876050963aa9f7f"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 129,
+      "digest": "sha256:be4bf12803bcd27e345395d1191852f6fac8e6312ce1f03a5d6a09bb0222908d"
+    },
+    {
+      "path": "fixtures/negative-indexed_attributes.json",
+      "mediaType": "application/json",
+      "size": 134,
+      "digest": "sha256:52c52c207c2b1808f8f4a58e95518f13d5092f2a11fa01e9df03b78f09843a0c"
+    },
+    {
+      "path": "fixtures/negative-partition_key.json",
+      "mediaType": "application/json",
+      "size": 130,
+      "digest": "sha256:d574bf261bbf6362030dce4aebdfe5050005a9f3ec0128e3fb8f502726a60d0d"
+    },
+    {
+      "path": "fixtures/negative-sort_key.json",
+      "mediaType": "application/json",
+      "size": 131,
+      "digest": "sha256:60b611ebd839f34a256c361c14660194d2c53b86acb61412057c90751b010308"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 149,
+      "digest": "sha256:a2c8744d4b7df3135aa25b6b93de63f43448640602ce7963ac0df758cef56355"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 142,
+      "digest": "sha256:0dfec235c8c59acf4aaae816bbbcc7534ad85616c5de438ceba70d1a9054ce53"
+    }
+  ]
+}

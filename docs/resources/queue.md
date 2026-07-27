@@ -2,22 +2,47 @@
 page_title: "takoform_queue Resource - takoform"
 subcategory: "Service Forms"
 description: |-
-  Declares a portable message queue.
+  Portable asynchronous delivery with at-least-once semantics.
 ---
 
 # takoform_queue
 
-Declares a portable message queue. See the [complete example](../../examples/resources/takoform_queue/resource.tf).
+Portable asynchronous delivery with at-least-once semantics.
+
+The configured host selects and operates the concrete backend. This resource
+carries desired state only: it never names a target, a credential, a price, or
+an implementation. See the [complete example](../../examples/resources/takoform_queue/resource.tf).
 
 ## Arguments
 
 - `name` (String, required, forces replacement) — Resource name.
-- `max_retries` (Number, optional) — Delivery retry preference.
-- `max_batch_size` (Number, optional) — Consumer batch-size preference.
+- `max_retries` (Number, optional) — Optional delivery retry preference. At least 0.
+- `max_batch_size` (Number, optional) — Optional consumer batch size preference. At least 1.
+- `visibility_timeout_seconds` (Number, optional) — Optional time a received message stays invisible to other consumers. At least 0.
+- `message_retention_seconds` (Number, optional) — Optional time an unacknowledged message is retained, in seconds. At least 1.
+- `max_message_bytes` (Number, optional) — Optional largest accepted message size in bytes. At least 1.
+- `delivery_delay_seconds` (Number, optional) — Optional delay before a sent message becomes receivable. At least 0.
+- `ordering` (String, optional) — Whether the host must preserve send order. One of `best_effort`, `strict`.
+- `connections` (List of Object, optional) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
 ## Read-only attributes
 
 `id`, `resource_version`, `drift_status`, `portability`, and `outputs` report
-the canonical resource fence, native observation result, and sanitized public
-host results. Backend placement is not provider state.
+the canonical resource identity, its generation fence, the native observation
+result, and sanitized public host results. Backend placement is never provider
+state.
+
+## Declared runtime interfaces
+
+- `queue.messages@1` — Portable queue delivery operations. Operations: `acknowledge`, `receive`, `send`.
+
+A declaration says what exists. It carries no credential and grants no
+consumer access; the host creates the record and authorizes its use.
+
+## Import
+
+```console
+terraform import takoform_queue.example NAME
+terraform import takoform_queue.example SPACE/NAME
+```

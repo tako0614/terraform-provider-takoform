@@ -257,7 +257,7 @@ type fakeGitHub struct {
 
 func newFakeGitHub(t *testing.T, repoRoot string) *fakeGitHub {
 	t.Helper()
-	candidatesRaw, err := os.ReadFile(filepath.Join(repoRoot, "forms", "standard-package-set.json"))
+	candidatesRaw, err := os.ReadFile(filepath.Join(repoRoot, "forms", "retired-package-set.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

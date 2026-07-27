@@ -1,0 +1,50 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "DnsZone",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:c0c4547215e8176313d62e173abc52d484eb7787193d965cb245b394fa10599e"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 4291,
+      "digest": "sha256:29ef627d8fb4619f555e51efcc4cc8435cc2705d237b4d8a0c3db8ac44085199"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 98,
+      "digest": "sha256:2268b62ba8bbab03421e8bd3d6e6ab2c354167bdcf61ea6fd0305653e9eefab3"
+    },
+    {
+      "path": "fixtures/negative-default_ttl_seconds.json",
+      "mediaType": "application/json",
+      "size": 95,
+      "digest": "sha256:f16f209b8481036d5426628845f9fa88ae944591b6338364a4de05d378cc383e"
+    },
+    {
+      "path": "fixtures/negative-domain.json",
+      "mediaType": "application/json",
+      "size": 82,
+      "digest": "sha256:b25a602feb16defe08f82f712d096fd020ce3150e58e4f9adb834cc94b2a8392"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 139,
+      "digest": "sha256:99dd960d5532af704f04ce2b8297c49136d819ffd9cbd465288b2439415f3882"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 122,
+      "digest": "sha256:d96075a57eeb3c8e2a85fd0a3d443ec32121d8935cc8b9f2fbf084c1f67fd21a"
+    }
+  ]
+}

@@ -25,7 +25,9 @@ func TestStandardFixtureCasesRequireExactExecutedFormIdentity(t *testing.T) {
 				PackageDigest: form.PackageDigest,
 			},
 			PositiveName: "canonical", Positive: map[string]any{"name": item.Name},
-			NegativeName: "reject-invalid-semantics", Negative: map[string]any{"name": item.Name},
+			Negatives: []StandardNegativeFixture{{
+				Name: "reject-name", Desired: map[string]any{"name": item.Name},
+			}},
 		})
 	}
 	if _, err := validateAndOrderStandardFixtureCases(cases); err != nil {
@@ -205,15 +207,15 @@ func TestValidateMatrixRejectsAddressAliasingAndEvidenceDrift(t *testing.T) {
 func completeReport(product, version, address string) Report {
 	checks := CheckEvidence{Create: true, Read: true, Update: true, Observe: true, Refresh: true, NativeImport: true, CLIImport: true, Delete: true, DriftState: true, NameReplace: true}
 	resources := make([]ResourceEvidence, 0, len(resourceCases))
-	immutable := make([]ImmutableReplaceEvidence, 0, len(resourceCases)+2)
+	immutable := make([]ImmutableReplaceEvidence, 0, len(resourceCases)+len(declaredImmutableFieldPointers()))
 	for _, item := range resourceCases {
 		resources = append(resources, ResourceEvidence{Kind: item.Kind, ResourceType: item.ResourceType, Checks: checks})
 		immutable = append(immutable, ImmutableReplaceEvidence{Kind: item.Kind, Field: "/name", Passed: true})
 	}
-	immutable = append(immutable,
-		ImmutableReplaceEvidence{Kind: "SQLDatabase", Field: "/engine", Passed: true},
-		ImmutableReplaceEvidence{Kind: "VectorIndex", Field: "/dimensions", Passed: true},
-	)
+	for _, pointer := range declaredImmutableFieldPointers() {
+		kind, field, _ := strings.Cut(pointer, "/")
+		immutable = append(immutable, ImmutableReplaceEvidence{Kind: kind, Field: "/" + field, Passed: true})
+	}
 	return Report{
 		Format: ReportFormat, Classification: "generic-lifecycle-candidate", PublicationReady: false,
 		BindingStatus: "exact-structural-candidate-set", RunnerSubject: RunnerSubject,
@@ -223,8 +225,8 @@ func completeReport(product, version, address string) Report {
 		CLI:            CLIIdentity{Product: product, Version: version, ProviderAddress: address, ExecutableName: strings.ToLower(product), ExecutableSHA256: "sha256:" + strings.Repeat("c", 64)},
 		Resources:      resources,
 		NegativeChecks: []NegativeEvidence{
-			{Name: "response-name-substitution-rejected", Kind: "ObjectBucket", Fixture: "fixture", Passed: true},
-			{Name: "response-package-digest-substitution-rejected", Kind: "KVStore", Fixture: "fixture", Passed: true},
+			{Name: "response-name-substitution-rejected", Kind: resourceCases[0].Kind, Fixture: "fixture", Passed: true},
+			{Name: "response-package-digest-substitution-rejected", Kind: resourceCases[1].Kind, Fixture: "fixture", Passed: true},
 		},
 		ImmutableReplace: immutable,
 	}

@@ -1,0 +1,56 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "ObjectLifecycleRule",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:61fc71ff38f735df2e3e87ebc1c5ab5b35dee3a8ea7905ab3f7ca64245794610"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 4769,
+      "digest": "sha256:5496da0f6a948c2a5446551eedd209becd7a3fa55aaf64eaf69ee6207201b41e"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 272,
+      "digest": "sha256:2121cafdd1d6cb35c2b56d9d19591312d96ab5f8ca45153bf0a3875650a7be3c"
+    },
+    {
+      "path": "fixtures/negative-expire_after_days.json",
+      "mediaType": "application/json",
+      "size": 271,
+      "digest": "sha256:0bae97b4b1e46144fe8b8fdbf4165ebe65a0498adfe6fffc2fc1d018bf505f49"
+    },
+    {
+      "path": "fixtures/negative-transition_after_days.json",
+      "mediaType": "application/json",
+      "size": 300,
+      "digest": "sha256:f95a9aa6e50ed9e2c29061451d5db624c8a719afc6310718681cc9effe2658e8"
+    },
+    {
+      "path": "fixtures/negative-transition_storage_class.json",
+      "mediaType": "application/json",
+      "size": 325,
+      "digest": "sha256:8bf597fca76d3d4451acc36aa4c226b1006522051d3e82dc544a3c7f668464de"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 164,
+      "digest": "sha256:bcbbe3cd993eec917cd0ac9f380b6cbb7705fa3b0ed03cc976c3283495964bbf"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 172,
+      "digest": "sha256:893e0b38a30c2352fb0a4b7fa55c184c34a6eb3c3e908cdec16264ad0b0ed2e7"
+    }
+  ]
+}

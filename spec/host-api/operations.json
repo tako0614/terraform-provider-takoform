@@ -1,0 +1,132 @@
+{
+  "format": "takoform.host-api@v1alpha1",
+  "apiGroup": "forms.takoform.com/v1alpha1",
+  "discoveryPath": "/.well-known/takoform",
+  "requiredFeatures": [
+    "service_forms",
+    "exact_form_ref",
+    "optimistic_concurrency",
+    "idempotent_lifecycle"
+  ],
+  "optionalFeatures": ["interface_declarations"],
+  "requiredEndpoints": ["api"],
+  "optionalEndpoints": ["forms", "interfaces", "oidc_issuer"],
+  "exactFormQueryParameters": [
+    "apiVersion",
+    "definitionVersion",
+    "kind",
+    "packageDigest",
+    "schemaDigest",
+    "space"
+  ],
+  "operations": [
+    {
+      "name": "forms",
+      "method": "GET",
+      "path": "/forms",
+      "exactFormQuery": true,
+      "precondition": "none",
+      "idempotencyKey": false,
+      "mutates": false
+    },
+    {
+      "name": "preview",
+      "method": "POST",
+      "path": "/resources/preview",
+      "exactFormQuery": false,
+      "precondition": "if-none-match-on-create-otherwise-if-match",
+      "idempotencyKey": false,
+      "mutates": false
+    },
+    {
+      "name": "apply",
+      "method": "PUT",
+      "path": "/resources/{kind}/{name}",
+      "exactFormQuery": false,
+      "precondition": "if-none-match-on-create-otherwise-if-match",
+      "idempotencyKey": true,
+      "mutates": true
+    },
+    {
+      "name": "read",
+      "method": "GET",
+      "path": "/resources/{kind}/{name}",
+      "exactFormQuery": true,
+      "precondition": "none",
+      "idempotencyKey": false,
+      "mutates": false
+    },
+    {
+      "name": "import",
+      "method": "POST",
+      "path": "/resources/{kind}/{name}/import",
+      "exactFormQuery": false,
+      "precondition": "if-none-match-on-create-otherwise-if-match",
+      "idempotencyKey": true,
+      "mutates": true
+    },
+    {
+      "name": "observe",
+      "method": "POST",
+      "path": "/resources/{kind}/{name}/observe",
+      "exactFormQuery": true,
+      "precondition": "if-match",
+      "idempotencyKey": true,
+      "mutates": false
+    },
+    {
+      "name": "refresh",
+      "method": "POST",
+      "path": "/resources/{kind}/{name}/refresh",
+      "exactFormQuery": true,
+      "precondition": "if-match",
+      "idempotencyKey": true,
+      "mutates": true
+    },
+    {
+      "name": "delete",
+      "method": "DELETE",
+      "path": "/resources/{kind}/{name}",
+      "exactFormQuery": true,
+      "precondition": "if-match",
+      "idempotencyKey": true,
+      "mutates": true
+    },
+    {
+      "name": "interfaces",
+      "method": "GET",
+      "path": "/interfaces",
+      "exactFormQuery": false,
+      "precondition": "none",
+      "idempotencyKey": false,
+      "mutates": false,
+      "optional": true
+    },
+    {
+      "name": "interface",
+      "method": "GET",
+      "path": "/interfaces/{name}",
+      "exactFormQuery": false,
+      "precondition": "none",
+      "idempotencyKey": false,
+      "mutates": false,
+      "optional": true
+    }
+  ],
+  "errorEnvelope": {
+    "shape": "{\"error\":{\"code\",\"message\",\"requestId\",\"retryable\",\"hostCode?\",\"details?\"}}",
+    "codes": [
+      "backend_unavailable",
+      "conflict",
+      "forbidden",
+      "interface_identity_ambiguous",
+      "interface_instance_ambiguous",
+      "invalid_argument",
+      "not_implemented",
+      "resource_busy",
+      "resource_not_found",
+      "unauthorized"
+    ],
+    "automaticallyRetryable": ["backend_unavailable", "resource_busy"]
+  }
+}

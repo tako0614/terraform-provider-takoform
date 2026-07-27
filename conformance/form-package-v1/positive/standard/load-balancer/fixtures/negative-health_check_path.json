@@ -1,0 +1,15 @@
+{
+  "connections": {
+    "upstream": {
+      "permissions": [
+        "request"
+      ],
+      "projection": "network.backend.v1",
+      "resource": "ContainerService/container-service"
+    }
+  },
+  "healthCheckPath": "relative/path",
+  "listenPort": 443,
+  "name": "load-balancer",
+  "protocol": "https"
+}

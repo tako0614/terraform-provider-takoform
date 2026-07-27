@@ -14,14 +14,10 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformance"
 	"github.com/tako0614/terraform-provider-takoform/internal/provider"
-)
-
-const (
-	definitionVersion = "1.0.1"
-	packageVersion    = "1.0.1"
 )
 
 type Spec struct {
@@ -29,27 +25,56 @@ type Spec struct {
 	Slug        string
 	Title       string
 	Description string
+	Version     string
 	Immutable   []string
 }
 
-var Specs = []Spec{
-	{Kind: "EdgeWorker", Slug: "edge-worker", Title: "Edge Worker", Description: "Provider-neutral edge application backed by a prebuilt immutable artifact.", Immutable: []string{"/name"}},
-	{Kind: "ObjectBucket", Slug: "object-bucket", Title: "Object Bucket", Description: "Provider-neutral object storage with a portable default storage class.", Immutable: []string{"/name"}},
-	{Kind: "KVStore", Slug: "kv-store", Title: "Key Value Store", Description: "Provider-neutral key/value state with an optional consistency preference.", Immutable: []string{"/name"}},
-	{Kind: "SQLDatabase", Slug: "sql-database", Title: "SQL Database", Description: "Provider-neutral SQL storage with an open engine capability token.", Immutable: []string{"/name", "/engine"}},
-	{Kind: "Queue", Slug: "queue", Title: "Queue", Description: "Provider-neutral asynchronous delivery and event fan-out.", Immutable: []string{"/name"}},
-	{Kind: "VectorIndex", Slug: "vector-index", Title: "Vector Index", Description: "Provider-neutral vector index with dimensions fixed for the materialized index lifecycle.", Immutable: []string{"/name", "/dimensions"}},
-	{Kind: "DurableWorkflow", Slug: "durable-workflow", Title: "Durable Workflow", Description: "Provider-neutral versioned durable workflow definition and instance-state lifecycle.", Immutable: []string{"/name"}},
-	{Kind: "ContainerService", Slug: "container-service", Title: "Container Service", Description: "Provider-neutral OCI container service, separate from an edge worker.", Immutable: []string{"/name"}},
-	{Kind: "StatefulActorNamespace", Slug: "stateful-actor-namespace", Title: "Stateful Actor Namespace", Description: "Provider-neutral namespace, class, and storage contract for stateful actors.", Immutable: []string{"/name"}},
-	{Kind: "Schedule", Slug: "schedule", Title: "Schedule", Description: "Provider-neutral five-field cron lifecycle with one explicit invokable connection.", Immutable: []string{"/name"}},
+// Specs is the active portable Form set, derived from the one declaration in
+// internal/formcatalog. Nothing here restates a Form: adding a kind to the
+// catalogue adds it to the packages, the inventory, and the provider at once.
+var Specs = activeSpecs()
+
+func activeSpecs() []Spec {
+	specs := make([]Spec, 0, len(formcatalog.Kinds))
+	for _, kind := range formcatalog.Kinds {
+		specs = append(specs, Spec{
+			Kind: kind.Kind, Slug: kind.Slug, Title: kind.Title, Description: kind.Description,
+			Version: kind.Version(), Immutable: kind.ImmutableFields(),
+		})
+	}
+	return specs
+}
+
+// retiredPackageVersion is the definition and package version of the Forms
+// this project published before the portable Form set was rebuilt.
+const retiredPackageVersion = "1.0.1"
+
+// portableGeneration names the rebuilt, intent-shaped Form set. It is not a
+// package version: each Form carries its own SemVer so a retained kind token
+// can start a new major line without renumbering every other Form.
+const portableGeneration = "portable-v1"
+
+// RetiredKinds is the exact published set whose immutable bytes and admission
+// evidence remain verifiable. Those releases are never rewritten, re-signed,
+// or reshaped; they are simply no longer the set this provider implements.
+var RetiredKinds = []Spec{
+	{Kind: "EdgeWorker", Slug: "edge-worker", Version: retiredPackageVersion},
+	{Kind: "ObjectBucket", Slug: "object-bucket", Version: retiredPackageVersion},
+	{Kind: "KVStore", Slug: "kv-store", Version: retiredPackageVersion},
+	{Kind: "SQLDatabase", Slug: "sql-database", Version: retiredPackageVersion},
+	{Kind: "Queue", Slug: "queue", Version: retiredPackageVersion},
+	{Kind: "VectorIndex", Slug: "vector-index", Version: retiredPackageVersion},
+	{Kind: "DurableWorkflow", Slug: "durable-workflow", Version: retiredPackageVersion},
+	{Kind: "ContainerService", Slug: "container-service", Version: retiredPackageVersion},
+	{Kind: "StatefulActorNamespace", Slug: "stateful-actor-namespace", Version: retiredPackageVersion},
+	{Kind: "Schedule", Slug: "schedule", Version: retiredPackageVersion},
 }
 
 var externalRequirements = []string{
 	"immutable-release-tag",
 	"registry-install-readback",
 	"sigstore-signature-and-provenance",
-	"takosumi-portable-host-lifecycle-proof",
+	"conforming-host-lifecycle-proof",
 	"terraform-provider-protocol-lifecycle-proof",
 	"portable-invalid-argument-negative-lifecycle-proof",
 	"signed-standard-admission-evidence",
@@ -58,8 +83,7 @@ var externalRequirements = []string{
 type Inventory struct {
 	Format              string           `json:"format"`
 	Classification      string           `json:"classification"`
-	DefinitionVersion   string           `json:"definitionVersion"`
-	PackageVersion      string           `json:"packageVersion"`
+	Generation          string           `json:"generation"`
 	LocalConformance    string           `json:"localConformance"`
 	PublicationReady    bool             `json:"publicationReady"`
 	AdmissionStatus     string           `json:"admissionStatus"`
@@ -78,6 +102,11 @@ type InventoryEntry struct {
 }
 
 func Generate(root string) error {
+	// A retired Form leaves nothing behind: its package directory goes with it,
+	// so the corpus can never advertise a kind the provider no longer implements.
+	if err := pruneRetiredPackages(root); err != nil {
+		return err
+	}
 	entries := make([]InventoryEntry, 0, len(Specs))
 	for _, spec := range Specs {
 		entry, err := generatePackage(root, spec)
@@ -89,13 +118,9 @@ func Generate(root string) error {
 		}
 		entries = append(entries, entry)
 	}
-	sqlDatabaseV2, err := generateSQLDatabaseV2(root)
-	if err != nil {
-		return err
-	}
 	inventory := Inventory{
 		Format: "takoform.standard-package-set@v1", Classification: "structural-candidate",
-		DefinitionVersion: definitionVersion, PackageVersion: packageVersion, LocalConformance: "structural-only",
+		Generation: portableGeneration, LocalConformance: "structural-only",
 		PublicationReady: false, AdmissionStatus: "external-required",
 		ExternalRequired:    append([]string(nil), externalRequirements...),
 		ConformanceManifest: "conformance/form-package-v1/manifest.json", Packages: entries,
@@ -117,15 +142,21 @@ func Generate(root string) error {
 	if err := os.RemoveAll(filepath.Join(root, "conformance", "standard-form-admission-v1")); err != nil {
 		return err
 	}
-	if err := updateConformanceManifest(root, entries, sqlDatabaseV2); err != nil {
+	if err := updateConformanceManifest(root, entries); err != nil {
 		return err
 	}
-	return updatePortableHostContract(root, entries)
+	if err := updatePortableHostContract(root, entries); err != nil {
+		return err
+	}
+	if err := generateRetiredInventory(root); err != nil {
+		return err
+	}
+	return generatePublishedSurfaces(root)
 }
 
 func syncCandidateReleaseSource(root string, entry InventoryEntry) error {
 	source := filepath.Join(root, filepath.FromSlash(entry.Path))
-	destination := filepath.Join(root, "forms", "releases", releaseIDForKind(entry.Kind), packageVersion)
+	destination := filepath.Join(root, "forms", "releases", releaseIDForKind(entry.Kind), entry.FormRef.DefinitionVersion)
 	if err := os.RemoveAll(destination); err != nil {
 		return err
 	}
@@ -136,51 +167,47 @@ func syncCandidateReleaseSource(root string, entry InventoryEntry) error {
 }
 
 func generatePackage(root string, spec Spec) (InventoryEntry, error) {
-	desiredSchema, err := desiredSchema(spec.Kind)
+	kind, ok := formcatalog.ByKind(spec.Kind)
+	if !ok {
+		return InventoryEntry{}, fmt.Errorf("no declared Form for %s", spec.Kind)
+	}
+	desired := kind.CanonicalDesired()
+	negatives, err := kind.NegativeCases()
 	if err != nil {
 		return InventoryEntry{}, err
 	}
-	desired, err := canonicalDesired(spec.Kind)
-	if err != nil {
-		return InventoryEntry{}, err
+	negativeFixtures := make([]formpackage.NegativeFixture, 0, len(negatives))
+	negativeFiles := make(map[string]any, len(negatives))
+	for _, negative := range negatives {
+		path := "fixtures/negative-" + negative.Field.HCL + ".json"
+		negativeFiles[path] = negative.Desired
+		negativeFixtures = append(negativeFixtures, formpackage.NegativeFixture{
+			Name: "reject-" + negative.Field.HCL, Stage: "desired",
+			InputPath: path, ExpectedFailure: "schema_validation_failed",
+		})
 	}
-	name, _ := desired["name"].(string)
 	definition := formpackage.FormDefinition{
-		APIVersion: formpackage.FormAPIVersion, Kind: spec.Kind, DefinitionVersion: definitionVersion,
+		APIVersion: formpackage.FormAPIVersion, Kind: spec.Kind, DefinitionVersion: spec.Version,
 		Title: spec.Title, Description: spec.Description, Status: "standard",
-		DesiredSchema: desiredSchema, ObservedSchema: observedSchema(), OutputSchema: outputSchema(spec.Kind),
+		DesiredSchema: kind.DesiredSchema(), ObservedSchema: formcatalog.ObservedSchema(), OutputSchema: kind.OutputSchema(),
 		ImmutableFields:       append([]string(nil), spec.Immutable...),
 		LifecycleCapabilities: []string{"create", "read", "update", "delete", "import", "observe", "refresh", "drift"},
-		Interfaces:            standardInterfaceDescriptors(spec.Kind),
+		Interfaces:            kind.InterfaceDescriptors(),
 		ConformanceFixtures: []formpackage.ConformanceFixture{{
 			Name: "canonical", DesiredPath: "fixtures/desired.json", ObservedPath: "fixtures/observed.json", OutputPath: "fixtures/output.json",
 		}},
-		NegativeFixtures: []formpackage.NegativeFixture{{
-			Name: "reject-invalid-semantics", Stage: "desired", InputPath: "fixtures/negative.json", ExpectedFailure: "schema_validation_failed",
-		}},
-	}
-	observed := map[string]any{
-		"driftedFields": []any{}, "generation": 1, "id": spec.Kind + "/" + name,
-		"imported": true, "portability": "portable", "ready": true,
-	}
-	output := map[string]any{
-		"generation": 1, "id": spec.Kind + "/" + name, "kind": spec.Kind, "name": name,
-		"portability": "portable",
-	}
-	if spec.Kind == "SQLDatabase" {
-		output["engine"] = desired["engine"]
-	}
-	negative, err := negativeDesired(spec.Kind, desired)
-	if err != nil {
-		return InventoryEntry{}, err
+		NegativeFixtures: negativeFixtures,
 	}
 	packageRoot := filepath.Join(root, "conformance", "form-package-v1", "positive", "standard", spec.Slug)
 	if err := os.RemoveAll(packageRoot); err != nil {
 		return InventoryEntry{}, err
 	}
 	files := map[string]any{
-		"definition.json": definition, "fixtures/desired.json": desired, "fixtures/negative.json": negative,
-		"fixtures/observed.json": observed, "fixtures/output.json": output,
+		"definition.json": definition, "fixtures/desired.json": desired,
+		"fixtures/observed.json": kind.CanonicalObserved(), "fixtures/output.json": kind.CanonicalOutput(),
+	}
+	for path, value := range negativeFiles {
+		files[path] = value
 	}
 	for relative, value := range files {
 		if err := writeJSON(filepath.Join(packageRoot, filepath.FromSlash(relative)), value); err != nil {
@@ -195,7 +222,7 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 	if err != nil {
 		return InventoryEntry{}, err
 	}
-	ref := formpackage.FormRef{APIVersion: formpackage.FormAPIVersion, Kind: spec.Kind, DefinitionVersion: definitionVersion, SchemaDigest: schemaDigest}
+	ref := formpackage.FormRef{APIVersion: formpackage.FormAPIVersion, Kind: spec.Kind, DefinitionVersion: spec.Version, SchemaDigest: schemaDigest}
 	paths := make([]string, 0, len(files))
 	for relative := range files {
 		paths = append(paths, relative)
@@ -213,7 +240,7 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 		}
 		packageFiles = append(packageFiles, formpackage.PackageFile{Path: relative, MediaType: mediaType, Size: int64(len(raw)), Digest: formpackage.DigestBytes(raw)})
 	}
-	index := formpackage.PackageIndex{APIVersion: formpackage.PackageAPIVersion, Kind: formpackage.PackageKind, PackageVersion: packageVersion, FormRef: ref, DefinitionPath: "definition.json", Files: packageFiles}
+	index := formpackage.PackageIndex{APIVersion: formpackage.PackageAPIVersion, Kind: formpackage.PackageKind, PackageVersion: spec.Version, FormRef: ref, DefinitionPath: "definition.json", Files: packageFiles}
 	if err := writeJSON(filepath.Join(packageRoot, formpackage.PackageIndexFilename), index); err != nil {
 		return InventoryEntry{}, err
 	}
@@ -235,7 +262,7 @@ func Verify(root string) error {
 	if err := readJSON(filepath.Join(root, "forms", "standard-package-set.json"), &inventory); err != nil {
 		return err
 	}
-	if inventory.Format != "takoform.standard-package-set@v1" || inventory.Classification != "structural-candidate" || inventory.DefinitionVersion != definitionVersion || inventory.PackageVersion != packageVersion || inventory.PublicationReady || inventory.LocalConformance != "structural-only" || inventory.AdmissionStatus != "external-required" || !reflect.DeepEqual(inventory.ExternalRequired, externalRequirements) || len(inventory.Packages) != len(Specs) {
+	if inventory.Format != "takoform.standard-package-set@v1" || inventory.Classification != "structural-candidate" || inventory.Generation != portableGeneration || inventory.PublicationReady || inventory.LocalConformance != "structural-only" || inventory.AdmissionStatus != "external-required" || !reflect.DeepEqual(inventory.ExternalRequired, externalRequirements) || len(inventory.Packages) != len(Specs) {
 		return fmt.Errorf("standard package inventory identity or release truth is invalid")
 	}
 	if _, err := os.Stat(filepath.Join(root, "conformance", "standard-form-admission-v1")); err == nil {
@@ -256,7 +283,7 @@ func Verify(root string) error {
 			return fmt.Errorf("%s inventory digest drift", entry.Kind)
 		}
 		releaseID := releaseIDForKind(entry.Kind)
-		releaseRoot := filepath.Join(root, "forms", "releases", releaseID, packageVersion)
+		releaseRoot := filepath.Join(root, "forms", "releases", releaseID, entry.FormRef.DefinitionVersion)
 		if err := verifyReleaseSource(packageRoot, releaseRoot, entry); err != nil {
 			return fmt.Errorf("%s release source: %w", entry.Kind, err)
 		}
@@ -276,9 +303,6 @@ func Verify(root string) error {
 		if err := provider.VerifyStandardFormStructure(entry.Kind, desired); err != nil {
 			return err
 		}
-	}
-	if _, err := verifySQLDatabaseV2(root); err != nil {
-		return err
 	}
 	return VerifyMaterializableCandidate(root)
 }
@@ -361,7 +385,7 @@ func VerifyAdmissionClosure(root string) error {
 	if err := Verify(root); err != nil {
 		return err
 	}
-	candidates, err := AdmissionCandidateSet()
+	candidates, err := AdmissionCandidateSet(root)
 	if err != nil {
 		return err
 	}
@@ -390,8 +414,8 @@ func publishedPackageCandidateSet(root string) (admissionrelease.CandidateSet, e
 	if err := readJSON(filepath.Join(root, "admission", "v1", "published-package-set.json"), &published); err != nil {
 		return admissionrelease.CandidateSet{}, err
 	}
-	if len(published.Entries) != len(Specs) {
-		return admissionrelease.CandidateSet{}, fmt.Errorf("published package set has %d entries, want %d", len(published.Entries), len(Specs))
+	if len(published.Entries) != len(RetiredKinds) {
+		return admissionrelease.CandidateSet{}, fmt.Errorf("published package set has %d entries, want %d", len(published.Entries), len(RetiredKinds))
 	}
 	byKind := make(map[string]admissionrelease.PublishedPackageEntry, len(published.Entries))
 	for _, entry := range published.Entries {
@@ -400,8 +424,8 @@ func publishedPackageCandidateSet(root string) (admissionrelease.CandidateSet, e
 		}
 		byKind[entry.Kind] = entry
 	}
-	candidates := make([]admissionrelease.Candidate, 0, len(Specs))
-	for _, spec := range Specs {
+	candidates := make([]admissionrelease.Candidate, 0, len(RetiredKinds))
+	for _, spec := range RetiredKinds {
 		entry, ok := byKind[spec.Kind]
 		if !ok || entry.Slug != spec.Slug {
 			return admissionrelease.CandidateSet{}, fmt.Errorf("published package set omits exact %s/%s identity", spec.Kind, spec.Slug)
@@ -426,366 +450,30 @@ func publishedPackageCandidateSet(root string) (admissionrelease.CandidateSet, e
 	}, nil
 }
 
-// AdmissionCandidateSet returns the exact all-or-nothing structural candidate
-// compiled into the provider. Callers may use it to build non-publishable
-// admission material, but the returned identities grant no admission status.
-func AdmissionCandidateSet() (admissionrelease.CandidateSet, error) {
-	candidates := make([]admissionrelease.Candidate, 0, len(Specs))
-	for _, spec := range Specs {
-		ref, err := formregistry.ForKind(spec.Kind)
+// AdmissionCandidateSet returns the exact retired published set whose
+// admission evidence this repository retains.
+//
+// It is deliberately not the active candidate set: the rebuilt portable Forms
+// have no published packages and no admission evidence, so binding an
+// admission lane to them would manufacture a claim that does not exist.
+func AdmissionCandidateSet(root string) (admissionrelease.CandidateSet, error) {
+	candidates := make([]admissionrelease.Candidate, 0, len(RetiredKinds))
+	for _, spec := range RetiredKinds {
+		packagePath := filepath.ToSlash(filepath.Join("forms", "releases", releaseIDForKind(spec.Kind), spec.Version))
+		report, err := formpackage.VerifyDirectory(filepath.Join(root, filepath.FromSlash(packagePath)))
 		if err != nil {
-			return admissionrelease.CandidateSet{}, err
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s retired release source: %w", spec.Kind, err)
 		}
 		candidates = append(candidates, admissionrelease.Candidate{
-			Kind: spec.Kind, Slug: spec.Slug,
-			PackagePath: filepath.ToSlash(filepath.Join("conformance", "form-package-v1", "positive", "standard", spec.Slug)),
-			FormRef: formpackage.FormRef{
-				APIVersion: ref.APIVersion, Kind: ref.Kind, DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest,
-			},
-			PackageDigest: ref.PackageDigest,
+			Kind: spec.Kind, Slug: spec.Slug, PackagePath: packagePath,
+			FormRef: report.FormRef, PackageDigest: report.PackageDigest,
 		})
 	}
 	return admissionrelease.CandidateSet{
-		DefinitionVersion: definitionVersion,
-		PackageVersion:    packageVersion,
+		DefinitionVersion: retiredPackageVersion,
+		PackageVersion:    retiredPackageVersion,
 		Entries:           candidates,
 	}, nil
-}
-
-func desiredSchema(kind string) (map[string]any, error) {
-	name := map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*"}
-	properties := map[string]any{"name": name}
-	required := []string{"name"}
-	defs := map[string]any{}
-	addConnections := func(requiredConnection bool) {
-		for key, value := range connectionDefinitions() {
-			defs[key] = value
-		}
-		properties["connections"] = map[string]any{"$ref": "#/$defs/connections"}
-		if requiredConnection {
-			required = append(required, "connections")
-		}
-	}
-	addArtifact := func() {
-		for key, value := range artifactDefinitions() {
-			defs[key] = value
-		}
-		properties["source"] = map[string]any{"$ref": "#/$defs/artifactSource"}
-		required = append(required, "source")
-	}
-	switch kind {
-	case "EdgeWorker":
-		addArtifact()
-		addConnections(false)
-		properties["compatibilityDate"] = map[string]any{"type": "string", "minLength": 1}
-		properties["compatibilityFlags"] = tokenArraySchema()
-		properties["profiles"] = tokenArraySchema()
-	case "ObjectBucket":
-		properties["storageClass"] = map[string]any{"type": "string", "enum": []string{"standard", "infrequent_access"}, "default": "standard"}
-		properties["interfaces"] = tokenArraySchema()
-	case "KVStore":
-		properties["consistency"] = map[string]any{"type": "string", "enum": []string{"eventual", "strong"}}
-	case "SQLDatabase":
-		properties["engine"] = tokenSchema("sqlite")
-		properties["migrationsPath"] = map[string]any{"type": "string", "minLength": 1}
-	case "Queue":
-		properties["delivery"] = map[string]any{
-			"type": "object", "additionalProperties": false,
-			"properties": map[string]any{
-				"maxRetries":   map[string]any{"type": "integer", "minimum": 0},
-				"maxBatchSize": map[string]any{"type": "integer", "minimum": 0},
-			},
-		}
-	case "VectorIndex":
-		addConnections(false)
-		properties["dimensions"] = map[string]any{"type": "integer", "minimum": 1}
-		properties["metric"] = tokenSchema("cosine")
-		required = append(required, "dimensions")
-	case "DurableWorkflow":
-		addArtifact()
-		addConnections(false)
-		properties["entrypoint"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": ".*\\S.*"}
-		properties["retry"] = map[string]any{
-			"type": "object", "additionalProperties": false,
-			"properties": map[string]any{
-				"maxAttempts":           map[string]any{"type": "integer", "minimum": 1},
-				"initialBackoffSeconds": map[string]any{"type": "integer", "minimum": 0},
-			},
-		}
-		required = append(required, "entrypoint")
-	case "ContainerService":
-		addConnections(false)
-		properties["image"] = map[string]any{"type": "string", "pattern": "^[^@\\s]+@sha256:[A-Fa-f0-9]{64}$"}
-		properties["ports"] = map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "integer", "minimum": 1, "maximum": 65535}}
-		properties["publicHttp"] = map[string]any{"type": "boolean"}
-		required = append(required, "image")
-	case "StatefulActorNamespace":
-		addConnections(false)
-		properties["className"] = map[string]any{"type": "string", "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"}
-		properties["storageProfile"] = tokenSchema("durable_sqlite")
-		properties["migrationTag"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*"}
-		required = append(required, "className")
-	case "Schedule":
-		for key, value := range scheduleConnectionDefinitions() {
-			defs[key] = value
-		}
-		properties["cron"] = map[string]any{"type": "string", "pattern": "^[0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)? [0-9*,-]+(?:/[1-9][0-9]*)?$"}
-		properties["timezone"] = map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:/+-]{0,127}$", "default": "UTC"}
-		properties["connections"] = map[string]any{"$ref": "#/$defs/connections"}
-		required = append(required, "cron", "connections")
-	default:
-		return nil, fmt.Errorf("no explicit standard desired schema for %s", kind)
-	}
-	schema := map[string]any{
-		"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-		"required": required, "properties": properties,
-	}
-	if len(defs) > 0 {
-		schema["$defs"] = defs
-	}
-	return schema, nil
-}
-
-func observedSchema() map[string]any {
-	return map[string]any{
-		"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-		"required": []string{"id", "ready", "generation", "imported", "portability", "driftedFields"},
-		"properties": map[string]any{
-			"id":          map[string]any{"type": "string", "minLength": 1},
-			"ready":       map[string]any{"type": "boolean"},
-			"generation":  map[string]any{"type": "integer", "minimum": 1},
-			"imported":    map[string]any{"type": "boolean"},
-			"portability": map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
-			"driftedFields": map[string]any{
-				"type": "array", "uniqueItems": true,
-				"items": map[string]any{"type": "string", "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$"},
-			},
-		},
-	}
-}
-
-func outputSchema(kind string) map[string]any {
-	required := []string{"id", "kind", "name", "generation", "portability"}
-	properties := map[string]any{
-		"id":          map[string]any{"type": "string", "minLength": 1},
-		"kind":        map[string]any{"type": "string", "const": kind},
-		"name":        map[string]any{"type": "string", "minLength": 1},
-		"generation":  map[string]any{"type": "integer", "minimum": 1},
-		"portability": map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
-	}
-	if kind == "SQLDatabase" {
-		required = append(required, "engine")
-		properties["engine"] = tokenSchema("sqlite")
-	}
-	return map[string]any{
-		"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-		"required": required, "properties": properties,
-	}
-}
-
-// standardInterfaceDescriptors owns only portable, data-only declarations.
-// Hosts still own runtime records, routing, authorization, and lifecycle. A
-// Schedule consumes DurableWorkflow rather than exposing a runtime surface, so
-// it intentionally has no descriptor.
-func standardInterfaceDescriptors(kind string) []formpackage.InterfaceDescriptor {
-	type interfaceSpec struct {
-		name        string
-		description string
-		operations  []string
-	}
-	interfaces := map[string]interfaceSpec{
-		"EdgeWorker":             {name: "http.request", description: "Portable HTTP request surface exposed by an edge application.", operations: []string{"request"}},
-		"ObjectBucket":           {name: "object.storage", description: "Portable object storage operations.", operations: []string{"delete", "get", "list", "put"}},
-		"KVStore":                {name: "keyvalue.store", description: "Portable key/value operations.", operations: []string{"delete", "get", "list", "put"}},
-		"SQLDatabase":            {name: "sql.query", description: "Portable SQL query and transaction operations.", operations: []string{"execute", "query", "transaction"}},
-		"Queue":                  {name: "queue.messages", description: "Portable queue delivery operations.", operations: []string{"acknowledge", "receive", "send"}},
-		"VectorIndex":            {name: "vector.query", description: "Portable vector index operations.", operations: []string{"delete", "query", "upsert"}},
-		"DurableWorkflow":        {name: "workflow.invoke", description: "Portable durable workflow invocation operations.", operations: []string{"cancel", "invoke", "status"}},
-		"ContainerService":       {name: "http.request", description: "Portable HTTP request surface exposed by a container service.", operations: []string{"request"}},
-		"StatefulActorNamespace": {name: "actor.invoke", description: "Portable stateful actor invocation operations.", operations: []string{"invoke"}},
-	}
-	spec, ok := interfaces[kind]
-	if !ok {
-		return nil
-	}
-	operationValues := make([]any, 0, len(spec.operations))
-	for _, operation := range spec.operations {
-		operationValues = append(operationValues, operation)
-	}
-	descriptor := formpackage.InterfaceDescriptor{
-		Name: spec.name, Version: "1", Description: spec.description, Required: true,
-		Document: map[string]any{"operations": operationValues},
-		DocumentSchema: map[string]any{
-			"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-			"required": []string{"operations"},
-			"properties": map[string]any{
-				"operations": map[string]any{
-					"type": "array", "minItems": len(operationValues), "maxItems": len(operationValues), "uniqueItems": true,
-					"items": map[string]any{"type": "string", "enum": operationValues},
-				},
-			},
-		},
-		Inputs: []formpackage.InterfaceInputDeclaration{
-			{Name: "resource", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/id"},
-			{Name: "name", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/name"},
-		},
-	}
-	if kind == "SQLDatabase" {
-		descriptor.Inputs = append(descriptor.Inputs, formpackage.InterfaceInputDeclaration{
-			Name: "engine", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/engine",
-		})
-	}
-	return []formpackage.InterfaceDescriptor{descriptor}
-}
-
-func canonicalDesired(kind string) (map[string]any, error) {
-	connections := func(name, resource string, permissions []any, projection string) map[string]any {
-		return map[string]any{name: map[string]any{"resource": resource, "permissions": permissions, "projection": projection}}
-	}
-	switch kind {
-	case "EdgeWorker":
-		return map[string]any{
-			"name": "edge", "source": map[string]any{
-				"artifactUrl":    "https://github.com/tako0614/takosumi/releases/download/standard-form-runtime-v1.0.3/edge-worker.mjs",
-				"artifactSha256": "281b77f65f6258e56d0468a580b1f67baf9f4d71891c2f7259ce24c47bf7d67e",
-			},
-			"compatibilityDate": "2026-07-20", "compatibilityFlags": []any{"nodejs_compat"}, "profiles": []any{"workers"},
-			"connections": connections("ASSETS", "ObjectBucket/edge-assets", []any{"read", "write"}, "object.binding.v1"),
-		}, nil
-	case "ObjectBucket":
-		return map[string]any{"name": "assets", "storageClass": "standard", "interfaces": []any{"s3_api"}}, nil
-	case "KVStore":
-		return map[string]any{"name": "cache", "consistency": "eventual"}, nil
-	case "SQLDatabase":
-		return map[string]any{"name": "main", "engine": "sqlite"}, nil
-	case "Queue":
-		return map[string]any{"name": "jobs"}, nil
-	case "VectorIndex":
-		return map[string]any{"name": "embeddings", "dimensions": 1536, "metric": "cosine"}, nil
-	case "DurableWorkflow":
-		return map[string]any{
-			"name": "ingest", "source": map[string]any{
-				"artifactRef":    "standard-form-runtime/v1.0.3/durable-workflow.mjs",
-				"artifactSha256": "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5",
-			},
-			"entrypoint": "IngestWorkflow", "retry": map[string]any{"maxAttempts": 3, "initialBackoffSeconds": 5},
-		}, nil
-	case "ContainerService":
-		return map[string]any{
-			"name": "agent", "image": "docker.io/library/nginx@sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317", "ports": []any{80}, "publicHttp": true,
-		}, nil
-	case "StatefulActorNamespace":
-		return map[string]any{
-			"name": "rooms", "className": "RoomActor", "storageProfile": "durable_sqlite", "migrationTag": "v1",
-		}, nil
-	case "Schedule":
-		return map[string]any{
-			"name": "nightly", "cron": "0 0 * * *", "timezone": "UTC",
-			"connections": connections("workflow", "DurableWorkflow/ingest", []any{"invoke"}, "schedule_trigger"),
-		}, nil
-	default:
-		return nil, fmt.Errorf("no canonical standard desired fixture for %s", kind)
-	}
-}
-
-func negativeDesired(kind string, canonical map[string]any) (map[string]any, error) {
-	negative := cloneJSONMap(canonical)
-	switch kind {
-	case "EdgeWorker":
-		negative["source"] = map[string]any{"artifactUrl": "https://artifacts.example.test/edge.js"}
-	case "ObjectBucket":
-		negative["storageClass"] = "cold"
-	case "KVStore":
-		negative["consistency"] = "linearizable"
-	case "SQLDatabase":
-		negative["engine"] = "not a token"
-	case "Queue":
-		negative["delivery"] = map[string]any{"maxRetries": -1}
-	case "VectorIndex":
-		negative["dimensions"] = 0
-	case "DurableWorkflow":
-		negative["retry"] = map[string]any{"maxAttempts": 0}
-	case "ContainerService":
-		negative["ports"] = []any{0}
-	case "StatefulActorNamespace":
-		negative["className"] = "not a class"
-	case "Schedule":
-		negative["cron"] = "0 0 * *"
-	default:
-		return nil, fmt.Errorf("no negative standard fixture for %s", kind)
-	}
-	return negative, nil
-}
-
-func connectionDefinitions() map[string]any {
-	return map[string]any{
-		"connections": map[string]any{
-			"type": "object", "propertyNames": portableMapKeys(),
-			"additionalProperties": map[string]any{"$ref": "#/$defs/connection"},
-		},
-		"connection": map[string]any{
-			"type": "object", "additionalProperties": false, "required": []string{"resource", "permissions", "projection"},
-			"properties": map[string]any{
-				"resource":    map[string]any{"type": "string", "pattern": "^\\S+$"},
-				"permissions": map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"}},
-				"projection":  map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
-			},
-		},
-	}
-}
-
-func scheduleConnectionDefinitions() map[string]any {
-	return map[string]any{
-		"connections": map[string]any{
-			"type": "object", "minProperties": 1, "maxProperties": 1, "propertyNames": portableMapKeys(),
-			"additionalProperties": map[string]any{"$ref": "#/$defs/scheduleConnection"},
-		},
-		"scheduleConnection": map[string]any{
-			"type": "object", "additionalProperties": false, "required": []string{"resource", "permissions", "projection"},
-			"properties": map[string]any{
-				"resource": map[string]any{"type": "string", "pattern": "^\\S+$"},
-				"permissions": map[string]any{
-					"type": "array", "minItems": 1, "uniqueItems": true,
-					"contains": map[string]any{"const": "invoke", "type": "string"},
-					"items":    map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"},
-				},
-				"projection": map[string]any{"const": "schedule_trigger", "type": "string"},
-			},
-		},
-	}
-}
-
-func artifactDefinitions() map[string]any {
-	return map[string]any{
-		"artifactSource": map[string]any{"oneOf": []any{
-			map[string]any{"type": "object", "additionalProperties": false, "required": []string{"artifactPath"}, "properties": map[string]any{"artifactPath": map[string]any{"type": "string", "minLength": 1}}},
-			map[string]any{"type": "object", "additionalProperties": false, "required": []string{"artifactUrl", "artifactSha256"}, "properties": map[string]any{"artifactUrl": map[string]any{"type": "string", "format": "uri", "pattern": "^https://"}, "artifactSha256": map[string]any{"$ref": "#/$defs/sha256"}}},
-			map[string]any{"type": "object", "additionalProperties": false, "required": []string{"artifactRef", "artifactSha256"}, "properties": map[string]any{"artifactRef": map[string]any{"type": "string", "minLength": 1}, "artifactSha256": map[string]any{"$ref": "#/$defs/sha256"}}},
-		}},
-		"sha256": map[string]any{"type": "string", "pattern": "^(sha256:)?[A-Fa-f0-9]{64}$"},
-	}
-}
-
-func tokenArraySchema() map[string]any {
-	return map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "pattern": "^\\S+$"}}
-}
-
-func tokenSchema(defaultValue string) map[string]any {
-	return map[string]any{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$", "default": defaultValue}
-}
-
-func portableMapKeys() map[string]any {
-	return map[string]any{
-		"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
-		"x-takoform-fieldPolicy": "portable-data-only-v1",
-	}
-}
-
-func cloneJSONMap(value map[string]any) map[string]any {
-	raw, _ := json.Marshal(value)
-	var result map[string]any
-	_ = json.Unmarshal(raw, &result)
-	return result
 }
 
 func updateConformanceManifest(root string, entries []InventoryEntry, successors ...InventoryEntry) error {
@@ -890,4 +578,28 @@ func writeJSON(path string, value any) error {
 		return err
 	}
 	return os.WriteFile(path, append(raw, '\n'), 0o644)
+}
+
+func pruneRetiredPackages(root string) error {
+	standardRoot := filepath.Join(root, "conformance", "form-package-v1", "positive", "standard")
+	entries, err := os.ReadDir(standardRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	declared := make(map[string]struct{}, len(Specs))
+	for _, spec := range Specs {
+		declared[spec.Slug] = struct{}{}
+	}
+	for _, entry := range entries {
+		if _, keep := declared[entry.Name()]; keep {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(standardRoot, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }

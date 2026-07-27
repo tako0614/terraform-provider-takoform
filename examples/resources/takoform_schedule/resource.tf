@@ -11,19 +11,21 @@ provider "takoform" {
   space    = "prod"
 }
 
-resource "takoform_schedule" "nightly_ingest" {
-  name     = "nightly-ingest"
+resource "takoform_schedule" "example" {
+  name     = "schedule"
   cron     = "0 0 * * *"
   timezone = "UTC"
 
-  connections = [{
-    name        = "workflow"
-    resource    = "DurableWorkflow/ingest"
-    permissions = ["invoke"]
-    projection  = "schedule_trigger"
-  }]
+  connections = [
+    {
+      name        = "invocation"
+      resource    = "Workflow/workflow"
+      permissions = ["invoke"]
+      projection  = "schedule.trigger.v1"
+    },
+  ]
 }
 
 output "schedule_outputs" {
-  value = takoform_schedule.nightly_ingest.outputs
+  value = takoform_schedule.example.outputs
 }

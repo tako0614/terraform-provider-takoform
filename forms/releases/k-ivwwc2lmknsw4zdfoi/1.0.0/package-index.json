@@ -1,0 +1,50 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "EmailSender",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:42709bb4c62f72ea852097222ceda624b1453ba2f5d53d89f5df9c1df3545b70"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 4392,
+      "digest": "sha256:9bd2d38957a514a94012228c265992883d03551841b7ec9fbb044ac321029a25"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 138,
+      "digest": "sha256:5b5eef1bbbe6e0c65f47999da71b9f5b2faf78818f179113dc0977b8061bcdf6"
+    },
+    {
+      "path": "fixtures/negative-default_sender.json",
+      "mediaType": "application/json",
+      "size": 106,
+      "digest": "sha256:0a684cbcc2cb92bedd51045704d2c34487adb1149488f0a58c58fba54f44407d"
+    },
+    {
+      "path": "fixtures/negative-domain.json",
+      "mediaType": "application/json",
+      "size": 122,
+      "digest": "sha256:240b1119a1f676339e1fba4af125d76a25c852891579247339134c75fab8b380"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 147,
+      "digest": "sha256:bd2738a67e95c41e99d35b02ea7bc1065549bf32430c6faaf31aee6f0d361f43"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 138,
+      "digest": "sha256:1cf12865b302547dc2a1a99617376c6239b1bc07887a3fb949ee2738b1dbf62d"
+    }
+  ]
+}

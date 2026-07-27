@@ -1,0 +1,62 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "HttpService",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:58e3aa716b1b3a7ddf2bdf97371a28966634905cee3ae9bc0d616cc75478bdf3"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 7755,
+      "digest": "sha256:2f51b0addd700d421f94ad6f9480ec42c608e14480e8d486311819014f8b4d21"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 458,
+      "digest": "sha256:e74b7ec18515b51bb74e8e1f19ab6b100bfd00ee78f41e8640715cb224a48448"
+    },
+    {
+      "path": "fixtures/negative-concurrency.json",
+      "mediaType": "application/json",
+      "size": 478,
+      "digest": "sha256:261a0ddbfff296849b904058b57d24604944563c98a7f90eaab1d04a726e28f9"
+    },
+    {
+      "path": "fixtures/negative-configuration.json",
+      "mediaType": "application/json",
+      "size": 463,
+      "digest": "sha256:a571ebcb7749937ada137cdb21d4ae8d6cf60ce6e02d26e357689528b0860a56"
+    },
+    {
+      "path": "fixtures/negative-request_timeout_seconds.json",
+      "mediaType": "application/json",
+      "size": 488,
+      "digest": "sha256:f71a364a678ef03e45fabbcb691337b615891eada8fd0576526a81964abe98df"
+    },
+    {
+      "path": "fixtures/negative-runtime.json",
+      "mediaType": "application/json",
+      "size": 459,
+      "digest": "sha256:d119ddea86c46b8ef6522e6fc9869e113a94c206906405e8281216bfb2b874d8"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 147,
+      "digest": "sha256:19f3cac15ef9060cf3a1356cc2eb47bb05e5524821185eb240adc8bb3d335943"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 138,
+      "digest": "sha256:7b29bd622093760bd814af9066ce2388eb3ad3838bfca10eb18f37ade8d63323"
+    }
+  ]
+}

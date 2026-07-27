@@ -9,7 +9,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 func TestVersionedTypedReadsGetFenceThenObserveAndMapDrift(t *testing.T) {
@@ -91,41 +99,10 @@ func TestVersionedTypedReadsStopOnExactGet404(t *testing.T) {
 	}
 }
 
-func TestCompatibilityTypedReadsUseObserveOnly(t *testing.T) {
-	for _, kind := range typedResourceKinds() {
-		kind := kind
-		t.Run(kind, func(t *testing.T) {
-			requests := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requests++
-				if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/resources/"+kind+"/fixture/observe") {
-					t.Errorf("compatibility read = %s %s, want observe only", r.Method, r.URL.Path)
-				}
-				_ = json.NewEncoder(w).Encode(client.Resource{
-					APIVersion: client.APIVersion, Kind: kind,
-					Metadata: client.Metadata{Name: "fixture", Space: "prod"},
-					Status:   &client.Status{Conditions: []client.Condition{{Type: "Drifted", Status: "False"}}},
-				})
-			}))
-			defer server.Close()
-			observed, err := observeResourceForRead(context.Background(), client.NewCompatibilityFallback(server.URL, "", server.Client()), kind, "fixture", "prod", providerCandidateForms()[kind])
-			if err != nil {
-				t.Fatal(err)
-			}
-			assertTypedDriftState(t, kind, observed, "current")
-			if requests != 1 {
-				t.Fatalf("requests = %d, want one observe", requests)
-			}
-		})
-	}
-}
-
+// typedResourceKinds exercises the read path against every declared Form, so
+// a new catalogue entry is covered the moment it exists.
 func typedResourceKinds() []string {
-	return []string{
-		client.KindEdgeWorker, client.KindObjectBucket, client.KindKVStore, client.KindQueue,
-		client.KindSQLDatabase, client.KindContainerService, client.KindVectorIndex,
-		client.KindDurableWorkflow, client.KindStatefulActorNamespace, client.KindSchedule,
-	}
+	return formcatalog.KindTokens()
 }
 
 func providerObservedResource(kind string, form client.InstalledFormReference, version string) client.Resource {
@@ -139,22 +116,24 @@ func providerObservedResource(kind string, form client.InstalledFormReference, v
 
 func assertTypedDriftState(t *testing.T, kind string, observed *client.Resource, want string) {
 	t.Helper()
-	if kind == client.KindEdgeWorker {
-		model := edgeWorkerModel{}
-		if diags := applyEdgeWorkerStatus(context.Background(), observed, "prod", &model); diags.HasError() {
-			t.Fatalf("status diagnostics: %v", diags)
-		}
-		if model.DriftStatus.ValueString() != want {
-			t.Fatalf("drift_status = %q, want %q", model.DriftStatus.ValueString(), want)
-		}
-		return
+	declared, ok := formcatalog.ByKind(kind)
+	if !ok {
+		t.Fatalf("no declared Form for %s", kind)
 	}
-	model := serviceShapeModel{}
-	if diags := applyServiceShapeStatus(context.Background(), observed, kind, "prod", &model); diags.HasError() {
+	resource := &formResource{kind: declared, data: &providerData{defaultSpace: "prod"}}
+	var response frameworkresource.SchemaResponse
+	resource.Schema(context.Background(), frameworkresource.SchemaRequest{}, &response)
+	state := tfsdk.State{Schema: response.Schema, Raw: tftypes.NewValue(response.Schema.Type().TerraformType(context.Background()), nil)}
+	values := formValues{Fields: map[string]attr.Value{}, Artifact: nullArtifactSourceValues()}
+	if diags := resource.setState(context.Background(), &state, observed, "prod", values, true); diags.HasError() {
 		t.Fatalf("status diagnostics: %v", diags)
 	}
-	if model.DriftStatus.ValueString() != want {
-		t.Fatalf("drift_status = %q, want %q", model.DriftStatus.ValueString(), want)
+	var drift types.String
+	if diags := state.GetAttribute(context.Background(), path.Root("drift_status"), &drift); diags.HasError() {
+		t.Fatalf("read drift_status: %v", diags)
+	}
+	if drift.ValueString() != want {
+		t.Fatalf("drift_status = %q, want %q", drift.ValueString(), want)
 	}
 }
 
@@ -170,6 +149,36 @@ func writeProviderDiscovery(t *testing.T, w http.ResponseWriter, origin string) 
 			"api": origin + "/apis/forms.takoform.com/v1alpha1",
 		},
 	})
+}
+
+func ptrForm(form client.InstalledFormReference) *client.InstalledFormReference {
+	return &form
+}
+
+// writeProviderFormAvailability answers the exact-availability probe every
+// versioned mutation performs before it sends desired state.
+func writeProviderFormAvailability(t *testing.T, w http.ResponseWriter, forms ...client.InstalledFormReference) {
+	t.Helper()
+	available := make([]client.FormAvailability, 0, len(forms))
+	for _, form := range forms {
+		available = append(available, client.FormAvailability{
+			Identity: form, DefinitionKnown: true, Installed: true, Executable: true,
+			Activated: true, AvailableToPrincipal: true,
+			Operations: []string{"create", "read", "update", "delete", "import", "observe", "refresh"},
+		})
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"forms": available})
+}
+
+// mustDiscoveredProviderClient returns a client that has negotiated the
+// versioned API base, which every provider resource requires.
+func mustDiscoveredProviderClient(t *testing.T, server *httptest.Server) *client.Client {
+	t.Helper()
+	c := client.New(server.URL, "", server.Client())
+	if _, err := c.Discover(context.Background()); err != nil {
+		t.Fatalf("discover test host: %v", err)
+	}
+	return c
 }
 
 func assertProviderExactQuery(t *testing.T, r *http.Request, form client.InstalledFormReference) {

@@ -36,9 +36,9 @@ func TestCoordinatedStandardSetBuildFinalizeAndClosedCandidateVerification(t *te
 			t.Fatal(err)
 		}
 	}
-	copyFile(filepath.Join(repositoryRoot(t), "forms", "standard-package-set.json"), filepath.Join(repo, "forms", "standard-package-set.json"))
+	copyFile(filepath.Join(repositoryRoot(t), "forms", "retired-package-set.json"), filepath.Join(repo, "forms", "retired-package-set.json"))
 	gitCommitAll(t, repo, "standard set")
-	for _, spec := range standardforms.Specs {
+	for _, spec := range standardforms.RetiredKinds {
 		releaseID := mustReleaseID(t, spec.Kind)
 		runCommand(t, repo, "git", "tag", "forms/"+releaseID+"/v1.0.1")
 	}
@@ -52,7 +52,7 @@ func TestCoordinatedStandardSetBuildFinalizeAndClosedCandidateVerification(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, spec := range standardforms.Specs {
+	for _, spec := range standardforms.RetiredKinds {
 		releaseID := mustReleaseID(t, spec.Kind)
 		packageOutput := filepath.Join(packagesRoot, releaseID)
 		if err := run([]string{

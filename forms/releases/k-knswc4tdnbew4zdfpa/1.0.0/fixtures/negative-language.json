@@ -1,0 +1,8 @@
+{
+  "fields": [
+    "body",
+    "title"
+  ],
+  "language": "not a token",
+  "name": "search-index"
+}

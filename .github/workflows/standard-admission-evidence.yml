@@ -3,6 +3,10 @@ name: Build signed Standard Form admission evidence
 on:
   workflow_dispatch:
     inputs:
+      host_id:
+        description: Reviewed conforming host in admission/v1/conforming-hosts.json that signed the host reports
+        required: true
+        type: string
       snapshot_commit:
         description: Exact retained-report snapshot commit
         required: true
@@ -79,7 +83,7 @@ permissions: {}
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   EXPECTED_COSIGN_VERSION: "v3.0.6"
-  HOST_REPORT_IDENTITY: https://github.com/tako0614/takosumi/.github/workflows/standard-form-host-report.yml@refs/heads/main
+  HOST_ID: ${{ inputs.host_id }}
   PROVIDER_REPORT_IDENTITY: https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-provider-report.yml@refs/heads/main
   EVIDENCE_IDENTITY: https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-admission-evidence.yml@refs/heads/main
   OIDC_ISSUER: https://token.actions.githubusercontent.com
@@ -194,6 +198,9 @@ jobs:
         run: |
           set -euo pipefail
           grep -F "${EXPECTED_COSIGN_VERSION}" <<<"$(cosign version 2>&1)"
+          host_report_identity="$(jq -er --arg id "${HOST_ID}" \
+            '.hosts[] | select(.hostId == $id) | .certificateIdentity' \
+            admission/v1/conforming-hosts.json)"
           test "$(find "${HOST_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
           test "$(find "${PROVIDER_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
           test "$(find "${HOST_CANDIDATE_PATH}" -type f | wc -l)" -eq 23
@@ -205,7 +212,7 @@ jobs:
           for report in "${host_reports[@]}"; do
             cosign verify-blob "${report}" --bundle "${report%.json}.sigstore.json" \
               --trusted-root admission/v1/trust/trusted-root.json \
-              --certificate-identity "${HOST_REPORT_IDENTITY}" \
+              --certificate-identity "${host_report_identity}" \
               --certificate-oidc-issuer "${OIDC_ISSUER}"
           done
           for report in "${provider_reports[@]}"; do
@@ -224,6 +231,7 @@ jobs:
           first="${RUNNER_TEMP}/material-first"
           second="${RUNNER_TEMP}/material-second"
           go run ./cmd/standard-admission-material build \
+            --host-id "${HOST_ID}" \
             --host-reports "${HOST_CANDIDATE_PATH}" \
             --provider-reports "${PROVIDER_CANDIDATE_PATH}" \
             --output-dir "${first}" \
@@ -234,6 +242,7 @@ jobs:
             --host-run-id "${HOST_RUN_ID}" \
             --provider-run-id "${PROVIDER_RUN_ID}"
           go run ./cmd/standard-admission-material build \
+            --host-id "${HOST_ID}" \
             --host-reports "${HOST_CANDIDATE_PATH}" \
             --provider-reports "${PROVIDER_CANDIDATE_PATH}" \
             --output-dir "${second}" \

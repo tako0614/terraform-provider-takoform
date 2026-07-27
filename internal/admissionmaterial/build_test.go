@@ -102,6 +102,8 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 		"git rev-parse \"${SNAPSHOT_COMMIT}:${HOST_CANDIDATE_PATH}\"",
 		"git rev-parse \"${SNAPSHOT_COMMIT}:${PROVIDER_CANDIDATE_PATH}\"",
 		"--trusted-root admission/v1/trust/trusted-root.json",
+		"--host-id \"${HOST_ID}\"",
+		"admission/v1/conforming-hosts.json",
 		"--host-source-commit \"${HOST_SOURCE_COMMIT}\"",
 		"--host-takoform-source-commit \"${HOST_TAKOFORM_SOURCE_COMMIT}\"",
 		"--provider-source-commit \"${PROVIDER_SOURCE_COMMIT}\"",
@@ -128,6 +130,11 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 		if strings.Contains(workflow, forbidden) {
 			t.Fatalf("workflow reintroduced expiring artifact or cross-repository secret dependency %q", forbidden)
 		}
+	}
+	// A portable contract may not name one host as the source of admission.
+	// The accepted publisher is reviewed data, not a workflow constant.
+	if strings.Contains(workflow, "github.com/tako0614/takosumi") {
+		t.Fatal("admission workflow hard-codes a single host repository identity")
 	}
 	if strings.Contains(jobs[1], "actions/checkout@") || strings.Contains(jobs[1], "contents: read") || strings.Contains(jobs[1], "contents: write") {
 		t.Fatal("signer regained source checkout or repository content authority")

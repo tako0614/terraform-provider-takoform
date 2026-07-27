@@ -11,15 +11,10 @@ import (
 )
 
 // observeResourceForRead keeps Terraform's ordinary state refresh separate
-// from the host's explicit state/output publication operation. Versioned hosts
-// first return the current desired-generation fence via exact GET; observe then
+// from the host's explicit state/output publication operation. A host first
+// returns the current desired-generation fence via exact GET; observe then
 // performs the read-only native drift check against that exact generation.
-// Compatibility hosts retain their historical single observe request.
 func observeResourceForRead(ctx context.Context, c *client.Client, kind, name, space string, form client.InstalledFormReference) (*client.Resource, error) {
-	if c.UsesCompatibilityFallback() {
-		return c.ObserveResource(ctx, kind, name, space)
-	}
-
 	current, err := c.GetResource(ctx, kind, name, space, form)
 	if err != nil {
 		return nil, err
@@ -84,4 +79,50 @@ func toStringSlice(raw any) []string {
 	default:
 		return nil
 	}
+}
+
+func int64FromSpec(value any) types.Int64 {
+	switch typed := value.(type) {
+	case float64:
+		return types.Int64Value(int64(typed))
+	case int64:
+		return types.Int64Value(typed)
+	case int:
+		return types.Int64Value(int64(typed))
+	default:
+		return types.Int64Null()
+	}
+}
+
+func toInt64Slice(raw any) []int64 {
+	values, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]int64, 0, len(values))
+	for _, value := range values {
+		switch typed := value.(type) {
+		case float64:
+			out = append(out, int64(typed))
+		case int64:
+			out = append(out, typed)
+		case int:
+			out = append(out, int64(typed))
+		}
+	}
+	return out
+}
+
+func toStringMap(raw any) map[string]string {
+	values, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		if text, ok := value.(string); ok {
+			out[key] = text
+		}
+	}
+	return out
 }

@@ -19,6 +19,7 @@ import (
 	"unicode"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/hostpolicy"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
@@ -446,7 +447,10 @@ func validateHostExecutionEvidence(report RunnerReport) error {
 	if formpackage.DigestBytes(canonical) != report.ExecutionEvidenceDigest {
 		return fmt.Errorf("embedded evidence digest mismatch")
 	}
-	if evidence.APIVersion != "takosumi.portable-form-host-conformance/v1" || evidence.Status != "passed" ||
+	// Evidence is namespaced by whoever produced it. Takoform accepts any
+	// conforming host's portable host-conformance evidence; it does not make
+	// one host's namespace the definition of a valid proof.
+	if !hostpolicy.EvidenceAPIVersionPattern.MatchString(evidence.APIVersion) || evidence.Status != "passed" ||
 		!reflect.DeepEqual(evidence.Identity, report.Identity) || strings.TrimSpace(evidence.EndpointOrigin) == "" ||
 		report.Subject != "host:"+evidence.EndpointOrigin || strings.TrimSpace(evidence.CanonicalResourceID) == "" {
 		return fmt.Errorf("embedded evidence identity mismatch")

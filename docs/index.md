@@ -1,7 +1,7 @@
 ---
 page_title: "Provider: Takoform"
 description: |-
-  The Takoform provider manages ten portable, statically typed Service Forms through any conforming host.
+  The Takoform provider manages portable, statically typed Service Forms through any conforming host.
 ---
 
 # Takoform Provider
@@ -28,9 +28,6 @@ provider "takoform" {
 - `endpoint` (String, optional) — Origin of a conforming Service Form host. Falls back to `TAKOFORM_ENDPOINT`; one of the two is required.
 - `space` (String, optional) — Default space for resources. Falls back to `TAKOFORM_SPACE`.
 - `token` (String, optional, sensitive) — Bearer token for the host. Falls back to `TAKOFORM_TOKEN`.
-- `compatibility_fallback` (Boolean, optional) — Explicitly permits the
-  historical unversioned `/v1` API only when discovery omits `endpoints.api`.
-  Defaults to false and falls back to `TAKOFORM_COMPATIBILITY_FALLBACK`.
 
 The endpoint must advertise `features.service_forms = true`, API version
 `forms.takoform.com/v1alpha1`, the versioned endpoint features, and exact

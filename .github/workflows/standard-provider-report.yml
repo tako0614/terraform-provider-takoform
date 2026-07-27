@@ -128,20 +128,17 @@ jobs:
           const canonical = (value) => Buffer.from(JSON.stringify(canonicalValue(value)));
           const same = (left, right) => canonical(left).equals(canonical(right));
           const readCanonical = (name) => { const raw = fs.readFileSync(path.join(root, name)); const value = JSON.parse(raw); if (!raw.equals(canonical(value))) throw new Error(`${name} is not exact canonical JSON`); return {raw, value}; };
-          const expected = new Map([
-            ["container-service", ["ContainerService", "sha256:f39586a6ca97ee474b3e130b0a2a57ba81d40282632cd44fa65631cfbd17c7cf", "sha256:5adfb7dd11a3f462bb2bad94ba9abbcb097c92afa0987d9cc1fa0783d00f3b05"]],
-            ["durable-workflow", ["DurableWorkflow", "sha256:9b6e5e0d28d8ea35527ae20756c9ed1eb57907e93ff6a44ae300dbbf72b80d45", "sha256:05db4bd34b3361eb933ff284f40c1dd17a9f4025c5b5a2ade56a838996a69b90"]],
-            ["edge-worker", ["EdgeWorker", "sha256:1d20c21cad95deec873359e218729be53ceaf0a8abfbdcc860be2a4ac0c7c722", "sha256:63e87939660c898837290f0cc8e64e0098106eb4e7cba97a984762d2beaaabb3"]],
-            ["kv-store", ["KVStore", "sha256:137e97cbce057aac1ef8e9af3f00bb9ca3a3967131bf2d920c252d5249b6e96f", "sha256:964c0bdc7445440f93f2ee6318eb9bf6356f8d749d12a7eb904e90141e312dca"]],
-            ["object-bucket", ["ObjectBucket", "sha256:4584b9233ef23231037d941c652eedd67c184deb9e36bec14d41151a28b7c2b4", "sha256:00f3ed05da56cc795a42043112933ef00e97b531ed123e0c2df3cce70bd1e391"]],
-            ["queue", ["Queue", "sha256:93308869c7fd95654ee5009efe329d43452d11c59d36f61b5fc79b0a2fbe4646", "sha256:609958d46da6f74f3a29e0940fb628e9c455c353d41d9457791c5859360ad8cc"]],
-            ["schedule", ["Schedule", "sha256:b44b0e785453c32133c53bfded6c75d1e95bd5860bdf54d874bb4b330a4c2508", "sha256:ebf03b9e2d90b4fe0444e6dfe824758637639a79e0e267616258e7b28e8d690e"]],
-            ["sql-database", ["SQLDatabase", "sha256:ecd201ad6a2156dabed0f1afbbea242c3f994fce37d2edf6f676342cd6937246", "sha256:714a6c3de551598788b25e208783c08b7e8059f10fb96873f5a34b321075c401"]],
-            ["stateful-actor-namespace", ["StatefulActorNamespace", "sha256:c82fa8458e333ce20160f052c255ee94636219bbdea6a46d4730852411050be4", "sha256:d6bd34aac538485161ff9045c8a8f9d8dc6193f28f1667cc7bef84a85dbf85d7"]],
-            ["vector-index", ["VectorIndex", "sha256:f0db5c150198bec614485074cc10c8ee1533edddf11a7374f1aaa7cdebc77fea", "sha256:adffdb7d630eb44b03c8f4cd4a8ef2295e66318ea81b1fa88be6dfdd20dd429b"]],
-          ]);
+          // The expected closure is derived from the reviewed inventory and
+          // release descriptor, so a Form added to the catalogue is covered
+          // here without a second hand-maintained list to fall out of step.
+          const inventory = JSON.parse(fs.readFileSync("forms/standard-package-set.json"));
+          const descriptor = JSON.parse(fs.readFileSync("release/version.json"));
+          const expected = new Map(inventory.packages.map((entry) => [
+            entry.path.split("/").pop(),
+            [entry.kind, entry.formRef.schemaDigest, entry.packageDigest],
+          ]));
           const {value: manifest} = readCanonical("provider-report-manifest.json");
-          if (manifest.format !== "takoform.standard-provider-report-candidate@v1" || manifest.status !== "candidate-only" || manifest.proofType !== "provider" || manifest.subject !== "provider:registry.opentofu.org/tako0614/takoform" || manifest.definitionVersion !== "1.0.1" || manifest.packageVersion !== "1.0.1" || manifest.runnerVersion !== "0.1.3" || manifest.source?.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || manifest.source?.commit !== process.env.SOURCE_COMMIT || manifest.reports?.length !== 10) throw new Error("provider-report manifest identity drift");
+          if (manifest.format !== "takoform.standard-provider-report-candidate@v1" || manifest.status !== "candidate-only" || manifest.proofType !== "provider" || manifest.subject !== "provider:registry.opentofu.org/tako0614/takoform" || manifest.generation !== inventory.generation || manifest.runnerVersion !== descriptor.version || manifest.source?.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || manifest.source?.commit !== process.env.SOURCE_COMMIT || manifest.reports?.length !== expected.size) throw new Error("provider-report manifest identity drift");
           const files = ["provider-report-manifest.json"];
           const seen = new Set();
           for (const entry of manifest.reports) {

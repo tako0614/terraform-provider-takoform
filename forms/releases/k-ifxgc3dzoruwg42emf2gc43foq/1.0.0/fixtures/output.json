@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "AnalyticsDataset/analytics-dataset",
+  "kind": "AnalyticsDataset",
+  "name": "analytics-dataset",
+  "portability": "portable"
+}

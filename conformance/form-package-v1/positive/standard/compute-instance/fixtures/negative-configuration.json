@@ -1,0 +1,9 @@
+{
+  "bootDiskGib": 20,
+  "configuration": {
+    "1 invalid key": "value"
+  },
+  "image": "portable-conformance/v1/base-linux",
+  "machineClass": "general.small",
+  "name": "compute-instance"
+}

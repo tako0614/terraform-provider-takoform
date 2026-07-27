@@ -21,6 +21,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
+	"github.com/tako0614/terraform-provider-takoform/internal/hostpolicy"
 	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
@@ -31,16 +32,10 @@ const (
 	providerManifestName   = "provider-report-manifest.json"
 	providerSignedName     = "signed-provider-report-candidate.json"
 	checksumsName          = "SHA256SUMS"
-	hostManifestFormat     = "takosumi.standard-form-host-report-candidate@v1"
-	hostSignedFormat       = "takosumi.standard-form-host-report-signed-candidate@v1"
 	providerManifestFormat = "takoform.standard-provider-report-candidate@v1"
 	providerSignedFormat   = "takoform.standard-provider-report-signed-candidate@v1"
-	hostWorkflow           = ".github/workflows/standard-form-host-report.yml"
 	providerWorkflow       = ".github/workflows/standard-provider-report.yml"
-	hostIdentity           = "https://github.com/tako0614/takosumi/.github/workflows/standard-form-host-report.yml@refs/heads/main"
 	providerIdentity       = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-provider-report.yml@refs/heads/main"
-	hostProofType          = "oss-reference-host-source-conformance"
-	hostSubject            = "host:https://in-process.takosumi.test"
 	providerSubject        = "provider:registry.opentofu.org/tako0614/takoform"
 	bundleMediaType        = "application/vnd.dev.sigstore.bundle.v0.3+json"
 	maximumMaterialBytes   = 16 << 20
@@ -63,6 +58,9 @@ type BuildOptions struct {
 	ProviderSourceCommit     string
 	HostWorkflowRunID        string
 	ProviderWorkflowRunID    string
+	// HostID names the reviewed conforming host in admission/v1/conforming-hosts.json
+	// whose signed reports this material accepts.
+	HostID string
 }
 
 type sourceRef struct {
@@ -168,7 +166,7 @@ func Build(options BuildOptions) error {
 	if err != nil {
 		return err
 	}
-	candidates, err := standardforms.AdmissionCandidateSet()
+	candidates, err := standardforms.AdmissionCandidateSet(root)
 	if err != nil {
 		return err
 	}
@@ -189,11 +187,11 @@ func Build(options BuildOptions) error {
 	if err != nil {
 		return err
 	}
-	hosts, err := loadArtifactSet(options.HostReports, "host-report", candidates, options.HostTakoformSourceCommit, options.HostSourceCommit, options.HostWorkflowRunID, "", providerVersion)
+	hosts, err := loadArtifactSet(root, options.HostID, options.HostReports, "host-report", candidates, options.HostTakoformSourceCommit, options.HostSourceCommit, options.HostWorkflowRunID, "", providerVersion)
 	if err != nil {
 		return fmt.Errorf("host report candidate: %w", err)
 	}
-	providers, err := loadArtifactSet(options.ProviderReports, "provider-report", candidates, options.ProviderSourceCommit, options.ProviderSourceCommit, options.ProviderWorkflowRunID, providerSubject, providerVersion)
+	providers, err := loadArtifactSet(root, options.HostID, options.ProviderReports, "provider-report", candidates, options.ProviderSourceCommit, options.ProviderSourceCommit, options.ProviderWorkflowRunID, providerSubject, providerVersion)
 	if err != nil {
 		return fmt.Errorf("provider report candidate: %w", err)
 	}
@@ -261,18 +259,32 @@ func Build(options BuildOptions) error {
 	return nil
 }
 
-func loadArtifactSet(root, role string, candidates admissionrelease.CandidateSet, takoformSourceCommit, expectedSourceCommit, expectedWorkflowRunID, expectedSubject, providerVersion string) (artifactSet, error) {
+func loadArtifactSet(repositoryRoot, hostID, root, role string, candidates admissionrelease.CandidateSet, takoformSourceCommit, expectedSourceCommit, expectedWorkflowRunID, expectedSubject, providerVersion string) (artifactSet, error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return artifactSet{}, err
 	}
 	manifestName, signedName := hostManifestName, hostSignedName
-	manifestFormat, signedFormat := hostManifestFormat, hostSignedFormat
-	workflow, identity := hostWorkflow, hostIdentity
+	manifestFormat, signedFormat := "", ""
+	workflow, identity := "", ""
+	var acceptedHost hostpolicy.Host
 	if role == "provider-report" {
 		manifestName, signedName = providerManifestName, providerSignedName
 		manifestFormat, signedFormat = providerManifestFormat, providerSignedFormat
 		workflow, identity = providerWorkflow, providerIdentity
+	} else {
+		// A host report is admission input from a conforming host, never from
+		// one privileged vendor. The accepted publisher is reviewed data.
+		policy, err := hostpolicy.Load(repositoryRoot)
+		if err != nil {
+			return artifactSet{}, err
+		}
+		acceptedHost, err = policy.ByHostID(hostID)
+		if err != nil {
+			return artifactSet{}, err
+		}
+		manifestFormat, signedFormat = acceptedHost.ManifestFormat, acceptedHost.SignedFormat
+		workflow, identity = acceptedHost.Workflow, acceptedHost.CertificateIdentity
 	}
 	manifestRaw, err := readRegular(absolute, manifestName, maximumMaterialBytes)
 	if err != nil {
@@ -308,7 +320,7 @@ func loadArtifactSet(root, role string, candidates admissionrelease.CandidateSet
 		return artifactSet{}, fmt.Errorf("provider runner version is %q, want %q", manifest.RunnerVersion, providerVersion)
 	}
 	if role == "host-report" {
-		if manifest.ProofType != hostProofType || manifest.Subject != hostSubject || manifest.Source.Repository != "https://github.com/tako0614/takosumi.git" || manifest.Source.Commit != expectedSourceCommit || manifest.RunnerVersion != "1.1.0+git."+manifest.Source.Commit || manifest.TakoformSource == nil || manifest.TakoformSource.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || manifest.TakoformSource.Commit != takoformSourceCommit || signed.TakoformSource == nil || *signed.TakoformSource != *manifest.TakoformSource {
+		if manifest.ProofType != acceptedHost.ProofType || manifest.Subject != acceptedHost.Subject || manifest.Source.Repository != acceptedHost.SourceRepository || manifest.Source.Commit != expectedSourceCommit || manifest.RunnerVersion != acceptedHost.RunnerVersionPrefix+manifest.Source.Commit || manifest.TakoformSource == nil || manifest.TakoformSource.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || manifest.TakoformSource.Commit != takoformSourceCommit || signed.TakoformSource == nil || *signed.TakoformSource != *manifest.TakoformSource {
 			return artifactSet{}, fmt.Errorf("host candidate source binding is invalid")
 		}
 	} else if manifest.ProofType != "provider" || manifest.Source.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || manifest.Source.Commit != expectedSourceCommit || manifest.TakoformSource != nil || signed.TakoformSource != nil {

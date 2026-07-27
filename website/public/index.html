@@ -90,7 +90,7 @@
       </div>
       <ul class="badges">
         <li>MIT license</li>
-        <li>10 standard resources today, more planned</li>
+        <li>34 standard resources today, more planned</li>
         <li>Definitions are data, not code</li>
       </ul>
     </div>
@@ -171,7 +171,8 @@
         <h3>The host runs it</h3>
         <p>
           The host chooses the backend, holds the credentials, and makes the
-          changes. Your state keeps IDs and public outputs only — no secrets.
+          changes. Your state keeps what you asked for, the resource IDs, and
+          sanitized public outputs — never a secret.
         </p>
       </article>
     </div>
@@ -182,25 +183,63 @@
   <div class="container">
     <h2>The standard resources</h2>
     <p class="section-lede">
-      The first set covers ten building blocks that most applications need.
+      34 portable resources across compute, data, analytics, networking, and
+      operations. Each one describes what you want, never who runs it.
     </p>
-    <div class="resource-grid">
-      <div class="resource"><code>takoform_edge_worker</code><span>Prebuilt edge Worker</span></div>
-      <div class="resource"><code>takoform_object_bucket</code><span>Object storage</span></div>
-      <div class="resource"><code>takoform_kv_store</code><span>Key/value storage</span></div>
-      <div class="resource"><code>takoform_queue</code><span>Message queue</span></div>
-      <div class="resource"><code>takoform_sql_database</code><span>SQL database</span></div>
-      <div class="resource"><code>takoform_container_service</code><span>Container service</span></div>
-      <div class="resource"><code>takoform_vector_index</code><span>Vector index</span></div>
-      <div class="resource"><code>takoform_durable_workflow</code><span>Durable workflow</span></div>
-      <div class="resource"><code>takoform_stateful_actor_namespace</code><span>Stateful actors</span></div>
-      <div class="resource"><code>takoform_schedule</code><span>Scheduled invocation</span></div>
-    </div>
+      <h3 class="resource-domain">Compute and application</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_http_service</code><span>HTTP application served from a prebuilt immutable artifact</span></div>
+        <div class="resource"><code>takoform_container_service</code><span>OCI container service pinned to an immutable image digest</span></div>
+        <div class="resource"><code>takoform_compute_instance</code><span>Long-running machine instance built from an immutable image</span></div>
+        <div class="resource"><code>takoform_static_site</code><span>Static asset site served from a prebuilt immutable artifact</span></div>
+        <div class="resource"><code>takoform_workflow</code><span>Durable workflow definition and instance-state lifecycle</span></div>
+        <div class="resource"><code>takoform_stateful_entity</code><span>Namespace of individually addressable, individually persistent entities</span></div>
+        <div class="resource"><code>takoform_schedule</code><span>Cron lifecycle that invokes exactly one connected Resource</span></div>
+      </div>
+      <h3 class="resource-domain">Data and storage</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_object_bucket</code><span>Object storage with a portable default storage class</span></div>
+        <div class="resource"><code>takoform_object_lifecycle_rule</code><span>Retention and transition rule applied to one connected object store</span></div>
+        <div class="resource"><code>takoform_key_value_store</code><span>Key/value state with an optional consistency preference</span></div>
+        <div class="resource"><code>takoform_cache_cluster</code><span>In-memory cache sized by an open capability token</span></div>
+        <div class="resource"><code>takoform_relational_database</code><span>Relational database addressed through an open engine capability token</span></div>
+        <div class="resource"><code>takoform_indexed_store</code><span>Bounded key/value item store with declared queryable attributes and no query language</span></div>
+        <div class="resource"><code>takoform_queue</code><span>Asynchronous delivery with at-least-once semantics</span></div>
+        <div class="resource"><code>takoform_stream_topic</code><span>Published event stream that many independent consumers can read</span></div>
+        <div class="resource"><code>takoform_search_index</code><span>Full-text index over a declared set of document fields</span></div>
+        <div class="resource"><code>takoform_vector_index</code><span>Vector index with dimensions fixed for the index lifecycle</span></div>
+      </div>
+      <h3 class="resource-domain">Analytics and inference</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_analytics_dataset</code><span>Append-oriented dataset queried for analysis rather than transactions</span></div>
+        <div class="resource"><code>takoform_model_endpoint</code><span>Inference endpoint serving one declared model for one declared task</span></div>
+      </div>
+      <h3 class="resource-domain">Network and delivery</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_dns_zone</code><span>Authoritative DNS zone for one domain</span></div>
+        <div class="resource"><code>takoform_dns_record</code><span>DNS record published into one connected zone</span></div>
+        <div class="resource"><code>takoform_tls_certificate</code><span>Managed TLS certificate for a fixed set of domains. Key material stays with the host</span></div>
+        <div class="resource"><code>takoform_http_route</code><span>Hostname and path binding that sends HTTP traffic to one connected Resource</span></div>
+        <div class="resource"><code>takoform_load_balancer</code><span>Listener that distributes connections across connected backends</span></div>
+        <div class="resource"><code>takoform_private_network</code><span>Private address space that other Resources can attach to</span></div>
+      </div>
+      <h3 class="resource-domain">Operations and integration</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_container_registry</code><span>OCI artifact registry namespace</span></div>
+        <div class="resource"><code>takoform_log_sink</code><span>Destination that retains structured application logs</span></div>
+        <div class="resource"><code>takoform_metric_sink</code><span>Destination that retains numeric time series</span></div>
+        <div class="resource"><code>takoform_email_sender</code><span>Outbound mail identity for one verified domain</span></div>
+        <div class="resource"><code>takoform_webhook_endpoint</code><span>Inbound HTTP endpoint that forwards received requests to one connected Resource</span></div>
+        <div class="resource"><code>takoform_identity_client</code><span>OIDC relying-party registration. Issued client material stays with the host</span></div>
+        <div class="resource"><code>takoform_feature_flag</code><span>Named runtime switch with an optional percentage rollout</span></div>
+        <div class="resource"><code>takoform_rate_limit_policy</code><span>Request budget applied to one connected Resource</span></div>
+        <div class="resource"><code>takoform_backup_policy</code><span>Scheduled copy and retention rule for one connected Resource</span></div>
+      </div>
     <div class="grow-card">
       <div class="grow-copy">
         <h3>More are coming</h3>
         <p>
-          Ten is the starting point, not the limit. The specification can define
+          This set is a starting point, not the limit. The specification can define
           any kind of service in the same data-only format, and new resources are
           added as specification and test additions. If something you need is
           missing, propose it on GitHub.
@@ -211,6 +250,63 @@
     <p class="fineprint">
       The provider deliberately has no settings for backends, credentials, prices,
       or billing. Those belong to the host.
+    </p>
+  </div>
+</section>
+
+<section id="configuration" class="section">
+  <div class="container">
+    <h2>Configuring a service</h2>
+    <p class="section-lede">
+      Portable does not have to mean bare. The application resources take a
+      <code>configuration</code> map, so a service can actually be configured
+      from the same code that describes it. The rest of the set carries the
+      settings that checking these definitions against real cloud provider
+      contracts showed were missing.
+    </p>
+    <figure class="code-card wide">
+      <figcaption><span class="traffic"></span>main.tf</figcaption>
+<pre><code><span class="k">resource</span> <span class="s">"takoform_container_service"</span> <span class="s">"api"</span> {
+  <span class="a">name</span>              = <span class="s">"api"</span>
+  <span class="a">image</span>             = <span class="s">"registry.example.com/api@sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317"</span>
+  <span class="a">ports</span>             = [<span class="s">8080</span>]
+  <span class="a">replicas</span>          = <span class="s">3</span>
+  <span class="a">health_check_path</span> = <span class="s">"/healthz"</span>
+
+  <span class="c"># Non-secret only. The host injects credentials on its own path.</span>
+  <span class="a">configuration</span> = {
+    <span class="a">LOG_LEVEL</span> = <span class="s">"info"</span>
+  }
+}
+
+<span class="k">resource</span> <span class="s">"takoform_relational_database"</span> <span class="s">"primary"</span> {
+  <span class="a">name</span>              = <span class="s">"primary"</span>
+  <span class="a">engine</span>            = <span class="s">"postgres"</span>
+  <span class="a">engine_version</span>    = <span class="s">"17"</span>
+  <span class="a">size_class</span>        = <span class="s">"db.small"</span>
+  <span class="a">database_name</span>     = <span class="s">"app"</span>
+  <span class="a">high_availability</span> = <span class="s">true</span>
+}</code></pre>
+    </figure>
+    <div class="compare">
+      <div class="compare-row good">
+        <code>configuration</code>
+        <span>Non-secret values the running service reads. They travel with the code and the state, so the same application configures the same way on every host.</span>
+      </div>
+      <div class="compare-row bad">
+        <code>DATABASE_PASSWORD</code>
+        <span>Not portable configuration. Map keys are held to the same data-only field policy as declared fields, so a credential cannot be smuggled in as configuration. Secret material is never portable state: a host injects it through its own credential path.</span>
+      </div>
+    </div>
+    <p class="fineprint">
+      <code>takoform_http_service</code>, <code>takoform_container_service</code>,
+      <code>takoform_compute_instance</code>, <code>takoform_workflow</code>, and
+      <code>takoform_stateful_entity</code> take a configuration map. Elsewhere the
+      added settings are ordinary typed arguments: size class, initial database name,
+      and a standby for a relational database; replica count and a health check path
+      for a container service; internal-only listeners and an idle timeout for a load
+      balancer; retention, message size, delivery delay, and ordering for a queue,
+      which can now also name a connection for messages it could not deliver.
     </p>
   </div>
 </section>
@@ -264,7 +360,7 @@
       </li>
       <li>
         <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/form-definition"><code>spec/form-definition</code></a>
-        <span>How a service type is defined as data, and how definitions are identified.</span>
+        <span>How a service type is defined as data, and how definitions are identified. It also sets what a configuration map key is allowed to be.</span>
       </li>
       <li>
         <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/form-package"><code>spec/form-package</code></a>
@@ -293,21 +389,29 @@
         <h3>Working today</h3>
         <ul>
           <li>The schemas and an offline package verifier</li>
-          <li>Ten resources with create, update, delete, import, and drift detection</li>
-          <li>Lifecycle tests on both Terraform and OpenTofu</li>
+          <li>34 resources with create, update, delete, import, and drift detection</li>
+          <li>Non-secret <code>configuration</code> on the application resources</li>
+          <li>Lifecycle tests on both Terraform and OpenTofu, run against an in-process test host</li>
           <li>A signed release pipeline</li>
         </ul>
       </div>
       <div class="status-col pending">
         <h3>Not yet</h3>
         <ul>
-          <li>No package has been published yet</li>
-          <li>Not on the Terraform or OpenTofu registries yet</li>
-          <li>The standard definitions are still candidates</li>
+          <li>Nothing in the rebuilt set is published: no release, no signature, no Registry readback, no admission evidence</li>
+          <li>Provider <code>0.2.0</code> carries the rebuilt set and has no release of its own</li>
+          <li>The definitions are structural candidates, not admitted standards</li>
+          <li>No conforming host has executed these resources</li>
           <li>Host-side install and revocation handling are still to come</li>
         </ul>
       </div>
     </div>
+    <p class="fineprint">
+      The generation published before the rebuild is retired, not erased. Its
+      releases keep their immutable bytes, signatures, and admission evidence,
+      and still verify offline. Nothing there is rewritten or re-signed, and the
+      rebuilt set does not inherit those proofs.
+    </p>
   </div>
 </section>
 
@@ -386,7 +490,7 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
       </div>
       <ul class="badges">
         <li>MIT ライセンス</li>
-        <li>標準リソースは 10 種類。今後追加していきます</li>
+        <li>標準リソースは 34 種類。今後追加していきます</li>
         <li>定義はデータのみで、コードを含みません</li>
       </ul>
     </div>
@@ -450,7 +554,7 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
       <article class="card">
         <span class="step">03</span>
         <h3>ホストが動かす</h3>
-        <p>バックエンドの選択、認証情報の管理、実際の変更はホストの仕事です。state に残るのは ID と公開情報だけで、シークレットは含まれません。</p>
+        <p>バックエンドの選択、認証情報の管理、実際の変更はホストの仕事です。state に残るのは書いた内容とリソースの ID、それに公開してよい出力だけで、シークレットは含まれません。</p>
       </article>
     </div>
   </div>
@@ -459,19 +563,56 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
 <section id="resources-ja" class="section">
   <div class="container">
     <h2>標準リソース</h2>
-    <p class="section-lede">最初のセットとして、多くのアプリケーションで使う 10 種類を定義しています。</p>
-    <div class="resource-grid">
-      <div class="resource"><code>takoform_edge_worker</code><span>エッジで動かす Worker</span></div>
-      <div class="resource"><code>takoform_object_bucket</code><span>オブジェクトストレージ</span></div>
-      <div class="resource"><code>takoform_kv_store</code><span>Key/Value ストレージ</span></div>
-      <div class="resource"><code>takoform_queue</code><span>メッセージキュー</span></div>
-      <div class="resource"><code>takoform_sql_database</code><span>SQL データベース</span></div>
-      <div class="resource"><code>takoform_container_service</code><span>コンテナサービス</span></div>
-      <div class="resource"><code>takoform_vector_index</code><span>ベクトルインデックス</span></div>
-      <div class="resource"><code>takoform_durable_workflow</code><span>長時間実行ワークフロー</span></div>
-      <div class="resource"><code>takoform_stateful_actor_namespace</code><span>状態を持つアクター</span></div>
-      <div class="resource"><code>takoform_schedule</code><span>スケジュール実行</span></div>
-    </div>
+    <p class="section-lede">計算・データ・分析・ネットワーク・運用にまたがる 34 種類のリソースがあります。どれも「何が欲しいか」だけを書き、「誰が動かすか」は書きません。</p>
+      <h3 class="resource-domain">計算とアプリケーション</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_http_service</code><span>HTTP アプリケーション</span></div>
+        <div class="resource"><code>takoform_container_service</code><span>コンテナサービス</span></div>
+        <div class="resource"><code>takoform_compute_instance</code><span>マシンインスタンス</span></div>
+        <div class="resource"><code>takoform_static_site</code><span>静的サイト</span></div>
+        <div class="resource"><code>takoform_workflow</code><span>長時間実行ワークフロー</span></div>
+        <div class="resource"><code>takoform_stateful_entity</code><span>状態を持つエンティティ</span></div>
+        <div class="resource"><code>takoform_schedule</code><span>スケジュール実行</span></div>
+      </div>
+      <h3 class="resource-domain">データとストレージ</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_object_bucket</code><span>オブジェクトストレージ</span></div>
+        <div class="resource"><code>takoform_object_lifecycle_rule</code><span>オブジェクト保持ルール</span></div>
+        <div class="resource"><code>takoform_key_value_store</code><span>Key/Value ストレージ</span></div>
+        <div class="resource"><code>takoform_cache_cluster</code><span>インメモリキャッシュ</span></div>
+        <div class="resource"><code>takoform_relational_database</code><span>リレーショナルデータベース</span></div>
+        <div class="resource"><code>takoform_indexed_store</code><span>キー指定データストア</span></div>
+        <div class="resource"><code>takoform_queue</code><span>メッセージキュー</span></div>
+        <div class="resource"><code>takoform_stream_topic</code><span>イベントストリーム</span></div>
+        <div class="resource"><code>takoform_search_index</code><span>全文検索インデックス</span></div>
+        <div class="resource"><code>takoform_vector_index</code><span>ベクトルインデックス</span></div>
+      </div>
+      <h3 class="resource-domain">分析と推論</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_analytics_dataset</code><span>分析用データセット</span></div>
+        <div class="resource"><code>takoform_model_endpoint</code><span>推論エンドポイント</span></div>
+      </div>
+      <h3 class="resource-domain">ネットワークと配信</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_dns_zone</code><span>DNS ゾーン</span></div>
+        <div class="resource"><code>takoform_dns_record</code><span>DNS レコード</span></div>
+        <div class="resource"><code>takoform_tls_certificate</code><span>TLS 証明書</span></div>
+        <div class="resource"><code>takoform_http_route</code><span>HTTP ルート</span></div>
+        <div class="resource"><code>takoform_load_balancer</code><span>ロードバランサー</span></div>
+        <div class="resource"><code>takoform_private_network</code><span>プライベートネットワーク</span></div>
+      </div>
+      <h3 class="resource-domain">運用と連携</h3>
+      <div class="resource-grid">
+        <div class="resource"><code>takoform_container_registry</code><span>コンテナレジストリ</span></div>
+        <div class="resource"><code>takoform_log_sink</code><span>ログ保存先</span></div>
+        <div class="resource"><code>takoform_metric_sink</code><span>メトリクス保存先</span></div>
+        <div class="resource"><code>takoform_email_sender</code><span>メール送信</span></div>
+        <div class="resource"><code>takoform_webhook_endpoint</code><span>Webhook 受信口</span></div>
+        <div class="resource"><code>takoform_identity_client</code><span>OIDC クライアント</span></div>
+        <div class="resource"><code>takoform_feature_flag</code><span>フィーチャーフラグ</span></div>
+        <div class="resource"><code>takoform_rate_limit_policy</code><span>レート制限</span></div>
+        <div class="resource"><code>takoform_backup_policy</code><span>バックアップ</span></div>
+      </div>
     <div class="grow-card">
       <div class="grow-copy">
         <h3>ここで終わりではありません</h3>
@@ -480,6 +621,48 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
       <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform/issues">リソースを提案する</a>
     </div>
     <p class="fineprint">このプロバイダには、バックエンドの指定・認証情報・価格・課金の設定はあえてありません。それらはホスト側で管理します。</p>
+  </div>
+</section>
+
+<section id="configuration-ja" class="section">
+  <div class="container">
+    <h2>サービスを設定する</h2>
+    <p class="section-lede">ベンダー中立でも、何も設定できないわけではありません。アプリケーション系のリソースには <code>configuration</code> マップがあり、サービスの設定を同じコードの中に書けます。それ以外のリソースにも、実際のクラウドの契約と突き合わせて足りないとわかった項目を入れてあります。</p>
+    <figure class="code-card wide">
+      <figcaption><span class="traffic"></span>main.tf</figcaption>
+<pre><code><span class="k">resource</span> <span class="s">"takoform_container_service"</span> <span class="s">"api"</span> {
+  <span class="a">name</span>              = <span class="s">"api"</span>
+  <span class="a">image</span>             = <span class="s">"registry.example.com/api@sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317"</span>
+  <span class="a">ports</span>             = [<span class="s">8080</span>]
+  <span class="a">replicas</span>          = <span class="s">3</span>
+  <span class="a">health_check_path</span> = <span class="s">"/healthz"</span>
+
+  <span class="c"># シークレットでない値だけ。認証情報はホストが自前の経路で注入する。</span>
+  <span class="a">configuration</span> = {
+    <span class="a">LOG_LEVEL</span> = <span class="s">"info"</span>
+  }
+}
+
+<span class="k">resource</span> <span class="s">"takoform_relational_database"</span> <span class="s">"primary"</span> {
+  <span class="a">name</span>              = <span class="s">"primary"</span>
+  <span class="a">engine</span>            = <span class="s">"postgres"</span>
+  <span class="a">engine_version</span>    = <span class="s">"17"</span>
+  <span class="a">size_class</span>        = <span class="s">"db.small"</span>
+  <span class="a">database_name</span>     = <span class="s">"app"</span>
+  <span class="a">high_availability</span> = <span class="s">true</span>
+}</code></pre>
+    </figure>
+    <div class="compare">
+      <div class="compare-row good">
+        <code>configuration</code>
+        <span>動いているサービスが読む、シークレットでない値です。コードと state に一緒に載るので、どのホストでも同じ設定になります。</span>
+      </div>
+      <div class="compare-row bad">
+        <code>DATABASE_PASSWORD</code>
+        <span>これは configuration には書けません。マップのキーにも、通常のフィールドと同じデータのみのポリシーがかかります。認証情報を設定に紛れ込ませることはできません。シークレットは state に載せるものではなく、ホストが自前の経路で注入します。</span>
+      </div>
+    </div>
+    <p class="fineprint">configuration マップを持つのは <code>takoform_http_service</code> / <code>takoform_container_service</code> / <code>takoform_compute_instance</code> / <code>takoform_workflow</code> / <code>takoform_stateful_entity</code> です。ほかに増えたのは普通の型付き引数で、リレーショナルデータベースのサイズクラス・初期データベース名・スタンバイ、コンテナサービスのレプリカ数とヘルスチェックパス、ロードバランサーの内部限定リスナーとアイドルタイムアウト、キューの保持期間・最大メッセージサイズ・配信遅延・順序保証があります。キューは、配信できなかったメッセージの送り先を connections で指せるようにもなりました。</p>
   </div>
 </section>
 
@@ -510,7 +693,7 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
 <section id="spec-ja" class="section">
   <div class="container">
     <h2>仕様</h2>
-    <p class="section-lede">プロバイダとホストの間の取り決めは、4 つのドキュメントにすべて書いてあります。</p>
+    <p class="section-lede">プロバイダとホストの間の取り決めは、すべてデータだけのドキュメントに書いてあります。</p>
     <ul class="spec-list">
       <li>
         <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/host-api"><code>spec/host-api</code></a>
@@ -518,11 +701,15 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
       </li>
       <li>
         <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/form-definition"><code>spec/form-definition</code></a>
-        <span>サービスの種類をデータとして定義する方法と、その識別のしかた。</span>
+        <span>サービスの種類をデータとして定義する方法と、その識別のしかた。設定マップのキーに何を認めないかも、ここで決めています。</span>
       </li>
       <li>
         <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/form-package"><code>spec/form-package</code></a>
         <span>定義をパッケージにして配布・検証する方法。</span>
+      </li>
+      <li>
+        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/interface-declaration"><code>spec/interface-declaration</code></a>
+        <span>サービスが実行時に何を提供するかの宣言。その記録と利用の許可はホストが持ちます。</span>
       </li>
       <li>
         <a href="https://github.com/tako0614/terraform-provider-takoform/tree/master/spec/trust"><code>spec/trust</code></a>
@@ -541,21 +728,24 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
         <h3>できていること</h3>
         <ul>
           <li>スキーマ一式と、オフラインで動くパッケージ検証ツール</li>
-          <li>作成・更新・削除・import・drift 検出まで対応した 10 種類のリソース</li>
-          <li>Terraform / OpenTofu それぞれでのライフサイクルテスト</li>
+          <li>作成・更新・削除・import・drift 検出まで対応した 34 種類のリソース</li>
+          <li>アプリケーション系リソースの、シークレットを含まない <code>configuration</code></li>
+          <li>Terraform / OpenTofu それぞれでのライフサイクルテスト。相手はプロセス内のテスト用ホストです</li>
           <li>署名付きリリースのしくみ</li>
         </ul>
       </div>
       <div class="status-col pending">
         <h3>まだできていないこと</h3>
         <ul>
-          <li>パッケージはまだ公開していません</li>
-          <li>Terraform / OpenTofu の Registry にはまだ載っていません</li>
-          <li>標準の定義はまだ候補の段階です</li>
+          <li>作り直したリソースは何も公開していません。リリースも署名も Registry からの読み戻しも admission の証跡もありません</li>
+          <li>作り直したリソースを載せるプロバイダ <code>0.2.0</code> は、まだリリースしていません</li>
+          <li>定義は構造上の候補で、標準として認められた状態ではありません</li>
+          <li>仕様に沿ったホストがこれらのリソースを動かした実績はまだありません</li>
           <li>ホスト側の取り込み・失効の処理はこれからです</li>
         </ul>
       </div>
     </div>
+    <p class="fineprint">作り直す前に公開した世代は、消さずに retire しています。リリースのバイト列・署名・admission の証跡はそのまま残り、いまもオフラインで検証できます。書き換えも署名し直しもしませんし、作り直したリソースがその証跡を引き継ぐこともありません。</p>
   </div>
 </section>
 

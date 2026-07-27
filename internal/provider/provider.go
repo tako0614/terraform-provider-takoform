@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,15 +25,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
 )
 
 // Environment variable fallbacks for provider configuration.
 const (
-	envEndpoint              = "TAKOFORM_ENDPOINT"
-	envSpace                 = "TAKOFORM_SPACE"
-	envToken                 = "TAKOFORM_TOKEN"
-	envCompatibilityFallback = "TAKOFORM_COMPATIBILITY_FALLBACK"
+	envEndpoint = "TAKOFORM_ENDPOINT"
+	envSpace    = "TAKOFORM_SPACE"
+	envToken    = "TAKOFORM_TOKEN"
 
 	defaultResourceAPITimeout = 12 * time.Minute
 )
@@ -52,17 +51,15 @@ type takoformProvider struct {
 type providerData struct {
 	client            *client.Client
 	defaultSpace      string
-	capabilities      client.ProductCapabilities
 	forms             map[string]client.InstalledFormReference
 	serviceFormMutate sync.Mutex
 }
 
 // takoformProviderModel maps the provider configuration schema.
 type takoformProviderModel struct {
-	Endpoint              types.String `tfsdk:"endpoint"`
-	Space                 types.String `tfsdk:"space"`
-	Token                 types.String `tfsdk:"token"`
-	CompatibilityFallback types.Bool   `tfsdk:"compatibility_fallback"`
+	Endpoint types.String `tfsdk:"endpoint"`
+	Space    types.String `tfsdk:"space"`
+	Token    types.String `tfsdk:"token"`
 }
 
 // New returns a provider factory bound to a build version.
@@ -79,7 +76,7 @@ func (p *takoformProvider) Metadata(_ context.Context, _ provider.MetadataReques
 
 func (p *takoformProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "The Takoform provider exposes ten statically typed Service Form resources " +
+		Description: "The Takoform provider exposes statically typed portable Service Form resources " +
 			"through any conforming form host. It never selects a backend, target, credential, price, or operator policy.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
@@ -97,11 +94,6 @@ func (p *takoformProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 				Sensitive: true,
 				Description: "Bearer token sent as `Authorization: Bearer <token>`. " +
 					"May also be set via the " + envToken + " environment variable.",
-			},
-			"compatibility_fallback": schema.BoolAttribute{
-				Optional: true,
-				Description: "Explicitly use the historical unversioned /v1 Resource API only when discovery omits endpoints.api. " +
-					"Defaults to false and may also be set via " + envCompatibilityFallback + ".",
 			},
 		},
 	}
@@ -123,15 +115,6 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 		)
 		return
 	}
-	if cfg.CompatibilityFallback.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("compatibility_fallback"),
-			"Unknown compatibility fallback setting",
-			"compatibility_fallback must be known at provider configuration time.",
-		)
-		return
-	}
-
 	endpoint := firstNonEmpty(cfg.Endpoint.ValueString(), os.Getenv(envEndpoint))
 	if endpoint == "" {
 		resp.Diagnostics.AddAttributeError(
@@ -144,23 +127,10 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 
 	token := firstNonEmpty(cfg.Token.ValueString(), os.Getenv(envToken))
 	space := firstNonEmpty(cfg.Space.ValueString(), os.Getenv(envSpace))
-	compatibilityFallback := cfg.CompatibilityFallback.ValueBool()
-	if cfg.CompatibilityFallback.IsNull() {
-		var err error
-		compatibilityFallback, err = parseExplicitBool(os.Getenv(envCompatibilityFallback))
-		if err != nil {
-			resp.Diagnostics.AddAttributeError(
-				path.Root("compatibility_fallback"),
-				"Invalid compatibility fallback environment value",
-				err.Error(),
-			)
-			return
-		}
-	}
 
 	httpClient := newResourceAPIHTTPClient()
 
-	c, err := configureClient(ctx, endpoint, token, httpClient, compatibilityFallback)
+	c, err := configureClient(ctx, endpoint, token, httpClient)
 	if err != nil {
 		resp.Diagnostics.AddError("Takoform configuration failed", err.Error())
 		return
@@ -169,7 +139,6 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 	data := &providerData{
 		client:       c,
 		defaultSpace: space,
-		capabilities: c.Capabilities,
 		forms:        providerCandidateForms(),
 	}
 	resp.ResourceData = data
@@ -188,18 +157,11 @@ func newResourceAPIHTTPClient() *http.Client {
 }
 
 func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resource {
-	return []func() resource.Resource{
-		NewEdgeWorkerResource,
-		NewObjectBucketResource,
-		NewKVStoreResource,
-		NewQueueResource,
-		NewSQLDatabaseResource,
-		NewContainerServiceResource,
-		NewVectorIndexResource,
-		NewDurableWorkflowResource,
-		NewStatefulActorNamespaceResource,
-		NewScheduleResource,
+	resources := make([]func() resource.Resource, 0, len(formcatalog.Kinds))
+	for _, kind := range formcatalog.Kinds {
+		resources = append(resources, NewFormResource(kind))
 	}
+	return resources
 }
 
 func (p *takoformProvider) DataSources(_ context.Context) []func() datasource.DataSource {
@@ -208,12 +170,11 @@ func (p *takoformProvider) DataSources(_ context.Context) []func() datasource.Da
 	}
 }
 
-// configureClient builds the client, discovers capabilities, and enforces the
-// Service Form API gate. It is split out from Configure so it can be unit
+// configureClient builds the client, discovers the versioned Service Form API,
+// and enforces the API gate. It is split out from Configure so it can be unit
 // tested against an httptest server without driving the full framework.
-func configureClient(ctx context.Context, endpoint, token string, httpClient *http.Client, allowCompatibilityFallback ...bool) (*client.Client, error) {
-	allowFallback := len(allowCompatibilityFallback) == 1 && allowCompatibilityFallback[0]
-	c := client.NewWithOptions(endpoint, token, httpClient, client.Options{AllowCompatibilityFallback: allowFallback})
+func configureClient(ctx context.Context, endpoint, token string, httpClient *http.Client) (*client.Client, error) {
+	c := client.NewWithOptions(endpoint, token, httpClient, client.Options{})
 
 	disco, err := c.Discover(ctx)
 	if err != nil {
@@ -234,20 +195,6 @@ func configureClient(ctx context.Context, endpoint, token string, httpClient *ht
 			disco.APIVersions,
 		)
 	}
-	if c.UsesCompatibilityFallback() {
-		caps, err := c.GetCapabilities(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("loading legacy Takoform capabilities from %q: %w", endpoint, err)
-		}
-		if caps.APIVersion != client.APIVersion {
-			return nil, fmt.Errorf(
-				"this Takoform endpoint returned unsupported capabilities apiVersion %q (expected %q)",
-				caps.APIVersion,
-				client.APIVersion,
-			)
-		}
-	}
-
 	return c, nil
 }
 
@@ -264,31 +211,6 @@ func providerCandidateForms() map[string]client.InstalledFormReference {
 		}
 	}
 	return out
-}
-
-func providerCandidateFormVersion(kind, definitionVersion string) (client.InstalledFormReference, bool) {
-	ref, err := formregistry.ForKindVersion(kind, definitionVersion)
-	if err != nil {
-		return client.InstalledFormReference{}, false
-	}
-	return client.InstalledFormReference{
-		FormRef: client.FormRef{
-			APIVersion: ref.APIVersion, Kind: ref.Kind,
-			DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest,
-		},
-		PackageDigest: ref.PackageDigest,
-	}, true
-}
-
-func parseExplicitBool(value string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "0", "false", "no":
-		return false, nil
-	case "1", "true", "yes":
-		return true, nil
-	default:
-		return false, fmt.Errorf("%s must be one of true, false, 1, 0, yes, or no", envCompatibilityFallback)
-	}
 }
 
 func supportsAPIVersion(versions []string, want string) bool {

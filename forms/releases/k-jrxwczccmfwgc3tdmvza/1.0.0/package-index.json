@@ -1,0 +1,62 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "LoadBalancer",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:28840ae7b597e55ee0b7aaa03210b042a0ff93f11d4c0e4848a51ad6cd1f26fb"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 6133,
+      "digest": "sha256:fec0bc14e069e25a42d9ae691efa258ddc7ec0872813111ef6f8e8aa528b3efa"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 302,
+      "digest": "sha256:df57e426f1fbef6eccd5f92d22ba859040f20468fbb4328545ee12811ce9febd"
+    },
+    {
+      "path": "fixtures/negative-health_check_path.json",
+      "mediaType": "application/json",
+      "size": 307,
+      "digest": "sha256:91747dd68cbe2550225c1e18bfe730ac9f3849778517a8828bd102833f31b690"
+    },
+    {
+      "path": "fixtures/negative-idle_timeout_seconds.json",
+      "mediaType": "application/json",
+      "size": 329,
+      "digest": "sha256:c13a491e99707f854f0b0846ece32880f2a23294a14e2351cfecba5612551ca2"
+    },
+    {
+      "path": "fixtures/negative-listen_port.json",
+      "mediaType": "application/json",
+      "size": 300,
+      "digest": "sha256:42bebd777a67c173a4e0edd4ccc5df0b6258e3aa00431c19c44b96918beb40af"
+    },
+    {
+      "path": "fixtures/negative-protocol.json",
+      "mediaType": "application/json",
+      "size": 301,
+      "digest": "sha256:b92de2460329652cec3330b2137075efd53dd865b1ee18be0aa9d0dcdb806e3c"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 149,
+      "digest": "sha256:3c92fcb614845ad32e495a19ee8e3f834cf3b77a394691d3d20ed524074dccee"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 142,
+      "digest": "sha256:89773c07d921fc0d7ee48bd336b456a8b5d9afd3d6ed9f5da7bbc0f53a83f481"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "accessProtocols": [
+    "s3_api"
+  ],
+  "name": "object-bucket",
+  "storageClass": "cold"
+}

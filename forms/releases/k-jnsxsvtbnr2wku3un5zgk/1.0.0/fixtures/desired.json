@@ -1,0 +1,4 @@
+{
+  "consistency": "eventual",
+  "name": "key-value-store"
+}

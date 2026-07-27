@@ -1,0 +1,202 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "TlsCertificate",
+  "definitionVersion": "1.0.0",
+  "title": "TLS Certificate",
+  "description": "Portable managed TLS certificate for a fixed set of domains. Key material stays with the host.",
+  "status": "standard",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "domains": {
+        "items": {
+          "pattern": "^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "keyAlgorithm": {
+        "default": "ecdsa_p256",
+        "enum": [
+          "ecdsa_p256",
+          "ecdsa_p384",
+          "rsa_2048",
+          "rsa_4096"
+        ],
+        "type": "string"
+      },
+      "name": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": ".*\\S.*",
+        "type": "string"
+      }
+    },
+    "required": [
+      "domains",
+      "name"
+    ],
+    "type": "object"
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "driftedFields": {
+        "items": {
+          "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "generation": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "imported": {
+        "type": "boolean"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "driftedFields",
+      "generation",
+      "id",
+      "imported",
+      "portability",
+      "ready"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "generation": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "kind": {
+        "const": "TlsCertificate",
+        "type": "string"
+      },
+      "name": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "generation",
+      "id",
+      "kind",
+      "name",
+      "portability"
+    ],
+    "type": "object"
+  },
+  "immutableFields": [
+    "/domains",
+    "/name"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh",
+    "drift"
+  ],
+  "interfaces": [
+    {
+      "name": "tls.certificate",
+      "version": "1",
+      "description": "Portable managed certificate status operations.",
+      "required": true,
+      "document": {
+        "operations": [
+          "status"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "status"
+              ],
+              "type": "string"
+            },
+            "maxItems": 1,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json",
+      "observedPath": "fixtures/observed.json",
+      "outputPath": "fixtures/output.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-domains",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-domains.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-key_algorithm",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-key_algorithm.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

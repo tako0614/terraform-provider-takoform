@@ -128,7 +128,7 @@ The source tree and repository settings are both part of the trust boundary:
 - release immutability is enabled before the first publication; and
 - a real tag/release is created only after maintainer authorization.
 
-All ten `1.0.0` Form Packages have live immutable releases. Their exact
+The retired `1.0.0` Form Packages have live immutable releases. Their exact
 seven-asset inventories and production package-publisher trust inputs are
 retained under `admission/v1` and verified offline by
 `standard-form-conformance published-package-check`. No admission activation or

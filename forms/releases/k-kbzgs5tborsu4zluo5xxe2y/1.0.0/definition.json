@@ -1,0 +1,186 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "PrivateNetwork",
+  "definitionVersion": "1.0.0",
+  "title": "Private Network",
+  "description": "Portable private address space that other Resources can attach to.",
+  "status": "standard",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "addressSpace": {
+        "pattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$|^[0-9A-Fa-f:]{2,45}/[0-9]{1,3}$",
+        "type": "string"
+      },
+      "name": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": ".*\\S.*",
+        "type": "string"
+      },
+      "publicEgress": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "addressSpace",
+      "name"
+    ],
+    "type": "object"
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "driftedFields": {
+        "items": {
+          "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "generation": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "imported": {
+        "type": "boolean"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "driftedFields",
+      "generation",
+      "id",
+      "imported",
+      "portability",
+      "ready"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "generation": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "kind": {
+        "const": "PrivateNetwork",
+        "type": "string"
+      },
+      "name": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "generation",
+      "id",
+      "kind",
+      "name",
+      "portability"
+    ],
+    "type": "object"
+  },
+  "immutableFields": [
+    "/addressSpace",
+    "/name"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh",
+    "drift"
+  ],
+  "interfaces": [
+    {
+      "name": "network.attach",
+      "version": "1",
+      "description": "Portable private network attachment operations.",
+      "required": true,
+      "document": {
+        "operations": [
+          "attach",
+          "detach"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "attach",
+                "detach"
+              ],
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json",
+      "observedPath": "fixtures/observed.json",
+      "outputPath": "fixtures/output.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-address_space",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-address_space.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

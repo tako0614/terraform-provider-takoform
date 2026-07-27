@@ -8,22 +8,26 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 // VerifyStandardFormStructure inspects the actual provider resource schema
 // used by this build. This is structural coverage only: it does not run the
 // Terraform protocol lifecycle, contact a host, or emit admission evidence.
+//
+// Because the Terraform schema and the Form Definition are both derived from
+// one declaration, this proves the derivation actually happened rather than
+// restating the declaration a second time.
 func VerifyStandardFormStructure(kind string, desired map[string]any) error {
 	name, ok := desired["name"].(string)
 	if !ok || !validPortableName(name) || validPortableName("") {
 		return fmt.Errorf("provider portable-name validation does not cover canonical positive/negative fixtures for %s", kind)
 	}
-	constructor, ok := standardResourceConstructors()[kind]
+	declared, ok := formcatalog.ByKind(kind)
 	if !ok {
 		return fmt.Errorf("provider has no standard resource for %q", kind)
 	}
-	implementation := constructor()
+	implementation := NewFormResource(declared)()
 	var response resource.SchemaResponse
 	implementation.Schema(context.Background(), resource.SchemaRequest{}, &response)
 	if response.Diagnostics.HasError() {
@@ -33,97 +37,85 @@ func VerifyStandardFormStructure(kind string, desired map[string]any) error {
 		return fmt.Errorf("provider resource %s lacks import", kind)
 	}
 	for field := range desired {
-		for _, providerField := range providerFieldsForDesired(kind, field) {
+		for _, providerField := range providerFieldsForDesired(declared, field) {
 			if _, ok := response.Schema.Attributes[providerField]; !ok {
 				return fmt.Errorf("provider schema for %s lacks %s projected from %s", kind, providerField, field)
 			}
 		}
 	}
-	if err := requireReplace(response.Schema.Attributes["name"], "name"); err != nil {
-		return fmt.Errorf("provider schema for %s: %w", kind, err)
-	}
-	if kind == client.KindVectorIndex {
-		if err := requireReplace(response.Schema.Attributes["dimensions"], "dimensions"); err != nil {
-			return fmt.Errorf("provider schema for %s: %w", kind, err)
+	// Every field the definition calls immutable must actually replace the
+	// resource. A Form that says "changing this replaces it" and a provider
+	// that quietly updates in place are not the same contract.
+	for _, pointer := range declared.ImmutableFields() {
+		attribute := strings.TrimPrefix(pointer, "/")
+		hcl := "name"
+		if attribute != "name" {
+			field, ok := fieldByWire(declared, attribute)
+			if !ok {
+				return fmt.Errorf("provider schema for %s declares immutable %s with no field", kind, attribute)
+			}
+			hcl = field.HCL
 		}
-	}
-	if kind == client.KindSQLDatabase {
-		replacementField := "engine"
-		if _, usesIndexedTables := desired["tables"]; usesIndexedTables {
-			replacementField = "tables"
-		}
-		if err := requireReplace(response.Schema.Attributes[replacementField], replacementField); err != nil {
+		if err := requireReplace(response.Schema.Attributes[hcl], hcl); err != nil {
 			return fmt.Errorf("provider schema for %s: %w", kind, err)
 		}
 	}
 	return nil
 }
 
-func standardResourceConstructors() map[string]func() resource.Resource {
-	return map[string]func() resource.Resource{
-		client.KindEdgeWorker:             NewEdgeWorkerResource,
-		client.KindObjectBucket:           NewObjectBucketResource,
-		client.KindKVStore:                NewKVStoreResource,
-		client.KindSQLDatabase:            NewSQLDatabaseResource,
-		client.KindQueue:                  NewQueueResource,
-		client.KindVectorIndex:            NewVectorIndexResource,
-		client.KindDurableWorkflow:        NewDurableWorkflowResource,
-		client.KindContainerService:       NewContainerServiceResource,
-		client.KindStatefulActorNamespace: NewStatefulActorNamespaceResource,
-		client.KindSchedule:               NewScheduleResource,
+func fieldByWire(kind formcatalog.Kind, wire string) (formcatalog.Field, bool) {
+	for _, field := range kind.Fields {
+		if field.Wire == wire {
+			return field, true
+		}
 	}
+	return formcatalog.Field{}, false
 }
 
-func providerFieldsForDesired(kind, field string) []string {
+func providerFieldsForDesired(kind formcatalog.Kind, field string) []string {
 	if field == "source" {
 		return []string{"artifact_path", "artifact_url", "artifact_ref", "artifact_sha256"}
 	}
-	mapping := map[string]string{
-		"compatibilityDate": "compatibility_date", "compatibilityFlags": "compatibility_flags",
-		"storageClass": "storage_class", "migrationsPath": "migrations_path",
-		"publicHttp": "public_http", "dimensions": "dimensions", "entrypoint": "entrypoint",
-		"className": "class_name", "storageProfile": "storage_profile", "migrationTag": "migration_tag",
-		"connections": "connections", "interfaces": "interfaces", "consistency": "consistency",
-		"image": "image", "ports": "ports", "metric": "metric",
-		"name": "name", "profiles": "profiles", "cron": "cron", "timezone": "timezone", "engine": "engine",
+	if field == "connections" || field == "name" {
+		return []string{field}
 	}
-	if field == "delivery" {
-		return []string{"max_retries", "max_batch_size"}
-	}
-	if field == "retry" {
-		return []string{"max_attempts", "initial_backoff_seconds"}
-	}
-	if mapped, ok := mapping[field]; ok {
-		return []string{mapped}
+	if declared, ok := fieldByWire(kind, field); ok {
+		return []string{declared.HCL}
 	}
 	return []string{camelToSnake(field)}
 }
 
 func requireReplace(attribute schema.Attribute, field string) error {
+	var modifiers []any
 	switch typed := attribute.(type) {
 	case schema.StringAttribute:
 		for _, modifier := range typed.PlanModifiers {
-			if strings.Contains(strings.ToLower(fmt.Sprintf("%T", modifier)), "requiresreplace") {
-				return nil
-			}
+			modifiers = append(modifiers, modifier)
 		}
 	case schema.Int64Attribute:
 		for _, modifier := range typed.PlanModifiers {
-			if strings.Contains(strings.ToLower(fmt.Sprintf("%T", modifier)), "requiresreplace") {
-				return nil
-			}
+			modifiers = append(modifiers, modifier)
+		}
+	case schema.BoolAttribute:
+		for _, modifier := range typed.PlanModifiers {
+			modifiers = append(modifiers, modifier)
+		}
+	case schema.SetAttribute:
+		for _, modifier := range typed.PlanModifiers {
+			modifiers = append(modifiers, modifier)
 		}
 	case schema.ListAttribute:
 		for _, modifier := range typed.PlanModifiers {
-			if strings.Contains(strings.ToLower(fmt.Sprintf("%T", modifier)), "requiresreplace") {
-				return nil
-			}
+			modifiers = append(modifiers, modifier)
 		}
 	case schema.ListNestedAttribute:
 		for _, modifier := range typed.PlanModifiers {
-			if strings.Contains(strings.ToLower(fmt.Sprintf("%T", modifier)), "requiresreplace") {
-				return nil
-			}
+			modifiers = append(modifiers, modifier)
+		}
+	}
+	for _, modifier := range modifiers {
+		if strings.Contains(strings.ToLower(fmt.Sprintf("%T", modifier)), "requiresreplace") {
+			return nil
 		}
 	}
 	return fmt.Errorf("%s lacks RequiresReplace", field)

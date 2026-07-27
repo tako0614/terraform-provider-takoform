@@ -1,0 +1,7 @@
+{
+  "deliveryDelaySeconds": -1,
+  "maxRetries": 5,
+  "messageRetentionSeconds": 345600,
+  "name": "queue",
+  "ordering": "best_effort"
+}

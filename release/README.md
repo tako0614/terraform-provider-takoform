@@ -128,7 +128,7 @@ The admission release semver is independent from the exact Form definition and
 Form Package semvers it activates. For example, admission `1.0.2` may activate
 the already immutable definition/package `1.0.1` closure. The release SBOM and
 provenance bind all three versions explicitly: the root package uses the
-admission release version, while the ten component packages use the retained
+admission release version, while the retired component packages use the retained
 Form Package version. The retained Registry matrix, the fresh direct-Registry
 matrix, and the matrix inside the release archive must be byte-identical.
 

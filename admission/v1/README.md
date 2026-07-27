@@ -3,7 +3,7 @@
 This directory separates live package publication proof from portable-standard
 admission authority.
 
-`published-package-set.json` is the source-reviewed snapshot of the ten live
+`published-package-set.json` is the source-reviewed snapshot of the retired live
 `1.0.1` GitHub Releases. Each entry binds the exact candidate FormRef/package
 digest to its immutable per-kind Git tag and shared `standard-forms/v1.0.1`
 aggregate release commit,
@@ -32,7 +32,7 @@ The three newly settled identities are exact protected-main workflow subjects:
 
 - `admission-evidence`: Takoform `standard-admission-evidence.yml`;
 - `provider-report`: Takoform `standard-provider-report.yml`;
-- `host-report`: Takosumi `standard-form-host-report.yml`.
+- `host-report`: the `standard-form-host-report.yml` workflow of the conforming host selected from [`conforming-hosts.json`](conforming-hosts.json).
 
 The five-role pin verifier rejects any reused `(issuer, certificate identity)`
 pair, policy-byte drift, or unpinned trust-root change.
@@ -50,7 +50,7 @@ and integrated time, and certificate-transparency SCT without a network lookup.
 readback tool: it requires every GitHub Release to report `immutable=true` and
 requires the remote names, sizes, and SHA-256 digests to equal the retained
 seven files before replacing the snapshot.
-The create-only download mode stages all ten exact seven-asset closures into a
+The create-only download mode stages every exact seven-asset closure into a
 new output root and leaves no partial final root on failure; it never overwrites
 retained evidence.
 
@@ -83,7 +83,7 @@ go run ./cmd/provider-lifecycle-conformance provider-reports \
 ```
 
 The command refuses an output path below this `admission/` tree. The protected
-`standard-provider-report.yml` workflow revalidates the exact ten-report,
+`standard-provider-report.yml` workflow revalidates the exact retained report,
 eleven-file unsigned artifact
 in a separate signer job before signing it. Generated or signed subjects remain
 evidence candidates until the admission-material workflow authenticates the

@@ -42,10 +42,6 @@ const (
 	KindStatefulActorNamespace = "StatefulActorNamespace"
 	KindSchedule               = "Schedule"
 
-	// ManagedByOpenTofu is used only by the explicit legacy /v1 compatibility
-	// fallback. The versioned Form host owns manager metadata.
-	ManagedByOpenTofu = "opentofu"
-
 	defaultUserAgent     = "terraform-provider-takoform"
 	maxResponseBodyBytes = 8 * 1024 * 1024
 )
@@ -68,12 +64,10 @@ type Discovery struct {
 
 // Endpoints carries advertised service URLs from discovery.
 type Endpoints struct {
-	API              string `json:"api,omitempty"`
-	Forms            string `json:"forms,omitempty"`
-	Interfaces       string `json:"interfaces,omitempty"`
-	Capabilities     string `json:"capabilities,omitempty"`
-	CompatibilityAPI string `json:"compatibility_api,omitempty"`
-	OIDCIssuer       string `json:"oidc_issuer,omitempty"`
+	API        string `json:"api,omitempty"`
+	Forms      string `json:"forms,omitempty"`
+	Interfaces string `json:"interfaces,omitempty"`
+	OIDCIssuer string `json:"oidc_issuer,omitempty"`
 }
 
 // HasFeature reports whether a named server capability is advertised.
@@ -175,8 +169,8 @@ type NativeResourceRef struct {
 	ID   string `json:"id"`
 }
 
-// PreviewResourceResult decodes the versioned preview response and the
-// historical compatibility response without exposing either as provider state.
+// PreviewResourceResult decodes the versioned preview response without
+// exposing host resolution evidence as provider state.
 type PreviewResourceResult struct {
 	Resource               Resource            `json:"resource"`
 	SelectedImplementation string              `json:"selectedImplementation"`
@@ -188,7 +182,6 @@ type PreviewResourceResult struct {
 	PlanDigest             string              `json:"planDigest"`
 	SpecDigest             string              `json:"specDigest"`
 	ResolutionFingerprint  string              `json:"resolutionFingerprint"`
-	Quote                  *DeploymentQuote    `json:"quote,omitempty"`
 	Review                 PreviewReview       `json:"review,omitempty"`
 }
 
@@ -197,43 +190,16 @@ type PreviewReview struct {
 	SpecDigest string `json:"specDigest"`
 }
 
-// DeploymentQuote is the immutable price snapshot attached to a Deploy API
-// preview by a commercial host. OSS endpoints can omit it.
-type DeploymentQuote struct {
-	QuoteID                 string `json:"quoteId"`
-	QuoteDigest             string `json:"quoteDigest"`
-	RatingStatus            string `json:"ratingStatus"`
-	Currency                string `json:"currency"`
-	EstimatedTotalUSDmicros int64  `json:"estimatedTotalUsdMicros"`
-	ExpiresAt               string `json:"expiresAt"`
-}
-
 // DeploymentReview presents the exact preview evidence accepted by apply.
-// Quote evidence is required only when the host returned a priced quote.
+// Pricing, rating, and quote authority belong to a host's own commercial
+// layer; the portable protocol carries only the reviewed plan digest.
 type DeploymentReview struct {
-	PlanDigest  string `json:"planDigest"`
-	QuoteID     string `json:"quoteId,omitempty"`
-	QuoteDigest string `json:"quoteDigest,omitempty"`
+	PlanDigest string `json:"planDigest"`
 }
 
 type applyResourceBody struct {
 	Resource
 	Review DeploymentReview `json:"review"`
-}
-
-// ProductCapabilities is the parsed body of GET /v1/capabilities.
-type ProductCapabilities struct {
-	APIVersion string          `json:"apiVersion"`
-	Resources  map[string]bool `json:"resources"`
-	Adapters   map[string]bool `json:"adapters"`
-	Compat     map[string]bool `json:"compat"`
-	Identity   map[string]bool `json:"identity"`
-	Commercial map[string]bool `json:"commercial"`
-}
-
-// SupportsResource reports whether a Service Form kind is advertised.
-func (p ProductCapabilities) SupportsResource(kind string) bool {
-	return p.Resources[kind]
 }
 
 // APIError is the typed form of the Takoform error envelope for non-2xx
@@ -295,27 +261,22 @@ func statusCode(err error) (int, bool) {
 
 // Client is a thin Takoform Service Form API HTTP client.
 type Client struct {
-	endpoint                   string // normalized origin, no trailing slash
-	token                      string
-	httpClient                 *http.Client
-	userAgent                  string
-	apiBase                    string
-	formsURL                   string
-	interfacesURL              string
-	compatibilityAPI           string
-	allowCompatibilityFallback bool
-	compatibilityFallback      bool
-	retryAttempts              int
+	endpoint      string // normalized origin, no trailing slash
+	token         string
+	httpClient    *http.Client
+	userAgent     string
+	apiBase       string
+	formsURL      string
+	interfacesURL string
+	retryAttempts int
 
 	// Discovery is populated by Discover and cached for capability checks.
-	Discovery    Discovery
-	Capabilities ProductCapabilities
+	Discovery Discovery
 }
 
-// Options controls the one intentionally non-default compatibility lane.
+// Options controls optional client behaviour.
 type Options struct {
-	AllowCompatibilityFallback bool
-	RetryAttempts              int
+	RetryAttempts int
 }
 
 // New constructs a Client. If httpClient is nil, http.DefaultClient is used.
@@ -323,14 +284,8 @@ func New(endpoint, token string, httpClient *http.Client) *Client {
 	return NewWithOptions(endpoint, token, httpClient, Options{})
 }
 
-// NewCompatibilityFallback constructs the explicit historical /v1 client.
-// Provider configuration never calls this implicitly.
-func NewCompatibilityFallback(endpoint, token string, httpClient *http.Client) *Client {
-	return NewWithOptions(endpoint, token, httpClient, Options{AllowCompatibilityFallback: true})
-}
-
-// NewWithOptions constructs a client. The historical /v1 API is never chosen
-// unless AllowCompatibilityFallback is explicitly true.
+// NewWithOptions constructs a client. Every request uses the versioned API
+// base advertised by discovery; there is no unversioned fallback lane.
 func NewWithOptions(endpoint, token string, httpClient *http.Client, options Options) *Client {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
@@ -339,27 +294,17 @@ func NewWithOptions(endpoint, token string, httpClient *http.Client, options Opt
 	if retryAttempts <= 0 {
 		retryAttempts = 3
 	}
-	client := &Client{
-		endpoint:                   strings.TrimRight(endpoint, "/"),
-		token:                      token,
-		httpClient:                 httpClient,
-		userAgent:                  defaultUserAgent,
-		allowCompatibilityFallback: options.AllowCompatibilityFallback,
-		retryAttempts:              retryAttempts,
+	return &Client{
+		endpoint:      strings.TrimRight(endpoint, "/"),
+		token:         token,
+		httpClient:    httpClient,
+		userAgent:     defaultUserAgent,
+		retryAttempts: retryAttempts,
 	}
-	if options.AllowCompatibilityFallback {
-		client.compatibilityFallback = true
-		client.compatibilityAPI = client.endpoint + "/v1"
-		client.apiBase = client.compatibilityAPI
-	}
-	return client
 }
 
 // Endpoint returns the normalized endpoint origin.
 func (c *Client) Endpoint() string { return c.endpoint }
-
-// UsesCompatibilityFallback reports the explicit historical /v1 mode.
-func (c *Client) UsesCompatibilityFallback() bool { return c.compatibilityFallback }
 
 // Discover performs GET {endpoint}/.well-known/takoform and caches the result.
 func (c *Client) Discover(ctx context.Context) (Discovery, error) {
@@ -378,7 +323,6 @@ func (c *Client) Discover(ctx context.Context) (Discovery, error) {
 }
 
 func (c *Client) negotiateEndpoints(disco Discovery) error {
-	c.compatibilityFallback = false
 	c.apiBase = ""
 	c.formsURL = ""
 	c.interfacesURL = ""
@@ -389,20 +333,7 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 		return fmt.Errorf("takoform: discovery does not advertise API version %s", APIVersion)
 	}
 	if strings.TrimSpace(disco.Endpoints.API) == "" {
-		if !c.allowCompatibilityFallback {
-			return errors.New("takoform: discovery omitted endpoints.api; set compatibility_fallback explicitly to use historical /v1")
-		}
-		c.compatibilityFallback = true
-		c.compatibilityAPI = strings.TrimRight(c.endpoint, "/") + "/v1"
-		if disco.Endpoints.CompatibilityAPI != "" {
-			resolved, err := c.validAdvertisedEndpoint(disco.Endpoints.CompatibilityAPI)
-			if err != nil {
-				return fmt.Errorf("takoform: invalid discovery compatibility endpoint: %w", err)
-			}
-			c.compatibilityAPI = strings.TrimRight(resolved, "/")
-		}
-		c.apiBase = c.compatibilityAPI
-		return nil
+		return errors.New("takoform: discovery must advertise an absolute same-origin endpoints.api")
 	}
 	for _, feature := range []string{"exact_form_ref", "optimistic_concurrency", "idempotent_lifecycle"} {
 		if !disco.HasFeature(feature) {
@@ -434,13 +365,6 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 			}
 			c.interfacesURL = strings.TrimRight(interfacesURL, "/")
 		}
-	}
-	if disco.Endpoints.CompatibilityAPI != "" {
-		compatibilityAPI, err := c.validAdvertisedEndpoint(disco.Endpoints.CompatibilityAPI)
-		if err != nil {
-			return fmt.Errorf("takoform: invalid discovery compatibility endpoint: %w", err)
-		}
-		c.compatibilityAPI = strings.TrimRight(compatibilityAPI, "/")
 	}
 	return nil
 }
@@ -494,27 +418,6 @@ func containsString(values []string, want string) bool {
 		}
 	}
 	return false
-}
-
-// GetCapabilities performs GET {endpoint}/v1/capabilities and caches the result.
-func (c *Client) GetCapabilities(ctx context.Context) (ProductCapabilities, error) {
-	if !c.compatibilityFallback {
-		return ProductCapabilities{}, errors.New("takoform: /v1 capabilities are available only in explicit compatibility fallback mode")
-	}
-	fullURL := c.compatibilityAPI + "/capabilities"
-	if c.Discovery.Endpoints.Capabilities != "" {
-		resolved, err := c.validAdvertisedEndpoint(c.Discovery.Endpoints.Capabilities)
-		if err != nil {
-			return ProductCapabilities{}, fmt.Errorf("takoform: invalid discovery capabilities endpoint: %w", err)
-		}
-		fullURL = resolved
-	}
-	var caps ProductCapabilities
-	if err := c.doJSON(ctx, http.MethodGet, fullURL, nil, &caps); err != nil {
-		return ProductCapabilities{}, err
-	}
-	c.Capabilities = caps
-	return caps, nil
 }
 
 // resourceURL builds {advertised API base}/resources/{kind}/{name}.
@@ -594,9 +497,6 @@ type FormAvailability struct {
 }
 
 func (c *Client) EnsureFormAvailable(ctx context.Context, space string, form InstalledFormReference, operation string) error {
-	if c.compatibilityFallback {
-		return nil
-	}
 	if err := validateInstalledFormReference(form.FormRef.Kind, form); err != nil {
 		return err
 	}
@@ -625,8 +525,8 @@ func (c *Client) EnsureFormAvailable(ctx context.Context, space string, form Ins
 
 // PutResource creates or updates a resource through the canonical reviewed
 // Deploy API lifecycle. It previews the exact desired Resource, then presents
-// that plan and optional quote evidence to PUT. Backend selection and pricing
-// remain server-side concerns.
+// that reviewed plan digest to PUT. Backend selection, placement, and any
+// commercial evidence remain server-side concerns.
 func (c *Client) PutResource(ctx context.Context, kind, name string, body *Resource) (*Resource, error) {
 	if err := c.requireReady(); err != nil {
 		return nil, err
@@ -634,13 +534,11 @@ func (c *Client) PutResource(ctx context.Context, kind, name string, body *Resou
 	if body == nil {
 		return nil, errors.New("takoform: apply requires a Resource body")
 	}
-	if !c.compatibilityFallback {
-		if err := validateResourceIdentity(kind, body); err != nil {
-			return nil, err
-		}
-		if body.Metadata.Name != name {
-			return nil, errors.New("takoform: Resource metadata.name does not match the requested URL name")
-		}
+	if err := validateResourceIdentity(kind, body); err != nil {
+		return nil, err
+	}
+	if body.Metadata.Name != name {
+		return nil, errors.New("takoform: Resource metadata.name does not match the requested URL name")
 	}
 	operation := "create"
 	if body.Metadata.ResourceVersion != "" {
@@ -652,44 +550,28 @@ func (c *Client) PutResource(ctx context.Context, kind, name string, body *Resou
 		}
 	}
 	transportResource := *body
-	if c.compatibilityFallback {
-		transportResource.Form = nil
-		transportResource.Metadata.ResourceVersion = ""
-	}
 	preview, err := c.PreviewResource(ctx, &transportResource)
 	if err != nil {
 		return nil, err
 	}
-	planDigest := preview.PlanDigest
-	if !c.compatibilityFallback {
-		planDigest = preview.Review.PlanDigest
-	}
+	planDigest := preview.Review.PlanDigest
 	if strings.TrimSpace(planDigest) == "" {
 		return nil, errors.New("takoform: Deploy API preview omitted planDigest")
 	}
 	review := DeploymentReview{PlanDigest: planDigest}
-	if c.compatibilityFallback && preview.Quote != nil {
-		if strings.TrimSpace(preview.Quote.QuoteID) == "" || strings.TrimSpace(preview.Quote.QuoteDigest) == "" {
-			return nil, errors.New("takoform: Deploy API preview returned incomplete quote evidence")
-		}
-		review.QuoteID = preview.Quote.QuoteID
-		review.QuoteDigest = preview.Quote.QuoteDigest
-	}
 
 	var out Resource
 	request := applyResourceBody{Resource: transportResource, Review: review}
 	headers := c.resourceMutationHeaders("apply", body, request)
-	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPut, c.putResourceURL(kind, name), headers, &request, &out, !c.compatibilityFallback)
+	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPut, c.putResourceURL(kind, name), headers, &request, &out, true)
 	if err != nil {
 		return nil, err
 	}
-	if !c.compatibilityFallback {
-		if err := verifyResourceIdentity(body.Form, name, body.Metadata.Space, &out); err != nil {
-			return nil, err
-		}
-		if err := captureResourceVersion(&out, responseHeaders); err != nil {
-			return nil, err
-		}
+	if err := verifyResourceIdentity(body.Form, name, body.Metadata.Space, &out); err != nil {
+		return nil, err
+	}
+	if err := captureResourceVersion(&out, responseHeaders); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
@@ -709,16 +591,7 @@ func (c *Client) ImportResource(ctx context.Context, kind, name, nativeID string
 	if body == nil {
 		return nil, errors.New("takoform: import requires a Resource body")
 	}
-	var out Resource
 	request := importResourceBody{Resource: *body, NativeID: nativeID}
-	if c.compatibilityFallback {
-		request.Form = nil
-		request.Metadata.ResourceVersion = ""
-		if err := c.doJSON(ctx, http.MethodPost, c.importResourceURL(kind, name), &request, &out); err != nil {
-			return nil, err
-		}
-		return &out, nil
-	}
 	if err := validateResourceIdentity(kind, body); err != nil {
 		return nil, err
 	}
@@ -752,16 +625,14 @@ func (c *Client) GetResource(ctx context.Context, kind, name, space string, form
 	}
 	query := spaceQuery(space)
 	var expected *InstalledFormReference
-	if !c.compatibilityFallback {
-		if len(form) != 1 {
-			return nil, errors.New("takoform: versioned Resource read requires one exact FormRef")
-		}
-		if err := validateInstalledFormReference(kind, form[0]); err != nil {
-			return nil, err
-		}
-		expected = &form[0]
-		query = exactResourceQuery(space, form[0])
+	if len(form) != 1 {
+		return nil, errors.New("takoform: versioned Resource read requires one exact FormRef")
 	}
+	if err := validateInstalledFormReference(kind, form[0]); err != nil {
+		return nil, err
+	}
+	expected = &form[0]
+	query = exactResourceQuery(space, form[0])
 	var out Resource
 	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodGet, c.resourceURL(kind, name, query), nil, nil, &out, false)
 	if err != nil {
@@ -791,16 +662,14 @@ func (c *Client) ObserveResource(ctx context.Context, kind, name, space string, 
 	query := spaceQuery(space)
 	var expected *InstalledFormReference
 	resourceVersion, form := mutationIdentity(options)
-	if !c.compatibilityFallback {
-		if len(form) != 1 || !validResourceVersion(resourceVersion) {
-			return nil, errors.New("takoform: versioned observe requires one exact FormRef and resourceVersion")
-		}
-		if err := validateInstalledFormReference(kind, form[0]); err != nil {
-			return nil, err
-		}
-		expected = &form[0]
-		query = exactResourceQuery(space, form[0])
+	if len(form) != 1 || !validResourceVersion(resourceVersion) {
+		return nil, errors.New("takoform: versioned observe requires one exact FormRef and resourceVersion")
 	}
+	if err := validateInstalledFormReference(kind, form[0]); err != nil {
+		return nil, err
+	}
+	expected = &form[0]
+	query = exactResourceQuery(space, form[0])
 	var out Resource
 	var target any = &out
 	var wrapped struct {
@@ -817,7 +686,7 @@ func (c *Client) ObserveResource(ctx context.Context, kind, name, space string, 
 		headers["If-Match"] = quoteResourceVersion(resourceVersion)
 		headers["Idempotency-Key"] = mutationKey("observe", kind, name, space, resourceVersion, expected)
 	}
-	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPost, c.actionResourceURL(kind, name, "observe", query), headers, nil, target, !c.compatibilityFallback)
+	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPost, c.actionResourceURL(kind, name, "observe", query), headers, nil, target, true)
 	if err != nil {
 		if code, ok := statusCode(err); ok && code == http.StatusNotFound {
 			return nil, ErrNotFound
@@ -856,16 +725,14 @@ func (c *Client) RefreshResource(ctx context.Context, kind, name, space string, 
 	query := spaceQuery(space)
 	var expected *InstalledFormReference
 	resourceVersion, form := mutationIdentity(options)
-	if !c.compatibilityFallback {
-		if len(form) != 1 || !validResourceVersion(resourceVersion) {
-			return nil, errors.New("takoform: versioned refresh requires one exact FormRef and resourceVersion")
-		}
-		if err := validateInstalledFormReference(kind, form[0]); err != nil {
-			return nil, err
-		}
-		expected = &form[0]
-		query = exactResourceQuery(space, form[0])
+	if len(form) != 1 || !validResourceVersion(resourceVersion) {
+		return nil, errors.New("takoform: versioned refresh requires one exact FormRef and resourceVersion")
 	}
+	if err := validateInstalledFormReference(kind, form[0]); err != nil {
+		return nil, err
+	}
+	expected = &form[0]
+	query = exactResourceQuery(space, form[0])
 	var out Resource
 	var target any = &out
 	var wrapped struct {
@@ -879,7 +746,7 @@ func (c *Client) RefreshResource(ctx context.Context, kind, name, space string, 
 		headers["If-Match"] = quoteResourceVersion(resourceVersion)
 		headers["Idempotency-Key"] = mutationKey("refresh", kind, name, space, resourceVersion, expected)
 	}
-	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPost, c.actionResourceURL(kind, name, "refresh", query), headers, nil, target, !c.compatibilityFallback)
+	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPost, c.actionResourceURL(kind, name, "refresh", query), headers, nil, target, true)
 	if err != nil {
 		if code, ok := statusCode(err); ok && code == http.StatusNotFound {
 			return nil, ErrNotFound
@@ -910,20 +777,16 @@ func (c *Client) DeleteResource(ctx context.Context, kind, name, space string, o
 		query = url.Values{}
 	}
 	headers := map[string]string{}
-	if c.compatibilityFallback {
-		query.Set("managedBy", ManagedByOpenTofu)
-	} else {
-		if len(form) != 1 || !validResourceVersion(resourceVersion) {
-			return errors.New("takoform: versioned delete requires one exact FormRef and resourceVersion")
-		}
-		if err := validateInstalledFormReference(kind, form[0]); err != nil {
-			return err
-		}
-		query = exactResourceQuery(space, form[0])
-		headers["If-Match"] = quoteResourceVersion(resourceVersion)
-		headers["Idempotency-Key"] = mutationKey("delete", kind, name, space, resourceVersion, &form[0])
+	if len(form) != 1 || !validResourceVersion(resourceVersion) {
+		return errors.New("takoform: versioned delete requires one exact FormRef and resourceVersion")
 	}
-	if _, err := c.doJSONWithHeaders(ctx, http.MethodDelete, c.resourceURL(kind, name, query), headers, nil, nil, !c.compatibilityFallback); err != nil {
+	if err := validateInstalledFormReference(kind, form[0]); err != nil {
+		return err
+	}
+	query = exactResourceQuery(space, form[0])
+	headers["If-Match"] = quoteResourceVersion(resourceVersion)
+	headers["Idempotency-Key"] = mutationKey("delete", kind, name, space, resourceVersion, &form[0])
+	if _, err := c.doJSONWithHeaders(ctx, http.MethodDelete, c.resourceURL(kind, name, query), headers, nil, nil, true); err != nil {
 		if code, ok := statusCode(err); ok && code == http.StatusNotFound {
 			return nil
 		}
@@ -942,15 +805,13 @@ func (c *Client) PreviewResource(ctx context.Context, body *Resource) (*PreviewR
 	}
 	var out PreviewResourceResult
 	headers := map[string]string{}
-	if !c.compatibilityFallback {
-		if err := validateResourceIdentity(body.Kind, body); err != nil {
-			return nil, err
-		}
-		if body.Metadata.ResourceVersion == "" {
-			headers["If-None-Match"] = "*"
-		} else {
-			headers["If-Match"] = quoteResourceVersion(body.Metadata.ResourceVersion)
-		}
+	if err := validateResourceIdentity(body.Kind, body); err != nil {
+		return nil, err
+	}
+	if body.Metadata.ResourceVersion == "" {
+		headers["If-None-Match"] = "*"
+	} else {
+		headers["If-Match"] = quoteResourceVersion(body.Metadata.ResourceVersion)
 	}
 	if _, err := c.doJSONWithHeaders(ctx, http.MethodPost, c.previewURL(), headers, body, &out, false); err != nil {
 		return nil, err
@@ -1095,9 +956,6 @@ func (c *Client) requireReady() error {
 }
 
 func (c *Client) resourceMutationHeaders(operation string, resource *Resource, request any) map[string]string {
-	if c.compatibilityFallback {
-		return nil
-	}
 	headers := map[string]string{}
 	if resource.Metadata.ResourceVersion == "" {
 		headers["If-None-Match"] = "*"

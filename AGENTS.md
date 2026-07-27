@@ -12,7 +12,7 @@ The HCP Terraform organization used by maintainers is not a public provider name
 
 ## Boundaries
 
-- Keep the provider statically typed and limited to the ten resources listed in `forms/README.md` until a specification and conformance change explicitly expands it.
+- Keep the provider statically typed and limited to the Forms declared in `internal/formcatalog`, which generates `forms/README.md`, the provider schema, the Form Definitions, the fixtures, the examples, and the resource docs. Add a Form by adding a catalogue entry and regenerating; never by hand-writing one surface.
 - The only data source is the read-only `takoform_interface`. Descriptor identity is `(name, version)` and runtime selection also uses the space-scoped portable Resource `{kind,name}`; it grants nothing. Never add a host Interface id, declaration resource, binding/permission/token attributes, or another write path.
 - Do not add target pools, backend managers, credentials, secrets, prices, billing, quota, accounts, capacity, SLA, or operator-policy resources.
 - A host selects and operates concrete implementations. Provider state may contain only sanitized observed evidence and outputs.

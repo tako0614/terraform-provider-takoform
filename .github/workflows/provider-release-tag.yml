@@ -84,7 +84,6 @@ jobs:
           go run ./cmd/provider-lifecycle-conformance render-matrix \
             --opentofu tofu --terraform terraform > "$RUNNER_TEMP/provider-lifecycle-matrix.json"
           go run ./cmd/standard-form-conformance candidate-publication-check
-          go run ./cmd/migration-proof
           go -C cmd/provider-release mod verify
           go -C cmd/provider-release test ./...
           go -C cmd/provider-release run . verify-source --allow-untagged-candidate

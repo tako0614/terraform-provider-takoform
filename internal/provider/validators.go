@@ -121,34 +121,6 @@ type int64AtLeastValidator struct {
 	minimum int64
 }
 
-type listSizeBetweenValidator struct {
-	minimum int
-	maximum int
-}
-
-// ListSizeBetween validates a closed portable collection cardinality.
-func ListSizeBetween(minimum, maximum int) validator.List {
-	return listSizeBetweenValidator{minimum: minimum, maximum: maximum}
-}
-
-func (v listSizeBetweenValidator) Description(_ context.Context) string {
-	return fmt.Sprintf("list must contain between %d and %d values", v.minimum, v.maximum)
-}
-
-func (v listSizeBetweenValidator) MarkdownDescription(ctx context.Context) string {
-	return v.Description(ctx)
-}
-
-func (v listSizeBetweenValidator) ValidateList(_ context.Context, req validator.ListRequest, resp *validator.ListResponse) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-	size := len(req.ConfigValue.Elements())
-	if size < v.minimum || size > v.maximum {
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid list size", v.Description(context.Background()))
-	}
-}
-
 // Int64AtLeast validates a lower bound owned by the portable Form schema.
 func Int64AtLeast(minimum int64) validator.Int64 {
 	return int64AtLeastValidator{minimum: minimum}
@@ -234,10 +206,6 @@ func (v stringTokenValidator) ValidateString(_ context.Context, req validator.St
 	}
 }
 
-type setStringsTokenValidator struct {
-	minItems int
-}
-
 type setStringsPatternValidator struct {
 	minItems    int
 	pattern     string
@@ -280,52 +248,6 @@ func (v setStringsPatternValidator) ValidateSet(ctx context.Context, req validat
 		}
 		if !matched {
 			resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", v.description)
-		}
-	}
-}
-
-// SetStringsToken validates an extensible set of non-empty capability tokens.
-// The configured host remains the authority for whether a token is executable;
-// the provider checks only portable wire syntax.
-func SetStringsToken(minItems int) validator.Set {
-	return setStringsTokenValidator{minItems: minItems}
-}
-
-func (v setStringsTokenValidator) Description(_ context.Context) string {
-	return fmt.Sprintf("at least %d non-empty token(s) without whitespace", v.minItems)
-}
-
-func (v setStringsTokenValidator) MarkdownDescription(ctx context.Context) string {
-	return v.Description(ctx)
-}
-
-func (v setStringsTokenValidator) ValidateSet(ctx context.Context, req validator.SetRequest, resp *validator.SetResponse) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-	var elems []types.String
-	resp.Diagnostics.Append(req.ConfigValue.ElementsAs(ctx, &elems, false)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if len(elems) < v.minItems {
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Too few values",
-			fmt.Sprintf("at least %d value(s) required, got %d", v.minItems, len(elems)),
-		)
-	}
-	for _, elem := range elems {
-		if elem.IsNull() || elem.IsUnknown() {
-			continue
-		}
-		value := elem.ValueString()
-		if strings.TrimSpace(value) == "" || strings.ContainsFunc(value, unicode.IsSpace) {
-			resp.Diagnostics.AddAttributeError(
-				req.Path,
-				"Invalid value",
-				fmt.Sprintf("%q must be a non-empty token without whitespace", value),
-			)
 		}
 	}
 }
@@ -444,6 +366,62 @@ func (v setStringsNonEmptyValidator) ValidateSet(ctx context.Context, req valida
 		}
 		if strings.ContainsFunc(val, unicode.IsSpace) {
 			resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", fmt.Sprintf("%q contains whitespace", val))
+		}
+	}
+}
+
+// Int64AtMost rejects a value above an inclusive portable maximum.
+func Int64AtMost(maximum int64) validator.Int64 {
+	return int64AtMostValidator{maximum: maximum}
+}
+
+type int64AtMostValidator struct{ maximum int64 }
+
+func (v int64AtMostValidator) Description(_ context.Context) string {
+	return fmt.Sprintf("value must be at most %d", v.maximum)
+}
+
+func (v int64AtMostValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v int64AtMostValidator) ValidateInt64(_ context.Context, req validator.Int64Request, resp *validator.Int64Response) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if req.ConfigValue.ValueInt64() > v.maximum {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", v.Description(context.Background()))
+	}
+}
+
+// MapKeysMatch rejects a configuration key that is not portable. Map keys are
+// held to the same grammar as declared fields so a host never has to guess
+// what an author meant by a key it cannot parse.
+func MapKeysMatch(pattern, description string) validator.Map {
+	return mapKeysPatternValidator{pattern: regexp.MustCompile(pattern), description: description}
+}
+
+type mapKeysPatternValidator struct {
+	pattern     *regexp.Regexp
+	description string
+}
+
+func (v mapKeysPatternValidator) Description(_ context.Context) string { return v.description }
+
+func (v mapKeysPatternValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v mapKeysPatternValidator) ValidateMap(ctx context.Context, req validator.MapRequest, resp *validator.MapResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	var entries map[string]string
+	resp.Diagnostics.Append(req.ConfigValue.ElementsAs(ctx, &entries, false)...)
+	for key := range entries {
+		if !v.pattern.MatchString(key) {
+			resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", v.description)
+			return
 		}
 	}
 }

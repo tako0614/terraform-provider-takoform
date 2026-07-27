@@ -188,7 +188,9 @@ func downloadSnapshot(ctx context.Context, client *githubClient, sourceRoot, out
 	if client == nil {
 		return fmt.Errorf("GitHub client is required")
 	}
-	candidatesRaw, err := os.ReadFile(filepath.Join(sourceRoot, "forms", "standard-package-set.json"))
+	// The published set is the retired generation: this command downloads and
+	// verifies bytes that already exist, never the current candidate set.
+	candidatesRaw, err := os.ReadFile(filepath.Join(sourceRoot, "forms", "retired-package-set.json"))
 	if err != nil {
 		return err
 	}

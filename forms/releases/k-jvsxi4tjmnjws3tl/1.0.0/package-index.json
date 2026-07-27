@@ -1,0 +1,50 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "MetricSink",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:6b903f73f23b24aafdab00883865361def881c37b5600ed7eb4243331dc88aa3"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 5335,
+      "digest": "sha256:53f5ae824d7fc6abcacbcc68bdb94437fe5baba500ce04841f7f3368c68e35cc"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 78,
+      "digest": "sha256:2d615120d76dcaed4ea58727481eed1e54ace48a1b80b1130d46556d9ed0d76b"
+    },
+    {
+      "path": "fixtures/negative-resolution_seconds.json",
+      "mediaType": "application/json",
+      "size": 77,
+      "digest": "sha256:29539e154eb174bc7e7e989450bddb541657ddddb06956f5dd45a5f11047bd44"
+    },
+    {
+      "path": "fixtures/negative-retention_days.json",
+      "mediaType": "application/json",
+      "size": 77,
+      "digest": "sha256:f5d45f08c1fa1efd89ba08582441d961dffb08f3a02ba87f9730a4fb23b16eae"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 145,
+      "digest": "sha256:2a47d18bad6e748815a12f1da12925d944924e20bb8fde858b739f33878d4162"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 134,
+      "digest": "sha256:66e2d3773f050c44b22e190229eb0f959f05e03900e739abb304d089bd8aaa63"
+    }
+  ]
+}

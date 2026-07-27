@@ -11,16 +11,13 @@ provider "takoform" {
   space    = "prod"
 }
 
-resource "takoform_queue" "delivery" {
-  name           = "delivery"
-  max_retries    = 5
-  max_batch_size = 25
-}
-
-output "queue_resource_version" {
-  value = takoform_queue.delivery.resource_version
+resource "takoform_queue" "example" {
+  name                      = "queue"
+  max_retries               = 5
+  message_retention_seconds = 345600
+  ordering                  = "best_effort"
 }
 
 output "queue_outputs" {
-  value = takoform_queue.delivery.outputs
+  value = takoform_queue.example.outputs
 }

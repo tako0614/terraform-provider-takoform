@@ -11,16 +11,12 @@ provider "takoform" {
   space    = "prod"
 }
 
-resource "takoform_object_bucket" "assets" {
-  name          = "assets"
-  storage_class = "standard"
-  interfaces    = ["s3_api", "signed_url"]
+resource "takoform_object_bucket" "example" {
+  name             = "object-bucket"
+  storage_class    = "standard"
+  access_protocols = ["s3_api"]
 }
 
-output "bucket_resource_version" {
-  value = takoform_object_bucket.assets.resource_version
-}
-
-output "bucket_outputs" {
-  value = takoform_object_bucket.assets.outputs
+output "object_bucket_outputs" {
+  value = takoform_object_bucket.example.outputs
 }

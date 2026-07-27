@@ -112,6 +112,8 @@ func TestLoadOfflineVerifierRequiresPinnedRetainedTrust(t *testing.T) {
 		writeRetainedTestFile(t, root, file.path, policyRaw)
 		policyRaws[file.path] = policyRaw
 	}
+	conformingHostsRaw := []byte(`{"format":"takoform.conforming-host-policy@v1","hosts":[]}`)
+	writeRetainedTestFile(t, root, canonicalConformingHostsPath, conformingHostsRaw)
 	pins := OfflineSigstorePins{
 		Format: offlineSigstorePinsFormat,
 		TrustedRoot: RetainedFile{
@@ -124,6 +126,7 @@ func TestLoadOfflineVerifierRequiresPinnedRetainedTrust(t *testing.T) {
 		ProviderReportPolicy:   RetainedFile{Path: canonicalProviderReportPolicyPath, Digest: formDigest(policyRaws[canonicalProviderReportPolicyPath])},
 		PackageIndexPolicy:     RetainedFile{Path: canonicalPackageIndexPolicyPath, Digest: formDigest(policyRaws[canonicalPackageIndexPolicyPath])},
 		RegistryReadbackPolicy: RetainedFile{Path: canonicalRegistryReadbackPolicyPath, Digest: formDigest(policyRaws[canonicalRegistryReadbackPolicyPath])},
+		ConformingHosts:        RetainedFile{Path: canonicalConformingHostsPath, Digest: formDigest(conformingHostsRaw)},
 	}
 	writeRetainedTestJSON(t, root, offlineSigstorePinsPath, pins)
 	if _, err := loadOfflineRetainedSubjectVerifier(root); err == nil || !strings.Contains(err.Error(), "pinned trusted root digest mismatch") {

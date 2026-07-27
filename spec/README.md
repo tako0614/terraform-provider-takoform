@@ -4,46 +4,46 @@ This directory is the portable specification surface for the standalone
 Takoform project. It records both the provider characterization boundary and
 the implemented data-only Form Package core.
 
+Requirement keywords, conformance classes, and what a passing check does and
+does not prove are defined in [`conformance.md`](conformance.md). How the API
+group, Form definitions, packages, and the provider are versioned — and what
+`v1alpha1` must satisfy to graduate — is in [`versioning.md`](versioning.md).
+
 Current committed surfaces:
 
-- [`host-api/`](host-api/) — the minimal discovery, capability, preview, apply, observe, and delete contract used by the provider candidate;
+- [`conformance.md`](conformance.md) — requirement keywords and the four conformance classes;
+- [`versioning.md`](versioning.md) — independent version streams, stability, and deprecation;
+- [`schemas/`](schemas/) — the normative machine-readable schemas;
+- [`host-api/`](host-api/) — the discovery, availability, preview, apply, read, import, observe, refresh, and delete contract, with [`operations.json`](host-api/operations.json) as its machine-readable form;
 - [`form-definition/`](form-definition/) — exact FormRef and data-only Form Definition contract;
 - [`form-package/`](form-package/) — package-index identity, closed payload rules, and local verifier boundary;
 - [`interface-declaration/`](interface-declaration/) — open `(name, version)` runtime interface descriptors, exact non-secret documents, and deterministic input mappings;
-- [`data-indexed/`](data-indexed/) — bounded primary-key and declared-index operation contract used by `SQLDatabase@2.0.0`;
+- [`data-indexed/`](data-indexed/) — a proposed bounded key and declared-index operation contract for `data.indexed@1`, required by no Form in this release;
 - [`trust/`](trust/) — the D-08 provider/Form Package trust decision and its machine-readable fail-closed profile;
 - [`../schemas/host-discovery.schema.json`](../schemas/host-discovery.schema.json) — machine-readable discovery validation;
-- [`../forms/README.md`](../forms/README.md) — the exact ten-kind Stable set and retained legacy inventory;
+- [`../forms/README.md`](../forms/README.md) — the generated portable Form inventory;
 - [`../conformance/README.md`](../conformance/README.md) — current evidence and the next fixture boundary.
 
 ## Status
 
 The FormRef, Form Definition, package-index, revocation, and cumulative
-revocation-checkpoint schemas, RFC
-8785/I-JSON library, closed local verifier, positive/negative corpus, protected
-keyless Sigstore release lane, and signed append-only checkpoint delivery lane
-are implemented. The ten `1.0.0` Form Packages have real immutable releases,
-and their retained package indexes pass offline production-root/publisher-policy
-verification. No revocation checkpoint or admission activation has been
-published. Remote host fetch/install, host publisher-policy verification,
-activation, and revocation enforcement remain consumer/operator work. The
-current ten provider resources pin independent exact `1.0.1 / standard`
-definition candidates with local structural verification. Their inventory is
-`structural-candidate`, not `portable-standard`; definition status pins proposed
-final bytes and does not perform admission. The historical
-`0.0.0-legacy.1` packages remain frozen compatibility candidates and were not
-renamed or promoted. Passed Takosumi host and Terraform provider lifecycle
-evidence, portable negative wire-code coverage, Registry installation/readback,
-signed admission evidence, and live revocation-chain proof are still external
-requirements. Package signatures and immutable tags are now retained
-publication evidence only. Authenticated host and provider evidence is the only
-path to `portable-standard` classification.
+revocation-checkpoint schemas, the RFC 8785/I-JSON library, the closed local
+verifier, the positive/negative corpus, the protected keyless Sigstore release
+lane, and the signed append-only checkpoint delivery lane are implemented.
 
-The same `SQLDatabase` provider resource can select the independent
-`2.0.0 / standard` successor candidate by configuring bounded `tables`. That
-package requires `data.indexed@1`, remains unpublished and externally
-unadmitted, and does not replace the historical `1.0.1` default identity. Its
-portable contract pins closed request/response unions, exact 200/409 results,
-ascending canonical ordering, and expiring tamper-evident live-keyset cursors.
+The portable Form set was rebuilt as intent-shaped kinds declared once in
+`internal/formcatalog`; [`../forms/README.md`](../forms/README.md) is the
+generated inventory. That set is `structural-candidate`: packages verify
+locally, the provider derives the same schema from the same declaration, and
+the protocol lifecycle runs against an in-process host. None of that admits a
+Form. Signed release bytes, a conforming host's signed lifecycle report,
+Registry installation and readback, and signed admission evidence are external
+requirements.
+
+The previously published generation is retired, not erased. Its immutable
+`1.0.1` releases and admission evidence stay verifiable offline through
+[`../forms/retired-package-set.json`](../forms/retired-package-set.json), and
+this build refuses to reissue their proofs rather than restamp them with a new
+provider identity.
 
 The project identity is `forms.takoform.com/v1alpha1`; the Terraform provider identity is `registry.terraform.io/tako0614/takoform`.

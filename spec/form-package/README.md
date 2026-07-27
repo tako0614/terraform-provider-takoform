@@ -1,18 +1,19 @@
 # Data-only Form Package v1alpha1
 
 A Form Package is a closed local directory with a root `package-index.json` and
-exactly the payload files listed by that index. The normative Draft 2020-12
+exactly the payload files listed by that index. Requirement keywords are used
+as described in [`../conformance.md`](../conformance.md). The normative Draft 2020-12
 index schema is
 [`../../formpackage/schemas/package-index.schema.json`](../../formpackage/schemas/package-index.schema.json).
 
-One package contains exactly one Form Definition and therefore exactly one
+One package MUST contain exactly one Form Definition and therefore exactly one
 FormRef. There is no `packageId` and no multi-form `definitions` collection in
 this contract. A compatibility set, catalog, or host migration map is an
 external data object that points to multiple exact `(FormRef, packageDigest)`
-pairs; it is not a wider Form Package. For example, extracting the current ten
-provider candidates requires ten independent packages, using valid SemVer such
-as `0.0.0-legacy.1`, rather than one package carrying ten definitions or a
-non-SemVer `legacy-v1` version.
+pairs; it is not a wider Form Package. For example, publishing the current
+provider candidate set requires one independent package per Form, each with a
+valid SemVer `packageVersion`, rather than one package carrying every
+definition or a non-SemVer collection version.
 
 ## Index and identity
 
@@ -25,8 +26,8 @@ lowercase `sha256:` digest over the exact payload bytes.
 
 The package's semantic identity is SHA-256 over the RFC 8785 canonical index.
 The index does not list itself. The `FormRef.schemaDigest` separately covers
-the RFC 8785 canonical Form Definition. An archive is only transport and its
-headers or compression do not contribute to either identity.
+the RFC 8785 canonical Form Definition. An archive is only transport: its headers and compression MUST NOT contribute
+to either identity.
 
 `packageDigest` is the verifier result used by an external catalog or mapping;
 it is not a self-referential field inside `package-index.json`.

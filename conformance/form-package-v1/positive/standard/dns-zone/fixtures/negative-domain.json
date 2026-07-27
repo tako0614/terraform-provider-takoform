@@ -1,0 +1,5 @@
+{
+  "defaultTtlSeconds": 3600,
+  "domain": "not a domain",
+  "name": "dns-zone"
+}
