@@ -1,0 +1,5 @@
+{
+  "entityClass": "not a class",
+  "migrationTag": "v1",
+  "name": "stateful-entity"
+}

@@ -9,7 +9,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 func TestVersionedTypedReadsGetFenceThenObserveAndMapDrift(t *testing.T) {
@@ -91,12 +99,10 @@ func TestVersionedTypedReadsStopOnExactGet404(t *testing.T) {
 	}
 }
 
+// typedResourceKinds exercises the read path against every declared Form, so
+// a new catalogue entry is covered the moment it exists.
 func typedResourceKinds() []string {
-	return []string{
-		client.KindEdgeWorker, client.KindObjectBucket, client.KindKVStore, client.KindQueue,
-		client.KindSQLDatabase, client.KindContainerService, client.KindVectorIndex,
-		client.KindDurableWorkflow, client.KindStatefulActorNamespace, client.KindSchedule,
-	}
+	return formcatalog.KindTokens()
 }
 
 func providerObservedResource(kind string, form client.InstalledFormReference, version string) client.Resource {
@@ -110,22 +116,24 @@ func providerObservedResource(kind string, form client.InstalledFormReference, v
 
 func assertTypedDriftState(t *testing.T, kind string, observed *client.Resource, want string) {
 	t.Helper()
-	if kind == client.KindEdgeWorker {
-		model := edgeWorkerModel{}
-		if diags := applyEdgeWorkerStatus(context.Background(), observed, "prod", &model); diags.HasError() {
-			t.Fatalf("status diagnostics: %v", diags)
-		}
-		if model.DriftStatus.ValueString() != want {
-			t.Fatalf("drift_status = %q, want %q", model.DriftStatus.ValueString(), want)
-		}
-		return
+	declared, ok := formcatalog.ByKind(kind)
+	if !ok {
+		t.Fatalf("no declared Form for %s", kind)
 	}
-	model := serviceShapeModel{}
-	if diags := applyServiceShapeStatus(context.Background(), observed, kind, "prod", &model); diags.HasError() {
+	resource := &formResource{kind: declared, data: &providerData{defaultSpace: "prod"}}
+	var response frameworkresource.SchemaResponse
+	resource.Schema(context.Background(), frameworkresource.SchemaRequest{}, &response)
+	state := tfsdk.State{Schema: response.Schema, Raw: tftypes.NewValue(response.Schema.Type().TerraformType(context.Background()), nil)}
+	values := formValues{Fields: map[string]attr.Value{}, Artifact: nullArtifactSourceValues()}
+	if diags := resource.setState(context.Background(), &state, observed, "prod", values); diags.HasError() {
 		t.Fatalf("status diagnostics: %v", diags)
 	}
-	if model.DriftStatus.ValueString() != want {
-		t.Fatalf("drift_status = %q, want %q", model.DriftStatus.ValueString(), want)
+	var drift types.String
+	if diags := state.GetAttribute(context.Background(), path.Root("drift_status"), &drift); diags.HasError() {
+		t.Fatalf("read drift_status: %v", diags)
+	}
+	if drift.ValueString() != want {
+		t.Fatalf("drift_status = %q, want %q", drift.ValueString(), want)
 	}
 }
 

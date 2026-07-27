@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "ContainerRegistry/container-registry",
+  "kind": "ContainerRegistry",
+  "name": "container-registry",
+  "portability": "portable"
+}

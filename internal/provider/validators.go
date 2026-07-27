@@ -447,3 +447,27 @@ func (v setStringsNonEmptyValidator) ValidateSet(ctx context.Context, req valida
 		}
 	}
 }
+
+// Int64AtMost rejects a value above an inclusive portable maximum.
+func Int64AtMost(maximum int64) validator.Int64 {
+	return int64AtMostValidator{maximum: maximum}
+}
+
+type int64AtMostValidator struct{ maximum int64 }
+
+func (v int64AtMostValidator) Description(_ context.Context) string {
+	return fmt.Sprintf("value must be at most %d", v.maximum)
+}
+
+func (v int64AtMostValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v int64AtMostValidator) ValidateInt64(_ context.Context, req validator.Int64Request, resp *validator.Int64Response) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if req.ConfigValue.ValueInt64() > v.maximum {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", v.Description(context.Background()))
+	}
+}

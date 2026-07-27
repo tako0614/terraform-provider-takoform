@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "ObjectLifecycleRule/object-lifecycle-rule",
+  "kind": "ObjectLifecycleRule",
+  "name": "object-lifecycle-rule",
+  "portability": "portable"
+}

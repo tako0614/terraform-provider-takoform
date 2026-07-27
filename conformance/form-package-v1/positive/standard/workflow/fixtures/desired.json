@@ -1,0 +1,10 @@
+{
+  "entrypoint": "IngestWorkflow",
+  "initialBackoffSeconds": 5,
+  "maxAttempts": 3,
+  "name": "workflow",
+  "source": {
+    "artifactRef": "portable-conformance/v1/workflow.mjs",
+    "artifactSha256": "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5"
+  }
+}

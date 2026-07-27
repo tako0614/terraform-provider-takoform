@@ -1,0 +1,5 @@
+{
+  "name": "metric-sink",
+  "resolutionSeconds": 60,
+  "retentionDays": 90
+}

@@ -1,0 +1,44 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "TlsCertificate",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:7116861d19aabeee2646896e63d55ed98ed964c177cdda860e0c9b6605b047d6"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 4368,
+      "digest": "sha256:3fb24c6f5ee76a574355fddf89ba368e20d9ca55e526a048292eea0ac90e80a4"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 119,
+      "digest": "sha256:7e424fc3f4d7fc3e225427adeebf6a16707214630dcfa2caed6a2c51deb1b27b"
+    },
+    {
+      "path": "fixtures/negative.json",
+      "mediaType": "application/json",
+      "size": 117,
+      "digest": "sha256:97f6e2fa6f2c39a2ece364413d58d98783d8cef79a3fb5d4dec00bf274f4fdeb"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 153,
+      "digest": "sha256:ed23d592360eadefbc9f83a2e323784ddca06ba316273633b60fd6401e9eb55b"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 150,
+      "digest": "sha256:eba22b0cca92c9f33f4f83f9f5201e1333d8b4f4a1310d76dea0a814f17cf882"
+    }
+  ]
+}

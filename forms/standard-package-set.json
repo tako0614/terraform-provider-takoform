@@ -1,8 +1,7 @@
 {
   "format": "takoform.standard-package-set@v1",
   "classification": "structural-candidate",
-  "definitionVersion": "1.0.1",
-  "packageVersion": "1.0.1",
+  "generation": "portable-v1",
   "localConformance": "structural-only",
   "publicationReady": false,
   "admissionStatus": "external-required",
@@ -18,95 +17,17 @@
   "conformanceManifest": "conformance/form-package-v1/manifest.json",
   "packages": [
     {
-      "kind": "EdgeWorker",
-      "path": "conformance/form-package-v1/positive/standard/edge-worker",
+      "kind": "HttpService",
+      "path": "conformance/form-package-v1/positive/standard/http-service",
       "admissionStatus": "external-required",
-      "conformanceCase": "standard-edge-worker-package",
+      "conformanceCase": "standard-http-service-package",
       "formRef": {
         "apiVersion": "forms.takoform.com/v1alpha1",
-        "kind": "EdgeWorker",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:1d20c21cad95deec873359e218729be53ceaf0a8abfbdcc860be2a4ac0c7c722"
+        "kind": "HttpService",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:1134e5eae30c3113d415c9a2e02f422bef30a444d2212deb14c2bdd46ceb84da"
       },
-      "packageDigest": "sha256:63e87939660c898837290f0cc8e64e0098106eb4e7cba97a984762d2beaaabb3"
-    },
-    {
-      "kind": "ObjectBucket",
-      "path": "conformance/form-package-v1/positive/standard/object-bucket",
-      "admissionStatus": "external-required",
-      "conformanceCase": "standard-object-bucket-package",
-      "formRef": {
-        "apiVersion": "forms.takoform.com/v1alpha1",
-        "kind": "ObjectBucket",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:4584b9233ef23231037d941c652eedd67c184deb9e36bec14d41151a28b7c2b4"
-      },
-      "packageDigest": "sha256:00f3ed05da56cc795a42043112933ef00e97b531ed123e0c2df3cce70bd1e391"
-    },
-    {
-      "kind": "KVStore",
-      "path": "conformance/form-package-v1/positive/standard/kv-store",
-      "admissionStatus": "external-required",
-      "conformanceCase": "standard-kv-store-package",
-      "formRef": {
-        "apiVersion": "forms.takoform.com/v1alpha1",
-        "kind": "KVStore",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:137e97cbce057aac1ef8e9af3f00bb9ca3a3967131bf2d920c252d5249b6e96f"
-      },
-      "packageDigest": "sha256:964c0bdc7445440f93f2ee6318eb9bf6356f8d749d12a7eb904e90141e312dca"
-    },
-    {
-      "kind": "SQLDatabase",
-      "path": "conformance/form-package-v1/positive/standard/sql-database",
-      "admissionStatus": "external-required",
-      "conformanceCase": "standard-sql-database-package",
-      "formRef": {
-        "apiVersion": "forms.takoform.com/v1alpha1",
-        "kind": "SQLDatabase",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:ecd201ad6a2156dabed0f1afbbea242c3f994fce37d2edf6f676342cd6937246"
-      },
-      "packageDigest": "sha256:714a6c3de551598788b25e208783c08b7e8059f10fb96873f5a34b321075c401"
-    },
-    {
-      "kind": "Queue",
-      "path": "conformance/form-package-v1/positive/standard/queue",
-      "admissionStatus": "external-required",
-      "conformanceCase": "standard-queue-package",
-      "formRef": {
-        "apiVersion": "forms.takoform.com/v1alpha1",
-        "kind": "Queue",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:93308869c7fd95654ee5009efe329d43452d11c59d36f61b5fc79b0a2fbe4646"
-      },
-      "packageDigest": "sha256:609958d46da6f74f3a29e0940fb628e9c455c353d41d9457791c5859360ad8cc"
-    },
-    {
-      "kind": "VectorIndex",
-      "path": "conformance/form-package-v1/positive/standard/vector-index",
-      "admissionStatus": "external-required",
-      "conformanceCase": "standard-vector-index-package",
-      "formRef": {
-        "apiVersion": "forms.takoform.com/v1alpha1",
-        "kind": "VectorIndex",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:f0db5c150198bec614485074cc10c8ee1533edddf11a7374f1aaa7cdebc77fea"
-      },
-      "packageDigest": "sha256:adffdb7d630eb44b03c8f4cd4a8ef2295e66318ea81b1fa88be6dfdd20dd429b"
-    },
-    {
-      "kind": "DurableWorkflow",
-      "path": "conformance/form-package-v1/positive/standard/durable-workflow",
-      "admissionStatus": "external-required",
-      "conformanceCase": "standard-durable-workflow-package",
-      "formRef": {
-        "apiVersion": "forms.takoform.com/v1alpha1",
-        "kind": "DurableWorkflow",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:9b6e5e0d28d8ea35527ae20756c9ed1eb57907e93ff6a44ae300dbbf72b80d45"
-      },
-      "packageDigest": "sha256:05db4bd34b3361eb933ff284f40c1dd17a9f4025c5b5a2ade56a838996a69b90"
+      "packageDigest": "sha256:ae531ce949ef1a21e774d5fe5eb8fea21d38685ad9362f59ec2cb2e6c52ae47b"
     },
     {
       "kind": "ContainerService",
@@ -116,23 +37,62 @@
       "formRef": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "ContainerService",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:f39586a6ca97ee474b3e130b0a2a57ba81d40282632cd44fa65631cfbd17c7cf"
+        "definitionVersion": "2.0.0",
+        "schemaDigest": "sha256:51bc955845beac06f7a1621b997e02ac95ac254826017ba2f624a0292c01633b"
       },
-      "packageDigest": "sha256:5adfb7dd11a3f462bb2bad94ba9abbcb097c92afa0987d9cc1fa0783d00f3b05"
+      "packageDigest": "sha256:87e43d04f95e81658e32cd595af0ad4ebfbbe2be84945ad4f693886d9b15399f"
     },
     {
-      "kind": "StatefulActorNamespace",
-      "path": "conformance/form-package-v1/positive/standard/stateful-actor-namespace",
+      "kind": "ComputeInstance",
+      "path": "conformance/form-package-v1/positive/standard/compute-instance",
       "admissionStatus": "external-required",
-      "conformanceCase": "standard-stateful-actor-namespace-package",
+      "conformanceCase": "standard-compute-instance-package",
       "formRef": {
         "apiVersion": "forms.takoform.com/v1alpha1",
-        "kind": "StatefulActorNamespace",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:c82fa8458e333ce20160f052c255ee94636219bbdea6a46d4730852411050be4"
+        "kind": "ComputeInstance",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:fd6172299535387c7955c849604cd788da013e58c25a8d46057495e1ae055f56"
       },
-      "packageDigest": "sha256:d6bd34aac538485161ff9045c8a8f9d8dc6193f28f1667cc7bef84a85dbf85d7"
+      "packageDigest": "sha256:fa227dede1e6e410a880b169f7bb840d3bf2b405e9923a9596784aca0b9f4a25"
+    },
+    {
+      "kind": "StaticSite",
+      "path": "conformance/form-package-v1/positive/standard/static-site",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-static-site-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "StaticSite",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:beaf832f2d0e6eff6a9a6ebd5bbfc540540d248b140df30b826f94fd76a59f57"
+      },
+      "packageDigest": "sha256:842b76eb8bbe8a8849641f45add245bc4452e65106454af86ab3daa82b6777bf"
+    },
+    {
+      "kind": "Workflow",
+      "path": "conformance/form-package-v1/positive/standard/workflow",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-workflow-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "Workflow",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:edb6ac196c4fc16826e7fc00460572155d04a90bb1524ba49d79b38325412b34"
+      },
+      "packageDigest": "sha256:a5d9645c076566392019868f9cbe3b1a58251f5532cf94d2bbf39e03a7bc8cd1"
+    },
+    {
+      "kind": "StatefulEntity",
+      "path": "conformance/form-package-v1/positive/standard/stateful-entity",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-stateful-entity-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "StatefulEntity",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:d9e445d45733965b9ee8a85aac5eae82855c272d21d46f42e2de02f0bced68b1"
+      },
+      "packageDigest": "sha256:132d10b7edabd7302dbf2d75c0968011f8ec80bb92d31c7ebbba6057b3f8e0d4"
     },
     {
       "kind": "Schedule",
@@ -142,10 +102,361 @@
       "formRef": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "Schedule",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:b44b0e785453c32133c53bfded6c75d1e95bd5860bdf54d874bb4b330a4c2508"
+        "definitionVersion": "2.0.0",
+        "schemaDigest": "sha256:0da58b51a9c1d8592e01184d052dc4bb43d4649201151645053f53486215967a"
       },
-      "packageDigest": "sha256:ebf03b9e2d90b4fe0444e6dfe824758637639a79e0e267616258e7b28e8d690e"
+      "packageDigest": "sha256:d2a45b60786f8c26466a7b5a0591a42273b30d388a28cf5915f7910374369b43"
+    },
+    {
+      "kind": "ObjectBucket",
+      "path": "conformance/form-package-v1/positive/standard/object-bucket",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-object-bucket-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "ObjectBucket",
+        "definitionVersion": "2.0.0",
+        "schemaDigest": "sha256:277939bb9719c8571fd4f9a5c943e2c196bdf7e5a3371a7f9ff6eb04b9f5ff5d"
+      },
+      "packageDigest": "sha256:bd706bf85fb15b0c2c30d82cdfe30e41cdff4cd3883a80a892f17a50451d3e3e"
+    },
+    {
+      "kind": "ObjectLifecycleRule",
+      "path": "conformance/form-package-v1/positive/standard/object-lifecycle-rule",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-object-lifecycle-rule-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "ObjectLifecycleRule",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:faad8fa5c7a3ca7526e7f77931b8111744f5b53e3a7bd7c19b1bc2f7729e65fa"
+      },
+      "packageDigest": "sha256:e240f3f4bd380bcf17deac26242fa42446af7fc4a3aa30e480223de8ba7e7697"
+    },
+    {
+      "kind": "KeyValueStore",
+      "path": "conformance/form-package-v1/positive/standard/key-value-store",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-key-value-store-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "KeyValueStore",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:9c0c9e11fe5610aec7cf06f7f9a862fc07d4d81ee308d17ad07c0823cb7faae0"
+      },
+      "packageDigest": "sha256:bf43a673db7b813f1d42a9b5e8743b36796e17dadb937745f145be827ac04ca3"
+    },
+    {
+      "kind": "CacheCluster",
+      "path": "conformance/form-package-v1/positive/standard/cache-cluster",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-cache-cluster-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "CacheCluster",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:1b881f81ad5a94d0f69be46d0079ef8b0458ca16998b77d42306bbe7e036cdc7"
+      },
+      "packageDigest": "sha256:806cd8f31e3f3a7870589638b4a196c0ba6434001dfa17b493981d43538c6aaa"
+    },
+    {
+      "kind": "RelationalDatabase",
+      "path": "conformance/form-package-v1/positive/standard/relational-database",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-relational-database-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "RelationalDatabase",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:4a97b7f9eead3d7087ec0a20061fa2ce335d5ff7a25432d834d6b82aeb9cf7e6"
+      },
+      "packageDigest": "sha256:804d94de59f47e92048ceaa0752fae94c9f554261f2904c09c74e654500a8fff"
+    },
+    {
+      "kind": "IndexedStore",
+      "path": "conformance/form-package-v1/positive/standard/indexed-store",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-indexed-store-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "IndexedStore",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:435fc50107ac777bebade69a7c37baf21a0728d5a5d81609a14391a66bff6c23"
+      },
+      "packageDigest": "sha256:10580e67e26389cea50cf5870bdc5210e26bfd8f2fa517005b574235f7807d5d"
+    },
+    {
+      "kind": "Queue",
+      "path": "conformance/form-package-v1/positive/standard/queue",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-queue-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "Queue",
+        "definitionVersion": "2.0.0",
+        "schemaDigest": "sha256:62c6a8ff7e0eb86445b2dc466dae8bce954d26a445f19793eb6c7846e86ed586"
+      },
+      "packageDigest": "sha256:4b28b0cd93b67b1153892cd3506bb0b3ab31bb6033c936fa824208cb3ace0057"
+    },
+    {
+      "kind": "StreamTopic",
+      "path": "conformance/form-package-v1/positive/standard/stream-topic",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-stream-topic-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "StreamTopic",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:e9c09400ac65939e334519a40ada4b7c3caca8e351ba55a9c2ea837362cd0553"
+      },
+      "packageDigest": "sha256:a18472dba0f3962c1fcf1056c9f0c272231458b4916edc6c3eeebebcb9ddb5c6"
+    },
+    {
+      "kind": "SearchIndex",
+      "path": "conformance/form-package-v1/positive/standard/search-index",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-search-index-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "SearchIndex",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:6bda890d38478af930c91f788a45822dea86c9c8fd2afe7363b576d49eaf5bf6"
+      },
+      "packageDigest": "sha256:07f1cf4ad317fb892608f9fcfd8cfd33329834ab5da0abe28efe7d79d2c8d7aa"
+    },
+    {
+      "kind": "VectorIndex",
+      "path": "conformance/form-package-v1/positive/standard/vector-index",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-vector-index-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "VectorIndex",
+        "definitionVersion": "2.0.0",
+        "schemaDigest": "sha256:a9bc77ec2f5f2b03fb5abb53ee1ec8070aa6240bf4eaf3d5e48f5d80235d61ed"
+      },
+      "packageDigest": "sha256:ef87dcac2c4762e21bcaa08de65b30b796d82d5cf7947df75d64fbce3496c01d"
+    },
+    {
+      "kind": "AnalyticsDataset",
+      "path": "conformance/form-package-v1/positive/standard/analytics-dataset",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-analytics-dataset-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "AnalyticsDataset",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:a8fa22d648505ac2adf8dfdceb6d27498d4d8538aee1c275ec51ecb2df6c2d5d"
+      },
+      "packageDigest": "sha256:734206c357201bb972be07739cea20172dcfb7276e41e44e2922936acbb4c1b6"
+    },
+    {
+      "kind": "ModelEndpoint",
+      "path": "conformance/form-package-v1/positive/standard/model-endpoint",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-model-endpoint-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "ModelEndpoint",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:64c8c7db865f1051430d211657c08f76e3fe7e2a4a059955ea325c226e615bbb"
+      },
+      "packageDigest": "sha256:110e53abcd338805e99f258890a7a56151e3a86b958e82cdb26423b508228527"
+    },
+    {
+      "kind": "DnsZone",
+      "path": "conformance/form-package-v1/positive/standard/dns-zone",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-dns-zone-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "DnsZone",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:3e055c29f3a026795572ca2de4b7a1b9e248f5cbb9b100127f3c0822c2f38839"
+      },
+      "packageDigest": "sha256:6c15984959312bb53d332b1ad35ae65d6d6a3e35e3535088ad875953b16afd7d"
+    },
+    {
+      "kind": "DnsRecord",
+      "path": "conformance/form-package-v1/positive/standard/dns-record",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-dns-record-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "DnsRecord",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:94aad9abc8989db915f67a5bf048a3f15ff5a72b8f27ea16074151f216a7e71e"
+      },
+      "packageDigest": "sha256:833f36253eeb5b1479c1c037dcccd3df45efbffc0b736c724ba822b4b1afe6f2"
+    },
+    {
+      "kind": "TlsCertificate",
+      "path": "conformance/form-package-v1/positive/standard/tls-certificate",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-tls-certificate-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "TlsCertificate",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:7116861d19aabeee2646896e63d55ed98ed964c177cdda860e0c9b6605b047d6"
+      },
+      "packageDigest": "sha256:1f4d5add8661f7f95143393b4829797674ec7c627f1e73fac9f0f1c885d8e501"
+    },
+    {
+      "kind": "HttpRoute",
+      "path": "conformance/form-package-v1/positive/standard/http-route",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-http-route-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "HttpRoute",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:086023eb3a23684c20ee5789291b3e32002c1dab65a0d2eab626ecaccf4abbd0"
+      },
+      "packageDigest": "sha256:04309a2f73d8d3ba6d37db574d597d0971560574412ff31e777bff3f5a218a3b"
+    },
+    {
+      "kind": "LoadBalancer",
+      "path": "conformance/form-package-v1/positive/standard/load-balancer",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-load-balancer-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "LoadBalancer",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:650a14470e1638850f0671e2b506307739832fbaa2ef6bd86fa5b538f16f7575"
+      },
+      "packageDigest": "sha256:49fcee90a57ece8874adfc40687a551d786fa19cda4f41def9fb0e65d00bc8e6"
+    },
+    {
+      "kind": "PrivateNetwork",
+      "path": "conformance/form-package-v1/positive/standard/private-network",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-private-network-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "PrivateNetwork",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:ecebd28ab32a22559e8fd35e92a6c43d4a91b664fadb6fc166a10d4cdafbaeaa"
+      },
+      "packageDigest": "sha256:025efead7b5f69fe08b97fe6653016a82ba603c13472614df9b132dd569ede81"
+    },
+    {
+      "kind": "ContainerRegistry",
+      "path": "conformance/form-package-v1/positive/standard/container-registry",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-container-registry-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "ContainerRegistry",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:3847d37dd2f73a980a133b431a40221e7e5cc26a6428a3ce8ac9ac864cceefc5"
+      },
+      "packageDigest": "sha256:f1fa9b90ce061562d877468d5004ac8bee1d677caa007fcea8a0dc8af16efbf0"
+    },
+    {
+      "kind": "LogSink",
+      "path": "conformance/form-package-v1/positive/standard/log-sink",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-log-sink-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "LogSink",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:8e3f57e1cc8673b57e29f1e60b05055147de703642e0e0a0d9b88066500d215d"
+      },
+      "packageDigest": "sha256:0d1a715d1c007b10941ab5601b35f26649366860b115691056c43b1622d176b8"
+    },
+    {
+      "kind": "MetricSink",
+      "path": "conformance/form-package-v1/positive/standard/metric-sink",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-metric-sink-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "MetricSink",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:fb346e31893c08fb27507ab48a3fcaf864c9a6a4e4d111d74b7e69fb1d8fa275"
+      },
+      "packageDigest": "sha256:25e95bc5bda05dba3e024ff0402c1982ababa4b5d3be648bbfdafdc1da49da5b"
+    },
+    {
+      "kind": "EmailSender",
+      "path": "conformance/form-package-v1/positive/standard/email-sender",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-email-sender-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "EmailSender",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:459fec36f571d371bd600e7e48c5c26338678de53db322fadeb2adcabb8ad845"
+      },
+      "packageDigest": "sha256:3d6eda58e496a4a802e83e4e0e5879d474159d666e7d833d7a2884b8a52338b4"
+    },
+    {
+      "kind": "WebhookEndpoint",
+      "path": "conformance/form-package-v1/positive/standard/webhook-endpoint",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-webhook-endpoint-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "WebhookEndpoint",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:9c993ff6d15d1ebade5ae5cc27dc1e9f69f16ee9ea27dcbdabac000e6ceec8c8"
+      },
+      "packageDigest": "sha256:00e01bbccc06f2ce0aaf4d56ac1842f59b183a530efc20333b7434d28ff9f4c4"
+    },
+    {
+      "kind": "IdentityClient",
+      "path": "conformance/form-package-v1/positive/standard/identity-client",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-identity-client-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "IdentityClient",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:ceadfbbb3a0d7cd18a9122464eeb73b2b96c7c90705d8f13c2f395b168905ad6"
+      },
+      "packageDigest": "sha256:e153f7d3ccb19278dc3e9e734d7c8ba2664c8ea16ca419fc5d8dd8e67fa0a37a"
+    },
+    {
+      "kind": "FeatureFlag",
+      "path": "conformance/form-package-v1/positive/standard/feature-flag",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-feature-flag-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "FeatureFlag",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:a77a935e43a5a8cc7903a9da5af0c8d984045bc7f915a81a62d57e4672a702a6"
+      },
+      "packageDigest": "sha256:3df436636b736b780ab8a40050573f121db48bfae6c009ef50b014a33cfeb906"
+    },
+    {
+      "kind": "RateLimitPolicy",
+      "path": "conformance/form-package-v1/positive/standard/rate-limit-policy",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-rate-limit-policy-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "RateLimitPolicy",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:46f489d30d169cbd7bdfe5c62683fb574b7fe66b79505c5cdc324bd9d0c1214d"
+      },
+      "packageDigest": "sha256:a347a42da633aee29b2ee7e82ffc76cac0c2cd541e3473e1ff53343fb5d11ae4"
+    },
+    {
+      "kind": "BackupPolicy",
+      "path": "conformance/form-package-v1/positive/standard/backup-policy",
+      "admissionStatus": "external-required",
+      "conformanceCase": "standard-backup-policy-package",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "BackupPolicy",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:b6c54ab806778a07639e6bf63cdb2e886abca3974369c7573a1ee83ef51b7a03"
+      },
+      "packageDigest": "sha256:dc492d7ae0545c632f0c06f1fb3cece48af838b961b6f1a4569ea2bfcbfeea29"
     }
   ]
 }

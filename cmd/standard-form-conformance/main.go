@@ -21,9 +21,7 @@ func main() {
 	} else if os.Args[1] == "verify" {
 		err = standardforms.Verify(".")
 	} else if os.Args[1] == "materializability-check" {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		err = standardforms.VerifyMaterializationReadback(ctx, ".", &http.Client{Timeout: 30 * time.Second})
+		err = standardforms.VerifyMaterializableCandidate(".")
 	} else if os.Args[1] == "candidate-publication-check" {
 		err = standardforms.VerifyCandidatePublication(".")
 	} else if os.Args[1] == "published-package-check" {

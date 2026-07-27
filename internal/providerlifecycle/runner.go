@@ -17,8 +17,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/characterization"
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
 )
 
@@ -124,17 +124,19 @@ type resourceCase struct {
 	Name         string
 }
 
-var resourceCases = []resourceCase{
-	{client.KindEdgeWorker, "takoform_edge_worker", "takoform_edge_worker.api", "api"},
-	{client.KindObjectBucket, "takoform_object_bucket", "takoform_object_bucket.assets", "assets"},
-	{client.KindKVStore, "takoform_kv_store", "takoform_kv_store.cache", "cache"},
-	{client.KindQueue, "takoform_queue", "takoform_queue.delivery", "delivery"},
-	{client.KindSQLDatabase, "takoform_sql_database", "takoform_sql_database.main", "main"},
-	{client.KindContainerService, "takoform_container_service", "takoform_container_service.agent", "agent"},
-	{client.KindVectorIndex, "takoform_vector_index", "takoform_vector_index.embeddings", "embeddings"},
-	{client.KindDurableWorkflow, "takoform_durable_workflow", "takoform_durable_workflow.ingest", "ingest"},
-	{client.KindStatefulActorNamespace, "takoform_stateful_actor_namespace", "takoform_stateful_actor_namespace.rooms", "rooms"},
-	{client.KindSchedule, "takoform_schedule", "takoform_schedule.nightly_ingest", "nightly-ingest"},
+// resourceCases is derived from the declared Form set so a new catalogue
+// entry is exercised by the protocol lifecycle without a second list to keep
+// in step.
+var resourceCases = declaredResourceCases()
+
+func declaredResourceCases() []resourceCase {
+	cases := make([]resourceCase, 0, len(formcatalog.Kinds))
+	for _, kind := range formcatalog.Kinds {
+		name := kind.FixtureName()
+		address := kind.ResourceType + "." + strings.ReplaceAll(name, "-", "_")
+		cases = append(cases, resourceCase{kind.Kind, kind.ResourceType, address, name})
+	}
+	return cases
 }
 
 func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
@@ -254,13 +256,13 @@ func run(ctx context.Context, repoRoot, cliPath, installationSource string) (Rep
 	host.markDriftStateVerified()
 	host.setDrift(false)
 
-	host.setSubstitution(client.KindObjectBucket, "name")
+	host.setSubstitution(resourceCases[0].Kind, "name")
 	negativeOutput, negativeErr := terraformRun("plan", "-refresh-only", "-input=false", "-no-color")
 	host.setSubstitution("", "")
 	if negativeErr == nil || !strings.Contains(negativeOutput, "changed the requested Resource name or space") {
 		return Report{}, fmt.Errorf("identity-substitution negative fixture was not rejected\n%s", negativeOutput)
 	}
-	host.setSubstitution(client.KindKVStore, "packageDigest")
+	host.setSubstitution(resourceCases[1].Kind, "packageDigest")
 	negativeFormOutput, negativeFormErr := terraformRun("plan", "-refresh-only", "-input=false", "-no-color")
 	host.setSubstitution("", "")
 	if negativeFormErr == nil || !strings.Contains(negativeFormOutput, "changed the exact FormRef/package identity") {
@@ -348,8 +350,8 @@ func validateReport(report Report, installationSource string) error {
 		}
 	}
 	expectedNegative := map[string]string{
-		"response-name-substitution-rejected":           client.KindObjectBucket,
-		"response-package-digest-substitution-rejected": client.KindKVStore,
+		"response-name-substitution-rejected":           resourceCases[0].Kind,
+		"response-package-digest-substitution-rejected": resourceCases[1].Kind,
 	}
 	if len(report.NegativeChecks) != len(expectedNegative) {
 		return errors.New("provider lifecycle negative fixture is incomplete")
@@ -365,15 +367,16 @@ func validateReport(report Report, installationSource string) error {
 		}
 		seenNegative[evidence.Name] = struct{}{}
 	}
-	if len(report.ImmutableReplace) != len(resourceCases)+2 {
+	if len(report.ImmutableReplace) != len(resourceCases)+len(declaredImmutableFieldPointers()) {
 		return errors.New("provider lifecycle immutable replacement evidence is incomplete")
 	}
-	expectedImmutable := make(map[string]struct{}, len(resourceCases)+2)
+	expectedImmutable := make(map[string]struct{}, len(resourceCases)+len(declaredImmutableFieldPointers()))
 	for _, item := range resourceCases {
 		expectedImmutable[item.Kind+"/name"] = struct{}{}
 	}
-	expectedImmutable[client.KindSQLDatabase+"/engine"] = struct{}{}
-	expectedImmutable[client.KindVectorIndex+"/dimensions"] = struct{}{}
+	for _, pointer := range declaredImmutableFieldPointers() {
+		expectedImmutable[pointer] = struct{}{}
+	}
 	seenImmutable := make(map[string]struct{}, len(report.ImmutableReplace))
 	for _, evidence := range report.ImmutableReplace {
 		key := evidence.Kind + evidence.Field
@@ -831,7 +834,7 @@ func exerciseReplacementPlans(workDir, configPath, endpoint, providerAddress, pr
 	fieldExpected := map[string]bool{}
 	nameExpected := map[string]bool{}
 	for _, item := range resourceCases {
-		fieldExpected[item.Address] = item.Kind == client.KindSQLDatabase || item.Kind == client.KindVectorIndex
+		fieldExpected[item.Address] = kindHasReplaceableField(item.Kind)
 		nameExpected[item.Address] = true
 	}
 	if err := verifyPlan(3, fieldExpected); err != nil {
@@ -840,36 +843,29 @@ func exerciseReplacementPlans(workDir, configPath, endpoint, providerAddress, pr
 	if err := verifyPlan(4, nameExpected); err != nil {
 		return nil, err
 	}
-	evidence := make([]ImmutableReplaceEvidence, 0, len(resourceCases)+2)
+	evidence := make([]ImmutableReplaceEvidence, 0, len(resourceCases)+len(declaredImmutableFieldPointers()))
 	for _, item := range resourceCases {
 		evidence = append(evidence, ImmutableReplaceEvidence{Kind: item.Kind, Field: "/name", Passed: true})
 	}
-	evidence = append(evidence,
-		ImmutableReplaceEvidence{Kind: client.KindSQLDatabase, Field: "/engine", Passed: true},
-		ImmutableReplaceEvidence{Kind: client.KindVectorIndex, Field: "/dimensions", Passed: true},
-	)
+	for _, kind := range formcatalog.Kinds {
+		for _, field := range kind.Fields {
+			if field.Immutable && field.AltExample != nil {
+				evidence = append(evidence, ImmutableReplaceEvidence{Kind: kind.Kind, Field: "/" + field.Wire, Passed: true})
+			}
+		}
+	}
 	return evidence, nil
 }
 
+// stackConfig renders the lifecycle stack for every declared Form.
+//
+// Each revision perturbs only mutable fields, so an update is a real update;
+// revision 4 changes every name, so a replacement is a real replacement. The
+// HCL is derived from the same declaration the provider schema comes from,
+// which is why adding a Form needs no edit here.
 func stackConfig(endpoint, providerAddress, providerVersion string, revision int) string {
-	artifactDigit, artifactRevision, storageClass, consistency, engine := "1", 1, "standard", "strong", "sqlite"
-	queueRetries, queueBatch, port, dimensions := 5, 25, 8080, 1536
-	imageDigest, migrationsPath, metric := strings.Repeat("c", 64), "migrations/v1", "cosine"
-	workflowEntrypoint, actorTag, cron, nameSuffix := "IngestWorkflow", "v1", "0 0 * * *", ""
-	if revision >= 2 {
-		artifactDigit, artifactRevision, storageClass, consistency = "3", 2, "infrequent_access", "eventual"
-		queueRetries, queueBatch, port = 6, 30, 9090
-		imageDigest, migrationsPath, metric = strings.Repeat("d", 64), "migrations/v2", "dot"
-		workflowEntrypoint, actorTag, cron = "IngestWorkflowV2", "v2", "15 0 * * *"
-	}
-	if revision == 3 {
-		engine, dimensions = "postgres", 1024
-	}
-	if revision == 4 {
-		nameSuffix = "-replacement"
-	}
-	digest := strings.Repeat(artifactDigit, 64)
-	return fmt.Sprintf(`terraform {
+	var builder strings.Builder
+	fmt.Fprintf(&builder, `terraform {
   required_providers {
     takoform = { source = %q, version = %q }
   }
@@ -878,71 +874,170 @@ provider "takoform" {
   endpoint = %q
   space = "prod"
 }
-resource "takoform_edge_worker" "api" {
-  name = "api%s"
-  artifact_url = "https://example.test/api-v%d.js"
-  artifact_sha256 = "sha256:%s"
+`, providerAddress, providerVersion, endpoint)
+	nameSuffix := ""
+	if revision == 4 {
+		nameSuffix = "-replacement"
+	}
+	for index, item := range resourceCases {
+		kind, ok := formcatalog.ByKind(item.Kind)
+		if !ok {
+			continue
+		}
+		address := strings.TrimPrefix(item.Address, item.ResourceType+".")
+		fmt.Fprintf(&builder, "resource %q %q {\n", item.ResourceType, address)
+		fmt.Fprintf(&builder, "  name = %q\n", item.Name+nameSuffix)
+		desired := kind.CanonicalDesired()
+		if kind.Artifact {
+			if source, ok := desired["source"].(map[string]any); ok {
+				for _, key := range sortedKeys(source) {
+					fmt.Fprintf(&builder, "  %s = %s\n", artifactAttribute(key), hclValue(source[key]))
+				}
+			}
+		}
+		for _, field := range kind.Fields {
+			value, present := desired[field.Wire]
+			if !present {
+				continue
+			}
+			fmt.Fprintf(&builder, "  %s = %s\n", field.HCL, hclValue(mutatedFieldValue(field, value, revision, index)))
+		}
+		if connections, ok := desired["connections"].(map[string]any); ok {
+			builder.WriteString("  connections = [")
+			for position, name := range sortedKeys(connections) {
+				entry, _ := connections[name].(map[string]any)
+				if position > 0 {
+					builder.WriteString(", ")
+				}
+				fmt.Fprintf(&builder, "{ name = %q, resource = %q, permissions = %s, projection = %q }",
+					name, entry["resource"], hclValue(entry["permissions"]), entry["projection"])
+			}
+			builder.WriteString("]\n")
+		}
+		builder.WriteString("}\n")
+	}
+	return builder.String()
 }
-resource "takoform_object_bucket" "assets" {
-  name = "assets%s"
-  storage_class = %q
-  interfaces = ["s3_api"]
+
+// mutatedFieldValue changes a mutable field between revisions so the lifecycle
+// exercises a real in-place update. An immutable field is never perturbed:
+// only the name change at revision 4 may force a replacement.
+func mutatedFieldValue(field formcatalog.Field, value any, revision, index int) any {
+	if field.Immutable {
+		// Revision 3 is the replacement revision: it changes exactly the
+		// fields a Form declares immutable, so the plan must replace.
+		if revision == 3 && field.AltExample != nil {
+			return field.AltExample
+		}
+		return value
+	}
+	if revision < 2 {
+		return value
+	}
+	if field.AltExample != nil {
+		return field.AltExample
+	}
+	switch field.Type {
+	case formcatalog.TypeInt:
+		number, ok := asInt64(value)
+		if !ok {
+			return value
+		}
+		candidate := number + 1
+		if field.Max != nil && candidate > *field.Max {
+			candidate = number - 1
+		}
+		if field.Min != nil && candidate < *field.Min {
+			candidate = number
+		}
+		return candidate
+	case formcatalog.TypeBool:
+		if boolean, ok := value.(bool); ok {
+			return !boolean
+		}
+	case formcatalog.TypeString:
+		if len(field.Enum) > 1 {
+			current, _ := value.(string)
+			for _, option := range field.Enum {
+				if option != current {
+					return option
+				}
+			}
+		}
+	case formcatalog.TypeStringSet:
+		members, ok := value.([]any)
+		if !ok || len(members) == 0 {
+			return value
+		}
+		if len(field.Enum) > len(members) {
+			for _, option := range field.Enum {
+				if !containsAny(members, option) {
+					return append(append([]any{}, members...), option)
+				}
+			}
+			return value
+		}
+		if field.Grammar == formcatalog.GrammarToken {
+			return append(append([]any{}, members...), "revision2")
+		}
+	}
+	return value
 }
-resource "takoform_kv_store" "cache" {
-  name = "cache%s"
-  consistency = %q
+
+func asInt64(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return int64(typed), true
+	case int64:
+		return typed, true
+	case float64:
+		return int64(typed), true
+	default:
+		return 0, false
+	}
 }
-resource "takoform_queue" "delivery" {
-  name = "delivery%s"
-  max_retries = %d
-  max_batch_size = %d
+
+func artifactAttribute(wireKey string) string {
+	switch wireKey {
+	case "artifactPath":
+		return "artifact_path"
+	case "artifactUrl":
+		return "artifact_url"
+	case "artifactRef":
+		return "artifact_ref"
+	default:
+		return "artifact_sha256"
+	}
 }
-resource "takoform_sql_database" "main" {
-  name = "main%s"
-  engine = %q
-  migrations_path = %q
+
+func hclValue(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return fmt.Sprintf("%q", typed)
+	case bool:
+		return fmt.Sprintf("%t", typed)
+	case []any:
+		members := make([]string, 0, len(typed))
+		for _, member := range typed {
+			members = append(members, hclValue(member))
+		}
+		sort.Strings(members)
+		return "[" + strings.Join(members, ", ") + "]"
+	default:
+		if number, ok := asInt64(value); ok {
+			return fmt.Sprintf("%d", number)
+		}
+		return fmt.Sprintf("%q", fmt.Sprint(value))
+	}
 }
-resource "takoform_container_service" "agent" {
-  name = "agent%s"
-  image = "ghcr.io/example/agent@sha256:%s"
-  ports = [%d]
-  public_http = true
-}
-resource "takoform_vector_index" "embeddings" {
-  name = "embeddings%s"
-  dimensions = %d
-  metric = %q
-}
-resource "takoform_durable_workflow" "ingest" {
-  name = "ingest%s"
-  artifact_url = "https://example.test/workflow-v%d.js"
-  artifact_sha256 = "sha256:%s"
-  entrypoint = %q
-}
-resource "takoform_stateful_actor_namespace" "rooms" {
-  name = "rooms%s"
-  class_name = "RoomActor"
-  storage_profile = "durable_sqlite"
-  migration_tag = %q
-}
-resource "takoform_schedule" "nightly_ingest" {
-  name = "nightly-ingest%s"
-  cron = %q
-  timezone = "UTC"
-  connections = [{ name = "workflow", resource = "DurableWorkflow/ingest", permissions = ["invoke"], projection = "schedule_trigger" }]
-}
-`, providerAddress, providerVersion, endpoint,
-		nameSuffix, artifactRevision, digest,
-		nameSuffix, storageClass,
-		nameSuffix, consistency,
-		nameSuffix, queueRetries, queueBatch,
-		nameSuffix, engine, migrationsPath,
-		nameSuffix, imageDigest, port,
-		nameSuffix, dimensions, metric,
-		nameSuffix, artifactRevision, digest, workflowEntrypoint,
-		nameSuffix, actorTag,
-		nameSuffix, cron,
-	)
+
+func sortedKeys(value map[string]any) []string {
+	keys := make([]string, 0, len(value))
+	for key := range value {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 type lifecycleCounts struct {
@@ -1310,9 +1405,9 @@ func (h *formHost) report(identity CLIIdentity, providerBinary ProviderBinaryIde
 		ProviderBinary: providerBinary, CLI: identity,
 		Resources: resources,
 		NegativeChecks: []NegativeEvidence{
-			{Name: "response-name-substitution-rejected", Kind: client.KindObjectBucket,
+			{Name: "response-name-substitution-rejected", Kind: resourceCases[0].Kind,
 				Fixture: "versioned host observe response with substituted metadata.name", Passed: true},
-			{Name: "response-package-digest-substitution-rejected", Kind: client.KindKVStore,
+			{Name: "response-package-digest-substitution-rejected", Kind: resourceCases[1].Kind,
 				Fixture: "versioned host observe response with substituted exact FormRef packageDigest", Passed: true},
 		},
 		ImmutableReplace: immutable,
@@ -1342,4 +1437,58 @@ func decimalVersion(value string) int {
 	return version
 }
 
-func RepoRoot(start string) (string, error) { return characterization.FindRepoRoot(start) }
+// RepoRoot walks up from start to the repository that owns this module.
+func RepoRoot(start string) (string, error) {
+	current, err := filepath.Abs(start)
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(current, "go.mod")); err == nil {
+			if _, err := os.Stat(filepath.Join(current, "forms", "standard-package-set.json")); err == nil {
+				return current, nil
+			}
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", errors.New("could not find Takoform repository root")
+		}
+		current = parent
+	}
+}
+
+// declaredImmutableFieldPointers lists every non-name field a Form declares
+// immutable, as Kind+JSON Pointer keys.
+func declaredImmutableFieldPointers() []string {
+	var pointers []string
+	for _, kind := range formcatalog.Kinds {
+		for _, field := range kind.Fields {
+			if field.Immutable && field.AltExample != nil {
+				pointers = append(pointers, kind.Kind+"/"+field.Wire)
+			}
+		}
+	}
+	return pointers
+}
+
+func kindHasReplaceableField(kind string) bool {
+	declared, ok := formcatalog.ByKind(kind)
+	if !ok {
+		return false
+	}
+	for _, field := range declared.Fields {
+		if field.Immutable && field.AltExample != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAny(members []any, want string) bool {
+	for _, member := range members {
+		if member == want {
+			return true
+		}
+	}
+	return false
+}

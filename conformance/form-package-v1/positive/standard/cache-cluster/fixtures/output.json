@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "CacheCluster/cache-cluster",
+  "kind": "CacheCluster",
+  "name": "cache-cluster",
+  "portability": "portable"
+}

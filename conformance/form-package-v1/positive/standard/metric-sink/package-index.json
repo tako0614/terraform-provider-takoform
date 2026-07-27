@@ -1,0 +1,44 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "MetricSink",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:fb346e31893c08fb27507ab48a3fcaf864c9a6a4e4d111d74b7e69fb1d8fa275"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 5125,
+      "digest": "sha256:0dcd46ccd31aad66be59ba3fa63fe54a395cbea602b7772bfad39c460c5fd836"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 78,
+      "digest": "sha256:2d615120d76dcaed4ea58727481eed1e54ace48a1b80b1130d46556d9ed0d76b"
+    },
+    {
+      "path": "fixtures/negative.json",
+      "mediaType": "application/json",
+      "size": 77,
+      "digest": "sha256:29539e154eb174bc7e7e989450bddb541657ddddb06956f5dd45a5f11047bd44"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 145,
+      "digest": "sha256:2a47d18bad6e748815a12f1da12925d944924e20bb8fde858b739f33878d4162"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 134,
+      "digest": "sha256:66e2d3773f050c44b22e190229eb0f959f05e03900e739abb304d089bd8aaa63"
+    }
+  ]
+}

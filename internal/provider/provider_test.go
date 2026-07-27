@@ -17,6 +17,8 @@ import (
 	frameworkdatasource "github.com/hashicorp/terraform-plugin-framework/datasource"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 func discoveryHandler(t *testing.T, serviceForms bool) http.HandlerFunc {
@@ -72,24 +74,33 @@ func TestProviderDoesNotExposePushNotificationResources(t *testing.T) {
 	}
 }
 
-func TestProviderSplitDoesNotExposeTakosumiAdminResources(t *testing.T) {
+// TestProviderExposesNoHostAuthorityResources keeps the provider on the
+// portable side of the boundary. A Form describes what a caller wants; who
+// runs it, on whose capacity, with whose credentials, and at what price stay
+// with the host, so no resource may name those concerns.
+func TestProviderExposesNoHostAuthorityResources(t *testing.T) {
 	forbidden := []string{
 		"target",
 		"target_pool",
 		"provider_connection",
 		"credential",
+		"secret",
 		"provider_binding",
-		"policy",
+		"operator_policy",
 		"adapter",
 		"billing",
+		"invoice",
+		"price",
 		"quota",
 		"account",
+		"backend",
+		"manager",
 	}
 	for _, name := range providerResourceTypeNames(t) {
 		normalized := strings.ToLower(name)
 		for _, term := range forbidden {
 			if strings.Contains(normalized, term) {
-				t.Fatalf("Takosumi host administration is outside the typed Takoform provider: %s contains %q", name, term)
+				t.Fatalf("host authority is outside the typed Takoform provider: %s contains %q", name, term)
 			}
 		}
 	}
@@ -319,17 +330,9 @@ func TestPublishedHCLUsesFullyQualifiedProviderAddress(t *testing.T) {
 }
 
 func currentProviderResourceTypeNames() []string {
-	names := []string{
-		"takoform_edge_worker",
-		"takoform_object_bucket",
-		"takoform_kv_store",
-		"takoform_queue",
-		"takoform_sql_database",
-		"takoform_container_service",
-		"takoform_vector_index",
-		"takoform_durable_workflow",
-		"takoform_stateful_actor_namespace",
-		"takoform_schedule",
+	names := make([]string, 0, len(formcatalog.Kinds))
+	for _, kind := range formcatalog.Kinds {
+		names = append(names, kind.ResourceType)
 	}
 	sort.Strings(names)
 	return names

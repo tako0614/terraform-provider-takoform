@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "PrivateNetwork/private-network",
+  "kind": "PrivateNetwork",
+  "name": "private-network",
+  "portability": "portable"
+}

@@ -80,3 +80,35 @@ func toStringSlice(raw any) []string {
 		return nil
 	}
 }
+
+func int64FromSpec(value any) types.Int64 {
+	switch typed := value.(type) {
+	case float64:
+		return types.Int64Value(int64(typed))
+	case int64:
+		return types.Int64Value(typed)
+	case int:
+		return types.Int64Value(int64(typed))
+	default:
+		return types.Int64Null()
+	}
+}
+
+func toInt64Slice(raw any) []int64 {
+	values, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]int64, 0, len(values))
+	for _, value := range values {
+		switch typed := value.(type) {
+		case float64:
+			out = append(out, int64(typed))
+		case int64:
+			out = append(out, typed)
+		case int:
+			out = append(out, int64(typed))
+		}
+	}
+	return out
+}

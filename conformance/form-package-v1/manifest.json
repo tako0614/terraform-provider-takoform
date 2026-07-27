@@ -12,39 +12,9 @@
       "kind": "ExampleInterfaceService"
     },
     {
-      "name": "standard-edge-worker-package",
-      "path": "positive/standard/edge-worker",
-      "kind": "EdgeWorker"
-    },
-    {
-      "name": "standard-object-bucket-package",
-      "path": "positive/standard/object-bucket",
-      "kind": "ObjectBucket"
-    },
-    {
-      "name": "standard-kv-store-package",
-      "path": "positive/standard/kv-store",
-      "kind": "KVStore"
-    },
-    {
-      "name": "standard-sql-database-package",
-      "path": "positive/standard/sql-database",
-      "kind": "SQLDatabase"
-    },
-    {
-      "name": "standard-queue-package",
-      "path": "positive/standard/queue",
-      "kind": "Queue"
-    },
-    {
-      "name": "standard-vector-index-package",
-      "path": "positive/standard/vector-index",
-      "kind": "VectorIndex"
-    },
-    {
-      "name": "standard-durable-workflow-package",
-      "path": "positive/standard/durable-workflow",
-      "kind": "DurableWorkflow"
+      "name": "standard-http-service-package",
+      "path": "positive/standard/http-service",
+      "kind": "HttpService"
     },
     {
       "name": "standard-container-service-package",
@@ -52,9 +22,24 @@
       "kind": "ContainerService"
     },
     {
-      "name": "standard-stateful-actor-namespace-package",
-      "path": "positive/standard/stateful-actor-namespace",
-      "kind": "StatefulActorNamespace"
+      "name": "standard-compute-instance-package",
+      "path": "positive/standard/compute-instance",
+      "kind": "ComputeInstance"
+    },
+    {
+      "name": "standard-static-site-package",
+      "path": "positive/standard/static-site",
+      "kind": "StaticSite"
+    },
+    {
+      "name": "standard-workflow-package",
+      "path": "positive/standard/workflow",
+      "kind": "Workflow"
+    },
+    {
+      "name": "standard-stateful-entity-package",
+      "path": "positive/standard/stateful-entity",
+      "kind": "StatefulEntity"
     },
     {
       "name": "standard-schedule-package",
@@ -62,9 +47,139 @@
       "kind": "Schedule"
     },
     {
-      "name": "standard-sql-database-v2-package",
-      "path": "positive/standard/sql-database-v2",
-      "kind": "SQLDatabase"
+      "name": "standard-object-bucket-package",
+      "path": "positive/standard/object-bucket",
+      "kind": "ObjectBucket"
+    },
+    {
+      "name": "standard-object-lifecycle-rule-package",
+      "path": "positive/standard/object-lifecycle-rule",
+      "kind": "ObjectLifecycleRule"
+    },
+    {
+      "name": "standard-key-value-store-package",
+      "path": "positive/standard/key-value-store",
+      "kind": "KeyValueStore"
+    },
+    {
+      "name": "standard-cache-cluster-package",
+      "path": "positive/standard/cache-cluster",
+      "kind": "CacheCluster"
+    },
+    {
+      "name": "standard-relational-database-package",
+      "path": "positive/standard/relational-database",
+      "kind": "RelationalDatabase"
+    },
+    {
+      "name": "standard-indexed-store-package",
+      "path": "positive/standard/indexed-store",
+      "kind": "IndexedStore"
+    },
+    {
+      "name": "standard-queue-package",
+      "path": "positive/standard/queue",
+      "kind": "Queue"
+    },
+    {
+      "name": "standard-stream-topic-package",
+      "path": "positive/standard/stream-topic",
+      "kind": "StreamTopic"
+    },
+    {
+      "name": "standard-search-index-package",
+      "path": "positive/standard/search-index",
+      "kind": "SearchIndex"
+    },
+    {
+      "name": "standard-vector-index-package",
+      "path": "positive/standard/vector-index",
+      "kind": "VectorIndex"
+    },
+    {
+      "name": "standard-analytics-dataset-package",
+      "path": "positive/standard/analytics-dataset",
+      "kind": "AnalyticsDataset"
+    },
+    {
+      "name": "standard-model-endpoint-package",
+      "path": "positive/standard/model-endpoint",
+      "kind": "ModelEndpoint"
+    },
+    {
+      "name": "standard-dns-zone-package",
+      "path": "positive/standard/dns-zone",
+      "kind": "DnsZone"
+    },
+    {
+      "name": "standard-dns-record-package",
+      "path": "positive/standard/dns-record",
+      "kind": "DnsRecord"
+    },
+    {
+      "name": "standard-tls-certificate-package",
+      "path": "positive/standard/tls-certificate",
+      "kind": "TlsCertificate"
+    },
+    {
+      "name": "standard-http-route-package",
+      "path": "positive/standard/http-route",
+      "kind": "HttpRoute"
+    },
+    {
+      "name": "standard-load-balancer-package",
+      "path": "positive/standard/load-balancer",
+      "kind": "LoadBalancer"
+    },
+    {
+      "name": "standard-private-network-package",
+      "path": "positive/standard/private-network",
+      "kind": "PrivateNetwork"
+    },
+    {
+      "name": "standard-container-registry-package",
+      "path": "positive/standard/container-registry",
+      "kind": "ContainerRegistry"
+    },
+    {
+      "name": "standard-log-sink-package",
+      "path": "positive/standard/log-sink",
+      "kind": "LogSink"
+    },
+    {
+      "name": "standard-metric-sink-package",
+      "path": "positive/standard/metric-sink",
+      "kind": "MetricSink"
+    },
+    {
+      "name": "standard-email-sender-package",
+      "path": "positive/standard/email-sender",
+      "kind": "EmailSender"
+    },
+    {
+      "name": "standard-webhook-endpoint-package",
+      "path": "positive/standard/webhook-endpoint",
+      "kind": "WebhookEndpoint"
+    },
+    {
+      "name": "standard-identity-client-package",
+      "path": "positive/standard/identity-client",
+      "kind": "IdentityClient"
+    },
+    {
+      "name": "standard-feature-flag-package",
+      "path": "positive/standard/feature-flag",
+      "kind": "FeatureFlag"
+    },
+    {
+      "name": "standard-rate-limit-policy-package",
+      "path": "positive/standard/rate-limit-policy",
+      "kind": "RateLimitPolicy"
+    },
+    {
+      "name": "standard-backup-policy-package",
+      "path": "positive/standard/backup-policy",
+      "kind": "BackupPolicy"
     }
   ],
   "negative": [

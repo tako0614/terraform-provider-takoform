@@ -11,10 +11,10 @@
       "formRef": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "ObjectBucket",
-        "definitionVersion": "1.0.1",
-        "schemaDigest": "sha256:4584b9233ef23231037d941c652eedd67c184deb9e36bec14d41151a28b7c2b4"
+        "definitionVersion": "2.0.0",
+        "schemaDigest": "sha256:277939bb9719c8571fd4f9a5c943e2c196bdf7e5a3371a7f9ff6eb04b9f5ff5d"
       },
-      "packageDigest": "sha256:00f3ed05da56cc795a42043112933ef00e97b531ed123e0c2df3cce70bd1e391"
+      "packageDigest": "sha256:bd706bf85fb15b0c2c30d82cdfe30e41cdff4cd3883a80a892f17a50451d3e3e"
     },
     "desired": {
       "interfaces": [
@@ -133,6 +133,6 @@
   ],
   "runnerEvidence": {
     "subject": "takoform.portable-host-black-box-runner@v1",
-    "sha256": "sha256:1528f0a068086101815395e45680d6f6569d3113f8a2a45e55c0482166d7c23a"
+    "sha256": "sha256:a679019a429f25561bf3b8e518116a493a7ceb6cce7b7b4fe77cc73a829a0b43"
   }
 }

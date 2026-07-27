@@ -2,26 +2,45 @@
 page_title: "takoform_container_service Resource - takoform"
 subcategory: "Service Forms"
 description: |-
-  Declares a portable OCI container service.
+  Portable OCI container service pinned to an immutable image digest.
 ---
 
 # takoform_container_service
 
-Declares a portable OCI container service. See the [complete example](../../examples/resources/takoform_container_service/resource.tf).
+Portable OCI container service pinned to an immutable image digest.
+
+The configured host selects and operates the concrete backend. This resource
+carries desired state only: it never names a target, a credential, a price, or
+an implementation. See the [complete example](../../examples/resources/takoform_container_service/resource.tf).
 
 ## Arguments
 
 - `name` (String, required, forces replacement) — Resource name.
-- `image` (String, required) — OCI image reference.
-- `ports` (Set of Number, optional) — Requested container ports.
-- `public_http` (Boolean, optional) — Requests public HTTP exposure.
-- `connections` (List of Object, optional) — Non-secret resource connections with `name`, `resource`, `permissions`, and `projection`.
+- `image` (String, required) — Immutable OCI image reference pinned by sha256 digest.
+- `ports` (Set of Number, optional) — Container ports requested by the service. Between 1 and 65535.
+- `public_http` (Bool, optional) — Whether this container asks for public HTTP exposure.
+- `cpu_millicores` (Number, optional) — Optional CPU request in millicores. At least 1.
+- `memory_mib` (Number, optional) — Optional memory request in mebibytes. At least 1.
+- `connections` (List of Object, optional) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
-
-Runtime configuration and credentials are host-owned projections; this resource never stores arbitrary environment values.
 
 ## Read-only attributes
 
 `id`, `resource_version`, `drift_status`, `portability`, and `outputs` report
-the canonical resource fence, native observation result, and sanitized public
-host results. Backend placement is not provider state.
+the canonical resource identity, its generation fence, the native observation
+result, and sanitized public host results. Backend placement is never provider
+state.
+
+## Declared runtime interfaces
+
+- `http.request@1` — Portable HTTP request surface exposed by a container service. Operations: `request`.
+
+A declaration says what exists. It carries no credential and grants no
+consumer access; the host creates the record and authorizes its use.
+
+## Import
+
+```console
+terraform import takoform_container_service.example NAME
+terraform import takoform_container_service.example SPACE/NAME
+```

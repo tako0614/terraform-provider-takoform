@@ -11,7 +11,15 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
 )
 
-func TestRunCreatesExactReadbackWithoutOverwriting(t *testing.T) {
+// TestRetainedRegistryReadbackBelongsToTheRetiredGeneration proves the
+// retained Registry evidence stays readable while this build refuses to
+// reissue it.
+//
+// That evidence was produced by a provider that implemented the published
+// Forms. This build implements the rebuilt portable set, so regenerating the
+// readback must fail closed rather than restamp an old proof with a new
+// provider's identity.
+func TestRetainedRegistryReadbackBelongsToTheRetiredGeneration(t *testing.T) {
 	root, err := providerlifecycle.RepoRoot(".")
 	if err != nil {
 		t.Fatal(err)
@@ -25,6 +33,9 @@ func TestRunCreatesExactReadbackWithoutOverwriting(t *testing.T) {
 	if err := json.Unmarshal(want, &readback); err != nil {
 		t.Fatal(err)
 	}
+	if readback.ProviderReleaseCommit == "" {
+		t.Fatal("retained readback lost its provider release commit")
+	}
 
 	output := filepath.Join(t.TempDir(), "provider-readback.json")
 	args := []string{
@@ -33,24 +44,17 @@ func TestRunCreatesExactReadbackWithoutOverwriting(t *testing.T) {
 		"--provider-release-commit", readback.ProviderReleaseCommit,
 		"--output", output,
 	}
-	if err := run(args); err != nil {
-		t.Fatal(err)
-	}
-	got, err := os.ReadFile(output)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatal("generated readback is not byte-for-byte equal to the retained subject")
-	}
 	if err := run(args); err == nil {
-		t.Fatal("second write unexpectedly overwrote the retained readback")
+		t.Fatal("a provider that no longer implements the published Forms reissued their Registry readback")
 	}
-	after, err := os.ReadFile(output)
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatalf("failed readback left an artifact behind: %v", err)
+	}
+	after, err := os.ReadFile(wantPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(after, want) {
-		t.Fatal("failed overwrite attempt changed the retained readback")
+		t.Fatal("failed readback attempt changed the retained evidence")
 	}
 }

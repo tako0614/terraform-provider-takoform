@@ -1,4 +1,4 @@
-// Package indexedsql owns the provider-neutral SQLDatabase@2.0.0 schema and
+// Package indexedsql owns the provider-neutral IndexedStore schema and
 // the data.indexed@1 request contract. It contains no host implementation,
 // target selection, credentials, or commercial policy.
 package indexedsql
@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	DefinitionVersion  = "2.0.0"
-	PackageVersion     = "2.0.0"
+	DefinitionVersion  = "1.0.0"
+	PackageVersion     = "1.0.0"
 	InterfaceName      = "data.indexed"
 	InterfaceVersion   = "1"
 	OperationMethod    = "POST"

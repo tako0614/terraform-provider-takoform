@@ -1,0 +1,6 @@
+{
+  "bootDiskGib": 20,
+  "image": "portable-conformance/v1/base-linux",
+  "machineClass": "not a token",
+  "name": "compute-instance"
+}

@@ -1,0 +1,10 @@
+{
+  "authMethod": "none",
+  "grantTypes": [
+    "authorization_code"
+  ],
+  "name": "identity-client",
+  "redirectUris": [
+    "http://app.portable-conformance.invalid/callback"
+  ]
+}

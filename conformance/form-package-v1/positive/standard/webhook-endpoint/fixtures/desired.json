@@ -1,0 +1,16 @@
+{
+  "allowedMethods": [
+    "POST"
+  ],
+  "connections": {
+    "destination": {
+      "permissions": [
+        "send"
+      ],
+      "projection": "queue.producer.v1",
+      "resource": "Queue/queue"
+    }
+  },
+  "name": "webhook-endpoint",
+  "path": "/hooks"
+}

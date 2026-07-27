@@ -66,15 +66,14 @@ type GeneratedReport struct {
 // report independently and later admission tooling verifies its Sigstore
 // bundle against the dedicated provider-report policy.
 type DirectoryInventory struct {
-	Format            string                      `json:"format"`
-	Status            string                      `json:"status"`
-	ProofType         string                      `json:"proofType"`
-	Subject           string                      `json:"subject"`
-	DefinitionVersion string                      `json:"definitionVersion"`
-	PackageVersion    string                      `json:"packageVersion"`
-	RunnerVersion     string                      `json:"runnerVersion"`
-	Source            DirectorySource             `json:"source"`
-	Reports           []DirectoryReportDescriptor `json:"reports"`
+	Format        string                      `json:"format"`
+	Status        string                      `json:"status"`
+	ProofType     string                      `json:"proofType"`
+	Subject       string                      `json:"subject"`
+	Generation    string                      `json:"generation"`
+	RunnerVersion string                      `json:"runnerVersion"`
+	Source        DirectorySource             `json:"source"`
+	Reports       []DirectoryReportDescriptor `json:"reports"`
 }
 
 type DirectorySource struct {
@@ -102,9 +101,8 @@ type providerReleaseDescriptor struct {
 }
 
 type standardPackageSetDescriptor struct {
-	Format            string `json:"format"`
-	DefinitionVersion string `json:"definitionVersion"`
-	PackageVersion    string `json:"packageVersion"`
+	Format     string `json:"format"`
+	Generation string `json:"generation"`
 }
 
 func (report GeneratedReport) Subject() string { return report.report.Subject }
@@ -239,8 +237,8 @@ func buildDirectoryInventory(repoRoot, sourceCommit string, reports []GeneratedR
 	if err := json.Unmarshal(candidateRaw, &packageSet); err != nil {
 		return DirectoryInventory{}, fmt.Errorf("decode standard package set identity: %w", err)
 	}
-	if packageSet.Format != "takoform.standard-package-set@v1" || strings.TrimSpace(packageSet.DefinitionVersion) == "" || strings.TrimSpace(packageSet.PackageVersion) == "" {
-		return DirectoryInventory{}, fmt.Errorf("standard package set lacks the exact definition/package version identity")
+	if packageSet.Format != "takoform.standard-package-set@v1" || strings.TrimSpace(packageSet.Generation) == "" {
+		return DirectoryInventory{}, fmt.Errorf("standard package set lacks its exact generation identity")
 	}
 	allowed := make(map[string]struct{}, len(subjects))
 	for _, subject := range subjects {
@@ -278,7 +276,7 @@ func buildDirectoryInventory(repoRoot, sourceCommit string, reports []GeneratedR
 	sort.Slice(descriptors, func(i, j int) bool { return descriptors[i].Slug < descriptors[j].Slug })
 	return DirectoryInventory{
 		Format: directoryInventoryFormat, Status: "candidate-only", ProofType: "provider", Subject: subject,
-		DefinitionVersion: packageSet.DefinitionVersion, PackageVersion: packageSet.PackageVersion,
+		Generation:    packageSet.Generation,
 		RunnerVersion: version,
 		Source:        DirectorySource{Repository: "https://github.com/tako0614/terraform-provider-takoform.git", Commit: sourceCommit},
 		Reports:       descriptors,
@@ -481,8 +479,8 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 // admission tree is deliberately rejected so generation cannot activate or
 // overwrite retained admission evidence.
 func Write(repoRoot, outputRoot string, reports []GeneratedReport) error {
-	if len(reports) != 10 {
-		return fmt.Errorf("provider-report set has %d reports, want exactly 10", len(reports))
+	if len(reports) != len(standardforms.Specs) {
+		return fmt.Errorf("provider-report set has %d reports, want exactly %d", len(reports), len(standardforms.Specs))
 	}
 	fixtures, err := LoadCandidateFixtures(repoRoot)
 	if err != nil {
@@ -630,7 +628,7 @@ func LoadCandidateFixtures(root string) ([]PublishedFixture, error) {
 			return nil, fmt.Errorf("candidate package set omits exact %s identity", spec.Kind)
 		}
 		releaseID := "k-" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(spec.Kind)))
-		releaseRoot := filepath.Join(root, "forms", "releases", releaseID, inventory.PackageVersion)
+		releaseRoot := filepath.Join(root, "forms", "releases", releaseID, entry.FormRef.DefinitionVersion)
 		fixture, err := loadCandidateFixture(releaseRoot, spec.Slug, entry)
 		if err != nil {
 			return nil, fmt.Errorf("%s candidate release-source fixtures: %w", spec.Kind, err)

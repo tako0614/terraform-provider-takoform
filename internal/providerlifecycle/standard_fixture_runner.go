@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
 
@@ -176,21 +177,62 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 	}, nil
 }
 
+// standardNegativeDiagnostic derives the attribute and message a rejected
+// fixture must produce, from the counter-example the Form itself declares.
+//
+// The negative case therefore always tests a constraint the Form states,
+// rather than a separately maintained list that can drift away from it.
 func standardNegativeDiagnostic(kind string) (string, string, bool) {
-	diagnostics := map[string][2]string{
-		"EdgeWorker":             {"artifact_sha256", "artifact_sha256 is required when artifact_url"},
-		"ObjectBucket":           {"storage_class", `"cold" is not a valid value`},
-		"KVStore":                {"consistency", `"linearizable" is not a valid value`},
-		"SQLDatabase":            {"engine", "portable capability-token grammar"},
-		"Queue":                  {"max_retries", "value must be at least 0"},
-		"VectorIndex":            {"dimensions", "value must be at least 1"},
-		"DurableWorkflow":        {"max_attempts", "value must be at least 1"},
-		"ContainerService":       {"ports", "0 must be between 1 and 65535"},
-		"StatefulActorNamespace": {"class_name", "portable runtime class grammar"},
-		"Schedule":               {"cron", "portable five-field expression"},
+	declared, ok := formcatalog.ByKind(kind)
+	if !ok {
+		return "", "", false
 	}
-	diagnostic, ok := diagnostics[kind]
-	return diagnostic[0], diagnostic[1], ok
+	for _, field := range declared.Fields {
+		if field.CounterExample == nil {
+			continue
+		}
+		return field.HCL, expectedDiagnosticDetail(field), true
+	}
+	return "", "", false
+}
+
+func expectedDiagnosticDetail(field formcatalog.Field) string {
+	if len(field.Enum) > 0 {
+		if value, ok := field.CounterExample.(string); ok {
+			return fmt.Sprintf("%q is not a valid value", value)
+		}
+		if members, ok := field.CounterExample.([]any); ok && len(members) > 0 {
+			return fmt.Sprintf("%q is not a valid value", fmt.Sprint(members[0]))
+		}
+	}
+	switch field.Type {
+	case formcatalog.TypeInt:
+		if number, ok := asInt64(field.CounterExample); ok {
+			if field.Min != nil && number < *field.Min {
+				return fmt.Sprintf("value must be at least %d", *field.Min)
+			}
+			if field.Max != nil && number > *field.Max {
+				return fmt.Sprintf("value must be at most %d", *field.Max)
+			}
+		}
+	case formcatalog.TypeIntSet:
+		if members, ok := field.CounterExample.([]any); ok && len(members) > 0 {
+			if number, ok := asInt64(members[0]); ok {
+				return fmt.Sprintf("%d must be between %d and %d", number, boundOrDefault(field.Min, 0), boundOrDefault(field.Max, 0))
+			}
+		}
+	}
+	if _, hasGrammar := field.Grammar.Pattern(); hasGrammar {
+		return field.Grammar.Message(field.HCL)
+	}
+	return "Invalid value"
+}
+
+func boundOrDefault(value *int64, fallback int64) int64 {
+	if value == nil {
+		return fallback
+	}
+	return *value
 }
 
 func terraformRunnerEnvironment(cliConfig string) []string {

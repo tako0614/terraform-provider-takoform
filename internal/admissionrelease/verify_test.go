@@ -71,7 +71,7 @@ func TestVerifyAdmissionSetRejectsRetainedEvidenceDigestMismatch(t *testing.T) {
 func TestVerifyAdmissionSetRejectsStructurallyValidEvidenceWithoutReportClosure(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	packagePath := "conformance/form-package-v1/positive/standard/object-bucket"
+	packagePath := "forms/releases/k-j5rguzldorbhky3lmv2a/1.0.1"
 	source := filepath.Join("..", "..", filepath.FromSlash(packagePath))
 	if err := os.CopyFS(filepath.Join(root, filepath.FromSlash(packagePath)), os.DirFS(source)); err != nil {
 		t.Fatal(err)

@@ -1,0 +1,44 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "WebhookEndpoint",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:9c993ff6d15d1ebade5ae5cc27dc1e9f69f16ee9ea27dcbdabac000e6ceec8c8"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 5441,
+      "digest": "sha256:c75cb6b790e15ac9bc6bd7d2a0b230472c9840bf5805ee42ccc617a21b71e0ee"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 262,
+      "digest": "sha256:21cb37b8f96f411a22cc153957f2fec0c19ec49c523f0b6e0b746e8dfb420683"
+    },
+    {
+      "path": "fixtures/negative.json",
+      "mediaType": "application/json",
+      "size": 263,
+      "digest": "sha256:ff8326c0f4b6ab7e6ab246e44686e59f39a8a6b38b7e838a3eed8d4f7e8777ac"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 155,
+      "digest": "sha256:8b6c321875e744dbc58604b9b82bb4188e5f64fc220973478ce67a03f4eabfe4"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 154,
+      "digest": "sha256:89943c325cb57eef785fa4140d060aa052ed9c60286950b41aebf031f47f1b1b"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "entityClass": "RoomEntity",
+  "migrationTag": "v1",
+  "name": "stateful-entity"
+}

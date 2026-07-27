@@ -13,7 +13,9 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
+	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
 
@@ -26,8 +28,8 @@ func TestLoadPublishedFixturesUsesExactRetainedReleaseArchives(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(fixtures) != 10 {
-		t.Fatalf("fixture count = %d, want 10", len(fixtures))
+	if len(fixtures) != len(standardforms.RetiredKinds) {
+		t.Fatalf("fixture count = %d, want %d", len(fixtures), len(standardforms.RetiredKinds))
 	}
 	seen := map[string]bool{}
 	for _, fixture := range fixtures {
@@ -42,9 +44,9 @@ func TestLoadPublishedFixturesUsesExactRetainedReleaseArchives(t *testing.T) {
 			t.Fatalf("%s positive and negative fixture unexpectedly match", fixture.Kind)
 		}
 	}
-	for _, kind := range []string{"EdgeWorker", "ObjectBucket", "KVStore", "SQLDatabase", "Queue", "VectorIndex", "DurableWorkflow", "ContainerService", "StatefulActorNamespace", "Schedule"} {
-		if !seen[kind] {
-			t.Fatalf("published fixture set omits %s", kind)
+	for _, spec := range standardforms.RetiredKinds {
+		if !seen[spec.Kind] {
+			t.Fatalf("retained published fixture set omits %s", spec.Kind)
 		}
 	}
 }
@@ -58,11 +60,15 @@ func TestLoadCandidateFixturesUsesExactCurrentReleaseSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(fixtures) != 10 {
-		t.Fatalf("fixture count = %d, want 10", len(fixtures))
+	if len(fixtures) != len(formcatalog.Kinds) {
+		t.Fatalf("fixture count = %d, want %d", len(fixtures), len(formcatalog.Kinds))
 	}
 	for _, fixture := range fixtures {
-		if fixture.Identity.FormRef.Kind != fixture.Kind || fixture.Identity.FormRef.DefinitionVersion != "1.0.1" || !formpackage.ValidDigest(fixture.Identity.FormRef.SchemaDigest) || !formpackage.ValidDigest(fixture.Identity.PackageDigest) {
+		declared, ok := formcatalog.ByKind(fixture.Kind)
+		if !ok {
+			t.Fatalf("undeclared candidate kind %s", fixture.Kind)
+		}
+		if fixture.Identity.FormRef.Kind != fixture.Kind || fixture.Identity.FormRef.DefinitionVersion != declared.Version() || !formpackage.ValidDigest(fixture.Identity.FormRef.SchemaDigest) || !formpackage.ValidDigest(fixture.Identity.PackageDigest) {
 			t.Fatalf("invalid current candidate identity: %#v", fixture)
 		}
 	}
@@ -83,8 +89,8 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != 10 {
-		t.Fatalf("report count = %d, want 10", len(reports))
+	if len(reports) != len(formcatalog.Kinds) {
+		t.Fatalf("report count = %d, want %d", len(reports), len(formcatalog.Kinds))
 	}
 	candidates, err := LoadCandidateFixtures(root)
 	if err != nil {
@@ -105,7 +111,11 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 		if generated.digest != formpackage.DigestBytes(generated.canonical) {
 			t.Fatalf("invalid canonical digest for %s", generated.kind)
 		}
-		if generated.report.Identity != exactIdentity[generated.kind] || generated.report.Identity.FormRef.DefinitionVersion != "1.0.1" || generated.report.RunnerVersion != "0.1.3" {
+		declared, ok := formcatalog.ByKind(generated.kind)
+		if !ok {
+			t.Fatalf("report names undeclared kind %s", generated.kind)
+		}
+		if generated.report.Identity != exactIdentity[generated.kind] || generated.report.Identity.FormRef.DefinitionVersion != declared.Version() || generated.report.RunnerVersion != "0.1.3" {
 			t.Fatalf("report %s relabeled executed candidate identity: %#v", generated.kind, generated.report)
 		}
 		if _, err := admissionrelease.ValidateCanonicalProviderRunnerReport(generated.canonical, generated.report.Identity, []string{"canonical"}, []string{"reject-invalid-semantics"}); err != nil {
@@ -125,7 +135,7 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if inventory.Format != directoryInventoryFormat || inventory.Status != "candidate-only" || inventory.ProofType != "provider" || inventory.Source.Commit != sourceCommit || inventory.Source.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || inventory.DefinitionVersion != "1.0.1" || inventory.PackageVersion != "1.0.1" || inventory.RunnerVersion != "0.1.3" || len(inventory.Reports) != 10 {
+	if inventory.Format != directoryInventoryFormat || inventory.Status != "candidate-only" || inventory.ProofType != "provider" || inventory.Source.Commit != sourceCommit || inventory.Source.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || inventory.Generation == "" || inventory.RunnerVersion != "0.1.3" || len(inventory.Reports) != len(formcatalog.Kinds) {
 		t.Fatalf("invalid exported provider-report manifest: %#v", inventory)
 	}
 	verified, err := VerifyDirectory(root, exportRoot, sourceCommit)

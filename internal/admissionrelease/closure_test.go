@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
@@ -22,7 +23,7 @@ import (
 func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	packagePath := "conformance/form-package-v1/positive/standard/object-bucket"
+	packagePath := "forms/releases/k-j5rguzldorbhky3lmv2a/1.0.1"
 	sourcePackage := filepath.Join("..", "..", filepath.FromSlash(packagePath))
 	if err := os.CopyFS(filepath.Join(root, filepath.FromSlash(packagePath)), os.DirFS(sourcePackage)); err != nil {
 		t.Fatal(err)
@@ -422,23 +423,19 @@ func writeRegistryFixture(t *testing.T, root string, versionRaw []byte, releaseC
 	}
 	digest := "sha256:" + fmt.Sprintf("%064d", 1)
 	checks := providerlifecycle.CheckEvidence{Create: true, Read: true, Update: true, Observe: true, Refresh: true, NativeImport: true, CLIImport: true, Delete: true, DriftState: true, NameReplace: true}
-	resourceIdentities := []struct{ kind, resourceType string }{
-		{"EdgeWorker", "takoform_edge_worker"}, {"ObjectBucket", "takoform_object_bucket"},
-		{"KVStore", "takoform_kv_store"}, {"Queue", "takoform_queue"}, {"SQLDatabase", "takoform_sql_database"},
-		{"ContainerService", "takoform_container_service"}, {"VectorIndex", "takoform_vector_index"},
-		{"DurableWorkflow", "takoform_durable_workflow"}, {"StatefulActorNamespace", "takoform_stateful_actor_namespace"},
-		{"Schedule", "takoform_schedule"},
+	resources := make([]providerlifecycle.ResourceEvidence, 0, len(formcatalog.Kinds))
+	immutable := make([]providerlifecycle.ImmutableReplaceEvidence, 0, len(formcatalog.Kinds)*2)
+	for _, kind := range formcatalog.Kinds {
+		resources = append(resources, providerlifecycle.ResourceEvidence{Kind: kind.Kind, ResourceType: kind.ResourceType, Checks: checks})
+		immutable = append(immutable, providerlifecycle.ImmutableReplaceEvidence{Kind: kind.Kind, Field: "/name", Passed: true})
 	}
-	resources := make([]providerlifecycle.ResourceEvidence, 0, len(resourceIdentities))
-	immutable := make([]providerlifecycle.ImmutableReplaceEvidence, 0, len(resourceIdentities)+2)
-	for _, identity := range resourceIdentities {
-		resources = append(resources, providerlifecycle.ResourceEvidence{Kind: identity.kind, ResourceType: identity.resourceType, Checks: checks})
-		immutable = append(immutable, providerlifecycle.ImmutableReplaceEvidence{Kind: identity.kind, Field: "/name", Passed: true})
+	for _, kind := range formcatalog.Kinds {
+		for _, field := range kind.Fields {
+			if field.Immutable && field.AltExample != nil {
+				immutable = append(immutable, providerlifecycle.ImmutableReplaceEvidence{Kind: kind.Kind, Field: "/" + field.Wire, Passed: true})
+			}
+		}
 	}
-	immutable = append(immutable,
-		providerlifecycle.ImmutableReplaceEvidence{Kind: "SQLDatabase", Field: "/engine", Passed: true},
-		providerlifecycle.ImmutableReplaceEvidence{Kind: "VectorIndex", Field: "/dimensions", Passed: true},
-	)
 	providerBinary := providerlifecycle.ProviderBinaryIdentity{Version: version.Version, SHA256: digest}
 	reports := make([]providerlifecycle.Report, 0, len(requirements))
 	for _, requirement := range requirements {
@@ -452,8 +449,8 @@ func writeRegistryFixture(t *testing.T, root string, versionRaw []byte, releaseC
 			CLI:            providerlifecycle.CLIIdentity{Product: requirement.Product, Version: requirement.Version, ProviderAddress: requirement.ProviderAddress, ExecutableName: requirement.Product, ExecutableSHA256: digest},
 			Resources:      resources,
 			NegativeChecks: []providerlifecycle.NegativeEvidence{
-				{Name: "response-name-substitution-rejected", Kind: "ObjectBucket", Fixture: "name substitution", Passed: true},
-				{Name: "response-package-digest-substitution-rejected", Kind: "KVStore", Fixture: "package substitution", Passed: true},
+				{Name: "response-name-substitution-rejected", Kind: formcatalog.Kinds[0].Kind, Fixture: "name substitution", Passed: true},
+				{Name: "response-package-digest-substitution-rejected", Kind: formcatalog.Kinds[1].Kind, Fixture: "package substitution", Passed: true},
 			},
 			ImmutableReplace: immutable,
 		}

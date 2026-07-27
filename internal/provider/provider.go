@@ -25,6 +25,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
 )
 
@@ -75,7 +76,7 @@ func (p *takoformProvider) Metadata(_ context.Context, _ provider.MetadataReques
 
 func (p *takoformProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "The Takoform provider exposes ten statically typed Service Form resources " +
+		Description: "The Takoform provider exposes statically typed portable Service Form resources " +
 			"through any conforming form host. It never selects a backend, target, credential, price, or operator policy.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
@@ -156,18 +157,11 @@ func newResourceAPIHTTPClient() *http.Client {
 }
 
 func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resource {
-	return []func() resource.Resource{
-		NewEdgeWorkerResource,
-		NewObjectBucketResource,
-		NewKVStoreResource,
-		NewQueueResource,
-		NewSQLDatabaseResource,
-		NewContainerServiceResource,
-		NewVectorIndexResource,
-		NewDurableWorkflowResource,
-		NewStatefulActorNamespaceResource,
-		NewScheduleResource,
+	resources := make([]func() resource.Resource, 0, len(formcatalog.Kinds))
+	for _, kind := range formcatalog.Kinds {
+		resources = append(resources, NewFormResource(kind))
 	}
+	return resources
 }
 
 func (p *takoformProvider) DataSources(_ context.Context) []func() datasource.DataSource {
@@ -217,20 +211,6 @@ func providerCandidateForms() map[string]client.InstalledFormReference {
 		}
 	}
 	return out
-}
-
-func providerCandidateFormVersion(kind, definitionVersion string) (client.InstalledFormReference, bool) {
-	ref, err := formregistry.ForKindVersion(kind, definitionVersion)
-	if err != nil {
-		return client.InstalledFormReference{}, false
-	}
-	return client.InstalledFormReference{
-		FormRef: client.FormRef{
-			APIVersion: ref.APIVersion, Kind: ref.Kind,
-			DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest,
-		},
-		PackageDigest: ref.PackageDigest,
-	}, true
 }
 
 func supportsAPIVersion(versions []string, want string) bool {

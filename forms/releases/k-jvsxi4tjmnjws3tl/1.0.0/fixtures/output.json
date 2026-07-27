@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "MetricSink/metric-sink",
+  "kind": "MetricSink",
+  "name": "metric-sink",
+  "portability": "portable"
+}
