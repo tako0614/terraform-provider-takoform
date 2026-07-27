@@ -369,7 +369,7 @@ func VerifyAdmissionClosure(root string) error {
 	if err := Verify(root); err != nil {
 		return err
 	}
-	candidates, err := AdmissionCandidateSet()
+	candidates, err := AdmissionCandidateSet(root)
 	if err != nil {
 		return err
 	}
@@ -440,11 +440,11 @@ func publishedPackageCandidateSet(root string) (admissionrelease.CandidateSet, e
 // It is deliberately not the active candidate set: the rebuilt portable Forms
 // have no published packages and no admission evidence, so binding an
 // admission lane to them would manufacture a claim that does not exist.
-func AdmissionCandidateSet() (admissionrelease.CandidateSet, error) {
+func AdmissionCandidateSet(root string) (admissionrelease.CandidateSet, error) {
 	candidates := make([]admissionrelease.Candidate, 0, len(RetiredKinds))
 	for _, spec := range RetiredKinds {
 		packagePath := filepath.ToSlash(filepath.Join("forms", "releases", releaseIDForKind(spec.Kind), spec.Version))
-		report, err := formpackage.VerifyDirectory(filepath.Join(".", filepath.FromSlash(packagePath)))
+		report, err := formpackage.VerifyDirectory(filepath.Join(root, filepath.FromSlash(packagePath)))
 		if err != nil {
 			return admissionrelease.CandidateSet{}, fmt.Errorf("%s retired release source: %w", spec.Kind, err)
 		}

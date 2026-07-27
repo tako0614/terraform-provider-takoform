@@ -321,7 +321,7 @@ type RetiredInventory struct {
 }
 
 func generateRetiredInventory(root string) error {
-	set, err := AdmissionCandidateSet()
+	set, err := AdmissionCandidateSet(root)
 	if err != nil {
 		return err
 	}

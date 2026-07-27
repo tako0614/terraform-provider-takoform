@@ -166,7 +166,7 @@ func Build(options BuildOptions) error {
 	if err != nil {
 		return err
 	}
-	candidates, err := standardforms.AdmissionCandidateSet()
+	candidates, err := standardforms.AdmissionCandidateSet(root)
 	if err != nil {
 		return err
 	}

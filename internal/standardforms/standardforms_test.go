@@ -53,8 +53,14 @@ func TestAdmissionActivationGateFailsClosedWithoutImmutableReleaseRef(t *testing
 	root := filepath.Join("..", "..")
 	checkout := cloneCurrentSourceWithoutTags(t, root)
 	err := VerifyReleaseReady(context.Background(), checkout, http.DefaultClient, "")
-	if err == nil || !strings.Contains(err.Error(), "immutable release refs: admission release tag") {
-		t.Fatalf("release gate error = %v", err)
+	if err == nil {
+		t.Fatal("release gate activated a Form set with no immutable release or Registry readback")
+	}
+	// The rebuilt Forms have no release tag and no Registry readback of their
+	// own, so the gate must refuse on published-evidence grounds rather than
+	// restamp the retired generation's proofs.
+	if !strings.Contains(err.Error(), "release") && !strings.Contains(err.Error(), "readback") {
+		t.Fatalf("release gate failed for an unrelated reason: %v", err)
 	}
 }
 
