@@ -3,7 +3,7 @@
 //
 // Takoform is a portable contract. It therefore never hard-codes one host's
 // repository, workflow, or subject as the definition of a valid proof: an
-// accepted publisher is data in admission/v1/host-report-policy.json, and any
+// accepted publisher is data in admission/v1/conforming-hosts.json, and any
 // host that can produce the same signed evidence may be added by review.
 package hostpolicy
 
@@ -17,9 +17,9 @@ import (
 )
 
 // PolicyPath is the repository-relative location of the reviewed policy.
-const PolicyPath = "admission/v1/host-report-policy.json"
+const PolicyPath = "admission/v1/conforming-hosts.json"
 
-const policyFormat = "takoform.host-report-policy@v1"
+const policyFormat = "takoform.conforming-host-policy@v1"
 
 var (
 	hostIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)

@@ -51,7 +51,7 @@ go run ./cmd/standard-form-conformance verify
 `generate` creates independent data-only definitions and fixtures; `verify`
 runs the package verifier and inspects actual provider constructors, attribute
 coverage, import support, and selected `RequiresReplace` modifiers. These
-checks do not execute a Terraform protocol lifecycle or a Takosumi host. The
+checks do not execute a Terraform protocol lifecycle or a conforming host. The
 inventory therefore says `classification: structural-candidate`,
 `localConformance: structural-only`, `admissionStatus: external-required`, and
 `publicationReady: false`. Observed and output fixtures expose only lifecycle
@@ -74,7 +74,7 @@ ContainerService desired fixtures contain illustrative artifact locations or
 digests and are not real executable artifacts. A host must not substitute
 those values and report the run as the canonical fixture.
 
-The active coordinated `1.0.1` candidate instead pins the Takosumi-owned,
+The active coordinated `1.0.1` candidate instead pins the host-published,
 host-conformance-only `standard-form-runtime-v1.0.3` EdgeWorker and
 DurableWorkflow release identities and their real byte digests plus a public
 Docker Hub linux/amd64 OCI manifest by exact digest. Optional
@@ -149,7 +149,7 @@ signed admission release can classify the exact packages
 `portable-standard`. A failed or absent Phase 2 leaves every Form unavailable
 for standard activation even though the provider binary is installable.
 
-The local Takosumi host proof and reviewed OpenTofu/Terraform FQN lifecycle
+The local conforming-host proof and reviewed OpenTofu/Terraform FQN lifecycle
 matrix cover the candidate set; shared negative admission fixtures use the
 portable API wire code `invalid_argument`. The package verifier's internal
 failure name `schema_validation_failed` is not a wire error. An admission

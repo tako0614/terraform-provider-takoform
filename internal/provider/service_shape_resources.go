@@ -1074,7 +1074,7 @@ func (m serviceShapeModel) toResource(ctx context.Context, defaultSpace, kind st
 			diags.AddAttributeError(
 				path.Root("tables"),
 				"Unknown indexed database schema",
-				"tables must be known before apply so Takosumi can select the exact SQLDatabase Form; no request was sent.",
+				"tables must be known before apply so the provider can select the exact SQLDatabase Form; no request was sent.",
 			)
 			return nil, "", diags
 		}

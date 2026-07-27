@@ -64,7 +64,7 @@ descriptor (`http.request@1`, `object.storage@1`, `keyvalue.store@1`,
 `sql.query@1`, `queue.messages@1`, `vector.query@1`, `workflow.invoke@1`, or
 `actor.invoke@1`). `Schedule` intentionally exposes none because it consumes
 `workflow.invoke` through its declared Resource connection. These names carry
-no Takosumi Cloud identity, credentials, routing authority, or consumer grant;
+no host or Cloud identity, credentials, routing authority, or consumer grant;
 the host materializes and authorizes the resulting Interface record.
 
 `SQLDatabase@2.0.0` is a separate, unpublished structural successor candidate
@@ -112,8 +112,8 @@ existing definition/package `1.0.1` bytes; these independent version streams
 avoid republishing or re-signing an unchanged package closure. The
 active provider `0.1.3` source candidate pins that complete `1.0.1` Form set,
 whose executable fixture
-references resolve to a separate Takosumi-owned
-`standard-form-runtime-v1.0.3` host-conformance runtime release.
+references resolve to a separate host-published
+`standard-form-runtime-v1.0.3` conformance runtime release.
 
 The candidate's exact EdgeWorker, DurableWorkflow, and ContainerService bytes
 are pinned in `forms/standard-runtime-artifact-set.json`. Run

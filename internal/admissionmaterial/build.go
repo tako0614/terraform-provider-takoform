@@ -58,7 +58,7 @@ type BuildOptions struct {
 	ProviderSourceCommit     string
 	HostWorkflowRunID        string
 	ProviderWorkflowRunID    string
-	// HostID names the reviewed conforming host in admission/v1/host-report-policy.json
+	// HostID names the reviewed conforming host in admission/v1/conforming-hosts.json
 	// whose signed reports this material accepts.
 	HostID string
 }

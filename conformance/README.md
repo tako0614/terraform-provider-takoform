@@ -112,13 +112,13 @@ standard` definition candidate set and the independent `SQLDatabase@2.0.0`
 successor candidate. Neither replaces or mutates a published `1.0.1`
 identity. `go run ./cmd/standard-form-conformance verify` validates package
 bytes and fixtures and inspects the actual provider resource structure. It does
-not run the Terraform protocol lifecycle or a Takosumi host, and this repository
+not run the Terraform protocol lifecycle or a conforming host, and this repository
 intentionally contains no locally synthesized passed admission JSON.
 
 The machine-readable inventory classifies the set `structural-candidate`, marks
 local coverage `structural-only`, and admission `external-required`. Definition
 `status: standard` pins the proposed final bytes; it is not an admission claim.
-The local dual-CLI/FQN provider lifecycle matrix and Takosumi host fixture proof
+The local dual-CLI/FQN provider lifecycle matrix and conforming-host fixture proof
 cover the candidate set, including portable negative wire-code coverage
 (`invalid_argument`). Signatures/provenance, immutable release tags, Registry
 installation/readback, and authenticated signed admission evidence remain

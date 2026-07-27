@@ -32,7 +32,7 @@ The three newly settled identities are exact protected-main workflow subjects:
 
 - `admission-evidence`: Takoform `standard-admission-evidence.yml`;
 - `provider-report`: Takoform `standard-provider-report.yml`;
-- `host-report`: Takosumi `standard-form-host-report.yml`.
+- `host-report`: the `standard-form-host-report.yml` workflow of the conforming host selected from [`conforming-hosts.json`](conforming-hosts.json).
 
 The five-role pin verifier rejects any reused `(issuer, certificate identity)`
 pair, policy-byte drift, or unpinned trust-root change.

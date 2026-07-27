@@ -103,7 +103,7 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 		"git rev-parse \"${SNAPSHOT_COMMIT}:${PROVIDER_CANDIDATE_PATH}\"",
 		"--trusted-root admission/v1/trust/trusted-root.json",
 		"--host-id \"${HOST_ID}\"",
-		"admission/v1/host-report-policy.json",
+		"admission/v1/conforming-hosts.json",
 		"--host-source-commit \"${HOST_SOURCE_COMMIT}\"",
 		"--host-takoform-source-commit \"${HOST_TAKOFORM_SOURCE_COMMIT}\"",
 		"--provider-source-commit \"${PROVIDER_SOURCE_COMMIT}\"",

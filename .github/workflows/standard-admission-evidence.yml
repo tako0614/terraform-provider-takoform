@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       host_id:
-        description: Reviewed conforming host in admission/v1/host-report-policy.json that signed the host reports
+        description: Reviewed conforming host in admission/v1/conforming-hosts.json that signed the host reports
         required: true
         type: string
       snapshot_commit:
@@ -200,7 +200,7 @@ jobs:
           grep -F "${EXPECTED_COSIGN_VERSION}" <<<"$(cosign version 2>&1)"
           host_report_identity="$(jq -er --arg id "${HOST_ID}" \
             '.hosts[] | select(.hostId == $id) | .certificateIdentity' \
-            admission/v1/host-report-policy.json)"
+            admission/v1/conforming-hosts.json)"
           test "$(find "${HOST_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
           test "$(find "${PROVIDER_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
           test "$(find "${HOST_CANDIDATE_PATH}" -type f | wc -l)" -eq 23

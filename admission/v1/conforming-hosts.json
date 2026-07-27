@@ -1,6 +1,6 @@
 {
-  "format": "takoform.host-report-policy@v1",
-  "description": "Conforming hosts whose signed lifecycle reports this repository accepts as admission input. Takoform does not standardize a Form on one host's say-so: an entry here is an accepted publisher identity, not an owner of the contract. Adding an entry is a reviewed change.",
+  "format": "takoform.conforming-host-policy@v1",
+  "description": "Conforming hosts whose signed lifecycle reports this repository accepts as admission input. Takoform does not standardize a Form on one host's say-so: an entry here is an accepted publisher identity, not an owner of the contract. Adding an entry is a reviewed change. This is the acceptance allowlist for building new material; trust/host-report-policy.json is the digest-pinned sigstore input that verifies one already-retained proof.",
   "hosts": [
     {
       "hostId": "takosumi-oss-reference",

@@ -115,6 +115,6 @@ manager authority.
 is the digest-pinned input for any neutral black-box host runner. The contract
 names a provider-independent runner subject and pins a digest over that subject,
 runner input, mutation preconditions, idempotent operations, and required check
-set. It contains no Takosumi repository path or closed implementation identity.
+set. It contains no host repository path or closed implementation identity.
 `go run ./cmd/conformance verify` checks both digests and the fixture's exact
 release-owned ObjectBucket identity.
