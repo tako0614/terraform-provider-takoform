@@ -881,6 +881,9 @@ function requireSuccessfulRun(
   ]);
   const run = JSON.parse(raw);
   const attempt = Number(runAttempt);
+  const expectedUrl =
+    `https://github.com/tako0614/terraform-provider-takoform/actions/runs/${runId}` +
+    `/attempts/${runAttempt}`;
   if (
     run.databaseId?.toString() !== runId ||
     run.attempt !== attempt ||
@@ -891,9 +894,7 @@ function requireSuccessfulRun(
     run.status !== "completed" ||
     run.conclusion !== "success" ||
     !REQUEST_ID.test(run.displayTitle ?? "") ||
-    !/^https:\/\/github\.com\/tako0614\/terraform-provider-takoform\/actions\/runs\/[1-9][0-9]*$/u.test(
-      run.url,
-    ) ||
+    run.url !== expectedUrl ||
     (displayTitle && run.displayTitle !== displayTitle)
   ) {
     throw new Error(
@@ -3822,6 +3823,7 @@ export const releaseDeployTestHooks = Object.freeze({
   providerAssetNames,
   pushExactTag,
   reportTagFailure,
+  requireSuccessfulRun,
   validateReleaseReadback,
   validateDraftBeforePublication,
   verifyChecksumClosure,
