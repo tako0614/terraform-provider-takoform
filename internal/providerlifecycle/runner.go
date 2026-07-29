@@ -184,7 +184,7 @@ func run(ctx context.Context, repoRoot, cliPath, installationSource string) (Rep
 	providerBinary := ""
 	if installationSource == LocalDevOverride {
 		providerBinary = filepath.Join(binDir, "terraform-provider-takoform")
-		if output, err := runCommand(ctx, repoRoot, nil, "go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-buildid= -X main.version="+providerVersion, "-o", providerBinary, "."); err != nil {
+		if output, err := buildLocalProviderBinary(ctx, repoRoot, providerVersion, providerBinary); err != nil {
 			return Report{}, fmt.Errorf("build provider binary: %w\n%s", err, output)
 		}
 		cliConfigBody = fmt.Sprintf(`provider_installation {
@@ -430,21 +430,65 @@ func LoadCLIMatrix(repoRoot string) ([]CLIRequirement, string, error) {
 }
 
 func loadProviderVersion(repoRoot string) (string, error) {
-	raw, err := os.ReadFile(filepath.Join(repoRoot, "release", "version.json"))
+	descriptor, err := loadProviderBuildDescriptor(repoRoot)
 	if err != nil {
 		return "", err
 	}
-	var descriptor struct {
-		Version string `json:"version"`
-		Tag     string `json:"tag"`
+	return descriptor.Version, nil
+}
+
+type providerBuildDescriptor struct {
+	Version   string `json:"version"`
+	Tag       string `json:"tag"`
+	GoVersion string `json:"goVersion"`
+}
+
+func loadProviderBuildDescriptor(repoRoot string) (providerBuildDescriptor, error) {
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "release", "version.json"))
+	if err != nil {
+		return providerBuildDescriptor{}, err
 	}
+	var descriptor providerBuildDescriptor
 	if err := json.Unmarshal(raw, &descriptor); err != nil {
+		return providerBuildDescriptor{}, err
+	}
+	if descriptor.Version == "" || descriptor.Tag != "v"+descriptor.Version ||
+		!strings.HasPrefix(descriptor.GoVersion, "go") || strings.ContainsAny(descriptor.GoVersion, " \t\r\n") {
+		return providerBuildDescriptor{}, errors.New("release descriptor provider build identity is invalid")
+	}
+	return descriptor, nil
+}
+
+func buildLocalProviderBinary(ctx context.Context, repoRoot, providerVersion, outputPath string) (string, error) {
+	descriptor, err := loadProviderBuildDescriptor(repoRoot)
+	if err != nil {
 		return "", err
 	}
-	if descriptor.Version == "" || descriptor.Tag != "v"+descriptor.Version {
-		return "", errors.New("release descriptor provider version is invalid")
+	if providerVersion != descriptor.Version {
+		return "", fmt.Errorf("provider build version %q differs from release descriptor %q", providerVersion, descriptor.Version)
 	}
-	return descriptor.Version, nil
+	environment := make([]string, 0, len(os.Environ())+2)
+	for _, item := range os.Environ() {
+		if strings.HasPrefix(item, "CGO_ENABLED=") || strings.HasPrefix(item, "GOTOOLCHAIN=") {
+			continue
+		}
+		environment = append(environment, item)
+	}
+	environment = append(environment, "CGO_ENABLED=0", "GOTOOLCHAIN="+descriptor.GoVersion)
+	return runCommand(
+		ctx,
+		repoRoot,
+		environment,
+		"go",
+		"build",
+		"-trimpath",
+		"-buildvcs=false",
+		"-ldflags",
+		"-s -w -buildid= -X main.version="+providerVersion,
+		"-o",
+		outputPath,
+		".",
+	)
 }
 
 func RunMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath string) (MatrixReport, error) {

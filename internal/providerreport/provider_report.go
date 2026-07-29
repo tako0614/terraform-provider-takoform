@@ -466,7 +466,8 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 		report := admissionrelease.RunnerReport{
 			Format: reportFormat, Role: providerRole,
 			Subject: "provider:" + lifecycle.CLI.ProviderAddress, RunnerVersion: lifecycle.ProviderBinary.Version,
-			Identity: fixture.Identity, Status: "passed",
+			ProviderBinarySHA256: lifecycle.ProviderBinary.SHA256,
+			Identity:             fixture.Identity, Status: "passed",
 			Lifecycle: standardform.LifecycleAudit{
 				Create: checks.Create, Read: checks.Read, Update: checks.Update, Delete: checks.Delete,
 				Import: checks.NativeImport && checks.CLIImport, Observe: checks.Observe, Refresh: checks.Refresh, Drift: checks.DriftState,

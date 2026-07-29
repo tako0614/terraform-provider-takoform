@@ -185,10 +185,10 @@ func verifyAdmissionSetAt(root, retainedRoot string, candidates CandidateSet, ve
 	if err != nil {
 		return fmt.Errorf("provider Registry install/readback: %w", err)
 	}
-	if set.Generation != "" &&
-		(providerIdentity.sourceCommit != registryReadback.ProviderReleaseCommit ||
-			providerIdentity.runnerVersion != registryReadback.ProviderVersion) {
-		return fmt.Errorf("provider-report closure source/version does not match Registry readback")
+	if set.Generation != "" {
+		if err := validateProviderRegistryIdentity(providerIdentity, registryReadback); err != nil {
+			return err
+		}
 	}
 	subjects = append(subjects, RetainedSubject{
 		Kind: "provider", Role: roleRegistryReadback, Path: set.ProviderRegistryReadback.Path,

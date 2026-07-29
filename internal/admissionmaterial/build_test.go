@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
 )
 
 func TestPrepareOutputPathRejectsRepositoryAndExistingPaths(t *testing.T) {
@@ -163,6 +165,40 @@ func TestBuildCurrentRequiresRegistryCandidateAndRunBinding(t *testing.T) {
 	options.RegistryWorkflowRunID = "3"
 	if err := BuildCurrent(options); err == nil || !strings.Contains(err.Error(), "current host, provider, Registry") {
 		t.Fatalf("missing registry candidate error = %v", err)
+	}
+}
+
+func TestCurrentProviderReportsMatchRegistryByExactBinary(t *testing.T) {
+	t.Parallel()
+	const binaryDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	providers := artifactSet{
+		allByKind: map[string]reportArtifact{
+			"ObjectBucket": {
+				report: admissionrelease.RunnerReport{
+					RunnerVersion:        "0.2.1",
+					ProviderBinarySHA256: binaryDigest,
+				},
+			},
+		},
+		providerBinarySHA256: binaryDigest,
+	}
+	registry := registryArtifactSet{
+		parsed: admissionrelease.ProviderRegistryReadback{
+			ProviderVersion:       "0.2.1",
+			ProviderReleaseCommit: "89abcdef0123456789abcdef0123456789abcdef",
+			Installs: []admissionrelease.RegistryInstall{
+				{Product: "OpenTofu", ProviderVersion: "0.2.1", ProviderBinarySHA256: binaryDigest},
+				{Product: "Terraform", ProviderVersion: "0.2.1", ProviderBinarySHA256: binaryDigest},
+			},
+		},
+	}
+	if err := validateCurrentProviderRegistryIdentity(providers, registry); err != nil {
+		t.Fatalf("exact provider binary must permit later evidence tooling commits: %v", err)
+	}
+	registry.parsed.Installs[0].ProviderBinarySHA256 = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	if err := validateCurrentProviderRegistryIdentity(providers, registry); err == nil ||
+		!strings.Contains(err.Error(), "binary") {
+		t.Fatalf("provider binary substitution error = %v", err)
 	}
 }
 

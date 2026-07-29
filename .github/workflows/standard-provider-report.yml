@@ -156,6 +156,7 @@ jobs:
           if (manifest.format !== "takoform.standard-provider-report-candidate@v1" || manifest.status !== "candidate-only" || manifest.proofType !== "provider" || manifest.subject !== "provider:registry.terraform.io/tako0614/takoform" || manifest.generation !== inventory.generation || manifest.runnerVersion !== descriptor.version || manifest.source?.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || manifest.source?.commit !== process.env.SOURCE_COMMIT || manifest.reports?.length !== expected.size) throw new Error("provider-report manifest identity drift");
           const files = ["provider-report-manifest.json"];
           const seen = new Set();
+          let providerBinarySha256 = "";
           for (const entry of manifest.reports) {
             const want = expected.get(entry.slug);
             if (!want || seen.has(entry.slug) || entry.kind !== want.kind || entry.path !== `packages/${entry.slug}/provider-report.json` || entry.bundlePath !== `packages/${entry.slug}/provider-report.sigstore.json`) throw new Error("report descriptor closure drift");
@@ -164,10 +165,12 @@ jobs:
             const identity = {formRef:{apiVersion:"forms.takoform.com/v1alpha1",kind:want.kind,definitionVersion:want.version,schemaDigest:want.schemaDigest},packageDigest:want.packageDigest};
             if (entry.digest !== digest(raw) || !same(entry.identity, identity) || report.format !== "takoform.standard-runner-report@v1" || report.role !== "provider-report" || report.status !== "passed" || report.subject !== manifest.subject || report.runnerVersion !== manifest.runnerVersion || !same(report.identity, identity)) throw new Error(`${entry.slug} identity or digest drift`);
             const lifecycleKeys = ["create","delete","drift","import","observe","read","refresh","update"];
-            const reportKeys = ["format","identity","lifecycle","negativeFixtures","positiveFixtures","role","runnerVersion","status","subject"];
+            const reportKeys = ["format","identity","lifecycle","negativeFixtures","positiveFixtures","providerBinarySha256","role","runnerVersion","status","subject"];
             const positive = want.positive.map((name) => ({name,passed:true}));
             const negative = want.negative.map((name) => ({errorCode:"invalid_argument",name,passed:true}));
-            if (!same(Object.keys(report).sort(), reportKeys) || !same(Object.keys(report.lifecycle ?? {}).sort(), lifecycleKeys) || !Object.values(report.lifecycle ?? {}).every((value) => value === true) || !same(report.positiveFixtures,positive) || !same(report.negativeFixtures,negative)) throw new Error(`${entry.slug} proof closure drift`);
+            if (!same(Object.keys(report).sort(), reportKeys) || !/^sha256:[0-9a-f]{64}$/.test(report.providerBinarySha256) || !same(Object.keys(report.lifecycle ?? {}).sort(), lifecycleKeys) || !Object.values(report.lifecycle ?? {}).every((value) => value === true) || !same(report.positiveFixtures,positive) || !same(report.negativeFixtures,negative)) throw new Error(`${entry.slug} proof closure drift`);
+            if (providerBinarySha256 && report.providerBinarySha256 !== providerBinarySha256) throw new Error(`${entry.slug} used a different provider binary`);
+            providerBinarySha256 = report.providerBinarySha256;
             files.push(entry.path);
           }
           if (seen.size !== expected.size) throw new Error("report set incomplete");

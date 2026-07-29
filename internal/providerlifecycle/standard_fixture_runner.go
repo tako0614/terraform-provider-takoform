@@ -97,7 +97,7 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 		return StandardFixtureRun{}, err
 	}
 	providerBinary := filepath.Join(binDir, "terraform-provider-takoform")
-	if output, err := runCommand(ctx, repoRoot, nil, "go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-buildid= -X main.version="+providerVersion, "-o", providerBinary, "."); err != nil {
+	if output, err := buildLocalProviderBinary(ctx, repoRoot, providerVersion, providerBinary); err != nil {
 		return StandardFixtureRun{}, fmt.Errorf("build provider binary for standard fixtures: %w\n%s", err, output)
 	}
 	providerBinarySHA256, err := fileSHA256(providerBinary)

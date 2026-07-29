@@ -56,6 +56,7 @@ type RunnerReport struct {
 	Role                    string                              `json:"role"`
 	Subject                 string                              `json:"subject"`
 	RunnerVersion           string                              `json:"runnerVersion"`
+	ProviderBinarySHA256    string                              `json:"providerBinarySha256,omitempty"`
 	Identity                standardform.InstalledFormReference `json:"identity"`
 	Status                  string                              `json:"status"`
 	Lifecycle               standardform.LifecycleAudit         `json:"lifecycle"`
@@ -421,11 +422,19 @@ func validateRunnerReport(
 		}
 	}
 	if role == roleHostReport {
+		if report.ProviderBinarySHA256 != "" {
+			return fmt.Errorf("%s must not claim provider binary identity", role)
+		}
 		if err := validateHostExecutionEvidence(report); err != nil {
 			return fmt.Errorf("%s execution evidence: %w", role, err)
 		}
-	} else if report.ExecutionEvidence != nil || report.ExecutionEvidenceDigest != "" {
-		return fmt.Errorf("%s provider report must not claim host execution evidence", role)
+	} else {
+		if report.ProviderBinarySHA256 != "" && !formpackage.ValidDigest(report.ProviderBinarySHA256) {
+			return fmt.Errorf("%s provider binary identity is invalid", role)
+		}
+		if report.ExecutionEvidence != nil || report.ExecutionEvidenceDigest != "" {
+			return fmt.Errorf("%s provider report must not claim host execution evidence", role)
+		}
 	}
 	if !sameStringSet(positiveNames, positives) || !sameStringSet(negativeNames, negatives) ||
 		!sameStringSet(proof.PositiveFixtures, positives) || !sameStringSet(proof.NegativeFixtures, negatives) {
