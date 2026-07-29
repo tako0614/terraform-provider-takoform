@@ -13,6 +13,7 @@ Current committed surfaces:
 
 - [`conformance.md`](conformance.md) — requirement keywords and the four conformance classes;
 - [`versioning.md`](versioning.md) — independent version streams, stability, and deprecation;
+- [`decisions/`](decisions/) — the reasons behind accepted normative product decisions;
 - [`schemas/`](schemas/) — the normative machine-readable schemas;
 - [`host-api/`](host-api/) — the discovery, availability, preview, apply, read, import, observe, refresh, and delete contract, with [`operations.json`](host-api/operations.json) as its machine-readable form;
 - [`form-definition/`](form-definition/) — exact FormRef and data-only Form Definition contract;

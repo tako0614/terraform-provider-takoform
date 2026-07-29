@@ -11,6 +11,40 @@ up meaning nothing.
 | Form Package | SemVer `packageVersion` | the packaged bytes for one definition change |
 | Provider | SemVer release | the Terraform/OpenTofu provider binary changes |
 
+## Provider releases
+
+The provider `v1.0.0` candidate establishes the first stable provider
+compatibility line. Within `v1.x`, a release MUST NOT remove an existing
+resource type, silently reinterpret persisted state as a different Form, or
+make an existing valid resource configuration invalid. Such a change requires
+provider `v2`. Compatible optional fields, new resource types, and bug fixes
+remain allowed within `v1`.
+
+This promise applies only to the provider binary and its Terraform/OpenTofu
+surface. It does not graduate the portable API group, admit a Form as
+`portable-standard`, or make any host implementation stable.
+
+Provider, Form definition, Form Package, and admission versions MUST NOT be
+coordinated merely to share a number:
+
+- a provider release may implement a mixed set of Form definition versions;
+- each Form Package has its own immutable SemVer and binds one exact FormRef;
+- an admission generation identifies one selected closure and is not a
+  provider SemVer;
+- changing the provider major does not reset an already-published Form
+  identity.
+
+In particular, `EdgeWorker@1.0.0` and `EdgeWorker@1.0.1` are already-published
+immutable identities. The rebuilt provider-neutral definition is therefore
+`EdgeWorker@2.0.0`, including when implemented by provider `v1.0.0`. Reusing
+`EdgeWorker@1.0.0` would make one public identity resolve to different bytes
+and is forbidden.
+
+The decision is recorded in
+[`decisions/0001-provider-v1-keeps-form-versions-independent.md`](decisions/0001-provider-v1-keeps-form-versions-independent.md).
+The machine-readable lock is the `versioning` object in
+[`../release/version.json`](../release/version.json).
+
 ## Form definitions
 
 A Form's identity is its exact `FormRef`, and the `schemaDigest` in that

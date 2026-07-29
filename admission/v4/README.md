@@ -11,6 +11,6 @@ publication snapshot under `admission/v3`.
 This directory intentionally contains only reviewed trust and conforming-host
 policy before publication. Package readback, signed provider/host/Registry
 candidates, and signed admission evidence are added only by their protected
-workflows after the exact Form Packages and provider `v0.3.0` are published.
+workflows after the exact Form Packages and provider `v1.0.0` are published.
 Until then `current-published-package-check` and
 `current-admission-closure-check` fail closed.

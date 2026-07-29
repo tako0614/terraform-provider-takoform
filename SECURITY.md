@@ -8,7 +8,15 @@ Include the affected provider version, a minimal reproduction with all secrets r
 
 ## Supported versions
 
-Until the first tagged release, only the current `main` branch is supported. After releases begin, the latest stable release will receive security fixes.
+The current `main` branch and the latest published provider line receive
+security fixes. A version in `release/version.json` with
+`publicationStatus: candidate-only` is not a published release.
+
+When provider `v1.0.0` is published, `v1` becomes the stable provider line and
+the latest `v1.x` release receives fixes. The pre-v1 provider line then becomes
+unsupported unless a security advisory explicitly says otherwise. Historical
+release bytes remain available for verification and migration; support never
+means replacing them.
 
 ## Provider release trust
 

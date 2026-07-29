@@ -103,11 +103,12 @@ found that its `HttpService@1.0.0` name described the `http.request@1`
 Interface rather than the requested execution class. The active successor is
 the provider-neutral `EdgeWorker@2.0.0`: it keeps the neutral runtime,
 concurrency, configuration, and immutable-artifact contract without restoring
-Cloudflare compatibility fields. Its package and provider `v0.3.0` remain
-unpublished candidates, so current admission is intentionally fail-closed
-until new package, provider, host, dual-Registry, and admission evidence is
-retained under the distinct [`admission/v4/`](admission/v4/) `ga-core-v2`
-lane. The successor lane verifies provider reports over all 34
+Cloudflare compatibility fields. Its `EdgeWorker@2.0.0` package and provider
+`v1.0.0` remain unpublished candidates, so current admission is intentionally
+fail-closed until new package, provider, host, dual-Registry, and admission
+evidence is retained under the distinct
+[`admission/v4/`](admission/v4/) `ga-core-v2` lane. The successor lane verifies
+provider reports over all 34
 `portable-v1` Forms before selecting the exact ten successor identities.
 GitHub Actions supplies distinct keyless publisher identities; all generation,
 rederivation, and closure checks remain local Go commands.
@@ -148,7 +149,7 @@ and rejected `v0.1.2` because it omitted the required Registry metadata
 manifest checksum. The exact six-entry `v0.1.3` release is the non-overwriting
 successor. The first rebuilt Form set uses immutable provider `v0.2.1`; the
 `EdgeWorker@2.0.0` successor is implemented by the candidate provider
-`v0.3.0`, whose Registry readback can exist only after publication.
+`v1.0.0`, whose Registry readback can exist only after publication.
 
 Provider publication and Standard Form admission are separate authorities.
 Provider publication never changes admission status. Current admission is a
@@ -162,7 +163,9 @@ the private key remains outside the repository. The `tako0614` public namespace
 and pinned signing key are registered. Do not create a new release tag until
 the release descriptor and provider compatibility gates are complete. Existing
 version paths are immutable, so retired provider `0.1.3`, published provider
-`0.2.1`, and candidate successor `0.3.0` remain distinct identities.
+`0.2.1`, and candidate successor `1.0.0` remain distinct identities. Provider
+`1.0.0` implements `EdgeWorker@2.0.0`; provider and Form versions are
+independent by design.
 
 ## License
 
