@@ -4,19 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 func interfaceHost(t *testing.T, advertise bool, handler http.HandlerFunc) *httptest.Server {
-	return interfaceHostWithWrites(t, advertise, false, handler)
-}
-
-func interfaceHostWithWrites(t *testing.T, advertise, writes bool, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -27,9 +24,6 @@ func interfaceHostWithWrites(t *testing.T, advertise, writes bool, handler http.
 			}
 			if advertise {
 				features[FeatureInterfaceDeclarations] = true
-			}
-			if writes {
-				features[FeatureInterfaceDeclarationWrites] = true
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"api_versions": []string{APIVersion},
@@ -45,118 +39,6 @@ func interfaceHostWithWrites(t *testing.T, advertise, writes bool, handler http.
 	}))
 	t.Cleanup(server.Close)
 	return server
-}
-
-func TestInterfaceWriteUsesPortableIdentityAndFences(t *testing.T) {
-	var methods []string
-	var preconditions []string
-	var keys []string
-	server := interfaceHostWithWrites(t, true, true, func(w http.ResponseWriter, r *http.Request) {
-		methods = append(methods, r.Method)
-		preconditions = append(preconditions, r.Header.Get("If-None-Match")+r.Header.Get("If-Match"))
-		keys = append(keys, r.Header.Get("Idempotency-Key"))
-		if r.URL.Path != "/apis/forms.takoform.com/v1alpha1/interfaces/example.runtime" {
-			t.Fatalf("path = %q", r.URL.Path)
-		}
-		if r.URL.Query().Get("space") != "prod" ||
-			r.URL.Query().Get("version") != "1" ||
-			r.URL.Query().Get("resourceKind") != "EdgeWorker" ||
-			r.URL.Query().Get("resourceName") != "api" {
-			t.Fatalf("query = %s", r.URL.RawQuery)
-		}
-		switch r.Method {
-		case http.MethodPut:
-			var body DeclaredInterface
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatal(err)
-			}
-			if body.Document["title"] != "Example" || body.ResourceURIInput != "resource_uri" {
-				t.Fatalf("body = %+v", body)
-			}
-			body.Values = map[string]any{
-				"endpoint":     "https://api.example.test",
-				"resource_uri": "https://api.example.test",
-			}
-			body.ResourceURI = "https://api.example.test"
-			body.ResourceVersion = "7"
-			w.Header().Set("ETag", `"7"`)
-			_ = json.NewEncoder(w).Encode(body)
-		case http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			t.Fatalf("method = %s", r.Method)
-		}
-	})
-	c := discoveredClient(t, server)
-	desired := DeclaredInterface{
-		Name: "example.runtime", Version: "1",
-		Resource: InterfaceResourceRef{Kind: "EdgeWorker", Name: "api"},
-		Document: map[string]any{"title": "Example"},
-		Inputs: []formpackage.InterfaceInputDeclaration{
-			{Name: "endpoint", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/url"},
-			{Name: "resource_uri", Source: formpackage.InterfaceInputSourceResourceURI},
-		},
-		ResourceURIInput: "resource_uri",
-	}
-	created, err := c.PutInterface(context.Background(), "prod", desired)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if created.ResourceVersion != "7" || created.ResourceURI != "https://api.example.test" {
-		t.Fatalf("created = %+v", created)
-	}
-	if err := c.DeleteInterface(context.Background(), "prod", InterfaceSelector{
-		Name: "example.runtime", Version: "1", ResourceKind: "EdgeWorker", ResourceName: "api",
-	}, created.ResourceVersion); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(methods, ",") != "PUT,DELETE" ||
-		preconditions[0] != "*" || preconditions[1] != `"7"` ||
-		keys[0] == "" || keys[1] == "" {
-		t.Fatalf("methods=%v preconditions=%v keys=%v", methods, preconditions, keys)
-	}
-}
-
-func TestInterfaceWriteRequiresSeparateCapability(t *testing.T) {
-	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unsupported write reached host: %s", r.URL.Path)
-	})
-	c := discoveredClient(t, server)
-	_, err := c.PutInterface(context.Background(), "prod", DeclaredInterface{
-		Name: "example.runtime", Version: "1",
-		Resource: InterfaceResourceRef{Kind: "EdgeWorker", Name: "api"},
-		Document: map[string]any{},
-	})
-	if !errors.Is(err, ErrInterfaceDeclarationWritesUnsupported) {
-		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestInterfaceWriteRejectsHostAuthoredFieldSubstitution(t *testing.T) {
-	server := interfaceHostWithWrites(t, true, true, func(w http.ResponseWriter, r *http.Request) {
-		var body DeclaredInterface
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatal(err)
-		}
-		body.Inputs = []formpackage.InterfaceInputDeclaration{
-			{Name: "endpoint", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/substituted"},
-		}
-		body.ResourceVersion = "1"
-		w.Header().Set("ETag", `"1"`)
-		_ = json.NewEncoder(w).Encode(body)
-	})
-	c := discoveredClient(t, server)
-	_, err := c.PutInterface(context.Background(), "prod", DeclaredInterface{
-		Name: "example.runtime", Version: "1",
-		Resource: InterfaceResourceRef{Kind: "EdgeWorker", Name: "api"},
-		Document: map[string]any{"title": "Example"},
-		Inputs: []formpackage.InterfaceInputDeclaration{
-			{Name: "endpoint", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/url"},
-		},
-	})
-	if err == nil || !strings.Contains(err.Error(), "altered the authored interface declaration") {
-		t.Fatalf("err = %v, want authored declaration substitution rejection", err)
-	}
 }
 
 func discoveredClient(t *testing.T, server *httptest.Server) *Client {
@@ -241,6 +123,7 @@ func TestGetInterfaceWithoutVersionRequiresUniqueVisibleName(t *testing.T) {
 				items = append(items, map[string]any{
 					"name": "mcp.server", "version": version,
 					"resource": map[string]any{"kind": "ObjectBucket", "name": "assets"}, "document": map[string]any{},
+					"values": map[string]any{},
 				})
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": items})
@@ -249,6 +132,7 @@ func TestGetInterfaceWithoutVersionRequiresUniqueVisibleName(t *testing.T) {
 				"name": "mcp.server", "version": r.URL.Query().Get("version"),
 				"resource": map[string]any{"kind": r.URL.Query().Get("resourceKind"), "name": r.URL.Query().Get("resourceName")},
 				"document": map[string]any{"title": "complete exact read"},
+				"values":   map[string]any{},
 			})
 		default:
 			t.Fatalf("unexpected path %q", r.URL.Path)
@@ -273,6 +157,7 @@ func TestInterfaceReadsRejectSubstitutionAndDuplicateIdentity(t *testing.T) {
 				"name": "mcp.server", "version": "other",
 				"resource": map[string]any{"kind": "ObjectBucket", "name": "other"},
 				"document": map[string]any{},
+				"values":   map[string]any{},
 			})
 		})
 		c := discoveredClient(t, server)
@@ -286,6 +171,7 @@ func TestInterfaceReadsRejectSubstitutionAndDuplicateIdentity(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"name": "mcp.server", "version": "1",
 				"resource": map[string]any{"kind": "ObjectBucket", "name": "assets"},
+				"values":   map[string]any{},
 			})
 		})
 		c := discoveredClient(t, server)
@@ -294,6 +180,23 @@ func TestInterfaceReadsRejectSubstitutionAndDuplicateIdentity(t *testing.T) {
 		})
 		if err == nil || !strings.Contains(err.Error(), "exact declared document") {
 			t.Fatalf("err = %v, want missing document rejection", err)
+		}
+	})
+
+	t.Run("missing exact values", func(t *testing.T) {
+		server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": "mcp.server", "version": "1",
+				"resource": map[string]any{"kind": "ObjectBucket", "name": "assets"},
+				"document": map[string]any{},
+			})
+		})
+		c := discoveredClient(t, server)
+		_, err := c.GetInterface(context.Background(), "prod", InterfaceSelector{
+			Name: "mcp.server", Version: "1", ResourceKind: "ObjectBucket", ResourceName: "assets",
+		})
+		if err == nil || !strings.Contains(err.Error(), "exact resolved values") {
+			t.Fatalf("err = %v, want missing values rejection", err)
 		}
 	})
 
@@ -315,11 +218,36 @@ func TestInterfaceReadsRejectSubstitutionAndDuplicateIdentity(t *testing.T) {
 		}
 	})
 
+	t.Run("Form kind must match Resource kind", func(t *testing.T) {
+		server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": "mcp.server", "version": "1",
+				"resource": map[string]any{"kind": "ObjectBucket", "name": "assets"},
+				"document": map[string]any{},
+				"values":   map[string]any{},
+				"form": map[string]any{
+					"formRef": map[string]any{
+						"apiVersion": APIVersion, "kind": "EdgeWorker", "definitionVersion": "1.0.0",
+						"schemaDigest": "sha256:" + strings.Repeat("a", 64),
+					},
+					"packageDigest": "sha256:" + strings.Repeat("b", 64),
+				},
+			})
+		})
+		c := discoveredClient(t, server)
+		_, err := c.GetInterface(context.Background(), "prod", InterfaceSelector{
+			Name: "mcp.server", Version: "1", ResourceKind: "ObjectBucket", ResourceName: "assets",
+		})
+		if err == nil || !strings.Contains(err.Error(), "invalid Form identity") {
+			t.Fatalf("err = %v, want mismatched Form kind rejection", err)
+		}
+	})
+
 	t.Run("duplicate list identity", func(t *testing.T) {
 		server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": []map[string]any{
-				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "ObjectBucket", "name": "assets"}, "document": map[string]any{}},
-				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "ObjectBucket", "name": "assets"}, "document": map[string]any{}},
+				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "ObjectBucket", "name": "assets"}, "document": map[string]any{}, "values": map[string]any{}},
+				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "ObjectBucket", "name": "assets"}, "document": map[string]any{}, "values": map[string]any{}},
 			}})
 		})
 		c := discoveredClient(t, server)
@@ -329,19 +257,183 @@ func TestInterfaceReadsRejectSubstitutionAndDuplicateIdentity(t *testing.T) {
 	})
 }
 
+func TestDeclaredInterfaceIdentityMatchesWireSchemaPatterns(t *testing.T) {
+	if got := resourceNamePattern.String(); got != formcatalog.PatternName {
+		t.Fatalf("resource name pattern = %q, want canonical PatternName %q", got, formcatalog.PatternName)
+	}
+	valid := DeclaredInterface{
+		Name: "mcp.server", Version: "2025-11-25",
+		Resource: InterfaceResourceRef{Kind: "ObjectBucket", Name: "a" + strings.Repeat("0", 62)},
+		Document: map[string]any{},
+		Values:   map[string]any{},
+	}
+	if err := ValidateResourceName(valid.Resource.Name); err != nil {
+		t.Fatalf("canonical Resource name rejected: %v", err)
+	}
+	if err := validateDeclaredInterfaceIdentity(valid); err != nil {
+		t.Fatalf("valid declaration rejected: %v", err)
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*DeclaredInterface)
+	}{
+		{name: "uppercase interface name", mutate: func(value *DeclaredInterface) { value.Name = "Mcp.server" }},
+		{name: "adjacent name separators", mutate: func(value *DeclaredInterface) { value.Name = "mcp..server" }},
+		{name: "long interface name", mutate: func(value *DeclaredInterface) { value.Name = strings.Repeat("a", 129) }},
+		{name: "invalid version", mutate: func(value *DeclaredInterface) { value.Version = "version/1" }},
+		{name: "lowercase resource kind", mutate: func(value *DeclaredInterface) { value.Resource.Kind = "objectBucket" }},
+		{name: "long resource kind", mutate: func(value *DeclaredInterface) { value.Resource.Kind = "A" + strings.Repeat("a", 64) }},
+		{name: "empty resource name", mutate: func(value *DeclaredInterface) { value.Resource.Name = "" }},
+		{name: "uppercase resource name", mutate: func(value *DeclaredInterface) { value.Resource.Name = "Assets" }},
+		{name: "numeric-leading resource name", mutate: func(value *DeclaredInterface) { value.Resource.Name = "1assets" }},
+		{name: "underscored resource name", mutate: func(value *DeclaredInterface) { value.Resource.Name = "asset_name" }},
+		{name: "dotted resource name", mutate: func(value *DeclaredInterface) { value.Resource.Name = "asset.name" }},
+		{name: "long resource name", mutate: func(value *DeclaredInterface) { value.Resource.Name = "a" + strings.Repeat("0", 63) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			value := valid
+			test.mutate(&value)
+			if err := validateDeclaredInterfaceIdentity(value); err == nil {
+				t.Fatalf("invalid declaration accepted: %+v", value)
+			}
+		})
+	}
+}
+
+func TestInterfaceResourceURIUsesCredentialFreeHTTPSGrammar(t *testing.T) {
+	t.Parallel()
+
+	base := DeclaredInterface{
+		Name: "mcp.server", Version: "1",
+		Resource: InterfaceResourceRef{Kind: "ObjectBucket", Name: "assets"},
+		Document: map[string]any{},
+		Values:   map[string]any{},
+	}
+	valid := []string{
+		"https://runtime.example.invalid",
+		"https://runtime.example.invalid:8443/oauth/resource",
+		"https://xn--r8jz45g.xn--zckzah/oauth/resource",
+		"https://runtime.example.invalid/%E8%9B%B8/runtime",
+		"https://runtime.example.invalid/蛸/runtime",
+	}
+	invalid := []string{
+		"",
+		"http://runtime.example.invalid/oauth/resource",
+		"https://user@runtime.example.invalid/oauth/resource",
+		"https://runtime.example.invalid/oauth/resource?audience=one",
+		"https://runtime.example.invalid/oauth/resource#fragment",
+		"https://例え.テスト/oauth/resource",
+		"https://localhost/oauth/resource",
+		"https://runtime.example.invalid:123456/oauth/resource",
+		"https://runtime.example.invalid/has space",
+		"https://runtime.example.invalid/has\u00a0space",
+		"https://runtime.example.invalid/%ZZ",
+		"https://runtime.example.invalid/has\x00control",
+	}
+	for _, resourceURI := range valid {
+		resourceURI := resourceURI
+		t.Run("valid "+resourceURI, func(t *testing.T) {
+			t.Parallel()
+			if !formcatalog.ValidCredentialFreeHTTPSURL(resourceURI) {
+				t.Fatalf("shared credential-free HTTPS validator rejected %q", resourceURI)
+			}
+			candidate := base
+			candidate.ResourceURI = resourceURI
+			if err := validateDeclaredInterfaceIdentity(candidate); err != nil {
+				t.Fatalf("Interface resourceUri %q rejected: %v", resourceURI, err)
+			}
+		})
+	}
+	for _, resourceURI := range invalid {
+		resourceURI := resourceURI
+		t.Run("invalid "+resourceURI, func(t *testing.T) {
+			t.Parallel()
+			if formcatalog.ValidCredentialFreeHTTPSURL(resourceURI) {
+				t.Fatalf("shared credential-free HTTPS validator accepted %q", resourceURI)
+			}
+			candidate := base
+			candidate.ResourceURI = resourceURI
+			candidate.resourceURIPresent = true
+			if err := validateDeclaredInterfaceIdentity(candidate); err == nil {
+				t.Fatalf("Interface resourceUri %q unexpectedly accepted", resourceURI)
+			}
+		})
+	}
+}
+
+func TestInterfaceHTTP200RequiresNonWhitespaceJSONBody(t *testing.T) {
+	for _, body := range []string{"", " \n\t"} {
+		body := body
+		t.Run(fmt.Sprintf("list body %q", body), func(t *testing.T) {
+			server := interfaceHost(t, true, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(body))
+			})
+			c := discoveredClient(t, server)
+			if _, err := c.ListInterfaces(context.Background(), "prod"); err == nil ||
+				!strings.Contains(err.Error(), "empty JSON response body") {
+				t.Fatalf("ListInterfaces body %q error = %v", body, err)
+			}
+		})
+		t.Run(fmt.Sprintf("exact body %q", body), func(t *testing.T) {
+			server := interfaceHost(t, true, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(body))
+			})
+			c := discoveredClient(t, server)
+			_, err := c.GetInterface(context.Background(), "prod", InterfaceSelector{
+				Name: "mcp.server", Version: "1",
+				ResourceKind: "ObjectBucket", ResourceName: "assets",
+			})
+			if err == nil || !strings.Contains(err.Error(), "empty JSON response body") {
+				t.Fatalf("GetInterface body %q error = %v", body, err)
+			}
+		})
+	}
+}
+
+func TestInterfaceListHTTP200RequiresTheInterfacesArray(t *testing.T) {
+	for _, test := range []struct {
+		body       string
+		wantDetail bool
+	}{
+		{body: `{}`, wantDetail: true},
+		{body: `{"interfaces":null}`, wantDetail: true},
+		{body: `null`},
+	} {
+		test := test
+		t.Run(test.body, func(t *testing.T) {
+			server := interfaceHost(t, true, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(test.body))
+			})
+			c := discoveredClient(t, server)
+			_, err := c.ListInterfaces(context.Background(), "prod")
+			if err == nil {
+				t.Fatalf("ListInterfaces body %s unexpectedly succeeded", test.body)
+			}
+			if test.wantDetail && !strings.Contains(err.Error(), "required interfaces array") {
+				t.Fatalf("ListInterfaces body %s error = %v", test.body, err)
+			}
+		})
+	}
+}
+
 func TestGetInterfaceRequiresResourceSelectorWhenMultipleInstancesExposeThePair(t *testing.T) {
 	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/apis/forms.takoform.com/v1alpha1/interfaces":
 			_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": []map[string]any{
-				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "EdgeWorker", "name": "api-a"}, "document": map[string]any{}},
-				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "EdgeWorker", "name": "api-b"}, "document": map[string]any{}},
+				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "EdgeWorker", "name": "api-a"}, "document": map[string]any{}, "values": map[string]any{}},
+				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "EdgeWorker", "name": "api-b"}, "document": map[string]any{}, "values": map[string]any{}},
 			}})
 		case "/apis/forms.takoform.com/v1alpha1/interfaces/mcp.server":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"name": "mcp.server", "version": "1",
 				"resource": map[string]any{"kind": r.URL.Query().Get("resourceKind"), "name": r.URL.Query().Get("resourceName")},
 				"document": map[string]any{},
+				"values":   map[string]any{},
 			})
 		default:
 			t.Fatalf("unexpected path %q", r.URL.Path)
@@ -369,11 +461,91 @@ func TestGetInterfaceRejectsPartialResourceSelector(t *testing.T) {
 	}
 }
 
-func TestGetInterfaceMapsMissingToErrNotFound(t *testing.T) {
-	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
+func TestInterfaceReadsRequireSpaceBeforeHTTP(t *testing.T) {
+	requests := 0
+	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": []DeclaredInterface{}})
+	})
 	c := discoveredClient(t, server)
-	if _, err := c.GetInterface(context.Background(), "prod", InterfaceSelector{Name: "mcp.server", Version: "1", ResourceKind: "ObjectBucket", ResourceName: "assets"}); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("err = %v, want ErrNotFound", err)
+	for _, space := range []string{"", " ", "\t"} {
+		if _, err := c.ListInterfaces(context.Background(), space); err == nil || !strings.Contains(err.Error(), "requires a space") {
+			t.Fatalf("ListInterfaces space %q error = %v", space, err)
+		}
+		if _, err := c.GetInterface(context.Background(), space, InterfaceSelector{Name: "mcp.server"}); err == nil || !strings.Contains(err.Error(), "requires a space") {
+			t.Fatalf("GetInterface space %q error = %v", space, err)
+		}
+	}
+	if requests != 0 {
+		t.Fatalf("blank spaces reached host %d times", requests)
+	}
+}
+
+func TestListInterfacesCarriesExactEffectiveSpace(t *testing.T) {
+	const space = "team alpha"
+	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("space"); got != space {
+			t.Fatalf("space = %q, want %q", got, space)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": []DeclaredInterface{}})
+	})
+	c := discoveredClient(t, server)
+	if _, err := c.ListInterfaces(context.Background(), space); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGetInterfaceMapsOnlyStableResourceNotFound(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		status       int
+		code         string
+		wantCode     string
+		wantNotFound bool
+	}{
+		{
+			name:         "stable resource missing",
+			status:       http.StatusNotFound,
+			code:         "resource_not_found",
+			wantCode:     "resource_not_found",
+			wantNotFound: true,
+		},
+		{name: "Form unavailable", status: http.StatusNotFound, code: "form_not_installed"},
+		{name: "plain 404", status: http.StatusNotFound},
+		{name: "wrong status", status: http.StatusInternalServerError, code: "resource_not_found"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(test.status)
+				if test.code == "" {
+					_, _ = w.Write([]byte("missing"))
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
+					"code": test.code, "message": "fixture", "requestId": "req-interface", "retryable": false,
+				}})
+			})
+			c := discoveredClient(t, server)
+			_, err := c.GetInterface(context.Background(), "prod", InterfaceSelector{
+				Name: "mcp.server", Version: "1", ResourceKind: "ObjectBucket", ResourceName: "assets",
+			})
+			if test.wantNotFound {
+				if !errors.Is(err, ErrNotFound) {
+					t.Fatalf("err = %v, want ErrNotFound", err)
+				}
+				return
+			}
+			if errors.Is(err, ErrNotFound) {
+				t.Fatalf("err = %v, must retain API error identity", err)
+			}
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) ||
+				apiErr.StatusCode != test.status ||
+				apiErr.Code != test.wantCode ||
+				apiErr.ProtocolInvalid != (test.wantCode == "") {
+				t.Fatalf("err = %#v, want APIError status=%d code=%q", err, test.status, test.wantCode)
+			}
+		})
 	}
 }
 

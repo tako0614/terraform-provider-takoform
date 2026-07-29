@@ -1,0 +1,6 @@
+{
+  "connections": {},
+  "cron": "0 0 * * *",
+  "name": "schedule",
+  "timezone": "UTC"
+}

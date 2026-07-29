@@ -8,7 +8,7 @@ func TestEdgeWorkerIsPortableExecutionIntentRatherThanHTTPInterfaceName(t *testi
 	if !ok {
 		t.Fatal("active portable catalog omits EdgeWorker")
 	}
-	if edge.Version() != "2.0.0" || edge.Slug != "edge-worker" ||
+	if edge.Version() != "3.0.0" || edge.Slug != "edge-worker" ||
 		edge.ResourceType != "takoform_edge_worker" {
 		t.Fatalf("unexpected active EdgeWorker identity: %#v", edge)
 	}

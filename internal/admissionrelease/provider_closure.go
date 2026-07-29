@@ -24,6 +24,7 @@ const (
 
 var providerClosurePositiveDecimalPattern = regexp.MustCompile(`^[1-9][0-9]*$`)
 var providerClosureChecksumPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var providerClosureCanonicalUUIDv4Pattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 type providerClosureIdentity struct {
 	sourceCommit         string
@@ -78,8 +79,10 @@ type providerClosureSignedManifest struct {
 	Subject             string                       `json:"subject"`
 	CertificateIdentity string                       `json:"certificateIdentity"`
 	Workflow            string                       `json:"workflow"`
+	RequestID           string                       `json:"requestId,omitempty"`
 	WorkflowRunID       string                       `json:"workflowRunId"`
 	WorkflowRunAttempt  int                          `json:"workflowRunAttempt"`
+	HeadSHA             string                       `json:"headSha,omitempty"`
 	Source              providerClosureSource        `json:"source"`
 	Manifest            providerClosureRetainedRef   `json:"manifest"`
 	Entries             []providerClosureSignedEntry `json:"entries"`
@@ -160,12 +163,15 @@ func verifyFullProviderReportClosure(root, retainedRoot string, set Set, selecte
 		signed.Source != manifest.Source ||
 		signed.CertificateIdentity != currentProviderIdentity ||
 		signed.Workflow != currentProviderWorkflow ||
-		signed.WorkflowRunAttempt != 1 ||
+		signed.WorkflowRunAttempt < 1 ||
 		!providerClosurePositiveDecimalPattern.MatchString(signed.WorkflowRunID) ||
 		signed.Manifest != (providerClosureRetainedRef{Path: "provider-report-manifest.json", Digest: formpackage.DigestBytes(manifestRaw)}) ||
 		len(manifest.Reports) != len(closure.Reports) ||
 		len(signed.Entries) != len(closure.Reports) {
 		return nil, providerClosureIdentity{}, fmt.Errorf("provider-report closure manifest identity is invalid")
+	}
+	if err := validateProviderClosureCorrelation(retainedRoot, signed, manifest.Source); err != nil {
+		return nil, providerClosureIdentity{}, err
 	}
 	inventoryRaw, err := readRetainedRelativeFile(root, "forms/standard-package-set.json", maxEvidenceBytes)
 	if err != nil {
@@ -282,11 +288,11 @@ func verifyFullProviderReportClosure(root, retainedRoot string, set Set, selecte
 		for _, fixture := range definition.ConformanceFixtures {
 			positives = append(positives, fixture.Name)
 		}
-		negatives := make([]string, 0, len(definition.NegativeFixtures))
+		negatives := make([]NegativeFixtureExpectation, 0, len(definition.NegativeFixtures))
 		for _, fixture := range definition.NegativeFixtures {
-			negatives = append(negatives, fixture.Name)
+			negatives = append(negatives, NegativeFixtureExpectation{Name: fixture.Name, Stage: fixture.Stage})
 		}
-		report, err := ValidateCanonicalProviderRunnerReport(reportRaw, retained.Identity, positives, negatives)
+		report, err := ValidateCanonicalProviderRunnerReportWithStages(reportRaw, retained.Identity, positives, negatives)
 		if err != nil {
 			return nil, providerClosureIdentity{}, fmt.Errorf("provider-report closure report %s is invalid: %w", retained.Kind, err)
 		}
@@ -314,6 +320,21 @@ func verifyFullProviderReportClosure(root, retainedRoot string, set Set, selecte
 		sourceCommit: manifest.Source.Commit, runnerVersion: manifest.RunnerVersion,
 		providerBinarySHA256: providerBinarySHA256,
 	}, nil
+}
+
+func validateProviderClosureCorrelation(
+	retainedRoot string,
+	signed providerClosureSignedManifest,
+	source providerClosureSource,
+) error {
+	isCurrentClosure := filepath.ToSlash(retainedRoot) == "admission/v4"
+	hasCurrentCorrelation := signed.RequestID != "" || signed.HeadSHA != ""
+	if (isCurrentClosure || hasCurrentCorrelation) &&
+		(!providerClosureCanonicalUUIDv4Pattern.MatchString(signed.RequestID) ||
+			signed.HeadSHA != source.Commit) {
+		return fmt.Errorf("provider-report closure request/head correlation is invalid")
+	}
+	return nil
 }
 
 func validateProviderRegistryIdentity(identity providerClosureIdentity, readback ProviderRegistryReadback) error {

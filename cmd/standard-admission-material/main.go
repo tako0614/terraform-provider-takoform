@@ -36,7 +36,12 @@ func run(args []string, output io.Writer) error {
 	}
 	required := []string{"host-id", "host-reports", "provider-reports", "output-dir", "admission-version", "host-source-commit", "host-takoform-source-commit", "provider-source-commit", "host-run-id", "provider-run-id"}
 	if commandName == "build-current" {
-		required = append(required, "registry-readback", "registry-run-id")
+		required = append(required,
+			"host-request-id", "host-run-attempt", "host-head-sha",
+			"provider-request-id", "provider-run-attempt", "provider-head-sha",
+			"registry-readback", "registry-request-id", "registry-run-id",
+			"registry-run-attempt", "registry-head-sha",
+		)
 	}
 	for _, key := range required {
 		if values[key] == "" {
@@ -73,8 +78,18 @@ func run(args []string, output io.Writer) error {
 	}
 	if commandName == "build-current" {
 		err = admissionmaterial.BuildCurrent(admissionmaterial.CurrentBuildOptions{
-			BuildOptions: options, RegistryReadback: values["registry-readback"],
-			RegistryWorkflowRunID: values["registry-run-id"],
+			BuildOptions:               options,
+			HostRequestID:              values["host-request-id"],
+			HostWorkflowRunAttempt:     values["host-run-attempt"],
+			HostHeadSHA:                values["host-head-sha"],
+			ProviderRequestID:          values["provider-request-id"],
+			ProviderWorkflowRunAttempt: values["provider-run-attempt"],
+			ProviderHeadSHA:            values["provider-head-sha"],
+			RegistryReadback:           values["registry-readback"],
+			RegistryRequestID:          values["registry-request-id"],
+			RegistryWorkflowRunID:      values["registry-run-id"],
+			RegistryWorkflowRunAttempt: values["registry-run-attempt"],
+			RegistryHeadSHA:            values["registry-head-sha"],
 		})
 	} else {
 		err = admissionmaterial.Build(options)
@@ -87,5 +102,5 @@ func run(args []string, output io.Writer) error {
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: standard-admission-material build [legacy options] | build-current --host-id ID --host-reports DIR --provider-reports DIR --registry-readback DIR --output-dir DIR --admission-version VERSION --host-source-commit COMMIT --host-takoform-source-commit COMMIT --provider-source-commit COMMIT --host-run-id ID --provider-run-id ID --registry-run-id ID")
+	return fmt.Errorf("usage: standard-admission-material build [legacy options] | build-current --host-id ID --host-reports DIR --provider-reports DIR --registry-readback DIR --output-dir DIR --admission-version VERSION --host-source-commit COMMIT --host-takoform-source-commit COMMIT --provider-source-commit COMMIT --host-request-id UUID --host-run-id ID --host-run-attempt ATTEMPT --host-head-sha COMMIT --provider-request-id UUID --provider-run-id ID --provider-run-attempt ATTEMPT --provider-head-sha COMMIT --registry-request-id UUID --registry-run-id ID --registry-run-attempt ATTEMPT --registry-head-sha COMMIT")
 }

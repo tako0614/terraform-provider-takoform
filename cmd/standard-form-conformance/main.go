@@ -8,8 +8,8 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "materializability-check" && os.Args[1] != "release-plan" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "published-package-check" && os.Args[1] != "retained-ga-core-v1-published-package-check" && os.Args[1] != "current-published-package-check" && os.Args[1] != "admission-closure-check" && os.Args[1] != "current-admission-closure-check") {
-		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|release-plan|materializability-check|candidate-publication-check|published-package-check|retained-ga-core-v1-published-package-check|current-published-package-check|admission-closure-check|current-admission-closure-check")
+	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "materializability-check" && os.Args[1] != "release-plan" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "published-package-check" && os.Args[1] != "retained-ga-core-v1-published-package-check" && os.Args[1] != "current-published-package-check" && os.Args[1] != "admission-closure-check" && os.Args[1] != "current-admission-material-check" && os.Args[1] != "current-admission-closure-check") {
+		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|release-plan|materializability-check|candidate-publication-check|published-package-check|retained-ga-core-v1-published-package-check|current-published-package-check|admission-closure-check|current-admission-material-check|current-admission-closure-check")
 		os.Exit(2)
 	}
 	var err error
@@ -35,6 +35,8 @@ func main() {
 		err = standardforms.VerifyCurrentPublishedPackageSet(".")
 	} else if os.Args[1] == "admission-closure-check" {
 		err = standardforms.VerifyAdmissionClosure(".")
+	} else if os.Args[1] == "current-admission-material-check" {
+		err = standardforms.VerifyCurrentAdmissionMaterial(".")
 	} else {
 		err = standardforms.VerifyCurrentAdmissionClosure(".")
 	}

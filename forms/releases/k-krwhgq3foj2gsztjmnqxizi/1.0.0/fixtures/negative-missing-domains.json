@@ -1,0 +1,4 @@
+{
+  "keyAlgorithm": "ecdsa_p256",
+  "name": "tls-certificate"
+}

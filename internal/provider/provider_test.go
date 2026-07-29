@@ -16,10 +16,12 @@ import (
 	"time"
 
 	frameworkdatasource "github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/path"
+	frameworkprovider "github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
@@ -154,79 +156,6 @@ func TestInterfaceDataSourceIsReadOnlyAndVersionExact(t *testing.T) {
 	}
 }
 
-func TestInterfaceResourceIsGenericDataOnlyDeclaration(t *testing.T) {
-	var schemaResponse frameworkresource.SchemaResponse
-	NewInterfaceResource().Schema(context.Background(), frameworkresource.SchemaRequest{}, &schemaResponse)
-	for _, required := range []string{
-		"name", "version", "resource_kind", "resource_name", "document_json",
-	} {
-		if attribute := schemaResponse.Schema.Attributes[required]; attribute == nil || !attribute.IsRequired() {
-			t.Errorf("%s must be required", required)
-		}
-	}
-	for _, computed := range []string{"id", "values_json", "resource_uri", "resource_version"} {
-		if attribute := schemaResponse.Schema.Attributes[computed]; attribute == nil || !attribute.IsComputed() {
-			t.Errorf("%s must be computed", computed)
-		}
-	}
-	for _, forbidden := range []string{
-		"mcp", "http", "ui", "s3", "binding", "permission", "grant", "token",
-		"credential", "secret", "target", "price", "billing", "quota",
-	} {
-		if _, exists := schemaResponse.Schema.Attributes[forbidden]; exists {
-			t.Errorf("generic declaration exposes protocol or host authority field %s", forbidden)
-		}
-	}
-}
-
-func TestInterfaceResourceImportsItsPortableCompoundIdentity(t *testing.T) {
-	ctx := context.Background()
-	resource := NewInterfaceResource().(*interfaceResource)
-	var schemaResponse frameworkresource.SchemaResponse
-	resource.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
-	empty := tfsdk.State{
-		Schema: schemaResponse.Schema,
-		Raw: tftypes.NewValue(
-			schemaResponse.Schema.Type().TerraformType(ctx),
-			nil,
-		),
-	}
-	id := `["prod","EdgeWorker","api","example.runtime","1"]`
-	response := frameworkresource.ImportStateResponse{State: empty}
-	resource.ImportState(
-		ctx,
-		frameworkresource.ImportStateRequest{ID: id},
-		&response,
-	)
-	if response.Diagnostics.HasError() {
-		t.Fatalf("import: %v", response.Diagnostics)
-	}
-	for attribute, want := range map[string]string{
-		"id":            id,
-		"space":         "prod",
-		"resource_kind": "EdgeWorker",
-		"resource_name": "api",
-		"name":          "example.runtime",
-		"version":       "1",
-	} {
-		var got types.String
-		response.State.GetAttribute(ctx, path.Root(attribute), &got)
-		if got.ValueString() != want {
-			t.Errorf("%s = %q, want %q", attribute, got.ValueString(), want)
-		}
-	}
-
-	invalid := frameworkresource.ImportStateResponse{State: empty}
-	resource.ImportState(
-		ctx,
-		frameworkresource.ImportStateRequest{ID: "prod/api"},
-		&invalid,
-	)
-	if !invalid.Diagnostics.HasError() {
-		t.Fatal("invalid compound identity was accepted")
-	}
-}
-
 func TestInterfaceDataSourceRejectsUnknownIdentityAndScopeBeforeRead(t *testing.T) {
 	base := interfaceDataSourceModel{
 		Name: types.StringValue("mcp.server"), Space: types.StringNull(), Version: types.StringNull(),
@@ -268,7 +197,62 @@ func TestProviderStateExcludesBackendCredentialAndPriceAuthority(t *testing.T) {
 		if _, ok := schemaResponse.Schema.Attributes["resource_version"]; !ok {
 			t.Errorf("%s omits the optimistic-concurrency fence", metadata.TypeName)
 		}
+		if schemaResponse.Schema.Version != 1 {
+			t.Errorf("%s schema version = %d, want fail-closed provider-v1 state version 1", metadata.TypeName, schemaResponse.Schema.Version)
+		}
+		stateGuard, ok := candidate.(frameworkresource.ResourceWithUpgradeState)
+		if !ok {
+			t.Errorf("%s omits the diagnostic-only version-zero state guard", metadata.TypeName)
+		} else if upgraders := stateGuard.UpgradeState(context.Background()); len(upgraders) != 1 {
+			t.Errorf("%s version-zero state guard count = %d, want 1", metadata.TypeName, len(upgraders))
+		} else if _, ok := upgraders[0]; !ok {
+			t.Errorf("%s omits the version-zero state guard", metadata.TypeName)
+		}
+		for _, name := range []string{
+			"form_api_version",
+			"form_kind",
+			"form_definition_version",
+			"form_schema_digest",
+			"form_package_digest",
+		} {
+			attribute, ok := schemaResponse.Schema.Attributes[name]
+			if !ok {
+				t.Errorf("%s omits exact state identity attribute %s", metadata.TypeName, name)
+				continue
+			}
+			if !attribute.IsComputed() || attribute.IsOptional() || attribute.IsRequired() {
+				t.Errorf("%s attribute %s must be computed-only", metadata.TypeName, name)
+			}
+		}
 	}
+}
+
+func TestProtocolRejectsVersionZeroFormStateWithoutRunningAnUpgrader(t *testing.T) {
+	server := providerserver.NewProtocol6(New("1.0.0")())()
+	response, err := server.UpgradeResourceState(context.Background(), &tfprotov6.UpgradeResourceStateRequest{
+		TypeName: "takoform_object_bucket",
+		Version:  0,
+		RawState: &tfprotov6.RawState{JSON: []byte(`{
+			"name":"legacy",
+			"space":"prod",
+			"storage_class":"standard"
+		}`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.UpgradedState != nil {
+		t.Fatal("provider fabricated upgraded v0.2.1 state")
+	}
+	for _, diagnostic := range response.Diagnostics {
+		if diagnostic.Summary == "Provider v1 requires explicit Form migration" &&
+			strings.Contains(diagnostic.Detail, "State was not modified and no Resource lifecycle request was made") &&
+			strings.Contains(diagnostic.Detail, "Pin the exact provider version that wrote this state") &&
+			strings.Contains(diagnostic.Detail, "do not refresh v0.1.x state through v0.2.1") {
+			return
+		}
+	}
+	t.Fatalf("protocol did not reject schema-version-0 state: %#v", response.Diagnostics)
 }
 
 func TestConfigureClientUsesOnlyTheAdvertisedVersionedEndpoint(t *testing.T) {
@@ -318,6 +302,84 @@ func TestConfigureClientRejectsHostsWithoutAVersionedEndpoint(t *testing.T) {
 	defer server.Close()
 	if _, err := configureClient(context.Background(), server.URL, "token", server.Client()); err == nil {
 		t.Fatal("expected a fail-closed configuration error")
+	}
+}
+
+func TestProviderConfigureRejectsUnknownAuthorityConfigurationBeforeEnvironmentFallback(t *testing.T) {
+	t.Setenv(envToken, "ambient-token")
+	t.Setenv(envSpace, "ambient-space")
+
+	tests := []struct {
+		name        string
+		token       any
+		space       any
+		wantSummary string
+	}{
+		{
+			name:        "token",
+			token:       tftypes.UnknownValue,
+			space:       "configured-space",
+			wantSummary: "Unknown Takoform token",
+		},
+		{
+			name:        "space",
+			token:       "configured-token",
+			space:       tftypes.UnknownValue,
+			wantSummary: "Unknown Takoform space",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			requests := 0
+			handler := discoveryHandler(t, true)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				handler(w, r)
+			}))
+			defer server.Close()
+
+			candidate := &takoformProvider{}
+			var schemaResponse frameworkprovider.SchemaResponse
+			candidate.Schema(
+				context.Background(),
+				frameworkprovider.SchemaRequest{},
+				&schemaResponse,
+			)
+			configType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"endpoint": tftypes.String,
+				"space":    tftypes.String,
+				"token":    tftypes.String,
+			}}
+			request := frameworkprovider.ConfigureRequest{
+				Config: tfsdk.Config{
+					Schema: schemaResponse.Schema,
+					Raw: tftypes.NewValue(configType, map[string]tftypes.Value{
+						"endpoint": tftypes.NewValue(tftypes.String, server.URL),
+						"space":    tftypes.NewValue(tftypes.String, test.space),
+						"token":    tftypes.NewValue(tftypes.String, test.token),
+					}),
+				},
+			}
+			var response frameworkprovider.ConfigureResponse
+			candidate.Configure(context.Background(), request, &response)
+
+			found := false
+			for _, diagnostic := range response.Diagnostics {
+				if diagnostic.Summary() == test.wantSummary {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("diagnostics = %#v, want %q", response.Diagnostics, test.wantSummary)
+			}
+			if requests != 0 {
+				t.Errorf("unknown provider %s made %d discovery requests", test.name, requests)
+			}
+			if response.ResourceData != nil || response.DataSourceData != nil {
+				t.Error("unknown provider authority configuration produced configured provider data")
+			}
+		})
 	}
 }
 
@@ -408,11 +470,10 @@ func TestPublishedHCLUsesFullyQualifiedProviderAddress(t *testing.T) {
 }
 
 func currentProviderResourceTypeNames() []string {
-	names := make([]string, 0, len(formcatalog.Kinds)+1)
+	names := make([]string, 0, len(formcatalog.Kinds))
 	for _, kind := range formcatalog.Kinds {
 		names = append(names, kind.ResourceType)
 	}
-	names = append(names, "takoform_interface")
 	sort.Strings(names)
 	return names
 }

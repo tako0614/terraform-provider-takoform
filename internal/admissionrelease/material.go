@@ -15,7 +15,23 @@ import (
 type FixtureDigestBinding struct {
 	PackageFixtureDigest string
 	EffectiveInputDigest string
+	// Stage is meaningful only for negative fixtures. Empty is treated as
+	// "desired" for compatibility with callers predating stage-aware reports.
+	Stage string
 }
+
+// NegativeFixtureExpectation declares one exact provider negative-fixture
+// name and validation stage. Provider reports cover desired and observed
+// stages; host reports cover desired-stage fixture bindings only.
+type NegativeFixtureExpectation struct {
+	Name  string
+	Stage string
+}
+
+const (
+	negativeFixtureStageDesired  = "desired"
+	negativeFixtureStageObserved = "observed"
+)
 
 // ValidateCanonicalHostRunnerReport verifies one unsigned host-report subject
 // against an exact Form identity and exact package/effective fixture bytes. It
@@ -44,6 +60,10 @@ func ValidateCanonicalHostRunnerReport(
 	if err != nil {
 		return RunnerReport{}, err
 	}
+	negative, err = negativeFixtureBindingsForRole(roleHostReport, negative)
+	if err != nil {
+		return RunnerReport{}, err
+	}
 	positiveNames := sortedBindingNames(positive)
 	negativeNames := sortedBindingNames(negative)
 	proof := standardform.ConformanceProof{
@@ -65,11 +85,97 @@ func convertFixtureBindings(label string, values map[string]FixtureDigestBinding
 		if name == "" || !formpackage.ValidDigest(value.PackageFixtureDigest) || !formpackage.ValidDigest(value.EffectiveInputDigest) {
 			return nil, fmt.Errorf("%s fixture binding %q is invalid", label, name)
 		}
+		stage := value.Stage
+		switch label {
+		case "positive":
+			if stage != "" {
+				return nil, fmt.Errorf("positive fixture binding %q must not declare a stage", name)
+			}
+		case "negative":
+			var err error
+			stage, err = normalizeNegativeFixtureStage(stage)
+			if err != nil {
+				return nil, fmt.Errorf("negative fixture binding %q: %w", name, err)
+			}
+		default:
+			return nil, fmt.Errorf("unknown fixture binding class %q", label)
+		}
 		result[name] = fixtureDigestBinding{
 			PackageFixtureDigest: value.PackageFixtureDigest,
 			EffectiveInputDigest: value.EffectiveInputDigest,
+			Stage:                stage,
 		}
 	}
+	return result, nil
+}
+
+func normalizeNegativeFixtureStage(stage string) (string, error) {
+	switch stage {
+	case "":
+		return negativeFixtureStageDesired, nil
+	case negativeFixtureStageDesired:
+		return negativeFixtureStageDesired, nil
+	case negativeFixtureStageObserved:
+		return negativeFixtureStageObserved, nil
+	default:
+		return "", fmt.Errorf("stage %q is not supported; want desired or observed", stage)
+	}
+}
+
+func negativeFixtureBindingsForRole(role string, values map[string]fixtureDigestBinding) (map[string]fixtureDigestBinding, error) {
+	expectations := make([]NegativeFixtureExpectation, 0, len(values))
+	normalized := make(map[string]fixtureDigestBinding, len(values))
+	for name, value := range values {
+		stage, err := normalizeNegativeFixtureStage(value.Stage)
+		if err != nil {
+			return nil, fmt.Errorf("negative fixture binding %q: %w", name, err)
+		}
+		value.Stage = stage
+		normalized[name] = value
+		expectations = append(expectations, NegativeFixtureExpectation{Name: name, Stage: stage})
+	}
+	names, err := negativeFixtureNamesForRole(role, expectations)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]fixtureDigestBinding, len(names))
+	for _, name := range names {
+		result[name] = normalized[name]
+	}
+	return result, nil
+}
+
+func negativeFixtureNamesForRole(role string, values []NegativeFixtureExpectation) ([]string, error) {
+	if len(values) == 0 {
+		return nil, fmt.Errorf("%s negative fixture expectations are required", role)
+	}
+	fixtures := make([]standardform.NegativeFixture, 0, len(values))
+	for _, value := range values {
+		stage, err := normalizeNegativeFixtureStage(value.Stage)
+		if err != nil {
+			return nil, fmt.Errorf("%s negative fixture %q: %w", role, value.Name, err)
+		}
+		fixtures = append(fixtures, standardform.NegativeFixture{Name: value.Name, Stage: stage})
+	}
+	var (
+		result []string
+		err    error
+	)
+	switch role {
+	case roleHostReport:
+		result, err = standardform.HostNegativeFixtureNames(fixtures)
+	case roleProviderReport:
+		result, err = standardform.ProviderNegativeFixtureNames(fixtures)
+	default:
+		return nil, fmt.Errorf("unknown runner report role %q", role)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("%s negative fixture expectations are required", role)
+	}
+	sort.Strings(result)
 	return result, nil
 }
 

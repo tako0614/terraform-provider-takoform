@@ -36,13 +36,74 @@ A definition contains:
 - inline Draft 2020-12 desired and observed schemas, plus an optional output schema;
 - optional immutable JSON Pointer fields;
 - an explicit subset of `create`, `read`, `update`, `delete`, `import`,
-  `observe`, `refresh`, and `drift`;
+  `observe`, `refresh`, and `drift`; `drift` means observation evidence can
+  report a current/drifted/missing outcome and does not define a separate host
+  operation;
 - optional portable Interface descriptors with exact `(name, version)`, an
   exact non-secret document/schema, `required` readiness metadata, and
   deterministic literal/output input mappings plus an optional host-resolved
   canonical OAuth `resource_uri` audience input;
 - optional references to data-only positive desired/observed/output fixtures
-  and negative schema fixtures in the same package.
+  and negative schema fixtures in the same package, with independent maxima of
+  32 positive fixtures and 32 negative fixtures.
+
+Negative fixtures name their validation stage. Standard admission executes
+`desired` negatives in both host and provider roles and `observed` negatives
+in the provider role before state projection. `output` remains a valid
+package-structure validation stage, but standard admission fails closed on it
+until a portable runner contract defines how a role executes that case.
+
+The published Form Definition JSON Schema is a normative structural minimum.
+The semantic verifier rules below are also normative: document-local reference
+closure, closed-object proof, validation-work limits, fixture semantics, and
+the portable data-only vocabulary can reject a document that satisfies the
+outer JSON Schema.
+
+## Connection requests
+
+A desired schema MAY declare a `connections` map whose entries name another
+portable Resource and request permission and projection tokens. Each entry is
+request-only metadata. It grants no access, creates no binding, and conveys no
+credential or token. A host MAY deny a connection because the referenced
+Resource, requested capability, caller authority, or host policy cannot
+satisfy it; a required connection that is denied cannot be reported Ready.
+
+The portable reference is exactly `Kind/name`. It has no Space selector:
+
+```json
+{
+  "connections": {
+    "assets": {
+      "resource": "ObjectBucket/assets",
+      "permissions": ["read"],
+      "projection": "object.binding.v1"
+    }
+  }
+}
+```
+
+The host MUST resolve that pair only in the source Resource's exact
+`metadata.space`. The resulting lookup identity is
+`(source metadata.space, referenced Kind, referenced name)`. It MUST NOT search
+another Space, substitute a unique or caller-visible Resource from another
+Space, or reinterpret any part of `Kind/name` as a Space. A same-named target
+that exists only in another Space is missing for this request. An apply with
+that missing target MUST fail as `resource_not_found` / HTTP 404 before any
+mutation of the source Resource, even when preview previously returned a plan.
+Cross-Space connections are therefore unrepresentable in portable desired
+state.
+
+If a product needs cross-Space composition, a host MAY offer a host-specific
+binding or composition object outside the portable Resource desired state. It
+MUST NOT extend or reinterpret the portable Connection value to express that
+authority.
+
+The host owns connection resolution, bindings and grants, projection
+materialization, token or credential issuance, authorization, write fencing,
+and lifecycle. These host-owned objects and secret values MUST NOT enter a Form
+Definition, portable desired state, provider state, or sanitized output.
+Portable `permissions` and `projection` tokens describe the request only; they
+MUST NOT be interpreted as proof that the host issued a capability.
 
 JSON Schema `$ref` values are limited to the document root (`#`) or a
 document-local JSON Pointer (`#/...`). The closure proof resolves the target
@@ -53,6 +114,21 @@ Inline `$id`, `$anchor`, `$dynamicAnchor`, `$recursiveAnchor`, and
 `$recursiveRef` are also rejected, as is `$vocabulary`; any nested `$schema`
 must still name Draft 2020-12. These limits keep the verifier's JSON Pointer
 proof and the compiler aligned on one resolution base and one dialect.
+
+## Digest-bound artifact sources
+
+An artifact-backed standard Form declares one required `source` object with
+`artifactUrl`, `artifactSha256`, and `artifactMediaType`. `artifactUrl` enters
+nonsensitive portable desired state and Terraform/OpenTofu state, so it MUST
+use the credential-free HTTPS grammar: an absolute `https` URL with a dotted
+hostname, optional port and path, and no userinfo, query, or fragment. The
+digest binds those credential-free fetch coordinates to exact immutable
+bytes; a host supplies any fetch authorization through its own credential
+boundary.
+
+This grammar is distinct from the HTTPS grammar used by
+`IdentityClient.redirectUris`; tightening artifact fetching does not narrow
+that separate redirect-URI acceptance surface.
 
 Object schemas are closed by default and MUST set
 `"additionalProperties": false`. A pure typed map is the only open-key

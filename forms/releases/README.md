@@ -17,18 +17,22 @@ decision, not automatic standardization.
 
 The retired `1.0.0` directories are the release-owned source copies of the
 historical first structural-candidate set. They are no longer regenerated from
-their generation of the `conformance/form-package-v1/positive/standard/` tree. All of them have
-immutable live GitHub Releases whose exact seven-asset inventories are retained
-and authenticated by `published-package-check` against these historical source
-bytes. Fixture regeneration never updates a release directory automatically.
-Publication does not change `forms/standard-package-set.json` from
-`structural-candidate` and does not satisfy direct Registry readback,
-host/provider lifecycle, signed admission, or revocation-chain requirements.
+their generation of the `conformance/form-package-v1/positive/standard/` tree.
+Their immutable tags and retained release manifests remain historical evidence;
+fixture regeneration never updates a release directory automatically.
 
-The retired `1.0.1` directories are the reviewed release-source copies for the
-active real-materialization candidate. They coexist with `1.0.0` and never
-replace its bytes or tags. Until their exact immutable releases and retained
-readbacks exist, they remain unpublished sources with external admission.
+The retired `1.0.1` directories are also immutable published release sources.
+They coexist with `1.0.0` and never replace its bytes or tags.
+`forms/retired-package-set.json` and
+`admission/v1/published-package-set.json` select the exact `1.0.1` generation,
+and `standard-form-conformance published-package-check` authenticates that
+selected set against its retained release assets. The retained `1.0.0` history
+is not the selected input to that current check.
+
+Publication of either generation does not change
+`forms/standard-package-set.json` from `structural-candidate` and does not
+satisfy direct Registry readback, host/provider lifecycle, signed admission, or
+revocation-chain requirements.
 
 `k-kniuyrdborqweyltmu/2.0.0` is the reviewed source for the independent
 `SQLDatabase@2.0.0` bounded indexed successor. It coexists with both SQLDatabase

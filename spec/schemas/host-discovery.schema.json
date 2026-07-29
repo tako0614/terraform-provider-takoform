@@ -8,6 +8,7 @@
     "api_versions": {
       "type": "array",
       "minItems": 1,
+      "uniqueItems": true,
       "items": {
         "type": "string",
         "minLength": 1
@@ -42,18 +43,56 @@
       "required": ["api"],
       "properties": {
         "api": {
-          "type": "string",
-          "format": "uri"
+          "$ref": "#/$defs/httpEndpoint"
         },
         "forms": {
-          "type": "string",
-          "format": "uri"
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            }
+          ],
+          "x-takoform-sameOriginWith": "/endpoints/api"
+        },
+        "interfaces": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            }
+          ],
+          "x-takoform-sameOriginWith": "/endpoints/api"
+        },
+        "oidc_issuer": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            },
+            {
+              "pattern": "^https://"
+            }
+          ]
         }
       },
-      "additionalProperties": {
-        "type": "string"
-      }
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false,
+  "$defs": {
+    "httpEndpoint": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "allOf": [
+        {
+          "not": {
+            "pattern": "^https?://[^/?#]*@"
+          }
+        },
+        {
+          "not": {
+            "pattern": "[?#]"
+          }
+        }
+      ]
+    }
+  }
 }

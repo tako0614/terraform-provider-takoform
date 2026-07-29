@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -39,16 +40,14 @@ func TestImportThenReadPopulatesEveryDeclaredField(t *testing.T) {
 					APIVersion: client.APIVersion, Kind: kind.Kind, Form: ptrForm(form),
 					Metadata: client.Metadata{Name: kind.FixtureName(), Space: "prod", ResourceVersion: "1"},
 					Spec:     jsonRoundTrip(t, desired),
-					Status:   &client.Status{Portability: "portable"},
+					Status:   providerPortableStatus(kind.Kind, kind.FixtureName(), 1),
 				}
 				w.Header().Set("ETag", `"1"`)
 				if r.Method == http.MethodGet {
 					_ = json.NewEncoder(w).Encode(res)
 					return
 				}
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"resource": res, "observation": map[string]any{"status": "current"},
-				})
+				_ = json.NewEncoder(w).Encode(map[string]any{"resource": res})
 			}))
 			defer srv.Close()
 
@@ -69,6 +68,14 @@ func TestImportThenReadPopulatesEveryDeclaredField(t *testing.T) {
 			resource.Read(ctx, frameworkresource.ReadRequest{State: importResponse.State}, &readResponse)
 			if readResponse.Diagnostics.HasError() {
 				t.Fatalf("read: %v", readResponse.Diagnostics)
+			}
+			assertStateFormIdentity(t, ctx, readResponse.State, form)
+			var providerID types.String
+			if diags := readResponse.State.GetAttribute(ctx, path.Root("id"), &providerID); diags.HasError() {
+				t.Fatalf("read id: %v", diags)
+			}
+			if want := kind.Kind + "/" + kind.FixtureName(); providerID.ValueString() != want {
+				t.Fatalf("provider-owned id = %q, want %q", providerID.ValueString(), want)
 			}
 
 			for _, field := range kind.Fields {
@@ -103,11 +110,9 @@ func TestImportThenReadPopulatesEveryDeclaredField(t *testing.T) {
 				}
 			}
 			if kind.Artifact {
-				var ref, url, localPath types.String
-				readResponse.State.GetAttribute(ctx, path.Root("artifact_ref"), &ref)
+				var url types.String
 				readResponse.State.GetAttribute(ctx, path.Root("artifact_url"), &url)
-				readResponse.State.GetAttribute(ctx, path.Root("artifact_path"), &localPath)
-				if ref.IsNull() && url.IsNull() && localPath.IsNull() {
+				if url.IsNull() {
 					t.Errorf("imported %s left its artifact source unset in state", kind.Kind)
 				}
 			}
@@ -141,16 +146,14 @@ func TestReadAdoptsOutOfBandChange(t *testing.T) {
 			APIVersion: client.APIVersion, Kind: kind.Kind, Form: ptrForm(form),
 			Metadata: client.Metadata{Name: "assets", Space: "prod", ResourceVersion: "1"},
 			Spec:     map[string]any{"name": "assets", "storageClass": "archive"},
-			Status:   &client.Status{Portability: "portable"},
+			Status:   providerPortableStatus(kind.Kind, "assets", 1),
 		}
 		w.Header().Set("ETag", `"1"`)
 		if r.Method == http.MethodGet {
 			_ = json.NewEncoder(w).Encode(res)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"resource": res, "observation": map[string]any{"status": "drifted"},
-		})
+		_ = json.NewEncoder(w).Encode(map[string]any{"resource": res})
 	}))
 	defer srv.Close()
 
@@ -169,6 +172,9 @@ func TestReadAdoptsOutOfBandChange(t *testing.T) {
 			t.Fatalf("seed %s: %v", name, diags)
 		}
 	}
+	if diags := setFormIdentityState(ctx, &state, form); diags.HasError() {
+		t.Fatalf("seed exact Form identity: %v", diags)
+	}
 
 	readResponse := frameworkresource.ReadResponse{State: state}
 	resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &readResponse)
@@ -179,6 +185,217 @@ func TestReadAdoptsOutOfBandChange(t *testing.T) {
 	readResponse.State.GetAttribute(ctx, path.Root("storage_class"), &storageClass)
 	if storageClass.ValueString() != "archive" {
 		t.Fatalf("storage_class = %q, want the host-observed archive", storageClass.ValueString())
+	}
+}
+
+func TestSetStateRejectsInvalidPortableStatusBeforeAnyStateWrite(t *testing.T) {
+	kind, ok := formcatalog.ByKind("ObjectBucket")
+	if !ok {
+		t.Fatal("ObjectBucket is not declared")
+	}
+	resource := &formResource{kind: kind, data: &providerData{forms: providerCandidateForms()}}
+	ctx := context.Background()
+	var schemaResponse frameworkresource.SchemaResponse
+	resource.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
+	state := tfsdk.State{
+		Schema: schemaResponse.Schema,
+		Raw:    tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil),
+	}
+	hostResource := canonicalPortableResource(kind, 1)
+	hostResource.Status.Output["credential"] = "must-not-enter-state"
+	diags := resource.setState(
+		ctx,
+		&state,
+		hostResource.Metadata.Name,
+		hostResource.Spec,
+		&hostResource,
+		"prod",
+		formValues{Fields: map[string]attr.Value{}, Artifact: nullArtifactSourceValues()},
+		true,
+	)
+	if !diags.HasError() {
+		t.Fatal("host output outside the exact Form contract entered state")
+	}
+	if !state.Raw.IsNull() {
+		t.Fatal("provider wrote partial state before rejecting invalid host output")
+	}
+}
+
+func TestSetStateRejectsHostDesiredSpecBeforeAnyStateWrite(t *testing.T) {
+	kind, ok := formcatalog.ByKind("ObjectBucket")
+	if !ok {
+		t.Fatal("ObjectBucket is not declared")
+	}
+	resource := &formResource{kind: kind, data: &providerData{forms: providerCandidateForms()}}
+	ctx := context.Background()
+	var schemaResponse frameworkresource.SchemaResponse
+	resource.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
+
+	tests := []struct {
+		name   string
+		mutate func(*client.Resource)
+	}{
+		{
+			name: "authority field",
+			mutate: func(hostResource *client.Resource) {
+				hostResource.Spec["selectedTarget"] = "private-target"
+			},
+		},
+		{
+			name: "valid but substituted value",
+			mutate: func(hostResource *client.Resource) {
+				hostResource.Spec["storageClass"] = "archive"
+			},
+		},
+		{
+			name: "spec name substitution",
+			mutate: func(hostResource *client.Resource) {
+				hostResource.Spec["name"] = "other"
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state := tfsdk.State{
+				Schema: schemaResponse.Schema,
+				Raw:    tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil),
+			}
+			hostResource := canonicalPortableResource(kind, 1)
+			test.mutate(&hostResource)
+			diags := resource.setState(
+				ctx,
+				&state,
+				kind.FixtureName(),
+				kind.CanonicalDesired(),
+				&hostResource,
+				"prod",
+				formValues{Fields: map[string]attr.Value{}, Artifact: nullArtifactSourceValues()},
+				true,
+			)
+			if !diags.HasError() {
+				t.Fatal("host desired state outside the exact requested Form contract entered state")
+			}
+			if !state.Raw.IsNull() {
+				t.Fatal("provider wrote partial state before rejecting invalid host desired state")
+			}
+		})
+	}
+}
+
+func TestReadFailsClosedBeforeHostWhenStateHasNoExactFormIdentity(t *testing.T) {
+	kind, ok := formcatalog.ByKind("ObjectBucket")
+	if !ok {
+		t.Fatal("ObjectBucket is not declared")
+	}
+	requests := 0
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Path == "/.well-known/takoform" {
+			writeProviderDiscovery(t, w, srv.URL)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	resource := &formResource{kind: kind, data: &providerData{
+		client: mustDiscoveredProviderClient(t, srv), forms: providerCandidateForms(), defaultSpace: "prod",
+	}}
+	ctx := context.Background()
+	var schemaResponse frameworkresource.SchemaResponse
+	resource.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
+	state := tfsdk.State{Schema: schemaResponse.Schema, Raw: tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil)}
+	for name, value := range map[string]types.String{
+		"name": types.StringValue("legacy"), "space": types.StringValue("prod"),
+		"storage_class": types.StringValue("standard"), "resource_version": types.StringValue("7"),
+	} {
+		if diags := state.SetAttribute(ctx, path.Root(name), value); diags.HasError() {
+			t.Fatalf("seed %s: %v", name, diags)
+		}
+	}
+
+	readResponse := frameworkresource.ReadResponse{State: state}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &readResponse)
+	if !readResponse.Diagnostics.HasError() {
+		t.Fatal("legacy state without an exact Form identity was refreshed")
+	}
+	if requests != 1 {
+		t.Fatalf("host requests = %d, want discovery only; resource GET must not run", requests)
+	}
+	if readResponse.State.Raw.IsNull() {
+		t.Fatal("legacy state was removed instead of being retained behind a migration diagnostic")
+	}
+}
+
+func TestReadFailsClosedBeforeHostWhenStateFormIdentityChanged(t *testing.T) {
+	kind, ok := formcatalog.ByKind("ObjectBucket")
+	if !ok {
+		t.Fatal("ObjectBucket is not declared")
+	}
+	requests := 0
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Path == "/.well-known/takoform" {
+			writeProviderDiscovery(t, w, srv.URL)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	resource := &formResource{kind: kind, data: &providerData{
+		client: mustDiscoveredProviderClient(t, srv), forms: providerCandidateForms(), defaultSpace: "prod",
+	}}
+	ctx := context.Background()
+	var schemaResponse frameworkresource.SchemaResponse
+	resource.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
+	state := tfsdk.State{Schema: schemaResponse.Schema, Raw: tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil)}
+	for name, value := range map[string]types.String{
+		"name": types.StringValue("changed"), "space": types.StringValue("prod"),
+		"storage_class": types.StringValue("standard"), "resource_version": types.StringValue("7"),
+	} {
+		if diags := state.SetAttribute(ctx, path.Root(name), value); diags.HasError() {
+			t.Fatalf("seed %s: %v", name, diags)
+		}
+	}
+	previous := providerCandidateForms()[kind.Kind]
+	previous.FormRef.SchemaDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if diags := setFormIdentityState(ctx, &state, previous); diags.HasError() {
+		t.Fatalf("seed previous exact Form identity: %v", diags)
+	}
+
+	readResponse := frameworkresource.ReadResponse{State: state}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &readResponse)
+	if !readResponse.Diagnostics.HasError() {
+		t.Fatal("state bound to another exact Form identity was refreshed")
+	}
+	if requests != 1 {
+		t.Fatalf("host requests = %d, want discovery only; resource GET must not run", requests)
+	}
+	if readResponse.State.Raw.IsNull() {
+		t.Fatal("mismatched exact-identity state was removed instead of retained")
+	}
+}
+
+func assertStateFormIdentity(t *testing.T, ctx context.Context, state tfsdk.State, want client.InstalledFormReference) {
+	t.Helper()
+	got := formStateIdentity{}
+	for name, target := range map[string]*types.String{
+		"form_api_version":        &got.APIVersion,
+		"form_kind":               &got.Kind,
+		"form_definition_version": &got.DefinitionVersion,
+		"form_schema_digest":      &got.SchemaDigest,
+		"form_package_digest":     &got.PackageDigest,
+	} {
+		if diags := state.GetAttribute(ctx, path.Root(name), target); diags.HasError() {
+			t.Fatalf("read %s: %v", name, diags)
+		}
+	}
+	reference, complete := got.reference()
+	if !complete || reference != want {
+		t.Fatalf("state Form identity = %#v complete=%t, want %#v", reference, complete, want)
 	}
 }
 

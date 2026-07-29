@@ -1,6 +1,0 @@
-{
-  "enabled": true,
-  "flagKey": "new_checkout",
-  "name": "feature-flag",
-  "rolloutPercentage": -1
-}

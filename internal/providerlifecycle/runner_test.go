@@ -2,15 +2,185 @@ package providerlifecycle
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
+
+func TestFormHostPreviewBindsReviewToCanonicalRequestedSpec(t *testing.T) {
+	host := newFormHost()
+	server := httptest.NewServer(host)
+	t.Cleanup(server.Close)
+	formClient := client.New(server.URL, "", server.Client())
+	ctx := context.Background()
+	if _, err := formClient.Discover(ctx); err != nil {
+		t.Fatal(err)
+	}
+	kind, ok := formcatalog.ByKind("ObjectBucket")
+	if !ok {
+		t.Fatal("ObjectBucket declaration is missing")
+	}
+	form := candidateForms()[kind.Kind]
+	desired := &client.Resource{
+		APIVersion: client.APIVersion, Kind: kind.Kind, Form: &form,
+		Metadata: client.Metadata{Name: kind.FixtureName(), Space: "prod"},
+		Spec:     kind.CanonicalDesired(),
+	}
+	specRaw, err := json.Marshal(desired.Spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDigest, err := formpackage.DigestCanonicalJSON(specRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := formClient.PreviewResource(ctx, desired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Review.SpecDigest != wantDigest {
+		t.Fatalf("preview specDigest = %q, want RFC 8785 requested spec digest %q", preview.Review.SpecDigest, wantDigest)
+	}
+}
+
+func TestFormHostProjectsExactFormDescriptorsOnlyForReadyResourceLifecycle(t *testing.T) {
+	host := newFormHost()
+	server := httptest.NewServer(host)
+	t.Cleanup(server.Close)
+	formClient := client.New(server.URL, "", server.Client())
+	if _, err := formClient.Discover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	kind, ok := formcatalog.ByKind("ObjectBucket")
+	if !ok {
+		t.Fatal("ObjectBucket declaration is missing")
+	}
+	form := candidateForms()[kind.Kind]
+	selector := client.InterfaceSelector{
+		Name: "object.storage", Version: "1",
+		ResourceKind: kind.Kind, ResourceName: kind.FixtureName(),
+	}
+	if listed, err := formClient.ListInterfaces(context.Background(), "prod"); err != nil || len(listed) != 0 {
+		t.Fatalf("interfaces before Resource create = %#v, %v", listed, err)
+	}
+	if _, err := formClient.GetInterface(context.Background(), "prod", selector); !errors.Is(err, client.ErrNotFound) {
+		t.Fatalf("exact interface before Resource create error = %v, want not found", err)
+	}
+
+	created, err := formClient.PutResource(context.Background(), kind.Kind, kind.FixtureName(), &client.Resource{
+		APIVersion: client.APIVersion, Kind: kind.Kind, Form: &form,
+		Metadata: client.Metadata{Name: kind.FixtureName(), Space: "prod"},
+		Spec:     kind.CanonicalDesired(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resourceIsReady(*created) {
+		t.Fatalf("created Resource is not Ready: %#v", created.Status)
+	}
+	listed, err := formClient.ListInterfaces(context.Background(), "prod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("Ready ObjectBucket interfaces = %#v, want one exact descriptor", listed)
+	}
+	wantDocument := map[string]any{"operations": []any{"delete", "get", "list", "put"}}
+	if listed[0].Name != selector.Name || listed[0].Version != selector.Version ||
+		listed[0].Resource.Kind != selector.ResourceKind || listed[0].Resource.Name != selector.ResourceName ||
+		!reflect.DeepEqual(listed[0].Document, wantDocument) || listed[0].Form == nil || *listed[0].Form != form {
+		t.Fatalf("materialized Interface does not match exact Form descriptor: %#v", listed[0])
+	}
+	if listed[0].Name == "s3.api" || listed[0].Version == "2025-11-25" {
+		t.Fatalf("undeclared legacy Interface leaked from test host: %#v", listed[0])
+	}
+	exact, err := formClient.GetInterface(context.Background(), "prod", selector)
+	if err != nil || !reflect.DeepEqual(exact, listed[0]) {
+		t.Fatalf("exact Interface read = %#v, %v; list item = %#v", exact, err, listed[0])
+	}
+
+	if err := host.setResourceReady(kind.Kind, kind.FixtureName(), false); err != nil {
+		t.Fatal(err)
+	}
+	if listed, err := formClient.ListInterfaces(context.Background(), "prod"); err != nil || len(listed) != 0 {
+		t.Fatalf("non-Ready Resource interfaces = %#v, %v", listed, err)
+	}
+	if err := host.setResourceReady(kind.Kind, kind.FixtureName(), true); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := formClient.DeleteResource(context.Background(), kind.Kind, kind.FixtureName(), "prod", client.MutationFence{
+		ResourceVersion: created.Metadata.ResourceVersion,
+		Form:            form,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if listed, err := formClient.ListInterfaces(context.Background(), "prod"); err != nil || len(listed) != 0 {
+		t.Fatalf("interfaces after Resource delete = %#v, %v", listed, err)
+	}
+	if _, err := formClient.GetInterface(context.Background(), "prod", selector); !errors.Is(err, client.ErrNotFound) {
+		t.Fatalf("exact interface after Resource delete error = %v, want not found", err)
+	}
+}
+
+func TestFormHostProjectsEveryCurrentDescriptorThroughReadyLifecycle(t *testing.T) {
+	host := newFormHost()
+	server := httptest.NewServer(host)
+	t.Cleanup(server.Close)
+	formClient := client.New(server.URL, "", server.Client())
+	ctx := context.Background()
+	if _, err := formClient.Discover(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyNoMaterializedInterfaces(ctx, formClient); err != nil {
+		t.Fatal(err)
+	}
+	forms := candidateForms()
+	created := make(map[string]*client.Resource, len(resourceCases))
+	for _, item := range resourceCases {
+		kind, ok := formcatalog.ByKind(item.Kind)
+		if !ok {
+			t.Fatalf("resource case names undeclared Form %s", item.Kind)
+		}
+		form := forms[item.Kind]
+		resource, err := formClient.PutResource(ctx, item.Kind, item.Name, &client.Resource{
+			APIVersion: client.APIVersion, Kind: item.Kind, Form: &form,
+			Metadata: client.Metadata{Name: item.Name, Space: "prod"},
+			Spec:     kind.CanonicalDesired(),
+		})
+		if err != nil {
+			t.Fatalf("create %s: %v", item.Kind, err)
+		}
+		created[item.Kind] = resource
+	}
+	if err := verifyReadyMaterializedInterfaces(ctx, formClient, host); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range resourceCases {
+		form := forms[item.Kind]
+		if err := formClient.DeleteResource(ctx, item.Kind, item.Name, "prod", client.MutationFence{
+			ResourceVersion: created[item.Kind].Metadata.ResourceVersion,
+			Form:            form,
+		}); err != nil {
+			t.Fatalf("delete %s: %v", item.Kind, err)
+		}
+	}
+	if err := verifyNoMaterializedInterfaces(ctx, formClient); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestOpenTofuValidateAcceptsYurucommuComputedConfigurationValues(t *testing.T) {
 	root, err := RepoRoot(".")
@@ -79,10 +249,12 @@ locals {
 }
 
 resource "takoform_edge_worker" "worker" {
-  name            = local.prefix
-  artifact_url    = "https://example.test/yurucommu-worker.js"
-  artifact_sha256 = "sha256:683c5ed5bc5f537087b703bf24ad3b306508dd3778918d0c31eb4561777fbe13"
-  runtime         = "javascript"
+  name                = local.prefix
+  artifact_url        = "https://example.test/yurucommu-worker.js"
+  artifact_sha256     = "sha256:683c5ed5bc5f537087b703bf24ad3b306508dd3778918d0c31eb4561777fbe13"
+  artifact_media_type = "text/javascript"
+  entrypoint          = "worker.js"
+  runtime             = "javascript"
 
   configuration = {
     DELIVERY_QUEUE_NAME = "${local.prefix}-delivery"
@@ -126,7 +298,7 @@ func TestStandardFixtureCasesRequireExactExecutedFormIdentity(t *testing.T) {
 			},
 			PositiveName: "canonical", Positive: map[string]any{"name": item.Name},
 			Negatives: []StandardNegativeFixture{{
-				Name: "reject-name", Desired: map[string]any{"name": item.Name},
+				Name: "reject-name", Stage: "desired", Input: map[string]any{"name": item.Name},
 			}},
 		})
 	}
@@ -137,6 +309,60 @@ func TestStandardFixtureCasesRequireExactExecutedFormIdentity(t *testing.T) {
 	forged[0].Identity.FormRef.Kind = resourceCases[1].Kind
 	if _, err := validateAndOrderStandardFixtureCases(forged); err == nil || !strings.Contains(err.Error(), "incomplete or unknown") {
 		t.Fatalf("mislabeled fixture identity was accepted: %v", err)
+	}
+}
+
+func TestStandardFixtureDiagnosticsCoverEveryRequiredDesiredOmission(t *testing.T) {
+	t.Parallel()
+
+	for _, kind := range formcatalog.Kinds {
+		kind := kind
+		t.Run(kind.Kind, func(t *testing.T) {
+			t.Parallel()
+			cases, err := kind.NegativeCases()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, negative := range cases {
+				if !strings.HasPrefix(negative.Name, "missing-") {
+					continue
+				}
+				field, detail, ok := standardNegativeDiagnostic(kind.Kind, "reject-"+negative.Name, negative.Desired)
+				if !ok || field == "" || detail != "required" {
+					t.Errorf("%s diagnostic = %q/%q/%t", negative.Name, field, detail, ok)
+				}
+			}
+		})
+	}
+}
+
+func TestStandardFixtureDiagnosticsCoverCredentialFreeArtifactURLs(t *testing.T) {
+	t.Parallel()
+
+	wantDetail := formcatalog.GrammarCredentialFreeHTTPSURL.Message("artifact_url")
+	for _, kind := range formcatalog.Kinds {
+		if !kind.Artifact {
+			continue
+		}
+		for _, suffix := range []string{"userinfo", "query", "fragment"} {
+			fixtureName := "reject-artifact-url-" + suffix
+			field, detail, ok := standardNegativeDiagnostic(
+				kind.Kind,
+				fixtureName,
+				kind.CanonicalDesired(),
+			)
+			if !ok || field != "artifact_url" || detail != wantDetail {
+				t.Errorf(
+					"%s %s diagnostic = %q/%q/%t, want artifact_url/%q/true",
+					kind.Kind,
+					fixtureName,
+					field,
+					detail,
+					ok,
+					wantDetail,
+				)
+			}
+		}
 	}
 }
 
@@ -169,7 +395,13 @@ func TestLoadCLIMatrixPinsOneCanonicalProviderAddress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"one provider source", "from the Terraform Registry"} {
+	for _, required := range []string{
+		"one provider source and state identity",
+		"not Registry-installable",
+		"through CLI",
+		"development overrides",
+		"After publication",
+	} {
 		if !strings.Contains(string(readme), required) {
 			t.Fatalf("provider distribution guidance lacks %q", required)
 		}
@@ -287,6 +519,13 @@ func TestValidateMatrixRejectsNonCanonicalAddressAndEvidenceDrift(t *testing.T) 
 		t.Fatal("matrix accepted divergent lifecycle evidence")
 	}
 
+	missingInterfaceCheck := matrix
+	missingInterfaceCheck.Reports = append([]Report(nil), matrix.Reports...)
+	missingInterfaceCheck.Reports[1].InterfaceChecks.RequiredReadiness = false
+	if err := ValidateMatrix(missingInterfaceCheck, requirements); err == nil {
+		t.Fatal("matrix accepted incomplete or divergent Interface lifecycle evidence")
+	}
+
 	duplicateResource := registry
 	duplicateResource.Reports = append([]Report(nil), registry.Reports...)
 	duplicateResource.Reports[0].Resources = append([]ResourceEvidence(nil), registry.Reports[0].Resources...)
@@ -324,6 +563,10 @@ func completeReport(product, version, address string) Report {
 		ProviderBinary: ProviderBinaryIdentity{Version: "0.1.0-rc.2", SHA256: "sha256:" + strings.Repeat("d", 64)},
 		CLI:            CLIIdentity{Product: product, Version: version, ProviderAddress: address, ExecutableName: strings.ToLower(product), ExecutableSHA256: "sha256:" + strings.Repeat("c", 64)},
 		Resources:      resources,
+		InterfaceChecks: InterfaceCheckEvidence{
+			AbsentBeforeCreate: true, DescriptorDerivedList: true, ExactGet: true,
+			RequiredReadiness: true, AbsentAfterDelete: true,
+		},
 		NegativeChecks: []NegativeEvidence{
 			{Name: "response-name-substitution-rejected", Kind: resourceCases[0].Kind, Fixture: "fixture", Passed: true},
 			{Name: "response-package-digest-substitution-rejected", Kind: resourceCases[1].Kind, Fixture: "fixture", Passed: true},

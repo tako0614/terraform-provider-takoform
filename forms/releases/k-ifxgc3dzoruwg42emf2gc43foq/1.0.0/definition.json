@@ -24,7 +24,7 @@
             "type": "string"
           },
           "resource": {
-            "pattern": "^\\S+$",
+            "pattern": "^[A-Z][A-Za-z0-9]{0,63}/[a-z][a-z0-9-]{0,62}$",
             "type": "string"
           }
         },
@@ -54,9 +54,9 @@
         "$ref": "#/$defs/connections"
       },
       "name": {
-        "maxLength": 128,
+        "maxLength": 63,
         "minLength": 1,
-        "pattern": ".*\\S.*",
+        "pattern": "^[a-z][a-z0-9-]{0,62}$",
         "type": "string"
       },
       "partitionField": {
@@ -86,11 +86,12 @@
         "uniqueItems": true
       },
       "generation": {
+        "maximum": 9223372036854775807,
         "minimum": 1,
         "type": "integer"
       },
       "id": {
-        "minLength": 1,
+        "pattern": "^AnalyticsDataset/[a-z][a-z0-9-]{0,62}$",
         "type": "string"
       },
       "imported": {
@@ -119,11 +120,12 @@
     "additionalProperties": false,
     "properties": {
       "generation": {
+        "maximum": 9223372036854775807,
         "minimum": 1,
         "type": "integer"
       },
       "id": {
-        "minLength": 1,
+        "pattern": "^AnalyticsDataset/[a-z][a-z0-9-]{0,62}$",
         "type": "string"
       },
       "kind": {
@@ -131,7 +133,9 @@
         "type": "string"
       },
       "name": {
+        "maxLength": 63,
         "minLength": 1,
+        "pattern": "^[a-z][a-z0-9-]{0,62}$",
         "type": "string"
       },
       "portability": {
@@ -221,6 +225,12 @@
   ],
   "negativeConformanceFixtures": [
     {
+      "name": "reject-missing-name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-name.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
       "name": "reject-partition_field",
       "stage": "desired",
       "inputPath": "fixtures/negative-partition_field.json",
@@ -230,6 +240,12 @@
       "name": "reject-retention_days",
       "stage": "desired",
       "inputPath": "fixtures/negative-retention_days.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-observed-foreign-kind-id",
+      "stage": "observed",
+      "inputPath": "fixtures/negative-observed-foreign-kind-id.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

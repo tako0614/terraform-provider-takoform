@@ -9,21 +9,39 @@ does not prove are defined in [`conformance.md`](conformance.md). How the API
 group, Form definitions, packages, and the provider are versioned — and what
 `v1alpha1` must satisfy to graduate — is in [`versioning.md`](versioning.md).
 
-Current committed surfaces:
+## Product contract map
 
-- [`conformance.md`](conformance.md) — requirement keywords and the four conformance classes;
-- [`versioning.md`](versioning.md) — independent version streams, stability, and deprecation;
-- [`decisions/`](decisions/) — the reasons behind accepted normative product decisions;
-- [`schemas/`](schemas/) — the normative machine-readable schemas;
-- [`host-api/`](host-api/) — the discovery, availability, preview, apply, read, import, observe, refresh, and delete contract, with [`operations.json`](host-api/operations.json) as its machine-readable form;
-- [`form-definition/`](form-definition/) — exact FormRef and data-only Form Definition contract;
-- [`form-package/`](form-package/) — package-index identity, closed payload rules, and local verifier boundary;
-- [`interface-declaration/`](interface-declaration/) — open `(name, version)` runtime interface descriptors, exact non-secret documents, and deterministic input mappings;
-- [`data-indexed/`](data-indexed/) — a proposed bounded key and declared-index operation contract for `data.indexed@1`, required by no Form in this release;
-- [`trust/`](trust/) — the D-08 provider/Form Package trust decision and its machine-readable fail-closed profile;
-- [`../schemas/host-discovery.schema.json`](../schemas/host-discovery.schema.json) — machine-readable discovery validation;
-- [`../forms/README.md`](../forms/README.md) — the generated portable Form inventory;
-- [`../conformance/README.md`](../conformance/README.md) — current evidence and the next fixture boundary.
+Takoform has four public contract interfaces:
+
+1. **Exact Form and Package data.**
+   [`form-definition/`](form-definition/) defines immutable `FormRef` and the
+   desired/observed/output shape. [`form-package/`](form-package/) binds one
+   exact definition and its data-only fixtures into immutable package bytes.
+2. **Desired Resource lifecycle.**
+   [`host-api/`](host-api/) defines discovery, exact Form availability,
+   preview/apply, read/import/observe/refresh/delete, fencing, and portable
+   errors. The host chooses implementation and placement.
+3. **Read-only Form-derived Interface projection.**
+   [`interface-declaration/`](interface-declaration/) defines open
+   `(name, version)` descriptors embedded in Forms and their read-only host
+   projection. Focused contracts such as
+   [`data.indexed@1`](data-indexed/) only define the descriptor data the current
+   Form actually declares.
+4. **Trust, version, and release identity.**
+   [`trust/`](trust/) defines immutable publisher evidence and revocation;
+   [`versioning.md`](versioning.md) keeps provider, API, Form, Package, and
+   admission versions independent.
+   [`release/`](../release/README.md) binds artifacts to those exact identities
+   without changing the three contracts above.
+
+[`schemas/`](schemas/), [`conformance.md`](conformance.md), and
+[`decisions/`](decisions/) support those interfaces with structural minima,
+executable evidence language, and decision rationale. They are not additional
+product interfaces. The generated current inventory is
+[`../forms/README.md`](../forms/README.md), host discovery validation is
+[`../schemas/host-discovery.schema.json`](../schemas/host-discovery.schema.json),
+and the local evidence map is
+[`../conformance/README.md`](../conformance/README.md).
 
 ## Status
 
@@ -48,3 +66,23 @@ this build refuses to reissue their proofs rather than restamp them with a new
 provider identity.
 
 The project identity is `forms.takoform.com/v1alpha1`; the Terraform provider identity is `registry.terraform.io/tako0614/takoform`.
+
+## Normative consistency audit
+
+`go test ./spec` is the cross-specification contradiction gate. It does not
+repeat the Form Package verifier, provider schema tests, or portable-host
+runner. Instead, it joins their machine-readable inputs and fails when:
+
+- host operations, mutation fences, idempotency, or the stable error taxonomy
+  disagree with the portable-host conformance contract;
+- the optional Interface projection stops being read-only, same-origin, and
+  materialized only from Form-declared descriptors;
+- the portable API identity, provider candidate version, or canonical provider
+  FQN diverges between release, schema, trust, and conformance locks; or
+- a normative active Form, package, schema, or host contract leaks a concrete
+  backend vocabulary such as Cloudflare/Workers configuration.
+
+The complete repository gate, `bun run check`, runs this audit together with
+the deeper package-byte, provider-schema, generated-surface, and lifecycle
+verifiers. Passing it remains local evidence only; it does not prove Registry
+publication, host admission, or production interoperability.

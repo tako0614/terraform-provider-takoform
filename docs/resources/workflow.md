@@ -16,8 +16,9 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 ## Arguments
 
 - `name` (String, required, forces replacement) — Resource name.
-- `artifact_path` / `artifact_url` / `artifact_ref` (String, optional) — Exactly one immutable artifact source. `artifact_url` and `artifact_ref` require `artifact_sha256`.
-- `artifact_sha256` (String, optional) — Expected artifact digest.
+- `artifact_url` (String, required) — Absolute credential-free HTTPS location any conforming host can fetch; userinfo, query, and fragment are forbidden because this value persists in nonsensitive state.
+- `artifact_sha256` (String, required) — Digest binding the URL to exact immutable bytes.
+- `artifact_media_type` (String, required) — Lowercase type/subtype describing how the bytes are interpreted.
 - `entrypoint` (String, required) — Workflow runtime entrypoint.
 - `max_attempts` (Number, optional) — Optional maximum attempts per workflow run. At least 1.
 - `initial_backoff_seconds` (Number, optional) — Optional initial retry backoff in seconds. At least 0.
@@ -27,10 +28,13 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 
 ## Read-only attributes
 
-`id`, `resource_version`, `drift_status`, `portability`, and `outputs` report
-the canonical resource identity, its generation fence, the native observation
-result, and sanitized public host results. Backend placement is never provider
-state.
+`form_api_version`, `form_kind`, `form_definition_version`, `form_schema_digest`, and
+`form_package_digest` bind state to the exact immutable Form identity.
+`id` is the provider-synthesized `Kind/name` identity and `resource_version` is
+the host generation fence. `drift_status`, `portability`, and `outputs` are written
+only after the host's observed and output documents satisfy this exact Form's
+closed schemas, identities, and generation. Undeclared host keys are rejected;
+backend placement is never provider state.
 
 ## Declared runtime interfaces
 

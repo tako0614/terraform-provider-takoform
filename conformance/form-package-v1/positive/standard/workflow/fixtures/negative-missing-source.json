@@ -1,0 +1,9 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "entrypoint": "IngestWorkflow",
+  "initialBackoffSeconds": 5,
+  "maxAttempts": 3,
+  "name": "workflow"
+}

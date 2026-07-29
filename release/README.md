@@ -25,50 +25,94 @@ manifest and keeps `publicationReady=false`.
 ## Provider v1.0.0 resource transition
 
 Provider `v1.0.0` removes the active `takoform_http_service` resource and adds
-`takoform_edge_worker` for the distinct `EdgeWorker@2.0.0` Form identity.
+`takoform_edge_worker` for the distinct `EdgeWorker@3.0.0` Form identity. It
+also removes the writable `takoform_interface` resource: portable Form
+Definitions may declare non-secret Interface descriptors and the provider
+retains the read-only `takoform_interface` data source, but Interface records,
+bindings, write fencing, authorization, and lifecycle belong to the host.
 Published `HttpService@1.0.0` bytes and provider `v0.2.1` remain immutable.
 
-This is not a state-label-only rename: the Form kind, resource type, package,
-and remote identity all change. Existing `takoform_http_service` state must
-stay pinned to provider `v0.2.1` until an operator performs an explicit
-create/cutover/destroy migration. Provider `v1.0.0` does not silently
-reinterpret old state as `EdgeWorker`.
+The compatibility break is broader than those two removed resource types.
+Provider `v0.2.1` and candidate `v1.0.0` each compile 34 Form identities. They
+share 33 kind names, but all 33 shared exact FormRefs/packages changed; there
+are zero unchanged exact identities. Common names, artifacts, connections, and
+semantic field contracts also changed. Every existing v0.2.1 Form resource,
+not only `takoform_http_service`, must therefore stay pinned until an operator
+performs an explicit create/cutover/destroy migration.
+
+Provider v1 gives every Form resource schema version `1`, stores the exact
+FormRef/package identity in state, and handles schema version `0` only with a
+diagnostic that returns no transformed state and makes no Resource lifecycle
+request. This makes a direct v0.2.1 state load fail before lifecycle code can
+query the new exact identity, receive `404`, and erase old state as though the
+old Resource had disappeared. Provider configuration may already have
+performed host discovery; this fence covers Resource lifecycle requests.
+Existing writable `takoform_interface` state also remains manageable only
+while pinned to v0.2.1. If the host has adopted the Interface record, destroying
+it through v0.2.1 can delete that remote record: verify host ownership and
+binding continuity, then remove only the Terraform state entry. Destroy through
+v0.2.1 only when the remote Interface itself is intentionally being retired.
+An automatic transformation or v1 import target would falsely claim a portable
+resource/data migration that does not exist.
+
+Some v0.2.1 OpenTofu state may use the retired
+`registry.opentofu.org/tako0614/takoform` identity. That address is not an alias
+for `registry.terraform.io/tako0614/takoform`; when it is actually present,
+normalize it with an explicit, reviewed `tofu state replace-provider` while
+the resource version remains pinned to v0.2.1. Address replacement does not
+migrate any Form resource. The full inventory, backup, address-normalization,
+and per-resource cutover procedure is
+[`migrations/v0.2.1-to-v1.0.0.md`](migrations/v0.2.1-to-v1.0.0.md), backed by
+the machine-readable
+[`migration audit`](migrations/v0.2.1-to-v1.0.0.json).
 
 This is the first stable provider compatibility line, not a claim that the
 portable specification has graduated from
 `forms.takoform.com/v1alpha1`. Provider, Form definition, Form Package, and
 admission versions remain independent. Published `EdgeWorker@1.0.0` and
 `EdgeWorker@1.0.1` identities cannot be reset, so the provider-neutral
-definition remains `EdgeWorker@2.0.0`. The exact contract is in
+definition uses the independent `EdgeWorker@3.0.0` identity. The intermediate
+`2.0.0` release source remains unmodified; tightening its artifact URL grammar
+required a new Form major. The exact contract is in
 [`../spec/versioning.md`](../spec/versioning.md).
-
-The pre-v1 legacy-provider migration report remains useful structural evidence,
-but its operator-host refresh/rollback drills are external migration evidence,
-not authority to publish this candidate-only provider. The tag and artifact
-lanes therefore run the structural migration proof without
-`--require-complete`; Form activation remains blocked by the separate complete
-Phase 2 admission closure.
 
 Every candidate contains:
 
-- one deterministic archive for each configured platform;
+- five deterministic provider archives, one for each configured platform;
 - `SHA256SUMS`, whose signed Registry closure contains the five provider ZIP
   archives and the exact Registry metadata manifest;
+- the detached OpenPGP signature for `SHA256SUMS`;
 - `manifest.json` with archive and binary digests, source commit, embedded
   version evidence, and publication blockers;
-- `sbom.spdx.json` generated from the exact Go module graph;
-- `provenance.json`, an unsigned in-toto statement describing the build.
+- five archive-specific SPDX 2.3 documents generated from the exact Go module
+  graph;
+- one RFC 8785 canonical in-toto Statement v1 with SLSA Provenance v1; and
+- the provenance statement's detached OpenPGP signature.
 
-The public GitHub Release inventory is deliberately broader than the signed
-Registry checksum manifest. Per-archive SPDX documents and workflow
-provenance/attestations remain immutable release evidence and are verified
-separately; they must not be listed in `SHA256SUMS`. The Registry metadata
-manifest is not an installable package, but the public Registry ingress
-contract requires its digest in the signed checksum file. Both Terraform and
-OpenTofu use the same six-entry checksum target set. Providers `v0.1.1` and
-`v0.1.2` remain immutable: `v0.1.1` included SPDX evidence in `SHA256SUMS`,
-while `v0.1.2` omitted the required Registry manifest. The corrected `v0.1.3`
-candidate supersedes both without replacing any published byte.
+The public GitHub Release inventory is exactly 15 assets and is deliberately
+broader than the signed Registry checksum manifest. Before provenance is
+added, the five archives, five SPDX documents, manifest, `SHA256SUMS`, and its
+signature form the exact 13-asset payload closure. The canonical provenance
+statement binds all 13 by name, byte size, and SHA-256, plus the source commit,
+release tag, tooling commit, workflow identity, run and attempt, request ID,
+and annotated tag-object OID and SHA-256. It excludes itself and its signature
+to avoid self-reference. Its detached signature MUST verify with the same
+pinned provider OpenPGP key that authenticates `SHA256SUMS`; a GitHub artifact
+attestation is not a substitute.
+
+Per-archive SPDX documents and source-bound provenance remain immutable release
+evidence and must not be listed in `SHA256SUMS`. The Registry metadata manifest
+is not an installable package, but the public Registry ingress contract
+requires its digest in the signed checksum file. Both Terraform and OpenTofu
+use the same six-entry checksum target set.
+
+Providers `v0.1.1`, `v0.1.2`, and the then-corrective `v0.1.3` describe
+historical pre-v1 layouts only. `v0.1.1` included SPDX evidence in
+`SHA256SUMS`; `v0.1.2` omitted the required Registry manifest; and `v0.1.3`
+corrected that historical checksum closure without replacing a published byte.
+None of those layouts defines the current provider `v1.0.0` candidate. The v1
+candidate is governed by the 15-asset provenance closure above and MUST NOT
+overwrite or inherit the identity of any historical version.
 
 `release/version.json` also pins the supported CLI/FQN matrix. Release CI must
 exercise Terraform `1.15.8` and OpenTofu `1.12.1` with the same canonical
@@ -133,7 +177,14 @@ identity. `standard-provider-report.yml` independently signs all 34
 `portable-v1` provider reports using
 `takoform.standard-provider-runner-report@v2`, including the exact installed
 provider binary digest. A conforming host signs the exact ten
-`ga-core-v2` host reports. The admission material retains and
+`ga-core-v2` host reports plus the exact portable runner report, then signs the
+candidate's exact `SHA256SUMS` envelope. That envelope closes over the manifest,
+request/run/source-bound signed candidate, portable report and bundle, and all
+ten report/bundle pairs; the checksum signature bundle is the only excluded
+self-referential file. Takoform requires this signed-candidate v4 26-file
+closure, rejects the legacy runner subject, and semantically verifies every
+portable runner result field against its exact retained contract.
+The admission material retains and
 offline-authenticates the complete 34-report provider candidate, including the
 24 reports outside the selected ten. Finally, `standard-admission-evidence.yml` verifies
 those retained candidates, builds the generation-aware v4 set twice, and signs
@@ -144,49 +195,95 @@ The portable source gate authenticates historical `ga-core-v1` publication
 with `retained-ga-core-v1-published-package-check`.
 `current-published-package-check` and `current-admission-closure-check` are
 post-publication v4 gates and remain fail-closed until all retained subjects
-and exact Git refs verify offline. The removed `standard-admission-release.yml`, controller
-promotion input, release archive, and `release-check` path described a
-set-wide artifact promotion that is not part of current Takoform.
+and exact Git refs verify offline. The removed
+`standard-admission-release.yml`,
+`standard-form-package-set-release.yml`, `form-package-release` set-wide
+subcommands and `--coordinated-standard-set` flag, controller promotion input,
+release archive, and `release-check` path described a set-wide artifact
+promotion that is not part of current Takoform.
 
 The admission checkpoint semver is independent from each exact Form definition
 and Form Package semver. It identifies one immutable source-retained closure;
 it does not republish package bytes or create another distributable artifact.
 
-`admission-closure-check` also resolves the admission tag, provider tag, and every
-package tag from fetched local Git refs and requires their exact retained
-commits. The provider tag must be annotated and signed by the pinned provider
-GPG fingerprint; import only `release/keys/provider-signing-key.asc` before an
-offline local check. A 40-character string without the corresponding immutable
-ref is never release evidence.
-
-The provider build tool never signs, uploads, creates a GitHub Release, or
-publishes to a Registry/mirror. Maintainers dispatch the protected
-`.github/workflows/provider-release-tag.yml` lane with the exact descriptor tag
-and current protected-main commit. Its read-only preflight job has no protected
-Environment, write token, or signing key and is the only job that executes Go,
-the candidate provider, or either Terraform-compatible CLI. Only canonical
-descriptor/build/SBOM/provenance/lifecycle digests cross the artifact boundary.
-The protected signing job starts from a fresh exact checkout, performs only
-static JSON/hash/Git/Registry-absence checks, imports the `provider-release`
-Environment key, and exports a checksum-closed public signed-tag object without
-repository write credentials. The signed message binds the protected-main
-commit, complete preflight checksum inventory, and exact Actions run/attempt.
-No local human signing key is required.
-
-After the Environment-approved run succeeds, an admin maintainer downloads both
-artifacts and performs the second half of the release boundary locally:
+After the signed admission evidence has been retained and independently
+reviewed in source, the only checkpoint publication sequence is the owner
+entrypoint below. It requires local `gh` and a non-empty operator `GH_TOKEN`;
+that token is exposed only to read-only `gh api` ruleset calls and is scrubbed
+from every `git`, `bun`, and `go` subprocess.
 
 ```console
-gh run download <run-id> --name provider-tag-preflight-<commit> --dir /tmp/provider-tag-preflight
-gh run download <run-id> --name provider-signed-tag-<run-id>-<attempt> --dir /tmp/provider-signed-tag
-go -C ./cmd/provider-release run . verify-tag-artifact \
-  --artifact /tmp/provider-signed-tag \
-  --preflight-artifact /tmp/provider-tag-preflight \
-  --expected-run-id <run-id> \
-  --expected-run-attempt <attempt> \
-  --expected-commit <commit> \
-  --materialize-ref
-git push origin refs/tags/$(jq -r .tag release/version.json):refs/tags/$(jq -r .tag release/version.json)
+bun run deploy -- takoform-admission-release prepare \
+  --expected-commit <exact-reviewed-closure-commit>
+bun run deploy -- takoform-admission-release publish \
+  --expected-commit <same-exact-reviewed-closure-commit>
+bun run deploy -- takoform-admission-release verify \
+  --expected-commit <same-exact-reviewed-closure-commit>
+```
+
+All three phases require two exact active GitHub rulesets whose sole include is
+`refs/tags/forms/admissions/v*`: a creation-only rule restricted to explicit
+always-bypass actors available to the operator, and a distinct no-bypass rule
+blocking update, deletion, and non-fast-forward changes. `prepare` is the
+non-mutating owner gate. `publish` fingerprints the exact rulesets immediately
+before the only push, creates the descriptor-pinned annotated tag only after an
+independent review and remote-absence proof, and requires the identical
+protection immediately afterward. A failed post-push protection proof is an
+indeterminate publication result and is never retried. `verify` performs the
+live-protection, authoritative tag-object, peeled-commit, v4-tree, and
+offline-closure readback.
+
+The admission tag is intentionally unsigned and has no GitHub Release:
+authenticity comes from the separately Sigstore-signed retained evidence, while
+the protected ref provides its immutable source identity. Version `1.0.5` is
+permanently reserved and abandoned because v3 candidates already used it; the
+current assignment is `1.0.6` / `forms/admissions/v1.0.6`. Never reuse, replace,
+or move either identity.
+
+The tagged closure commit may later be an ancestor of `main`, but its complete
+`admission/v4` tree must stay byte-identical to the current v4 tree. Unrelated
+website state may move forward. A changed v4 closure is repaired forward under
+a newly assigned checkpoint version.
+
+`admission-closure-check` also resolves the admission tag, provider tag, and
+every package tag from fetched local Git refs and requires their exact retained
+commits. The provider tag—not the admission tag—must be annotated and signed by
+the pinned provider GPG fingerprint; import only
+`release/keys/provider-signing-key.asc` before an offline local check. A
+40-character string without the corresponding immutable ref is never release
+evidence.
+
+The provider build tool never signs, uploads, creates a GitHub Release, or
+publishes to a Registry/mirror. The only operator entrypoint is the repository
+deploy command. First dispatch the protected signed-tag lane with the exact
+descriptor tag and current protected-main commit:
+
+```console
+bun run deploy -- takoform-provider-release prepare \
+  --tag v1.0.0 \
+  --expected-commit <40-character-protected-main-commit>
+```
+
+The entrypoint records the workflow run and stops. Its read-only preflight job
+has no protected Environment, write token, or signing key and is the only job
+that executes Go, the candidate provider, or either Terraform-compatible CLI.
+Only canonical descriptor/build/SBOM/provenance/lifecycle digests cross the
+artifact boundary. The protected signing job starts from a fresh exact checkout,
+performs only static JSON/hash/Git/Registry-absence checks, imports the
+`provider-release` Environment key, and exports a checksum-closed public
+signed-tag object without repository write credentials. The signed message
+binds the protected-main commit, complete preflight checksum inventory, and
+exact Actions run/attempt. No local human signing key is required.
+
+After the Environment-approved run succeeds, an admin maintainer consumes that
+exact signed-tag run through the same owner entrypoint:
+
+```console
+bun run deploy -- takoform-provider-release tag \
+  --tag v1.0.0 \
+  --expected-commit <same-40-character-commit> \
+  --run-id <signed-tag-workflow-run-id> \
+  --run-attempt <signed-tag-workflow-attempt>
 ```
 
 The verifier closes both inventories, reconstructs the exact public tag object
@@ -194,18 +291,70 @@ with `git mktag`, checks its expected object id and peeled target, imports only
 the pinned public key in a temporary keyring, verifies the signer fingerprint,
 and refuses to replace an existing local tag ref. The final push uses the
 maintainer's existing admin authentication to cross the restricted tag-creation
-ruleset; the Actions job itself cannot bypass that rule. That push triggers
-`release.yml`, the only
-provider artifact producer. Its read-only build job verifies the signed tag
-with the public key, runs the candidate and pinned GoReleaser/Syft toolchain,
-validates every final Syft document against the repository-pinned official
-SPDX 2.3 schema, exports an exact unsigned evidence inventory, and closes the
-five provider archives plus Registry metadata manifest under the signed
-checksum file. A fresh
-protected publication job executes no provider or repository Go code: it
-statically rechecks the tag, inventory, Registry absence, and checksums, imports
-the same Environment key, adds only the detached checksum signature, publishes
-the exact draft assets, and records GitHub build provenance.
+ruleset; the Actions job itself cannot bypass that rule. The entrypoint then
+dispatches the prepare-only `release.yml` at that exact immutable signed tag
+ref, with the same tag and peeled source commit. It never dispatches this
+candidate workflow from mutable `main`; its workflow identity is exactly
+`.github/workflows/release.yml@refs/tags/<tag>`.
+It prints that exact run URL and stops again.
+Its read-only build job verifies the signed tag with the public key, runs the
+same non-publishing GoReleaser command twice, requires the five final archive
+names and bytes to match after a source-mtime perturbation, extracts the exact
+final Linux amd64 provider, and runs both supported CLI lifecycles against
+those extracted bytes. It then validates every final Syft
+document against the repository-pinned official SPDX 2.3 schema, and closes the
+five provider archives plus Registry metadata manifest under the checksum
+file. A fresh protected signing job executes no provider or repository Go code:
+it statically rechecks the tag, inventory, Registry absence, and checksums,
+imports the same Environment key, adds the detached checksum signature, builds
+the RFC 8785 canonical provenance over that exact 13-subject payload, and adds
+the provenance statement's detached GPG signature. It emits a same-run,
+checksum-closed local-publication candidate with exactly 15 public assets.
+Neither job has tag, GitHub Release, public-attestation, or publication
+authority.
+
+After that second run succeeds, publish only its exact run/attempt:
+
+```console
+bun run deploy -- takoform-provider-release publish \
+  --tag v1.0.0 \
+  --expected-commit <same-40-character-commit> \
+  --run-id <provider-release-candidate-run-id> \
+  --run-attempt <provider-release-candidate-run-attempt>
+```
+
+The owner deploy entrypoint verifies the outer checksum closure and detached
+GPG signature, then uses only the operator machine's GitHub authority to create
+a draft, upload the exact fifteen assets, compare their public API digests,
+publish that same draft, and require an immutable exact-ID/tag readback. A
+dispatch, tag push, or candidate artifact is not publication success.
+
+After the immutable GitHub Release exists and the public Registry has indexed
+it, dispatch the signed direct-install readback and then verify that exact run:
+
+Protected `main` must remain exactly the signed provider tag's peeled commit
+from `prepare` through the successful Registry `verify` phase. Use that same
+commit for every `--expected-commit` below; only after Registry verification
+succeeds may `main` advance to evidence or status commits.
+
+```console
+bun run deploy -- takoform-provider-release readback \
+  --tag v1.0.0 \
+  --expected-commit <same-signed-tag-40-character-commit>
+
+bun run deploy -- takoform-provider-release verify \
+  --tag v1.0.0 \
+  --expected-commit <same-signed-tag-40-character-commit> \
+  --run-id <registry-readback-workflow-run-id> \
+  --run-attempt <registry-readback-workflow-attempt>
+```
+
+The readback workflow installs the exact public version directly through both
+OpenTofu and Terraform, requires one provider binary digest, signs the Registry
+readback, and emits the exact six-file candidate used by admission. The verify
+phase requires that workflow attempt to have completed successfully and closes
+the downloaded artifact inventory and checksums; it never republishes the
+provider.
 
 Repository configuration is part of the trust boundary, not a claim made by
 this tree. The workflow references the `provider-release` GitHub Environment,
@@ -228,9 +377,11 @@ and `v0.1.2` remain immutable GitHub Releases. Terraform Registry rejected the
 first because its checksum manifest projected SPDX evidence as provider
 packages, and rejected the second because the required Registry metadata
 manifest was absent from `SHA256SUMS`. Existing version paths must never be
-overwritten; the corrected six-entry candidate is `v0.1.3`, and direct
-Terraform/OpenTofu Registry install evidence remains post-publication. The
-coordinated Form `1.0.1` candidate therefore uses provider `0.1.3`.
+overwritten. At that historical point the corrected six-entry candidate was
+`v0.1.3`, and direct Terraform/OpenTofu Registry install evidence remained
+post-publication; the coordinated Form `1.0.1` candidate therefore used
+provider `0.1.3`. Those retained facts do not define the current provider
+`v1.0.0` candidate or its 15-asset provenance closure.
 
 Key rotation is additive and review-gated: create a distinct repo-external key,
 change the pinned fingerprint/public key in one reviewed commit, register that

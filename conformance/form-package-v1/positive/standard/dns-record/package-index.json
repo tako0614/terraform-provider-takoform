@@ -6,21 +6,117 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "DnsRecord",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:786d77482d9d78b4320d0a132af81c43247bc1ea09a781c515de18476301732e"
+    "schemaDigest": "sha256:94f0085ce535628bb2547e44c9280fd8c7bb304ae0c0e3781bb7c86926254a3b"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4902,
-      "digest": "sha256:dcd7ac52e1c0e54c932c26e5bf706874b9a656d555bc2655fcf79a316342e6e4"
+      "size": 37609,
+      "digest": "sha256:45513cf76deaee9af3ca716d5985f52a06715b32d16d076ef312bb5ab950324f"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
       "size": 328,
       "digest": "sha256:358b29a90c73b5b05eca19fd3ab15eea52dc41d51c080594737a28c548de5380"
+    },
+    {
+      "path": "fixtures/negative-connections-cardinality.json",
+      "mediaType": "application/json",
+      "size": 478,
+      "digest": "sha256:1ac4b217a3762fa9511c8d8a9c1c541b6d20e2f64f6b18d57dd8474f29a95d4b"
+    },
+    {
+      "path": "fixtures/negative-connections-required.json",
+      "mediaType": "application/json",
+      "size": 179,
+      "digest": "sha256:1ebf58eb189e5a7c45b5a387076697b7afc1a6551088bb801d5b31ac136545c7"
+    },
+    {
+      "path": "fixtures/negative-dns-a-values.json",
+      "mediaType": "application/json",
+      "size": 303,
+      "digest": "sha256:8cd6669b0eb8822494aa932f7ec88451b0ee4f1282e70f62012e6b75eaed507b"
+    },
+    {
+      "path": "fixtures/negative-dns-aaaa-values.json",
+      "mediaType": "application/json",
+      "size": 300,
+      "digest": "sha256:24b6b9fc342cd31367333a9d89f56c48c58c995f01e46f992b0fe5817aea8503"
+    },
+    {
+      "path": "fixtures/negative-dns-caa-values.json",
+      "mediaType": "application/json",
+      "size": 327,
+      "digest": "sha256:167a75abf66be28dc7ac5e0a43772af65e422dd9f0cae3830f6bffac4a59c2ed"
+    },
+    {
+      "path": "fixtures/negative-dns-cname-cardinality.json",
+      "mediaType": "application/json",
+      "size": 364,
+      "digest": "sha256:8628fde746b5297a731389de9212f89d2964797d75477b43908355b6cdcbb3a3"
+    },
+    {
+      "path": "fixtures/negative-dns-hostname-values.json",
+      "mediaType": "application/json",
+      "size": 306,
+      "digest": "sha256:78079735d68e6fb591f01d94165acbeef0ecc97055ee30cdc6814b32dfa324f0"
+    },
+    {
+      "path": "fixtures/negative-dns-mx-values.json",
+      "mediaType": "application/json",
+      "size": 322,
+      "digest": "sha256:01e9a1e049dda82205b47a244a1c660549a25b5778bc147685c6cf0413543aad"
+    },
+    {
+      "path": "fixtures/negative-dns-srv-values.json",
+      "mediaType": "application/json",
+      "size": 330,
+      "digest": "sha256:56ec0a36deb9b4843e027c85174bee6b4601f909c79f956cadd98cc849c82ab3"
+    },
+    {
+      "path": "fixtures/negative-missing-connections.json",
+      "mediaType": "application/json",
+      "size": 158,
+      "digest": "sha256:8878cd1404d98d448b290657c8a9a646aedb76f260c9326597546d82f7ba7e36"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 304,
+      "digest": "sha256:37e95f56b13c0de60527ae133569d22e6a1492e5475b245b910136001dcd15d9"
+    },
+    {
+      "path": "fixtures/negative-missing-record_name.json",
+      "mediaType": "application/json",
+      "size": 305,
+      "digest": "sha256:8d62ac0582db05bd6d932e322e38c9ca64d771b2007818ec83575f782eb7042b"
+    },
+    {
+      "path": "fixtures/negative-missing-record_type.json",
+      "mediaType": "application/json",
+      "size": 303,
+      "digest": "sha256:2cbf3fe129e03c58060dd050009f4c9f2af4484cc6db49b5d8472012fc9daca0"
+    },
+    {
+      "path": "fixtures/negative-missing-values.json",
+      "mediaType": "application/json",
+      "size": 266,
+      "digest": "sha256:35070fb367e1e2267e6e0784e97f34ba3cc5e7cec5cdb3f6f60363c348aef1b1"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 143,
+      "digest": "sha256:101782211ce791a686a9ef0e4339d378a5e27a3fa74caaedd941455c8ff42094"
+    },
+    {
+      "path": "fixtures/negative-record_name.json",
+      "mediaType": "application/json",
+      "size": 335,
+      "digest": "sha256:aa60ec563c5c27e27f8fd3f76b9e987df543f040e15890bafc3be86dfa639355"
     },
     {
       "path": "fixtures/negative-record_type.json",

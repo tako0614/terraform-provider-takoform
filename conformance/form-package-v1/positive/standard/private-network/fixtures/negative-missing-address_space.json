@@ -1,0 +1,4 @@
+{
+  "name": "private-network",
+  "publicEgress": false
+}

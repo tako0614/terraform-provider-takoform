@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "DnsZone",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:c0c4547215e8176313d62e173abc52d484eb7787193d965cb245b394fa10599e"
+    "schemaDigest": "sha256:d4b8e6f6dc50fd8e35d00864ceb55671f5d05034237ad19baf21d49839a6cf9d"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4291,
-      "digest": "sha256:29ef627d8fb4619f555e51efcc4cc8435cc2705d237b4d8a0c3db8ac44085199"
+      "size": 5106,
+      "digest": "sha256:dd039136b02d94da7502fb300aa77a3232d436841726332cf0a08c30dd419002"
     },
     {
       "path": "fixtures/desired.json",
@@ -33,6 +33,24 @@
       "mediaType": "application/json",
       "size": 82,
       "digest": "sha256:b25a602feb16defe08f82f712d096fd020ce3150e58e4f9adb834cc94b2a8392"
+    },
+    {
+      "path": "fixtures/negative-missing-domain.json",
+      "mediaType": "application/json",
+      "size": 54,
+      "digest": "sha256:95e626340d9b105495797709eabe472e00b386693b8969056a79823bc52223ed"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 76,
+      "digest": "sha256:c1bb8697b279ab7e2071fbfc44c3b5e37fbb2f5474183626699e120023cba638"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 141,
+      "digest": "sha256:ee0dd6805989beaa7b0b31661943ee669aeeb12d8fde3bae3a4d35a2c33c8a1f"
     },
     {
       "path": "fixtures/observed.json",

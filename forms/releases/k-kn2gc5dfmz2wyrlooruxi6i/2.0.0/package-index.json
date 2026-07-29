@@ -1,0 +1,110 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "2.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "StatefulEntity",
+    "definitionVersion": "2.0.0",
+    "schemaDigest": "sha256:17d6ba36c6363a75e4966a2f8d912f6e3826bcf534b62d2ce9231d5be7804f02"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 9273,
+      "digest": "sha256:f672b9260d3df87e46e3a0efab2b8eb1ac9849115a30dd5c11414ec15b562631"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 498,
+      "digest": "sha256:d925ab10d7ed5ad703e3c42dd99e16a5175b008843c675d303192530ceb8d990"
+    },
+    {
+      "path": "fixtures/negative-artifact-source.json",
+      "mediaType": "application/json",
+      "size": 446,
+      "digest": "sha256:78b83535ca090b5a47bcebef0132b8b27dbe19d8789c9e12e56f4fd408e5f029"
+    },
+    {
+      "path": "fixtures/negative-configuration.json",
+      "mediaType": "application/json",
+      "size": 503,
+      "digest": "sha256:d8da256cb1562fa07f91eee5c90916aaee9952cb4fd307e8378a82f4adbce397"
+    },
+    {
+      "path": "fixtures/negative-entity_class.json",
+      "mediaType": "application/json",
+      "size": 499,
+      "digest": "sha256:ac046185b454dd1cc2a6f87271c42e068bcb783d0642813ed19fac9e21304517"
+    },
+    {
+      "path": "fixtures/negative-migration_tag.json",
+      "mediaType": "application/json",
+      "size": 509,
+      "digest": "sha256:c9d03aa0fa57189454b4db660920429b639ec5d288a70c78ddad737a3b3e8c4c"
+    },
+    {
+      "path": "fixtures/negative-missing-entity_class.json",
+      "mediaType": "application/json",
+      "size": 467,
+      "digest": "sha256:95e1292cdd9f6ce706cb012b79a0259b65e7df9f0254fe0d6d2b6b9526a1aac1"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 469,
+      "digest": "sha256:b9dd404b27502e0484c7eac866b6f86efe8b4c32b91fc16aadec6d61ec6e5b6a"
+    },
+    {
+      "path": "fixtures/negative-missing-runtime.json",
+      "mediaType": "application/json",
+      "size": 471,
+      "digest": "sha256:cce8607c639704b9483d6a7801f43f82cb693e4b22986fb9396f9770bd0012bb"
+    },
+    {
+      "path": "fixtures/negative-missing-source.json",
+      "mediaType": "application/json",
+      "size": 228,
+      "digest": "sha256:f7cdea2aebfd6c6de4f6d721de54a434f065c0e5cd248c3f37dea3136caf24a0"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 148,
+      "digest": "sha256:bfc4d72e64080fc404d115f5c2028f73ab9362f5b2fb225befcc098f16b9c911"
+    },
+    {
+      "path": "fixtures/negative-persistence.json",
+      "mediaType": "application/json",
+      "size": 496,
+      "digest": "sha256:02834b4071462b245d8baaea2e8eab1e785fee0401e16c886a6b34421c2cbc65"
+    },
+    {
+      "path": "fixtures/negative-runtime.json",
+      "mediaType": "application/json",
+      "size": 501,
+      "digest": "sha256:bf0547334a97f9b7957b7d1d6a6d42e0c1aebe2dac0f58ddee3ccbcc90a9320a"
+    },
+    {
+      "path": "fixtures/negative-runtime_version.json",
+      "mediaType": "application/json",
+      "size": 505,
+      "digest": "sha256:422ae549138a11e0603c117c8b571548c9ce359ad2fd73bcee20692f1f47b527"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 153,
+      "digest": "sha256:06c13395ce3fa64726696be94728e73a49cbabb783689211a46d22c07aab5648"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 150,
+      "digest": "sha256:5353f85c0ac966b0b12e4f69657bef5f843baffbf25c292a40b136b982fdb8c0"
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 terraform {
   required_providers {
     takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
     }
   }
 }
@@ -12,10 +13,12 @@ provider "takoform" {
 }
 
 resource "takoform_load_balancer" "example" {
-  name              = "load-balancer"
-  protocol          = "https"
-  listen_port       = 443
-  health_check_path = "/healthz"
+  name                 = "load-balancer"
+  protocol             = "https"
+  listen_port          = 443
+  health_check_path    = "/healthz"
+  internal             = false
+  idle_timeout_seconds = 60
 
   connections = [
     {

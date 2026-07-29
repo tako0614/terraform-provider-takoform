@@ -1,0 +1,13 @@
+{
+  "connections": {
+    "invocation": {
+      "permissions": [
+        "invoke"
+      ],
+      "projection": "schedule.trigger.v1",
+      "resource": "Workflow/workflow"
+    }
+  },
+  "name": "schedule",
+  "timezone": "UTC"
+}

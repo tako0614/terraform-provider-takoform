@@ -115,6 +115,7 @@ type NegativeFixtureResult struct {
 type fixtureDigestBinding struct {
 	PackageFixtureDigest string
 	EffectiveInputDigest string
+	Stage                string
 }
 
 type packageReleaseManifest struct {
@@ -351,6 +352,27 @@ func readCanonicalRunnerReport(admissionRoot, relative string, maximum int64) (R
 // subject against one exact published package and its reviewed fixture names.
 // It does not authenticate, retain, sign, publish, or admit the report.
 func ValidateCanonicalProviderRunnerReport(raw []byte, identity standardform.InstalledFormReference, positives, negatives []string) (RunnerReport, error) {
+	expectations := make([]NegativeFixtureExpectation, 0, len(negatives))
+	for _, name := range negatives {
+		expectations = append(expectations, NegativeFixtureExpectation{Name: name, Stage: negativeFixtureStageDesired})
+	}
+	return ValidateCanonicalProviderRunnerReportWithStages(raw, identity, positives, expectations)
+}
+
+// ValidateCanonicalProviderRunnerReportWithStages verifies an unsigned
+// provider-report subject against the desired and observed negative fixtures
+// a provider can validate locally. Output-stage and unknown-stage fixtures
+// fail closed because they are not part of provider conformance.
+func ValidateCanonicalProviderRunnerReportWithStages(
+	raw []byte,
+	identity standardform.InstalledFormReference,
+	positives []string,
+	negatives []NegativeFixtureExpectation,
+) (RunnerReport, error) {
+	negativeNames, err := negativeFixtureNamesForRole(roleProviderReport, negatives)
+	if err != nil {
+		return RunnerReport{}, err
+	}
 	canonical, err := formpackage.Canonicalize(raw)
 	if err != nil {
 		return RunnerReport{}, err
@@ -364,9 +386,9 @@ func ValidateCanonicalProviderRunnerReport(raw []byte, identity standardform.Ins
 	}
 	proof := standardform.ConformanceProof{
 		Subject: report.Subject, RunnerVersion: report.RunnerVersion, Identity: identity, Status: "passed",
-		PositiveFixtures: append([]string(nil), positives...), NegativeFixtures: append([]string(nil), negatives...),
+		PositiveFixtures: append([]string(nil), positives...), NegativeFixtures: append([]string(nil), negativeNames...),
 	}
-	if err := validateRunnerReport(report, roleProviderReport, proof, positives, negatives, nil, nil); err != nil {
+	if err := validateRunnerReport(report, roleProviderReport, proof, positives, negativeNames, nil, nil); err != nil {
 		return RunnerReport{}, err
 	}
 	return report, nil

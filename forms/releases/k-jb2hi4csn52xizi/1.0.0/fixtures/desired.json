@@ -10,5 +10,6 @@
   },
   "hostname": "api.portable-conformance.invalid",
   "name": "http-route",
-  "pathPrefix": "/"
+  "pathPrefix": "/",
+  "stripPathPrefix": false
 }

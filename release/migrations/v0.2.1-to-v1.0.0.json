@@ -1,0 +1,56 @@
+{
+  "format": "takoform.provider-migration-audit@v1",
+  "from": {
+    "providerVersion": "0.2.1",
+    "providerTag": "v0.2.1",
+    "sourceCommit": "8f408793d39d928f3cc91fe2a3ad3a92e60d5749",
+    "candidateRefsSha256": "sha256:f7008ebab73bcdc13261697be5e133c9bd624f6492f1901594dcefca6a91854d",
+    "formResourceCount": 34,
+    "totalResourceCount": 35,
+    "writableInterfaceResource": true,
+    "openTofuProviderAddress": "registry.opentofu.org/tako0614/takoform"
+  },
+  "to": {
+    "providerVersion": "1.0.0",
+    "providerTag": "v1.0.0",
+    "candidateRefsSha256": "sha256:d54b838930aabeeac611dab5ec43a89b17512b652964492980f264c80dce5910",
+    "formResourceCount": 34,
+    "totalResourceCount": 34,
+    "resourceSchemaVersion": 1,
+    "writableInterfaceResource": false,
+    "readOnlyInterfaceDataSource": true,
+    "canonicalProviderAddress": "registry.terraform.io/tako0614/takoform"
+  },
+  "exactFormRefs": {
+    "fromKindCount": 34,
+    "toKindCount": 34,
+    "commonKindCount": 33,
+    "changedCommonExactRefs": 33,
+    "unchangedCommonExactRefs": 0,
+    "removedKinds": [
+      "HttpService"
+    ],
+    "addedKinds": [
+      "EdgeWorker"
+    ]
+  },
+  "stateBoundary": {
+    "directUpgradeSupported": false,
+    "automaticStateTransformationImplemented": false,
+    "versionZeroUpgradeBehavior": "diagnostic-only-no-state-output-no-resource-lifecycle-request",
+    "exactIdentityFields": [
+      "form_api_version",
+      "form_kind",
+      "form_definition_version",
+      "form_schema_digest",
+      "form_package_digest"
+    ],
+    "missingOrMismatchedIdentityBehavior": "diagnostic-before-resource-lifecycle-request-state-retained",
+    "currentExactNotFoundBehavior": "remove-current-state"
+  },
+  "providerAddressBoundary": {
+    "automaticAlias": false,
+    "replaceOnlyWhenOldAddressIsPresentInState": true,
+    "replacementCommand": "tofu state replace-provider registry.opentofu.org/tako0614/takoform registry.terraform.io/tako0614/takoform"
+  }
+}

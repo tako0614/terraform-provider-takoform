@@ -13,6 +13,7 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
     }
   }
 }
@@ -30,10 +31,14 @@ resource "takoform_object_bucket" "assets" {
 
 `endpoint`, `space`, and the sensitive bearer `token` can instead be supplied as `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 There is one provider source and state identity:
-`registry.terraform.io/tako0614/takoform`. Both OpenTofu and Terraform install
-that exact FQN from the Terraform Registry, and the lifecycle matrix proves
-both CLI executions independently. The provider follows the same-origin
-versioned endpoint advertised by discovery.
+`registry.terraform.io/tako0614/takoform`. The configuration above deliberately
+pins the source candidate to `1.0.0`. That candidate is not Registry-installable
+until the signed provider release and one authenticated two-CLI Registry
+readback exist. The local development lifecycle matrix exercises the exact same
+FQN through CLI
+development overrides in both OpenTofu and Terraform. After publication, the
+separate Registry matrix must prove direct installation independently. The
+provider follows the same-origin versioned endpoint advertised by discovery.
 A host that advertises no versioned endpoint is rejected; there is no
 unversioned lane to downgrade into.
 
@@ -57,8 +62,18 @@ quota, billing, or operator-policy resources. It discovers
 `features.service_forms` and verifies the exact build-pinned candidate
 FormRef/package identity against the configured host. Backend placement,
 admission, and credentials remain host responsibilities; state contains only
-the canonical resource ID, generation fence, read-only drift status,
-portability, desired typed fields, and sanitized public outputs.
+the exact FormRef/package identity, a locally synthesized `Kind/name` resource
+ID, generation fence, desired typed fields, and Form-schema-validated observed
+and public output projections. A host-provided opaque ID, undeclared output
+key, backend target, credential, or commercial field is rejected before state.
+
+Provider `v1.0.0` is not an in-place state upgrade from `v0.2.1`: every old
+exact Form identity changed, and the old writable Interface resource was
+removed. Provider v1 starts a new fail-closed resource schema version and has
+a diagnostic-only v0.2.1 rejection handler, not an automatic state
+transformation. See the
+[`v0.2.1` to `v1.0.0` migration boundary](release/migrations/v0.2.1-to-v1.0.0.md)
+before changing an existing provider constraint or OpenTofu provider address.
 
 A Form may declare the runtime interfaces its service exposes, with open
 author-defined `(name, version)` identities such as `http.request@1`,
@@ -101,15 +116,23 @@ The first rebuilt ten-Form publication snapshot under
 [`admission/v3/`](admission/v3/) remains immutable history. Product review
 found that its `HttpService@1.0.0` name described the `http.request@1`
 Interface rather than the requested execution class. The active successor is
-the provider-neutral `EdgeWorker@2.0.0`: it keeps the neutral runtime,
+the provider-neutral `EdgeWorker@3.0.0`: it keeps the neutral runtime,
 concurrency, configuration, and immutable-artifact contract without restoring
-Cloudflare compatibility fields. Its `EdgeWorker@2.0.0` package and provider
-`v1.0.0` remain unpublished candidates, so current admission is intentionally
-fail-closed until new package, provider, host, dual-Registry, and admission
-evidence is retained under the distinct
-[`admission/v4/`](admission/v4/) `ga-core-v2` lane. The successor lane verifies
-provider reports over all 34
-`portable-v1` Forms before selecting the exact ten successor identities.
+Cloudflare compatibility fields. The new major also makes the persisted
+artifact URL credential-free by forbidding userinfo, query, and fragment; the
+earlier `2.0.0` release source is not reshaped. The clean provider-v1 candidate
+also tightens the common resource-name, connection, artifact, and
+semantic-value contracts across all 34 portable Forms. Existing Form release
+sources remain immutable history. All 34 exact package identities in
+[`forms/release-plan.json`](forms/release-plan.json) and provider `v1.0.0` are
+unpublished candidates. `ga-core-v2` independently selects the exact ten
+successor identities in
+[`forms/admission-candidate-set.json`](forms/admission-candidate-set.json).
+Current admission is therefore intentionally fail-closed until the package,
+provider, host, two-CLI direct-Registry, and admission evidence is retained
+under the distinct [`admission/v4/`](admission/v4/) lane. The successor lane
+verifies provider reports over all 34 `portable-v1` Forms before admitting
+only that exact ten-Form subset.
 GitHub Actions supplies distinct keyless publisher identities; all generation,
 rederivation, and closure checks remain local Go commands.
 
@@ -122,6 +145,7 @@ newer patched toolchain declared by the release descriptor.
 gofmt -w .
 go vet ./...
 go test ./...
+go run ./cmd/portable-host-conformance self-test
 go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
 go run ./cmd/provider-lifecycle-conformance provider-reports \
   --cli terraform --output-dir /tmp/takoform-provider-reports \
@@ -148,7 +172,7 @@ because its checksum manifest projected SPDX evidence as provider packages,
 and rejected `v0.1.2` because it omitted the required Registry metadata
 manifest checksum. The exact six-entry `v0.1.3` release is the non-overwriting
 successor. The first rebuilt Form set uses immutable provider `v0.2.1`; the
-`EdgeWorker@2.0.0` successor is implemented by the candidate provider
+`EdgeWorker@3.0.0` successor is implemented by the candidate provider
 `v1.0.0`, whose Registry readback can exist only after publication.
 
 Provider publication and Standard Form admission are separate authorities.
@@ -164,7 +188,7 @@ and pinned signing key are registered. Do not create a new release tag until
 the release descriptor and provider compatibility gates are complete. Existing
 version paths are immutable, so retired provider `0.1.3`, published provider
 `0.2.1`, and candidate successor `1.0.0` remain distinct identities. Provider
-`1.0.0` implements `EdgeWorker@2.0.0`; provider and Form versions are
+`1.0.0` implements `EdgeWorker@3.0.0`; provider and Form versions are
 independent by design.
 
 ## License

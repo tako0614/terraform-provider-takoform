@@ -30,8 +30,9 @@ type StandardFixtureCase struct {
 
 // StandardNegativeFixture is one rejectable input a Form declares.
 type StandardNegativeFixture struct {
-	Name    string
-	Desired map[string]any
+	Name  string
+	Stage string
+	Input map[string]any
 }
 
 // StandardFixtureEvidence records only provider-protocol observations. The
@@ -153,7 +154,11 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 			if err := os.MkdirAll(negativeDir, 0o755); err != nil {
 				return StandardFixtureRun{}, err
 			}
-			negativeConfig, err := standardFixtureConfig(server.URL, identity.ProviderAddress, providerVersion, item.ResourceType, negative.Desired)
+			desired := negative.Input
+			if negative.Stage == "observed" {
+				desired = fixture.Positive
+			}
+			negativeConfig, err := standardFixtureConfig(server.URL, identity.ProviderAddress, providerVersion, item.ResourceType, desired)
 			if err != nil {
 				return StandardFixtureRun{}, fmt.Errorf("render %s %s fixture: %w", fixture.Kind, negative.Name, err)
 			}
@@ -161,17 +166,39 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 				return StandardFixtureRun{}, err
 			}
 			before := host.mutationCount(fixture.Kind)
+			if negative.Stage == "observed" {
+				host.setObservedOverride(fixture.Kind, negative.Input)
+			}
 			output, negativeErr := runCommand(ctx, repoRoot, env, cli, "-chdir="+negativeDir, "apply", "-auto-approve", "-input=false", "-no-color")
+			if negative.Stage == "observed" {
+				host.setObservedOverride("", nil)
+				if name, ok := fixture.Positive["name"].(string); ok {
+					host.removeResource(fixture.Kind, name)
+				}
+			}
 			after := host.mutationCount(fixture.Kind)
 			if negativeErr == nil {
 				return StandardFixtureRun{}, fmt.Errorf("%s %s unexpectedly passed provider protocol", fixture.Kind, negative.Name)
 			}
-			if after != before {
-				return StandardFixtureRun{}, fmt.Errorf("%s %s reached the Form host mutation path", fixture.Kind, negative.Name)
-			}
-			diagnosticField, diagnosticDetail, ok := standardNegativeDiagnostic(fixture.Kind, negative.Name)
-			if !ok || !strings.Contains(output, "Error:") || !strings.Contains(output, diagnosticField) || !strings.Contains(output, diagnosticDetail) || strings.Contains(output, "Unsupported argument") || strings.Contains(output, "Invalid expression") {
-				return StandardFixtureRun{}, fmt.Errorf("%s %s did not produce a provider configuration diagnostic\n%s", fixture.Kind, negative.Name, output)
+			switch negative.Stage {
+			case "desired":
+				if after != before {
+					return StandardFixtureRun{}, fmt.Errorf("%s %s reached the Form host mutation path", fixture.Kind, negative.Name)
+				}
+				diagnosticField, diagnosticDetail, ok := standardNegativeDiagnostic(fixture.Kind, negative.Name, negative.Input)
+				normalizedOutput := strings.Join(strings.Fields(output), " ")
+				if !ok || !strings.Contains(normalizedOutput, "Error:") || !strings.Contains(normalizedOutput, diagnosticField) || !strings.Contains(normalizedOutput, diagnosticDetail) || strings.Contains(normalizedOutput, "Unsupported argument") || strings.Contains(normalizedOutput, "Invalid expression") {
+					return StandardFixtureRun{}, fmt.Errorf("%s %s did not produce a provider configuration diagnostic\n%s", fixture.Kind, negative.Name, output)
+				}
+			case "observed":
+				if after <= before {
+					return StandardFixtureRun{}, fmt.Errorf("%s %s did not exercise the host response path", fixture.Kind, negative.Name)
+				}
+				normalizedOutput := strings.Join(strings.Fields(output), " ")
+				if !strings.Contains(normalizedOutput, "Error: Host returned invalid portable Resource") ||
+					!strings.Contains(normalizedOutput, "observed document does not satisfy the exact "+fixture.Kind+" Form contract") {
+					return StandardFixtureRun{}, fmt.Errorf("%s %s did not reject the exact invalid observed fixture\n%s", fixture.Kind, negative.Name, output)
+				}
 			}
 			negativeNames = append(negativeNames, negative.Name)
 		}
@@ -187,23 +214,70 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 }
 
 // standardNegativeDiagnostic derives the attribute and message a rejected
-// fixture must produce, from the counter-example the Form itself declares.
+// desired fixture must produce, from the required key or counter-example the
+// Form itself declares.
 //
 // The negative case therefore always tests a constraint the Form states,
 // rather than a separately maintained list that can drift away from it.
-func standardNegativeDiagnostic(kind, fixtureName string) (string, string, bool) {
+func standardNegativeDiagnostic(kind, fixtureName string, desired map[string]any) (string, string, bool) {
 	declared, ok := formcatalog.ByKind(kind)
 	if !ok {
 		return "", "", false
 	}
 	attribute := strings.TrimPrefix(fixtureName, "reject-")
+	if missing, ok := strings.CutPrefix(attribute, "missing-"); ok {
+		switch missing {
+		case "name":
+			return "name", "required", true
+		case "source":
+			if declared.Artifact {
+				return "artifact_url", "required", true
+			}
+		case "connections":
+			if declared.Connections == formcatalog.ConnectionsRequired {
+				return "connections", "required", true
+			}
+		default:
+			for _, field := range declared.Fields {
+				if field.Required && field.HCL == missing {
+					return field.HCL, "required", true
+				}
+			}
+		}
+		return "", "", false
+	}
 	for _, field := range declared.Fields {
 		if field.HCL != attribute {
 			continue
 		}
 		return field.HCL, expectedDiagnosticDetail(field), true
 	}
-	return "", "", false
+	switch attribute {
+	case "artifact-source":
+		if declared.Artifact {
+			return "artifact_sha256", "64-character SHA-256", true
+		}
+	case "artifact-url-userinfo", "artifact-url-query", "artifact-url-fragment":
+		if declared.Artifact {
+			return "artifact_url", formcatalog.GrammarCredentialFreeHTTPSURL.Message("artifact_url"), true
+		}
+	case "connections-required", "connections-cardinality":
+		if declared.Connections != formcatalog.ConnectionsAbsent {
+			return "connections", "requires", true
+		}
+	}
+	violations, err := declared.ConditionalViolations(desired)
+	if err != nil || len(violations) != 1 {
+		return "", "", false
+	}
+	field := camelToSnakeFixture(violations[0].WireField)
+	for _, declaredField := range declared.Fields {
+		if declaredField.Wire == violations[0].WireField {
+			field = declaredField.HCL
+			break
+		}
+	}
+	return field, violations[0].Detail, true
 }
 
 func expectedDiagnosticDetail(field formcatalog.Field) string {
@@ -286,6 +360,11 @@ func validateAndOrderStandardFixtureCases(cases []StandardFixtureCase) ([]Standa
 			fixture.Identity.FormRef.APIVersion != client.APIVersion || fixture.Identity.FormRef.Kind != fixture.Kind || strings.TrimSpace(fixture.Identity.FormRef.DefinitionVersion) == "" ||
 			!validDigest(fixture.Identity.FormRef.SchemaDigest) || !validDigest(fixture.Identity.PackageDigest) {
 			return nil, fmt.Errorf("standard fixture set contains an incomplete or unknown %q case", fixture.Kind)
+		}
+		for _, negative := range fixture.Negatives {
+			if strings.TrimSpace(negative.Name) == "" || (negative.Stage != "desired" && negative.Stage != "observed") || negative.Input == nil {
+				return nil, fmt.Errorf("standard fixture set contains an incomplete %s negative case", fixture.Kind)
+			}
 		}
 		byKind[fixture.Kind] = fixture
 	}

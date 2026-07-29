@@ -58,7 +58,9 @@ content. It rejects:
   Forms do not decode or transform an embedded second document;
 - the legacy `dependencies` applicator (use `dependentRequired` or
   `dependentSchemas`); and
-- Form Definitions with more than 32 conformance fixtures.
+- Form Definitions with more than 32 positive conformance fixtures or more
+  than 32 negative conformance fixtures. These are independent per-class
+  limits, not one combined 32-fixture budget.
 
 Local `$ref` targets are admitted once per canonical JSON Pointer with explicit
 `visiting`/`done` states. Shared acyclic schema graphs therefore cost linear
@@ -70,6 +72,12 @@ and the corresponding unevaluated keywords once per concrete fixture element or
 property. Both estimates saturate at the same 16,384-evaluation limit. Desired
 and observed schemas are each compiled once before the bounded fixture loop.
 Cycles and resource-exhaustion inputs fail closed.
+
+The published JSON Schemas are normative structural minima. The semantic
+identity, filesystem closure, canonicalization, reference-proof,
+validation-work, fixture, and portable-content rules enforced here are also
+normative. Schema validity alone is therefore necessary but not sufficient for
+Form Package conformance.
 
 Allowed payload media types are the Form Definition type, JSON Schema, generic
 JSON fixture data, Markdown, and plain text. The verifier limits index, file,

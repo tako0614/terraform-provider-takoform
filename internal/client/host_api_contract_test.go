@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -33,8 +34,9 @@ type hostAPIContract struct {
 		Optional       bool   `json:"optional"`
 	} `json:"operations"`
 	ErrorEnvelope struct {
-		Codes                  []string `json:"codes"`
-		AutomaticallyRetryable []string `json:"automaticallyRetryable"`
+		Codes                  []string       `json:"codes"`
+		AutomaticallyRetryable []string       `json:"automaticallyRetryable"`
+		HTTPStatusByCode       map[string]int `json:"httpStatusByCode"`
 	} `json:"errorEnvelope"`
 }
 
@@ -68,7 +70,7 @@ func TestClientSpeaksThePublishedHostContract(t *testing.T) {
 	seen := map[string]observed{}
 	base := "/apis/" + APIVersion
 	resource := Resource{
-		APIVersion: APIVersion, Kind: KindObjectBucket, Form: &exactObjectBucketFixture,
+		APIVersion: APIVersion, Kind: testObjectBucketKind, Form: &exactObjectBucketFixture,
 		Metadata: Metadata{Name: "assets", Space: "prod", ResourceVersion: "1"},
 		Spec:     map[string]any{"name": "assets"},
 	}
@@ -101,9 +103,19 @@ func TestClientSpeaksThePublishedHostContract(t *testing.T) {
 		case route == "/resources/preview":
 			var desired Resource
 			_ = json.NewDecoder(r.Body).Decode(&desired)
-			_ = json.NewEncoder(w).Encode(PreviewResourceResult{Resource: desired, Review: PreviewReview{PlanDigest: "sha256:plan"}})
+			specDigest, err := canonicalValueDigest(desired.Spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = json.NewEncoder(w).Encode(PreviewResourceResult{
+				Resource: desired,
+				Review: PreviewReview{
+					PlanDigest: "sha256:" + strings.Repeat("a", 64),
+					SpecDigest: specDigest,
+				},
+			})
 		case strings.HasSuffix(route, "/observe"), strings.HasSuffix(route, "/refresh"), strings.HasSuffix(route, "/import"):
-			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "observation": map[string]any{"status": "current"}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
 		case r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -118,27 +130,27 @@ func TestClientSpeaksThePublishedHostContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	desired := &Resource{
-		APIVersion: APIVersion, Kind: KindObjectBucket, Form: &exactObjectBucketFixture,
+		APIVersion: APIVersion, Kind: testObjectBucketKind, Form: &exactObjectBucketFixture,
 		Metadata: Metadata{Name: "assets", Space: "prod"},
 		Spec:     map[string]any{"name": "assets"},
 	}
 	fence := MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture}
-	if _, err := client.PutResource(ctx, KindObjectBucket, "assets", desired); err != nil {
+	if _, err := client.PutResource(ctx, testObjectBucketKind, "assets", desired); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.ImportResource(ctx, KindObjectBucket, "assets", "native", desired); err != nil {
+	if _, err := client.ImportResource(ctx, testObjectBucketKind, "assets", "native", desired); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.GetResource(ctx, KindObjectBucket, "assets", "prod", exactObjectBucketFixture); err != nil {
+	if _, err := client.GetResource(ctx, testObjectBucketKind, "assets", "prod", exactObjectBucketFixture); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.ObserveResource(ctx, KindObjectBucket, "assets", "prod", fence); err != nil {
+	if _, err := client.ObserveResource(ctx, testObjectBucketKind, "assets", "prod", fence); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.RefreshResource(ctx, KindObjectBucket, "assets", "prod", fence); err != nil {
+	if _, err := client.RefreshResource(ctx, testObjectBucketKind, "assets", "prod", fence); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.DeleteResource(ctx, KindObjectBucket, "assets", "prod", fence); err != nil {
+	if err := client.DeleteResource(ctx, testObjectBucketKind, "assets", "prod", fence); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,7 +158,7 @@ func TestClientSpeaksThePublishedHostContract(t *testing.T) {
 		if operation.Optional {
 			continue
 		}
-		route := strings.ReplaceAll(strings.ReplaceAll(operation.Path, "{kind}", KindObjectBucket), "{name}", "assets")
+		route := strings.ReplaceAll(strings.ReplaceAll(operation.Path, "{kind}", testObjectBucketKind), "{name}", "assets")
 		record, ok := seen[operation.Method+" "+route]
 		if !ok {
 			t.Errorf("contract operation %s (%s %s) never reached the host", operation.Name, operation.Method, route)
@@ -173,6 +185,27 @@ func TestClientSpeaksThePublishedHostContract(t *testing.T) {
 		if !containsString(contract.ErrorEnvelope.Codes, code) {
 			t.Errorf("retryable code %s is not in the published error taxonomy", code)
 		}
+	}
+	if !reflect.DeepEqual(contract.ErrorEnvelope.HTTPStatusByCode, stableErrorHTTPStatusByCode) {
+		t.Errorf(
+			"client stable error HTTP mapping drifted from operations.json:\nclient: %#v\nspec: %#v",
+			stableErrorHTTPStatusByCode,
+			contract.ErrorEnvelope.HTTPStatusByCode,
+		)
+	}
+	clientRetryableCodes := make([]string, 0, len(automaticallyRetryableErrorCodes))
+	for code := range automaticallyRetryableErrorCodes {
+		clientRetryableCodes = append(clientRetryableCodes, code)
+	}
+	contractRetryableCodes := append([]string(nil), contract.ErrorEnvelope.AutomaticallyRetryable...)
+	sort.Strings(clientRetryableCodes)
+	sort.Strings(contractRetryableCodes)
+	if !reflect.DeepEqual(contractRetryableCodes, clientRetryableCodes) {
+		t.Errorf(
+			"client automatic retry allowlist drifted from operations.json: client=%v spec=%v",
+			clientRetryableCodes,
+			contractRetryableCodes,
+		)
 	}
 	for _, feature := range contract.RequiredFeatures {
 		if !client.Discovery.HasFeature(feature) {

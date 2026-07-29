@@ -1,7 +1,8 @@
 terraform {
   required_providers {
     takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
     }
   }
 }
@@ -12,11 +13,14 @@ provider "takoform" {
 }
 
 resource "takoform_compute_instance" "example" {
-  name          = "compute-instance"
-  machine_class = "general.small"
-  image         = "portable-conformance/v1/base-linux"
-  boot_disk_gib = 20
-  configuration = { "LOG_LEVEL" = "info" }
+  name                = "compute-instance"
+  artifact_media_type = "application/x-qemu-disk"
+  artifact_sha256     = "a6cbb7e295a8dd89b98f3b8c731047e0e62a4312b8b43c590a8c8662df59e913"
+  artifact_url        = "https://artifacts.portable-conformance.invalid/base-linux.qcow2"
+  machine_class       = "general.small"
+  boot_disk_gib       = 20
+  instance_count      = 1
+  configuration       = { "LOG_LEVEL" = "info" }
 }
 
 output "compute_instance_outputs" {

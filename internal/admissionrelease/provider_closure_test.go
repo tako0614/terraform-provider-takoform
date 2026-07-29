@@ -150,6 +150,31 @@ func TestFullProviderReportClosureRejectsTamperedUnselectedReport(t *testing.T) 
 	}
 }
 
+func TestProviderClosureCorrelationIsRequiredOnlyForCurrentV4(t *testing.T) {
+	t.Parallel()
+	const (
+		commit    = "0123456789abcdef0123456789abcdef01234567"
+		requestID = "01234567-89ab-4cde-8f01-23456789abcd"
+	)
+	source := providerClosureSource{Repository: currentProviderRepository, Commit: commit}
+	if err := validateProviderClosureCorrelation("admission/v3", providerClosureSignedManifest{}, source); err != nil {
+		t.Fatalf("historical v3 candidate without correlation was rejected: %v", err)
+	}
+	valid := providerClosureSignedManifest{RequestID: requestID, HeadSHA: commit}
+	if err := validateProviderClosureCorrelation("admission/v4", valid, source); err != nil {
+		t.Fatalf("current v4 exact correlation was rejected: %v", err)
+	}
+	for name, invalid := range map[string]providerClosureSignedManifest{
+		"missing":           {},
+		"uppercase request": {RequestID: strings.ToUpper(requestID), HeadSHA: commit},
+		"wrong head":        {RequestID: requestID, HeadSHA: strings.Repeat("f", 40)},
+	} {
+		if err := validateProviderClosureCorrelation("admission/v4", invalid, source); err == nil {
+			t.Errorf("%s current correlation was accepted", name)
+		}
+	}
+}
+
 func TestProviderClosureMatchesRegistryByVersionAndBinaryNotToolingCommit(t *testing.T) {
 	t.Parallel()
 	const binaryDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

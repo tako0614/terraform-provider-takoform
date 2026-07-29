@@ -3,6 +3,8 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,26 +14,35 @@ import (
 
 var exactObjectBucketFixture = InstalledFormReference{
 	FormRef: FormRef{
-		APIVersion: APIVersion, Kind: KindObjectBucket,
+		APIVersion: APIVersion, Kind: testObjectBucketKind,
 		DefinitionVersion: "0.0.0-legacy.1",
 		SchemaDigest:      "sha256:ee32286a40681296fc6f3db9ece79c2d651821aa2e947d1fa1cd6e28e8be8391",
 	},
 	PackageDigest: "sha256:0c43dfbf565c959ad627a6cd8d19aa77bf56d9e3655f44f71bb207fb79b264f2",
 }
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
+}
+
 func TestVersionedClientUsesDiscoveryExactIdentityAndMutationFences(t *testing.T) {
 	t.Parallel()
+	planDigest := "sha256:" + strings.Repeat("a", 64)
 	var server *httptest.Server
 	var mu sync.Mutex
 	requests := []struct {
 		method, path, ifMatch, ifNone, idempotency string
 	}{}
 	resource := Resource{
-		APIVersion: APIVersion, Kind: KindObjectBucket, Form: &exactObjectBucketFixture,
+		APIVersion: APIVersion, Kind: testObjectBucketKind, Form: &exactObjectBucketFixture,
 		Metadata: Metadata{Name: "assets", Space: "prod", ResourceVersion: "1"},
 		Spec:     map[string]any{"name": "assets", "storageClass": "standard"},
-		Status:   &Status{Phase: "Ready", ObservedGeneration: 1, Portability: "portable"},
-		ID:       "tkrn:prod:ObjectBucket:assets",
+		Status: &Status{
+			Observed: map[string]any{"name": "assets", "storageClass": "standard"},
+			Output:   map[string]any{"reference": "fixture-output"},
+		},
 	}
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -55,18 +66,22 @@ func TestVersionedClientUsesDiscoveryExactIdentityAndMutationFences(t *testing.T
 			if err := json.NewDecoder(r.Body).Decode(&desired); err != nil {
 				t.Fatal(err)
 			}
-			if desired.Metadata.ManagedBy != "" || !sameForm(desired.Form, &exactObjectBucketFixture) {
-				t.Errorf("preview leaked manager or changed FormRef: %#v", desired)
+			if !sameForm(desired.Form, &exactObjectBucketFixture) {
+				t.Errorf("preview changed FormRef: %#v", desired)
+			}
+			specDigest, err := canonicalValueDigest(desired.Spec)
+			if err != nil {
+				t.Fatal(err)
 			}
 			_ = json.NewEncoder(w).Encode(PreviewResourceResult{
-				Resource: desired, Review: PreviewReview{PlanDigest: "sha256:plan", SpecDigest: "sha256:spec"},
+				Resource: desired, Review: PreviewReview{PlanDigest: planDigest, SpecDigest: specDigest},
 			})
 		case r.Method == http.MethodPut && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets":
 			var apply applyResourceBody
 			if err := json.NewDecoder(r.Body).Decode(&apply); err != nil {
 				t.Fatal(err)
 			}
-			if apply.Review.PlanDigest != "sha256:plan" || !sameForm(apply.Form, &exactObjectBucketFixture) {
+			if apply.Review.PlanDigest != planDigest || !sameForm(apply.Form, &exactObjectBucketFixture) {
 				t.Errorf("invalid reviewed apply: %#v", apply)
 			}
 			w.Header().Set("ETag", `"1"`)
@@ -80,7 +95,7 @@ func TestVersionedClientUsesDiscoveryExactIdentityAndMutationFences(t *testing.T
 				t.Errorf("invalid import request: %#v", imported)
 			}
 			w.Header().Set("ETag", `"1"`)
-			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "import": map[string]any{"summary": "imported"}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
 		case r.Method == http.MethodGet && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets":
 			assertExactQuery(t, r, exactObjectBucketFixture)
 			w.Header().Set("ETag", `"1"`)
@@ -88,11 +103,11 @@ func TestVersionedClientUsesDiscoveryExactIdentityAndMutationFences(t *testing.T
 		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets/observe":
 			assertExactQuery(t, r, exactObjectBucketFixture)
 			w.Header().Set("ETag", `"1"`)
-			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "observation": map[string]any{"status": "current", "summary": "current"}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
 		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets/refresh":
 			assertExactQuery(t, r, exactObjectBucketFixture)
 			w.Header().Set("ETag", `"1"`)
-			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "refresh": map[string]any{"summary": "refreshed"}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
 		case r.Method == http.MethodDelete && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets":
 			assertExactQuery(t, r, exactObjectBucketFixture)
 			w.WriteHeader(http.StatusNoContent)
@@ -107,31 +122,31 @@ func TestVersionedClientUsesDiscoveryExactIdentityAndMutationFences(t *testing.T
 		t.Fatal(err)
 	}
 	desired := &Resource{
-		APIVersion: APIVersion, Kind: KindObjectBucket, Form: &exactObjectBucketFixture,
+		APIVersion: APIVersion, Kind: testObjectBucketKind, Form: &exactObjectBucketFixture,
 		Metadata: Metadata{Name: "assets", Space: "prod"},
 		Spec:     map[string]any{"name": "assets", "storageClass": "standard"},
 	}
-	if _, err := client.ImportResource(context.Background(), KindObjectBucket, "assets", "native-assets", desired); err != nil {
+	if _, err := client.ImportResource(context.Background(), testObjectBucketKind, "assets", "native-assets", desired); err != nil {
 		t.Fatal(err)
 	}
-	applied, err := client.PutResource(context.Background(), KindObjectBucket, "assets", desired)
+	applied, err := client.PutResource(context.Background(), testObjectBucketKind, "assets", desired)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if applied.Metadata.ResourceVersion != "1" {
 		t.Fatalf("resourceVersion = %q", applied.Metadata.ResourceVersion)
 	}
-	if _, err := client.GetResource(context.Background(), KindObjectBucket, "assets", "prod", exactObjectBucketFixture); err != nil {
+	if _, err := client.GetResource(context.Background(), testObjectBucketKind, "assets", "prod", exactObjectBucketFixture); err != nil {
 		t.Fatal(err)
 	}
 	fence := MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture}
-	if _, err := client.ObserveResource(context.Background(), KindObjectBucket, "assets", "prod", fence); err != nil {
+	if _, err := client.ObserveResource(context.Background(), testObjectBucketKind, "assets", "prod", fence); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.RefreshResource(context.Background(), KindObjectBucket, "assets", "prod", fence); err != nil {
+	if _, err := client.RefreshResource(context.Background(), testObjectBucketKind, "assets", "prod", fence); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.DeleteResource(context.Background(), KindObjectBucket, "assets", "prod", fence); err != nil {
+	if err := client.DeleteResource(context.Background(), testObjectBucketKind, "assets", "prod", fence); err != nil {
 		t.Fatal(err)
 	}
 
@@ -176,7 +191,7 @@ func TestVersionedClientRetriesOnlyStableRetryableErrors(t *testing.T) {
 	client := NewWithOptions(server.URL, "", server.Client(), Options{RetryAttempts: 2})
 	client.apiBase = server.URL + "/apis/forms.takoform.com/v1alpha1"
 	fence := MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture}
-	if err := client.DeleteResource(context.Background(), KindObjectBucket, "assets", "prod", fence); err != nil {
+	if err := client.DeleteResource(context.Background(), testObjectBucketKind, "assets", "prod", fence); err != nil {
 		t.Fatal(err)
 	}
 	if attempts != 2 {
@@ -191,9 +206,257 @@ func TestVersionedClientRetriesOnlyStableRetryableErrors(t *testing.T) {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		_, _ = w.Write([]byte(`{"error":{"code":"resource_version_conflict","message":"stale","requestId":"req-2","retryable":false}}`))
 	})
-	err := client.DeleteResource(context.Background(), KindObjectBucket, "assets", "prod", fence)
+	err := client.DeleteResource(context.Background(), testObjectBucketKind, "assets", "prod", fence)
 	if err == nil || attempts != 1 {
 		t.Fatalf("conflict err=%v attempts=%d", err, attempts)
+	}
+}
+
+func TestDeleteResourceRejectsNonEmptyHTTPNoContentBody(t *testing.T) {
+	t.Parallel()
+	const responseBody = `{"unexpected":"state"}`
+	httpClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode:    http.StatusNoContent,
+			Status:        "204 No Content",
+			Header:        make(http.Header),
+			Body:          io.NopCloser(strings.NewReader(responseBody)),
+			ContentLength: int64(len(responseBody)),
+			Request:       request,
+		}, nil
+	})}
+	client := New("https://forms.example.test", "", httpClient)
+	client.apiBase = "https://forms.example.test/apis/forms.takoform.com/v1alpha1"
+	fence := MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture}
+
+	err := client.DeleteResource(
+		context.Background(),
+		testObjectBucketKind,
+		"assets",
+		"prod",
+		fence,
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "HTTP 204") ||
+		!strings.Contains(err.Error(), "response body") {
+		t.Fatalf("DeleteResource() error = %v, want non-empty HTTP 204 response body rejection", err)
+	}
+}
+
+func TestPortableRetryableRequiresExactStableTuple(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name      string
+		status    int
+		code      string
+		retryable bool
+		want      bool
+	}{
+		{
+			name:      "resource busy",
+			status:    http.StatusConflict,
+			code:      "resource_busy",
+			retryable: true,
+			want:      true,
+		},
+		{
+			name:      "backend unavailable",
+			status:    http.StatusServiceUnavailable,
+			code:      "backend_unavailable",
+			retryable: true,
+			want:      true,
+		},
+		{
+			name:      "resource busy flag false",
+			status:    http.StatusConflict,
+			code:      "resource_busy",
+			retryable: false,
+		},
+		{
+			name:      "resource busy wrong status",
+			status:    http.StatusServiceUnavailable,
+			code:      "resource_busy",
+			retryable: true,
+		},
+		{
+			name:      "backend unavailable flag false",
+			status:    http.StatusServiceUnavailable,
+			code:      "backend_unavailable",
+			retryable: false,
+		},
+		{
+			name:      "backend unavailable wrong status",
+			status:    http.StatusConflict,
+			code:      "backend_unavailable",
+			retryable: true,
+		},
+		{
+			name:      "resource version conflict",
+			status:    http.StatusPreconditionFailed,
+			code:      "resource_version_conflict",
+			retryable: true,
+		},
+		{
+			name:      "internal error",
+			status:    http.StatusInternalServerError,
+			code:      "internal_error",
+			retryable: true,
+		},
+		{
+			name:      "missing stable code",
+			status:    http.StatusServiceUnavailable,
+			retryable: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := isPortableRetryable(&APIError{
+				StatusCode: test.status,
+				Code:       test.code,
+				Retryable:  test.retryable,
+			})
+			if got != test.want {
+				t.Fatalf("isPortableRetryable() = %t, want %t", got, test.want)
+			}
+		})
+	}
+	if isPortableRetryable(nil) {
+		t.Fatal("nil error unexpectedly acquired retry semantics")
+	}
+}
+
+func TestMutationTransportFailuresAreNeverRetried(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name   string
+		method string
+		body   any
+	}{
+		{name: "apply", method: http.MethodPut, body: map[string]any{"resource": "fixture"}},
+		{name: "import", method: http.MethodPost, body: map[string]any{"nativeId": "fixture"}},
+		{name: "observe", method: http.MethodPost},
+		{name: "refresh", method: http.MethodPost},
+		{name: "delete", method: http.MethodDelete},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			attempts := 0
+			httpClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				attempts++
+				if request.Body == nil {
+					t.Error("mutation request body must be one-shot, including an empty body")
+				}
+				if request.GetBody != nil {
+					t.Error("mutation request must not be replayable by net/http")
+				}
+				return nil, errors.New("ambiguous transport failure")
+			})}
+			formClient := NewWithOptions(
+				"https://forms.example.test",
+				"",
+				httpClient,
+				Options{RetryAttempts: 5},
+			)
+			_, err := formClient.doJSONWithHeaders(
+				context.Background(),
+				test.method,
+				"https://forms.example.test/mutation",
+				map[string]string{"Idempotency-Key": "takoform-fixture"},
+				test.body,
+				nil,
+				true,
+				http.StatusNoContent,
+			)
+			if err == nil || !strings.Contains(err.Error(), "ambiguous transport failure") {
+				t.Fatalf("error = %v, want original ambiguous transport failure", err)
+			}
+			if attempts != 1 {
+				t.Fatalf("attempts = %d, want exactly one", attempts)
+			}
+		})
+	}
+}
+
+func TestResourceLifecycleMapsOnlyStableResourceNotFound(t *testing.T) {
+	fence := MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture}
+	operations := []struct {
+		name   string
+		delete bool
+		run    func(*Client) error
+	}{
+		{name: "get", run: func(c *Client) error {
+			_, err := c.GetResource(context.Background(), testObjectBucketKind, "assets", "prod", exactObjectBucketFixture)
+			return err
+		}},
+		{name: "observe", run: func(c *Client) error {
+			_, err := c.ObserveResource(context.Background(), testObjectBucketKind, "assets", "prod", fence)
+			return err
+		}},
+		{name: "refresh", run: func(c *Client) error {
+			_, err := c.RefreshResource(context.Background(), testObjectBucketKind, "assets", "prod", fence)
+			return err
+		}},
+		{name: "delete", delete: true, run: func(c *Client) error {
+			return c.DeleteResource(context.Background(), testObjectBucketKind, "assets", "prod", fence)
+		}},
+	}
+	responses := []struct {
+		name         string
+		status       int
+		code         string
+		wantCode     string
+		wantNotFound bool
+	}{
+		{
+			name:         "stable resource missing",
+			status:       http.StatusNotFound,
+			code:         "resource_not_found",
+			wantCode:     "resource_not_found",
+			wantNotFound: true,
+		},
+		{name: "Form unavailable", status: http.StatusNotFound, code: "form_not_installed"},
+		{name: "plain 404", status: http.StatusNotFound},
+		{name: "wrong status", status: http.StatusInternalServerError, code: "resource_not_found"},
+	}
+
+	for _, operation := range operations {
+		for _, response := range responses {
+			t.Run(operation.name+"/"+response.name, func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(response.status)
+					if response.code == "" {
+						_, _ = w.Write([]byte("missing"))
+						return
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{
+						"code": response.code, "message": "fixture", "requestId": "req-resource", "retryable": false,
+					}})
+				}))
+				defer server.Close()
+
+				c := New(server.URL, "", server.Client())
+				c.apiBase = server.URL
+				err := operation.run(c)
+				if response.wantNotFound {
+					if operation.delete {
+						if err != nil {
+							t.Fatalf("delete err = %v, want already deleted", err)
+						}
+					} else if !errors.Is(err, ErrNotFound) {
+						t.Fatalf("err = %v, want ErrNotFound", err)
+					}
+					return
+				}
+				if errors.Is(err, ErrNotFound) || err == nil {
+					t.Fatalf("err = %v, must retain API error identity", err)
+				}
+				var apiErr *APIError
+				if !errors.As(err, &apiErr) ||
+					apiErr.StatusCode != response.status ||
+					apiErr.Code != response.wantCode ||
+					apiErr.ProtocolInvalid != (response.wantCode == "") {
+					t.Fatalf("err = %#v, want APIError status=%d code=%q", err, response.status, response.wantCode)
+				}
+			})
+		}
 	}
 }
 
@@ -281,12 +544,14 @@ func TestCaptureResourceVersionRejectsMissingInvalidAndConflictingFences(t *test
 		name, bodyVersion, etag string
 		wantError               bool
 	}{
-		{name: "body", bodyVersion: "2"},
-		{name: "etag", etag: `"2"`},
+		{name: "missing ETag", bodyVersion: "2", wantError: true},
+		{name: "missing body", etag: `"2"`, wantError: true},
 		{name: "matching", bodyVersion: "2", etag: `"2"`},
 		{name: "missing", wantError: true},
 		{name: "invalid body", bodyVersion: "rv-2", wantError: true},
-		{name: "unquoted etag", etag: "2", wantError: true},
+		{name: "overflowing body", bodyVersion: "9223372036854775808", etag: `"9223372036854775808"`, wantError: true},
+		{name: "unquoted ETag", bodyVersion: "2", etag: "2", wantError: true},
+		{name: "weak ETag", bodyVersion: "2", etag: `W/"2"`, wantError: true},
 		{name: "conflict", bodyVersion: "2", etag: `"3"`, wantError: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -306,20 +571,216 @@ func TestCaptureResourceVersionRejectsMissingInvalidAndConflictingFences(t *test
 	}
 }
 
+func TestResourceVersionUsesCanonicalPositiveInt64Range(t *testing.T) {
+	t.Parallel()
+
+	for _, value := range []string{
+		"1",
+		"9007199254740993",
+		"9223372036854775806",
+		"9223372036854775807",
+	} {
+		if !validResourceVersion(value) {
+			t.Errorf("valid resourceVersion %q was rejected", value)
+		}
+	}
+	for _, value := range []string{
+		"",
+		"0",
+		"00",
+		"01",
+		"-1",
+		"+1",
+		"1.0",
+		"9223372036854775808",
+		"10000000000000000000",
+	} {
+		if validResourceVersion(value) {
+			t.Errorf("invalid resourceVersion %q was accepted", value)
+		}
+	}
+}
+
+func TestStrictWireDecoderPreservesGenerationBeyondIEEE754(t *testing.T) {
+	t.Parallel()
+
+	var decoded struct {
+		Status map[string]any `json:"status"`
+	}
+	if err := decodeStrictJSON(
+		[]byte(`{"status":{"generation":9007199254740993}}`),
+		&decoded,
+	); err != nil {
+		t.Fatal(err)
+	}
+	generation, ok := decoded.Status["generation"].(json.Number)
+	if !ok || generation.String() != "9007199254740993" {
+		t.Fatalf("decoded generation = %T(%v), want exact json.Number", decoded.Status["generation"], decoded.Status["generation"])
+	}
+}
+
+func TestObserveAndRefreshSuccessMustEchoIfMatchGeneration(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name      string
+		operation string
+		fence     string
+		returned  string
+		wantError bool
+	}{
+		{name: "observe exact", operation: "observe", fence: "7", returned: "7"},
+		{name: "observe advanced", operation: "observe", fence: "7", returned: "8", wantError: true},
+		{name: "refresh exact maximum", operation: "refresh", fence: "9223372036854775807", returned: "9223372036854775807"},
+		{name: "refresh stale response", operation: "refresh", fence: "7", returned: "6", wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.Header.Get("If-Match"); got != quoteResourceVersion(test.fence) {
+					t.Errorf("If-Match = %q, want %q", got, quoteResourceVersion(test.fence))
+				}
+				resource := Resource{
+					APIVersion: APIVersion,
+					Kind:       testObjectBucketKind,
+					Form:       &exactObjectBucketFixture,
+					Metadata: Metadata{
+						Name: "assets", Space: "prod", ResourceVersion: test.returned,
+					},
+					Spec: map[string]any{"name": "assets"},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("ETag", quoteResourceVersion(test.returned))
+				_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
+			}))
+			defer server.Close()
+
+			formClient := New(server.URL, "", server.Client())
+			formClient.apiBase = server.URL
+			fence := MutationFence{ResourceVersion: test.fence, Form: exactObjectBucketFixture}
+			var err error
+			switch test.operation {
+			case "observe":
+				_, err = formClient.ObserveResource(context.Background(), testObjectBucketKind, "assets", "prod", fence)
+			case "refresh":
+				_, err = formClient.RefreshResource(context.Background(), testObjectBucketKind, "assets", "prod", fence)
+			default:
+				t.Fatalf("unknown operation %q", test.operation)
+			}
+			if (err != nil) != test.wantError {
+				t.Fatalf("error = %v, wantError = %v", err, test.wantError)
+			}
+			if err != nil && !strings.Contains(err.Error(), "generation protected by If-Match") {
+				t.Fatalf("error = %v, want exact generation-fence rejection", err)
+			}
+		})
+	}
+}
+
 func TestExactInstalledFormReferenceValidationFailsClosed(t *testing.T) {
 	t.Parallel()
-	for _, mutate := range []func(*InstalledFormReference){
-		func(form *InstalledFormReference) { form.FormRef.APIVersion = "forms.takoform.com/v0" },
-		func(form *InstalledFormReference) { form.FormRef.Kind = KindQueue },
-		func(form *InstalledFormReference) { form.FormRef.DefinitionVersion = "" },
-		func(form *InstalledFormReference) { form.FormRef.SchemaDigest = "sha256:not-a-digest" },
-		func(form *InstalledFormReference) { form.PackageDigest = "" },
-	} {
+	for _, version := range []string{"1.0.0", "0.0.0-legacy.1", "1.2.3-rc.1+build.5"} {
 		form := exactObjectBucketFixture
-		mutate(&form)
-		if err := validateInstalledFormReference(KindObjectBucket, form); err == nil {
-			t.Fatalf("invalid FormRef unexpectedly passed: %#v", form)
+		form.FormRef.DefinitionVersion = version
+		if err := validateInstalledFormReference(testObjectBucketKind, form); err != nil {
+			t.Fatalf("valid SemVer %q rejected: %v", version, err)
 		}
+	}
+
+	for _, test := range []struct {
+		name   string
+		kind   string
+		mutate func(*InstalledFormReference)
+	}{
+		{name: "API version", mutate: func(form *InstalledFormReference) { form.FormRef.APIVersion = "forms.takoform.com/v0" }},
+		{name: "kind", mutate: func(form *InstalledFormReference) { form.FormRef.Kind = testQueueKind }},
+		{name: "lowercase kind", kind: "objectBucket", mutate: func(form *InstalledFormReference) {
+			form.FormRef.Kind = "objectBucket"
+		}},
+		{name: "empty definition version", mutate: func(form *InstalledFormReference) { form.FormRef.DefinitionVersion = "" }},
+		{name: "short definition version", mutate: func(form *InstalledFormReference) { form.FormRef.DefinitionVersion = "1" }},
+		{name: "prefixed definition version", mutate: func(form *InstalledFormReference) { form.FormRef.DefinitionVersion = "v1.2.3" }},
+		{name: "leading zero definition version", mutate: func(form *InstalledFormReference) { form.FormRef.DefinitionVersion = "01.2.3" }},
+		{name: "numeric prerelease leading zero", mutate: func(form *InstalledFormReference) { form.FormRef.DefinitionVersion = "1.2.3-01" }},
+		{name: "trailing prerelease separator", mutate: func(form *InstalledFormReference) { form.FormRef.DefinitionVersion = "1.2.3-" }},
+		{name: "trailing build separator", mutate: func(form *InstalledFormReference) { form.FormRef.DefinitionVersion = "1.2.3+" }},
+		{name: "definition version whitespace", mutate: func(form *InstalledFormReference) { form.FormRef.DefinitionVersion = " 1.2.3" }},
+		{name: "invalid schema digest", mutate: func(form *InstalledFormReference) { form.FormRef.SchemaDigest = "sha256:not-a-digest" }},
+		{name: "uppercase schema digest", mutate: func(form *InstalledFormReference) {
+			form.FormRef.SchemaDigest = "sha256:" + strings.Repeat("A", 64)
+		}},
+		{name: "uppercase package digest", mutate: func(form *InstalledFormReference) {
+			form.PackageDigest = "sha256:" + strings.Repeat("B", 64)
+		}},
+		{name: "empty package digest", mutate: func(form *InstalledFormReference) { form.PackageDigest = "" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			form := exactObjectBucketFixture
+			test.mutate(&form)
+			kind := test.kind
+			if kind == "" {
+				kind = testObjectBucketKind
+			}
+			if err := validateInstalledFormReference(kind, form); err == nil {
+				t.Fatalf("invalid FormRef unexpectedly passed: %#v", form)
+			}
+		})
+	}
+}
+
+func TestVersionedResourceResponseRejectsNonCanonicalFormRefJSON(t *testing.T) {
+	t.Parallel()
+	validRaw, err := json.Marshal(exactObjectBucketFixture.FormRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, raw, wantError string
+	}{
+		{
+			name:      "unknown field",
+			raw:       strings.TrimSuffix(string(validRaw), "}") + `,"extension":"must-not-be-ignored"}`,
+			wantError: "extension",
+		},
+		{
+			name:      "duplicate field",
+			raw:       strings.Replace(string(validRaw), "{", `{"kind":"objectBucket",`, 1),
+			wantError: "duplicate object name",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("ETag", `"1"`)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"apiVersion": APIVersion,
+					"kind":       testObjectBucketKind,
+					"form": map[string]any{
+						"formRef":       json.RawMessage(test.raw),
+						"packageDigest": exactObjectBucketFixture.PackageDigest,
+					},
+					"metadata": map[string]any{
+						"name":            "assets",
+						"space":           "prod",
+						"resourceVersion": "1",
+					},
+					"spec": map[string]any{"name": "assets"},
+				})
+			}))
+			defer server.Close()
+
+			formClient := New(server.URL, "", server.Client())
+			formClient.apiBase = server.URL
+			_, err := formClient.GetResource(
+				context.Background(),
+				testObjectBucketKind,
+				"assets",
+				"prod",
+				exactObjectBucketFixture,
+			)
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("non-canonical nested FormRef error = %v", err)
+			}
+		})
 	}
 }
 
@@ -329,23 +790,23 @@ func TestVersionedLifecycleRejectsResponseNameAndSpaceSubstitution(t *testing.T)
 		run  func(*Client, *Resource) error
 	}{
 		{name: "put", run: func(c *Client, desired *Resource) error {
-			_, err := c.PutResource(context.Background(), KindObjectBucket, "assets", desired)
+			_, err := c.PutResource(context.Background(), testObjectBucketKind, "assets", desired)
 			return err
 		}},
 		{name: "import", run: func(c *Client, desired *Resource) error {
-			_, err := c.ImportResource(context.Background(), KindObjectBucket, "assets", "native-assets", desired)
+			_, err := c.ImportResource(context.Background(), testObjectBucketKind, "assets", "native-assets", desired)
 			return err
 		}},
 		{name: "get", run: func(c *Client, _ *Resource) error {
-			_, err := c.GetResource(context.Background(), KindObjectBucket, "assets", "prod", exactObjectBucketFixture)
+			_, err := c.GetResource(context.Background(), testObjectBucketKind, "assets", "prod", exactObjectBucketFixture)
 			return err
 		}},
 		{name: "observe", run: func(c *Client, _ *Resource) error {
-			_, err := c.ObserveResource(context.Background(), KindObjectBucket, "assets", "prod", MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture})
+			_, err := c.ObserveResource(context.Background(), testObjectBucketKind, "assets", "prod", MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture})
 			return err
 		}},
 		{name: "refresh", run: func(c *Client, _ *Resource) error {
-			_, err := c.RefreshResource(context.Background(), KindObjectBucket, "assets", "prod", MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture})
+			_, err := c.RefreshResource(context.Background(), testObjectBucketKind, "assets", "prod", MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture})
 			return err
 		}},
 	}
@@ -377,10 +838,20 @@ func TestVersionedLifecycleRejectsResponseNameAndSpaceSubstitution(t *testing.T)
 						if err := json.NewDecoder(r.Body).Decode(&desired); err != nil {
 							t.Fatal(err)
 						}
-						_ = json.NewEncoder(w).Encode(PreviewResourceResult{Resource: desired, Review: PreviewReview{PlanDigest: "sha256:plan"}})
+						specDigest, err := canonicalValueDigest(desired.Spec)
+						if err != nil {
+							t.Fatal(err)
+						}
+						_ = json.NewEncoder(w).Encode(PreviewResourceResult{
+							Resource: desired,
+							Review: PreviewReview{
+								PlanDigest: "sha256:" + strings.Repeat("a", 64),
+								SpecDigest: specDigest,
+							},
+						})
 					default:
 						resource := Resource{
-							APIVersion: APIVersion, Kind: KindObjectBucket, Form: &exactObjectBucketFixture,
+							APIVersion: APIVersion, Kind: testObjectBucketKind, Form: &exactObjectBucketFixture,
 							Metadata: Metadata{Name: "assets", Space: "prod", ResourceVersion: "1"},
 						}
 						mutation.mutate(&resource)
@@ -390,10 +861,8 @@ func TestVersionedLifecycleRejectsResponseNameAndSpaceSubstitution(t *testing.T)
 							_ = json.NewEncoder(w).Encode(resource)
 						case "import":
 							_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
-						case "observe":
-							_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "observation": map[string]any{"status": "current"}})
-						case "refresh":
-							_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "refresh": map[string]any{"summary": "refreshed"}})
+						case "observe", "refresh":
+							_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
 						}
 					}
 				}))
@@ -404,7 +873,7 @@ func TestVersionedLifecycleRejectsResponseNameAndSpaceSubstitution(t *testing.T)
 					t.Fatal(err)
 				}
 				desired := &Resource{
-					APIVersion: APIVersion, Kind: KindObjectBucket, Form: &exactObjectBucketFixture,
+					APIVersion: APIVersion, Kind: testObjectBucketKind, Form: &exactObjectBucketFixture,
 					Metadata: Metadata{Name: "assets", Space: "prod"}, Spec: map[string]any{"name": "assets"},
 				}
 				err := operation.run(formClient, desired)

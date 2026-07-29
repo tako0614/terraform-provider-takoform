@@ -34,19 +34,26 @@ const (
 type Grammar string
 
 const (
-	GrammarNone       Grammar = ""
-	GrammarToken      Grammar = "token"       // open capability token
-	GrammarClass      Grammar = "class"       // runtime class identifier
-	GrammarTimezone   Grammar = "timezone"    // IANA-style zone token
-	GrammarCron       Grammar = "cron"        // five-field cron expression
-	GrammarHostname   Grammar = "hostname"    // DNS hostname
-	GrammarDomain     Grammar = "domain"      // DNS domain name
-	GrammarPath       Grammar = "path"        // absolute URL path
-	GrammarCIDR       Grammar = "cidr"        // IPv4/IPv6 address block
-	GrammarOCIDigest  Grammar = "oci-digest"  // OCI reference pinned by digest
-	GrammarMailbox    Grammar = "mailbox"     // email address
-	GrammarHTTPSURL   Grammar = "https-url"   // absolute https URL
-	GrammarRecordData Grammar = "record-data" // DNS record value
+	GrammarNone             Grammar = ""
+	GrammarToken            Grammar = "token"    // open capability token
+	GrammarVersion          Grammar = "version"  // opaque portable version token
+	GrammarClass            Grammar = "class"    // runtime class identifier
+	GrammarTimezone         Grammar = "timezone" // IANA-style zone token
+	GrammarCron             Grammar = "cron"     // five-field cron expression
+	GrammarHostname         Grammar = "hostname" // DNS hostname
+	GrammarDomain           Grammar = "domain"   // DNS domain name
+	GrammarPath             Grammar = "path"     // absolute URL path
+	GrammarCIDR             Grammar = "cidr"     // IPv4/IPv6 address block
+	GrammarDNSRelativeName  Grammar = "dns-relative-name"
+	GrammarOCIDigest        Grammar = "oci-digest" // OCI reference pinned by digest
+	GrammarMailbox          Grammar = "mailbox"    // email address
+	GrammarMailboxLocalPart Grammar = "mailbox-local-part"
+	GrammarHTTPSURL         Grammar = "https-url" // general absolute https URL; query and fragment permitted
+	// GrammarCredentialFreeHTTPSURL is an absolute HTTPS URL safe to retain
+	// in nonsensitive state. Userinfo, query, and fragment are forbidden.
+	GrammarCredentialFreeHTTPSURL Grammar = "credential-free-https-url"
+	GrammarRecordData             Grammar = "record-data" // DNS record value
+	GrammarRelativePath           Grammar = "relative-path"
 )
 
 // ConnectionMode says whether a Form declares connections to other Resources.
@@ -99,6 +106,22 @@ type Interface struct {
 	ExtraInputs []string
 }
 
+// ConditionalConstraint binds cross-field meaning into the portable JSON
+// Schema. It is intentionally small: Forms can specialize a string-set item
+// grammar or forbid fields for selected discriminator values without relying
+// on a host-only validator.
+type ConditionalConstraint struct {
+	Name                  string
+	WhenField             string
+	WhenValues            []string
+	ForbidFields          []string
+	StringSetItemPatterns map[string]string
+	StringSetMaxItems     map[string]int
+	// CounterExample overlays the canonical desired state to prove this
+	// condition is enforced by package and host conformance.
+	CounterExample map[string]any
+}
+
 // Kind is one portable Service Form.
 type Kind struct {
 	Kind         string // PascalCase portable kind
@@ -114,14 +137,19 @@ type Kind struct {
 
 	Fields      []Field
 	Connections ConnectionMode
-	// Artifact adds the portable prebuilt-artifact source union.
+	// MaxConnections bounds connection cardinality when the Form's intent is
+	// singular. Zero means unbounded; ConnectionsRequired always means at least
+	// one. JSON and provider projections enforce the same limits.
+	MaxConnections int
+	// Artifact adds the portable digest-bound HTTPS artifact source.
 	Artifact bool
 	// ArtifactExample is the canonical fixture value for that source.
 	ArtifactExample map[string]any
 	// ConnectionExample is the canonical fixture value for connections.
 	ConnectionExample map[string]any
 
-	Interfaces []Interface
+	Interfaces  []Interface
+	Constraints []ConditionalConstraint
 }
 
 func i64(value int64) *int64 { return &value }
@@ -130,25 +158,29 @@ func i64(value int64) *int64 { return &value }
 var Kinds = []Kind{
 	// ---------------------------------------------------------------- compute
 	{
-		Kind: "EdgeWorker", DefinitionVersion: "2.0.0", Slug: "edge-worker", ResourceType: "takoform_edge_worker",
+		Kind: "EdgeWorker", DefinitionVersion: "3.0.0", Slug: "edge-worker", ResourceType: "takoform_edge_worker",
 		Domain: "compute", Title: "Edge Worker",
 		Description: "Portable edge/event-driven application served from a prebuilt immutable artifact.",
 		Artifact:    true, Connections: ConnectionsOptional,
 		ArtifactExample: map[string]any{
-			"artifactRef":    "portable-conformance/v1/edge-worker.tar",
-			"artifactSha256": "0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37",
+			"artifactUrl":       "https://artifacts.portable-conformance.invalid/edge-worker.tar",
+			"artifactSha256":    "0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37",
+			"artifactMediaType": "application/vnd.takoform.edge-worker+tar",
 		},
 		ConnectionExample: connection("assets", "ObjectBucket/object-bucket", []any{"read"}, "object.binding.v1"),
 		Fields: []Field{
+			{HCL: "entrypoint", Wire: "entrypoint", Type: TypeString, Required: true, Grammar: GrammarRelativePath,
+				Doc: "Relative path of the artifact module the edge runtime starts.", Example: "worker.mjs",
+				CounterExample: "../worker.mjs"},
 			{HCL: "runtime", Wire: "runtime", Type: TypeString, Grammar: GrammarToken,
 				Doc:     "Open runtime capability token the artifact expects. The configured host decides support.",
 				Example: "javascript", AltExample: "python"},
-			{HCL: "runtime_version", Wire: "runtimeVersion", Type: TypeString,
-				Doc: "Optional runtime version requested for the artifact."},
+			{HCL: "runtime_version", Wire: "runtimeVersion", Type: TypeString, Grammar: GrammarVersion,
+				Doc: "Optional runtime version requested for the artifact.", Example: "2026.1"},
 			{HCL: "request_timeout_seconds", Wire: "requestTimeoutSeconds", Type: TypeInt, Min: i64(1), Max: i64(3600),
-				Doc: "Optional per-request timeout preference in seconds."},
+				Doc: "Optional per-request timeout preference in seconds.", Example: 30},
 			{HCL: "concurrency", Wire: "concurrency", Type: TypeInt, Min: i64(1),
-				Doc: "Optional concurrent-request preference.", CounterExample: 0},
+				Doc: "Optional concurrent-request preference.", Example: 100, CounterExample: 0},
 			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
 				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
 				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
@@ -156,7 +188,7 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "http.request", Description: "Portable HTTP request surface exposed by an edge application.", Operations: []string{"request"}}},
 	},
 	{
-		Kind: "ContainerService", DefinitionVersion: "2.0.0", Slug: "container-service", ResourceType: "takoform_container_service",
+		Kind: "ContainerService", DefinitionVersion: "3.0.0", Slug: "container-service", ResourceType: "takoform_container_service",
 		Domain: "compute", Title: "Container Service",
 		Description: "Portable OCI container service pinned to an immutable image digest.",
 		Connections: ConnectionsOptional,
@@ -171,13 +203,13 @@ var Kinds = []Kind{
 			{HCL: "public_http", Wire: "publicHttp", Type: TypeBool,
 				Doc: "Whether this container asks for public HTTP exposure.", Example: true},
 			{HCL: "cpu_millicores", Wire: "cpuMillicores", Type: TypeInt, Min: i64(1),
-				Doc: "Optional CPU request in millicores."},
+				Doc: "Optional CPU request in millicores.", Example: 250},
 			{HCL: "memory_mib", Wire: "memoryMib", Type: TypeInt, Min: i64(1),
-				Doc: "Optional memory request in mebibytes."},
+				Doc: "Optional memory request in mebibytes.", Example: 512},
 			{HCL: "replicas", Wire: "replicas", Type: TypeInt, Min: i64(1),
 				Doc: "Requested number of identical running instances.", Example: 2},
 			{HCL: "health_check_path", Wire: "healthCheckPath", Type: TypeString, Grammar: GrammarPath,
-				Doc: "Optional HTTP path a host polls to decide whether an instance is serving."},
+				Doc: "Optional HTTP path a host polls to decide whether an instance is serving.", Example: "/healthz"},
 			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
 				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
 				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
@@ -185,41 +217,45 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "http.request", Description: "Portable HTTP request surface exposed by a container service.", Operations: []string{"request"}}},
 	},
 	{
-		Kind: "ComputeInstance", Slug: "compute-instance", ResourceType: "takoform_compute_instance",
+		Kind: "ComputeInstance", DefinitionVersion: "2.0.0", Slug: "compute-instance", ResourceType: "takoform_compute_instance",
 		Domain: "compute", Title: "Compute Instance",
-		Description: "Portable long-running machine instance built from an immutable image.",
-		Connections: ConnectionsOptional,
+		Description: "Portable long-running machine instance built from digest-bound boot-image bytes.",
+		Artifact:    true, Connections: ConnectionsOptional,
+		ArtifactExample: map[string]any{
+			"artifactUrl":       "https://artifacts.portable-conformance.invalid/base-linux.qcow2",
+			"artifactSha256":    "a6cbb7e295a8dd89b98f3b8c731047e0e62a4312b8b43c590a8c8662df59e913",
+			"artifactMediaType": "application/x-qemu-disk",
+		},
 		Fields: []Field{
 			{HCL: "machine_class", Wire: "machineClass", Type: TypeString, Required: true, Grammar: GrammarToken,
 				Doc: "Open machine capability token describing the requested size class.", Example: "general.small",
 				CounterExample: "not a token"},
-			{HCL: "image", Wire: "image", Type: TypeString, Required: true,
-				Doc: "Immutable machine image reference.", Example: "portable-conformance/v1/base-linux"},
 			{HCL: "boot_disk_gib", Wire: "bootDiskGib", Type: TypeInt, Required: true, Min: i64(1),
 				Doc: "Boot disk size in gibibytes.", Example: 20},
 			{HCL: "instance_count", Wire: "instanceCount", Type: TypeInt, Min: i64(1),
-				Doc: "Optional identical-instance count preference."},
+				Doc: "Optional identical-instance count preference.", Example: 1},
 			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
 				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
 				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
 		},
 	},
 	{
-		Kind: "StaticSite", Slug: "static-site", ResourceType: "takoform_static_site",
+		Kind: "StaticSite", DefinitionVersion: "2.0.0", Slug: "static-site", ResourceType: "takoform_static_site",
 		Domain: "compute", Title: "Static Site",
 		Description: "Portable static asset site served from a prebuilt immutable artifact.",
 		Artifact:    true,
 		ArtifactExample: map[string]any{
-			"artifactRef":    "portable-conformance/v1/static-site.tar",
-			"artifactSha256": "3b1d4c2f9a8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a392817065f4e",
+			"artifactUrl":       "https://artifacts.portable-conformance.invalid/static-site.tar",
+			"artifactSha256":    "3b1d4c2f9a8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a392817065f4e",
+			"artifactMediaType": "application/vnd.takoform.static-site+tar",
 		},
 		Fields: []Field{
-			{HCL: "index_document", Wire: "indexDocument", Type: TypeString, Default: "index.html",
+			{HCL: "index_document", Wire: "indexDocument", Type: TypeString, Default: "index.html", Grammar: GrammarRelativePath,
 				Doc: "Document served for a directory request.", Example: "index.html"},
-			{HCL: "error_document", Wire: "errorDocument", Type: TypeString,
-				Doc: "Optional document served for a not-found request."},
+			{HCL: "error_document", Wire: "errorDocument", Type: TypeString, Grammar: GrammarRelativePath,
+				Doc: "Optional document served for a not-found request.", Example: "404.html"},
 			{HCL: "single_page_app", Wire: "singlePageApp", Type: TypeBool,
-				Doc: "Whether unmatched paths should serve the index document."},
+				Doc: "Whether unmatched paths should serve the index document.", Example: false},
 			{HCL: "cache_control_seconds", Wire: "cacheControlSeconds", Type: TypeInt, Min: i64(0),
 				Doc:     "Optional freshness lifetime advertised for served assets, in seconds.",
 				Example: 300, CounterExample: -1},
@@ -227,16 +263,17 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "http.request", Description: "Portable HTTP request surface exposed by a static site.", Operations: []string{"request"}}},
 	},
 	{
-		Kind: "Workflow", Slug: "workflow", ResourceType: "takoform_workflow",
+		Kind: "Workflow", DefinitionVersion: "2.0.0", Slug: "workflow", ResourceType: "takoform_workflow",
 		Domain: "compute", Title: "Workflow",
 		Description: "Portable durable workflow definition and instance-state lifecycle.",
 		Artifact:    true, Connections: ConnectionsOptional,
 		ArtifactExample: map[string]any{
-			"artifactRef":    "portable-conformance/v1/workflow.mjs",
-			"artifactSha256": "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5",
+			"artifactUrl":       "https://artifacts.portable-conformance.invalid/workflow.mjs",
+			"artifactSha256":    "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5",
+			"artifactMediaType": "text/javascript",
 		},
 		Fields: []Field{
-			{HCL: "entrypoint", Wire: "entrypoint", Type: TypeString, Required: true,
+			{HCL: "entrypoint", Wire: "entrypoint", Type: TypeString, Required: true, Grammar: GrammarClass,
 				Doc: "Workflow runtime entrypoint.", Example: "IngestWorkflow"},
 			{HCL: "max_attempts", Wire: "maxAttempts", Type: TypeInt, Min: i64(1),
 				Doc: "Optional maximum attempts per workflow run.", Example: 3, CounterExample: 0},
@@ -249,17 +286,27 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "workflow.invoke", Description: "Portable durable workflow invocation operations.", Operations: []string{"cancel", "invoke", "status"}}},
 	},
 	{
-		Kind: "StatefulEntity", Slug: "stateful-entity", ResourceType: "takoform_stateful_entity",
+		Kind: "StatefulEntity", DefinitionVersion: "3.0.0", Slug: "stateful-entity", ResourceType: "takoform_stateful_entity",
 		Domain: "compute", Title: "Stateful Entity",
-		Description: "Portable namespace of individually addressable, individually persistent entities.",
-		Connections: ConnectionsOptional,
+		Description: "Portable namespace of addressable persistent entities implemented by digest-bound application bytes.",
+		Artifact:    true, Connections: ConnectionsOptional,
+		ArtifactExample: map[string]any{
+			"artifactUrl":       "https://artifacts.portable-conformance.invalid/stateful-entity.tar",
+			"artifactSha256":    "5d877f919bf8db6e6fd819e32f74dff6fc94b06f8914fa1abf5bcd2fb32ae958",
+			"artifactMediaType": "application/vnd.takoform.stateful-entity+tar",
+		},
 		Fields: []Field{
 			{HCL: "entity_class", Wire: "entityClass", Type: TypeString, Required: true, Grammar: GrammarClass,
 				Doc: "Runtime class identifier owning entity behaviour inside this namespace.", Example: "RoomEntity",
 				CounterExample: "not a class"},
+			{HCL: "runtime", Wire: "runtime", Type: TypeString, Required: true, Grammar: GrammarToken,
+				Doc: "Open runtime capability token required by the entity artifact.", Example: "javascript",
+				CounterExample: "not a runtime"},
+			{HCL: "runtime_version", Wire: "runtimeVersion", Type: TypeString, Grammar: GrammarVersion,
+				Doc: "Optional runtime-version capability token requested for the artifact.", Example: "2026.1"},
 			{HCL: "persistence", Wire: "persistence", Type: TypeString, Grammar: GrammarToken,
-				Doc: "Open persistence capability token requested for entity state."},
-			{HCL: "migration_tag", Wire: "migrationTag", Type: TypeString,
+				Doc: "Open persistence capability token requested for entity state.", Example: "transactional"},
+			{HCL: "migration_tag", Wire: "migrationTag", Type: TypeString, Grammar: GrammarVersion,
 				Doc: "Optional namespace migration tag. It never identifies one entity instance.", Example: "v1",
 				AltExample: "v2"},
 			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
@@ -269,10 +316,11 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "entity.invoke", Description: "Portable stateful entity invocation operations.", Operations: []string{"invoke"}}},
 	},
 	{
-		Kind: "Schedule", DefinitionVersion: "2.0.0", Slug: "schedule", ResourceType: "takoform_schedule",
+		Kind: "Schedule", DefinitionVersion: "3.0.0", Slug: "schedule", ResourceType: "takoform_schedule",
 		Domain: "compute", Title: "Schedule",
 		Description:       "Portable cron lifecycle that invokes exactly one connected Resource.",
 		Connections:       ConnectionsRequired,
+		MaxConnections:    1,
 		ConnectionExample: connection("invocation", "Workflow/workflow", []any{"invoke"}, "schedule.trigger.v1"),
 		Fields: []Field{
 			{HCL: "cron", Wire: "cron", Type: TypeString, Required: true, Grammar: GrammarCron,
@@ -285,7 +333,7 @@ var Kinds = []Kind{
 
 	// ------------------------------------------------------------------- data
 	{
-		Kind: "ObjectBucket", DefinitionVersion: "2.0.0", Slug: "object-bucket", ResourceType: "takoform_object_bucket",
+		Kind: "ObjectBucket", DefinitionVersion: "3.0.0", Slug: "object-bucket", ResourceType: "takoform_object_bucket",
 		Domain: "data", Title: "Object Bucket",
 		Description: "Portable object storage with a portable default storage class.",
 		Fields: []Field{
@@ -294,7 +342,7 @@ var Kinds = []Kind{
 				Doc:  "Portable default storage class for newly written objects.", Example: "standard",
 				CounterExample: "cold"},
 			{HCL: "versioning", Wire: "versioning", Type: TypeBool,
-				Doc: "Whether the bucket should retain non-current object versions."},
+				Doc: "Whether the bucket should retain non-current object versions.", Example: true},
 			{HCL: "access_protocols", Wire: "accessProtocols", Type: TypeStringSet, Grammar: GrammarToken,
 				Doc: "Optional access-protocol capability tokens requested from the host.", Example: []any{"s3_api"}},
 		},
@@ -303,31 +351,31 @@ var Kinds = []Kind{
 	{
 		Kind: "ObjectLifecycleRule", Slug: "object-lifecycle-rule", ResourceType: "takoform_object_lifecycle_rule",
 		Domain: "data", Title: "Object Lifecycle Rule",
-		Description:       "Portable retention and transition rule applied to one connected object store.",
+		Description:       "One portable expiration or storage-transition action applied to a connected object store.",
 		Connections:       ConnectionsRequired,
+		MaxConnections:    1,
 		ConnectionExample: connection("store", "ObjectBucket/object-bucket", []any{"administer"}, "object.lifecycle.v1"),
 		Fields: []Field{
 			{HCL: "prefix", Wire: "prefix", Type: TypeString,
 				Doc: "Optional key prefix the rule applies to.", Example: "logs/"},
-			{HCL: "expire_after_days", Wire: "expireAfterDays", Type: TypeInt, Min: i64(1),
-				Doc: "Optional age in days after which matching objects are deleted.", Example: 90,
+			{HCL: "action", Wire: "action", Type: TypeString, Required: true,
+				Enum: []string{"expire", "transition_infrequent_access", "transition_archive"},
+				Doc:  "Single action performed when matching objects reach after_days.", Example: "expire",
+				CounterExample: "transition"},
+			{HCL: "after_days", Wire: "afterDays", Type: TypeInt, Required: true, Min: i64(1),
+				Doc: "Age in days at which the declared action is performed.", Example: 90,
 				CounterExample: 0},
-			{HCL: "transition_after_days", Wire: "transitionAfterDays", Type: TypeInt, Min: i64(1),
-				Doc: "Optional age in days after which matching objects change storage class."},
-			{HCL: "transition_storage_class", Wire: "transitionStorageClass", Type: TypeString,
-				Enum: []string{"infrequent_access", "archive"},
-				Doc:  "Storage class matching objects transition into."},
 		},
 	},
 	{
-		Kind: "KeyValueStore", Slug: "key-value-store", ResourceType: "takoform_key_value_store",
+		Kind: "KeyValueStore", DefinitionVersion: "2.0.0", Slug: "key-value-store", ResourceType: "takoform_key_value_store",
 		Domain: "data", Title: "Key Value Store",
 		Description: "Portable key/value state with an optional consistency preference.",
 		Fields: []Field{
 			{HCL: "consistency", Wire: "consistency", Type: TypeString, Enum: []string{"eventual", "strong"},
 				Doc: "Optional consistency preference.", Example: "eventual", CounterExample: "linearizable"},
 			{HCL: "default_ttl_seconds", Wire: "defaultTtlSeconds", Type: TypeInt, Min: i64(0),
-				Doc: "Optional default entry lifetime in seconds."},
+				Doc: "Optional default entry lifetime in seconds.", Example: 3600},
 		},
 		Interfaces: []Interface{{Name: "keyvalue.store", Description: "Portable key/value operations.", Operations: []string{"delete", "get", "list", "put"}}},
 	},
@@ -343,29 +391,29 @@ var Kinds = []Kind{
 				Enum: []string{"least_recently_used", "least_frequently_used", "time_to_live"},
 				Doc:  "Optional eviction preference when the cache is full.", Example: "least_recently_used"},
 			{HCL: "default_ttl_seconds", Wire: "defaultTtlSeconds", Type: TypeInt, Min: i64(0),
-				Doc: "Optional default entry lifetime in seconds."},
+				Doc: "Optional default entry lifetime in seconds.", Example: 300},
 		},
 		Interfaces: []Interface{{Name: "cache.store", Description: "Portable cache operations.", Operations: []string{"delete", "get", "put"}}},
 	},
 	{
-		Kind: "RelationalDatabase", Slug: "relational-database", ResourceType: "takoform_relational_database",
+		Kind: "RelationalDatabase", DefinitionVersion: "2.0.0", Slug: "relational-database", ResourceType: "takoform_relational_database",
 		Domain: "data", Title: "Relational Database",
 		Description: "Portable relational database addressed through an open engine capability token.",
 		Fields: []Field{
 			{HCL: "engine", Wire: "engine", Type: TypeString, Required: true, Immutable: true, Grammar: GrammarToken,
 				Doc: "Open engine capability token. Changing it replaces the database.", Example: "postgres",
 				CounterExample: "not a token", AltExample: "mysql"},
-			{HCL: "engine_version", Wire: "engineVersion", Type: TypeString,
+			{HCL: "engine_version", Wire: "engineVersion", Type: TypeString, Grammar: GrammarVersion,
 				Doc: "Optional engine version requested from the host.", Example: "16", AltExample: "17"},
 			{HCL: "storage_gib", Wire: "storageGib", Type: TypeInt, Min: i64(1),
-				Doc: "Optional storage request in gibibytes."},
+				Doc: "Optional storage request in gibibytes.", Example: 20},
 			{HCL: "size_class", Wire: "sizeClass", Type: TypeString, Grammar: GrammarToken,
 				Doc: "Open capability token describing the requested compute size.", Example: "db.small"},
 			{HCL: "database_name", Wire: "databaseName", Type: TypeString, Immutable: true, Grammar: GrammarToken,
 				Doc:     "Initial logical database created inside the instance. Changing it replaces the database.",
 				Example: "app", AltExample: "app_v2"},
 			{HCL: "high_availability", Wire: "highAvailability", Type: TypeBool,
-				Doc: "Whether the host should keep a standby able to take over."},
+				Doc: "Whether the host should keep a standby able to take over.", Example: false},
 		},
 		Interfaces: []Interface{{
 			Name: "sql.query", Description: "Portable SQL query and transaction operations.",
@@ -391,7 +439,7 @@ var Kinds = []Kind{
 		}},
 	},
 	{
-		Kind: "Queue", DefinitionVersion: "2.0.0", Slug: "queue", ResourceType: "takoform_queue",
+		Kind: "Queue", DefinitionVersion: "3.0.0", Slug: "queue", ResourceType: "takoform_queue",
 		Domain: "data", Title: "Queue",
 		Description: "Portable asynchronous delivery with at-least-once semantics.",
 		Connections: ConnectionsOptional,
@@ -399,15 +447,15 @@ var Kinds = []Kind{
 			{HCL: "max_retries", Wire: "maxRetries", Type: TypeInt, Min: i64(0),
 				Doc: "Optional delivery retry preference.", Example: 5, CounterExample: -1},
 			{HCL: "max_batch_size", Wire: "maxBatchSize", Type: TypeInt, Min: i64(1),
-				Doc: "Optional consumer batch size preference."},
+				Doc: "Optional consumer batch size preference.", Example: 10},
 			{HCL: "visibility_timeout_seconds", Wire: "visibilityTimeoutSeconds", Type: TypeInt, Min: i64(0),
-				Doc: "Optional time a received message stays invisible to other consumers."},
+				Doc: "Optional time a received message stays invisible to other consumers.", Example: 30},
 			{HCL: "message_retention_seconds", Wire: "messageRetentionSeconds", Type: TypeInt, Min: i64(1),
 				Doc: "Optional time an unacknowledged message is retained, in seconds.", Example: 345600},
 			{HCL: "max_message_bytes", Wire: "maxMessageBytes", Type: TypeInt, Min: i64(1),
-				Doc: "Optional largest accepted message size in bytes."},
+				Doc: "Optional largest accepted message size in bytes.", Example: 262144},
 			{HCL: "delivery_delay_seconds", Wire: "deliveryDelaySeconds", Type: TypeInt, Min: i64(0),
-				Doc: "Optional delay before a sent message becomes receivable."},
+				Doc: "Optional delay before a sent message becomes receivable.", Example: 0},
 			{HCL: "ordering", Wire: "ordering", Type: TypeString, Enum: []string{"best_effort", "strict"},
 				Doc: "Whether the host must preserve send order.", Example: "best_effort"},
 		},
@@ -438,7 +486,7 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "search.query", Description: "Portable search index operations.", Operations: []string{"delete", "index", "query"}}},
 	},
 	{
-		Kind: "VectorIndex", DefinitionVersion: "2.0.0", Slug: "vector-index", ResourceType: "takoform_vector_index",
+		Kind: "VectorIndex", DefinitionVersion: "3.0.0", Slug: "vector-index", ResourceType: "takoform_vector_index",
 		Domain: "data", Title: "Vector Index",
 		Description: "Portable vector index with dimensions fixed for the index lifecycle.",
 		Connections: ConnectionsOptional,
@@ -467,18 +515,21 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "analytics.query", Description: "Portable analytics dataset operations.", Operations: []string{"append", "query"}}},
 	},
 	{
-		Kind: "ModelEndpoint", Slug: "model-endpoint", ResourceType: "takoform_model_endpoint",
+		Kind: "ModelEndpoint", DefinitionVersion: "3.0.0", Slug: "model-endpoint", ResourceType: "takoform_model_endpoint",
 		Domain: "analytics", Title: "Model Endpoint",
-		Description: "Portable inference endpoint serving one declared model for one declared task.",
+		Description: "Portable inference endpoint serving digest-bound model bytes for one declared task.",
+		Artifact:    true,
+		ArtifactExample: map[string]any{
+			"artifactUrl":       "https://artifacts.portable-conformance.invalid/embedding-small.safetensors",
+			"artifactSha256":    "fd52f6d3dfaa989615128f2049893584cc6f71a4ae5536b86681ae33ae2c072b",
+			"artifactMediaType": "application/vnd.safetensors",
+		},
 		Fields: []Field{
-			{HCL: "model", Wire: "model", Type: TypeString, Required: true,
-				Doc: "Immutable model reference the endpoint serves.", Example: "portable-conformance/v1/embedding-small",
-				AltExample: "portable-conformance/v1/embedding-large"},
 			{HCL: "task", Wire: "task", Type: TypeString, Required: true, Grammar: GrammarToken,
 				Doc: "Open task capability token, for example text_generation or embedding.", Example: "embedding",
-				CounterExample: "not a token"},
+				CounterExample: "not a token", AltExample: "text_generation"},
 			{HCL: "max_concurrency", Wire: "maxConcurrency", Type: TypeInt, Min: i64(1),
-				Doc: "Optional concurrent-inference preference."},
+				Doc: "Optional concurrent-inference preference.", Example: 8},
 		},
 		Interfaces: []Interface{{Name: "model.invoke", Description: "Portable model inference operations.", Operations: []string{"invoke"}}},
 	},
@@ -502,9 +553,10 @@ var Kinds = []Kind{
 		Domain: "network", Title: "DNS Record",
 		Description:       "Portable DNS record published into one connected zone.",
 		Connections:       ConnectionsRequired,
+		MaxConnections:    1,
 		ConnectionExample: connection("parent", "DnsZone/primary", []any{"administer"}, "dns.zone.v1"),
 		Fields: []Field{
-			{HCL: "record_name", Wire: "recordName", Type: TypeString, Required: true,
+			{HCL: "record_name", Wire: "recordName", Type: TypeString, Required: true, Grammar: GrammarDNSRelativeName,
 				Doc: "Record name relative to the connected zone.", Example: "api"},
 			{HCL: "record_type", Wire: "recordType", Type: TypeString, Required: true, Immutable: true,
 				Enum: []string{"A", "AAAA", "CNAME", "TXT", "MX", "SRV", "CAA", "NS"},
@@ -514,6 +566,22 @@ var Kinds = []Kind{
 				Doc: "Record data published for this name.", Example: []any{"service.portable-conformance.invalid"}},
 			{HCL: "ttl_seconds", Wire: "ttlSeconds", Type: TypeInt, Min: i64(1),
 				Doc: "Optional record time to live in seconds.", Example: 300},
+		},
+		Constraints: []ConditionalConstraint{
+			{Name: "dns-a-values", WhenField: "recordType", WhenValues: []string{"A"}, StringSetItemPatterns: map[string]string{"values": PatternIPv4Address},
+				CounterExample: map[string]any{"recordType": "A", "values": []any{"999.999.999.999"}}},
+			{Name: "dns-aaaa-values", WhenField: "recordType", WhenValues: []string{"AAAA"}, StringSetItemPatterns: map[string]string{"values": PatternIPv6Address},
+				CounterExample: map[string]any{"recordType": "AAAA", "values": []any{"2001:::10"}}},
+			{Name: "dns-hostname-values", WhenField: "recordType", WhenValues: []string{"CNAME", "NS"}, StringSetItemPatterns: map[string]string{"values": PatternHostname},
+				CounterExample: map[string]any{"recordType": "CNAME", "values": []any{"not a hostname"}}},
+			{Name: "dns-cname-cardinality", WhenField: "recordType", WhenValues: []string{"CNAME"}, StringSetMaxItems: map[string]int{"values": 1},
+				CounterExample: map[string]any{"recordType": "CNAME", "values": []any{"one.portable-conformance.invalid", "two.portable-conformance.invalid"}}},
+			{Name: "dns-mx-values", WhenField: "recordType", WhenValues: []string{"MX"}, StringSetItemPatterns: map[string]string{"values": PatternDNSMX},
+				CounterExample: map[string]any{"recordType": "MX", "values": []any{"mail.portable-conformance.invalid"}}},
+			{Name: "dns-srv-values", WhenField: "recordType", WhenValues: []string{"SRV"}, StringSetItemPatterns: map[string]string{"values": PatternDNSSRV},
+				CounterExample: map[string]any{"recordType": "SRV", "values": []any{"443 service.portable-conformance.invalid"}}},
+			{Name: "dns-caa-values", WhenField: "recordType", WhenValues: []string{"CAA"}, StringSetItemPatterns: map[string]string{"values": PatternDNSCAA},
+				CounterExample: map[string]any{"recordType": "CAA", "values": []any{"issue ca.portable-conformance.invalid"}}},
 		},
 	},
 	{
@@ -536,6 +604,7 @@ var Kinds = []Kind{
 		Domain: "network", Title: "HTTP Route",
 		Description:       "Portable hostname and path binding that sends HTTP traffic to one connected Resource.",
 		Connections:       ConnectionsRequired,
+		MaxConnections:    1,
 		ConnectionExample: connection("application", "EdgeWorker/edge-worker", []any{"request"}, "http.route.v1"),
 		Fields: []Field{
 			{HCL: "hostname", Wire: "hostname", Type: TypeString, Required: true, Grammar: GrammarHostname,
@@ -544,7 +613,7 @@ var Kinds = []Kind{
 			{HCL: "path_prefix", Wire: "pathPrefix", Type: TypeString, Grammar: GrammarPath, Default: "/",
 				Doc: "Absolute path prefix this route matches.", Example: "/", AltExample: "/api"},
 			{HCL: "strip_path_prefix", Wire: "stripPathPrefix", Type: TypeBool,
-				Doc: "Whether the matched prefix is removed before the request reaches the target."},
+				Doc: "Whether the matched prefix is removed before the request reaches the target.", Example: false},
 		},
 	},
 	{
@@ -556,16 +625,22 @@ var Kinds = []Kind{
 		Fields: []Field{
 			{HCL: "protocol", Wire: "protocol", Type: TypeString, Required: true,
 				Enum: []string{"tcp", "udp", "http", "https"},
-				Doc:  "Listener protocol.", Example: "https", CounterExample: "smtp"},
+				Doc:  "Listener protocol.", Example: "https", CounterExample: "smtp",
+				AltExample: "http"},
 			{HCL: "listen_port", Wire: "listenPort", Type: TypeInt, Required: true, Min: i64(1), Max: i64(65535),
 				Doc: "Port the listener accepts connections on.", Example: 443},
 			{HCL: "health_check_path", Wire: "healthCheckPath", Type: TypeString, Grammar: GrammarPath,
 				Doc: "Optional HTTP path polled to decide backend health.", Example: "/healthz"},
 			{HCL: "internal", Wire: "internal", Type: TypeBool,
-				Doc: "Whether the listener is reachable only from inside the host's private network."},
+				Doc: "Whether the listener is reachable only from inside the host's private network.", Example: false},
 			{HCL: "idle_timeout_seconds", Wire: "idleTimeoutSeconds", Type: TypeInt, Min: i64(1), Max: i64(4000),
-				Doc: "Optional time an idle connection is held open, in seconds."},
+				Doc: "Optional time an idle connection is held open, in seconds.", Example: 60},
 		},
+		Constraints: []ConditionalConstraint{{
+			Name: "non-http-health-path", WhenField: "protocol", WhenValues: []string{"tcp", "udp"},
+			ForbidFields:   []string{"healthCheckPath"},
+			CounterExample: map[string]any{"protocol": "tcp"},
+		}},
 		Interfaces: []Interface{{Name: "network.endpoint", Description: "Portable network endpoint status operations.", Operations: []string{"status"}}},
 	},
 	{
@@ -632,10 +707,10 @@ var Kinds = []Kind{
 			{HCL: "domain", Wire: "domain", Type: TypeString, Required: true, Immutable: true, Grammar: GrammarDomain,
 				Doc:     "Domain the host verifies before it accepts outbound mail.",
 				Example: "portable-conformance.invalid", CounterExample: "not a domain", AltExample: "alt.portable-conformance.invalid"},
-			{HCL: "default_sender", Wire: "defaultSender", Type: TypeString, Grammar: GrammarMailbox,
-				Doc:        "Optional default sender mailbox inside the verified domain.",
-				Example:    "notifications@portable-conformance.invalid",
-				AltExample: "alerts@portable-conformance.invalid"},
+			{HCL: "default_local_part", Wire: "defaultLocalPart", Type: TypeString, Grammar: GrammarMailboxLocalPart,
+				Doc:        "Optional local part combined with domain to form the default sender mailbox.",
+				Example:    "notifications",
+				AltExample: "alerts"},
 		},
 		Interfaces: []Interface{{Name: "email.send", Description: "Portable outbound mail operations.", Operations: []string{"send", "status"}}},
 	},
@@ -644,6 +719,7 @@ var Kinds = []Kind{
 		Domain: "operations", Title: "Webhook Endpoint",
 		Description:       "Portable inbound HTTP endpoint that forwards received requests to one connected Resource.",
 		Connections:       ConnectionsRequired,
+		MaxConnections:    1,
 		ConnectionExample: connection("destination", "Queue/queue", []any{"send"}, "queue.producer.v1"),
 		Fields: []Field{
 			{HCL: "path", Wire: "path", Type: TypeString, Grammar: GrammarPath, Default: "/",
@@ -664,12 +740,9 @@ var Kinds = []Kind{
 				Doc:            "Absolute https redirect URIs the client may return to.",
 				Example:        []any{"https://app.portable-conformance.invalid/callback"},
 				CounterExample: []any{"http://app.portable-conformance.invalid/callback"}},
-			{HCL: "grant_types", Wire: "grantTypes", Type: TypeStringSet, MinItems: 1,
-				Enum: []string{"authorization_code", "client_credentials", "refresh_token"},
-				Doc:  "Grant types the client is registered for.", Example: []any{"authorization_code"}},
 			{HCL: "auth_method", Wire: "authMethod", Type: TypeString, Default: "none",
-				Enum:    []string{"none", "basic", "jwt"},
-				Doc:     "How the client authenticates at the token endpoint. The host issues and holds any material this implies.",
+				Enum:    []string{"none", "client_secret_basic", "private_key_jwt"},
+				Doc:     "How this authorization-code client authenticates at the token endpoint. The host issues and holds any material this implies.",
 				Example: "none"},
 		},
 		Interfaces: []Interface{{Name: "identity.oidc", Description: "Portable OIDC relying-party metadata operations.", Operations: []string{"metadata"}}},
@@ -677,15 +750,13 @@ var Kinds = []Kind{
 	{
 		Kind: "FeatureFlag", Slug: "feature-flag", ResourceType: "takoform_feature_flag",
 		Domain: "operations", Title: "Feature Flag",
-		Description: "Portable named runtime switch with an optional percentage rollout.",
+		Description: "Portable named runtime switch expressed as one complete enabled percentage.",
 		Fields: []Field{
 			{HCL: "flag_key", Wire: "flagKey", Type: TypeString, Required: true, Immutable: true, Grammar: GrammarToken,
 				Doc: "Stable key applications evaluate. Changing it replaces the flag.", Example: "new_checkout",
 				CounterExample: "not a key", AltExample: "new_checkout_v2"},
-			{HCL: "enabled", Wire: "enabled", Type: TypeBool, Required: true,
-				Doc: "Whether the flag evaluates true by default.", Example: true},
-			{HCL: "rollout_percentage", Wire: "rolloutPercentage", Type: TypeInt, Min: i64(0), Max: i64(100),
-				Doc: "Optional share of evaluations that receive the enabled value.", Example: 25},
+			{HCL: "enabled_percentage", Wire: "enabledPercentage", Type: TypeInt, Required: true, Min: i64(0), Max: i64(100),
+				Doc: "Share of stable evaluation subjects receiving true; 0 is always false and 100 is always true.", Example: 25},
 		},
 		Interfaces: []Interface{{Name: "flag.evaluate", Description: "Portable feature flag evaluation operations.", Operations: []string{"evaluate"}}},
 	},
@@ -694,6 +765,7 @@ var Kinds = []Kind{
 		Domain: "operations", Title: "Rate Limit Policy",
 		Description:       "Portable request budget applied to one connected Resource.",
 		Connections:       ConnectionsRequired,
+		MaxConnections:    1,
 		ConnectionExample: connection("subject", "HttpRoute/http-route", []any{"administer"}, "http.route.v1"),
 		Fields: []Field{
 			{HCL: "requests_per_minute", Wire: "requestsPerMinute", Type: TypeInt, Required: true, Min: i64(1),
@@ -710,6 +782,7 @@ var Kinds = []Kind{
 		Domain: "operations", Title: "Backup Policy",
 		Description:       "Portable scheduled copy and retention rule for one connected Resource.",
 		Connections:       ConnectionsRequired,
+		MaxConnections:    1,
 		ConnectionExample: connection("origin", "RelationalDatabase/relational-database", []any{"administer"}, "sql.admin.v1"),
 		Fields: []Field{
 			{HCL: "cron", Wire: "cron", Type: TypeString, Required: true, Grammar: GrammarCron,

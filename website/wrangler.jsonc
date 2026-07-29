@@ -9,6 +9,7 @@
   },
   "routes": [
     { "pattern": "takoform.com", "custom_domain": true },
-    { "pattern": "www.takoform.com", "custom_domain": true }
+    { "pattern": "www.takoform.com", "custom_domain": true },
+    { "pattern": "forms.takoform.com", "custom_domain": true }
   ]
 }

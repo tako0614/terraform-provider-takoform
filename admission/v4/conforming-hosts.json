@@ -5,8 +5,8 @@
     {
       "hostId": "takosumi-oss-reference",
       "title": "Takosumi OSS reference host",
-      "manifestFormat": "takosumi.standard-form-host-report-candidate@v2",
-      "signedFormat": "takosumi.standard-form-host-report-signed-candidate@v2",
+      "manifestFormat": "takosumi.standard-form-host-report-candidate@v3",
+      "signedFormat": "takosumi.standard-form-host-report-signed-candidate@v4",
       "certificateIdentity": "https://github.com/tako0614/takosumi/.github/workflows/standard-form-host-report.yml@refs/heads/main",
       "workflow": ".github/workflows/standard-form-host-report.yml",
       "sourceRepository": "https://github.com/tako0614/takosumi.git",

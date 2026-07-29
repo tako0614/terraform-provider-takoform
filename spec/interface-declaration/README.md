@@ -1,10 +1,12 @@
 # Interface declaration v1alpha1
 
-A Form Definition or a standalone `takoform_interface` IaC resource MAY declare
-a runtime interface a service exposes. The portable declaration says what
-exists, the exact non-secret document, its optional schema, and how public
-values are resolved. The host owns the resulting record, consumer
-authorization, identity fencing, and lifecycle.
+A Form Definition MAY declare a runtime interface its service exposes. The
+portable descriptor says what exists, the exact non-secret document, its
+optional schema, and how public values are resolved. The Takoform data source
+MAY read a projection made visible by the host, but it neither creates nor owns
+an Interface record. The host (Takosumi in the Takos ecosystem) owns Interface
+records and bindings, write fencing, lifecycle, authorization, and token
+issuance.
 
 Requirement keywords are used as described in
 [`../conformance.md`](../conformance.md).
@@ -79,8 +81,15 @@ credentials never appear in a Form Definition.
 `resourceUriInput` is optional. When present, it names exactly one input whose
 source is `resource_uri`. The host resolves that input to its canonical OAuth
 resource URI. The resolved value must be an absolute credential-free HTTPS URI
-and may be used as an audience fence. The marker
-does not declare a token, grant consumer access, create an InterfaceBinding, or
+using the same `credentialFreeHTTPSURL` grammar as an immutable artifact URL:
+literal lowercase `https://`, a dotted ASCII hostname, an optional one-to-five
+decimal-digit port, and an optional path without whitespace, `?`, or `#`.
+Userinfo, query, fragment, single-label and Unicode hostnames are forbidden.
+Unicode path text may be direct or percent-encoded; an internationalized
+hostname must use its dotted ASCII IDNA representation. The whole value must
+also be valid URI syntax, so malformed percent escapes and control characters
+are forbidden. The URI may be used as an audience fence. The marker does not
+declare a token, grant consumer access, create an InterfaceBinding, or
 authorize any caller.
 
 ## Required semantics
@@ -95,38 +104,52 @@ declaration it cannot honor; it must not silently install that Resource Ready.
 An optional descriptor may be skipped. If skipped, it must not be falsely
 listed. Listing any descriptor implies no consumer permission.
 
-## Standalone IaC declaration
+## Read-only IaC projection
 
-`resource "takoform_interface"` carries the same generic descriptor fields
-directly:
+The Takoform provider MAY expose `data "takoform_interface"` to read an exact
+host projection selected by the descriptor identity and exposing Resource.
+The projection may contain the declaration's non-secret document, resolved
+public values, and declaring Form kind. It MUST NOT expose a host Interface
+record id, binding, credential, token, write generation, or lifecycle state.
 
-- exact `name` and `version`;
-- the exposing Resource `{kind,name}` and Space;
-- `document`, optional `documentSchema`, `inputs`, and optional
-  `resourceUriInput`.
-
-The resource is deliberately not a protocol catalogue. It does not define
-MCP-, HTTP-, UI-, storage-, or vendor-specific blocks. Application authors put
-their complete data-only document in `document_json` and their deterministic
-input declarations in `inputs_json`.
-
-A compatible host that supports writes advertises both
-`interface_declarations` and `interface_declaration_writes`. `PUT` is
-idempotent and uses the same optimistic-concurrency preconditions as Resource
-lifecycle operations; `DELETE` is generation-fenced. The portable address is
-`(space, resource.kind, resource.name, name, version)`, so no host Interface id
-enters configuration or state.
+Every projection read is scoped to one effective Space. An explicit data
+source `space` selector takes precedence; otherwise the provider's configured
+default Space is used. A provider MUST fail before making a request when
+neither supplies a non-empty Space, and MUST send that effective value as the
+`space` query parameter on both list and exact reads. The host MUST scope
+visibility and ambiguity checks to that Space and MUST NOT substitute another
+Space.
 
 The provider endpoint is control-plane transport only. Resolved application
-endpoints are returned as public `values` and, when `resourceUriInput` is
-declared, as `resourceUri`. Runtime consumers discover and invoke that URI
-directly under host-governed authorization. Environment variables configure
-the provider origin, Space, and bearer credential; they are not a second
-source of truth for an application's runtime endpoint.
+endpoints may be returned as public values and, when `resourceUriInput` is
+declared, as a credential-free `resourceUri`. Runtime consumers discover and
+invoke that URI directly under host-governed authorization. Environment
+variables configure the provider origin, Space, and bearer credential; they
+are not a second source of truth for an application's runtime endpoint.
+
+Reading a projection does not import the Interface into Terraform state as a
+managed object. It grants no consumer access and gives Terraform no authority
+to mutate the corresponding host record.
+
+## No portable Interface write path
+
+This specification MUST NOT define a `resource "takoform_interface"`, a generic
+Interface create/update/delete operation, or any portable `PUT` or `DELETE`
+transport for Interface records. It also MUST NOT place a host record id,
+write-generation fence, binding, or lifecycle state in portable provider
+state.
+
+Form descriptors are declarative inputs that a host interprets while it owns
+Resource activation. They do not create a second lifecycle authority. The host
+(Takosumi in the Takos ecosystem) exclusively creates and updates Interface
+records, manages bindings and write fences, authorizes consumers, issues
+tokens, and retires records with the exposing Resource. A host-specific write
+API, if one exists, is outside the portable Takoform contract and MUST NOT be
+presented as a portable Takoform resource.
 
 ## Hard boundary
 
 A declaration contains no credentials, tokens, authorization, record identity,
 generation, provenance, target, placement, capacity, price, billing, quota,
-policy, or executable content. A portable declaration write creates no binding
-or consumer grant.
+policy, or executable content. No portable Interface declaration write exists;
+reading a projection creates no record, binding, or consumer grant.

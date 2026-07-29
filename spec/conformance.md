@@ -10,9 +10,17 @@ Takoform specification are to be interpreted as described in
 [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they
 appear in all capitals.
 
-Prose that does not use those keywords is explanatory. Where prose and a
-normative schema disagree, **the schema wins**; every schema this
-specification declares normative is listed in [`schemas/`](schemas/).
+Prose that does not use those keywords is explanatory. A normative JSON Schema
+is the structural minimum for its document, not the complete acceptance
+contract. Implementations MUST also enforce the BCP 14 semantic verifier rules
+in the owning Form Definition, Form Package, Interface, and trust sections; a
+schema-valid document can therefore still be non-conforming.
+
+Where a prose statement and a normative schema directly disagree about the
+same structural condition, **the schema wins**. Semantic rules that the schema
+does not express add fail-closed requirements rather than contradicting it.
+Every schema this specification declares normative is listed in
+[`schemas/`](schemas/).
 
 ## Conformance classes
 
@@ -38,6 +46,23 @@ reject a request whose exact Form identity it has not installed, and it MUST
 NOT return a Resource whose name, space, or Form identity differs from the one
 requested.
 
+When desired state contains a portable Connection, the host MUST resolve its
+`Kind/name` only within the source Resource's exact `metadata.space`.
+Cross-Space selection is not part of the portable Connection shape, and a host
+MUST NOT substitute a target from another Space. A target absent from the
+source Space fails apply as `resource_not_found` / HTTP 404 before mutation,
+even if the same identity exists in another Space or preview previously
+returned a plan.
+
+Host admission evidence MUST execute every `desired`-stage negative fixture
+from the exact package bytes. It does not claim `observed`-stage coverage:
+portable HTTP has no operation that injects a fabricated observation into an
+otherwise conforming host.
+
+A Form admitted as standard MUST declare at least one `desired`-stage negative
+fixture. Host and provider admission evidence therefore both have a non-empty
+negative-fixture set to execute.
+
 A host **MAY** additionally implement the optional read-only interface
 declaration surface ([`interface-declaration/`](interface-declaration/)). A host
 that does not is still fully conforming.
@@ -52,6 +77,12 @@ A **conforming provider** MUST send only declared desired state, MUST carry the
 exact five-field installed Form identity on every mutation, and MUST NOT place
 a credential, price, target, or backend selection in its state.
 
+Provider admission evidence MUST execute every `desired`-stage negative and
+every `observed`-stage negative, rejecting the latter before host-produced
+status enters provider state. Standard admission currently defines no runner
+semantics for `output`-stage negatives, so their presence fails admission
+closed instead of being counted as executed evidence.
+
 ### Form publisher (distribution)
 
 A **conforming publisher** MUST satisfy [`trust/`](trust/): immutable release
@@ -60,8 +91,12 @@ publisher MUST NOT overwrite or re-sign a released version in place.
 
 ## What conformance is not
 
-Passing the checks in this repository proves the local data and schema
-contract. It is not, and MUST NOT be presented as, evidence of publication,
-host admission, activation, revocation enforcement, or interoperability with
-any particular host. Those require signed evidence from the party that actually
-performed the operation.
+Passing the package/schema checks proves the local data contract. Passing the
+portable host runner self-test additionally proves that the checked-in
+black-box runner can detect the lifecycle failures in its pinned matrix over
+HTTP; it proves only the disposable reference host used by that test.
+
+Neither result is, or may be presented as, evidence of publication, external
+host admission, production activation, revocation enforcement, or
+interoperability with a particular host. Those require signed evidence from
+the party that actually performed the external operation.

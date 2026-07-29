@@ -26,6 +26,6 @@
   },
   "conformingHosts": {
     "path": "conforming-hosts.json",
-    "digest": "sha256:ee5984e3d9b13acbf8639b50bce8116fb21d381969d77dcebd2c4726aa66675a"
+    "digest": "sha256:ca8c6e059b7654cb2a4d703dde06b1af7af1c4c8a86dfad5d076fe2f1d711e60"
   }
 }

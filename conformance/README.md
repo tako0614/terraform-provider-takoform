@@ -20,7 +20,8 @@ tofu fmt -check -recursive examples
 every declared typed resource through a Terraform-compatible CLI against an in-process
 versioned Form host. The generic candidate covers create, read plus observe,
 mutable update with state-generation fencing, explicit refresh, native import,
-CLI import, drift mapping, delete, exact response-identity rejection, and
+CLI import, drift mapping from observe evidence, delete, exact
+response-identity rejection, and
 replacement plans for immutable names, SQL engine, and vector dimensions.
 The data-only candidate report binds the CLI product/version, exact canonical
 provider FQN, provider schema digest, embedded candidate-set digest,
@@ -40,24 +41,29 @@ go run ./cmd/provider-lifecycle-conformance provider-reports \
   --source-commit "$(git rev-parse HEAD)"
 ```
 
-`provider-reports` first authenticates the exact retained
-publication closure under `admission/v1/releases/`. It reads each canonical
-positive desired fixture and `reject-invalid-semantics` desired fixture from
-the retained release archive, projects those exact values into the typed
-provider configuration, and executes both through provider protocol v6. The
-positive fixture must apply and delete successfully. The negative fixture must
-return a provider diagnostic before the in-process Form host receives any
-mutation; that rejection is normalized to portable `invalid_argument`.
+`provider-reports` first verifies the exact current candidate release-source
+closure. It executes each canonical positive fixture and every declared
+negative fixture through provider protocol v6. Desired negatives include a
+one-at-a-time omission of `name`, artifact `source`, required `connections`,
+and every Form-specific required field; each must return a provider diagnostic
+before the in-process Form host receives a mutation. The observed negative
+lets the host return `OtherKind/<name>` and requires the provider to reject the
+response before it enters state. Both classes are reported as portable
+`invalid_argument`. The external host report binds and executes the exact
+desired-stage subset; the provider report covers that subset plus the
+observed-stage response rejection. Admission rejects output-stage negatives
+until a runner contract exists for them, rather than claiming unexecuted
+coverage.
 
 The command combines those per-package observations with the independently
 executed full lifecycle checks and writes one strict RFC 8785
-`takoform.standard-runner-report@v1` document with `role: provider-report` per
-kind. It refuses to write under `admission/`, signs nothing, publishes nothing,
-and does not change `external-required` admission status. Its output directory
-must be new or empty. Authentication and admission remain separate protected
-release decisions. Each report subject records the one canonical provider
-identity, `provider:registry.terraform.io/tako0614/takoform`, regardless of
-whether OpenTofu or Terraform executes it.
+`takoform.standard-provider-runner-report@v2` document per kind. It refuses to
+write under `admission/`, signs nothing, publishes nothing, and does not change
+`external-required` admission status. Its output directory must be new or
+empty. Authentication and admission remain separate protected release
+decisions. Each report subject records the one canonical provider identity,
+`provider:registry.terraform.io/tako0614/takoform`, regardless of whether
+OpenTofu or Terraform executes it.
 
 The matrix is intentionally classified `generic-lifecycle-candidate` with
 `publicationReady: false` and
@@ -118,7 +124,8 @@ prove linear admission of a shared-reference DAG, fail-closed schema proof
 depth/operation limits, the 16,384-evaluation fixture-validation budget through
 the real directory verifier, cardinality amplification through `items`,
 `contains`, `additionalProperties`, and `propertyNames`, embedded content
-transformation rejection, and the 32-fixture Form Definition limit.
+transformation rejection, and the independent limits of 32 positive plus 32
+negative fixtures per Form Definition.
 
 Run it with:
 
@@ -135,16 +142,19 @@ Negative cases cover mapping grammar, invalid pointer escapes, and documents
 that do not satisfy their declared schema. Materialization, authorization, and
 lifecycle remain host work.
 
+The Form Definition limits apply independently to each fixture class: at most
+32 positive fixtures and at most 32 negative fixtures, not 32 combined. Every
+generated Form stays within the negative limit without combining or dropping
+required-field omission cases.
+
 The current manifest result is 36 positive packages (one ExampleStore, one
 interface-declaration package, and one generated package per declared Form) and
-51 negative cases. The separate `data-indexed-v1` corpus adds six positive
-request operations, seven HTTP 200 response shapes, two HTTP 409 conflict
-shapes, and bounded negative request/response cases. Its manifest pins both
-canonical schemas and the 200/409 association.
-Passing this corpus proves the local data contract only. It is not signature,
+51 negative cases. Passing this corpus proves the local data contract only. It
+is not signature,
 publisher, remote-install, host-activation, retention/revocation, lifecycle
-idempotency, or cross-host/kind-standardization evidence. Those later trust and
-host conformance layers remain unimplemented.
+idempotency, or cross-host/kind-standardization evidence. Those require their
+own role-specific execution and, for admission, authenticated external
+evidence.
 
 ## Portable host evidence
 
@@ -152,3 +162,126 @@ host conformance layers remain unimplemented.
 FormRef/package identity, concurrency/idempotency rules, stable error taxonomy,
 and required cross-repo black-box runner checks. The provider client consumes
 the same contract in adversarial HTTP tests.
+
+The executable runner is
+`go run ./cmd/portable-host-conformance`. Its `self-test` command starts a
+disposable deterministic host and drives the actual HTTP discovery, Form
+availability, preview, apply, read, observe, refresh, import, delete, and
+read-only Interface endpoints. It rejects a host that accepts a preview plan
+for different spec bytes, advances a generation on an exact idempotent replay,
+ignores a stale fence, changes an exact response/ETag on replay, or exposes a
+required Interface before Ready or after delete.
+
+```console
+go run ./cmd/portable-host-conformance self-test
+```
+
+The matrix also exercises all stable error envelopes over HTTP. Errors such as
+permission or backend failure have no provider-neutral way to induce, so a
+disposable external conformance endpoint uses the runner-only
+`Takoform-Conformance-Probe-Error` header. The same disposable adapter accepts
+the closed authorization probes
+`Takoform-Conformance-Probe-Authorization: credential-revoked`,
+`permission-revoked`, and `policy-revoked`, and must process each current
+denial in the normal authentication/authorization path before any replay
+lookup. After every denial, the runner repeats the unprobed request and
+requires the original cached success byte-for-byte, proving that a denial did
+not overwrite or poison the success record.
+
+Plan binding has two explicitly separated evidence classes. Valid substitutions
+of desired spec, Space, and an existing Resource generation are pure black-box
+HTTP checks. The remaining one-field substitutions would ordinarily be
+rejected by route, envelope, or exact-Form validation before reaching plan
+binding, so the disposable adapter accepts the closed-enum
+`Takoform-Conformance-Probe-Plan-Binding` header. It passes that request
+directly to the same canonical plan-binding function used by normal apply and
+returns
+`Takoform-Conformance-Probe-Plan-Binding-Result: rejected` with
+`invalid_argument` only when that function rejects it. If the function accepts
+the substitution, the adapter returns HTTP 204 with
+`accepted-no-mutation` and must not execute a fence, mutate state, or record a
+replay. Unknown values fail as `invalid_argument`, and authentication and
+authorization run before this instrumentation. The report records pure
+black-box and instrumented-adapter inputs separately.
+
+The disposable adapter also accepts
+`Takoform-Conformance-Probe-Raw-JSON: duplicate-error-code` and returns the
+contract's exact malformed error envelope. The runner must reject it during
+complete raw-document I-JSON validation, before decoding stable error
+semantics. Unknown raw-probe values fail as `invalid_argument`.
+
+All four probe headers are disposable-adapter transport, are not part of the
+host API, and must not be implemented or enabled on production.
+The first two token variables must name distinct authenticated principals in
+the same tenant. The third must represent the first principal in another
+tenant. All three credentials must be distinct and authorized for the complete
+test lifecycle in both exact runner Spaces. For the cross-tenant isolation
+probe only, both tenant contexts must address the same disposable Resource
+namespace; an independently executed create then deterministically collides
+instead of returning the first tenant's cached success. Run the same matrix
+against such an endpoint with:
+
+```console
+go run ./cmd/portable-host-conformance run \
+  --endpoint https://disposable-host.example \
+  --token-env TAKOFORM_CONFORMANCE_TOKEN \
+  --alternate-token-env TAKOFORM_CONFORMANCE_ALTERNATE_TOKEN \
+  --alternate-tenant-token-env TAKOFORM_CONFORMANCE_ALTERNATE_TENANT_TOKEN
+```
+
+Both reports are explicitly `publicationReady: false`. The local reference
+report proves the executable runner, not an external host. Admission still
+requires a signed report from the host workflow that actually executed its
+backend lifecycle. Desired-stage negative fixtures are host request evidence;
+observed-stage rejection is provider/host-response evidence because the
+portable API intentionally has no operation for injecting observed state.
+
+The required sequence includes create collision, mutable update, stale
+update/delete/observe/refresh rejection, exact replay, retry-code semantics,
+the fixed stable-code/HTTP mapping, the exact
+`1..9223372036854775807` decimal generation range, and Interface readiness.
+It also rejects plan substitution field by field for desired spec, Resource
+identity/name, Space, generation, every exact FormRef field, and package
+digest. Name instrumentation uses the matching alternate Resource URL, while
+generation uses a real update after the Resource has advanced, so neither can
+pass because of a create fence or URL/body mismatch. Replay
+evidence proves that another principal cannot address the first principal's
+cached success, that the same principal in another tenant cannot address it,
+and that current authentication, permission, and policy denial each precede
+replay lookup.
+The same Resource name and exact Form are then created and read in
+`runnerInput.alternateSpace` with the primary Space's Idempotency-Key; neither
+Resource state nor replay records may cross the Space boundary.
+
+Before lifecycle mutation, raw adversarial requests additionally prove that
+unknown top-level envelope fields, unknown metadata fields, authority-shaped
+desired fields, duplicate `metadata.space`, duplicate
+`metadata.resourceVersion`, duplicate `spec`, and invalid UTF-8 fail closed.
+The duplicate cases are rejected by shared complete-document I-JSON validation
+before typed decoding. The report also records the three replay isolation
+dimensions, the three current denial codes, and preservation of the original
+successful replay after every denial.
+
+`interfaceDeclarations.checks` is an exact executed subset of
+`requiredRunnerChecks`, and the report repeats that exact list as Interface
+evidence. Over real HTTP the runner rejects unknown, duplicate, and partially
+paired Interface query parameters; requires an explicit Space without
+substituting another one; exercises omitted-version success only for a unique
+visible declaration; creates a second Ready Resource in the same Space to
+require `interface_instance_ambiguous`; and re-reads an unchanged projection
+after POST, PUT, PATCH, and DELETE are rejected on both portable Interface
+routes. The visible declaration must equal the exact Form descriptor, satisfy
+its `documentSchema`, contain no portable authority fields, appear only with a
+Ready Resource, and disappear after deletion. When present, `resourceUri` must
+pass the shared credential-free HTTPS grammar; the adversarial runner rejects
+userinfo, query, fragment, plaintext HTTP, and Unicode-hostname substitutions.
+
+The selected ObjectBucket fixture has one required descriptor at one version,
+so this runner does not claim that it induced multi-version identity ambiguity,
+optional-descriptor omission, or activation rejection on a feature-disabled
+host. Their wire rules remain normative, and the stable ambiguity error
+envelopes are exercised, but causal host evidence for those cases needs a
+separate exact package fixture.
+
+It treats drift only as validated observed evidence and defines no drift
+operation or portable audit endpoint.

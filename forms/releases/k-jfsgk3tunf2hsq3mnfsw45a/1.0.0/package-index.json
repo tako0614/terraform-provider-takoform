@@ -6,39 +6,51 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "IdentityClient",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:fddb15faf0bf637236173ab03a7eba1facd49da7be31f36847fd2fe211dce31b"
+    "schemaDigest": "sha256:cb7b9d2e3315ad1822f3b9e7546ed9b884aa1cbfd471ed2c52d5e7ac54b9e22e"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4901,
-      "digest": "sha256:79591fdb8ff4fc86665212e374d9cdec06d774a75ae58549c49787b1c535621b"
+      "size": 5468,
+      "digest": "sha256:143dea766ad7b03f575ccf1f82442fc08231bdf1cb2cefd82598e3a593087640"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 185,
-      "digest": "sha256:a7d00222ed8c2db83a7e52437cb4654e274db173a4ab94b9f1e18edb93f5ccf5"
+      "size": 137,
+      "digest": "sha256:e2accd93defbdb90fb6aaf33f9610ef218f6b69370e70e05339c75b19120d67a"
     },
     {
       "path": "fixtures/negative-auth_method.json",
       "mediaType": "application/json",
-      "size": 202,
-      "digest": "sha256:9b2be92e725add57468d0b5f16fcd274c1af4d4d1d1e49e10d18a41e4e455203"
+      "size": 154,
+      "digest": "sha256:bc2043ecc06e31fdc6dc5282956622d22e8e7aed052348017dbd8671dc79b14d"
     },
     {
-      "path": "fixtures/negative-grant_types.json",
+      "path": "fixtures/negative-missing-name.json",
       "mediaType": "application/json",
-      "size": 188,
-      "digest": "sha256:4ee017e1961cdaeb8af60496133764d352e6b67a57152e750f9eda57d201e4f2"
+      "size": 108,
+      "digest": "sha256:6adb96b25403ed59ddb32ec411603a1e99a043fe3971d8892acff912c02e3e82"
+    },
+    {
+      "path": "fixtures/negative-missing-redirect_uris.json",
+      "mediaType": "application/json",
+      "size": 56,
+      "digest": "sha256:0b3984485426eb3a606da3230d02ba14a902d170981448bddc7ff4f8c76d290f"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 148,
+      "digest": "sha256:34b232ac880dbcc855c5087d8332ef306e2ad6624e89a4399b32f156fc3fd35f"
     },
     {
       "path": "fixtures/negative-redirect_uris.json",
       "mediaType": "application/json",
-      "size": 184,
-      "digest": "sha256:9264000d53b158531d2c2e7565c9dd533841456be30886404c74f249eba89270"
+      "size": 136,
+      "digest": "sha256:d3f4b863a523dee4ab4eb75deebadd761209246dac4759e330cefbec3e6a3dfe"
     },
     {
       "path": "fixtures/observed.json",

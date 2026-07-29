@@ -1,7 +1,8 @@
 terraform {
   required_providers {
     takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
     }
   }
 }
@@ -14,8 +15,7 @@ provider "takoform" {
 resource "takoform_feature_flag" "example" {
   name               = "feature-flag"
   flag_key           = "new_checkout"
-  enabled            = true
-  rollout_percentage = 25
+  enabled_percentage = 25
 }
 
 output "feature_flag_outputs" {

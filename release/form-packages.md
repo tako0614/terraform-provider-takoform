@@ -11,17 +11,61 @@ them under. Each Form is released on its own tag, from its own reviewed release
 source, and is published or not published independently of every other Form.
 
 [`forms/release-plan.json`](../forms/release-plan.json) is the derived list of
-those releases, regenerated with the packages and verified by
-`standard-form-conformance verify`. Print the dispatch list with:
+all 34 releases, regenerated with the packages and verified by
+`standard-form-conformance verify`. Print the owner-entrypoint invocations with:
 
 ```console
-go run ./cmd/standard-form-conformance release-plan
+bun run deploy -- takoform-form-package-release plan
 ```
 
-For each Form: create its exact `forms/<release-id>/v<semver>` tag on the
-reviewed commit, then dispatch the protected `Release Form Package` workflow
-with that tag. The workflow refuses a tag that already owns a release, so a
-published version is never overwritten.
+Run each printed invocation separately. The entrypoint accepts only an exact
+tag from the canonical 34-entry plan, runs the owner gate, proves the local
+checkout is the current canonical protected `main`, refuses an existing tag or
+release, and dispatches the protected candidate workflow:
+
+```console
+bun run deploy -- takoform-form-package-release prepare \
+  --tag forms/<release-id>/v<semver> \
+  --expected-commit <40-character-reviewed-commit>
+```
+
+Each prepare call stops after recording one exact workflow run and waits for
+its required reviewer. It does not interpret a dispatch as publication. After
+that run completes, consume only its explicit run and attempt:
+
+```console
+bun run deploy -- takoform-form-package-release publish \
+  --tag forms/<release-id>/v<semver> \
+  --expected-commit <same-40-character-reviewed-commit> \
+  --run-id <candidate-workflow-run-id> \
+  --run-attempt <candidate-workflow-run-attempt>
+```
+
+The publish phase verifies the candidate before creating its tag or Release,
+then performs exact immutable readback. Re-run the public semantic verifier for
+that tag with:
+
+```console
+bun run deploy -- takoform-form-package-release verify \
+  --tag forms/<release-id>/v<semver> \
+  --expected-commit <40-character-reviewed-commit>
+```
+
+Repeat prepare/publish/verify for all 34 plan entries. Once every independent
+release exists, retain one deterministic, create-only publication record
+outside the repository:
+
+```console
+bun run deploy -- takoform-form-package-release verify-all \
+  --output-root /absolute/new/directory/outside/takoform
+```
+
+The output contains the exact seven downloaded assets for every plan entry and
+`form-package-publication-set.json`, in release-plan order, binding every public
+Release identity and digest. It is source-retainable evidence; generating it
+does not modify this repository. Admission remains a separate decision:
+`ga-core-v2` selects exactly ten of those independently published packages,
+while publication of the other 24 does not admit them.
 
 Publishing proves published bytes and their publisher identity. It admits
 nothing: a Form becomes a portable standard only with a conforming host's
@@ -68,24 +112,29 @@ The release contains:
   canonicalization mode; its builder ID is versioned by that tooling commit;
 - a Sigstore v0.3 bundle containing the ephemeral certificate, signature, and
   transparency-log inclusion evidence;
-- a release manifest and `SHA256SUMS` for the exact final asset inventory; and
-- GitHub build-provenance and SBOM attestations for the final inventory.
+- a release manifest and `SHA256SUMS` for the exact final asset inventory.
 
 `.github/workflows/form-package-release.yml` is dispatched only from current
 protected `main` with exact `tag` and `expected_commit` inputs. It verifies the
-tag, equality to the approved commit, and that commit's ancestry from main,
-then checks the tagged data into a separate untrusted-source directory. Only
-the protected-main release tooling executes. The workflow uses the protected
-`form-package-release` Environment, commit-pinned Actions, and Cosign v3. It
-passes its exact `GITHUB_SHA` as the tooling commit, distinct from the tagged
-package source commit, and both commits are retained in the release manifest,
-publisher policy evidence, and SLSA resolved dependencies. It
-refuses an existing release, signs and immediately verifies the canonical
-index against the exact protected-main workflow identity, creates a draft,
-compares remote and local inventories by the exact release ID created by that
-run, attests the assets, then publishes that same draft.
-When repository release immutability is enabled, publication locks the tag and
-assets.
+planned identity, approved commit, and that commit's ancestry from main, then
+checks the exact data source into a separate untrusted-source directory. The
+workflow creates only an ephemeral local annotated tag object. Only the
+protected-main release tooling executes. The protected `form-package-release`
+Environment, commit-pinned Actions, and Cosign v3 sign and immediately verify
+the canonical index against the exact protected-main workflow identity. The
+workflow emits a same-run checksum-closed candidate containing the tag object,
+seven public assets, source/tooling commits, run/attempt, and every asset
+digest. It has no repository-write, tag-push, Release, public-attestation, or
+publish authority.
+
+The local owner deploy entrypoint downloads that exact run/attempt, verifies its
+outer checksum closure, reconstructs and checks the tag object, verifies the
+Sigstore bundle and seven-asset semantic closure, repeats remote absence
+proofs, then uses only the operator machine's Git/GitHub authority to create the
+tag, draft, upload, and immutable release. It downloads the public assets again
+and requires the same release ID, tag, names, sizes, and digests. When
+repository release immutability is enabled, that final local publication locks
+the tag and assets.
 
 ## Verification
 
@@ -129,10 +178,32 @@ bytes for observe/delete. Deprecation is not a revocation.
 `.github/workflows/form-package-revocation.yml` dispatches from protected main,
 binds the exact statement/checkpoint source to
 `forms/revocations/v<statementVersion>`, verifies the complete cumulative
-source chain, and keyless-signs the checkpoint. It adds SLSA and GitHub
-provenance, verifies an exact draft inventory, and publishes it through the
-same protected Environment. CI permits adding a new statement/checkpoint pair
-but rejects edits, renames, and deletion of existing source paths.
+source chain, and keyless-signs the checkpoint through the same protected
+Environment. It emits only a checksum-closed same-run candidate; it cannot
+create a tag, Release, public attestation, or published asset. The Form Package
+owner deploy surface verifies that candidate and performs the create-only tag,
+exact local Release publication, and authoritative readback with operator
+credentials. CI permits preparing a new statement/checkpoint pair but rejects
+edits, renames, and deletion of existing source paths.
+
+Prepare, publish, and independently read back one checkpoint with explicit
+phase boundaries:
+
+```console
+bun run deploy -- takoform-form-package-release prepare-revocation \
+  --tag forms/revocations/v<statement-version> \
+  --expected-commit <40-character-reviewed-commit>
+
+bun run deploy -- takoform-form-package-release publish-revocation \
+  --tag forms/revocations/v<statement-version> \
+  --expected-commit <same-40-character-reviewed-commit> \
+  --run-id <candidate-workflow-run-id> \
+  --run-attempt <candidate-workflow-run-attempt>
+
+bun run deploy -- takoform-form-package-release verify-revocation \
+  --tag forms/revocations/v<statement-version> \
+  --expected-commit <same-40-character-reviewed-commit>
+```
 
 After verifying the Sigstore bundle against the exact `@refs/heads/main`
 workflow identity, a host starts only at sequence 1 and durably pins the
@@ -147,15 +218,19 @@ The source tree and repository settings are both part of the trust boundary:
 
 - active tag rulesets target `refs/tags/forms/*/v*`, restrict creation, and
   prevent deletion and non-fast-forward updates;
-- `form-package-release` has required reviewers and only permits deployment
-  from the `main` branch;
+- `form-package-release` has required reviewers and only permits signing a
+  candidate from the `main` branch;
 - release immutability is enabled before the first publication; and
-- a real tag/release is created only after maintainer authorization.
+- a real tag/release is created only by the local owner deploy entrypoint after
+  maintainer authorization.
 
-The retired `1.0.0` Form Packages have live immutable releases. Their exact
-seven-asset inventories and production package-publisher trust inputs are
-retained under `admission/v1` and verified offline by
-`standard-form-conformance published-package-check`. No admission activation or
-revocation release exists. Host fetch/install, the remaining role-specific
-publisher authorities, direct Registry readback, portable lifecycle evidence,
-activation, and live revocation proof remain separate consumer/operator work.
+The retired `1.0.0` and `1.0.1` Form Packages have immutable tags and retained
+release evidence. The current `forms/retired-package-set.json` and
+`admission/v1/published-package-set.json` select the exact `1.0.1` generation;
+`standard-form-conformance published-package-check` authenticates that selected
+set and its production package-publisher trust inputs offline. The retained
+`1.0.0` history is not rewritten and is not the selected input to that current
+check. No admission activation or revocation release exists. Host fetch/install,
+the remaining role-specific publisher authorities, direct Registry readback,
+portable lifecycle evidence, activation, and live revocation proof remain
+separate consumer/operator work.

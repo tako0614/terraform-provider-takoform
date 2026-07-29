@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -153,12 +154,23 @@ func TestProviderTagWorkflowExportsReadOnlySignedObject(t *testing.T) {
 	}
 	text := string(workflow)
 	for _, required := range []string{
+		"run-name: ${{ inputs.request_id }}",
+		"request_id:",
+		`[[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`,
 		"contents: read",
 		"persist-credentials: false",
 		"takoform.provider-signed-tag-artifact@v1",
+		"request-id: %s",
+		`--arg requestId "$REQUEST_ID"`,
+		`--arg runId "$GITHUB_RUN_ID"`,
+		`--arg runAttempt "$GITHUB_RUN_ATTEMPT"`,
+		"requestId:$requestId",
+		"runId:$runId",
+		"runAttempt:$runAttempt",
 		"preflight-sha256:",
 		"git cat-file tag",
-		"provider-signed-tag-${{ github.run_id }}-${{ github.run_attempt }}",
+		"provider-tag-preflight-${{ inputs.request_id }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}",
+		"provider-signed-tag-${{ inputs.request_id }}-${{ github.run_id }}-${{ github.run_attempt }}",
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("provider tag workflow lacks %q", required)
@@ -168,6 +180,35 @@ func TestProviderTagWorkflowExportsReadOnlySignedObject(t *testing.T) {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("provider tag signing workflow retains remote write authority %q", forbidden)
 		}
+	}
+}
+
+func TestProviderTagPreflightRejectsRerunAndRequestSubstitution(t *testing.T) {
+	requestID := "123e4567-e89b-42d3-a456-426614174000"
+	commit := strings.Repeat("a", 40)
+	preflight := providerTagPreflight{
+		Format:       "takoform.provider-tag-preflight@v1",
+		RequestID:    requestID,
+		RunID:        "123",
+		RunAttempt:   "2",
+		SourceCommit: commit,
+	}
+	if err := verifyProviderTagPreflightBinding(preflight, requestID, "123", "2", commit); err != nil {
+		t.Fatalf("exact preflight run binding: %v", err)
+	}
+	for name, mutate := range map[string]func(*providerTagPreflight){
+		"request": func(value *providerTagPreflight) { value.RequestID = "223e4567-e89b-42d3-a456-426614174000" },
+		"run":     func(value *providerTagPreflight) { value.RunID = "124" },
+		"attempt": func(value *providerTagPreflight) { value.RunAttempt = "1" },
+		"commit":  func(value *providerTagPreflight) { value.SourceCommit = strings.Repeat("b", 40) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			substituted := preflight
+			mutate(&substituted)
+			if err := verifyProviderTagPreflightBinding(substituted, requestID, "123", "2", commit); err == nil {
+				t.Fatal("substituted preflight run binding was accepted")
+			}
+		})
 	}
 }
 
@@ -197,15 +238,41 @@ func TestVerifyClosedChecksumsRejectsExtraAndTamperedFiles(t *testing.T) {
 func TestVerifyTagObjectBindingsRequiresExactRunAndPreflight(t *testing.T) {
 	commit := strings.Repeat("a", 40)
 	preflight := "sha256:" + strings.Repeat("b", 64)
+	requestID := "123e4567-e89b-42d3-a456-426614174000"
 	runURL := "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123/attempts/1"
 	raw := []byte("object " + commit + "\ntype commit\ntag v0.1.0-rc.2\ntagger Takoform Provider Release <release@takoform.invalid> 1784408928 +0000\n\n" +
-		"Takoform provider v0.1.0-rc.2\n\nsource-commit: " + commit + "\npreflight-sha256: " + preflight + "\nworkflow-run: " + runURL + "\n" +
+		"Takoform provider v0.1.0-rc.2\n\nsource-commit: " + commit + "\nrequest-id: " + requestID + "\npreflight-sha256: " + preflight + "\nworkflow-run: " + runURL + "\n" +
 		"-----BEGIN PGP SIGNATURE-----\nfixture\n")
-	if err := verifyTagObjectBindings(raw, "v0.1.0-rc.2", commit, preflight, runURL); err != nil {
+	if err := verifyTagObjectBindings(raw, "v0.1.0-rc.2", commit, requestID, preflight, runURL); err != nil {
 		t.Fatalf("exact binding: %v", err)
 	}
-	if err := verifyTagObjectBindings(raw, "v0.1.0-rc.2", commit, "sha256:"+strings.Repeat("c", 64), runURL); err == nil {
+	if err := verifyTagObjectBindings(raw, "v0.1.0-rc.2", commit, requestID, "sha256:"+strings.Repeat("c", 64), runURL); err == nil {
 		t.Fatal("mismatched preflight digest was accepted")
+	}
+	if err := verifyTagObjectBindings(raw, "v0.1.0-rc.2", commit, "223e4567-e89b-42d3-a456-426614174000", preflight, runURL); err == nil {
+		t.Fatal("mismatched request id was accepted")
+	}
+}
+
+func TestCanonicalRequestIDRequiresLowercaseUUIDv4(t *testing.T) {
+	for _, valid := range []string{
+		"123e4567-e89b-42d3-a456-426614174000",
+		"ffffffff-ffff-4fff-bfff-ffffffffffff",
+	} {
+		if !requestIDPattern.MatchString(valid) {
+			t.Errorf("canonical UUIDv4 rejected: %s", valid)
+		}
+	}
+	for _, invalid := range []string{
+		"",
+		"123E4567-E89B-42D3-A456-426614174000",
+		"123e4567-e89b-72d3-a456-426614174000",
+		"123e4567-e89b-42d3-c456-426614174000",
+		"123e4567e89b42d3a456426614174000",
+	} {
+		if requestIDPattern.MatchString(invalid) {
+			t.Errorf("non-canonical UUIDv4 accepted: %s", invalid)
+		}
 	}
 }
 
@@ -417,16 +484,58 @@ func TestVerifySPDXFilesRequiresPathsAndRejectsInvalidOrTrailingJSON(t *testing.
 	}
 }
 
-func TestProviderReleaseWorkflowValidatesFinalSBOMInventoryBeforeClosure(t *testing.T) {
+func TestProviderReleaseWorkflowExercisesTheExactReproducibleFinalArchiveBeforeClosure(t *testing.T) {
 	workflow, err := os.ReadFile(filepath.Join(testRepoRoot(t), ".github", "workflows", "release.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(workflow)
+	firstBuild := strings.Index(text, "Build the first final unsigned release inventory")
+	secondBuild := strings.Index(text, "Build the second and final unsigned release inventory")
+	finalComparison := strings.Index(text, "Verify the exact final archives are reproducible")
+	finalExercise := strings.Index(text, "Exercise the exact final linux amd64 provider bytes")
 	validation := strings.Index(text, "Validate final Syft SBOMs against the pinned SPDX schema")
 	closure := strings.Index(text, "Close and export the unsigned inventory")
-	if validation < 0 || closure < 0 || validation >= closure {
-		t.Fatal("provider release does not validate final SBOMs before closing the unsigned inventory")
+	if firstBuild < 0 || secondBuild <= firstBuild || finalComparison <= secondBuild ||
+		finalExercise <= finalComparison || validation <= finalExercise || closure <= validation {
+		t.Fatal("provider release must exercise the exact second reproducible final archive and validate its SBOMs before inventory closure")
+	}
+	const finalBuildCommand = "args: release --config ../.goreleaser.yml --clean --skip=publish,sign"
+	if strings.Count(text[firstBuild:finalComparison], finalBuildCommand) != 2 {
+		t.Fatal("provider release must run the same final non-publishing GoReleaser command exactly twice")
+	}
+	if strings.Contains(text, "--snapshot") {
+		t.Fatal("provider release must not compare snapshot-version bytes with final-version bytes")
+	}
+	for _, required := range []string{
+		`first="$RUNNER_TEMP/goreleaser-final-1"`,
+		`final="$GITHUB_WORKSPACE/release-source/dist"`,
+		`diff -u "$RUNNER_TEMP/first-final-archives.txt" "$RUNNER_TEMP/second-final-archives.txt"`,
+		`cmp -s "$first/$name" "$final/$name"`,
+		`test "$(sha256sum "$first/$name" | cut -d' ' -f1)" = "$(sha256sum "$final/$name" | cut -d' ' -f1)"`,
+	} {
+		if !strings.Contains(text[finalComparison:finalExercise], required) {
+			t.Fatalf("final archive reproducibility comparison lacks %q", required)
+		}
+	}
+	for _, required := range []string{
+		`archive="$GITHUB_WORKSPACE/release-source/dist/terraform-provider-takoform_${version}_linux_amd64.zip"`,
+		`printf '%s\n' LICENSE "$entry"`,
+		`unzip -Z1 "$archive"`,
+		`unzip -p "$archive" "$entry" > "$binary"`,
+		`test "$("$binary" -version)" = "$version"`,
+		`go -C release-source run ./cmd/provider-lifecycle-conformance render-matrix`,
+		`--provider-binary "$binary"`,
+		`.providerBinary.sha256 == $sha256`,
+		`test "$(sha256sum "$archive" | cut -d' ' -f1)" = "$archive_sha256"`,
+		`test "sha256:$(sha256sum "$binary" | cut -d' ' -f1)" = "$binary_sha256"`,
+	} {
+		if !strings.Contains(text[finalExercise:validation], required) {
+			t.Fatalf("exact final provider lifecycle step lacks %q", required)
+		}
+	}
+	if strings.Contains(text[:firstBuild], "provider-lifecycle-conformance matrix --") {
+		t.Fatal("provider lifecycle must not be satisfied by rebuilding a pre-GoReleaser provider")
 	}
 	for _, required := range []string{
 		"-name '*.zip.spdx.json'",
@@ -436,6 +545,260 @@ func TestProviderReleaseWorkflowValidatesFinalSBOMInventoryBeforeClosure(t *test
 		if !strings.Contains(text[validation:closure], required) {
 			t.Fatalf("final SBOM validation step lacks %q", required)
 		}
+	}
+}
+
+func TestProviderReleaseWorkflowPreparesChecksumClosedCandidateWithoutProductionMutation(t *testing.T) {
+	workflow, err := os.ReadFile(filepath.Join(testRepoRoot(t), ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	for _, required := range []string{
+		"workflow_dispatch:",
+		"run-name: ${{ inputs.request_id }}",
+		"request_id:",
+		`[[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`,
+		"environment: provider-release",
+		`github_release_status="$(curl`,
+		`if [[ "$github_release_status" != "404" ]]`,
+		`if [[ "$registry_status" != "404" ]]`,
+		`test "$(wc -l < "$RUNNER_TEMP/candidate-assets.txt")" -eq 15`,
+		`--arg format "takoform.provider-release-candidate.v1"`,
+		`--arg requestId "$REQUEST_ID"`,
+		`--arg tagObjectOid "${{ steps.inventory.outputs.tag_object_oid }}"`,
+		`--arg tagObjectSha256 "${{ steps.inventory.outputs.tag_object_sha256 }}"`,
+		`--arg sha256 "sha256:$digest"`,
+		"requestId: $requestId",
+		"tagObjectOid: $tagObjectOid",
+		"tagObjectSha256: $tagObjectSha256",
+		`git cat-file tag "$tag_object_oid" > "$tag_object"`,
+		`test "$(git hash-object -t tag "$tag_object")" = "$tag_object_oid"`,
+		"sourceCommit: $sourceCommit",
+		"toolingCommit: $toolingCommit",
+		`printf '%s\n' SHA256SUMS assets metadata.json`,
+		`test "$(wc -l < SHA256SUMS)" -eq 16`,
+		"sha256sum --check --strict SHA256SUMS",
+		"name: provider-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}",
+		"retention-days: 1",
+		`"$GITHUB_REF" != "refs/tags/$RELEASE_TAG"`,
+		`expected_workflow_ref="$GITHUB_REPOSITORY/.github/workflows/release.yml@refs/tags/$RELEASE_TAG"`,
+		`test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"`,
+		`test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/release.yml@refs/tags/$RELEASE_TAG"`,
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("provider preparation workflow lacks %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"contents: write",
+		"id-token: write",
+		"attestations: write",
+		"actions/attest@",
+		"gh release create",
+		"gh release upload",
+		"--method POST",
+		"--method PATCH",
+		"--method DELETE",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("provider preparation workflow retains production mutation %q", forbidden)
+		}
+	}
+	if strings.Count(text, `test "$tag_commit" = "$GITHUB_SHA"`) != 2 {
+		t.Fatal("both provider jobs must bind the peeled signed-tag source and tooling commit to the exact workflow commit")
+	}
+	if strings.Contains(text, "refs/heads/main") || strings.Contains(text, "protected-main-release-tooling") {
+		t.Fatal("provider release candidate workflow must not retain mutable-main execution or provenance identity")
+	}
+}
+
+func TestProviderReleaseWorkflowProducesCanonicalSignedProvenance(t *testing.T) {
+	workflow, err := os.ReadFile(filepath.Join(testRepoRoot(t), ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	checksumSignature := strings.Index(text, `--detach-sign "$checksum"`)
+	provenance := strings.Index(text, `provenance="${base}_provenance.intoto.json"`)
+	provenanceSignature := strings.Index(text, `--detach-sign "$provenance"`)
+	if checksumSignature < 0 || provenance <= checksumSignature || provenanceSignature <= provenance {
+		t.Fatal("provider provenance must be created and signed only after the checksum signature exists")
+	}
+	for _, required := range []string{
+		`test "$(wc -l < "$RUNNER_TEMP/expected-payload-inventory.txt")" -eq 13`,
+		`annotations: {size}`,
+		`"_type": "https://in-toto.io/Statement/v1"`,
+		`predicateType: "https://slsa.dev/provenance/v1"`,
+		`buildType: "https://takoform.com/buildtypes/provider-release/v1"`,
+		`canonicalization: "RFC8785"`,
+		`externalParameters: {tag, requestId}`,
+		`sourceCommit,`,
+		`toolingCommit,`,
+		`workflow: {path: workflowPath, ref: workflowRef}`,
+		`run: {id: runId, attempt: runAttempt}`,
+		`tagObject: {oid: tagObjectOid, sha256: tagObjectSha256}`,
+		`metadata: {invocationId}`,
+		`node <<'NODE'`,
+		`Number.isSafeInteger(size)`,
+		`JSON.stringify(subjectNames) !== JSON.stringify(expectedNames)`,
+		`JSON.stringify(recursivelySort(statement))`,
+		`gpg --batch --verify "$provenance_signature" "$provenance"`,
+		`test "$(wc -l < "$RUNNER_TEMP/expected-signed-inventory.txt")" -eq 15`,
+	} {
+		if !strings.Contains(text[checksumSignature:], required) {
+			t.Fatalf("provider provenance closure lacks %q", required)
+		}
+	}
+}
+
+func TestProviderReleaseWorkflowDestroysSigningAuthorityBeforeRepositoryCode(t *testing.T) {
+	workflow, err := os.ReadFile(filepath.Join(testRepoRoot(t), ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	importKey := strings.Index(text, "Import provider signing key only after static verification")
+	checksumSignature := strings.Index(text, `--detach-sign "$checksum"`)
+	provenanceSignature := strings.Index(text, `--detach-sign "$provenance"`)
+	deleteKey := strings.Index(text, `--delete-secret-keys "$EXPECTED_GPG_FINGERPRINT"`)
+	killAgent := strings.Index(text, "gpgconf --kill gpg-agent")
+	verifyJob := strings.Index(text, "\n  verify:\n")
+	repositoryVerifier := strings.Index(text, "go -C cmd/provider-release run . verify-release-provenance")
+	if importKey < 0 || checksumSignature <= importKey || provenanceSignature <= checksumSignature ||
+		deleteKey <= provenanceSignature || killAgent <= deleteKey || verifyJob <= killAgent ||
+		repositoryVerifier <= verifyJob {
+		t.Fatal("provider workflow must sign, destroy secret-key authority, and only then run repository verification in a separate job")
+	}
+	signingJob := text[importKey:verifyJob]
+	for _, forbidden := range []string{
+		"go run ",
+		"go -C ",
+		"bun ",
+		"release-source/",
+		"provider-lifecycle-conformance",
+		"./cmd/",
+		"unzip ",
+	} {
+		if strings.Contains(signingJob, forbidden) {
+			t.Fatalf("protected provider signing job executes repository-controlled candidate code %q while signing authority may still exist", forbidden)
+		}
+	}
+	verifyBlock := text[verifyJob:]
+	if strings.Contains(verifyBlock, "environment:") || !strings.Contains(verifyBlock, "needs: prepare") ||
+		!strings.Contains(verifyBlock, `--assets "$candidate/assets"`) {
+		t.Fatal("provider provenance verifier must be a no-Environment downstream consumer of the exact candidate")
+	}
+}
+
+func TestVerifyCanonicalJSONFileRejectsNonRFC8785AndTrailingBytes(t *testing.T) {
+	repo := testRepoRoot(t)
+	for _, test := range []struct {
+		name string
+		raw  string
+		ok   bool
+	}{
+		{name: "canonical", raw: `{"a":1,"b":2}`, ok: true},
+		{name: "unsorted", raw: `{"b":2,"a":1}`},
+		{name: "trailing newline", raw: "{\"a\":1,\"b\":2}\n"},
+		{name: "duplicate key", raw: `{"a":1,"a":1}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "provenance.json")
+			raw := []byte(test.raw)
+			if err := os.WriteFile(path, raw, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			err := verifyCanonicalJSONFile(repo, path, raw)
+			if test.ok && err != nil {
+				t.Fatalf("canonical document rejected: %v", err)
+			}
+			if !test.ok && err == nil {
+				t.Fatal("noncanonical document accepted")
+			}
+		})
+	}
+}
+
+func TestReleaseProvenanceStrictShapeAndBindingsRejectAliasesAndMismatch(t *testing.T) {
+	want := releaseProvenanceStatement{
+		Type:          "https://in-toto.io/Statement/v1",
+		PredicateType: "https://slsa.dev/provenance/v1",
+		Predicate: releaseProvenancePredicate{
+			BuildDefinition: releaseProvenanceBuildDefinition{
+				ExternalParameters: releaseProvenanceExternalParameters{
+					Tag: "v1.0.0", RequestID: "123e4567-e89b-42d3-a456-426614174000",
+				},
+			},
+		},
+	}
+	if err := verifyReleaseProvenanceSemantics(want, want); err != nil {
+		t.Fatalf("exact semantic binding rejected: %v", err)
+	}
+	wrong := want
+	wrong.Predicate.BuildDefinition.ExternalParameters.RequestID = "223e4567-e89b-42d3-a456-426614174000"
+	if err := verifyReleaseProvenanceSemantics(wrong, want); err == nil {
+		t.Fatal("wrong request binding accepted")
+	}
+	external := []byte(`{"requestId":"123e4567-e89b-42d3-a456-426614174000","tag":"v1.0.0"}`)
+	if _, err := exactJSONObject(external, "externalParameters", "requestId", "tag"); err != nil {
+		t.Fatalf("exact external parameter keys rejected: %v", err)
+	}
+	alias := strings.Replace(string(external), `"requestId"`, `"requestID"`, 1)
+	if _, err := exactJSONObject([]byte(alias), "externalParameters", "requestId", "tag"); err == nil {
+		t.Fatal("unknown requestId alias accepted")
+	}
+}
+
+func TestPinnedDetachedSignatureRejectsTamperedSubject(t *testing.T) {
+	home := t.TempDir()
+	if err := os.Chmod(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := command("", nil, "gpg", "--homedir", home, "--batch", "--pinentry-mode", "loopback", "--passphrase", "",
+		"--quick-generate-key", "Takoform Provenance Test <test@takoform.invalid>", "rsa2048", "sign", "0"); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := command("", nil, "gpg", "--homedir", home, "--batch", "--with-colons", "--list-secret-keys")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := ""
+	for _, line := range strings.Split(keys, "\n") {
+		fields := strings.Split(line, ":")
+		if len(fields) > 9 && fields[0] == "fpr" {
+			fingerprint = strings.ToUpper(fields[9])
+			break
+		}
+	}
+	if !regexp.MustCompile(`^[0-9A-F]{40}$`).MatchString(fingerprint) {
+		t.Fatalf("test key has invalid fingerprint %q", fingerprint)
+	}
+	publicKey, err := command("", nil, "gpg", "--homedir", home, "--batch", "--armor", "--export", fingerprint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKeyPath := filepath.Join(t.TempDir(), "provider-signing-key.asc")
+	if err := os.WriteFile(publicKeyPath, []byte(publicKey), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	subjectPath := filepath.Join(t.TempDir(), "provenance.intoto.json")
+	signaturePath := subjectPath + ".sig"
+	if err := os.WriteFile(subjectPath, []byte(`{"signed":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := command("", nil, "gpg", "--homedir", home, "--batch", "--local-user", fingerprint,
+		"--output", signaturePath, "--detach-sign", subjectPath); err != nil {
+		t.Fatal(err)
+	}
+	if signer, err := verifyPinnedDetachedSignature(publicKeyPath, fingerprint, signaturePath, subjectPath); err != nil || signer != fingerprint {
+		t.Fatalf("valid pinned signature rejected: signer=%q err=%v", signer, err)
+	}
+	if err := os.WriteFile(subjectPath, []byte(`{"signed":false}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifyPinnedDetachedSignature(publicKeyPath, fingerprint, signaturePath, subjectPath); err == nil {
+		t.Fatal("tampered provenance subject accepted")
 	}
 }
 

@@ -448,6 +448,10 @@ func writeRegistryFixture(t *testing.T, root string, versionRaw []byte, releaseC
 			ProviderBinary: providerBinary,
 			CLI:            providerlifecycle.CLIIdentity{Product: requirement.Product, Version: requirement.Version, ProviderAddress: requirement.ProviderAddress, ExecutableName: requirement.Product, ExecutableSHA256: digest},
 			Resources:      resources,
+			InterfaceChecks: providerlifecycle.InterfaceCheckEvidence{
+				AbsentBeforeCreate: true, DescriptorDerivedList: true, ExactGet: true,
+				RequiredReadiness: true, AbsentAfterDelete: true,
+			},
 			NegativeChecks: []providerlifecycle.NegativeEvidence{
 				{Name: "response-name-substitution-rejected", Kind: formcatalog.Kinds[0].Kind, Fixture: "name substitution", Passed: true},
 				{Name: "response-package-digest-substitution-rejected", Kind: formcatalog.Kinds[1].Kind, Fixture: "package substitution", Passed: true},

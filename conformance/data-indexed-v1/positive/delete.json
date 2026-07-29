@@ -1,8 +1,0 @@
-{
-  "expectedRevision": 1,
-  "key": {
-    "id": "r1"
-  },
-  "operation": "delete",
-  "table": "records"
-}

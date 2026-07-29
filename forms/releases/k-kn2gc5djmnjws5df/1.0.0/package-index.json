@@ -6,27 +6,63 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "StaticSite",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:04447bb460c3c398066cd7d5f2f57f0e36224046205c288c10fe4dd4cf0a1dba"
+    "schemaDigest": "sha256:075803d6f6d7675bd0f059e5f53812df439d0b4b323d2d073b653b57e6847d1c"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5711,
-      "digest": "sha256:28e9616cc66eca41a253bd5e94772aa5b2b64b7d1e15d62f577e3fa6ba8c2441"
+      "size": 6692,
+      "digest": "sha256:f5f36f585f0b0447f16fb8fc8006ff61a6e3ba6034e485a0e929ae8d4e1b7e6b"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 261,
-      "digest": "sha256:06de2aa3f49375e72bccc4f15083c263c65ce6a9eb9895d51616acffc5791ee3"
+      "size": 410,
+      "digest": "sha256:267783f07794aa27ebdc23b596c4b5f163971d2e53931d200df449250778af89"
+    },
+    {
+      "path": "fixtures/negative-artifact-source.json",
+      "mediaType": "application/json",
+      "size": 358,
+      "digest": "sha256:27fc07568f1d476825e11e81197b2b39bb1a6538a440ff0e551bd5e5564d336b"
     },
     {
       "path": "fixtures/negative-cache_control_seconds.json",
       "mediaType": "application/json",
-      "size": 260,
-      "digest": "sha256:837dfe96b1d13b0ce7e3550866e3ad3aa08d2ace01a1cda6cb1f18568c59420f"
+      "size": 409,
+      "digest": "sha256:55fb232d286307b863f5eebefb74b7224bc4e1a2f15abe7424ee4b9bd00705a4"
+    },
+    {
+      "path": "fixtures/negative-error_document.json",
+      "mediaType": "application/json",
+      "size": 411,
+      "digest": "sha256:88888f4a2c40ca13ae1b8dd59c0fab9a5abe927b61d95bc9b899b5966587c5af"
+    },
+    {
+      "path": "fixtures/negative-index_document.json",
+      "mediaType": "application/json",
+      "size": 409,
+      "digest": "sha256:77cda73c91e175e3ca76f0656747ab552109368ce7c2cbd83b741b8f479a0ca4"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 385,
+      "digest": "sha256:cc2ca6892780ba796711942b2235bca45719aee1b22a27730152acd204230131"
+    },
+    {
+      "path": "fixtures/negative-missing-source.json",
+      "mediaType": "application/json",
+      "size": 148,
+      "digest": "sha256:5fb363b80e566eab8b0774024f68d8ab632f226270c303fb2daa2137b3003b13"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 144,
+      "digest": "sha256:3b2ff65a7b098682571d83b202b51bb1415e7115bda368b10245f89ed2d94977"
     },
     {
       "path": "fixtures/observed.json",

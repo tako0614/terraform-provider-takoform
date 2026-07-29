@@ -1,0 +1,14 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "entrypoint": "IngestWorkflow",
+  "initialBackoffSeconds": 5,
+  "maxAttempts": 3,
+  "name": "workflow",
+  "source": {
+    "artifactMediaType": "text/javascript",
+    "artifactSha256": "not-a-sha256",
+    "artifactUrl": "https://artifacts.portable-conformance.invalid/workflow.mjs"
+  }
+}

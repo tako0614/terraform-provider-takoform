@@ -32,6 +32,7 @@ const (
 	providerManifestName   = "provider-report-manifest.json"
 	providerSignedName     = "signed-provider-report-candidate.json"
 	checksumsName          = "SHA256SUMS"
+	checksumsBundleName    = "SHA256SUMS.sigstore.json"
 	providerManifestFormat = "takoform.standard-provider-report-candidate@v1"
 	providerSignedFormat   = "takoform.standard-provider-report-signed-candidate@v1"
 	providerWorkflow       = ".github/workflows/standard-provider-report.yml"
@@ -45,8 +46,9 @@ const (
 )
 
 var (
-	commitPattern  = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	versionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:[-.][0-9A-Za-z.-]+)?$`)
+	commitPattern          = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	versionPattern         = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:[-.][0-9A-Za-z.-]+)?$`)
+	canonicalUUIDv4Pattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
 type BuildOptions struct {
@@ -89,9 +91,21 @@ type reportManifest struct {
 	DefinitionVersion string                `json:"definitionVersion"`
 	PackageVersion    string                `json:"packageVersion"`
 	RunnerVersion     string                `json:"runnerVersion"`
+	Workflow          string                `json:"workflow,omitempty"`
+	RequestID         string                `json:"requestId,omitempty"`
 	Source            sourceRef             `json:"source"`
 	TakoformSource    *sourceRef            `json:"takoformSource,omitempty"`
+	PortableRunner    *portableRunnerRef    `json:"portableRunner,omitempty"`
 	Reports           []reportManifestEntry `json:"reports"`
+}
+
+type portableRunnerRef struct {
+	Path              string `json:"path"`
+	BundlePath        string `json:"bundlePath"`
+	Digest            string `json:"digest"`
+	Format            string `json:"format"`
+	RunnerSubject     string `json:"runnerSubject"`
+	RunnerInputDigest string `json:"runnerInputDigest"`
 }
 
 type signedEntry struct {
@@ -109,19 +123,38 @@ type retainedRef struct {
 }
 
 type signedManifest struct {
-	Format              string        `json:"format"`
-	Status              string        `json:"status"`
-	ProofType           string        `json:"proofType"`
-	Subject             string        `json:"subject"`
-	Generation          string        `json:"generation,omitempty"`
-	CertificateIdentity string        `json:"certificateIdentity"`
-	Workflow            string        `json:"workflow"`
-	WorkflowRunID       string        `json:"workflowRunId"`
-	WorkflowRunAttempt  int           `json:"workflowRunAttempt"`
-	Source              sourceRef     `json:"source"`
-	TakoformSource      *sourceRef    `json:"takoformSource,omitempty"`
-	Manifest            retainedRef   `json:"manifest"`
-	Entries             []signedEntry `json:"entries"`
+	Format              string                   `json:"format"`
+	Status              string                   `json:"status"`
+	ProofType           string                   `json:"proofType"`
+	Subject             string                   `json:"subject"`
+	Generation          string                   `json:"generation,omitempty"`
+	CertificateIdentity string                   `json:"certificateIdentity"`
+	Workflow            string                   `json:"workflow"`
+	RequestID           string                   `json:"requestId,omitempty"`
+	WorkflowRunID       string                   `json:"workflowRunId"`
+	WorkflowRunAttempt  int                      `json:"workflowRunAttempt"`
+	HeadSHA             string                   `json:"headSha,omitempty"`
+	Source              sourceRef                `json:"source"`
+	TakoformSource      *sourceRef               `json:"takoformSource,omitempty"`
+	Manifest            retainedRef              `json:"manifest"`
+	PortableRunner      *signedPortableRunnerRef `json:"portableRunner,omitempty"`
+	Closure             *signedClosureRef        `json:"closure,omitempty"`
+	Entries             []signedEntry            `json:"entries"`
+}
+
+type signedClosureRef struct {
+	ChecksumsPath       string `json:"checksumsPath"`
+	BundlePath          string `json:"bundlePath"`
+	CertificateIdentity string `json:"certificateIdentity"`
+}
+
+type signedPortableRunnerRef struct {
+	ReportPath        string `json:"reportPath"`
+	ReportDigest      string `json:"reportDigest"`
+	BundlePath        string `json:"bundlePath"`
+	BundleDigest      string `json:"bundleDigest"`
+	RunnerSubject     string `json:"runnerSubject"`
+	RunnerInputDigest string `json:"runnerInputDigest"`
 }
 
 type reportArtifact struct {
@@ -323,6 +356,9 @@ func loadArtifactSet(repositoryRoot, hostID, root, role string, candidates admis
 		signed.Subject != manifest.Subject || signed.ProofType != manifest.ProofType || signed.CertificateIdentity != identity || signed.Workflow != workflow || signed.WorkflowRunID != expectedWorkflowRunID || signed.WorkflowRunAttempt != 1 {
 		return artifactSet{}, fmt.Errorf("candidate manifest identity or workflow closure is invalid")
 	}
+	if manifest.PortableRunner != nil || signed.PortableRunner != nil || signed.Closure != nil {
+		return artifactSet{}, fmt.Errorf("historical candidate contains unsupported current-generation closure fields")
+	}
 	if expectedSubject != "" && manifest.Subject != expectedSubject {
 		return artifactSet{}, fmt.Errorf("subject is %q, want %q", manifest.Subject, expectedSubject)
 	}
@@ -475,7 +511,11 @@ func loadFixtureClosure(packageRoot string) (fixtureClosure, error) {
 			return fixtureClosure{}, err
 		}
 		result.negative = append(result.negative, standardform.NegativeFixture{Name: fixture.Name, Stage: fixture.Stage, Input: input, ExpectedErrorCode: standardform.InvalidArgumentErrorCode})
-		result.negativeBindings[fixture.Name] = admissionrelease.FixtureDigestBinding{PackageFixtureDigest: formpackage.DigestBytes(inputRaw), EffectiveInputDigest: effective}
+		result.negativeBindings[fixture.Name] = admissionrelease.FixtureDigestBinding{
+			PackageFixtureDigest: formpackage.DigestBytes(inputRaw),
+			EffectiveInputDigest: effective,
+			Stage:                fixture.Stage,
+		}
 	}
 	return result, nil
 }
@@ -497,15 +537,27 @@ func buildEvidence(packageRoot string, candidate admissionrelease.Candidate, hos
 	for _, item := range fixtures.positive {
 		positiveNames = append(positiveNames, item.Name)
 	}
-	negativeNames := make([]string, 0, len(fixtures.negative))
-	for _, item := range fixtures.negative {
-		negativeNames = append(negativeNames, item.Name)
-	}
-	providerReport, err := admissionrelease.ValidateCanonicalProviderRunnerReport(provider.raw, identity, positiveNames, negativeNames)
+	hostNegativeNames, err := standardform.HostNegativeFixtureNames(fixtures.negative)
 	if err != nil {
 		return standardform.AdmissionEvidence{}, nil, err
 	}
-	proof := func(report admissionrelease.RunnerReport, raw []byte) standardform.ConformanceProof {
+	providerNegativeNames, err := standardform.ProviderNegativeFixtureNames(fixtures.negative)
+	if err != nil {
+		return standardform.AdmissionEvidence{}, nil, err
+	}
+	providerExpectations := make([]admissionrelease.NegativeFixtureExpectation, 0, len(fixtures.negative))
+	for _, item := range fixtures.negative {
+		providerExpectations = append(providerExpectations, admissionrelease.NegativeFixtureExpectation{
+			Name: item.Name, Stage: item.Stage,
+		})
+	}
+	providerReport, err := admissionrelease.ValidateCanonicalProviderRunnerReportWithStages(
+		provider.raw, identity, positiveNames, providerExpectations,
+	)
+	if err != nil {
+		return standardform.AdmissionEvidence{}, nil, err
+	}
+	proof := func(report admissionrelease.RunnerReport, raw []byte, negativeNames []string) standardform.ConformanceProof {
 		return standardform.ConformanceProof{Subject: report.Subject, RunnerVersion: report.RunnerVersion, Identity: report.Identity, Status: "passed", PositiveFixtures: positiveNames, NegativeFixtures: negativeNames, EvidenceDigest: formpackage.DigestBytes(raw)}
 	}
 	evidence := standardform.AdmissionEvidence{
@@ -516,8 +568,11 @@ func buildEvidence(packageRoot string, candidate admissionrelease.Candidate, hos
 			Security:     standardform.SecurityAudit{SecretFreeDesiredState: true, CredentialBoundaryExternal: true, DataOnlyPackage: true},
 			Interfaces:   standardform.InterfaceAudit{Reviewed: true, BindingAuthorityExternal: true, SecretFreeDocuments: true},
 		},
-		Fixtures:    standardform.Fixtures{Positive: fixtures.positive, Negative: fixtures.negative},
-		Conformance: standardform.Conformance{Host: proof(hostReport, host.raw), Provider: proof(providerReport, provider.raw)},
+		Fixtures: standardform.Fixtures{Positive: fixtures.positive, Negative: fixtures.negative},
+		Conformance: standardform.Conformance{
+			Host:     proof(hostReport, host.raw, hostNegativeNames),
+			Provider: proof(providerReport, provider.raw, providerNegativeNames),
+		},
 	}
 	raw, err := json.Marshal(evidence)
 	if err != nil {
@@ -763,6 +818,18 @@ func sameFileSet(files []string, expected map[string]struct{}) bool {
 }
 
 func verifyChecksums(root string, expected map[string]struct{}) error {
+	return verifyChecksumsExcluding(root, expected, nil)
+}
+
+func verifyChecksumsExcluding(root string, expected, excluded map[string]struct{}) error {
+	for name := range excluded {
+		if name == checksumsName {
+			return fmt.Errorf("SHA256SUMS exclusion cannot name itself")
+		}
+		if _, ok := expected[name]; !ok {
+			return fmt.Errorf("SHA256SUMS exclusion %q is not in the candidate inventory", name)
+		}
+	}
 	raw, err := readRegular(root, checksumsName, maximumMaterialBytes)
 	if err != nil {
 		return err
@@ -780,6 +847,9 @@ func verifyChecksums(root string, expected map[string]struct{}) error {
 		name := fields[1]
 		if name == checksumsName {
 			return fmt.Errorf("SHA256SUMS must not checksum itself")
+		}
+		if _, omitted := excluded[name]; omitted {
+			return fmt.Errorf("SHA256SUMS must not checksum excluded signature %q", name)
 		}
 		if _, ok := expected[name]; !ok {
 			return fmt.Errorf("SHA256SUMS lists unexpected %q", name)
@@ -800,8 +870,20 @@ func verifyChecksums(root string, expected map[string]struct{}) error {
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-	if len(seen) != len(expected)-1 {
+	want := len(expected) - 1 - len(excluded)
+	if want < 0 || len(seen) != want {
 		return fmt.Errorf("SHA256SUMS does not close over every candidate file")
+	}
+	for name := range expected {
+		if name == checksumsName {
+			continue
+		}
+		if _, omitted := excluded[name]; omitted {
+			continue
+		}
+		if _, ok := seen[name]; !ok {
+			return fmt.Errorf("SHA256SUMS omits %q", name)
+		}
 	}
 	return nil
 }

@@ -1,0 +1,14 @@
+{
+  "bootDiskGib": 20,
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "instanceCount": 1,
+  "machineClass": "general.small",
+  "name": "compute-instance",
+  "source": {
+    "artifactMediaType": "application/x-qemu-disk",
+    "artifactSha256": "not-a-sha256",
+    "artifactUrl": "https://artifacts.portable-conformance.invalid/base-linux.qcow2"
+  }
+}

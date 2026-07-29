@@ -1,6 +1,7 @@
 package standardforms
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,30 +18,239 @@ import (
 // are: a Form is declared once. A hand-written example is a second, slowly
 // diverging description of the same contract.
 func generatePublishedSurfaces(root string) error {
-	if err := generateExamples(root); err != nil {
+	if err := validatePublishedSurfaceCatalog(formcatalog.Kinds); err != nil {
 		return err
 	}
-	if err := generateFormInventoryDoc(root); err != nil {
-		return err
-	}
-	return generateResourceDocs(root)
-}
-
-func generateExamples(root string) error {
-	examplesRoot := filepath.Join(root, "examples", "resources")
-	if err := pruneGeneratedDirectories(examplesRoot, declaredResourceTypes()); err != nil {
-		return err
-	}
-	for _, kind := range formcatalog.Kinds {
-		directory := filepath.Join(examplesRoot, kind.ResourceType)
-		if err := os.MkdirAll(directory, 0o755); err != nil {
+	for _, relativeParent := range []string{"docs", "examples", "forms"} {
+		if err := prepareGeneratedDirectoryPath(root, relativeParent); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(directory, "resource.tf"), []byte(exampleHCL(kind)), 0o644); err != nil {
+	}
+	for _, relativeRoot := range []string{"docs/resources", "examples/resources"} {
+		if err := resetGeneratedTree(filepath.Join(root, filepath.FromSlash(relativeRoot))); err != nil {
+			return err
+		}
+	}
+	for _, surface := range renderPublishedSurfaces() {
+		path := filepath.Join(root, filepath.FromSlash(surface.path))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		if info, err := os.Lstat(path); err == nil {
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("generated public surface %s is not a regular file", surface.path)
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if err := os.WriteFile(path, surface.content, 0o644); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+type publishedSurface struct {
+	path    string
+	content []byte
+}
+
+type formInventoryDomain struct {
+	name  string
+	title string
+}
+
+var formInventoryDomains = []formInventoryDomain{
+	{name: "compute", title: "Compute and application"},
+	{name: "data", title: "Data and storage"},
+	{name: "analytics", title: "Analytics and inference"},
+	{name: "network", title: "Network and delivery"},
+	{name: "operations", title: "Operations and integration"},
+}
+
+// renderPublishedSurfaces is the single pure renderer for every
+// catalog-derived human-facing surface. Both generation and verification use
+// these exact bytes, so the read-only owner gate cannot silently bless
+// hand-written drift.
+func renderPublishedSurfaces() []publishedSurface {
+	surfaces := make([]publishedSurface, 0, len(formcatalog.Kinds)*2+1)
+	for _, kind := range formcatalog.Kinds {
+		surfaces = append(surfaces,
+			publishedSurface{
+				path:    filepath.ToSlash(filepath.Join("docs", "resources", docBasename(kind))),
+				content: []byte(resourceDoc(kind)),
+			},
+			publishedSurface{
+				path:    filepath.ToSlash(filepath.Join("examples", "resources", kind.ResourceType, "resource.tf")),
+				content: []byte(exampleHCL(kind)),
+			},
+		)
+	}
+	surfaces = append(surfaces, publishedSurface{
+		path:    "forms/README.md",
+		content: []byte(formInventoryDoc()),
+	})
+	sort.Slice(surfaces, func(left, right int) bool {
+		return surfaces[left].path < surfaces[right].path
+	})
+	return surfaces
+}
+
+// VerifyPublishedSurfaces fails closed when a generated public file is
+// missing, edited, replaced by a non-regular file, or joined by an undeclared
+// file. It never writes the worktree.
+func VerifyPublishedSurfaces(root string) error {
+	if err := validatePublishedSurfaceCatalog(formcatalog.Kinds); err != nil {
+		return err
+	}
+	for _, relativeRoot := range []string{"docs/resources", "examples/resources", "forms"} {
+		if err := verifyGeneratedDirectoryPath(root, relativeRoot); err != nil {
+			return err
+		}
+	}
+	surfaces := renderPublishedSurfaces()
+	for _, surface := range surfaces {
+		path := filepath.Join(root, filepath.FromSlash(surface.path))
+		info, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("generated public surface %s: %w", surface.path, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("generated public surface %s is not a regular file", surface.path)
+		}
+		actual, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read generated public surface %s: %w", surface.path, err)
+		}
+		if !bytes.Equal(actual, surface.content) {
+			return fmt.Errorf("generated public surface %s differs from the canonical Form catalog rendering", surface.path)
+		}
+	}
+	if err := verifyPublishedSurfaceInventory(root, surfaces); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validatePublishedSurfaceCatalog(kinds []formcatalog.Kind) error {
+	domains := make(map[string]struct{}, len(formInventoryDomains))
+	for _, domain := range formInventoryDomains {
+		domains[domain.name] = struct{}{}
+	}
+	paths := make(map[string]string, len(kinds)*2)
+	for _, kind := range kinds {
+		if _, ok := domains[kind.Domain]; !ok {
+			return fmt.Errorf("Form %s has unknown public inventory domain %q", kind.Kind, kind.Domain)
+		}
+		for _, path := range []string{
+			filepath.ToSlash(filepath.Join("docs", "resources", docBasename(kind))),
+			filepath.ToSlash(filepath.Join("examples", "resources", kind.ResourceType, "resource.tf")),
+		} {
+			if owner, duplicate := paths[path]; duplicate {
+				return fmt.Errorf("Forms %s and %s render the same public surface %s", owner, kind.Kind, path)
+			}
+			paths[path] = kind.Kind
+		}
+	}
+	return nil
+}
+
+func verifyGeneratedDirectoryPath(root, relative string) error {
+	current := root
+	parts := []string{"."}
+	if info, err := os.Lstat(current); err != nil {
+		return fmt.Errorf("generated public surface root: %w", err)
+	} else if !info.IsDir() {
+		return fmt.Errorf("generated public surface root is not a real directory")
+	}
+	for _, part := range strings.Split(filepath.FromSlash(relative), string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		parts = append(parts, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return fmt.Errorf("generated public surface directory %s: %w", filepath.ToSlash(filepath.Join(parts...)), err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("generated public surface directory %s is not a real directory", filepath.ToSlash(filepath.Join(parts...)))
+		}
+	}
+	return nil
+}
+
+func prepareGeneratedDirectoryPath(root, relative string) error {
+	current := root
+	if info, err := os.Lstat(current); err != nil {
+		return fmt.Errorf("generated public surface root: %w", err)
+	} else if !info.IsDir() {
+		return fmt.Errorf("generated public surface root is not a real directory")
+	}
+	for _, part := range strings.Split(filepath.FromSlash(relative), string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			if err := os.Mkdir(current, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("generated public surface parent %s is not a real directory", filepath.ToSlash(relative))
+		}
+	}
+	return nil
+}
+
+func verifyPublishedSurfaceInventory(root string, surfaces []publishedSurface) error {
+	expectedDocs := make(map[string]struct{}, len(formcatalog.Kinds))
+	expectedExamples := make(map[string]struct{}, len(formcatalog.Kinds)*2)
+	for _, surface := range surfaces {
+		switch {
+		case strings.HasPrefix(surface.path, "docs/resources/"):
+			expectedDocs[strings.TrimPrefix(surface.path, "docs/resources/")] = struct{}{}
+		case strings.HasPrefix(surface.path, "examples/resources/"):
+			relative := strings.TrimPrefix(surface.path, "examples/resources/")
+			expectedExamples[relative] = struct{}{}
+			expectedExamples[filepath.ToSlash(filepath.Dir(relative))] = struct{}{}
+		}
+	}
+	if err := verifyExactGeneratedTree(root, "docs/resources", expectedDocs); err != nil {
+		return err
+	}
+	return verifyExactGeneratedTree(root, "examples/resources", expectedExamples)
+}
+
+func verifyExactGeneratedTree(root, relativeRoot string, expected map[string]struct{}) error {
+	treeRoot := filepath.Join(root, filepath.FromSlash(relativeRoot))
+	return filepath.WalkDir(treeRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("walk generated public surfaces under %s: %w", relativeRoot, walkErr)
+		}
+		if path == treeRoot {
+			return nil
+		}
+		relative, err := filepath.Rel(treeRoot, path)
+		if err != nil {
+			return err
+		}
+		relative = filepath.ToSlash(relative)
+		if _, ok := expected[relative]; !ok {
+			return fmt.Errorf("undeclared generated public surface %s", filepath.ToSlash(filepath.Join(relativeRoot, relative)))
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("inspect generated public surface %s: %w", filepath.ToSlash(filepath.Join(relativeRoot, relative)), err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("generated public surface %s is not a regular file", filepath.ToSlash(filepath.Join(relativeRoot, relative)))
+		}
+		return nil
+	})
 }
 
 func exampleHCL(kind formcatalog.Kind) string {
@@ -48,7 +258,8 @@ func exampleHCL(kind formcatalog.Kind) string {
 	builder.WriteString(`terraform {
   required_providers {
     takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
     }
   }
 }
@@ -101,14 +312,14 @@ provider "takoform" {
 
 func artifactAttributeName(wireKey string) string {
 	switch wireKey {
-	case "artifactPath":
-		return "artifact_path"
 	case "artifactUrl":
 		return "artifact_url"
-	case "artifactRef":
-		return "artifact_ref"
-	default:
+	case "artifactSha256":
 		return "artifact_sha256"
+	case "artifactMediaType":
+		return "artifact_media_type"
+	default:
+		return wireKey
 	}
 }
 
@@ -147,34 +358,6 @@ func quoteHCL(value any) string {
 	}
 }
 
-func generateResourceDocs(root string) error {
-	docsRoot := filepath.Join(root, "docs", "resources")
-	if err := os.MkdirAll(docsRoot, 0o755); err != nil {
-		return err
-	}
-	expected := map[string]struct{}{"interface.md": {}}
-	for _, kind := range formcatalog.Kinds {
-		expected[docBasename(kind)] = struct{}{}
-	}
-	entries, err := os.ReadDir(docsRoot)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if _, keep := expected[entry.Name()]; !keep {
-			if err := os.RemoveAll(filepath.Join(docsRoot, entry.Name())); err != nil {
-				return err
-			}
-		}
-	}
-	for _, kind := range formcatalog.Kinds {
-		if err := os.WriteFile(filepath.Join(docsRoot, docBasename(kind)), []byte(resourceDoc(kind)), 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func docBasename(kind formcatalog.Kind) string {
 	return strings.TrimPrefix(kind.ResourceType, "takoform_") + ".md"
 }
@@ -202,8 +385,9 @@ an implementation. See the [complete example](../../examples/resources/%s/resour
 
 	fmt.Fprintf(&builder, "- `name` (String, required, forces replacement) — Resource name.\n")
 	if kind.Artifact {
-		builder.WriteString("- `artifact_path` / `artifact_url` / `artifact_ref` (String, optional) — Exactly one immutable artifact source. `artifact_url` and `artifact_ref` require `artifact_sha256`.\n")
-		builder.WriteString("- `artifact_sha256` (String, optional) — Expected artifact digest.\n")
+		builder.WriteString("- `artifact_url` (String, required) — Absolute credential-free HTTPS location any conforming host can fetch; userinfo, query, and fragment are forbidden because this value persists in nonsensitive state.\n")
+		builder.WriteString("- `artifact_sha256` (String, required) — Digest binding the URL to exact immutable bytes.\n")
+		builder.WriteString("- `artifact_media_type` (String, required) — Lowercase type/subtype describing how the bytes are interpreted.\n")
 	}
 	for _, field := range kind.Fields {
 		fmt.Fprintf(&builder, "- `%s` (%s, %s) — %s%s\n",
@@ -211,7 +395,11 @@ an implementation. See the [complete example](../../examples/resources/%s/resour
 	}
 	switch kind.Connections {
 	case formcatalog.ConnectionsRequired:
-		builder.WriteString("- `connections` (List of Object, required) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.\n")
+		if kind.MaxConnections == 1 {
+			builder.WriteString("- `connections` (List of Object, exactly one) — One declared Resource reference with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.\n")
+		} else {
+			builder.WriteString("- `connections` (List of Object, one or more) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. Names must be unique. A connection is a request the host validates; it grants nothing by itself.\n")
+		}
 	case formcatalog.ConnectionsOptional:
 		builder.WriteString("- `connections` (List of Object, optional) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.\n")
 	}
@@ -220,10 +408,13 @@ an implementation. See the [complete example](../../examples/resources/%s/resour
 	builder.WriteString(`
 ## Read-only attributes
 
-` + "`id`" + `, ` + "`resource_version`" + `, ` + "`drift_status`" + `, ` + "`portability`" + `, and ` + "`outputs`" + ` report
-the canonical resource identity, its generation fence, the native observation
-result, and sanitized public host results. Backend placement is never provider
-state.
+` + "`form_api_version`" + `, ` + "`form_kind`" + `, ` + "`form_definition_version`" + `, ` + "`form_schema_digest`" + `, and
+` + "`form_package_digest`" + ` bind state to the exact immutable Form identity.
+` + "`id`" + ` is the provider-synthesized ` + "`Kind/name`" + ` identity and ` + "`resource_version`" + ` is
+the host generation fence. ` + "`drift_status`" + `, ` + "`portability`" + `, and ` + "`outputs`" + ` are written
+only after the host's observed and output documents satisfy this exact Form's
+closed schemas, identities, and generation. Undeclared host keys are rejected;
+backend placement is never provider state.
 `)
 	if len(kind.Interfaces) > 0 {
 		builder.WriteString("\n## Declared runtime interfaces\n\n")
@@ -285,30 +476,34 @@ func docConstraint(field formcatalog.Field) string {
 }
 
 func declaredResourceTypes() map[string]struct{} {
-	expected := make(map[string]struct{}, len(formcatalog.Kinds)+1)
+	expected := make(map[string]struct{}, len(formcatalog.Kinds))
 	for _, kind := range formcatalog.Kinds {
 		expected[kind.ResourceType] = struct{}{}
 	}
-	// takoform_interface is a portable provider resource, but not a Service
-	// Form. Its hand-written example and reference doc have a different owner
-	// and must survive regeneration of the Form-derived surfaces.
-	expected["takoform_interface"] = struct{}{}
 	return expected
 }
 
-func pruneGeneratedDirectories(root string, expected map[string]struct{}) error {
-	if err := os.MkdirAll(root, 0o755); err != nil {
+func resetGeneratedTree(root string) error {
+	info, err := os.Lstat(root)
+	if os.IsNotExist(err) {
+		return os.MkdirAll(root, 0o755)
+	}
+	if err != nil {
 		return err
+	}
+	if !info.IsDir() {
+		if err := os.RemoveAll(root); err != nil {
+			return err
+		}
+		return os.MkdirAll(root, 0o755)
 	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return err
 	}
 	for _, entry := range entries {
-		if _, keep := expected[entry.Name()]; !keep {
-			if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
-				return err
-			}
+		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -364,30 +559,23 @@ func generateRetiredInventory(root string) error {
 	return writeJSON(filepath.Join(root, filepath.FromSlash(RetiredInventoryPath)), inventory)
 }
 
-// generateFormInventoryDoc writes the human-readable Form inventory. It is
-// generated so the published list of Forms can never disagree with the
-// declaration the packages are built from.
-func generateFormInventoryDoc(root string) error {
+// formInventoryDoc renders the human-readable Form inventory so the published
+// list of Forms can never disagree with the declaration the packages are built
+// from.
+func formInventoryDoc() string {
 	var builder strings.Builder
 	builder.WriteString(`# Portable Form inventory
 
-This is the complete portable Service Form set of this release, generated from
-the one declaration in ` + "`internal/formcatalog`" + `. Every Form describes what a
-caller wants. None of them names a target, a credential, a placement, a price,
-or an implementation: those stay with the host that realizes the Form.
+This is the current provider-v1 portable Service Form inventory, generated
+from the one declaration in ` + "`internal/formcatalog`" + `. Every Form describes what
+a caller wants. None of them names a target, a credential, a placement, a
+price, or an implementation: those stay with the host that realizes the Form.
 
 `)
-	labels := []struct{ domain, title string }{
-		{"compute", "Compute and application"},
-		{"data", "Data and storage"},
-		{"analytics", "Analytics and inference"},
-		{"network", "Network and delivery"},
-		{"operations", "Operations and integration"},
-	}
-	for _, label := range labels {
-		fmt.Fprintf(&builder, "## %s\n\n| Kind | Resource | Version | Portable intent |\n| --- | --- | --- | --- |\n", label.title)
+	for _, domain := range formInventoryDomains {
+		fmt.Fprintf(&builder, "## %s\n\n| Kind | Resource | Version | Portable intent |\n| --- | --- | --- | --- |\n", domain.title)
 		for _, kind := range formcatalog.Kinds {
-			if kind.Domain != label.domain {
+			if kind.Domain != domain.name {
 				continue
 			}
 			fmt.Fprintf(&builder, "| `%s` | `%s` | `%s` | %s |\n", kind.Kind, kind.ResourceType, kind.Version(), kind.Description)
@@ -438,5 +626,5 @@ and admission evidence stay verifiable through
 [` + "`retired-package-set.json`" + `](retired-package-set.json). Those releases are never
 rewritten, re-signed, or reshaped.
 `)
-	return os.WriteFile(filepath.Join(root, "forms", "README.md"), []byte(builder.String()), 0o644)
+	return builder.String()
 }

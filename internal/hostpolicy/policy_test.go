@@ -41,8 +41,14 @@ func TestCurrentReviewedPolicyLoadsWithoutRelabelingV1(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", retainedRoot, err)
 		}
-		if host.ManifestFormat != "takosumi.standard-form-host-report-candidate@v2" ||
-			host.SignedFormat != "takosumi.standard-form-host-report-signed-candidate@v2" ||
+		wantManifest := "takosumi.standard-form-host-report-candidate@v2"
+		wantSigned := "takosumi.standard-form-host-report-signed-candidate@v2"
+		if retainedRoot == "admission/v4" {
+			wantManifest = "takosumi.standard-form-host-report-candidate@v3"
+			wantSigned = "takosumi.standard-form-host-report-signed-candidate@v4"
+		}
+		if host.ManifestFormat != wantManifest ||
+			host.SignedFormat != wantSigned ||
 			host.RunnerVersionPrefix != "1.2.0+git." {
 			t.Fatalf("%s current host contract drifted: %#v", retainedRoot, host)
 		}

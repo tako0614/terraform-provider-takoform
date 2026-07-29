@@ -1,0 +1,9 @@
+{
+  "bootDiskGib": 20,
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "instanceCount": 1,
+  "machineClass": "general.small",
+  "name": "compute-instance"
+}

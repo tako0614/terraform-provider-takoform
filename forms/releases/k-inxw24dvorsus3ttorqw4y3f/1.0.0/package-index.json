@@ -6,45 +6,81 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ComputeInstance",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:cb1e06538f410edb2e7881c64ad0eaa77926f0e1fe2b4715246c695b18512a81"
+    "schemaDigest": "sha256:76cc9a648715fd74ed2eba9bf8c1b35a66729d901a3a18c575894f06a86fa0b8"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5224,
-      "digest": "sha256:dc46cbf19dcfc9f0cd4b6efdebf6c1adeda3244b32b34be2d3d142d5c13ce2c3"
+      "size": 7584,
+      "digest": "sha256:8f2e61d4e7e30deb7e62b63b73173962fb636dc9370a1ff235a57bff497611c5"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 188,
-      "digest": "sha256:5a68ba059e3237be896f7e975f253f8ef84d480fd9e553164afe6521f658d94f"
+      "size": 407,
+      "digest": "sha256:6d186675a976e58ce6f4384472b09dc149ba8b45effb2cc594703ade48c5d7fb"
+    },
+    {
+      "path": "fixtures/negative-artifact-source.json",
+      "mediaType": "application/json",
+      "size": 355,
+      "digest": "sha256:bff8cd7e11854983664cbb4123b18b96997a974013496382274bb5c4dfe6e360"
     },
     {
       "path": "fixtures/negative-boot_disk_gib.json",
       "mediaType": "application/json",
-      "size": 187,
-      "digest": "sha256:ff848f1637f1943dfbe4e1f316f89fcd6e83ac76ec670a072060c8f09958d193"
+      "size": 406,
+      "digest": "sha256:133ab8a44ad597d51ef582cbbe9a92fe1da1e9b545f3986c1f2a3e722eb1f550"
     },
     {
       "path": "fixtures/negative-configuration.json",
       "mediaType": "application/json",
-      "size": 193,
-      "digest": "sha256:863f40c1772a5c96a4e888286c783728d75ea8f5a608d6a55d0e2138aae2e808"
+      "size": 412,
+      "digest": "sha256:e2b60d854270c9d67fed92303df83d79eab305136145e6381aea4bcea8248f44"
     },
     {
       "path": "fixtures/negative-instance_count.json",
       "mediaType": "application/json",
-      "size": 210,
-      "digest": "sha256:fb6e37066b3b7c3092bd809311de858b10645c6f9bc6b2c37f7c4a80e65aa9be"
+      "size": 407,
+      "digest": "sha256:5c1a54b4313b4e4256506643d5d488bf0a9f07d7c9f902091b6142d76303b53f"
     },
     {
       "path": "fixtures/negative-machine_class.json",
       "mediaType": "application/json",
-      "size": 186,
-      "digest": "sha256:4c8326faabe6fb9da3f25706067bca523999972df2e93c77b94e91d79da9496c"
+      "size": 405,
+      "digest": "sha256:8e1d5922a77c0c2a43053fa36ba722627034b63a10e736a7c65955310ccd1807"
+    },
+    {
+      "path": "fixtures/negative-missing-boot_disk_gib.json",
+      "mediaType": "application/json",
+      "size": 386,
+      "digest": "sha256:3fac848d9f392e21e14915fb72209a918cfdc186ddd4a25a482d1b8c10f1d05d"
+    },
+    {
+      "path": "fixtures/negative-missing-machine_class.json",
+      "mediaType": "application/json",
+      "size": 372,
+      "digest": "sha256:7a13ac63c5c9d0f9eba8decaf9bd659a51a373d03c02600055ab47da06876b44"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 377,
+      "digest": "sha256:4060060b93311e7e191537a66e3a209da220a17c9bc14e04b17245bcad131504"
+    },
+    {
+      "path": "fixtures/negative-missing-source.json",
+      "mediaType": "application/json",
+      "size": 161,
+      "digest": "sha256:21e15879fabf2f95b21dd4ad180ab3dcbd35d38cb8785778d0735e916fa92588"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 149,
+      "digest": "sha256:ec86f6e1f01f789ca57841bc31dc4e69c7c5f7d1bbdd84cfbce3f59b3ecfdec8"
     },
     {
       "path": "fixtures/observed.json",

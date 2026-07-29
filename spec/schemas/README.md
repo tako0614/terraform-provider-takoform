@@ -1,8 +1,11 @@
 # Normative schemas
 
-These are the normative machine-readable artifacts of the Takoform
-specification. Where this repository's prose and one of these schemas
-disagree, the schema wins.
+These are the normative structural minima of the Takoform specification.
+Schema validity is necessary but not sufficient: the semantic verifier rules
+in the owning Form Definition, Form Package, Interface, and trust contracts
+are also normative and may reject a structurally valid document. Where prose
+and a schema directly disagree about the same structural condition, the schema
+wins.
 
 | Schema | Contract |
 | --- | --- |
@@ -12,8 +15,30 @@ disagree, the schema wins.
 | [`form-package-revocation.schema.json`](form-package-revocation.schema.json) | one append-only revocation statement |
 | [`form-package-revocation-checkpoint.schema.json`](form-package-revocation-checkpoint.schema.json) | the cumulative, hash-chained revocation checkpoint |
 | [`host-discovery.schema.json`](host-discovery.schema.json) | the versioned host discovery document |
+| [`host-api-wire.schema.json`](host-api-wire.schema.json) | the fixed Resource, lifecycle response, Interface projection, and error envelopes |
 
-The Go implementation embeds its own copies so the verifier has no filesystem
-dependency at runtime. `go test ./spec` proves those copies are byte-identical
-to these files, so the implementation can never quietly diverge from the
-specification it claims to implement.
+The Form Package verifier embeds its own copies of the package schemas so it
+has no filesystem dependency at runtime. The host discovery implementation
+keeps its published copy under `schemas/`. The wire-envelope schema is
+normative and is consumed by host/provider conformance rather than embedded in
+the data-only package verifier. `go test ./spec` compiles every schema and
+proves every implementation copy is byte-identical to its normative source.
+
+Every schema `$id` is also a retrieval URL. The files in this directory are the
+only source; `bun run sync:public-schemas` projects them byte-for-byte into
+`website/public/schemas/`, and `bun run check:public-surfaces` rejects missing,
+extra, or drifted public copies. Do not edit the generated public copies.
+
+Once a `$id` URL resolves, its bytes are an immutable published identity.
+[`release/public-schema-identities.json`](../../release/public-schema-identities.json)
+is the append-only ledger of every such identity, its exact digest, normative
+source, and public projection. The public-surface gate requires the normative
+set to equal that ledger. Deployment also compares the candidate ledger with
+every retained ledger version in repository history, so a published identity
+cannot disappear by deleting both its source and current ledger entry.
+
+Deployment fetches every retained URL immediately before mutation and refuses
+to overwrite a differing or unavailable identity. A wholly DNS-absent origin
+can be minted only through the explicit initial-origin acknowledgement
+documented in [`website/README.md`](../../website/README.md); that
+acknowledgement cannot bypass any existing response or mismatch.

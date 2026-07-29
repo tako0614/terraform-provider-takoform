@@ -1,0 +1,4 @@
+{
+  "partitionField": "eventDate",
+  "retentionDays": 365
+}

@@ -10,6 +10,7 @@
   },
   "healthCheckPath": "/healthz",
   "idleTimeoutSeconds": 0,
+  "internal": false,
   "listenPort": 443,
   "name": "load-balancer",
   "protocol": "https"

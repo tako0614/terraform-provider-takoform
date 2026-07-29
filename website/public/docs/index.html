@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Takoform provider documentation hub: current candidate status, getting started, 34 Form resources, and the read-only Interface data source."
+    >
+    <title>Documentation / ドキュメント — Takoform</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="/">Takoform</a>
+        <nav class="nav-links" aria-label="Documentation navigation">
+          <a href="#getting-started">Getting started</a>
+          <a href="#resources">Resources</a>
+          <a href="/spec/">Specification</a>
+          <a
+            class="btn btn-ghost"
+            href="https://github.com/tako0614/terraform-provider-takoform"
+          >GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container hero-grid">
+          <div>
+            <p class="eyebrow"><span class="dot"></span>forms.takoform.com/v1alpha1</p>
+            <h1>Documentation<br><span lang="ja">ドキュメント</span></h1>
+            <p class="lede">
+              Provider configuration, all 34 typed Service Form resources, and
+              the independent read-only generic Interface data source.
+              <br>
+              <span lang="ja">
+                Provider設定、34個の型付きService Form、独立した読み取り専用の
+                汎用Interface data sourceへの入口です。
+              </span>
+            </p>
+            <div class="cta-row">
+              <a class="btn btn-primary" href="#getting-started">Read the guide</a>
+              <a class="btn btn-ghost" href="/spec/">Read the specification</a>
+            </div>
+          </div>
+
+          <div class="status-col pending">
+            <h3>Candidate status / 現在の状態</h3>
+            <ul>
+              <li>Provider <code>v1.0.0</code> is candidate-only.</li>
+              <li>It is not installable from the Registry yet.</li>
+              <li>The API remains explicitly <code>v1alpha1</code>.</li>
+              <li>All 34 Forms are structural candidates, not admitted standards.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="ownership">
+        <div class="container">
+          <h2>What each layer owns / 各レイヤーの責務</h2>
+          <p class="section-lede">
+            Takoform describes portable intent. It deliberately leaves concrete
+            infrastructure and authority with the configured host.
+            <br>
+            <span lang="ja">
+              Takoformが定義するのはportableな意図です。具体的な基盤と権限はhostが所有します。
+            </span>
+          </p>
+          <div class="cards four">
+            <article class="card">
+              <span class="step">FORM</span>
+              <h3>Portable desired state</h3>
+              <p>
+                Exact versioned schema, immutable fields, and declared runtime
+                Interfaces. No target, credential, price, or implementation.
+              </p>
+            </article>
+            <article class="card">
+              <span class="step">PROVIDER</span>
+              <h3>Typed HCL bridge</h3>
+              <p>
+                Validates HCL, checks discovery, and translates lifecycle calls.
+                It does not operate a backend.
+              </p>
+            </article>
+            <article class="card">
+              <span class="step">HOST</span>
+              <h3>Realization and authority</h3>
+              <p>
+                Owns admission, placement, concrete backends, credentials,
+                authorization, policy, and native observation.
+              </p>
+            </article>
+            <article class="card">
+              <span class="step">INTERFACE</span>
+              <h3>Read-only discovery</h3>
+              <p>
+                Forms declare non-secret runtime surfaces and the host
+                materializes them. The provider can read them, not create them.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="getting-started">
+        <div class="container">
+          <h2>Candidate configuration / 候補版の設定</h2>
+          <p class="section-lede">
+            This is valid for the intended provider <code>v1.0.0</code>
+            contract, but <code>tofu init</code> and <code>terraform init</code>
+            cannot install that version from the Registry until it is published
+            and read back successfully.
+            <br>
+            <span lang="ja">
+              これはprovider <code>v1.0.0</code>候補の正しい設定です。ただし公開と
+              readbackが完了するまでRegistryからはinstallできません。
+            </span>
+          </p>
+          <figure class="code-card wide">
+            <figcaption><span class="traffic"></span>main.tf</figcaption>
+            <pre><code>terraform {
+  required_providers {
+    takoform = {
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
+    }
+  }
+}
+
+provider "takoform" {
+  endpoint = "https://forms.example.com"
+  space    = "prod"
+}
+
+resource "takoform_object_bucket" "assets" {
+  name             = "assets"
+  storage_class    = "standard"
+  versioning       = true
+  access_protocols = ["s3_api"]
+}</code></pre>
+          </figure>
+
+          <div class="grow-card">
+            <div>
+              <h3>Validate from source today / 現在はsourceから検証</h3>
+              <p>
+                Clone the repository and run <code>bun run check</code> with
+                the documented Go, OpenTofu, and Terraform toolchains. That
+                proves the local candidate lifecycle; it is not Registry
+                installation evidence.
+              </p>
+            </div>
+            <a
+              class="btn btn-ghost"
+              href="https://github.com/tako0614/terraform-provider-takoform#development"
+            >Development instructions</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="provider">
+        <div class="container">
+          <h2>Provider configuration</h2>
+          <p class="section-lede">
+            <code>endpoint</code> selects the conforming host control plane;
+            it is not a runtime invocation endpoint.
+          </p>
+          <div class="cards three">
+            <article class="card">
+              <span class="step">endpoint</span>
+              <h3>Host origin</h3>
+              <p>
+                Required as HCL or <code>TAKOFORM_ENDPOINT</code>. Discovery
+                must advertise the versioned <code>v1alpha1</code> endpoint and
+                exact candidate Form availability.
+              </p>
+            </article>
+            <article class="card">
+              <span class="step">space</span>
+              <h3>Default namespace</h3>
+              <p>
+                Optional in HCL or <code>TAKOFORM_SPACE</code>. Individual
+                resources can override it.
+              </p>
+            </article>
+            <article class="card">
+              <span class="step">token</span>
+              <h3>Sensitive bearer token</h3>
+              <p>
+                Optional in HCL or <code>TAKOFORM_TOKEN</code>. Runtime
+                Interface credentials never enter this provider setting.
+              </p>
+            </article>
+          </div>
+          <p class="fineprint">
+            Canonical reference:
+            <a
+              href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/index.md"
+            >docs/index.md</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="section alt" id="resources">
+        <div class="container">
+          <h2>Resource reference / Resource一覧</h2>
+          <p class="section-lede">
+            Every link opens the canonical generated Markdown reference in the
+            source repository. The first 34 resources are the complete current
+            Service Form inventory.
+          </p>
+
+          <h3 class="resource-domain">Compute and application / コンピュートとアプリケーション</h3>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/edge_worker.md"><code>takoform_edge_worker</code><span>Edge/event application</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/container_service.md"><code>takoform_container_service</code><span>OCI container service</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/compute_instance.md"><code>takoform_compute_instance</code><span>Long-running machine</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/static_site.md"><code>takoform_static_site</code><span>Static asset site</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/workflow.md"><code>takoform_workflow</code><span>Durable workflow</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/stateful_entity.md"><code>takoform_stateful_entity</code><span>Persistent entities</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/schedule.md"><code>takoform_schedule</code><span>Cron lifecycle</span></a>
+          </div>
+
+          <h3 class="resource-domain">Data and storage / データとストレージ</h3>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/object_bucket.md"><code>takoform_object_bucket</code><span>Object storage</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/object_lifecycle_rule.md"><code>takoform_object_lifecycle_rule</code><span>Object lifecycle action</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/key_value_store.md"><code>takoform_key_value_store</code><span>Key/value state</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/cache_cluster.md"><code>takoform_cache_cluster</code><span>In-memory cache</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/relational_database.md"><code>takoform_relational_database</code><span>Relational database</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/indexed_store.md"><code>takoform_indexed_store</code><span>Indexed item store</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/queue.md"><code>takoform_queue</code><span>At-least-once queue</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/stream_topic.md"><code>takoform_stream_topic</code><span>Published event stream</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/search_index.md"><code>takoform_search_index</code><span>Full-text index</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/vector_index.md"><code>takoform_vector_index</code><span>Vector index</span></a>
+          </div>
+
+          <h3 class="resource-domain">Analytics and inference / 分析と推論</h3>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/analytics_dataset.md"><code>takoform_analytics_dataset</code><span>Analytical dataset</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/model_endpoint.md"><code>takoform_model_endpoint</code><span>Model inference endpoint</span></a>
+          </div>
+
+          <h3 class="resource-domain">Network and delivery / ネットワークと配信</h3>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/dns_zone.md"><code>takoform_dns_zone</code><span>Authoritative DNS zone</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/dns_record.md"><code>takoform_dns_record</code><span>DNS record</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/tls_certificate.md"><code>takoform_tls_certificate</code><span>Managed TLS certificate</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/http_route.md"><code>takoform_http_route</code><span>HTTP traffic binding</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/load_balancer.md"><code>takoform_load_balancer</code><span>Connection distributor</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/private_network.md"><code>takoform_private_network</code><span>Private address space</span></a>
+          </div>
+
+          <h3 class="resource-domain">Operations and integration / 運用と連携</h3>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/container_registry.md"><code>takoform_container_registry</code><span>OCI artifact registry</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/log_sink.md"><code>takoform_log_sink</code><span>Structured log destination</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/metric_sink.md"><code>takoform_metric_sink</code><span>Numeric time-series destination</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/email_sender.md"><code>takoform_email_sender</code><span>Outbound mail identity</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/webhook_endpoint.md"><code>takoform_webhook_endpoint</code><span>Inbound HTTP endpoint</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/identity_client.md"><code>takoform_identity_client</code><span>OIDC client registration</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/feature_flag.md"><code>takoform_feature_flag</code><span>Runtime switch</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/rate_limit_policy.md"><code>takoform_rate_limit_policy</code><span>Request budget</span></a>
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/resources/backup_policy.md"><code>takoform_backup_policy</code><span>Copy and retention rule</span></a>
+          </div>
+
+          <h3 class="resource-domain">Generic Interface data source / 汎用Interface data source</h3>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/docs/data-sources/interface.md"><code>data.takoform_interface</code><span>Read an exact declaration</span></a>
+          </div>
+          <p class="fineprint">
+            A Form Definition declares each open, author-defined Interface and
+            the host materializes it. The provider has no Interface write
+            resource. Reading a declaration contains no credential and grants
+            no consumer access.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="evidence">
+        <div class="container">
+          <h2>What “candidate” means / candidateの意味</h2>
+          <div class="status-grid">
+            <div class="status-col done">
+              <h3>Proven locally / ローカルで確認済み</h3>
+              <ul>
+                <li>One catalog generates provider schemas and Form definitions.</li>
+                <li>Positive and negative package fixtures verify offline.</li>
+                <li>OpenTofu and Terraform lifecycle matrices run locally.</li>
+                <li>Reference docs and examples cover every current resource.</li>
+              </ul>
+            </div>
+            <div class="status-col pending">
+              <h3>Still external / 外部証拠が必要</h3>
+              <ul>
+                <li>Provider <code>v1.0.0</code> publication and Registry readback.</li>
+                <li>Signed current Form Package publication evidence.</li>
+                <li>Conforming-host lifecycle and Interface materialization reports.</li>
+                <li>Signed admission closure for any portable standard claim.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-grid">
+        <div class="footer-brand">Takoform</div>
+        <ul class="footer-links">
+          <li><a href="/">Home</a></li>
+          <li><a href="/spec/">Specification</a></li>
+          <li><a href="https://github.com/tako0614/terraform-provider-takoform">GitHub</a></li>
+        </ul>
+        <div class="footer-ids">
+          <code>registry.terraform.io/tako0614/takoform</code>
+          <code>forms.takoform.com/v1alpha1</code>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

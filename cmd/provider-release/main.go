@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"sort"
@@ -30,7 +31,10 @@ import (
 
 const descriptorPath = "release/version.json"
 
-var semverPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
+var (
+	semverPattern    = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
+	requestIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+)
 
 type cliCompatibility struct {
 	Product         string `json:"product"`
@@ -150,6 +154,107 @@ type statementPredicate struct {
 	RunDetails      map[string]any `json:"runDetails"`
 }
 
+type releaseProvenanceStatement struct {
+	Type          string                     `json:"_type"`
+	Subject       []releaseProvenanceSubject `json:"subject"`
+	PredicateType string                     `json:"predicateType"`
+	Predicate     releaseProvenancePredicate `json:"predicate"`
+}
+
+type releaseProvenanceSubject struct {
+	Name        string                              `json:"name"`
+	Digest      releaseProvenanceSubjectDigest      `json:"digest"`
+	Annotations releaseProvenanceSubjectAnnotations `json:"annotations"`
+}
+
+type releaseProvenanceSubjectDigest struct {
+	SHA256 string `json:"sha256"`
+}
+
+type releaseProvenanceSubjectAnnotations struct {
+	Size int64 `json:"size"`
+}
+
+type releaseProvenancePredicate struct {
+	BuildDefinition releaseProvenanceBuildDefinition `json:"buildDefinition"`
+	RunDetails      releaseProvenanceRunDetails      `json:"runDetails"`
+}
+
+type releaseProvenanceBuildDefinition struct {
+	BuildType            string                              `json:"buildType"`
+	ExternalParameters   releaseProvenanceExternalParameters `json:"externalParameters"`
+	InternalParameters   releaseProvenanceInternalParameters `json:"internalParameters"`
+	ResolvedDependencies []releaseProvenanceDependency       `json:"resolvedDependencies"`
+}
+
+type releaseProvenanceExternalParameters struct {
+	Tag       string `json:"tag"`
+	RequestID string `json:"requestId"`
+}
+
+type releaseProvenanceInternalParameters struct {
+	Canonicalization string                     `json:"canonicalization"`
+	SourceCommit     string                     `json:"sourceCommit"`
+	ToolingCommit    string                     `json:"toolingCommit"`
+	Workflow         releaseProvenanceWorkflow  `json:"workflow"`
+	Run              releaseProvenanceRun       `json:"run"`
+	TagObject        releaseProvenanceTagObject `json:"tagObject"`
+}
+
+type releaseProvenanceWorkflow struct {
+	Path string `json:"path"`
+	Ref  string `json:"ref"`
+}
+
+type releaseProvenanceRun struct {
+	ID      string `json:"id"`
+	Attempt string `json:"attempt"`
+}
+
+type releaseProvenanceTagObject struct {
+	OID    string `json:"oid"`
+	SHA256 string `json:"sha256"`
+}
+
+type releaseProvenanceDependency struct {
+	Name   string            `json:"name"`
+	URI    string            `json:"uri"`
+	Digest map[string]string `json:"digest"`
+}
+
+type releaseProvenanceRunDetails struct {
+	Builder  releaseProvenanceBuilder  `json:"builder"`
+	Metadata releaseProvenanceMetadata `json:"metadata"`
+}
+
+type releaseProvenanceBuilder struct {
+	ID string `json:"id"`
+}
+
+type releaseProvenanceMetadata struct {
+	InvocationID string `json:"invocationId"`
+}
+
+type releaseProvenanceVerification struct {
+	Kind              string `json:"kind"`
+	Tag               string `json:"tag"`
+	Provenance        string `json:"provenance"`
+	SubjectCount      int    `json:"subjectCount"`
+	SignerFingerprint string `json:"signerFingerprint"`
+	Verified          bool   `json:"verified"`
+}
+
+type releaseProvenanceExpectations struct {
+	Tag             string
+	SourceCommit    string
+	ToolingCommit   string
+	RequestID       string
+	RunID           string
+	RunAttempt      string
+	TagObjectOID    string
+	TagObjectSHA256 string
+}
+
 type signedTagArtifactMetadata struct {
 	Format            string `json:"format"`
 	Repository        string `json:"repository"`
@@ -157,6 +262,7 @@ type signedTagArtifactMetadata struct {
 	WorkflowRef       string `json:"workflowRef"`
 	RunID             string `json:"runId"`
 	RunAttempt        string `json:"runAttempt"`
+	RequestID         string `json:"requestId"`
 	SourceRef         string `json:"sourceRef"`
 	SourceCommit      string `json:"sourceCommit"`
 	ReleaseTag        string `json:"releaseTag"`
@@ -167,8 +273,22 @@ type signedTagArtifactMetadata struct {
 	SignerFingerprint string `json:"signerFingerprint"`
 }
 
+type providerTagPreflight struct {
+	Format                          string `json:"format"`
+	RequestID                       string `json:"requestId"`
+	RunID                           string `json:"runId"`
+	RunAttempt                      string `json:"runAttempt"`
+	SourceCommit                    string `json:"sourceCommit"`
+	ReleaseDescriptorSHA256         string `json:"releaseDescriptorSha256"`
+	ProviderCandidateManifestSHA256 string `json:"providerCandidateManifestSha256"`
+	ProviderSBOMSHA256              string `json:"providerSBOMSha256"`
+	ProviderProvenanceSHA256        string `json:"providerProvenanceSha256"`
+	ProviderLifecycleMatrixSHA256   string `json:"providerLifecycleMatrixSha256"`
+}
+
 type signedTagArtifactEvidence struct {
 	Kind                 string `json:"kind"`
+	RequestID            string `json:"requestId"`
 	ReleaseTag           string `json:"releaseTag"`
 	SourceCommit         string `json:"sourceCommit"`
 	WorkflowRun          string `json:"workflowRun"`
@@ -182,7 +302,7 @@ type signedTagArtifactEvidence struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: provider-release <verify-source|build|verify-reproducible|verify-sbom|registry-checksum-targets|verify-tag-artifact> [options]")
+		fail("usage: provider-release <verify-source|build|verify-reproducible|verify-sbom|registry-checksum-targets|verify-tag-artifact|verify-release-provenance> [options]")
 	}
 	repo, err := repositoryRoot()
 	check(err)
@@ -252,10 +372,30 @@ func main() {
 		preflightPath := fs.String("preflight-artifact", "", "downloaded provider-tag-preflight artifact directory")
 		expectedRunID := fs.String("expected-run-id", "", "exact approved GitHub Actions run id")
 		expectedRunAttempt := fs.String("expected-run-attempt", "", "exact approved GitHub Actions run attempt")
+		expectedRequestID := fs.String("expected-request-id", "", "exact lowercase UUIDv4 dispatch correlation token")
 		expectedCommit := fs.String("expected-commit", "", "exact protected-main source commit")
 		materializeRef := fs.Bool("materialize-ref", false, "atomically create the local descriptor tag ref after verification")
 		check(fs.Parse(os.Args[2:]))
-		evidence, err := verifySignedTagArtifact(repo, desc, *artifactPath, *preflightPath, *expectedRunID, *expectedRunAttempt, *expectedCommit, *materializeRef)
+		evidence, err := verifySignedTagArtifact(repo, desc, *artifactPath, *preflightPath, *expectedRunID, *expectedRunAttempt, *expectedRequestID, *expectedCommit, *materializeRef)
+		check(err)
+		writeJSON(os.Stdout, evidence)
+	case "verify-release-provenance":
+		fs := flag.NewFlagSet("verify-release-provenance", flag.ExitOnError)
+		assets := fs.String("assets", "", "exact closed provider release asset directory")
+		expectedTag := fs.String("expected-tag", "", "exact provider release tag")
+		expectedSourceCommit := fs.String("expected-source-commit", "", "exact tagged source commit")
+		expectedToolingCommit := fs.String("expected-tooling-commit", "", "exact signed-tag workflow commit")
+		expectedRequestID := fs.String("expected-request-id", "", "exact lowercase UUIDv4 dispatch correlation token")
+		expectedRunID := fs.String("expected-run-id", "", "exact GitHub Actions run id")
+		expectedRunAttempt := fs.String("expected-run-attempt", "", "exact GitHub Actions run attempt")
+		expectedTagObjectOID := fs.String("expected-tag-object-oid", "", "exact annotated tag object id")
+		expectedTagObjectSHA256 := fs.String("expected-tag-object-sha256", "", "exact sha256 digest of the annotated tag bytes")
+		check(fs.Parse(os.Args[2:]))
+		evidence, err := verifyReleaseProvenance(repo, desc, *assets, releaseProvenanceExpectations{
+			Tag: *expectedTag, SourceCommit: *expectedSourceCommit, ToolingCommit: *expectedToolingCommit,
+			RequestID: *expectedRequestID, RunID: *expectedRunID, RunAttempt: *expectedRunAttempt,
+			TagObjectOID: *expectedTagObjectOID, TagObjectSHA256: *expectedTagObjectSHA256,
+		})
 		check(err)
 		writeJSON(os.Stdout, evidence)
 	default:
@@ -294,12 +434,345 @@ func registryChecksumTargets(desc descriptor, product string) ([]string, error) 
 	return targets, nil
 }
 
-func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflightPath, expectedRunID, expectedRunAttempt, expectedCommit string, materializeRef bool) (signedTagArtifactEvidence, error) {
+func providerReleasePayloadNames(desc descriptor) []string {
+	base := "terraform-provider-takoform_" + desc.Version
+	names := make([]string, 0, 13)
+	for _, platform := range desc.Platforms {
+		archive := base + "_" + platform + ".zip"
+		names = append(names, archive, archive+".spdx.json")
+	}
+	names = append(names, base+"_manifest.json", base+"_SHA256SUMS", base+"_SHA256SUMS.sig")
+	sort.Strings(names)
+	return names
+}
+
+func verifyReleaseProvenance(repo string, desc descriptor, assets string, expected releaseProvenanceExpectations) (releaseProvenanceVerification, error) {
+	var evidence releaseProvenanceVerification
+	if strings.TrimSpace(assets) == "" {
+		return evidence, errors.New("--assets is required")
+	}
+	if expected.Tag != desc.Tag {
+		return evidence, errors.New("expected tag must exactly match the release descriptor")
+	}
+	commitPattern := regexp.MustCompile(`^[0-9a-f]{40}$`)
+	if !commitPattern.MatchString(expected.SourceCommit) || !commitPattern.MatchString(expected.ToolingCommit) ||
+		expected.SourceCommit != expected.ToolingCommit {
+		return evidence, errors.New("source and tooling commits must be the same exact lowercase signed-tag commit")
+	}
+	positiveDecimal := regexp.MustCompile(`^[1-9][0-9]*$`)
+	if !positiveDecimal.MatchString(expected.RunID) || !positiveDecimal.MatchString(expected.RunAttempt) {
+		return evidence, errors.New("expected run id and attempt must be positive decimal strings")
+	}
+	if !requestIDPattern.MatchString(expected.RequestID) {
+		return evidence, errors.New("expected request id must be one exact lowercase canonical UUIDv4")
+	}
+	if !commitPattern.MatchString(expected.TagObjectOID) ||
+		!regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(expected.TagObjectSHA256) {
+		return evidence, errors.New("expected tag object bindings must be exact lowercase object and sha256 identities")
+	}
+	if !filepath.IsAbs(assets) {
+		assets = filepath.Join(repo, assets)
+	}
+	assets = filepath.Clean(assets)
+	base := "terraform-provider-takoform_" + desc.Version
+	provenanceName := base + "_provenance.intoto.json"
+	signatureName := provenanceName + ".sig"
+	payloadNames := providerReleasePayloadNames(desc)
+	if len(payloadNames) != 13 {
+		return evidence, fmt.Errorf("provider release payload inventory has %d entries, want 13", len(payloadNames))
+	}
+	expectedInventory := append(append([]string(nil), payloadNames...), provenanceName, signatureName)
+	sort.Strings(expectedInventory)
+	entries, err := os.ReadDir(assets)
+	if err != nil {
+		return evidence, err
+	}
+	actualInventory := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return evidence, err
+		}
+		if !info.Mode().IsRegular() {
+			return evidence, fmt.Errorf("provider release asset %q is not a regular file", entry.Name())
+		}
+		actualInventory = append(actualInventory, entry.Name())
+	}
+	sort.Strings(actualInventory)
+	if !reflect.DeepEqual(actualInventory, expectedInventory) {
+		return evidence, fmt.Errorf("provider release asset inventory mismatch: got %v, want %v", actualInventory, expectedInventory)
+	}
+
+	subjects := make([]releaseProvenanceSubject, 0, len(payloadNames))
+	for _, name := range payloadNames {
+		digest, size, err := fileDigest(filepath.Join(assets, name))
+		if err != nil {
+			return evidence, fmt.Errorf("describe provider release payload %s: %w", name, err)
+		}
+		if size <= 0 {
+			return evidence, fmt.Errorf("provider release payload %s is empty", name)
+		}
+		subjects = append(subjects, releaseProvenanceSubject{
+			Name:        name,
+			Digest:      releaseProvenanceSubjectDigest{SHA256: digest},
+			Annotations: releaseProvenanceSubjectAnnotations{Size: size},
+		})
+	}
+	const workflowPath = ".github/workflows/release.yml"
+	repository := strings.TrimPrefix(desc.SourceRepository, "github.com/")
+	workflowRef := repository + "/" + workflowPath + "@refs/tags/" + expected.Tag
+	invocationID := "https://github.com/" + repository + "/actions/runs/" + expected.RunID + "/attempts/" + expected.RunAttempt
+	want := releaseProvenanceStatement{
+		Type:          "https://in-toto.io/Statement/v1",
+		Subject:       subjects,
+		PredicateType: "https://slsa.dev/provenance/v1",
+		Predicate: releaseProvenancePredicate{
+			BuildDefinition: releaseProvenanceBuildDefinition{
+				BuildType: "https://takoform.com/buildtypes/provider-release/v1",
+				ExternalParameters: releaseProvenanceExternalParameters{
+					Tag: expected.Tag, RequestID: expected.RequestID,
+				},
+				InternalParameters: releaseProvenanceInternalParameters{
+					Canonicalization: "RFC8785",
+					SourceCommit:     expected.SourceCommit,
+					ToolingCommit:    expected.ToolingCommit,
+					Workflow:         releaseProvenanceWorkflow{Path: workflowPath, Ref: workflowRef},
+					Run:              releaseProvenanceRun{ID: expected.RunID, Attempt: expected.RunAttempt},
+					TagObject:        releaseProvenanceTagObject{OID: expected.TagObjectOID, SHA256: expected.TagObjectSHA256},
+				},
+				ResolvedDependencies: []releaseProvenanceDependency{
+					{
+						Name: "signed-provider-tag",
+						URI:  "git+https://" + desc.SourceRepository + "@refs/tags/" + expected.Tag,
+						Digest: map[string]string{
+							"gitCommit":    expected.SourceCommit,
+							"gitTagObject": expected.TagObjectOID,
+							"sha256":       strings.TrimPrefix(expected.TagObjectSHA256, "sha256:"),
+						},
+					},
+					{
+						Name:   "signed-tag-release-tooling",
+						URI:    "git+https://" + desc.SourceRepository + "@" + expected.ToolingCommit,
+						Digest: map[string]string{"gitCommit": expected.ToolingCommit},
+					},
+				},
+			},
+			RunDetails: releaseProvenanceRunDetails{
+				Builder:  releaseProvenanceBuilder{ID: "https://github.com/" + workflowRef},
+				Metadata: releaseProvenanceMetadata{InvocationID: invocationID},
+			},
+		},
+	}
+	provenancePath := filepath.Join(assets, provenanceName)
+	raw, err := os.ReadFile(provenancePath)
+	if err != nil {
+		return evidence, err
+	}
+	if err := verifyCanonicalJSONFile(repo, provenancePath, raw); err != nil {
+		return evidence, fmt.Errorf("provider release provenance canonicalization: %w", err)
+	}
+	if err := validateReleaseProvenanceJSONShape(raw); err != nil {
+		return evidence, fmt.Errorf("provider release provenance shape: %w", err)
+	}
+	var got releaseProvenanceStatement
+	if err := decodeStrictJSON(raw, &got); err != nil {
+		return evidence, fmt.Errorf("decode provider release provenance: %w", err)
+	}
+	if err := verifyReleaseProvenanceSemantics(got, want); err != nil {
+		return evidence, err
+	}
+	if err := validateSLSAProvenanceRaw(raw); err != nil {
+		return evidence, fmt.Errorf("official in-toto/SLSA validation: %w", err)
+	}
+	signer, err := verifyPinnedDetachedSignature(
+		filepath.Join(repo, desc.PublicKeyPath),
+		desc.SigningFingerprint,
+		filepath.Join(assets, signatureName),
+		provenancePath,
+	)
+	if err != nil {
+		return evidence, fmt.Errorf("verify provider release provenance signature: %w", err)
+	}
+	return releaseProvenanceVerification{
+		Kind: "takoform.provider-release-provenance-verification@v1",
+		Tag:  expected.Tag, Provenance: provenanceName, SubjectCount: len(subjects),
+		SignerFingerprint: signer, Verified: true,
+	}, nil
+}
+
+func verifyReleaseProvenanceSemantics(got, want releaseProvenanceStatement) error {
+	if !reflect.DeepEqual(got, want) {
+		return errors.New("provider release provenance does not semantically rebuild from the exact payload and release bindings")
+	}
+	return nil
+}
+
+func validateReleaseProvenanceJSONShape(raw []byte) error {
+	top, err := exactJSONObject(raw, "statement", "_type", "predicate", "predicateType", "subject")
+	if err != nil {
+		return err
+	}
+	var subjects []json.RawMessage
+	if err := json.Unmarshal(top["subject"], &subjects); err != nil {
+		return fmt.Errorf("statement.subject: %w", err)
+	}
+	for index, subject := range subjects {
+		object, err := exactJSONObject(subject, fmt.Sprintf("statement.subject[%d]", index), "annotations", "digest", "name")
+		if err != nil {
+			return err
+		}
+		if _, err := exactJSONObject(object["digest"], fmt.Sprintf("statement.subject[%d].digest", index), "sha256"); err != nil {
+			return err
+		}
+		if _, err := exactJSONObject(object["annotations"], fmt.Sprintf("statement.subject[%d].annotations", index), "size"); err != nil {
+			return err
+		}
+	}
+	predicate, err := exactJSONObject(top["predicate"], "statement.predicate", "buildDefinition", "runDetails")
+	if err != nil {
+		return err
+	}
+	build, err := exactJSONObject(predicate["buildDefinition"], "statement.predicate.buildDefinition",
+		"buildType", "externalParameters", "internalParameters", "resolvedDependencies")
+	if err != nil {
+		return err
+	}
+	if _, err := exactJSONObject(build["externalParameters"], "statement.predicate.buildDefinition.externalParameters", "requestId", "tag"); err != nil {
+		return err
+	}
+	internal, err := exactJSONObject(build["internalParameters"], "statement.predicate.buildDefinition.internalParameters",
+		"canonicalization", "run", "sourceCommit", "tagObject", "toolingCommit", "workflow")
+	if err != nil {
+		return err
+	}
+	if _, err := exactJSONObject(internal["workflow"], "statement.predicate.buildDefinition.internalParameters.workflow", "path", "ref"); err != nil {
+		return err
+	}
+	if _, err := exactJSONObject(internal["run"], "statement.predicate.buildDefinition.internalParameters.run", "attempt", "id"); err != nil {
+		return err
+	}
+	if _, err := exactJSONObject(internal["tagObject"], "statement.predicate.buildDefinition.internalParameters.tagObject", "oid", "sha256"); err != nil {
+		return err
+	}
+	var dependencies []json.RawMessage
+	if err := json.Unmarshal(build["resolvedDependencies"], &dependencies); err != nil {
+		return fmt.Errorf("statement.predicate.buildDefinition.resolvedDependencies: %w", err)
+	}
+	if len(dependencies) != 2 {
+		return fmt.Errorf("statement.predicate.buildDefinition.resolvedDependencies has %d entries, want 2", len(dependencies))
+	}
+	for index, dependency := range dependencies {
+		object, err := exactJSONObject(dependency, fmt.Sprintf("resolvedDependencies[%d]", index), "digest", "name", "uri")
+		if err != nil {
+			return err
+		}
+		digestKeys := []string{"gitCommit"}
+		if index == 0 {
+			digestKeys = []string{"gitCommit", "gitTagObject", "sha256"}
+		}
+		if _, err := exactJSONObject(object["digest"], fmt.Sprintf("resolvedDependencies[%d].digest", index), digestKeys...); err != nil {
+			return err
+		}
+	}
+	runDetails, err := exactJSONObject(predicate["runDetails"], "statement.predicate.runDetails", "builder", "metadata")
+	if err != nil {
+		return err
+	}
+	if _, err := exactJSONObject(runDetails["builder"], "statement.predicate.runDetails.builder", "id"); err != nil {
+		return err
+	}
+	if _, err := exactJSONObject(runDetails["metadata"], "statement.predicate.runDetails.metadata", "invocationId"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func exactJSONObject(raw []byte, label string, expectedKeys ...string) (map[string]json.RawMessage, error) {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
+	}
+	actualKeys := make([]string, 0, len(object))
+	for key := range object {
+		actualKeys = append(actualKeys, key)
+	}
+	sort.Strings(actualKeys)
+	expected := append([]string(nil), expectedKeys...)
+	sort.Strings(expected)
+	if !reflect.DeepEqual(actualKeys, expected) {
+		return nil, fmt.Errorf("%s keys are %v, want %v", label, actualKeys, expected)
+	}
+	return object, nil
+}
+
+func verifyCanonicalJSONFile(repo, path string, raw []byte) error {
+	canonical, err := command(repo, nil, "go", "run", "./cmd/form-package", "canonicalize", path)
+	if err != nil {
+		return err
+	}
+	want := append(append([]byte(nil), raw...), '\n')
+	if !bytes.Equal([]byte(canonical), want) {
+		return errors.New("document is not exact RFC8785 bytes")
+	}
+	return nil
+}
+
+func verifyPinnedDetachedSignature(publicKeyPath, expectedFingerprint, signaturePath, subjectPath string) (string, error) {
+	fingerprint, err := publicKeyFingerprint(publicKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("inspect pinned provider public key: %w", err)
+	}
+	if fingerprint != expectedFingerprint {
+		return fingerprint, fmt.Errorf("provider public key fingerprint %s does not match pinned signer %s", fingerprint, expectedFingerprint)
+	}
+	gnupgHome, err := os.MkdirTemp("", "takoform-provider-provenance-verify-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(gnupgHome)
+	if err := os.Chmod(gnupgHome, 0o700); err != nil {
+		return "", err
+	}
+	if _, err := command("", nil, "gpg", "--homedir", gnupgHome, "--batch", "--import", publicKeyPath); err != nil {
+		return "", fmt.Errorf("import pinned provider public key: %w", err)
+	}
+	verify := exec.Command("gpg", "--homedir", gnupgHome, "--batch", "--status-fd", "1", "--verify", signaturePath, subjectPath)
+	var status, diagnostics bytes.Buffer
+	verify.Stdout, verify.Stderr = &status, &diagnostics
+	if err := verify.Run(); err != nil {
+		return "", fmt.Errorf("detached signature verification failed: %w: %s", err, strings.TrimSpace(diagnostics.String()))
+	}
+	validFingerprints := make([]string, 0, 1)
+	for _, line := range strings.Split(status.String(), "\n") {
+		fields := strings.Fields(line)
+		for index, field := range fields {
+			if field == "VALIDSIG" && index+1 < len(fields) {
+				candidate := strings.ToUpper(fields[index+1])
+				if regexp.MustCompile(`^[0-9A-F]{40}$`).MatchString(candidate) {
+					validFingerprints = append(validFingerprints, candidate)
+				}
+				break
+			}
+		}
+	}
+	if len(validFingerprints) != 1 {
+		return "", fmt.Errorf("detached signature returned %d exact VALIDSIG fingerprints", len(validFingerprints))
+	}
+	if validFingerprints[0] != expectedFingerprint {
+		return validFingerprints[0], fmt.Errorf("provenance signer %s does not match pinned signer %s", validFingerprints[0], expectedFingerprint)
+	}
+	return validFingerprints[0], nil
+}
+
+func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflightPath, expectedRunID, expectedRunAttempt, expectedRequestID, expectedCommit string, materializeRef bool) (signedTagArtifactEvidence, error) {
 	if strings.TrimSpace(artifactPath) == "" || strings.TrimSpace(preflightPath) == "" {
 		return signedTagArtifactEvidence{}, errors.New("--artifact and --preflight-artifact are required")
 	}
 	if !regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(expectedRunID) || !regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(expectedRunAttempt) {
 		return signedTagArtifactEvidence{}, errors.New("expected run id and attempt must be positive decimal strings")
+	}
+	if !requestIDPattern.MatchString(expectedRequestID) {
+		return signedTagArtifactEvidence{}, errors.New("expected request id must be one exact lowercase canonical UUIDv4")
 	}
 	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(expectedCommit) {
 		return signedTagArtifactEvidence{}, errors.New("expected commit must be an exact lowercase 40-character object id")
@@ -312,6 +785,21 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 	if err := verifyClosedChecksums(artifactPath, []string{"SHA256SUMS", "metadata.json", "tag-object"}, []string{"metadata.json", "tag-object"}); err != nil {
 		return signedTagArtifactEvidence{}, fmt.Errorf("verify signed tag artifact: %w", err)
 	}
+	var preflight providerTagPreflight
+	if err := readStrictJSONFile(filepath.Join(preflightPath, "preflight.json"), &preflight); err != nil {
+		return signedTagArtifactEvidence{}, fmt.Errorf("read provider tag preflight: %w", err)
+	}
+	sha256Pattern := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	if err := verifyProviderTagPreflightBinding(preflight, expectedRequestID, expectedRunID, expectedRunAttempt, expectedCommit); err != nil {
+		return signedTagArtifactEvidence{}, err
+	}
+	if !sha256Pattern.MatchString(preflight.ReleaseDescriptorSHA256) ||
+		!sha256Pattern.MatchString(preflight.ProviderCandidateManifestSHA256) ||
+		!sha256Pattern.MatchString(preflight.ProviderSBOMSHA256) ||
+		!sha256Pattern.MatchString(preflight.ProviderProvenanceSHA256) ||
+		!sha256Pattern.MatchString(preflight.ProviderLifecycleMatrixSHA256) {
+		return signedTagArtifactEvidence{}, errors.New("provider tag preflight does not bind the exact closed evidence")
+	}
 	var metadata signedTagArtifactMetadata
 	if err := readStrictJSONFile(filepath.Join(artifactPath, "metadata.json"), &metadata); err != nil {
 		return signedTagArtifactEvidence{}, fmt.Errorf("read signed tag metadata: %w", err)
@@ -323,6 +811,7 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 		metadata.Repository != "tako0614/terraform-provider-takoform" ||
 		metadata.WorkflowPath != expectedWorkflowPath || metadata.WorkflowRef != expectedWorkflowRef ||
 		metadata.RunID != expectedRunID || metadata.RunAttempt != expectedRunAttempt ||
+		metadata.RequestID != expectedRequestID ||
 		metadata.SourceRef != "refs/heads/main" || metadata.SourceCommit != expectedCommit ||
 		metadata.ReleaseTag != desc.Tag || metadata.SignerFingerprint != desc.SigningFingerprint {
 		return signedTagArtifactEvidence{}, errors.New("signed tag metadata does not match the exact release, source, workflow run, or signer")
@@ -341,7 +830,6 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 	if metadata.ObjectFormat != objectFormat || !regexp.MustCompile(fmt.Sprintf(`^[0-9a-f]{%d}$`, oidLength)).MatchString(metadata.TagObjectOID) {
 		return signedTagArtifactEvidence{}, errors.New("tag object id or object format does not match the local repository")
 	}
-	sha256Pattern := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	if !sha256Pattern.MatchString(metadata.TagObjectSHA256) || !sha256Pattern.MatchString(metadata.PreflightSHA256) {
 		return signedTagArtifactEvidence{}, errors.New("artifact metadata contains an invalid SHA256 digest")
 	}
@@ -364,7 +852,7 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 	if metadata.TagObjectSHA256 != "sha256:"+tagObjectDigest {
 		return signedTagArtifactEvidence{}, errors.New("tag object digest does not match metadata")
 	}
-	if err := verifyTagObjectBindings(tagObject, desc.Tag, expectedCommit, metadata.PreflightSHA256, expectedWorkflowRun); err != nil {
+	if err := verifyTagObjectBindings(tagObject, desc.Tag, expectedCommit, expectedRequestID, metadata.PreflightSHA256, expectedWorkflowRun); err != nil {
 		return signedTagArtifactEvidence{}, err
 	}
 	if _, err := command(repo, nil, "git", "cat-file", "-e", expectedCommit+"^{commit}"); err != nil {
@@ -410,10 +898,22 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 	}
 	return signedTagArtifactEvidence{
 		Kind: "takoform.provider-signed-tag-verification@v1", ReleaseTag: desc.Tag, SourceCommit: expectedCommit,
+		RequestID:   expectedRequestID,
 		WorkflowRun: expectedWorkflowRun, PreflightSHA256: metadata.PreflightSHA256,
 		TagObjectOID: tagObjectOID, TagObjectSHA256: metadata.TagObjectSHA256,
 		SignerFingerprint: signer, LocalRefMaterialized: materializeRef, Verified: true,
 	}, nil
+}
+
+func verifyProviderTagPreflightBinding(preflight providerTagPreflight, expectedRequestID, expectedRunID, expectedRunAttempt, expectedCommit string) error {
+	if preflight.Format != "takoform.provider-tag-preflight@v1" ||
+		preflight.RequestID != expectedRequestID ||
+		preflight.RunID != expectedRunID ||
+		preflight.RunAttempt != expectedRunAttempt ||
+		preflight.SourceCommit != expectedCommit {
+		return errors.New("provider tag preflight does not bind the exact request, workflow run attempt, and source")
+	}
+	return nil
 }
 
 func verifyClosedChecksums(root string, expectedFiles, checksumTargets []string) error {
@@ -472,7 +972,7 @@ func verifyClosedChecksums(root string, expectedFiles, checksumTargets []string)
 	return nil
 }
 
-func verifyTagObjectBindings(raw []byte, releaseTag, sourceCommit, preflightSHA256, workflowRun string) error {
+func verifyTagObjectBindings(raw []byte, releaseTag, sourceCommit, requestID, preflightSHA256, workflowRun string) error {
 	headerEnd := bytes.Index(raw, []byte("\n\n"))
 	signatureStart := bytes.Index(raw, []byte("-----BEGIN PGP SIGNATURE-----"))
 	if headerEnd < 0 || signatureStart <= headerEnd+2 {
@@ -483,20 +983,23 @@ func verifyTagObjectBindings(raw []byte, releaseTag, sourceCommit, preflightSHA2
 		!strings.HasPrefix(headers[3], "tagger Takoform Provider Release <release@takoform.invalid> ") {
 		return errors.New("tag object headers do not bind the exact source commit, tag, type, and release identity")
 	}
-	expectedMessage := fmt.Sprintf("Takoform provider %s\n\nsource-commit: %s\npreflight-sha256: %s\nworkflow-run: %s\n", releaseTag, sourceCommit, preflightSHA256, workflowRun)
+	expectedMessage := fmt.Sprintf("Takoform provider %s\n\nsource-commit: %s\nrequest-id: %s\npreflight-sha256: %s\nworkflow-run: %s\n", releaseTag, sourceCommit, requestID, preflightSHA256, workflowRun)
 	if string(raw[headerEnd+2:signatureStart]) != expectedMessage {
-		return errors.New("signed tag message does not bind the exact source, preflight inventory, and workflow run")
+		return errors.New("signed tag message does not bind the exact source, request, preflight inventory, and workflow run")
 	}
 	return nil
 }
 
 func readStrictJSONFile(path string, value any) error {
-	file, err := os.Open(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
+	return decodeStrictJSON(raw, value)
+}
+
+func decodeStrictJSON(raw []byte, value any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(value); err != nil {
 		return err
@@ -1036,6 +1539,10 @@ func validateSLSAProvenance(document statement) error {
 	if err != nil {
 		return err
 	}
+	return validateSLSAProvenanceRaw(raw)
+}
+
+func validateSLSAProvenanceRaw(raw []byte) error {
 	var envelope intotov1.Statement
 	if err := protojson.Unmarshal(raw, &envelope); err != nil {
 		return err

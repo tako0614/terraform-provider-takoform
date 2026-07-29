@@ -1,5 +1,5 @@
 {
-  "defaultSender": "notifications@portable-conformance.invalid",
+  "defaultLocalPart": "notifications",
   "domain": "not a domain",
   "name": "email-sender"
 }

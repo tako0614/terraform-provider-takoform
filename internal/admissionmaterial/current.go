@@ -10,8 +10,10 @@ import (
 	"regexp"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/admissioncheckpoint"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
 	"github.com/tako0614/terraform-provider-takoform/internal/hostpolicy"
+	"github.com/tako0614/terraform-provider-takoform/internal/portableconformance"
 	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
@@ -40,8 +42,17 @@ const (
 // evidence. The builder is deterministic and non-publishing.
 type CurrentBuildOptions struct {
 	BuildOptions
-	RegistryReadback      string
-	RegistryWorkflowRunID string
+	HostRequestID              string
+	HostWorkflowRunAttempt     string
+	HostHeadSHA                string
+	ProviderRequestID          string
+	ProviderWorkflowRunAttempt string
+	ProviderHeadSHA            string
+	RegistryReadback           string
+	RegistryRequestID          string
+	RegistryWorkflowRunID      string
+	RegistryWorkflowRunAttempt string
+	RegistryHeadSHA            string
 }
 
 type registryProviderIdentity struct {
@@ -82,6 +93,7 @@ type signedRegistryManifest struct {
 	Generation          string                    `json:"generation"`
 	CertificateIdentity string                    `json:"certificateIdentity"`
 	Workflow            string                    `json:"workflow"`
+	RequestID           string                    `json:"requestId"`
 	WorkflowRunID       string                    `json:"workflowRunId"`
 	WorkflowRunAttempt  int                       `json:"workflowRunAttempt"`
 	Source              sourceRef                 `json:"source"`
@@ -105,7 +117,10 @@ type currentArtifactConfig struct {
 	selected           admissionrelease.CandidateSet
 	takoformCommit     string
 	sourceCommit       string
+	requestID          string
 	workflowRunID      string
+	workflowRunAttempt string
+	headSHA            string
 	expectedSubject    string
 	providerVersion    string
 	retainedPolicyRoot string
@@ -121,6 +136,13 @@ func BuildCurrent(options CurrentBuildOptions) error {
 	root, err := filepath.Abs(options.Root)
 	if err != nil {
 		return err
+	}
+	descriptor, _, err := admissioncheckpoint.LoadCurrent(root)
+	if err != nil {
+		return fmt.Errorf("current admission checkpoint descriptor: %w", err)
+	}
+	if options.AdmissionVersion != descriptor.Version {
+		return fmt.Errorf("admission version %q does not equal the source descriptor version %q", options.AdmissionVersion, descriptor.Version)
 	}
 	output, err := prepareOutputPath(root, options.OutputDir)
 	if err != nil {
@@ -158,7 +180,9 @@ func BuildCurrent(options CurrentBuildOptions) error {
 		repositoryRoot: root, hostID: options.HostID, root: options.HostReports,
 		role: "host-report", closure: selected, selected: selected,
 		takoformCommit: options.HostTakoformSourceCommit, sourceCommit: options.HostSourceCommit,
-		workflowRunID: options.HostWorkflowRunID, providerVersion: providerVersion,
+		requestID: options.HostRequestID, workflowRunID: options.HostWorkflowRunID,
+		workflowRunAttempt: options.HostWorkflowRunAttempt, headSHA: options.HostHeadSHA,
+		providerVersion:    providerVersion,
 		retainedPolicyRoot: currentAdmissionRoot,
 	})
 	if err != nil {
@@ -168,13 +192,23 @@ func BuildCurrent(options CurrentBuildOptions) error {
 		repositoryRoot: root, root: options.ProviderReports,
 		role: "provider-report", closure: portable, selected: selected,
 		takoformCommit: options.ProviderSourceCommit, sourceCommit: options.ProviderSourceCommit,
-		workflowRunID: options.ProviderWorkflowRunID, expectedSubject: currentProviderSubject,
+		requestID: options.ProviderRequestID, workflowRunID: options.ProviderWorkflowRunID,
+		workflowRunAttempt: options.ProviderWorkflowRunAttempt, headSHA: options.ProviderHeadSHA,
+		expectedSubject: currentProviderSubject,
 		providerVersion: providerVersion, retainedPolicyRoot: currentAdmissionRoot,
 	})
 	if err != nil {
 		return fmt.Errorf("current provider report candidate: %w", err)
 	}
-	registry, err := loadCurrentRegistryArtifact(root, options.RegistryReadback, options.ProviderSourceCommit, options.RegistryWorkflowRunID)
+	registry, err := loadCurrentRegistryArtifact(
+		root,
+		options.RegistryReadback,
+		options.ProviderSourceCommit,
+		options.RegistryRequestID,
+		options.RegistryWorkflowRunID,
+		options.RegistryWorkflowRunAttempt,
+		options.RegistryHeadSHA,
+	)
 	if err != nil {
 		return fmt.Errorf("current provider Registry candidate: %w", err)
 	}
@@ -281,7 +315,7 @@ func BuildCurrent(options CurrentBuildOptions) error {
 			return err
 		}
 	}
-	_, setRaw, err := admissionrelease.BuildCanonicalSet(selected, "forms/admissions/v"+options.AdmissionVersion, admissionrelease.RegistryReadbackRef{
+	_, setRaw, err := admissionrelease.BuildCanonicalSet(selected, descriptor.Tag, admissionrelease.RegistryReadbackRef{
 		Path: path.Join("registry", registryReadbackName), Digest: formpackage.DigestBytes(registry.readback),
 		SigstoreBundle: path.Join("registry", registryBundleName),
 	}, entries, providerClosure)
@@ -301,15 +335,21 @@ func validateCurrentBuildOptions(options CurrentBuildOptions) error {
 		"host source commit":          options.HostSourceCommit,
 		"host Takoform source commit": options.HostTakoformSourceCommit,
 		"provider source commit":      options.ProviderSourceCommit,
+		"host head SHA":               options.HostHeadSHA,
+		"provider head SHA":           options.ProviderHeadSHA,
+		"registry head SHA":           options.RegistryHeadSHA,
 	} {
 		if !commitPattern.MatchString(value) {
 			return fmt.Errorf("%s must be lowercase 40-hex", label)
 		}
 	}
 	for label, value := range map[string]string{
-		"host workflow run id":     options.HostWorkflowRunID,
-		"provider workflow run id": options.ProviderWorkflowRunID,
-		"registry workflow run id": options.RegistryWorkflowRunID,
+		"host workflow run id":          options.HostWorkflowRunID,
+		"host workflow run attempt":     options.HostWorkflowRunAttempt,
+		"provider workflow run id":      options.ProviderWorkflowRunID,
+		"provider workflow run attempt": options.ProviderWorkflowRunAttempt,
+		"registry workflow run id":      options.RegistryWorkflowRunID,
+		"registry workflow run attempt": options.RegistryWorkflowRunAttempt,
 	} {
 		if !regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(value) {
 			return fmt.Errorf("%s must be a positive decimal integer", label)
@@ -317,6 +357,24 @@ func validateCurrentBuildOptions(options CurrentBuildOptions) error {
 	}
 	if !versionPattern.MatchString(options.AdmissionVersion) {
 		return fmt.Errorf("admission version is not a canonical version token")
+	}
+	for label, value := range map[string]string{
+		"host request id":     options.HostRequestID,
+		"provider request id": options.ProviderRequestID,
+		"registry request id": options.RegistryRequestID,
+	} {
+		if !canonicalUUIDv4Pattern.MatchString(value) {
+			return fmt.Errorf("%s must be a canonical lowercase UUIDv4", label)
+		}
+	}
+	if options.HostHeadSHA != options.HostSourceCommit {
+		return fmt.Errorf("host head SHA must equal the host source commit")
+	}
+	if options.ProviderHeadSHA != options.ProviderSourceCommit {
+		return fmt.Errorf("provider head SHA must equal the provider source commit")
+	}
+	if options.RegistryHeadSHA != options.ProviderSourceCommit {
+		return fmt.Errorf("registry head SHA must equal the provider source commit")
 	}
 	if options.HostReports == "" || options.ProviderReports == "" || options.RegistryReadback == "" ||
 		options.OutputDir == "" || options.HostID == "" {
@@ -383,8 +441,93 @@ func loadCurrentArtifactSet(config currentArtifactConfig) (artifactSet, error) {
 		manifest.Subject == "" || manifest.RunnerVersion == "" ||
 		signed.Subject != manifest.Subject || signed.ProofType != manifest.ProofType ||
 		signed.CertificateIdentity != identity || signed.Workflow != workflow ||
-		signed.WorkflowRunID != config.workflowRunID || signed.WorkflowRunAttempt != 1 {
+		signed.RequestID != config.requestID ||
+		!canonicalUUIDv4Pattern.MatchString(signed.RequestID) ||
+		signed.WorkflowRunID != config.workflowRunID ||
+		fmt.Sprint(signed.WorkflowRunAttempt) != config.workflowRunAttempt ||
+		signed.Source != manifest.Source ||
+		signed.Source.Commit != config.headSHA {
 		return artifactSet{}, fmt.Errorf("current candidate manifest identity or workflow closure is invalid")
+	}
+	expectedFiles := map[string]struct{}{manifestName: {}, signedName: {}, checksumsName: {}}
+	if config.role == "host-report" {
+		contract, err := portableconformance.Verify(
+			filepath.Join(config.repositoryRoot, "conformance", "portable-host-v1"),
+		)
+		if err != nil {
+			return artifactSet{}, fmt.Errorf("current portable host runner contract: %w", err)
+		}
+		if manifest.Workflow != workflow ||
+			!canonicalUUIDv4Pattern.MatchString(manifest.RequestID) ||
+			signed.RequestID != manifest.RequestID ||
+			signed.WorkflowRunAttempt != 1 ||
+			manifest.PortableRunner == nil ||
+			signed.PortableRunner == nil ||
+			signed.Closure == nil {
+			return artifactSet{}, fmt.Errorf("current host candidate request/runner closure is invalid")
+		}
+		portable := manifest.PortableRunner
+		signedPortable := signed.PortableRunner
+		signedClosure := signed.Closure
+		if portable.Path != "portable-host-runner-report.json" ||
+			portable.BundlePath != "portable-host-runner-report.sigstore.json" ||
+			portable.Format != "takoform.portable-host-runner-report@v1" ||
+			portable.RunnerSubject != contract.RunnerEvidence.Subject ||
+			portable.RunnerInputDigest != contract.RunnerEvidence.SHA256 ||
+			!formpackage.ValidDigest(portable.Digest) ||
+			!formpackage.ValidDigest(portable.RunnerInputDigest) ||
+			signedPortable.ReportPath != portable.Path ||
+			signedPortable.ReportDigest != portable.Digest ||
+			signedPortable.BundlePath != portable.BundlePath ||
+			signedPortable.RunnerSubject != portable.RunnerSubject ||
+			signedPortable.RunnerInputDigest != portable.RunnerInputDigest ||
+			signedClosure.ChecksumsPath != checksumsName ||
+			signedClosure.BundlePath != checksumsBundleName ||
+			signedClosure.CertificateIdentity != identity {
+			return artifactSet{}, fmt.Errorf("current host portable runner identity is invalid")
+		}
+		portableRaw, err := readRegular(absolute, portable.Path, maximumMaterialBytes)
+		if err != nil {
+			return artifactSet{}, err
+		}
+		if err := requireCanonical(portableRaw, portable.Path); err != nil {
+			return artifactSet{}, err
+		}
+		portableBundle, err := readRegular(absolute, portable.BundlePath, maximumMaterialBytes)
+		if err != nil {
+			return artifactSet{}, err
+		}
+		if portable.Digest != formpackage.DigestBytes(portableRaw) ||
+			signedPortable.BundleDigest != formpackage.DigestBytes(portableBundle) {
+			return artifactSet{}, fmt.Errorf("current host portable runner digest closure is invalid")
+		}
+		var portableReport portableconformance.HostRunnerReport
+		if err := decodeStrict(portableRaw, &portableReport); err != nil {
+			return artifactSet{}, fmt.Errorf("current host portable runner report: %w", err)
+		}
+		if portableReport.Format != portable.Format ||
+			portableReport.RunnerSubject != portable.RunnerSubject ||
+			portableReport.RunnerInputDigest != portable.RunnerInputDigest {
+			return artifactSet{}, fmt.Errorf("current host portable runner report does not match its manifest reference")
+		}
+		if err := portableconformance.ValidateHostRunnerReport(contract, portableReport); err != nil {
+			return artifactSet{}, fmt.Errorf("current host portable runner semantics: %w", err)
+		}
+		if err := validateBundle(portableBundle); err != nil {
+			return artifactSet{}, err
+		}
+		checksumsBundle, err := readRegular(absolute, signedClosure.BundlePath, maximumMaterialBytes)
+		if err != nil {
+			return artifactSet{}, err
+		}
+		if err := validateBundle(checksumsBundle); err != nil {
+			return artifactSet{}, fmt.Errorf("current host checksum signature bundle: %w", err)
+		}
+		expectedFiles[portable.Path] = struct{}{}
+		expectedFiles[portable.BundlePath] = struct{}{}
+		expectedFiles[signedClosure.BundlePath] = struct{}{}
+	} else if manifest.PortableRunner != nil || signed.PortableRunner != nil || signed.Closure != nil {
+		return artifactSet{}, fmt.Errorf("current provider candidate must not claim host runner or checksum-signature fields")
 	}
 	if config.expectedSubject != "" && manifest.Subject != config.expectedSubject {
 		return artifactSet{}, fmt.Errorf("subject is %q, want %q", manifest.Subject, config.expectedSubject)
@@ -392,6 +535,7 @@ func loadCurrentArtifactSet(config currentArtifactConfig) (artifactSet, error) {
 	if config.role == "provider-report" {
 		if manifest.ProofType != "provider" || manifest.RunnerVersion != config.providerVersion ||
 			manifest.Source.Repository != currentProviderRepository || manifest.Source.Commit != config.sourceCommit ||
+			signed.HeadSHA != config.headSHA ||
 			manifest.TakoformSource != nil || signed.TakoformSource != nil {
 			return artifactSet{}, fmt.Errorf("current provider candidate source binding is invalid")
 		}
@@ -415,7 +559,6 @@ func loadCurrentArtifactSet(config currentArtifactConfig) (artifactSet, error) {
 		len(signed.Entries) != len(config.closure.Entries) {
 		return artifactSet{}, fmt.Errorf("current candidate has %d/%d reports, want exact %d closure", len(manifest.Reports), len(signed.Entries), len(config.closure.Entries))
 	}
-	expectedFiles := map[string]struct{}{manifestName: {}, signedName: {}, checksumsName: {}}
 	bySigned := make(map[string]signedEntry, len(signed.Entries))
 	for _, entry := range signed.Entries {
 		if _, duplicate := bySigned[entry.Kind]; duplicate {
@@ -463,14 +606,16 @@ func loadCurrentArtifactSet(config currentArtifactConfig) (artifactSet, error) {
 		var parsed admissionrelease.RunnerReport
 		if config.role == "provider-report" {
 			positive := make([]string, 0, len(fixtures.positive))
-			negative := make([]string, 0, len(fixtures.negative))
+			negative := make([]admissionrelease.NegativeFixtureExpectation, 0, len(fixtures.negative))
 			for _, fixture := range fixtures.positive {
 				positive = append(positive, fixture.Name)
 			}
 			for _, fixture := range fixtures.negative {
-				negative = append(negative, fixture.Name)
+				negative = append(negative, admissionrelease.NegativeFixtureExpectation{
+					Name: fixture.Name, Stage: fixture.Stage,
+				})
 			}
-			parsed, err = admissionrelease.ValidateCanonicalProviderRunnerReport(reportRaw, identity, positive, negative)
+			parsed, err = admissionrelease.ValidateCanonicalProviderRunnerReportWithStages(reportRaw, identity, positive, negative)
 		} else {
 			parsed, err = admissionrelease.ValidateCanonicalHostRunnerReport(reportRaw, identity, fixtures.positiveBindings, fixtures.negativeBindings)
 		}
@@ -504,7 +649,13 @@ func loadCurrentArtifactSet(config currentArtifactConfig) (artifactSet, error) {
 	if !sameFileSet(files, expectedFiles) {
 		return artifactSet{}, fmt.Errorf("current candidate file inventory is not the exact %d-file closure", len(expectedFiles))
 	}
-	if err := verifyChecksums(absolute, expectedFiles); err != nil {
+	if config.role == "host-report" {
+		if err := verifyChecksumsExcluding(absolute, expectedFiles, map[string]struct{}{
+			checksumsBundleName: {},
+		}); err != nil {
+			return artifactSet{}, err
+		}
+	} else if err := verifyChecksums(absolute, expectedFiles); err != nil {
 		return artifactSet{}, err
 	}
 	selected := make(map[string]reportArtifact, len(config.selected.Entries))
@@ -542,7 +693,15 @@ func validateCurrentProviderRegistryIdentity(providers artifactSet, registry reg
 	return nil
 }
 
-func loadCurrentRegistryArtifact(repositoryRoot, artifactRoot, sourceCommit, workflowRunID string) (registryArtifactSet, error) {
+func loadCurrentRegistryArtifact(
+	repositoryRoot,
+	artifactRoot,
+	sourceCommit,
+	requestID,
+	workflowRunID,
+	workflowRunAttempt,
+	headSHA string,
+) (registryArtifactSet, error) {
 	absolute, err := filepath.Abs(artifactRoot)
 	if err != nil {
 		return registryArtifactSet{}, err
@@ -575,8 +734,12 @@ func loadCurrentRegistryArtifact(repositoryRoot, artifactRoot, sourceCommit, wor
 		manifest.Generation != currentProviderGeneration || signed.Generation != currentProviderGeneration ||
 		manifest.Source != (sourceRef{Repository: currentProviderRepository, Commit: sourceCommit}) ||
 		signed.Source != manifest.Source || signed.CertificateIdentity != registryIdentity ||
-		signed.Workflow != registryWorkflow || signed.WorkflowRunID != workflowRunID ||
-		signed.WorkflowRunAttempt != 1 ||
+		signed.Workflow != registryWorkflow ||
+		signed.RequestID != requestID ||
+		!canonicalUUIDv4Pattern.MatchString(signed.RequestID) ||
+		signed.WorkflowRunID != workflowRunID ||
+		fmt.Sprint(signed.WorkflowRunAttempt) != workflowRunAttempt ||
+		signed.Source.Commit != headSHA ||
 		signed.Manifest != (retainedRef{Path: registryManifestName, Digest: formpackage.DigestBytes(manifestRaw)}) {
 		return registryArtifactSet{}, fmt.Errorf("Registry candidate identity or workflow closure is invalid")
 	}

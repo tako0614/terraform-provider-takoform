@@ -6,21 +6,21 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "CacheCluster",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:557bcd34c86ed64455ada08571e5e5b2a95797ec2d53324ae947d431f036c6a6"
+    "schemaDigest": "sha256:d43ffcb12620fd87dff72a774e515c0ed5747152e78b1eb12e09d62a9fe0cfc8"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4651,
-      "digest": "sha256:f49b396ab9a644be1049f7d3d30c15d116c33a2191b2e595cca8530f6f3a14c1"
+      "size": 5478,
+      "digest": "sha256:4760803a79aec10ac32b0c46ae95aa571c4b3d951ae4b98caa8ce00bffaab660"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 103,
-      "digest": "sha256:3d9d8ba2c660409658e7cd51e065d0b17ba0704a4df14706ba966574eae123e4"
+      "size": 131,
+      "digest": "sha256:e595228da5567d8454d989d9ca2d714f718a372361a7ae2204c8150b464c40b1"
     },
     {
       "path": "fixtures/negative-default_ttl_seconds.json",
@@ -31,14 +31,32 @@
     {
       "path": "fixtures/negative-eviction_policy.json",
       "mediaType": "application/json",
-      "size": 105,
-      "digest": "sha256:11616f0dc8902a44d0085d2ceed3e582e4fde4bccbe6650555c4e45cb92f4722"
+      "size": 133,
+      "digest": "sha256:a79a96e9001d11c9fdd6cca930bcbadb8db4bdf153fbce7b136f94a24838e579"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 104,
+      "digest": "sha256:cc392a3f94e1f28e74ccbb274dad2a18c16541857c128d90a8f036a4b9a62b74"
+    },
+    {
+      "path": "fixtures/negative-missing-size_class.json",
+      "mediaType": "application/json",
+      "size": 101,
+      "digest": "sha256:94450ab2fc0a4e1468e57ca103c62f5bbe061f5dbb603f5453d639e06425879f"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 146,
+      "digest": "sha256:00b39f6bab289a61e86d26a2069b1cc35a565f044464e12443b7a563b317a5ce"
     },
     {
       "path": "fixtures/negative-size_class.json",
       "mediaType": "application/json",
-      "size": 103,
-      "digest": "sha256:61ea4834aabe2a417f99827cedadf6c44411d5207310d53e7b0ab232e47b2a53"
+      "size": 131,
+      "digest": "sha256:d264a000be7ef651c08cecaa6bd4955f4dce00d88d82b08e01583c1839d6901c"
     },
     {
       "path": "fixtures/observed.json",

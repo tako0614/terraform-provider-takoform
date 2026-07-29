@@ -6,45 +6,87 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "LoadBalancer",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:28840ae7b597e55ee0b7aaa03210b042a0ff93f11d4c0e4848a51ad6cd1f26fb"
+    "schemaDigest": "sha256:d81be8345b05f1054a39a4a9b3b1f3989e889dcd5b3cbf821aab1dcf8fbf7cca"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 6133,
-      "digest": "sha256:fec0bc14e069e25a42d9ae691efa258ddc7ec0872813111ef6f8e8aa528b3efa"
+      "size": 11236,
+      "digest": "sha256:8beb1bc6b3f21a5eb7276eea49d59f501ed5b72eb8fad261823034ee43a2aa8c"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 302,
-      "digest": "sha256:df57e426f1fbef6eccd5f92d22ba859040f20468fbb4328545ee12811ce9febd"
+      "size": 351,
+      "digest": "sha256:cf7b16e28947583fec44ed86fae1571b9e8a928fb23ac874b05d415d6d651bb0"
+    },
+    {
+      "path": "fixtures/negative-connections-required.json",
+      "mediaType": "application/json",
+      "size": 177,
+      "digest": "sha256:f97641132bf0304482aa8bba75ad616c4c85434aab2c1eb841bbf594e23e8645"
     },
     {
       "path": "fixtures/negative-health_check_path.json",
       "mediaType": "application/json",
-      "size": 307,
-      "digest": "sha256:91747dd68cbe2550225c1e18bfe730ac9f3849778517a8828bd102833f31b690"
+      "size": 356,
+      "digest": "sha256:590d3a27b30f6cf82abd29edc498c6ee66a5ebd8932d2a1dde7c58871899496b"
     },
     {
       "path": "fixtures/negative-idle_timeout_seconds.json",
       "mediaType": "application/json",
-      "size": 329,
-      "digest": "sha256:c13a491e99707f854f0b0846ece32880f2a23294a14e2351cfecba5612551ca2"
+      "size": 350,
+      "digest": "sha256:24f2e0b450daec6b35e59ef538114863796eec6068ada439d16ca1db1f74618e"
     },
     {
       "path": "fixtures/negative-listen_port.json",
       "mediaType": "application/json",
-      "size": 300,
-      "digest": "sha256:42bebd777a67c173a4e0edd4ccc5df0b6258e3aa00431c19c44b96918beb40af"
+      "size": 349,
+      "digest": "sha256:e69a9fa7a3a3fc1b515215661db3e75f7641fd98c248e1ef6f9a020ab8821458"
+    },
+    {
+      "path": "fixtures/negative-missing-connections.json",
+      "mediaType": "application/json",
+      "size": 156,
+      "digest": "sha256:1105123971d0662b081c3e585257bd6700b62d040d1deda7862becc09fa35808"
+    },
+    {
+      "path": "fixtures/negative-missing-listen_port.json",
+      "mediaType": "application/json",
+      "size": 330,
+      "digest": "sha256:40068af5a95a2c177e85b7802efb164640da92bd22896f4adab7115354172cbe"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 324,
+      "digest": "sha256:31f340da112caaf4112fbb0544137141744924964c4d6c7610e58234382ee2bf"
+    },
+    {
+      "path": "fixtures/negative-missing-protocol.json",
+      "mediaType": "application/json",
+      "size": 328,
+      "digest": "sha256:b8d4d7d130067ad705941ee942d2f588d51a5ecd4d0a088257fea39acc59c1e5"
+    },
+    {
+      "path": "fixtures/negative-non-http-health-path.json",
+      "mediaType": "application/json",
+      "size": 349,
+      "digest": "sha256:d222028bc0382632a5cfd6b99efd15890adf221c48ed1c307e366b4436c274ac"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 146,
+      "digest": "sha256:3070fc94298e59bc26413f0b7934c866f425448eea0941281c7975098c8f8ef0"
     },
     {
       "path": "fixtures/negative-protocol.json",
       "mediaType": "application/json",
-      "size": 301,
-      "digest": "sha256:b92de2460329652cec3330b2137075efd53dd865b1ee18be0aa9d0dcdb806e3c"
+      "size": 350,
+      "digest": "sha256:1ec59e2c3ee4d1f927bb0a6cb5dc5bdefe68bb90b7046b012f054786e67c23f4"
     },
     {
       "path": "fixtures/observed.json",

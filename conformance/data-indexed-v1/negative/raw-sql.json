@@ -1,4 +1,0 @@
-{
-  "operation": "query",
-  "sql": "select * from records"
-}

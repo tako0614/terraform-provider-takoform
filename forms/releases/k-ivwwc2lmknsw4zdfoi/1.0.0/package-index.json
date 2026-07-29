@@ -6,33 +6,51 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "EmailSender",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:42709bb4c62f72ea852097222ceda624b1453ba2f5d53d89f5df9c1df3545b70"
+    "schemaDigest": "sha256:c8028b33f8b2e188486183b9f15d15e3b373d3fe4533cec6b3cf804ff3c9fe3c"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4392,
-      "digest": "sha256:9bd2d38957a514a94012228c265992883d03551841b7ec9fbb044ac321029a25"
+      "size": 5177,
+      "digest": "sha256:79174e3b105bb60e72ab277a7b26be6bf24b27c5a7f4f1f2e56917a0dc131e53"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 138,
-      "digest": "sha256:5b5eef1bbbe6e0c65f47999da71b9f5b2faf78818f179113dc0977b8061bcdf6"
+      "size": 112,
+      "digest": "sha256:a52f8b166c57af842f10b85d5b5bd8b04b2573a7c27a9eeb430f818eb937bbef"
     },
     {
-      "path": "fixtures/negative-default_sender.json",
+      "path": "fixtures/negative-default_local_part.json",
       "mediaType": "application/json",
-      "size": 106,
-      "digest": "sha256:0a684cbcc2cb92bedd51045704d2c34487adb1149488f0a58c58fba54f44407d"
+      "size": 108,
+      "digest": "sha256:f53c19a3e3f9a3b343eabadb2515d32ad7bf7bc87ea9b956c3ff640736ef8c77"
     },
     {
       "path": "fixtures/negative-domain.json",
       "mediaType": "application/json",
-      "size": 122,
-      "digest": "sha256:240b1119a1f676339e1fba4af125d76a25c852891579247339134c75fab8b380"
+      "size": 96,
+      "digest": "sha256:d5030c003bf5f174bd96798180ff066693a8e293256c49ec834816830a7f9d73"
+    },
+    {
+      "path": "fixtures/negative-missing-domain.json",
+      "mediaType": "application/json",
+      "size": 68,
+      "digest": "sha256:18069709863a09d0b7575d58158f7320668a298b7f5483b64ef6271b5de58b5d"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 86,
+      "digest": "sha256:d16a2e2eeee98b4b26585cedf141b7982509ff9a05533270a9557f72356f6ae8"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 145,
+      "digest": "sha256:6b0d8548294b134e217cce989f4bbce105900835cc57a6f8e2343cecee3c1b01"
     },
     {
       "path": "fixtures/observed.json",

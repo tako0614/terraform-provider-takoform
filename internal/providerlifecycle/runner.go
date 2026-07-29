@@ -9,22 +9,25 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
 )
 
 const (
-	ReportFormat          = "takoform.provider-lifecycle-candidate@v3"
-	MatrixReportFormat    = "takoform.provider-cli-fqn-matrix@v2"
+	ReportFormat          = "takoform.provider-lifecycle-candidate@v4"
+	MatrixReportFormat    = "takoform.provider-cli-fqn-matrix@v3"
 	RunnerSubject         = "takoform.provider-binary-cli-runner@v1"
 	LocalDevOverride      = "local-dev-override"
 	DirectRegistryInstall = "direct-registry-install"
@@ -63,6 +66,14 @@ type NegativeEvidence struct {
 	Passed  bool   `json:"passed"`
 }
 
+type InterfaceCheckEvidence struct {
+	AbsentBeforeCreate    bool `json:"absentBeforeCreate"`
+	DescriptorDerivedList bool `json:"descriptorDerivedList"`
+	ExactGet              bool `json:"exactGet"`
+	RequiredReadiness     bool `json:"requiredReadiness"`
+	AbsentAfterDelete     bool `json:"absentAfterDelete"`
+}
+
 type CLIIdentity struct {
 	Product          string `json:"product"`
 	Version          string `json:"version"`
@@ -95,6 +106,7 @@ type Report struct {
 	ProviderBinary       ProviderBinaryIdentity     `json:"providerBinary"`
 	CLI                  CLIIdentity                `json:"cli"`
 	Resources            []ResourceEvidence         `json:"resources"`
+	InterfaceChecks      InterfaceCheckEvidence     `json:"interfaceChecks"`
 	NegativeChecks       []NegativeEvidence         `json:"negativeChecks"`
 	ImmutableReplace     []ImmutableReplaceEvidence `json:"immutableReplace"`
 }
@@ -139,17 +151,23 @@ func declaredResourceCases() []resourceCase {
 }
 
 func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
-	return run(ctx, repoRoot, cliPath, LocalDevOverride)
+	return run(ctx, repoRoot, cliPath, LocalDevOverride, "")
+}
+
+// RunWithProviderBinary executes the local dev-override lifecycle with the
+// exact bytes of an already-built provider, rather than rebuilding from source.
+func RunWithProviderBinary(ctx context.Context, repoRoot, cliPath, providerBinaryPath string) (Report, error) {
+	return run(ctx, repoRoot, cliPath, LocalDevOverride, providerBinaryPath)
 }
 
 // RunRegistry executes the same lifecycle without dev_overrides. The exact
 // version pinned by release/version.json must be installed by the CLI from its
 // canonical Registry address before any lifecycle action runs.
 func RunRegistry(ctx context.Context, repoRoot, cliPath string) (Report, error) {
-	return run(ctx, repoRoot, cliPath, DirectRegistryInstall)
+	return run(ctx, repoRoot, cliPath, DirectRegistryInstall, "")
 }
 
-func run(ctx context.Context, repoRoot, cliPath, installationSource string) (Report, error) {
+func run(ctx context.Context, repoRoot, cliPath, installationSource, providerBinaryPath string) (Report, error) {
 	cli, identity, err := identifyCLI(ctx, cliPath)
 	if err != nil {
 		return Report{}, err
@@ -163,6 +181,15 @@ func run(ctx context.Context, repoRoot, cliPath, installationSource string) (Rep
 	host := newFormHost()
 	server := httptest.NewServer(host)
 	defer server.Close()
+	formClient := client.New(server.URL, "", server.Client())
+	if _, err := formClient.Discover(ctx); err != nil {
+		return Report{}, fmt.Errorf("discover Interface conformance host: %w", err)
+	}
+	interfaceChecks := InterfaceCheckEvidence{}
+	if err := verifyNoMaterializedInterfaces(ctx, formClient); err != nil {
+		return Report{}, fmt.Errorf("Interface projection before Resource create: %w", err)
+	}
+	interfaceChecks.AbsentBeforeCreate = true
 
 	binDir := filepath.Join(temp, "bin")
 	workDir := filepath.Join(temp, "stack")
@@ -184,8 +211,14 @@ func run(ctx context.Context, repoRoot, cliPath, installationSource string) (Rep
 	providerBinary := ""
 	if installationSource == LocalDevOverride {
 		providerBinary = filepath.Join(binDir, "terraform-provider-takoform")
-		if output, err := buildLocalProviderBinary(ctx, repoRoot, providerVersion, providerBinary); err != nil {
-			return Report{}, fmt.Errorf("build provider binary: %w\n%s", err, output)
+		if providerBinaryPath != "" {
+			if err := copyProviderBinary(providerBinaryPath, providerBinary); err != nil {
+				return Report{}, err
+			}
+		} else {
+			if output, err := buildLocalProviderBinary(ctx, repoRoot, providerVersion, providerBinary); err != nil {
+				return Report{}, fmt.Errorf("build provider binary: %w\n%s", err, output)
+			}
 		}
 		cliConfigBody = fmt.Sprintf(`provider_installation {
   dev_overrides {
@@ -234,6 +267,12 @@ func run(ctx context.Context, repoRoot, cliPath, installationSource string) (Rep
 	if output, err := terraformRun("apply", "-auto-approve", "-input=false", "-no-color"); err != nil {
 		return Report{}, fmt.Errorf("%s create apply: %w\n%s", identity.Product, err, output)
 	}
+	if err := verifyReadyMaterializedInterfaces(ctx, formClient, host); err != nil {
+		return Report{}, fmt.Errorf("%s Ready Interface projection: %w", identity.Product, err)
+	}
+	interfaceChecks.DescriptorDerivedList = true
+	interfaceChecks.ExactGet = true
+	interfaceChecks.RequiredReadiness = true
 	if output, err := terraformRun("plan", "-refresh-only", "-input=false", "-no-color", "-detailed-exitcode"); err != nil {
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 2 {
@@ -301,8 +340,15 @@ func run(ctx context.Context, repoRoot, cliPath, installationSource string) (Rep
 	if output, err := terraformRun("destroy", "-auto-approve", "-input=false", "-no-color"); err != nil {
 		return Report{}, fmt.Errorf("%s destroy: %w\n%s", identity.Product, err, output)
 	}
+	if err := verifyNoMaterializedInterfaces(ctx, formClient); err != nil {
+		return Report{}, fmt.Errorf("%s Interface projection after Resource delete: %w", identity.Product, err)
+	}
+	interfaceChecks.AbsentAfterDelete = true
+	if err := verifyProviderBinaryUnchanged(providerBinary, providerBinarySHA256); err != nil {
+		return Report{}, fmt.Errorf("%s exact provider binary integrity: %w", identity.Product, err)
+	}
 
-	return host.report(identity, ProviderBinaryIdentity{Version: providerVersion, SHA256: providerBinarySHA256}, providerSchemaSHA256, installationSource, immutableEvidence), nil
+	return host.report(identity, ProviderBinaryIdentity{Version: providerVersion, SHA256: providerBinarySHA256}, providerSchemaSHA256, installationSource, immutableEvidence, interfaceChecks), nil
 }
 
 func Validate(report Report) error {
@@ -347,6 +393,11 @@ func validateReport(report Report, installationSource string) error {
 			!checks.CLIImport || !checks.Delete || !checks.DriftState || !checks.NameReplace {
 			return fmt.Errorf("provider lifecycle candidate is incomplete for %s", resource.Kind)
 		}
+	}
+	interfaceChecks := report.InterfaceChecks
+	if !interfaceChecks.AbsentBeforeCreate || !interfaceChecks.DescriptorDerivedList ||
+		!interfaceChecks.ExactGet || !interfaceChecks.RequiredReadiness || !interfaceChecks.AbsentAfterDelete {
+		return errors.New("provider lifecycle Interface projection evidence is incomplete")
 	}
 	// The two substitution negatives must name two distinct declared Forms.
 	// Pinning which Forms would make the evidence depend on catalogue order,
@@ -492,16 +543,22 @@ func buildLocalProviderBinary(ctx context.Context, repoRoot, providerVersion, ou
 }
 
 func RunMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath string) (MatrixReport, error) {
-	return runMatrix(ctx, repoRoot, openTofuPath, terraformPath, LocalDevOverride)
+	return runMatrix(ctx, repoRoot, openTofuPath, terraformPath, LocalDevOverride, "")
+}
+
+// RunMatrixWithProviderBinary runs both supported CLIs against the exact same
+// already-built provider bytes.
+func RunMatrixWithProviderBinary(ctx context.Context, repoRoot, openTofuPath, terraformPath, providerBinaryPath string) (MatrixReport, error) {
+	return runMatrix(ctx, repoRoot, openTofuPath, terraformPath, LocalDevOverride, providerBinaryPath)
 }
 
 // RunRegistryMatrix runs the reviewed CLI/FQN matrix using direct Registry
 // installation rather than a locally built dev override.
 func RunRegistryMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath string) (MatrixReport, error) {
-	return runMatrix(ctx, repoRoot, openTofuPath, terraformPath, DirectRegistryInstall)
+	return runMatrix(ctx, repoRoot, openTofuPath, terraformPath, DirectRegistryInstall, "")
 }
 
-func runMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath, installationSource string) (MatrixReport, error) {
+func runMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath, installationSource, providerBinaryPath string) (MatrixReport, error) {
 	requirements, descriptorSHA256, err := LoadCLIMatrix(repoRoot)
 	if err != nil {
 		return MatrixReport{}, err
@@ -512,6 +569,8 @@ func runMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath, insta
 		var report Report
 		if installationSource == DirectRegistryInstall {
 			report, err = RunRegistry(ctx, repoRoot, paths[requirement.Product])
+		} else if providerBinaryPath != "" {
+			report, err = RunWithProviderBinary(ctx, repoRoot, paths[requirement.Product], providerBinaryPath)
 		} else {
 			report, err = Run(ctx, repoRoot, paths[requirement.Product])
 		}
@@ -574,6 +633,7 @@ func validateMatrix(matrix MatrixReport, requirements []CLIRequirement, installa
 			continue
 		}
 		if !reflect.DeepEqual(report.Resources, baseline.Resources) ||
+			report.InterfaceChecks != baseline.InterfaceChecks ||
 			!reflect.DeepEqual(report.NegativeChecks, baseline.NegativeChecks) ||
 			!reflect.DeepEqual(report.ImmutableReplace, baseline.ImmutableReplace) ||
 			report.ProviderBinary != baseline.ProviderBinary {
@@ -586,6 +646,204 @@ func validateMatrix(matrix MatrixReport, requirements []CLIRequirement, installa
 		return errors.New("provider CLI matrix must use the canonical Terraform Registry FQN for both OpenTofu and Terraform")
 	}
 	return nil
+}
+
+func verifyNoMaterializedInterfaces(ctx context.Context, formClient *client.Client) error {
+	listed, err := formClient.ListInterfaces(ctx, "prod")
+	if err != nil {
+		return err
+	}
+	if len(listed) != 0 {
+		return fmt.Errorf("listed %d declarations without a Ready exposing Resource", len(listed))
+	}
+	var selector client.InterfaceSelector
+	for _, kind := range formcatalog.Kinds {
+		descriptors := kind.InterfaceDescriptors()
+		if len(descriptors) == 0 {
+			continue
+		}
+		selector = client.InterfaceSelector{
+			Name: descriptors[0].Name, Version: descriptors[0].Version,
+			ResourceKind: kind.Kind, ResourceName: kind.FixtureName(),
+		}
+		break
+	}
+	if selector.Name == "" {
+		return errors.New("current Form set has no Interface descriptor to exercise")
+	}
+	if _, err := formClient.GetInterface(ctx, "prod", selector); err == nil {
+		return errors.New("exact declaration unexpectedly resolved without an exposing Resource")
+	} else if !errors.Is(err, client.ErrNotFound) {
+		return fmt.Errorf("exact declaration without exposing Resource: %w", err)
+	}
+	return nil
+}
+
+func verifyReadyMaterializedInterfaces(ctx context.Context, formClient *client.Client, host *formHost) error {
+	forms := candidateForms()
+	expected := map[string]client.DeclaredInterface{}
+	readinessKind := ""
+	readinessName := ""
+	readinessDeclarationCount := 0
+	for _, item := range resourceCases {
+		kind, ok := formcatalog.ByKind(item.Kind)
+		if !ok {
+			return fmt.Errorf("resource case names undeclared Form %s", item.Kind)
+		}
+		descriptors := kind.InterfaceDescriptors()
+		if len(descriptors) == 0 {
+			continue
+		}
+		form := forms[item.Kind]
+		resource, err := formClient.GetResource(ctx, item.Kind, item.Name, "prod", form)
+		if err != nil {
+			return fmt.Errorf("read exposing Resource %s/%s: %w", item.Kind, item.Name, err)
+		}
+		for _, descriptor := range descriptors {
+			if descriptor.Required && !resourceIsReady(*resource) {
+				return fmt.Errorf("%s/%s reports non-Ready with required %s@%s",
+					item.Kind, item.Name, descriptor.Name, descriptor.Version)
+			}
+			declaration, err := expectedMaterializedInterface(kind, item.Name, form, descriptor)
+			if err != nil {
+				return err
+			}
+			key := interfaceIdentityKey(declaration)
+			if _, duplicate := expected[key]; duplicate {
+				return fmt.Errorf("compiled Form descriptors duplicate runtime identity %s", key)
+			}
+			expected[key] = declaration
+		}
+		if readinessKind == "" {
+			for _, descriptor := range descriptors {
+				if descriptor.Required {
+					readinessKind = item.Kind
+					readinessName = item.Name
+					readinessDeclarationCount = len(descriptors)
+					break
+				}
+			}
+		}
+	}
+	if len(expected) == 0 {
+		return errors.New("current Form set has no Interface descriptors to exercise")
+	}
+
+	listed, err := formClient.ListInterfaces(ctx, "prod")
+	if err != nil {
+		return err
+	}
+	if len(listed) != len(expected) {
+		return fmt.Errorf("Interface list has %d declarations, want %d exact Form descriptors", len(listed), len(expected))
+	}
+	for _, actual := range listed {
+		key := interfaceIdentityKey(actual)
+		want, ok := expected[key]
+		if !ok {
+			return fmt.Errorf("Interface list contains undeclared runtime identity %s", key)
+		}
+		if !reflect.DeepEqual(actual, want) {
+			return fmt.Errorf("Interface list projection for %s differs from exact Form descriptor", key)
+		}
+		exact, err := formClient.GetInterface(ctx, "prod", client.InterfaceSelector{
+			Name: actual.Name, Version: actual.Version,
+			ResourceKind: actual.Resource.Kind, ResourceName: actual.Resource.Name,
+		})
+		if err != nil {
+			return fmt.Errorf("exact Interface GET for %s: %w", key, err)
+		}
+		if !reflect.DeepEqual(exact, actual) {
+			return fmt.Errorf("exact Interface GET for %s differs from list projection", key)
+		}
+	}
+	if readinessKind == "" {
+		return errors.New("current Form set has no required Interface descriptor to exercise")
+	}
+	if err := host.setResourceReady(readinessKind, readinessName, false); err != nil {
+		return err
+	}
+	notReadyList, listErr := formClient.ListInterfaces(ctx, "prod")
+	restoreErr := host.setResourceReady(readinessKind, readinessName, true)
+	if listErr != nil {
+		return listErr
+	}
+	if restoreErr != nil {
+		return restoreErr
+	}
+	if len(notReadyList) != len(expected)-readinessDeclarationCount {
+		return fmt.Errorf("non-Ready %s/%s left %d declarations visible, want %d",
+			readinessKind, readinessName, len(notReadyList), len(expected)-readinessDeclarationCount)
+	}
+	for _, declaration := range notReadyList {
+		if declaration.Resource.Kind == readinessKind && declaration.Resource.Name == readinessName {
+			return fmt.Errorf("non-Ready %s/%s still exposed %s@%s",
+				readinessKind, readinessName, declaration.Name, declaration.Version)
+		}
+	}
+	return nil
+}
+
+func expectedMaterializedInterface(kind formcatalog.Kind, resourceName string, form client.InstalledFormReference, descriptor formpackage.InterfaceDescriptor) (client.DeclaredInterface, error) {
+	output := kind.CanonicalOutput()
+	output["id"] = kind.Kind + "/" + resourceName
+	output["name"] = resourceName
+	values := make(map[string]any, len(descriptor.Inputs))
+	resourceURI := ""
+	for _, input := range descriptor.Inputs {
+		switch input.Source {
+		case formpackage.InterfaceInputSourceOutput:
+			value, ok := resolveJSONPointer(output, input.Pointer)
+			if !ok {
+				return client.DeclaredInterface{}, fmt.Errorf("%s@%s canonical output pointer %q is unresolved", descriptor.Name, descriptor.Version, input.Pointer)
+			}
+			values[input.Name] = value
+		case formpackage.InterfaceInputSourceLiteral:
+			var value any
+			if len(input.Value) == 0 || json.Unmarshal(input.Value, &value) != nil {
+				return client.DeclaredInterface{}, fmt.Errorf("%s@%s literal input %q is invalid", descriptor.Name, descriptor.Version, input.Name)
+			}
+			values[input.Name] = value
+		case formpackage.InterfaceInputSourceResourceURI:
+			resourceURI = fmt.Sprintf("https://runtime.example.test/%s/%s", url.PathEscape(kind.Kind), url.PathEscape(resourceName))
+			values[input.Name] = resourceURI
+		default:
+			return client.DeclaredInterface{}, fmt.Errorf("%s@%s uses unsupported host input source %q", descriptor.Name, descriptor.Version, input.Source)
+		}
+	}
+	document := descriptor.Document
+	if document == nil {
+		document = map[string]any{}
+	}
+	exactForm := form
+	expected := client.DeclaredInterface{
+		Name: descriptor.Name, Version: descriptor.Version,
+		Resource:    client.InterfaceResourceRef{Kind: kind.Kind, Name: resourceName},
+		Document:    document,
+		Values:      values,
+		ResourceURI: resourceURI,
+		Form:        &exactForm,
+	}
+	raw, err := json.Marshal(expected)
+	if err != nil {
+		return client.DeclaredInterface{}, err
+	}
+	var normalized client.DeclaredInterface
+	if err := json.Unmarshal(raw, &normalized); err != nil {
+		return client.DeclaredInterface{}, err
+	}
+	return normalized, nil
+}
+
+func interfaceIdentityKey(item client.DeclaredInterface) string {
+	return item.Resource.Kind + "/" + item.Resource.Name + " " + item.Name + "@" + item.Version
+}
+
+func resourceIsReady(resource client.Resource) bool {
+	if resource.Status == nil {
+		return false
+	}
+	ready, ok := resource.Status.Observed["ready"].(bool)
+	return ok && ready
 }
 
 func exerciseExplicitHostActions(ctx context.Context, endpoint string, httpClient *http.Client) error {
@@ -1053,14 +1311,14 @@ func asInt64(value any) (int64, bool) {
 
 func artifactAttribute(wireKey string) string {
 	switch wireKey {
-	case "artifactPath":
-		return "artifact_path"
 	case "artifactUrl":
 		return "artifact_url"
-	case "artifactRef":
-		return "artifact_ref"
-	default:
+	case "artifactSha256":
 		return "artifact_sha256"
+	case "artifactMediaType":
+		return "artifact_media_type"
+	default:
+		return camelToSnakeFixture(wireKey)
 	}
 }
 
@@ -1109,24 +1367,17 @@ type lifecycleCounts struct {
 	create, read, update, observe, refresh, nativeImport, cliImport, delete, driftState int
 }
 
-// The declaration the in-process conformance host reports. It matches the
-// portable-host contract's optional interface surface.
-const (
-	conformanceInterfaceName         = "s3.api"
-	conformanceInterfaceVersion      = "2025-11-25"
-	conformanceInterfaceKind         = "ObjectBucket"
-	conformanceInterfaceResourceName = "assets"
-)
-
 type formHost struct {
-	mu                sync.Mutex
-	forms             map[string]client.InstalledFormReference
-	resources         map[string]client.Resource
-	counts            map[string]*lifecycleCounts
-	drift             bool
-	substitutionKind  string
-	substitutionField string
-	cliImportPhase    bool
+	mu                   sync.Mutex
+	forms                map[string]client.InstalledFormReference
+	resources            map[string]client.Resource
+	counts               map[string]*lifecycleCounts
+	drift                bool
+	substitutionKind     string
+	substitutionField    string
+	observedOverrideKind string
+	observedOverride     map[string]any
+	cliImportPhase       bool
 }
 
 func newFormHost() *formHost {
@@ -1213,7 +1464,7 @@ func (h *formHost) handleForms(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	form, ok := h.forms[kind]
 	if !ok || !exactQuery(r, "prod", form) {
-		http.Error(w, `{"error":{"code":"form_unknown","message":"unknown form","retryable":false}}`, http.StatusNotFound)
+		writeHostError(w, http.StatusNotFound, "form_unknown", "unknown form")
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"forms": []client.FormAvailability{{
@@ -1222,32 +1473,201 @@ func (h *formHost) handleForms(w http.ResponseWriter, r *http.Request) {
 	}}})
 }
 
-// handleInterfaces answers what this host declares. It is read-only and says
-// nothing about who may consume a declaration: no binding, permission, or
-// token is expressed here or anywhere else in the portable protocol.
+// handleInterfaces projects only declarations materialized from the exact
+// installed Form of a Ready Resource. It is read-only and says nothing about
+// who may consume a declaration: no binding, permission, or token is expressed
+// here or anywhere else in the portable protocol.
 func (h *formHost) handleInterfaces(w http.ResponseWriter, r *http.Request, name string) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
 	}
-	declared := []client.DeclaredInterface{{
-		Name:     conformanceInterfaceName,
-		Version:  conformanceInterfaceVersion,
-		Resource: client.InterfaceResourceRef{Kind: conformanceInterfaceKind, Name: conformanceInterfaceResourceName},
-		Document: map[string]any{"title": "Portable assets bucket"},
-		Values:   map[string]any{"endpoint": "https://example.test/s3"},
-	}}
+	declared, err := h.visibleInterfaces(r.URL.Query().Get("space"))
+	if err != nil {
+		writeHostError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
 	if name == "" {
 		_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": declared})
 		return
 	}
+	query := r.URL.Query()
+	version := query.Get("version")
+	resourceKind := query.Get("resourceKind")
+	resourceName := query.Get("resourceName")
+	if (resourceKind == "") != (resourceName == "") {
+		writeHostError(w, http.StatusBadRequest, "invalid_argument", "resourceKind and resourceName must be supplied together")
+		return
+	}
+	matches := make([]client.DeclaredInterface, 0, 1)
 	for _, item := range declared {
-		if item.Name == name {
-			_ = json.NewEncoder(w).Encode(item)
+		if item.Name != name || (version != "" && item.Version != version) {
+			continue
+		}
+		if resourceKind != "" && (item.Resource.Kind != resourceKind || item.Resource.Name != resourceName) {
+			continue
+		}
+		matches = append(matches, item)
+	}
+	if len(matches) == 0 {
+		writeHostError(w, http.StatusNotFound, "resource_not_found", "unknown interface")
+		return
+	}
+	if version == "" {
+		versions := map[string]struct{}{}
+		for _, item := range matches {
+			versions[item.Version] = struct{}{}
+		}
+		if len(versions) > 1 {
+			writeHostError(w, http.StatusConflict, "interface_identity_ambiguous", "interface name has multiple visible versions")
 			return
 		}
 	}
-	http.Error(w, `{"error":{"code":"resource_not_found","message":"unknown interface","retryable":false}}`, http.StatusNotFound)
+	if resourceKind == "" && len(matches) > 1 {
+		writeHostError(w, http.StatusConflict, "interface_instance_ambiguous", "interface is exposed by multiple visible Resources")
+		return
+	}
+	if len(matches) != 1 {
+		writeHostError(w, http.StatusConflict, "interface_identity_ambiguous", "interface selector is ambiguous")
+		return
+	}
+	_ = json.NewEncoder(w).Encode(matches[0])
+}
+
+func (h *formHost) visibleInterfaces(space string) ([]client.DeclaredInterface, error) {
+	keys := make([]string, 0, len(h.resources))
+	for key := range h.resources {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	declared := []client.DeclaredInterface{}
+	for _, key := range keys {
+		resource := h.resources[key]
+		if resource.Metadata.Space != space || !resourceIsReady(resource) {
+			continue
+		}
+		materialized, err := h.materializeResourceInterfaces(resource)
+		if err != nil {
+			return nil, err
+		}
+		declared = append(declared, materialized...)
+	}
+	sort.Slice(declared, func(i, j int) bool {
+		left := declared[i].Resource.Kind + "\x00" + declared[i].Resource.Name + "\x00" + declared[i].Name + "\x00" + declared[i].Version
+		right := declared[j].Resource.Kind + "\x00" + declared[j].Resource.Name + "\x00" + declared[j].Name + "\x00" + declared[j].Version
+		return left < right
+	})
+	return declared, nil
+}
+
+func (h *formHost) materializeResourceInterfaces(resource client.Resource) ([]client.DeclaredInterface, error) {
+	if resource.Form == nil {
+		return nil, fmt.Errorf("%s/%s has no exact installed Form", resource.Kind, resource.Metadata.Name)
+	}
+	installed, ok := h.forms[resource.Kind]
+	if !ok || installed != *resource.Form {
+		return nil, fmt.Errorf("%s/%s exact installed Form drifted", resource.Kind, resource.Metadata.Name)
+	}
+	kind, ok := formcatalog.ByKind(resource.Kind)
+	if !ok || kind.Version() != installed.FormRef.DefinitionVersion {
+		return nil, fmt.Errorf("%s/%s has no matching compiled Form descriptor", resource.Kind, resource.Metadata.Name)
+	}
+	descriptors := kind.InterfaceDescriptors()
+	materialized := make([]client.DeclaredInterface, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		item, err := materializeInterfaceDescriptor(resource, installed, descriptor)
+		if err != nil {
+			if descriptor.Required {
+				return nil, fmt.Errorf("%s/%s required Interface %s@%s: %w",
+					resource.Kind, resource.Metadata.Name, descriptor.Name, descriptor.Version, err)
+			}
+			continue
+		}
+		materialized = append(materialized, item)
+	}
+	return materialized, nil
+}
+
+func materializeInterfaceDescriptor(resource client.Resource, installed client.InstalledFormReference, descriptor formpackage.InterfaceDescriptor) (client.DeclaredInterface, error) {
+	document := descriptor.Document
+	if document == nil {
+		document = map[string]any{}
+	}
+	values := make(map[string]any, len(descriptor.Inputs))
+	resourceURI := ""
+	for _, input := range descriptor.Inputs {
+		switch input.Source {
+		case formpackage.InterfaceInputSourceOutput:
+			value, ok := resolveJSONPointer(resourceOutputDocument(resource), input.Pointer)
+			if !ok {
+				return client.DeclaredInterface{}, fmt.Errorf("output pointer %q is unresolved", input.Pointer)
+			}
+			values[input.Name] = value
+		case formpackage.InterfaceInputSourceLiteral:
+			var value any
+			if len(input.Value) == 0 || json.Unmarshal(input.Value, &value) != nil {
+				return client.DeclaredInterface{}, fmt.Errorf("literal input %q is invalid", input.Name)
+			}
+			values[input.Name] = value
+		case formpackage.InterfaceInputSourceResourceURI:
+			resourceURI = fmt.Sprintf("https://runtime.example.test/%s/%s",
+				url.PathEscape(resource.Kind), url.PathEscape(resource.Metadata.Name))
+			values[input.Name] = resourceURI
+		default:
+			return client.DeclaredInterface{}, fmt.Errorf("unsupported host input source %q", input.Source)
+		}
+	}
+	form := installed
+	return client.DeclaredInterface{
+		Name: descriptor.Name, Version: descriptor.Version,
+		Resource:    client.InterfaceResourceRef{Kind: resource.Kind, Name: resource.Metadata.Name},
+		Document:    document,
+		Values:      values,
+		ResourceURI: resourceURI,
+		Form:        &form,
+	}, nil
+}
+
+func resolveJSONPointer(document any, pointer string) (any, bool) {
+	if pointer == "" {
+		return document, true
+	}
+	if !strings.HasPrefix(pointer, "/") {
+		return nil, false
+	}
+	current := document
+	for _, encoded := range strings.Split(strings.TrimPrefix(pointer, "/"), "/") {
+		token := strings.ReplaceAll(strings.ReplaceAll(encoded, "~1", "/"), "~0", "~")
+		switch typed := current.(type) {
+		case map[string]any:
+			var ok bool
+			current, ok = typed[token]
+			if !ok {
+				return nil, false
+			}
+		case []any:
+			index, err := strconv.Atoi(token)
+			if err != nil || index < 0 || index >= len(typed) {
+				return nil, false
+			}
+			current = typed[index]
+		default:
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+func writeHostError(w http.ResponseWriter, status int, code, message string) {
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error": map[string]any{
+			"code":      code,
+			"message":   message,
+			"requestId": "provider-lifecycle-" + code,
+			"retryable": false,
+		},
+	})
 }
 
 func (h *formHost) handlePreview(w http.ResponseWriter, r *http.Request) {
@@ -1256,9 +1676,19 @@ func (h *formHost) handlePreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	specRaw, err := json.Marshal(desired.Spec)
+	if err != nil {
+		writeHostError(w, http.StatusBadRequest, "invalid_argument", "desired spec is not JSON")
+		return
+	}
+	specDigest, err := formpackage.DigestCanonicalJSON(specRaw)
+	if err != nil {
+		writeHostError(w, http.StatusBadRequest, "invalid_argument", "desired spec is not canonicalizable I-JSON")
+		return
+	}
 	_ = json.NewEncoder(w).Encode(client.PreviewResourceResult{
 		Resource: desired,
-		Review:   client.PreviewReview{PlanDigest: "sha256:" + strings.Repeat("a", 64), SpecDigest: "sha256:" + strings.Repeat("b", 64)},
+		Review:   client.PreviewReview{PlanDigest: "sha256:" + strings.Repeat("a", 64), SpecDigest: specDigest},
 	})
 }
 
@@ -1276,22 +1706,35 @@ func (h *formHost) handleApply(w http.ResponseWriter, r *http.Request, kind, nam
 	version := 1
 	if exists {
 		if !matchFence(r, current.Metadata.ResourceVersion) || r.Header.Get("Idempotency-Key") == "" {
-			http.Error(w, `{"error":{"code":"resource_version_conflict","message":"missing update fence","retryable":false}}`, http.StatusPreconditionFailed)
+			writeHostError(w, http.StatusPreconditionFailed, "resource_version_conflict", "missing update fence")
 			return
 		}
 		version = decimalVersion(current.Metadata.ResourceVersion) + 1
-		h.counts[kind].update++
 	} else {
 		if r.Header.Get("If-None-Match") != "*" || r.Header.Get("Idempotency-Key") == "" {
-			http.Error(w, `{"error":{"code":"resource_version_conflict","message":"missing create fence","retryable":false}}`, http.StatusPreconditionFailed)
+			writeHostError(w, http.StatusPreconditionFailed, "resource_version_conflict", "missing create fence")
 			return
 		}
+	}
+	resource, err := h.readyResource(request.Resource, version)
+	if err != nil {
+		writeHostError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	h.resources[key] = resource
+	if exists {
+		h.counts[kind].update++
+	} else {
 		h.counts[kind].create++
 	}
-	resource := responseResource(request.Resource, version)
-	h.resources[key] = resource
+	response := resource
+	if h.observedOverrideKind == kind && h.observedOverride != nil && response.Status != nil {
+		status := *response.Status
+		status.Observed = h.observedOverride
+		response.Status = &status
+	}
 	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, version))
-	_ = json.NewEncoder(w).Encode(resource)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (h *formHost) handleGet(w http.ResponseWriter, r *http.Request, kind, name string) {
@@ -1311,20 +1754,23 @@ func (h *formHost) handleObserve(w http.ResponseWriter, r *http.Request, kind, n
 		return
 	}
 	if !matchFence(r, resource.Metadata.ResourceVersion) || r.Header.Get("Idempotency-Key") == "" {
-		http.Error(w, `{"error":{"code":"resource_version_conflict","message":"stale","retryable":false}}`, http.StatusPreconditionFailed)
+		writeHostError(w, http.StatusPreconditionFailed, "resource_version_conflict", "stale")
 		return
 	}
 	h.counts[kind].observe++
 	if h.cliImportPhase {
 		h.counts[kind].cliImport++
 	}
-	status := "current"
-	if h.drift {
-		status = "drifted"
+	if resource.Status != nil && resource.Status.Observed != nil {
+		if h.drift {
+			resource.Status.Observed["driftedFields"] = []any{"/name"}
+		} else {
+			resource.Status.Observed["driftedFields"] = []any{}
+		}
 	}
 	resource = h.maybeSubstitute(resource, kind)
 	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, resource.Metadata.ResourceVersion))
-	_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "observation": map[string]any{"status": status, "summary": status}})
+	_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
 }
 
 func (h *formHost) handleRefresh(w http.ResponseWriter, r *http.Request, kind, name string) {
@@ -1333,12 +1779,12 @@ func (h *formHost) handleRefresh(w http.ResponseWriter, r *http.Request, kind, n
 		return
 	}
 	if !matchFence(r, resource.Metadata.ResourceVersion) || r.Header.Get("Idempotency-Key") == "" {
-		http.Error(w, `{"error":{"code":"resource_version_conflict","message":"stale","retryable":false}}`, http.StatusPreconditionFailed)
+		writeHostError(w, http.StatusPreconditionFailed, "resource_version_conflict", "stale")
 		return
 	}
 	h.counts[kind].refresh++
 	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, resource.Metadata.ResourceVersion))
-	_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "refresh": map[string]any{"summary": "published"}})
+	_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
 }
 
 func (h *formHost) handleImport(w http.ResponseWriter, r *http.Request, kind, name string) {
@@ -1355,19 +1801,23 @@ func (h *formHost) handleImport(w http.ResponseWriter, r *http.Request, kind, na
 	version := 1
 	if exists {
 		if !matchFence(r, current.Metadata.ResourceVersion) || r.Header.Get("Idempotency-Key") == "" {
-			http.Error(w, `{"error":{"code":"resource_version_conflict","message":"missing import fence","retryable":false}}`, http.StatusPreconditionFailed)
+			writeHostError(w, http.StatusPreconditionFailed, "resource_version_conflict", "missing import fence")
 			return
 		}
 		version = decimalVersion(current.Metadata.ResourceVersion) + 1
 	} else if r.Header.Get("If-None-Match") != "*" || r.Header.Get("Idempotency-Key") == "" {
-		http.Error(w, `{"error":{"code":"resource_version_conflict","message":"missing import create fence","retryable":false}}`, http.StatusPreconditionFailed)
+		writeHostError(w, http.StatusPreconditionFailed, "resource_version_conflict", "missing import create fence")
 		return
 	}
-	resource := responseResource(request.Resource, version)
+	resource, err := h.readyResource(request.Resource, version)
+	if err != nil {
+		writeHostError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
 	h.resources[key] = resource
 	h.counts[kind].nativeImport++
 	w.Header().Set("ETag", fmt.Sprintf(`"%d"`, version))
-	_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource, "import": map[string]any{"summary": "adopted"}})
+	_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
 }
 
 func (h *formHost) handleDelete(w http.ResponseWriter, r *http.Request, kind, name string) {
@@ -1376,7 +1826,7 @@ func (h *formHost) handleDelete(w http.ResponseWriter, r *http.Request, kind, na
 		return
 	}
 	if !matchFence(r, resource.Metadata.ResourceVersion) || r.Header.Get("Idempotency-Key") == "" {
-		http.Error(w, `{"error":{"code":"resource_version_conflict","message":"stale","retryable":false}}`, http.StatusPreconditionFailed)
+		writeHostError(w, http.StatusPreconditionFailed, "resource_version_conflict", "stale")
 		return
 	}
 	delete(h.resources, resourceKey(kind, name))
@@ -1387,12 +1837,12 @@ func (h *formHost) handleDelete(w http.ResponseWriter, r *http.Request, kind, na
 func (h *formHost) lookupExact(w http.ResponseWriter, r *http.Request, kind, name string) (client.Resource, bool) {
 	form := h.forms[kind]
 	if !exactQuery(r, "prod", form) {
-		http.Error(w, `{"error":{"code":"form_identity_conflict","message":"exact form mismatch","retryable":false}}`, http.StatusConflict)
+		writeHostError(w, http.StatusConflict, "form_identity_conflict", "exact form mismatch")
 		return client.Resource{}, false
 	}
 	resource, ok := h.resources[resourceKey(kind, name)]
 	if !ok {
-		http.Error(w, `{"error":{"code":"resource_not_found","message":"missing","retryable":false}}`, http.StatusNotFound)
+		writeHostError(w, http.StatusNotFound, "resource_not_found", "missing")
 		return client.Resource{}, false
 	}
 	return resource, true
@@ -1427,10 +1877,36 @@ func (h *formHost) setSubstitution(kind, field string) {
 	h.substitutionField = field
 }
 
+func (h *formHost) setObservedOverride(kind string, observed map[string]any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.observedOverrideKind = kind
+	h.observedOverride = observed
+}
+
+func (h *formHost) removeResource(kind, name string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.resources, resourceKey(kind, name))
+}
+
 func (h *formHost) setCLIImport(value bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.cliImportPhase = value
+}
+
+func (h *formHost) setResourceReady(kind, name string, ready bool) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	key := resourceKey(kind, name)
+	resource, ok := h.resources[key]
+	if !ok || resource.Status == nil || resource.Status.Observed == nil {
+		return fmt.Errorf("cannot change readiness for missing %s", key)
+	}
+	resource.Status.Observed["ready"] = ready
+	h.resources[key] = resource
+	return nil
 }
 
 func (h *formHost) markDriftStateVerified() {
@@ -1441,7 +1917,7 @@ func (h *formHost) markDriftStateVerified() {
 	}
 }
 
-func (h *formHost) report(identity CLIIdentity, providerBinary ProviderBinaryIdentity, providerSchemaSHA256, installationSource string, immutable []ImmutableReplaceEvidence) Report {
+func (h *formHost) report(identity CLIIdentity, providerBinary ProviderBinaryIdentity, providerSchemaSHA256, installationSource string, immutable []ImmutableReplaceEvidence, interfaceChecks InterfaceCheckEvidence) Report {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	immutableByKindField := map[string]bool{}
@@ -1468,7 +1944,8 @@ func (h *formHost) report(identity CLIIdentity, providerBinary ProviderBinaryIde
 		Protocol: providerProtocol, InstallationSource: installationSource,
 		CandidateSetSHA256: candidateSetSHA256(), ProviderSchemaSHA256: providerSchemaSHA256,
 		ProviderBinary: providerBinary, CLI: identity,
-		Resources: resources,
+		Resources:       resources,
+		InterfaceChecks: interfaceChecks,
 		NegativeChecks: []NegativeEvidence{
 			{Name: "response-name-substitution-rejected", Kind: resourceCases[0].Kind,
 				Fixture: "versioned host observe response with substituted metadata.name", Passed: true},
@@ -1479,10 +1956,76 @@ func (h *formHost) report(identity CLIIdentity, providerBinary ProviderBinaryIde
 	}
 }
 
-func responseResource(resource client.Resource, version int) client.Resource {
+func (h *formHost) readyResource(resource client.Resource, version int) (client.Resource, error) {
 	resource.Metadata.ResourceVersion = fmt.Sprintf("%d", version)
-	resource.Status = &client.Status{Phase: "Ready", Portability: "portable", Outputs: map[string]any{"reference": resource.Metadata.Name + "-output"}}
-	return resource
+	output := map[string]any{
+		"id":          resource.Kind + "/" + resource.Metadata.Name,
+		"kind":        resource.Kind,
+		"name":        resource.Metadata.Name,
+		"generation":  version,
+		"portability": "portable",
+	}
+	kind, ok := formcatalog.ByKind(resource.Kind)
+	if !ok {
+		return client.Resource{}, fmt.Errorf("unknown Form kind %s", resource.Kind)
+	}
+	for _, descriptor := range kind.InterfaceDescriptors() {
+		for _, input := range descriptor.Inputs {
+			if input.Source != formpackage.InterfaceInputSourceOutput || input.Pointer == "" {
+				continue
+			}
+			token, ok := topLevelJSONPointerToken(input.Pointer)
+			if !ok {
+				return client.Resource{}, fmt.Errorf("%s@%s output pointer %q is not a top-level Form output", descriptor.Name, descriptor.Version, input.Pointer)
+			}
+			if _, present := output[token]; present {
+				continue
+			}
+			value, present := resource.Spec[token]
+			if !present {
+				return client.Resource{}, fmt.Errorf("%s@%s output %q is unresolved", descriptor.Name, descriptor.Version, token)
+			}
+			output[token] = value
+		}
+	}
+	resource.Status = &client.Status{
+		Observed: map[string]any{
+			"id": resource.Kind + "/" + resource.Metadata.Name, "ready": false,
+			"generation": version, "imported": false, "portability": "portable",
+			"driftedFields": []any{},
+		},
+		Output: output,
+	}
+	if _, err := h.materializeResourceInterfaces(resource); err != nil {
+		return client.Resource{}, err
+	}
+	resource.Status.Observed["ready"] = true
+	return resource, nil
+}
+
+func resourceOutputDocument(resource client.Resource) map[string]any {
+	if resource.Status == nil {
+		return nil
+	}
+	return resource.Status.Output
+}
+
+func topLevelJSONPointerToken(pointer string) (string, bool) {
+	if !strings.HasPrefix(pointer, "/") || strings.Contains(strings.TrimPrefix(pointer, "/"), "/") {
+		return "", false
+	}
+	encoded := strings.TrimPrefix(pointer, "/")
+	if strings.Contains(encoded, "~") {
+		for index := 0; index < len(encoded); index++ {
+			if encoded[index] == '~' && (index+1 >= len(encoded) || (encoded[index+1] != '0' && encoded[index+1] != '1')) {
+				return "", false
+			}
+			if encoded[index] == '~' {
+				index++
+			}
+		}
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(encoded, "~1", "/"), "~0", "~"), true
 }
 
 func exactQuery(r *http.Request, space string, form client.InstalledFormReference) bool {
