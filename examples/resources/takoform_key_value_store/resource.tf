@@ -1,7 +1,8 @@
 terraform {
   required_providers {
     takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
     }
   }
 }
@@ -12,8 +13,9 @@ provider "takoform" {
 }
 
 resource "takoform_key_value_store" "example" {
-  name        = "key-value-store"
-  consistency = "eventual"
+  name                = "key-value-store"
+  consistency         = "eventual"
+  default_ttl_seconds = 3600
 }
 
 output "key_value_store_outputs" {

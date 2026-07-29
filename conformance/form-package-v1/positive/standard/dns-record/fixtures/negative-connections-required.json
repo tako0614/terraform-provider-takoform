@@ -1,0 +1,10 @@
+{
+  "connections": {},
+  "name": "dns-record",
+  "recordName": "api",
+  "recordType": "CNAME",
+  "ttlSeconds": 300,
+  "values": [
+    "service.portable-conformance.invalid"
+  ]
+}

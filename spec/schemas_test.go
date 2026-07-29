@@ -1,5 +1,4 @@
-// Package spec holds the drift gate between the normative schemas and the
-// copies the implementation embeds.
+// Package spec holds the compile and drift gates for normative schemas.
 package spec
 
 import (
@@ -9,8 +8,10 @@ import (
 	"testing"
 )
 
-// TestNormativeSchemasMatchTheImplementation proves the Go verifier embeds
-// exactly the schemas this specification publishes.
+// TestNormativeSchemasMatchTheImplementation proves every schema that has a
+// runtime copy is byte-identical to its normative source. A normative-only
+// protocol schema is instead consumed by conformance tooling and is compiled
+// in host_api_wire_test.go.
 //
 // The specification is the source: if these ever disagree, an implementation
 // would be enforcing a contract nobody can read.
@@ -23,20 +24,28 @@ func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 		"form-package-revocation-checkpoint.schema.json": filepath.Join("..", "formpackage", "schemas", "form-package-revocation-checkpoint.schema.json"),
 		"host-discovery.schema.json":                     filepath.Join("..", "schemas", "host-discovery.schema.json"),
 	}
+	normativeOnly := map[string]bool{
+		"host-api-wire.schema.json": true,
+	}
 	entries, err := os.ReadDir("schemas")
 	if err != nil {
 		t.Fatal(err)
 	}
-	seen := 0
+	seenImplementations := 0
+	seenNormativeOnly := 0
 	for _, entry := range entries {
 		if filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
-		seen++
 		implementation, ok := implementations[entry.Name()]
 		if !ok {
-			t.Fatalf("normative schema %s has no implementation counterpart", entry.Name())
+			if normativeOnly[entry.Name()] {
+				seenNormativeOnly++
+				continue
+			}
+			t.Fatalf("normative schema %s is neither copied by an implementation nor declared normative-only", entry.Name())
 		}
+		seenImplementations++
 		want, err := os.ReadFile(filepath.Join("schemas", entry.Name()))
 		if err != nil {
 			t.Fatal(err)
@@ -49,7 +58,13 @@ func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 			t.Fatalf("%s drifted from the normative schema", entry.Name())
 		}
 	}
-	if seen != len(implementations) {
-		t.Fatalf("normative schema set has %d files, want %d", seen, len(implementations))
+	if seenImplementations != len(implementations) || seenNormativeOnly != len(normativeOnly) {
+		t.Fatalf(
+			"normative schema set has %d implementation copies and %d normative-only schemas, want %d and %d",
+			seenImplementations,
+			seenNormativeOnly,
+			len(implementations),
+			len(normativeOnly),
+		)
 	}
 }

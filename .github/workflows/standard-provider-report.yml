@@ -2,11 +2,16 @@ name: Build signed standard provider reports
 
 on:
   workflow_dispatch:
+    inputs:
+      request_id:
+        description: Exact owner-dispatch UUIDv4 correlation token
+        required: true
+        type: string
 
-run-name: standard-provider-report:${{ github.sha }}
+run-name: ${{ inputs.request_id }}
 
 concurrency:
-  group: standard-provider-report-${{ github.sha }}
+  group: standard-provider-report-${{ github.sha }}-${{ inputs.request_id }}
   cancel-in-progress: false
 
 permissions: {}
@@ -35,19 +40,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Bind this one-attempt run to protected main
+      - name: Bind this exact run attempt to protected main
         id: source
         shell: bash
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
         run: |
           set -euo pipefail
-          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          if [[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; then
+            echo "request_id must be a canonical lowercase UUIDv4" >&2
+            exit 1
+          fi
+          [[ "${GITHUB_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
           test "${GITHUB_REF}" = "refs/heads/main"
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           test "$(git rev-parse refs/remotes/origin/main)" = "${GITHUB_SHA}"
           {
             echo "source_commit=${GITHUB_SHA}"
             echo "source_commit_short=${GITHUB_SHA:0:12}"
-            echo "artifact_name=takoform-standard-provider-report-unsigned-current-${GITHUB_SHA:0:12}"
+            echo "artifact_name=takoform-standard-provider-report-unsigned-current-${REQUEST_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:12}"
           } >> "${GITHUB_OUTPUT}"
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
@@ -103,13 +114,18 @@ jobs:
         env:
           ARTIFACT_ID: ${{ needs.generate.outputs.artifact_id }}
           ARTIFACT_DIGEST: ${{ needs.generate.outputs.artifact_digest }}
+          REQUEST_ID: ${{ inputs.request_id }}
           SOURCE_COMMIT: ${{ needs.generate.outputs.source_commit }}
         run: |
           set -euo pipefail
           [[ "${ARTIFACT_ID}" =~ ^[1-9][0-9]*$ ]]
           [[ "${ARTIFACT_DIGEST}" =~ ^(sha256:)?[0-9a-f]{64}$ ]]
+          if [[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; then
+            echo "request_id must be a canonical lowercase UUIDv4" >&2
+            exit 1
+          fi
           [[ "${SOURCE_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
-          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          [[ "${GITHUB_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
           test "${SOURCE_COMMIT}" = "${GITHUB_SHA}"
 
       - name: Download only the immutable artifact id from this run
@@ -187,6 +203,7 @@ jobs:
         env:
           ARTIFACT_ID: ${{ needs.generate.outputs.artifact_id }}
           ARTIFACT_DIGEST: ${{ needs.generate.outputs.artifact_digest }}
+          REQUEST_ID: ${{ inputs.request_id }}
           SOURCE_COMMIT: ${{ needs.generate.outputs.source_commit }}
         run: |
           set -euo pipefail
@@ -215,8 +232,12 @@ jobs:
             format:"takoform.standard-provider-report-signed-candidate@v1", status:"candidate-only", proofType:"provider",
             generation:manifest.generation,
             subject:manifest.subject, certificateIdentity:process.env.REPORT_IDENTITY,
-            workflow:".github/workflows/standard-provider-report.yml", workflowRunId:process.env.GITHUB_RUN_ID,
-            workflowRunAttempt:1, source:manifest.source,
+            workflow:".github/workflows/standard-provider-report.yml",
+            requestId:process.env.REQUEST_ID,
+            workflowRunId:process.env.GITHUB_RUN_ID,
+            workflowRunAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),
+            headSha:process.env.GITHUB_SHA,
+            source:manifest.source,
             manifest:{path:"provider-report-manifest.json",digest:digest(manifestRaw)}, entries:reports,
           };
           fs.writeFileSync(path.join(root,"signed-provider-report-candidate.json"), JSON.stringify(sorted(candidate)));
@@ -228,7 +249,7 @@ jobs:
       - name: Upload the signed provider-report candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: takoform-standard-provider-report-candidate-current-${{ needs.generate.outputs.source_commit_short }}
+          name: takoform-standard-provider-report-candidate-current-${{ inputs.request_id }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.generate.outputs.source_commit_short }}
           path: unsigned/
           if-no-files-found: error
           retention-days: 90

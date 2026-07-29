@@ -1,0 +1,15 @@
+{
+  "action": "transition",
+  "afterDays": 90,
+  "connections": {
+    "store": {
+      "permissions": [
+        "administer"
+      ],
+      "projection": "object.lifecycle.v1",
+      "resource": "ObjectBucket/object-bucket"
+    }
+  },
+  "name": "object-lifecycle-rule",
+  "prefix": "logs/"
+}

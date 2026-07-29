@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "LogSink",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:7897916a7bb3311befc908694e3714779c5bc3262751042335733d9c6b86cf22"
+    "schemaDigest": "sha256:6a2d8924f781ade0d3312e69ab9555d3f63e70c3f7fb7e37f3a7dd76e1031798"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5361,
-      "digest": "sha256:07daed39a17aab433d759cabb3d930d303004aded40379d8454b7cc291f38d22"
+      "size": 6019,
+      "digest": "sha256:13a644fde395c64ef6ecad39120113d1c617246c745a8a40b7cce798aeba6294"
     },
     {
       "path": "fixtures/desired.json",
@@ -27,6 +27,18 @@
       "mediaType": "application/json",
       "size": 85,
       "digest": "sha256:e593246e29d1a24f0429f6edcad0b46d0ff8e6c322fb47a6b7e484d8640699b1"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 46,
+      "digest": "sha256:4b89179a12e46a93ca18c72a7cb88fca1bea290c4c415cacc38940640f4e41c8"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 141,
+      "digest": "sha256:c82be80753fd5e0fd51c82db43b32a451e6484725c638be56c9078b6008e2383"
     },
     {
       "path": "fixtures/negative-retention_days.json",

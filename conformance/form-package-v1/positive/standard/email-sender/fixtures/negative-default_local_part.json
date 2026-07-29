@@ -1,0 +1,5 @@
+{
+  "defaultLocalPart": "bad@local",
+  "domain": "portable-conformance.invalid",
+  "name": "email-sender"
+}

@@ -1,0 +1,22 @@
+{
+  "connections": {
+    "origin": {
+      "permissions": [
+        "administer"
+      ],
+      "projection": "sql.admin.v1",
+      "resource": "RelationalDatabase/relational-database"
+    },
+    "overflow1": {
+      "permissions": [
+        "administer"
+      ],
+      "projection": "sql.admin.v1",
+      "resource": "RelationalDatabase/relational-database"
+    }
+  },
+  "cron": "0 3 * * *",
+  "name": "backup-policy",
+  "retentionDays": 14,
+  "timezone": "UTC"
+}

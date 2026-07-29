@@ -2,11 +2,16 @@ name: Build signed provider Registry readback
 
 on:
   workflow_dispatch:
+    inputs:
+      request_id:
+        description: Exact owner-deploy UUIDv4 dispatch correlation token
+        required: true
+        type: string
 
-run-name: provider-registry-readback:${{ github.sha }}
+run-name: ${{ inputs.request_id }}
 
 concurrency:
-  group: provider-registry-readback-${{ github.sha }}
+  group: provider-registry-readback-${{ github.sha }}-${{ inputs.request_id }}
   cancel-in-progress: false
 
 permissions: {}
@@ -35,12 +40,18 @@ jobs:
           fetch-tags: true
           persist-credentials: false
 
-      - name: Bind this one-attempt run to protected main and the published tag
+      - name: Bind this exact run attempt to protected main and the published tag
         id: source
         shell: bash
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
         run: |
           set -euo pipefail
-          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          if [[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; then
+            echo "request_id must be a canonical lowercase UUIDv4" >&2
+            exit 1
+          fi
+          [[ "${GITHUB_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
           test "${GITHUB_REF}" = "refs/heads/main"
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           test "$(git rev-parse refs/remotes/origin/main)" = "${GITHUB_SHA}"
@@ -116,7 +127,7 @@ jobs:
         id: upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: takoform-provider-registry-readback-unsigned-${{ steps.source.outputs.source_commit_short }}
+          name: takoform-provider-registry-readback-unsigned-${{ inputs.request_id }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.source.outputs.source_commit_short }}
           path: ${{ runner.temp }}/registry-readback/
           if-no-files-found: error
           retention-days: 1
@@ -135,13 +146,15 @@ jobs:
         env:
           ARTIFACT_ID: ${{ needs.generate.outputs.artifact_id }}
           ARTIFACT_DIGEST: ${{ needs.generate.outputs.artifact_digest }}
+          REQUEST_ID: ${{ inputs.request_id }}
           SOURCE_COMMIT: ${{ needs.generate.outputs.source_commit }}
         run: |
           set -euo pipefail
           [[ "${ARTIFACT_ID}" =~ ^[1-9][0-9]*$ ]]
           [[ "${ARTIFACT_DIGEST}" =~ ^(sha256:)?[0-9a-f]{64}$ ]]
+          [[ "${REQUEST_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]
           [[ "${SOURCE_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
-          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          [[ "${GITHUB_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
           test "${SOURCE_COMMIT}" = "${GITHUB_SHA}"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -157,6 +170,7 @@ jobs:
         env:
           ARTIFACT_ID: ${{ needs.generate.outputs.artifact_id }}
           ARTIFACT_DIGEST: ${{ needs.generate.outputs.artifact_digest }}
+          REQUEST_ID: ${{ inputs.request_id }}
           SOURCE_COMMIT: ${{ needs.generate.outputs.source_commit }}
         run: |
           set -euo pipefail
@@ -191,8 +205,9 @@ jobs:
             generation:manifest.generation,
             certificateIdentity:process.env.READBACK_IDENTITY,
             workflow:".github/workflows/provider-registry-readback.yml",
+            requestId:process.env.REQUEST_ID,
             workflowRunId:process.env.GITHUB_RUN_ID,
-            workflowRunAttempt:1,
+            workflowRunAttempt:Number(process.env.GITHUB_RUN_ATTEMPT),
             source:manifest.source,
             manifest:{path:"provider-registry-readback-manifest.json",digest:digest(manifestRaw)},
             readback:{path:manifest.readback.path,digest:manifest.readback.digest,bundlePath:manifest.readback.bundlePath,bundleDigest:digest(fs.readFileSync(`unsigned/${manifest.readback.bundlePath}`))},
@@ -206,7 +221,7 @@ jobs:
       - name: Upload the signed Registry-readback candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: takoform-provider-registry-readback-candidate-${{ needs.generate.outputs.source_commit_short }}
+          name: takoform-provider-registry-readback-candidate-${{ inputs.request_id }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.generate.outputs.source_commit_short }}
           path: unsigned/
           if-no-files-found: error
           retention-days: 90

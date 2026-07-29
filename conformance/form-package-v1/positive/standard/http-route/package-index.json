@@ -6,33 +6,69 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "HttpRoute",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:6763d5a72dc37e24c1d6305f27d96777666b45232ee32ffb3acac3fd3e668540"
+    "schemaDigest": "sha256:451dc2e74902fd1ec837f688a2698c9b9fd3a9e138cb013d677033f2b355fbb2"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4495,
-      "digest": "sha256:51715bd49585d75c2594e036667bd4c77d4765ce1374830c2a23687fda255783"
+      "size": 6023,
+      "digest": "sha256:9410464e67b613907b961c2ae0151c04c61daed778df88afee0362f8f629eeec"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 279,
-      "digest": "sha256:68e12c412d29eddfc67c6b49ff359726860b3bfc420c4a2e67501cd40c5b515e"
+      "size": 307,
+      "digest": "sha256:3bc7a032cea76adce5b494da07d3a205d0d137764cccd5081b4c63af2eff00ac"
+    },
+    {
+      "path": "fixtures/negative-connections-cardinality.json",
+      "mediaType": "application/json",
+      "size": 463,
+      "digest": "sha256:3ae507e9a35b8fc18ed7bc4940dc242654801c07761b08bda32abfc04aa3b9d1"
+    },
+    {
+      "path": "fixtures/negative-connections-required.json",
+      "mediaType": "application/json",
+      "size": 147,
+      "digest": "sha256:e8f4477413bd535b37d4d61836bd017481bc0c0af48cc214d39cf01f755a7d21"
     },
     {
       "path": "fixtures/negative-hostname.json",
       "mediaType": "application/json",
-      "size": 261,
-      "digest": "sha256:00e3711f8cc1c37bdb04d7e2628d7829036c121aad4dcddf75e35b134709dfde"
+      "size": 289,
+      "digest": "sha256:dc6cd215df51295b593c5388b5357dd4329d5040221130bb7f77a6ae6c264017"
+    },
+    {
+      "path": "fixtures/negative-missing-connections.json",
+      "mediaType": "application/json",
+      "size": 126,
+      "digest": "sha256:2844df4e09f4cee0f50ed538c5476d1b3506b6068979846169cb6ca82c094961"
+    },
+    {
+      "path": "fixtures/negative-missing-hostname.json",
+      "mediaType": "application/json",
+      "size": 257,
+      "digest": "sha256:84cd022757332e10267b8d886848d696ee1ec35399650437006b2e7ee03f787f"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 283,
+      "digest": "sha256:142992009ac812ab08217f5d271eaf5de1b2bc53f610384fb76d21514b160bb4"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 143,
+      "digest": "sha256:538046f64a94c73fcd8abd77687789581dc8a503a68ffda312a238af18a0802e"
     },
     {
       "path": "fixtures/negative-path_prefix.json",
       "mediaType": "application/json",
-      "size": 291,
-      "digest": "sha256:1f9cd9702d45547cf5447eb1c2d10cfb391d6a39ffa694d601232755a57b4d41"
+      "size": 319,
+      "digest": "sha256:310ec033d0aa1a8de07bb8434e56932e1b3aa3682b9341359ae150dc28486bb6"
     },
     {
       "path": "fixtures/observed.json",

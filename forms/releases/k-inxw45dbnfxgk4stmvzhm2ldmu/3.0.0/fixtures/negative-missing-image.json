@@ -1,0 +1,14 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "cpuMillicores": 250,
+  "healthCheckPath": "/healthz",
+  "memoryMib": 512,
+  "name": "container-service",
+  "ports": [
+    80
+  ],
+  "publicHttp": true,
+  "replicas": 2
+}

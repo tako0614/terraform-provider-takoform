@@ -17,16 +17,18 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 
 - `name` (String, required, forces replacement) — Resource name.
 - `redirect_uris` (Set of String, required) — Absolute https redirect URIs the client may return to.
-- `grant_types` (Set of String, optional) — Grant types the client is registered for. One of `authorization_code`, `client_credentials`, `refresh_token`.
-- `auth_method` (String, optional) — How the client authenticates at the token endpoint. The host issues and holds any material this implies. One of `none`, `basic`, `jwt`. Defaults to `none`.
+- `auth_method` (String, optional) — How this authorization-code client authenticates at the token endpoint. The host issues and holds any material this implies. One of `none`, `client_secret_basic`, `private_key_jwt`. Defaults to `none`.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
 ## Read-only attributes
 
-`id`, `resource_version`, `drift_status`, `portability`, and `outputs` report
-the canonical resource identity, its generation fence, the native observation
-result, and sanitized public host results. Backend placement is never provider
-state.
+`form_api_version`, `form_kind`, `form_definition_version`, `form_schema_digest`, and
+`form_package_digest` bind state to the exact immutable Form identity.
+`id` is the provider-synthesized `Kind/name` identity and `resource_version` is
+the host generation fence. `drift_status`, `portability`, and `outputs` are written
+only after the host's observed and output documents satisfy this exact Form's
+closed schemas, identities, and generation. Undeclared host keys are rejected;
+backend placement is never provider state.
 
 ## Declared runtime interfaces
 

@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "StaticSite/static-site",
+  "kind": "StaticSite",
+  "name": "static-site",
+  "portability": "portable"
+}

@@ -64,10 +64,168 @@ func TestValidateCanonicalHostRunnerReportBindsExactFixtureBytes(t *testing.T) {
 	}
 }
 
+func TestValidateCanonicalHostRunnerReportUsesDesiredNegativeFixturesOnly(t *testing.T) {
+	t.Parallel()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	identity := standardform.InstalledFormReference{
+		FormRef: formpackage.FormRef{
+			APIVersion: formpackage.FormAPIVersion, Kind: "ObjectBucket",
+			DefinitionVersion: "3.0.0", SchemaDigest: digest,
+		},
+		PackageDigest: digest,
+	}
+	positive := FixtureDigestBinding{PackageFixtureDigest: digest, EffectiveInputDigest: digest}
+	desired := FixtureDigestBinding{
+		PackageFixtureDigest: digest, EffectiveInputDigest: digest, Stage: "desired",
+	}
+	observed := FixtureDigestBinding{
+		PackageFixtureDigest: digest, EffectiveInputDigest: digest, Stage: "observed",
+	}
+	report := completeRunnerReport(
+		roleHostReport,
+		"host:https://host.example.test",
+		identity,
+		[]string{"canonical"},
+		[]string{"reject-desired"},
+		fixtureDigestBinding(positive),
+		fixtureDigestBinding(desired),
+	)
+	raw := canonicalFixture(t, report)
+	if _, err := ValidateCanonicalHostRunnerReport(
+		raw,
+		identity,
+		map[string]FixtureDigestBinding{"canonical": positive},
+		map[string]FixtureDigestBinding{"reject-desired": desired, "reject-observed": observed},
+	); err != nil {
+		t.Fatalf("desired-only host report: %v", err)
+	}
+
+	overclaim := completeRunnerReport(
+		roleHostReport,
+		"host:https://host.example.test",
+		identity,
+		[]string{"canonical"},
+		[]string{"reject-desired", "reject-observed"},
+		fixtureDigestBinding(positive),
+		fixtureDigestBinding(desired),
+		fixtureDigestBinding(observed),
+	)
+	if _, err := ValidateCanonicalHostRunnerReport(
+		canonicalFixture(t, overclaim),
+		identity,
+		map[string]FixtureDigestBinding{"canonical": positive},
+		map[string]FixtureDigestBinding{"reject-desired": desired, "reject-observed": observed},
+	); err == nil || !strings.Contains(err.Error(), "reject-observed") {
+		t.Fatalf("host observed-stage overclaim error = %v", err)
+	}
+
+	for _, stage := range []string{"output", "host-private", " observed "} {
+		t.Run(stage, func(t *testing.T) {
+			invalid := observed
+			invalid.Stage = stage
+			if _, err := ValidateCanonicalHostRunnerReport(
+				raw,
+				identity,
+				map[string]FixtureDigestBinding{"canonical": positive},
+				map[string]FixtureDigestBinding{"reject-desired": desired, "reject-invalid": invalid},
+			); err == nil || !strings.Contains(err.Error(), "not supported") {
+				t.Fatalf("stage %q error = %v", stage, err)
+			}
+		})
+	}
+	emptyNegativeReport := completeRunnerReport(
+		roleHostReport,
+		"host:https://host.example.test",
+		identity,
+		[]string{"canonical"},
+		nil,
+		fixtureDigestBinding(positive),
+	)
+	if _, err := ValidateCanonicalHostRunnerReport(
+		canonicalFixture(t, emptyNegativeReport),
+		identity,
+		map[string]FixtureDigestBinding{"canonical": positive},
+		map[string]FixtureDigestBinding{"reject-observed": observed},
+	); err == nil || !strings.Contains(err.Error(), "negative fixture expectations are required") {
+		t.Fatalf("observed-only host binding error = %v", err)
+	}
+}
+
+func TestValidateCanonicalProviderRunnerReportWithStagesCoversDesiredAndObserved(t *testing.T) {
+	t.Parallel()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	identity := standardform.InstalledFormReference{
+		FormRef: formpackage.FormRef{
+			APIVersion: formpackage.FormAPIVersion, Kind: "ObjectBucket",
+			DefinitionVersion: "3.0.0", SchemaDigest: digest,
+		},
+		PackageDigest: digest,
+	}
+	report := completeRunnerReport(
+		roleProviderReport,
+		"provider:registry.terraform.io/tako0614/takoform",
+		identity,
+		[]string{"canonical"},
+		[]string{"reject-desired", "reject-observed"},
+	)
+	raw := canonicalFixture(t, report)
+	expectations := []NegativeFixtureExpectation{
+		{Name: "reject-desired", Stage: "desired"},
+		{Name: "reject-observed", Stage: "observed"},
+	}
+	if _, err := ValidateCanonicalProviderRunnerReportWithStages(raw, identity, []string{"canonical"}, expectations); err != nil {
+		t.Fatalf("desired+observed provider report: %v", err)
+	}
+
+	desiredOnly := completeRunnerReport(
+		roleProviderReport,
+		"provider:registry.terraform.io/tako0614/takoform",
+		identity,
+		[]string{"canonical"},
+		[]string{"reject-desired"},
+	)
+	if _, err := ValidateCanonicalProviderRunnerReportWithStages(
+		canonicalFixture(t, desiredOnly),
+		identity,
+		[]string{"canonical"},
+		expectations,
+	); err == nil || !strings.Contains(err.Error(), "fixture closure") {
+		t.Fatalf("provider observed-stage omission error = %v", err)
+	}
+
+	for _, stage := range []string{"output", "host-private", " observed "} {
+		t.Run(stage, func(t *testing.T) {
+			if _, err := ValidateCanonicalProviderRunnerReportWithStages(
+				raw,
+				identity,
+				[]string{"canonical"},
+				[]NegativeFixtureExpectation{{Name: "reject-desired", Stage: "desired"}, {Name: "reject-invalid", Stage: stage}},
+			); err == nil || !strings.Contains(err.Error(), "not supported") {
+				t.Fatalf("stage %q error = %v", stage, err)
+			}
+		})
+	}
+	if _, err := ValidateCanonicalProviderRunnerReportWithStages(raw, identity, []string{"canonical"}, nil); err == nil ||
+		!strings.Contains(err.Error(), "negative fixture expectations are required") {
+		t.Fatalf("empty provider expectation error = %v", err)
+	}
+
+	// The pre-stage API remains source- and behavior-compatible: every supplied
+	// negative name is interpreted as a desired-stage expectation.
+	if _, err := ValidateCanonicalProviderRunnerReport(
+		raw,
+		identity,
+		[]string{"canonical"},
+		[]string{"reject-desired", "reject-observed"},
+	); err != nil {
+		t.Fatalf("all-desired compatibility API: %v", err)
+	}
+}
+
 func TestBuildCanonicalSetReturnsCanonicalBytes(t *testing.T) {
 	t.Parallel()
 	want := testSet()
-	// Admission activation has its own immutable release stream. It may advance
+	// Admission closure has its own immutable checkpoint tag. It may advance
 	// without republishing the exact Form definition/package closure.
 	want.AdmissionReleaseTag = "forms/admissions/v1.0.2"
 	set, raw, err := BuildCanonicalSet(

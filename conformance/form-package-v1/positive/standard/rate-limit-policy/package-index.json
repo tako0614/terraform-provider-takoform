@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "RateLimitPolicy",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:ff9c07aa7ea940fcfb62ad601f8049df7950feeb2ad8c8d07685eee94ba3d963"
+    "schemaDigest": "sha256:d84e988da486daa3bc3bceb12105c992f43de8c0dad0fde4ba32abd84ad2fb45"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4610,
-      "digest": "sha256:ffb682242825bedb7e83f6cef103301f9cf74f9fe7a281a2f0ec197f01850191"
+      "size": 6166,
+      "digest": "sha256:fa805a86bf4092638c3dc32039cd92c18479e84357b4889183ae03b7729ea39e"
     },
     {
       "path": "fixtures/desired.json",
@@ -27,6 +27,42 @@
       "mediaType": "application/json",
       "size": 276,
       "digest": "sha256:defe3f3bea4c7ed80c40a405b51289f83459a7d732dc4cd722ca042e2cec2efb"
+    },
+    {
+      "path": "fixtures/negative-connections-cardinality.json",
+      "mediaType": "application/json",
+      "size": 434,
+      "digest": "sha256:ef6b46cebbb58fb0525802bc026b2bab773e91258f9a7fe90eb5569cac4fd98e"
+    },
+    {
+      "path": "fixtures/negative-connections-required.json",
+      "mediaType": "application/json",
+      "size": 120,
+      "digest": "sha256:95f2de608a62363d9a62be87150040d09967b823a11d10fcfb3f69c94bdf6bd4"
+    },
+    {
+      "path": "fixtures/negative-missing-connections.json",
+      "mediaType": "application/json",
+      "size": 99,
+      "digest": "sha256:782c516be8b5684ad3660ef60cf0ec6dd2b26354dbcc4d2fbba0dbd0a5462380"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 246,
+      "digest": "sha256:b57c56dcb11d05bf1398548abf9a763e8f0a144d5b1582f6073b5f99450e0557"
+    },
+    {
+      "path": "fixtures/negative-missing-requests_per_minute.json",
+      "mediaType": "application/json",
+      "size": 249,
+      "digest": "sha256:05f7b87a5cbe36fc6361ae2293ffe32cb20a8c1fe86e39d1229183c509585986"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 150,
+      "digest": "sha256:c77dd3184a5f835ad2d9f35d5f59083f4e93b8d8ac3c9167773892d95af13321"
     },
     {
       "path": "fixtures/negative-requests_per_minute.json",

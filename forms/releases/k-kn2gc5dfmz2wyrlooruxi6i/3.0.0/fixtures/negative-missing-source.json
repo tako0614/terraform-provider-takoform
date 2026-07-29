@@ -1,0 +1,11 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "entityClass": "RoomEntity",
+  "migrationTag": "v1",
+  "name": "stateful-entity",
+  "persistence": "transactional",
+  "runtime": "javascript",
+  "runtimeVersion": "2026.1"
+}

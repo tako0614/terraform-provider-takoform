@@ -21,15 +21,18 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 - `health_check_path` (String, optional) — Optional HTTP path polled to decide backend health.
 - `internal` (Bool, optional) — Whether the listener is reachable only from inside the host's private network.
 - `idle_timeout_seconds` (Number, optional) — Optional time an idle connection is held open, in seconds. Between 1 and 4000.
-- `connections` (List of Object, required) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.
+- `connections` (List of Object, one or more) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. Names must be unique. A connection is a request the host validates; it grants nothing by itself.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
 ## Read-only attributes
 
-`id`, `resource_version`, `drift_status`, `portability`, and `outputs` report
-the canonical resource identity, its generation fence, the native observation
-result, and sanitized public host results. Backend placement is never provider
-state.
+`form_api_version`, `form_kind`, `form_definition_version`, `form_schema_digest`, and
+`form_package_digest` bind state to the exact immutable Form identity.
+`id` is the provider-synthesized `Kind/name` identity and `resource_version` is
+the host generation fence. `drift_status`, `portability`, and `outputs` are written
+only after the host's observed and output documents satisfy this exact Form's
+closed schemas, identities, and generation. Undeclared host keys are rejected;
+backend placement is never provider state.
 
 ## Declared runtime interfaces
 

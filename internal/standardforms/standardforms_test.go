@@ -102,7 +102,7 @@ func TestCurrentAdmissionCandidateSetIsExactMixedVersionSuccessorGeneration(t *t
 		versions[entry.FormRef.DefinitionVersion] = true
 		kinds[entry.Kind] = true
 	}
-	if !versions["1.0.0"] || !versions["2.0.0"] || len(versions) != 2 {
+	if !versions["2.0.0"] || !versions["3.0.0"] || len(versions) != 2 {
 		t.Fatalf("current admission set lost mixed versions: %#v", versions)
 	}
 	if !kinds["EdgeWorker"] || kinds["HttpService"] {
@@ -128,10 +128,10 @@ func TestCurrentPortableCandidateSetRetainsAllThirtyFourIdentities(t *testing.T)
 	}
 }
 
-func TestFormSurfaceRegenerationPreservesInterfaceResource(t *testing.T) {
+func TestFormSurfaceRegenerationExcludesStandaloneInterfaceResource(t *testing.T) {
 	t.Parallel()
-	if _, ok := declaredResourceTypes()["takoform_interface"]; !ok {
-		t.Fatal("Form surface regeneration would prune the independent interface resource example")
+	if _, ok := declaredResourceTypes()["takoform_interface"]; ok {
+		t.Fatal("Form surface regeneration retained the forbidden standalone interface resource")
 	}
 }
 

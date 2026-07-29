@@ -20,34 +20,24 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
 // API constants for the frozen wire contract.
 const (
 	// APIVersion is the Resource object apiVersion this provider speaks.
-	APIVersion = "forms.takoform.com/v1alpha1"
-
-	// KindEdgeWorker is the Service Form kind for HTTP services.
-	KindEdgeWorker = "EdgeWorker"
-
-	KindObjectBucket           = "ObjectBucket"
-	KindKVStore                = "KVStore"
-	KindQueue                  = "Queue"
-	KindSQLDatabase            = "SQLDatabase"
-	KindContainerService       = "ContainerService"
-	KindVectorIndex            = "VectorIndex"
-	KindDurableWorkflow        = "DurableWorkflow"
-	KindStatefulActorNamespace = "StatefulActorNamespace"
-	KindSchedule               = "Schedule"
+	APIVersion = formpackage.FormAPIVersion
 
 	defaultUserAgent     = "terraform-provider-takoform"
 	maxResponseBodyBytes = 8 * 1024 * 1024
 )
 
-// ErrNotFound is returned when a resource read targets a resource that the
-// server reports as gone (HTTP 404). Callers map this to "remove from state".
+// ErrNotFound is returned only for the stable resource_not_found error on
+// HTTP 404. Callers map this exact condition to "remove from state".
 var ErrNotFound = errors.New("takoform: resource not found")
 
 // Discovery is the parsed body of GET /.well-known/takoform.
@@ -57,7 +47,6 @@ var ErrNotFound = errors.New("takoform: resource not found")
 // branches on an "edition" string).
 type Discovery struct {
 	APIVersions []string        `json:"api_versions"`
-	Edition     string          `json:"edition,omitempty"`
 	Features    map[string]bool `json:"features"`
 	Endpoints   Endpoints       `json:"endpoints"`
 }
@@ -83,46 +72,15 @@ func (d Discovery) SupportsServiceForms() bool {
 
 // Metadata is the Resource object metadata block.
 type Metadata struct {
-	Name            string            `json:"name"`
-	Space           string            `json:"space,omitempty"`
-	Project         string            `json:"project,omitempty"`
-	Environment     string            `json:"environment,omitempty"`
-	Labels          map[string]string `json:"labels,omitempty"`
-	ResourceVersion string            `json:"resourceVersion,omitempty"`
-	ManagedBy       string            `json:"managedBy,omitempty"`
-	// ID may be returned by the server inside metadata; the provider also
-	// accepts a top-level Resource.ID. Either, if present, wins over the
-	// synthesized tkrn id.
-	ID string `json:"id,omitempty"`
+	Name            string `json:"name"`
+	Space           string `json:"space,omitempty"`
+	ResourceVersion string `json:"resourceVersion,omitempty"`
 }
 
-// Resolution is the resolver's chosen implementation/target for a resource.
-type Resolution struct {
-	SelectedImplementation string `json:"selectedImplementation,omitempty"`
-	Target                 string `json:"target,omitempty"`
-	Locked                 bool   `json:"locked,omitempty"`
-	Portability            string `json:"portability,omitempty"`
-}
-
-// Condition is a Kubernetes-style status condition.
-type Condition struct {
-	Type    string `json:"type"`
-	Status  string `json:"status"`
-	Reason  string `json:"reason,omitempty"`
-	Message string `json:"message,omitempty"`
-}
-
-// Status is the observed state returned by the server on PUT/GET/preview.
+// Status carries only the Form's portable observed and output documents.
 type Status struct {
-	Phase              string         `json:"phase,omitempty"`
-	ObservedGeneration int64          `json:"observedGeneration,omitempty"`
-	Portability        string         `json:"portability,omitempty"`
-	Resolution         Resolution     `json:"resolution"`
-	Outputs            map[string]any `json:"outputs,omitempty"`
-	Conditions         []Condition    `json:"conditions,omitempty"`
-	// DriftStatus is transport evidence from the versioned observe response.
-	// It is intentionally not part of the Resource wire envelope.
-	DriftStatus string `json:"-"`
+	Observed map[string]any `json:"observed,omitempty"`
+	Output   map[string]any `json:"output,omitempty"`
 }
 
 // Resource is the Takoform Resource object envelope. Spec is kept generic so
@@ -135,8 +93,6 @@ type Resource struct {
 	Metadata   Metadata                `json:"metadata"`
 	Spec       map[string]any          `json:"spec,omitempty"`
 	Status     *Status                 `json:"status,omitempty"`
-	// ID is an optional top-level server identifier.
-	ID string `json:"id,omitempty"`
 }
 
 // FormRef pins one immutable typed Form Definition. Publication and admission
@@ -146,6 +102,21 @@ type FormRef struct {
 	Kind              string `json:"kind"`
 	DefinitionVersion string `json:"definitionVersion"`
 	SchemaDigest      string `json:"schemaDigest"`
+}
+
+// UnmarshalJSON preserves the normative raw-document validation boundary.
+// Validating only a decoded Go struct would lose duplicate member names before
+// the Form Package I-JSON validator can reject them.
+func (ref *FormRef) UnmarshalJSON(raw []byte) error {
+	validated, err := formpackage.ValidateFormRef(raw)
+	if err != nil {
+		return fmt.Errorf("takoform: invalid FormRef JSON: %w", err)
+	}
+	ref.APIVersion = validated.APIVersion
+	ref.Kind = validated.Kind
+	ref.DefinitionVersion = validated.DefinitionVersion
+	ref.SchemaDigest = validated.SchemaDigest
+	return nil
 }
 
 // InstalledFormReference adds the exact package bytes selected by this
@@ -162,27 +133,10 @@ type MutationFence struct {
 	Form            InstalledFormReference
 }
 
-// NativeResourceRef is an opaque host-side native-resource handle returned in
-// preview evidence. The provider never creates or selects this object.
-type NativeResourceRef struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
-}
-
-// PreviewResourceResult decodes the versioned preview response without
-// exposing host resolution evidence as provider state.
+// PreviewResourceResult decodes the exact portable Resource and review fence.
 type PreviewResourceResult struct {
-	Resource               Resource            `json:"resource"`
-	SelectedImplementation string              `json:"selectedImplementation"`
-	SelectedTarget         string              `json:"selectedTarget"`
-	Portability            string              `json:"portability"`
-	NativeResourcePlan     []NativeResourceRef `json:"nativeResourcePlan"`
-	RiskNotes              []string            `json:"riskNotes"`
-	Summary                string              `json:"summary"`
-	PlanDigest             string              `json:"planDigest"`
-	SpecDigest             string              `json:"specDigest"`
-	ResolutionFingerprint  string              `json:"resolutionFingerprint"`
-	Review                 PreviewReview       `json:"review,omitempty"`
+	Resource Resource      `json:"resource"`
+	Review   PreviewReview `json:"review,omitempty"`
 }
 
 type PreviewReview struct {
@@ -215,8 +169,35 @@ type APIError struct {
 	RequestID  string
 	Retryable  bool
 	HostCode   string
+	// ProtocolInvalid means the response did not match the closed stable error
+	// taxonomy and therefore carries no portable code semantics.
+	ProtocolInvalid bool
 	// Details is the optional, free-form details payload, kept raw.
 	Details json.RawMessage
+}
+
+var stableErrorHTTPStatusByCode = map[string]int{
+	"invalid_argument":             http.StatusBadRequest,
+	"unauthenticated":              http.StatusUnauthorized,
+	"permission_denied":            http.StatusForbidden,
+	"form_unknown":                 http.StatusNotFound,
+	"form_not_installed":           http.StatusConflict,
+	"form_unavailable":             http.StatusServiceUnavailable,
+	"form_identity_conflict":       http.StatusConflict,
+	"resource_not_found":           http.StatusNotFound,
+	"resource_version_conflict":    http.StatusPreconditionFailed,
+	"resource_busy":                http.StatusConflict,
+	"import_conflict":              http.StatusConflict,
+	"policy_denied":                http.StatusForbidden,
+	"backend_unavailable":          http.StatusServiceUnavailable,
+	"interface_identity_ambiguous": http.StatusConflict,
+	"interface_instance_ambiguous": http.StatusConflict,
+	"internal_error":               http.StatusInternalServerError,
+}
+
+var automaticallyRetryableErrorCodes = map[string]struct{}{
+	"resource_busy":       {},
+	"backend_unavailable": {},
 }
 
 // errorEnvelope decodes the nested wire shape of an error response.
@@ -225,7 +206,7 @@ type errorEnvelope struct {
 		Code      string          `json:"code"`
 		Message   string          `json:"message"`
 		RequestID string          `json:"requestId"`
-		Retryable bool            `json:"retryable"`
+		Retryable *bool           `json:"retryable"`
 		HostCode  string          `json:"hostCode,omitempty"`
 		Details   json.RawMessage `json:"details,omitempty"`
 	} `json:"error"`
@@ -233,7 +214,11 @@ type errorEnvelope struct {
 
 func (e *APIError) Error() string {
 	var b strings.Builder
-	b.WriteString("takoform api error")
+	if e.ProtocolInvalid {
+		b.WriteString("takoform protocol-invalid error response")
+	} else {
+		b.WriteString("takoform api error")
+	}
 	if e.StatusCode != 0 {
 		fmt.Fprintf(&b, " (http %d)", e.StatusCode)
 	}
@@ -250,13 +235,11 @@ func (e *APIError) Error() string {
 	return b.String()
 }
 
-// statusCode reports the HTTP status carried by err, if it is an *APIError.
-func statusCode(err error) (int, bool) {
-	var ae *APIError
-	if errors.As(err, &ae) {
-		return ae.StatusCode, true
-	}
-	return 0, false
+func isResourceNotFound(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) &&
+		apiErr.StatusCode == http.StatusNotFound &&
+		apiErr.Code == "resource_not_found"
 }
 
 // Client is a thin Takoform Service Form API HTTP client.
@@ -354,6 +337,11 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 		}
 		c.formsURL = strings.TrimRight(formsURL, "/")
 	}
+	if disco.Endpoints.OIDCIssuer != "" {
+		if err := validateOIDCIssuer(disco.Endpoints.OIDCIssuer); err != nil {
+			return fmt.Errorf("takoform: invalid discovery OIDC issuer: %w", err)
+		}
+	}
 	// Runtime interface declarations are an optional, read-only surface. A host
 	// that advertises no declarations remains a conforming Form host.
 	if disco.HasFeature(FeatureInterfaceDeclarations) {
@@ -378,13 +366,46 @@ func (c *Client) validAdvertisedEndpoint(raw string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !strings.EqualFold(advertised.Scheme, configured.Scheme) || !strings.EqualFold(advertised.Host, configured.Host) {
+	if !sameOrigin(advertised, configured) {
 		return "", errors.New("cross-origin discovery endpoints are rejected to protect bearer credentials")
 	}
 	if advertised.User != nil || advertised.Fragment != "" || advertised.RawQuery != "" {
 		return "", errors.New("endpoint must not contain userinfo, query, or fragment")
 	}
 	return advertised.String(), nil
+}
+
+func validateOIDCIssuer(raw string) error {
+	issuer, err := url.Parse(raw)
+	if err != nil || !issuer.IsAbs() || !strings.EqualFold(issuer.Scheme, "https") || issuer.Host == "" {
+		return errors.New("issuer must be an absolute HTTPS URL")
+	}
+	if issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
+		return errors.New("issuer must not contain userinfo, query, or fragment")
+	}
+	return nil
+}
+
+func sameOrigin(left, right *url.URL) bool {
+	return left != nil &&
+		right != nil &&
+		strings.EqualFold(left.Scheme, right.Scheme) &&
+		strings.EqualFold(left.Hostname(), right.Hostname()) &&
+		effectivePort(left) == effectivePort(right)
+}
+
+func effectivePort(endpoint *url.URL) string {
+	if port := endpoint.Port(); port != "" {
+		return port
+	}
+	switch strings.ToLower(endpoint.Scheme) {
+	case "http":
+		return "80"
+	case "https":
+		return "443"
+	default:
+		return ""
+	}
 }
 
 func (c *Client) configuredOrigin() (*url.URL, error) {
@@ -500,8 +521,8 @@ func (c *Client) EnsureFormAvailable(ctx context.Context, space string, form Ins
 	if err := validateInstalledFormReference(form.FormRef.Kind, form); err != nil {
 		return err
 	}
-	if strings.TrimSpace(space) == "" {
-		return errors.New("takoform: exact FormRef availability requires a space")
+	if err := ValidateSpaceID(space); err != nil {
+		return fmt.Errorf("takoform: exact FormRef availability has invalid SpaceID: %w", err)
 	}
 	query := exactResourceQuery(space, form)
 	var response struct {
@@ -563,7 +584,10 @@ func (c *Client) PutResource(ctx context.Context, kind, name string, body *Resou
 	var out Resource
 	request := applyResourceBody{Resource: transportResource, Review: review}
 	headers := c.resourceMutationHeaders("apply", body, request)
-	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPut, c.putResourceURL(kind, name), headers, &request, &out, true)
+	responseHeaders, err := c.doJSONWithHeaders(
+		ctx, http.MethodPut, c.putResourceURL(kind, name), headers, &request, &out, true,
+		http.StatusOK, http.StatusCreated,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +629,10 @@ func (c *Client) ImportResource(ctx context.Context, kind, name, nativeID string
 		Resource Resource `json:"resource"`
 	}
 	headers := c.resourceMutationHeaders("import", body, request)
-	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPost, c.importResourceURL(kind, name), headers, &request, &wrapped, true)
+	responseHeaders, err := c.doJSONWithHeaders(
+		ctx, http.MethodPost, c.importResourceURL(kind, name), headers, &request, &wrapped, true,
+		http.StatusOK, http.StatusCreated,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -618,49 +645,53 @@ func (c *Client) ImportResource(ctx context.Context, kind, name, nativeID string
 	return &wrapped.Resource, nil
 }
 
-// GetResource reads a resource. A 404 is translated to ErrNotFound.
+// GetResource reads a resource. Only the stable resource_not_found code is
+// translated to ErrNotFound; other errors retain their typed API identity.
 func (c *Client) GetResource(ctx context.Context, kind, name, space string, form ...InstalledFormReference) (*Resource, error) {
 	if err := c.requireReady(); err != nil {
 		return nil, err
 	}
-	query := spaceQuery(space)
-	var expected *InstalledFormReference
+	if err := ValidateSpaceID(space); err != nil {
+		return nil, fmt.Errorf("takoform: resource read has invalid SpaceID: %w", err)
+	}
 	if len(form) != 1 {
 		return nil, errors.New("takoform: versioned Resource read requires one exact FormRef")
 	}
 	if err := validateInstalledFormReference(kind, form[0]); err != nil {
 		return nil, err
 	}
-	expected = &form[0]
-	query = exactResourceQuery(space, form[0])
+	expected := &form[0]
+	query := exactResourceQuery(space, form[0])
 	var out Resource
-	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodGet, c.resourceURL(kind, name, query), nil, nil, &out, false)
+	responseHeaders, err := c.doJSONWithHeaders(
+		ctx, http.MethodGet, c.resourceURL(kind, name, query), nil, nil, &out, false,
+		http.StatusOK,
+	)
 	if err != nil {
-		if code, ok := statusCode(err); ok && code == http.StatusNotFound {
+		if isResourceNotFound(err) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
-	if expected != nil {
-		if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
-			return nil, err
-		}
-		if err := captureResourceVersion(&out, responseHeaders); err != nil {
-			return nil, err
-		}
+	if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
+		return nil, err
+	}
+	if err := captureResourceVersion(&out, responseHeaders); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
 
-// ObserveResource performs a read-only backend drift check and returns the
-// Resource projection with updated conditions. A 404 is translated to
-// ErrNotFound, matching GetResource.
+// ObserveResource performs a read-only observation and returns the Resource's
+// portable observed and output documents. Only resource_not_found maps to
+// ErrNotFound.
 func (c *Client) ObserveResource(ctx context.Context, kind, name, space string, options ...MutationFence) (*Resource, error) {
 	if err := c.requireReady(); err != nil {
 		return nil, err
 	}
-	query := spaceQuery(space)
-	var expected *InstalledFormReference
+	if err := ValidateSpaceID(space); err != nil {
+		return nil, fmt.Errorf("takoform: resource observe has invalid SpaceID: %w", err)
+	}
 	resourceVersion, form := mutationIdentity(options)
 	if len(form) != 1 || !validResourceVersion(resourceVersion) {
 		return nil, errors.New("takoform: versioned observe requires one exact FormRef and resourceVersion")
@@ -668,62 +699,48 @@ func (c *Client) ObserveResource(ctx context.Context, kind, name, space string, 
 	if err := validateInstalledFormReference(kind, form[0]); err != nil {
 		return nil, err
 	}
-	expected = &form[0]
-	query = exactResourceQuery(space, form[0])
-	var out Resource
-	var target any = &out
+	expected := &form[0]
+	query := exactResourceQuery(space, form[0])
 	var wrapped struct {
-		Resource    Resource `json:"resource"`
-		Observation struct {
-			Status string `json:"status"`
-		} `json:"observation"`
+		Resource Resource `json:"resource"`
 	}
-	if expected != nil {
-		target = &wrapped
+	headers := map[string]string{
+		"If-Match":        quoteResourceVersion(resourceVersion),
+		"Idempotency-Key": mutationKey("observe", kind, name, space, resourceVersion, expected),
 	}
-	headers := map[string]string{}
-	if expected != nil {
-		headers["If-Match"] = quoteResourceVersion(resourceVersion)
-		headers["Idempotency-Key"] = mutationKey("observe", kind, name, space, resourceVersion, expected)
-	}
-	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPost, c.actionResourceURL(kind, name, "observe", query), headers, nil, target, true)
+	responseHeaders, err := c.doJSONWithHeaders(
+		ctx, http.MethodPost, c.actionResourceURL(kind, name, "observe", query), headers, nil, &wrapped, true,
+		http.StatusOK,
+	)
 	if err != nil {
-		if code, ok := statusCode(err); ok && code == http.StatusNotFound {
+		if isResourceNotFound(err) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
-	if expected != nil {
-		out = wrapped.Resource
-		if wrapped.Observation.Status != "current" && wrapped.Observation.Status != "drifted" && wrapped.Observation.Status != "missing" {
-			return nil, errors.New("takoform: host observe response omitted a valid observation status")
-		}
-		if out.Status == nil {
-			out.Status = &Status{}
-		}
-		out.Status.DriftStatus = wrapped.Observation.Status
-		if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
-			return nil, err
-		}
-		if err := captureResourceVersion(&out, responseHeaders); err != nil {
-			return nil, err
-		}
+	out := wrapped.Resource
+	if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
+		return nil, err
 	}
-	if expected == nil && out.Status != nil {
-		out.Status.DriftStatus = driftStatusFromConditions(out.Status.Conditions)
+	if err := captureResourceVersion(&out, responseHeaders); err != nil {
+		return nil, err
+	}
+	if err := requireExactResourceVersion(&out, resourceVersion); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
 
 // RefreshResource updates the Resource-owned backend state and public outputs
-// without mutating native provider resources. A 404 is translated to
-// ErrNotFound, matching GetResource and ObserveResource.
+// without mutating native provider resources. Only resource_not_found maps to
+// ErrNotFound.
 func (c *Client) RefreshResource(ctx context.Context, kind, name, space string, options ...MutationFence) (*Resource, error) {
 	if err := c.requireReady(); err != nil {
 		return nil, err
 	}
-	query := spaceQuery(space)
-	var expected *InstalledFormReference
+	if err := ValidateSpaceID(space); err != nil {
+		return nil, fmt.Errorf("takoform: resource refresh has invalid SpaceID: %w", err)
+	}
 	resourceVersion, form := mutationIdentity(options)
 	if len(form) != 1 || !validResourceVersion(resourceVersion) {
 		return nil, errors.New("takoform: versioned refresh requires one exact FormRef and resourceVersion")
@@ -731,51 +748,48 @@ func (c *Client) RefreshResource(ctx context.Context, kind, name, space string, 
 	if err := validateInstalledFormReference(kind, form[0]); err != nil {
 		return nil, err
 	}
-	expected = &form[0]
-	query = exactResourceQuery(space, form[0])
-	var out Resource
-	var target any = &out
+	expected := &form[0]
+	query := exactResourceQuery(space, form[0])
 	var wrapped struct {
 		Resource Resource `json:"resource"`
 	}
-	if expected != nil {
-		target = &wrapped
+	headers := map[string]string{
+		"If-Match":        quoteResourceVersion(resourceVersion),
+		"Idempotency-Key": mutationKey("refresh", kind, name, space, resourceVersion, expected),
 	}
-	headers := map[string]string{}
-	if expected != nil {
-		headers["If-Match"] = quoteResourceVersion(resourceVersion)
-		headers["Idempotency-Key"] = mutationKey("refresh", kind, name, space, resourceVersion, expected)
-	}
-	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPost, c.actionResourceURL(kind, name, "refresh", query), headers, nil, target, true)
+	responseHeaders, err := c.doJSONWithHeaders(
+		ctx, http.MethodPost, c.actionResourceURL(kind, name, "refresh", query), headers, nil, &wrapped, true,
+		http.StatusOK,
+	)
 	if err != nil {
-		if code, ok := statusCode(err); ok && code == http.StatusNotFound {
+		if isResourceNotFound(err) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
-	if expected != nil {
-		out = wrapped.Resource
-		if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
-			return nil, err
-		}
-		if err := captureResourceVersion(&out, responseHeaders); err != nil {
-			return nil, err
-		}
+	out := wrapped.Resource
+	if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
+		return nil, err
+	}
+	if err := captureResourceVersion(&out, responseHeaders); err != nil {
+		return nil, err
+	}
+	if err := requireExactResourceVersion(&out, resourceVersion); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
 
-// DeleteResource deletes a resource. 200/204 => done; a 404 is treated as
-// already-deleted (no error).
+// DeleteResource deletes a resource. resource_not_found is already deleted;
+// a different stable error retains its typed API identity.
 func (c *Client) DeleteResource(ctx context.Context, kind, name, space string, options ...MutationFence) error {
 	if err := c.requireReady(); err != nil {
 		return err
 	}
-	query := spaceQuery(space)
-	resourceVersion, form := mutationIdentity(options)
-	if query == nil {
-		query = url.Values{}
+	if err := ValidateSpaceID(space); err != nil {
+		return fmt.Errorf("takoform: resource delete has invalid SpaceID: %w", err)
 	}
+	resourceVersion, form := mutationIdentity(options)
 	headers := map[string]string{}
 	if len(form) != 1 || !validResourceVersion(resourceVersion) {
 		return errors.New("takoform: versioned delete requires one exact FormRef and resourceVersion")
@@ -783,11 +797,14 @@ func (c *Client) DeleteResource(ctx context.Context, kind, name, space string, o
 	if err := validateInstalledFormReference(kind, form[0]); err != nil {
 		return err
 	}
-	query = exactResourceQuery(space, form[0])
+	query := exactResourceQuery(space, form[0])
 	headers["If-Match"] = quoteResourceVersion(resourceVersion)
 	headers["Idempotency-Key"] = mutationKey("delete", kind, name, space, resourceVersion, &form[0])
-	if _, err := c.doJSONWithHeaders(ctx, http.MethodDelete, c.resourceURL(kind, name, query), headers, nil, nil, true); err != nil {
-		if code, ok := statusCode(err); ok && code == http.StatusNotFound {
+	if _, err := c.doJSONWithHeaders(
+		ctx, http.MethodDelete, c.resourceURL(kind, name, query), headers, nil, nil, true,
+		http.StatusNoContent,
+	); err != nil {
+		if isResourceNotFound(err) {
 			return nil
 		}
 		return err
@@ -813,7 +830,13 @@ func (c *Client) PreviewResource(ctx context.Context, body *Resource) (*PreviewR
 	} else {
 		headers["If-Match"] = quoteResourceVersion(body.Metadata.ResourceVersion)
 	}
-	if _, err := c.doJSONWithHeaders(ctx, http.MethodPost, c.previewURL(), headers, body, &out, false); err != nil {
+	if _, err := c.doJSONWithHeaders(
+		ctx, http.MethodPost, c.previewURL(), headers, body, &out, false,
+		http.StatusOK,
+	); err != nil {
+		return nil, err
+	}
+	if err := validatePreviewResult(body, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -822,7 +845,7 @@ func (c *Client) PreviewResource(ctx context.Context, body *Resource) (*PreviewR
 // doJSON marshals body (if any), sends the request, and decodes a 2xx response
 // into out (if any). Non-2xx responses are parsed into *APIError.
 func (c *Client) doJSON(ctx context.Context, method, fullURL string, body, out any) error {
-	_, err := c.doJSONWithHeaders(ctx, method, fullURL, nil, body, out, false)
+	_, err := c.doJSONWithHeaders(ctx, method, fullURL, nil, body, out, false, http.StatusOK)
 	return err
 }
 
@@ -831,7 +854,8 @@ func (c *Client) doJSONWithHeaders(
 	method, fullURL string,
 	headers map[string]string,
 	body, out any,
-	retry bool,
+	retryStableAPIError bool,
+	successStatuses ...int,
 ) (http.Header, error) {
 	var raw []byte
 	if body != nil {
@@ -842,17 +866,26 @@ func (c *Client) doJSONWithHeaders(
 		raw = encoded
 	}
 	attempts := 1
-	if retry {
+	if retryStableAPIError {
 		attempts = c.retryAttempts
 	}
 	for attempt := 0; attempt < attempts; attempt++ {
 		var reader io.Reader
-		if body != nil {
+		if retryStableAPIError {
+			// net/http treats Idempotency-Key as permission to replay a request
+			// after some transport failures. Lifecycle mutations deliberately
+			// use a one-shot body, including an empty one, so only this client's
+			// stable structured-error policy can start another attempt.
+			reader = struct{ io.Reader }{Reader: bytes.NewReader(raw)}
+		} else if body != nil {
 			reader = bytes.NewReader(raw)
 		}
 		req, err := http.NewRequestWithContext(ctx, method, fullURL, reader)
 		if err != nil {
 			return nil, fmt.Errorf("takoform: building request: %w", err)
+		}
+		if retryStableAPIError && body != nil {
+			req.ContentLength = int64(len(raw))
 		}
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
@@ -868,12 +901,6 @@ func (c *Client) doJSONWithHeaders(
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			if retry && attempt+1 < attempts {
-				if err := waitForRetry(ctx, attempt); err != nil {
-					return nil, err
-				}
-				continue
-			}
 			return nil, fmt.Errorf("takoform: request to %s failed: %w", fullURL, err)
 		}
 		if resp.ContentLength > maxResponseBodyBytes {
@@ -891,7 +918,7 @@ func (c *Client) doJSONWithHeaders(
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			apiErr := parseAPIError(resp.StatusCode, data)
-			if retry && attempt+1 < attempts && apiErr.Retryable && (apiErr.Code == "resource_busy" || apiErr.Code == "backend_unavailable") {
+			if retryStableAPIError && attempt+1 < attempts && isPortableRetryable(apiErr) {
 				if err := waitForRetry(ctx, attempt); err != nil {
 					return nil, err
 				}
@@ -899,15 +926,47 @@ func (c *Client) doJSONWithHeaders(
 			}
 			return nil, apiErr
 		}
+		if !containsStatus(successStatuses, resp.StatusCode) {
+			return nil, fmt.Errorf(
+				"takoform: response from %s returned unexpected success status %d",
+				fullURL,
+				resp.StatusCode,
+			)
+		}
+		if resp.StatusCode == http.StatusNoContent && len(data) != 0 {
+			return nil, fmt.Errorf(
+				"takoform: response from %s returned a non-empty response body for HTTP 204",
+				fullURL,
+			)
+		}
 
-		if out != nil && len(bytes.TrimSpace(data)) > 0 {
-			if err := json.Unmarshal(data, out); err != nil {
+		if out != nil {
+			if len(bytes.TrimSpace(data)) == 0 {
+				return nil, fmt.Errorf(
+					"takoform: response from %s returned an empty JSON response body",
+					fullURL,
+				)
+			}
+			if err := decodeStrictJSON(data, out); err != nil {
 				return nil, fmt.Errorf("takoform: decoding response from %s: %w", fullURL, err)
 			}
 		}
 		return resp.Header.Clone(), nil
 	}
 	return nil, errors.New("takoform: retry attempts exhausted")
+}
+
+func containsStatus(allowed []int, status int) bool {
+	for _, candidate := range allowed {
+		if status == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func decodeStrictJSON(data []byte, out any) error {
+	return formpackage.DecodeStrictIJSON(data, out)
 }
 
 func waitForRetry(ctx context.Context, attempt int) error {
@@ -926,16 +985,22 @@ func waitForRetry(ctx context.Context, attempt int) error {
 // ({ "error": { "code", "message", "requestId", "details" } }), falling back to
 // the raw body when the response is not the expected JSON shape.
 func parseAPIError(status int, data []byte) *APIError {
-	apiErr := &APIError{StatusCode: status}
+	apiErr := &APIError{StatusCode: status, ProtocolInvalid: true}
 	if len(bytes.TrimSpace(data)) > 0 {
 		var env errorEnvelope
-		if err := json.Unmarshal(data, &env); err == nil {
+		if err := decodeStrictJSON(data, &env); err == nil &&
+			strings.TrimSpace(env.Error.Code) != "" &&
+			strings.TrimSpace(env.Error.Message) != "" &&
+			strings.TrimSpace(env.Error.RequestID) != "" &&
+			env.Error.Retryable != nil &&
+			isStableErrorEnvelope(status, env.Error.Code, *env.Error.Retryable) {
 			apiErr.Code = env.Error.Code
 			apiErr.Message = env.Error.Message
 			apiErr.RequestID = env.Error.RequestID
-			apiErr.Retryable = env.Error.Retryable
+			apiErr.Retryable = *env.Error.Retryable
 			apiErr.HostCode = env.Error.HostCode
 			apiErr.Details = env.Error.Details
+			apiErr.ProtocolInvalid = false
 		}
 	}
 	if apiErr.Message == "" {
@@ -946,6 +1011,25 @@ func parseAPIError(status int, data []byte) *APIError {
 		}
 	}
 	return apiErr
+}
+
+func isStableErrorEnvelope(status int, code string, retryable bool) bool {
+	expectedStatus, known := stableErrorHTTPStatusByCode[code]
+	if !known || status != expectedStatus {
+		return false
+	}
+	if retryable {
+		_, allowed := automaticallyRetryableErrorCodes[code]
+		return allowed
+	}
+	return true
+}
+
+func isPortableRetryable(apiErr *APIError) bool {
+	if apiErr == nil || apiErr.ProtocolInvalid || !apiErr.Retryable {
+		return false
+	}
+	return isStableErrorEnvelope(apiErr.StatusCode, apiErr.Code, true)
 }
 
 func (c *Client) requireReady() error {
@@ -990,29 +1074,39 @@ func validateResourceIdentity(kind string, resource *Resource) error {
 	if resource.APIVersion != APIVersion || resource.Kind != kind || resource.Form.FormRef.APIVersion != APIVersion || resource.Form.FormRef.Kind != kind {
 		return errors.New("takoform: Resource and exact FormRef identities do not match")
 	}
-	if strings.TrimSpace(resource.Metadata.Name) == "" || strings.TrimSpace(resource.Metadata.Space) == "" {
-		return errors.New("takoform: versioned Resource requires metadata.name and metadata.space")
+	if err := ValidateResourceName(resource.Metadata.Name); err != nil {
+		return fmt.Errorf("takoform: Resource metadata.name is invalid: %w", err)
+	}
+	if err := ValidateSpaceID(resource.Metadata.Space); err != nil {
+		return fmt.Errorf("takoform: Resource metadata.space has invalid SpaceID: %w", err)
 	}
 	if err := validateInstalledFormReference(kind, *resource.Form); err != nil {
 		return err
 	}
 	if resource.Metadata.ResourceVersion != "" && !validResourceVersion(resource.Metadata.ResourceVersion) {
-		return errors.New("takoform: resourceVersion must be a positive decimal generation")
+		return errors.New("takoform: resourceVersion must be canonical decimal in the range 1..9223372036854775807")
 	}
 	return nil
 }
 
 func validateInstalledFormReference(kind string, form InstalledFormReference) error {
-	if kind == "" || form.FormRef.APIVersion != APIVersion || form.FormRef.Kind != kind ||
-		strings.TrimSpace(form.FormRef.DefinitionVersion) == "" || !validSHA256Digest(form.FormRef.SchemaDigest) ||
-		!validSHA256Digest(form.PackageDigest) {
+	raw, err := json.Marshal(form.FormRef)
+	if err != nil {
+		return fmt.Errorf("takoform: encoding exact FormRef for validation: %w", err)
+	}
+	if _, err := formpackage.ValidateFormRef(raw); err != nil {
+		return fmt.Errorf("takoform: exact FormRef is invalid: %w", err)
+	}
+	if kind == "" || form.FormRef.Kind != kind || !formpackage.ValidDigest(form.PackageDigest) {
 		return errors.New("takoform: exact InstalledFormReference is incomplete or invalid")
 	}
 	return nil
 }
 
 func validSHA256Digest(value string) bool {
-	if !strings.HasPrefix(value, "sha256:") || len(value) != len("sha256:")+sha256.Size*2 {
+	if !strings.HasPrefix(value, "sha256:") ||
+		value != strings.ToLower(value) ||
+		len(value) != len("sha256:")+sha256.Size*2 {
 		return false
 	}
 	_, err := hex.DecodeString(strings.TrimPrefix(value, "sha256:"))
@@ -1028,7 +1122,8 @@ func validResourceVersion(value string) bool {
 			return false
 		}
 	}
-	return true
+	generation, err := strconv.ParseInt(value, 10, 64)
+	return err == nil && generation > 0
 }
 
 func verifyResourceIdentity(expected *InstalledFormReference, expectedName, expectedSpace string, resource *Resource) error {
@@ -1053,19 +1148,51 @@ func sameForm(left, right *InstalledFormReference) bool {
 		left.PackageDigest == right.PackageDigest
 }
 
-func driftStatusFromConditions(conditions []Condition) string {
-	for _, condition := range conditions {
-		if condition.Type != "Drifted" {
-			continue
-		}
-		switch strings.ToLower(condition.Status) {
-		case "true":
-			return "drifted"
-		case "false":
-			return "current"
-		}
+func validatePreviewResult(request *Resource, preview *PreviewResourceResult) error {
+	if request == nil || preview == nil {
+		return errors.New("takoform: host preview omitted the reviewed Resource")
 	}
-	return ""
+	if err := verifyResourceIdentity(
+		request.Form,
+		request.Metadata.Name,
+		request.Metadata.Space,
+		&preview.Resource,
+	); err != nil {
+		return fmt.Errorf("takoform: host preview changed the requested Resource: %w", err)
+	}
+	if preview.Resource.Metadata.ResourceVersion != request.Metadata.ResourceVersion {
+		return errors.New("takoform: host preview changed the Resource generation fence")
+	}
+	if preview.Resource.Status != nil {
+		return errors.New("takoform: host preview returned status outside the portable review envelope")
+	}
+
+	requestSpecDigest, err := canonicalValueDigest(request.Spec)
+	if err != nil {
+		return fmt.Errorf("takoform: digesting requested spec: %w", err)
+	}
+	previewSpecDigest, err := canonicalValueDigest(preview.Resource.Spec)
+	if err != nil {
+		return fmt.Errorf("takoform: digesting previewed spec: %w", err)
+	}
+	if previewSpecDigest != requestSpecDigest {
+		return errors.New("takoform: host preview changed the requested spec")
+	}
+	if preview.Review.SpecDigest != requestSpecDigest {
+		return errors.New("takoform: host preview returned a specDigest for different desired state")
+	}
+	if !validSHA256Digest(preview.Review.PlanDigest) {
+		return errors.New("takoform: host preview returned an invalid planDigest")
+	}
+	return nil
+}
+
+func canonicalValueDigest(value any) (string, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return formpackage.DigestCanonicalJSON(raw)
 }
 
 func captureResourceVersion(resource *Resource, headers http.Header) error {
@@ -1073,28 +1200,23 @@ func captureResourceVersion(resource *Resource, headers http.Header) error {
 		return errors.New("takoform: host response omitted the Resource")
 	}
 	bodyVersion := resource.Metadata.ResourceVersion
-	if bodyVersion != "" && !validResourceVersion(bodyVersion) {
-		return errors.New("takoform: host response returned an invalid resourceVersion")
+	if !validResourceVersion(bodyVersion) {
+		return errors.New("takoform: host response omitted resourceVersion or returned a value outside 1..9223372036854775807")
 	}
-	etag := strings.TrimSpace(headers.Get("ETag"))
-	etagVersion := ""
-	if len(etag) >= 2 && etag[0] == '"' && etag[len(etag)-1] == '"' {
-		etagVersion = etag[1 : len(etag)-1]
-		if !validResourceVersion(etagVersion) {
-			return errors.New("takoform: host response returned an invalid ETag resourceVersion")
-		}
-	} else if etag != "" {
-		return errors.New("takoform: host response returned an unquoted ETag resourceVersion")
+	etagValues := headers.Values("ETag")
+	if len(etagValues) != 1 {
+		return errors.New("takoform: host response must return exactly one ETag resourceVersion fence")
 	}
-	if bodyVersion != "" && etagVersion != "" && bodyVersion != etagVersion {
+	if etagValues[0] != quoteResourceVersion(bodyVersion) {
 		return errors.New("takoform: host response resourceVersion and ETag disagree")
 	}
-	if bodyVersion == "" {
-		bodyVersion = etagVersion
-		resource.Metadata.ResourceVersion = bodyVersion
-	}
-	if bodyVersion == "" {
-		return errors.New("takoform: host response omitted the resourceVersion fence")
+	return nil
+}
+
+func requireExactResourceVersion(resource *Resource, expected string) error {
+	if resource == nil || !validResourceVersion(expected) ||
+		resource.Metadata.ResourceVersion != expected {
+		return errors.New("takoform: host response changed the generation protected by If-Match")
 	}
 	return nil
 }

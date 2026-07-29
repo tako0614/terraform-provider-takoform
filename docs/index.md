@@ -1,18 +1,72 @@
 ---
 page_title: "Provider: Takoform"
 description: |-
-  The Takoform provider manages portable, statically typed Service Forms through any conforming host.
+  Reference for the Takoform v1.0.0 provider, its 34 portable Service Form resources, and read-only Interface data source.
 ---
 
 # Takoform Provider
 
-The Takoform provider translates typed Terraform/OpenTofu resources into the `forms.takoform.com/v1alpha1` Service Form API. The canonical provider address is `registry.terraform.io/tako0614/takoform`.
+Takoform is a thin, statically typed Terraform/OpenTofu provider for the
+`forms.takoform.com/v1alpha1` Service Form API. Its canonical provider address
+is `registry.terraform.io/tako0614/takoform`.
+
+## Version and scope
+
+- **This documentation is version-bound to provider `v1.0.0`.** The canonical
+  distribution is `registry.terraform.io/tako0614/takoform`; consumers should
+  pin the exact version and let Terraform or OpenTofu verify its signed
+  checksums during installation.
+- **Availability is verified, not declared by this immutable documentation.**
+  Check the canonical
+  [Registry version endpoint](https://registry.terraform.io/v1/providers/tako0614/takoform/versions)
+  for exact version `1.0.0`, then run `terraform init` or `tofu init` with the
+  exact pin. A source tag, documentation page, or local build alone is not
+  Registry publication or installation evidence.
+- **The API remains `forms.takoform.com/v1alpha1`.** Provider SemVer and API
+  stability are independent; provider `v1.0.0` does not graduate the API to
+  `v1`.
+- **The 34 Service Forms below are `structural-candidate`.** Their generated
+  schemas, fixtures, provider types, examples, and local lifecycle checks agree,
+  but the current Forms are not admitted as `portable-standard`.
+- **The read-only `takoform_interface` data source is independent of the
+  34-Form resource inventory.** Forms declare generic non-secret runtime
+  Interfaces in their Form Definitions, the host materializes them, and the
+  provider may read them. The provider has no Interface write resource.
+
+See [versioning](../spec/versioning.md), the
+[generated Form inventory](../forms/README.md), and
+[conformance status](../conformance/README.md) for the exact evidence boundary.
+
+## Ownership and boundaries
+
+| Surface | Owns | Does not own |
+| --- | --- | --- |
+| Form | Portable desired-state schema, immutable fields, declared runtime interfaces, and exact versioned identity | Backend selection, placement, credentials, pricing, or host policy |
+| Provider | Typed HCL schema, state translation, discovery checks, and Service Form lifecycle calls | Concrete infrastructure, secrets issued by a backend, admission decisions, or runtime authorization |
+| Host | Discovery, exact Form availability and admission, realization, observation, backend selection, credentials, policy, and authorization | The portable Form or provider identity |
+| Interface declaration | A Form-defined generic `(name, version)` descriptor, non-secret document, and deterministic public value mappings that the host materializes | A provider write path, consumer permission, tokens, bindings, or invocation through the provider |
+
+The provider control-plane `endpoint` is not a runtime service endpoint.
+Applications discover an Interface from the host, obtain host-governed
+authorization when required, and invoke the resolved runtime endpoint directly.
+
+Every `connections[*].resource` value is only `Kind/name`; it does not carry a
+Space. The host resolves it in the source Resource's exact `space`. A target
+that exists only in another Space is treated as missing, and apply fails with
+`resource_not_found` before changing the source Resource. Cross-Space
+composition, if a host offers it, is outside portable Resource desired state.
+
+## Configuration
+
+The following configuration pins the provider to this documentation's exact
+`v1.0.0` compatibility line.
 
 ```hcl
 terraform {
   required_providers {
     takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
     }
   }
 }
@@ -21,25 +75,119 @@ provider "takoform" {
   endpoint = "https://forms.example.com"
   space    = "prod"
 }
+
+resource "takoform_object_bucket" "assets" {
+  name             = "assets"
+  storage_class    = "standard"
+  versioning       = true
+  access_protocols = ["s3_api"]
+}
 ```
+
+To verify the source and portable conformance corpus independently:
+
+```console
+git clone https://github.com/tako0614/terraform-provider-takoform.git
+cd terraform-provider-takoform
+git checkout --detach v1.0.0
+bun run check
+```
+
+The owner gate requires the Go, OpenTofu, and Terraform toolchains documented in
+the repository. It tests both CLI lifecycles locally; it is not Registry
+installation evidence.
 
 ## Provider arguments
 
-- `endpoint` (String, optional) — Origin of a conforming Service Form host. Falls back to `TAKOFORM_ENDPOINT`; one of the two is required.
-- `space` (String, optional) — Default space for resources. Falls back to `TAKOFORM_SPACE`.
-- `token` (String, optional, sensitive) — Bearer token for the host. Falls back to `TAKOFORM_TOKEN`.
+- `endpoint` (String, optional) — origin of a conforming Service Form host.
+  Falls back to `TAKOFORM_ENDPOINT`; one of the two is required.
+- `space` (String, optional) — default space for resources. Falls back to
+  `TAKOFORM_SPACE`.
+- `token` (String, optional, sensitive) — bearer token for the host. Falls back
+  to `TAKOFORM_TOKEN`.
 
 The endpoint must advertise `features.service_forms = true`, API version
-`forms.takoform.com/v1alpha1`, the versioned endpoint features, and exact
-availability for each exact build-pinned candidate FormRef used by configuration. This
-provider does not expose target-pool, backend, credential, pricing, billing,
-quota, account, or operator-policy resources.
+`forms.takoform.com/v1alpha1`, its same-origin versioned endpoint, and exact
+availability for every build-pinned candidate FormRef used by the
+configuration. There is no unversioned fallback.
 
-The only data source is read-only
-[`takoform_interface`](data-sources/interface.md). It selects an exact runtime
-declaration by descriptor `(name, version)` plus a space-scoped portable
-Resource `{kind,name}`, and grants no consumer authorization.
+## Compute and application
+
+| Resource | Intent |
+| --- | --- |
+| [`takoform_edge_worker`](resources/edge_worker.md) | Edge/event-driven application from a prebuilt immutable artifact |
+| [`takoform_container_service`](resources/container_service.md) | OCI container service pinned to an immutable image digest |
+| [`takoform_compute_instance`](resources/compute_instance.md) | Long-running machine from digest-bound boot-image bytes |
+| [`takoform_static_site`](resources/static_site.md) | Static asset site from a prebuilt immutable artifact |
+| [`takoform_workflow`](resources/workflow.md) | Durable workflow definition and instance-state lifecycle |
+| [`takoform_stateful_entity`](resources/stateful_entity.md) | Addressable persistent entities implemented by digest-bound application bytes |
+| [`takoform_schedule`](resources/schedule.md) | Cron lifecycle invoking exactly one connected Resource |
+
+## Data and storage
+
+| Resource | Intent |
+| --- | --- |
+| [`takoform_object_bucket`](resources/object_bucket.md) | Object storage with a portable default storage class |
+| [`takoform_object_lifecycle_rule`](resources/object_lifecycle_rule.md) | One expiration or storage-transition action |
+| [`takoform_key_value_store`](resources/key_value_store.md) | Key/value state with an optional consistency preference |
+| [`takoform_cache_cluster`](resources/cache_cluster.md) | In-memory cache sized by an open capability token |
+| [`takoform_relational_database`](resources/relational_database.md) | Relational database addressed through an open engine token |
+| [`takoform_indexed_store`](resources/indexed_store.md) | Bounded item store with declared queryable attributes |
+| [`takoform_queue`](resources/queue.md) | At-least-once asynchronous delivery |
+| [`takoform_stream_topic`](resources/stream_topic.md) | Published event stream for independent consumers |
+| [`takoform_search_index`](resources/search_index.md) | Full-text index over declared document fields |
+| [`takoform_vector_index`](resources/vector_index.md) | Vector index with lifecycle-fixed dimensions |
+
+## Analytics and inference
+
+| Resource | Intent |
+| --- | --- |
+| [`takoform_analytics_dataset`](resources/analytics_dataset.md) | Append-oriented dataset queried for analysis |
+| [`takoform_model_endpoint`](resources/model_endpoint.md) | Inference endpoint serving digest-bound model bytes |
+
+## Network and delivery
+
+| Resource | Intent |
+| --- | --- |
+| [`takoform_dns_zone`](resources/dns_zone.md) | Authoritative DNS zone |
+| [`takoform_dns_record`](resources/dns_record.md) | DNS record in one connected zone |
+| [`takoform_tls_certificate`](resources/tls_certificate.md) | Managed TLS certificate; key material stays with the host |
+| [`takoform_http_route`](resources/http_route.md) | Hostname/path binding to a connected Resource |
+| [`takoform_load_balancer`](resources/load_balancer.md) | Listener distributing connections across backends |
+| [`takoform_private_network`](resources/private_network.md) | Private address space for attached Resources |
+
+## Operations and integration
+
+| Resource | Intent |
+| --- | --- |
+| [`takoform_container_registry`](resources/container_registry.md) | OCI artifact registry namespace |
+| [`takoform_log_sink`](resources/log_sink.md) | Structured application-log destination |
+| [`takoform_metric_sink`](resources/metric_sink.md) | Numeric time-series destination |
+| [`takoform_email_sender`](resources/email_sender.md) | Outbound mail identity for one verified domain |
+| [`takoform_webhook_endpoint`](resources/webhook_endpoint.md) | Inbound HTTP endpoint forwarding to a connected Resource |
+| [`takoform_identity_client`](resources/identity_client.md) | OIDC relying-party registration |
+| [`takoform_feature_flag`](resources/feature_flag.md) | Named runtime switch with a complete enabled percentage |
+| [`takoform_rate_limit_policy`](resources/rate_limit_policy.md) | Request budget applied to a connected Resource |
+| [`takoform_backup_policy`](resources/backup_policy.md) | Scheduled copy and retention rule |
+
+## Generic Interface data source
+
+- [`takoform_interface` data source](data-sources/interface.md) — reads one
+  exact host-materialized Interface declaration, failing closed when selection
+  is ambiguous.
+
+Interface names and versions are open and author-defined. They are not a central
+allowlist. A Form declares them in its Form Definition; the provider does not
+create them. Documents and resolved values must remain non-secret, and the host
+retains all lifecycle and authorization authority.
 
 ## Import
 
-Every resource supports `terraform import ADDRESS NAME` and `terraform import ADDRESS SPACE/NAME`. The latter form records the resource space explicitly.
+Every Service Form resource supports both forms:
+
+```console
+terraform import takoform_object_bucket.assets NAME
+terraform import takoform_object_bucket.assets SPACE/NAME
+```
+
+The second form records the resource space explicitly.

@@ -1,7 +1,8 @@
 terraform {
   required_providers {
     takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
     }
   }
 }
@@ -12,9 +13,9 @@ provider "takoform" {
 }
 
 resource "takoform_email_sender" "example" {
-  name           = "email-sender"
-  domain         = "portable-conformance.invalid"
-  default_sender = "notifications@portable-conformance.invalid"
+  name               = "email-sender"
+  domain             = "portable-conformance.invalid"
+  default_local_part = "notifications"
 }
 
 output "email_sender_outputs" {

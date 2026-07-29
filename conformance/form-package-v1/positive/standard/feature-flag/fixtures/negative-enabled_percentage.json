@@ -1,0 +1,5 @@
+{
+  "enabledPercentage": -1,
+  "flagKey": "new_checkout",
+  "name": "feature-flag"
+}

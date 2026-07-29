@@ -2,18 +2,104 @@
   "format": "takoform.host-api@v1alpha1",
   "apiGroup": "forms.takoform.com/v1alpha1",
   "discoveryPath": "/.well-known/takoform",
+  "wireSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json",
   "requiredFeatures": [
     "service_forms",
     "exact_form_ref",
     "optimistic_concurrency",
     "idempotent_lifecycle"
   ],
-  "optionalFeatures": [
-    "interface_declarations",
-    "interface_declaration_writes"
-  ],
+  "optionalFeatures": ["interface_declarations"],
   "requiredEndpoints": ["api"],
   "optionalEndpoints": ["forms", "interfaces", "oidc_issuer"],
+  "resourceVersion": {
+    "encoding": "canonical-decimal-string",
+    "minimum": "1",
+    "maximum": "9223372036854775807",
+    "etag": "exactly-one-strong-quoted-resource-version"
+  },
+  "planBinding": {
+    "canonicalization": "RFC8785",
+    "portableInputs": [
+      "specDigest",
+      "resource.apiVersion",
+      "resource.kind",
+      "resource.metadata.name",
+      "resource.metadata.space",
+      "resource.metadata.resourceVersion",
+      "resource.form.formRef.apiVersion",
+      "resource.form.formRef.kind",
+      "resource.form.formRef.definitionVersion",
+      "resource.form.formRef.schemaDigest",
+      "resource.form.packageDigest"
+    ],
+    "hostPlan": "exact-reviewed-plan",
+    "substitutionFailure": "invalid_argument/400-before-mutation",
+    "pureBlackBoxInputs": [
+      "specDigest",
+      "resource.metadata.space",
+      "resource.metadata.resourceVersion"
+    ],
+    "instrumentedAdapter": {
+      "scope": "disposable-conformance-adapter-only; production-forbidden",
+      "requestHeader": "Takoform-Conformance-Probe-Plan-Binding",
+      "resultHeader": "Takoform-Conformance-Probe-Plan-Binding-Result",
+      "inputs": [
+        "resource.apiVersion",
+        "resource.kind",
+        "resource.metadata.name",
+        "resource.form.formRef.apiVersion",
+        "resource.form.formRef.kind",
+        "resource.form.formRef.definitionVersion",
+        "resource.form.formRef.schemaDigest",
+        "resource.form.packageDigest"
+      ],
+      "bindingPath": "same-canonical-plan-binding-function",
+      "rejectedResult": "invalid_argument/400; result=rejected",
+      "acceptedNoMutationResult": "204; result=accepted-no-mutation; no-state-mutation",
+      "unknownValueFailure": "invalid_argument/400",
+      "authorizationOrder": "authenticate-and-authorize-before-probe"
+    }
+  },
+  "idempotency": {
+    "scopeDimensions": [
+      "authenticated-tenant",
+      "authenticated-principal",
+      "space",
+      "idempotency-key"
+    ],
+    "fingerprint": [
+      "method",
+      "request-target",
+      "preconditions",
+      "request-body-bytes"
+    ],
+    "replayAuthorization": "authenticate-and-authorize-current-request-before-cache-lookup",
+    "crossPrincipalRule": "same-key-is-independent",
+    "crossTenantRule": "same-key-is-independent",
+    "crossTenantProbe": "same-principal-different-tenant-shared-disposable-resource",
+    "revokedRule": "current-authentication-or-authorization-error-not-cached-success",
+    "replayDenialCodes": [
+      "unauthenticated",
+      "permission_denied",
+      "policy_denied"
+    ],
+    "deniedReplayRecordRule": "denial-neither-returns-nor-overwrites-cached-success"
+  },
+  "wireJSON": {
+    "encoding": "UTF-8 I-JSON",
+    "rawValidationOrder": "validate-complete-raw-document-before-typed-decode",
+    "unknownRequestFieldFailure": "invalid_argument/400-before-mutation",
+    "duplicateRequestFailure": "invalid_argument/400-before-mutation",
+    "duplicateResponseFailure": "protocol-invalid-before-typed-semantics",
+    "duplicateContractFailure": "verification-failure-before-typed-decode"
+  },
+  "connectionResolution": {
+    "sourceSpace": "resource.metadata.space",
+    "reference": "Kind/name",
+    "crossSpace": "unrepresentable",
+    "missing": "resource_not_found/404-before-mutation"
+  },
   "exactFormQueryParameters": [
     "apiVersion",
     "definitionVersion",
@@ -22,6 +108,9 @@
     "schemaDigest",
     "space"
   ],
+  "queryParameterSchemas": {
+    "space": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/spaceId"
+  },
   "operations": [
     {
       "name": "forms",
@@ -30,7 +119,9 @@
       "exactFormQuery": true,
       "precondition": "none",
       "idempotencyKey": false,
-      "mutates": false
+      "mutates": false,
+      "successStatus": [200],
+      "responseSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/formsResponse"
     },
     {
       "name": "preview",
@@ -39,7 +130,10 @@
       "exactFormQuery": false,
       "precondition": "if-none-match-on-create-otherwise-if-match",
       "idempotencyKey": false,
-      "mutates": false
+      "mutates": false,
+      "successStatus": [200],
+      "requestSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/resourceRequest",
+      "responseSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/previewResponse"
     },
     {
       "name": "apply",
@@ -48,7 +142,10 @@
       "exactFormQuery": false,
       "precondition": "if-none-match-on-create-otherwise-if-match",
       "idempotencyKey": true,
-      "mutates": true
+      "mutates": true,
+      "successStatus": [200, 201],
+      "requestSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/applyRequest",
+      "responseSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/resourceResponse"
     },
     {
       "name": "read",
@@ -57,7 +154,9 @@
       "exactFormQuery": true,
       "precondition": "none",
       "idempotencyKey": false,
-      "mutates": false
+      "mutates": false,
+      "successStatus": [200],
+      "responseSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/resourceResponse"
     },
     {
       "name": "import",
@@ -66,7 +165,10 @@
       "exactFormQuery": false,
       "precondition": "if-none-match-on-create-otherwise-if-match",
       "idempotencyKey": true,
-      "mutates": true
+      "mutates": true,
+      "successStatus": [200, 201],
+      "requestSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/importRequest",
+      "responseSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/resourceEnvelope"
     },
     {
       "name": "observe",
@@ -75,7 +177,10 @@
       "exactFormQuery": true,
       "precondition": "if-match",
       "idempotencyKey": true,
-      "mutates": false
+      "mutates": false,
+      "successResourceVersion": "equals-if-match",
+      "successStatus": [200],
+      "responseSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/resourceEnvelope"
     },
     {
       "name": "refresh",
@@ -84,7 +189,10 @@
       "exactFormQuery": true,
       "precondition": "if-match",
       "idempotencyKey": true,
-      "mutates": true
+      "mutates": true,
+      "successResourceVersion": "equals-if-match",
+      "successStatus": [200],
+      "responseSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/resourceEnvelope"
     },
     {
       "name": "delete",
@@ -93,7 +201,8 @@
       "exactFormQuery": true,
       "precondition": "if-match",
       "idempotencyKey": true,
-      "mutates": true
+      "mutates": true,
+      "successStatus": [204]
     },
     {
       "name": "interfaces",
@@ -103,7 +212,11 @@
       "precondition": "none",
       "idempotencyKey": false,
       "mutates": false,
-      "optional": true
+      "optional": true,
+      "requiredQueryParameters": ["space"],
+      "optionalQueryParameters": [],
+      "successStatus": [200],
+      "responseSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/interfacesResponse"
     },
     {
       "name": "interface",
@@ -113,43 +226,53 @@
       "precondition": "none",
       "idempotencyKey": false,
       "mutates": false,
-      "optional": true
-    },
-    {
-      "name": "apply_interface",
-      "method": "PUT",
-      "path": "/interfaces/{name}",
-      "exactFormQuery": false,
-      "precondition": "if-none-match-on-create-otherwise-if-match",
-      "idempotencyKey": true,
-      "mutates": true,
-      "optional": true
-    },
-    {
-      "name": "delete_interface",
-      "method": "DELETE",
-      "path": "/interfaces/{name}",
-      "exactFormQuery": false,
-      "precondition": "if-match",
-      "idempotencyKey": true,
-      "mutates": true,
-      "optional": true
+      "optional": true,
+      "requiredQueryParameters": ["space"],
+      "optionalQueryParameters": ["version", "resourceKind", "resourceName"],
+      "pairedQueryParameters": [["resourceKind", "resourceName"]],
+      "successStatus": [200],
+      "responseSchema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/interfaceDeclaration"
     }
   ],
   "errorEnvelope": {
+    "schema": "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json#/$defs/errorEnvelope",
     "shape": "{\"error\":{\"code\",\"message\",\"requestId\",\"retryable\",\"hostCode?\",\"details?\"}}",
     "codes": [
+      "invalid_argument",
+      "unauthenticated",
+      "permission_denied",
+      "form_unknown",
+      "form_not_installed",
+      "form_unavailable",
+      "form_identity_conflict",
+      "resource_not_found",
+      "resource_version_conflict",
+      "resource_busy",
+      "import_conflict",
+      "policy_denied",
       "backend_unavailable",
-      "conflict",
-      "forbidden",
       "interface_identity_ambiguous",
       "interface_instance_ambiguous",
-      "invalid_argument",
-      "not_implemented",
-      "resource_busy",
-      "resource_not_found",
-      "unauthorized"
+      "internal_error"
     ],
-    "automaticallyRetryable": ["backend_unavailable", "resource_busy"]
+    "automaticallyRetryable": ["resource_busy", "backend_unavailable"],
+    "httpStatusByCode": {
+      "invalid_argument": 400,
+      "unauthenticated": 401,
+      "permission_denied": 403,
+      "form_unknown": 404,
+      "form_not_installed": 409,
+      "form_unavailable": 503,
+      "form_identity_conflict": 409,
+      "resource_not_found": 404,
+      "resource_version_conflict": 412,
+      "resource_busy": 409,
+      "import_conflict": 409,
+      "policy_denied": 403,
+      "backend_unavailable": 503,
+      "interface_identity_ambiguous": 409,
+      "interface_instance_ambiguous": 409,
+      "internal_error": 500
+    }
   }
 }

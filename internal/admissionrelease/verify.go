@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/admissioncheckpoint"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
 
@@ -33,7 +34,7 @@ var (
 	slugPattern                = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
 )
 
-// VerifyAdmissionSet is the fail-closed release entry point. This foundation
+// VerifyAdmissionSet is the fail-closed admission-closure entry point. It
 // performs strict retained-set, exact-candidate, canonical-digest, package,
 // and admission-structure checks. Every retained report, package index, and
 // Registry readback is then authenticated offline before Form admission opens.
@@ -46,6 +47,14 @@ func VerifyAdmissionSet(root string, candidates CandidateSet) error {
 // while current mixed-version sets advance under a different retained root.
 func VerifyAdmissionSetAt(root, retainedRoot string, candidates CandidateSet) error {
 	return verifyAdmissionSetAt(root, retainedRoot, candidates, nil, gitReleaseRefVerifier{})
+}
+
+// VerifyAdmissionMaterialAt authenticates one complete source-retained
+// admission closure before its checkpoint tag exists. It verifies every
+// retained subject plus provider/package release ref, but deliberately omits
+// only the not-yet-minted admission tag.
+func VerifyAdmissionMaterialAt(root, retainedRoot string, candidates CandidateSet) error {
+	return verifyAdmissionSetAt(root, retainedRoot, candidates, nil, gitMaterialRefVerifier{})
 }
 
 func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedSubjectVerifier, refVerifier ReleaseRefVerifier) error {
@@ -76,6 +85,18 @@ func verifyAdmissionSetAt(root, retainedRoot string, candidates CandidateSet, ve
 	ordered, err := validateSet(set, candidates)
 	if err != nil {
 		return fmt.Errorf("verify %s: %w", manifestPath, err)
+	}
+	if candidates.Generation == "ga-core-v2" {
+		descriptor, _, err := admissioncheckpoint.LoadCurrent(root)
+		if err != nil {
+			return fmt.Errorf("verify current admission checkpoint descriptor: %w", err)
+		}
+		if retainedRoot != descriptor.RetainedRoot {
+			return fmt.Errorf("current admission retained root %q does not match descriptor %q", retainedRoot, descriptor.RetainedRoot)
+		}
+		if err := descriptor.ValidateSetProjection(set.Generation, set.AdmissionReleaseTag); err != nil {
+			return fmt.Errorf("verify current admission checkpoint projection: %w", err)
+		}
 	}
 
 	subjects := make([]RetainedSubject, 0, expectedRetainedSubjectCount(set))
@@ -131,10 +152,6 @@ func verifyAdmissionSetAt(root, retainedRoot string, candidates CandidateSet, ve
 		for _, fixture := range evidence.Fixtures.Positive {
 			positiveNames = append(positiveNames, fixture.Name)
 		}
-		negativeNames := make([]string, 0, len(evidence.Fixtures.Negative))
-		for _, fixture := range evidence.Fixtures.Negative {
-			negativeNames = append(negativeNames, fixture.Name)
-		}
 		for _, retained := range []struct {
 			role   string
 			path   string
@@ -152,7 +169,12 @@ func verifyAdmissionSetAt(root, retainedRoot string, candidates CandidateSet, ve
 			if formpackage.DigestBytes(reportRaw) != retained.digest || retained.proof.EvidenceDigest != retained.digest {
 				return fmt.Errorf("%s %s digest does not match the admission proof", pair.entry.Kind, retained.role)
 			}
-			if err := validateRunnerReport(runnerReport, retained.role, retained.proof, positiveNames, negativeNames, positiveBindings, negativeBindings); err != nil {
+			roleNegativeBindings, err := negativeFixtureBindingsForRole(retained.role, negativeBindings)
+			if err != nil {
+				return fmt.Errorf("%s %s negative fixture stages: %w", pair.entry.Kind, retained.role, err)
+			}
+			roleNegativeNames := sortedBindingNames(roleNegativeBindings)
+			if err := validateRunnerReport(runnerReport, retained.role, retained.proof, positiveNames, roleNegativeNames, positiveBindings, roleNegativeBindings); err != nil {
 				return fmt.Errorf("%s: %w", pair.entry.Kind, err)
 			}
 			subjects = append(subjects, RetainedSubject{
@@ -256,6 +278,13 @@ func bindExactPackageFixtures(
 	}
 	negative := make(map[string]fixtureDigestBinding, len(definition.NegativeFixtures))
 	for _, fixture := range definition.NegativeFixtures {
+		if fixture.Stage == "" {
+			return nil, nil, fmt.Errorf("negative fixture %q has an empty stage", fixture.Name)
+		}
+		stage, err := normalizeNegativeFixtureStage(fixture.Stage)
+		if err != nil {
+			return nil, nil, fmt.Errorf("negative fixture %q: %w", fixture.Name, err)
+		}
 		retained, ok := negativeEvidence[fixture.Name]
 		if !ok {
 			return nil, nil, fmt.Errorf("negative fixture %q is missing from admission evidence", fixture.Name)
@@ -274,6 +303,7 @@ func bindExactPackageFixtures(
 		negative[fixture.Name] = fixtureDigestBinding{
 			PackageFixtureDigest: formpackage.DigestBytes(inputRaw),
 			EffectiveInputDigest: effectiveDigest,
+			Stage:                stage,
 		}
 	}
 	if len(positive) != len(positiveEvidence) || len(negative) != len(negativeEvidence) {

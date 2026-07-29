@@ -1,21 +1,25 @@
-name: Release Form Package revocation checkpoint
+name: Prepare signed Form Package revocation checkpoint
+run-name: ${{ inputs.request_id }}
 
 on:
   workflow_dispatch:
     inputs:
+      request_id:
+        description: Exact owner-deploy UUIDv4 dispatch correlation token
+        required: true
+        type: string
       tag:
-        description: Exact existing forms/revocations/v<semver> tag
+        description: Planned exact forms/revocations/v<semver> tag
         required: true
         type: string
       expected_commit:
-        description: Exact approved 40-character tag commit
+        description: Exact approved 40-character source commit
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
-  attestations: write
 
 concurrency:
   group: form-package-revocation-${{ inputs.tag }}
@@ -26,7 +30,7 @@ env:
   EXPECTED_COSIGN_VERSION: "v3.0.6"
 
 jobs:
-  release:
+  prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: form-package-release
@@ -38,52 +42,156 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify trusted main and the exact approved tag commit
+      - name: Verify trusted main and the exact approved source commit
         id: source
         shell: bash
         env:
+          REQUEST_ID: ${{ inputs.request_id }}
           RELEASE_TAG: ${{ inputs.tag }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          if [[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; then
+            echo "request_id must be a canonical lowercase UUIDv4" >&2
+            exit 1
+          fi
           if [[ "$GITHUB_REF" != "refs/heads/main" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
-            echo "Release dispatch must execute the current protected main commit" >&2
+            echo "Candidate preparation must execute the current protected main tooling commit" >&2
             exit 1
           fi
           if [[ ! "$RELEASE_TAG" =~ ^forms/revocations/v[0-9][0-9A-Za-z.+-]*$ ]]; then
-            echo "Revocation releases require forms/revocations/v<semver>" >&2
+            echo "Revocation candidates require forms/revocations/v<semver>" >&2
             exit 1
           fi
           if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
             echo "expected_commit must be an exact lowercase 40-character Git commit" >&2
             exit 1
           fi
-          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
-          tag_commit="$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")"
-          test "$tag_commit" = "$EXPECTED_COMMIT"
-          git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main
+          workflow_path=".github/workflows/form-package-revocation.yml"
+          workflow_ref="$GITHUB_REPOSITORY/$workflow_path@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$workflow_ref"
+          git cat-file -e "$EXPECTED_COMMIT^{commit}"
+          git merge-base --is-ancestor "$EXPECTED_COMMIT" refs/remotes/origin/main
+          remote_tag_refs="$RUNNER_TEMP/form-package-revocation-remote-tag-refs.txt"
+          if ! git ls-remote --tags origin \
+            "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" > "$remote_tag_refs"; then
+            echo "Could not prove remote revocation tag absence for $RELEASE_TAG" >&2
+            exit 1
+          fi
+          if [[ -s "$remote_tag_refs" ]]; then
+            echo "Remote revocation tag $RELEASE_TAG already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          github_releases_control="$RUNNER_TEMP/form-package-revocation-release-capability-control.json"
+          if ! github_repository_status="$(curl --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            --output "$github_releases_control" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases?per_page=1")"; then
+            echo "Could not prove revocation GitHub Release read capability" >&2
+            exit 1
+          fi
+          if [[ "$github_repository_status" != "200" ]]; then
+            echo "Revocation GitHub Release capability control expected 200, got $github_repository_status" >&2
+            exit 1
+          fi
+          jq -e 'type == "array"' "$github_releases_control" >/dev/null
+          encoded_release_tag="$(jq -rn --arg tag "$RELEASE_TAG" '$tag | @uri')"
+          github_release_body="$RUNNER_TEMP/form-package-revocation-release-preflight.json"
+          if ! github_release_status="$(curl --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            --output "$github_release_body" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$encoded_release_tag")"; then
+            echo "Could not prove revocation GitHub release absence for $RELEASE_TAG" >&2
+            exit 1
+          fi
+          if [[ "$github_release_status" == "200" ]]; then
+            echo "A GitHub release already owns revocation tag $RELEASE_TAG; refusing overwrite" >&2
+            exit 1
+          fi
+          if [[ "$github_release_status" != "404" ]]; then
+            echo "Revocation GitHub release absence preflight expected 404, got $github_release_status" >&2
+            exit 1
+          fi
           {
             echo "tag=$RELEASE_TAG"
-            echo "commit=$tag_commit"
+            echo "commit=$EXPECTED_COMMIT"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Check out the untrusted tagged revocation source separately
+      - name: Check out the untrusted approved revocation source separately
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.expected_commit }}
           path: release-source
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
+
+      - name: Create the deterministic ephemeral revocation tag object
+        id: tag_object
+        shell: bash
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+          EXPECTED_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          test "$(git -C release-source rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git -C release-source status --porcelain=v1 --untracked-files=all)"
+          if git -C release-source show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            echo "Exact source checkout unexpectedly contains $RELEASE_TAG" >&2
+            exit 1
+          fi
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+
+          tag_object="$RUNNER_TEMP/form-package-revocation-tag-object"
+          tagger_epoch="$(git -C release-source show -s --format=%ct "$EXPECTED_COMMIT")"
+          workflow_run="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+          {
+            printf 'object %s\n' "$EXPECTED_COMMIT"
+            printf 'type commit\n'
+            printf 'tag %s\n' "$RELEASE_TAG"
+            printf 'tagger Takoform Form Package Revocation <release@takoform.invalid> %s +0000\n\n' "$tagger_epoch"
+            printf 'Takoform Form Package revocation checkpoint %s\n\n' "$RELEASE_TAG"
+            printf 'source-commit: %s\n' "$EXPECTED_COMMIT"
+            printf 'request-id: %s\n' "$REQUEST_ID"
+            printf 'workflow-run: %s\n' "$workflow_run"
+          } > "$tag_object"
+          tag_object_oid="$(git -C release-source mktag < "$tag_object")"
+          git -C release-source update-ref "refs/tags/$RELEASE_TAG" "$tag_object_oid"
+          test "$(git -C release-source cat-file -t "$tag_object_oid")" = "tag"
+          test "$(git -C release-source rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$EXPECTED_COMMIT"
+          git -C release-source cat-file tag "$tag_object_oid" > "$RUNNER_TEMP/materialized-revocation-tag-object"
+          cmp "$tag_object" "$RUNNER_TEMP/materialized-revocation-tag-object"
+          test -z "$(git -C release-source status --porcelain=v1 --untracked-files=all)"
+
+          object_format="$(git -C release-source rev-parse --show-object-format)"
+          tag_object_sha256="sha256:$(sha256sum "$tag_object" | cut -d' ' -f1)"
+          {
+            echo "path=$tag_object"
+            echo "object_format=$object_format"
+            echo "oid=$tag_object_oid"
+            echo "sha256=$tag_object_sha256"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.26.5"
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Install pinned Cosign v3
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
 
-      - name: Build cumulative checkpoint evidence with trusted main tooling
+      - name: Build reproducible cumulative checkpoint evidence with trusted main tooling
         id: build
         shell: bash
         env:
@@ -97,32 +205,35 @@ jobs:
           grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
           go test ./formpackage ./cmd/form-package-release
           output="$RUNNER_TEMP/form-package-revocation"
+          rebuild="$RUNNER_TEMP/form-package-revocation-rebuild"
           go run ./cmd/form-package-release build-revocation \
             --repo "$GITHUB_WORKSPACE/release-source" \
             --tag "$RELEASE_TAG" \
             --tooling-commit "$GITHUB_SHA" \
             --output "$output"
+          go run ./cmd/form-package-release build-revocation \
+            --repo "$GITHUB_WORKSPACE/release-source" \
+            --tag "$RELEASE_TAG" \
+            --tooling-commit "$GITHUB_SHA" \
+            --output "$rebuild" > /dev/null
+          diff -ruN "$output" "$rebuild"
           subject="$(jq -r .signedSubject "$output/release-manifest.json")"
           bundle="$(jq -r .signatureBundle "$output/release-manifest.json")"
           identity="$(jq -r .publisherPolicy.identity "$output/release-manifest.json")"
+          test "$(jq -r .releaseType "$output/release-manifest.json")" = "form-package-revocation"
+          test "$(jq -r .tag "$output/release-manifest.json")" = "$RELEASE_TAG"
+          test "$(jq -r .sourceCommit "$output/release-manifest.json")" = "$EXPECTED_COMMIT"
+          test "$(jq -r .toolingCommit "$output/release-manifest.json")" = "$GITHUB_SHA"
+          test "$(jq -r .workflow "$output/release-manifest.json")" = ".github/workflows/form-package-revocation.yml"
+          test "$(jq -r .publicationReady "$output/release-manifest.json")" = "false"
+          jq -e '.publicationBlockers == []' "$output/release-manifest.json" > /dev/null
+          [[ "$subject" != */* && "$bundle" != */* ]]
           {
             echo "output=$output"
             echo "subject=$subject"
             echo "bundle=$bundle"
             echo "identity=$identity"
           } >> "$GITHUB_OUTPUT"
-
-      - name: Refuse an existing release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.source.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "A GitHub release already owns $RELEASE_TAG; refusing overwrite" >&2
-            exit 1
-          fi
 
       - name: Keyless-sign the cumulative revocation checkpoint
         shell: bash
@@ -138,75 +249,111 @@ jobs:
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
           go run ./cmd/form-package-release finalize-bundle --output "$output"
           (cd "$output" && sha256sum --check --strict SHA256SUMS)
+          jq -e \
+            '.publicationReady == true
+              and .publicationBlockers == []
+              and (.assets | length == 4)' \
+            "$output/release-manifest.json" > /dev/null
 
-      - name: Create this run's verified revocation draft
-        id: draft
+      - name: Package this run's checksum-closed revocation candidate
+        id: candidate
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.source.outputs.tag }}
         run: |
           set -euo pipefail
-          response="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
-            -f tag_name="$RELEASE_TAG" -f name="$RELEASE_TAG" -F draft=true \
-            -f body='Signed cumulative Takoform Form Package revocation checkpoint. Referenced package bytes remain retained for observe and delete.')"
-          release_id="$(jq -r .id <<<"$response")"
-          test "$release_id" != "null"
-          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          export LC_ALL=C
+          output="${{ steps.build.outputs.output }}"
+          candidate="$RUNNER_TEMP/form-package-revocation-candidate"
+          assets="$candidate/assets"
+          test ! -e "$candidate"
+          mkdir -p "$assets"
+          install -m 0644 "${{ steps.tag_object.outputs.path }}" "$candidate/tag-object"
 
-      - name: Upload the exact local asset inventory
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.source.outputs.tag }}
-        run: |
-          set -euo pipefail
-          while IFS= read -r asset; do
-            gh release upload "$RELEASE_TAG" "$asset"
-          done < <(find "${{ steps.build.outputs.output }}" -maxdepth 1 -type f -print | sort)
-
-      - name: Verify this run's exact draft release inventory
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
-        run: |
-          set -euo pipefail
-          find "${{ steps.build.outputs.output }}" -maxdepth 1 -type f -printf '%f\n' | sort > "$RUNNER_TEMP/expected-assets.txt"
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[].name' | sort > "$RUNNER_TEMP/actual-assets.txt"
+          awk 'NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 ~ /\// { exit 1 } { print $2 }' \
+            "$output/SHA256SUMS" | sort > "$RUNNER_TEMP/checkpoint-assets.txt"
+          {
+            cat "$RUNNER_TEMP/checkpoint-assets.txt"
+            printf '%s\n' SHA256SUMS
+          } | sort > "$RUNNER_TEMP/expected-assets.txt"
+          find "$output" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' \
+            | sort > "$RUNNER_TEMP/actual-assets.txt"
           diff -u "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/actual-assets.txt"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq .draft)" = "true"
+          test "$(wc -l < "$RUNNER_TEMP/expected-assets.txt")" -eq 6
 
-      - name: Attest exact revocation checkpoint inventory
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+          while IFS= read -r name; do
+            install -m 0644 "$output/$name" "$assets/$name"
+          done < "$RUNNER_TEMP/expected-assets.txt"
+          find "$assets" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' \
+            | sort > "$RUNNER_TEMP/candidate-assets.txt"
+          diff -u "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/candidate-assets.txt"
+          (cd "$assets" && sha256sum --check --strict SHA256SUMS)
+
+          asset_metadata="$RUNNER_TEMP/form-package-revocation-assets.jsonl"
+          : > "$asset_metadata"
+          while IFS= read -r name; do
+            digest="$(sha256sum "$assets/$name" | cut -d' ' -f1)"
+            jq -cn --arg name "$name" --arg sha256 "sha256:$digest" \
+              '{name: $name, sha256: $sha256}' >> "$asset_metadata"
+          done < "$RUNNER_TEMP/candidate-assets.txt"
+
+          jq -S -n \
+            --arg format "takoform.form-package-revocation-candidate@v1" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflowPath ".github/workflows/form-package-revocation.yml" \
+            --arg workflowRef "$GITHUB_WORKFLOW_REF" \
+            --arg requestId "${{ inputs.request_id }}" \
+            --arg runId "$GITHUB_RUN_ID" \
+            --arg runAttempt "$GITHUB_RUN_ATTEMPT" \
+            --arg sourceRef "$GITHUB_REF" \
+            --arg tag "${{ steps.source.outputs.tag }}" \
+            --arg sourceCommit "${{ steps.source.outputs.commit }}" \
+            --arg toolingCommit "$GITHUB_SHA" \
+            --arg objectFormat "${{ steps.tag_object.outputs.object_format }}" \
+            --arg tagObjectOid "${{ steps.tag_object.outputs.oid }}" \
+            --arg tagObjectSha256 "${{ steps.tag_object.outputs.sha256 }}" \
+            --slurpfile candidateAssets "$asset_metadata" \
+            '{
+              format: $format,
+              repository: $repository,
+              workflowPath: $workflowPath,
+              workflowRef: $workflowRef,
+              requestId: $requestId,
+              runId: $runId,
+              runAttempt: $runAttempt,
+              sourceRef: $sourceRef,
+              tag: $tag,
+              sourceCommit: $sourceCommit,
+              toolingCommit: $toolingCommit,
+              objectFormat: $objectFormat,
+              tagObjectOid: $tagObjectOid,
+              tagObjectSha256: $tagObjectSha256,
+              assetCount: ($candidateAssets | length),
+              assets: $candidateAssets
+            }' > "$candidate/metadata.json"
+          test "$(jq -r .assetCount "$candidate/metadata.json")" -eq 6
+          test "$(jq -r .runId "$candidate/metadata.json")" = "$GITHUB_RUN_ID"
+          test "$(jq -r .runAttempt "$candidate/metadata.json")" = "$GITHUB_RUN_ATTEMPT"
+
+          (
+            cd "$candidate"
+            {
+              printf '%s\0' metadata.json tag-object
+              find assets -mindepth 1 -maxdepth 1 -type f -print0
+            } | sort -z | xargs -0 sha256sum > SHA256SUMS
+            test "$(wc -l < SHA256SUMS)" -eq 8
+            sha256sum --check --strict SHA256SUMS
+          )
+          {
+            printf '%s\n' SHA256SUMS assets metadata.json tag-object
+          } | sort > "$RUNNER_TEMP/expected-candidate-root.txt"
+          find "$candidate" -mindepth 1 -maxdepth 1 -printf '%f\n' \
+            | sort > "$RUNNER_TEMP/actual-candidate-root.txt"
+          diff -u "$RUNNER_TEMP/expected-candidate-root.txt" "$RUNNER_TEMP/actual-candidate-root.txt"
+          echo "path=$candidate" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the same-run signed revocation candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          subject-path: |
-            ${{ steps.build.outputs.output }}/*.json
-            ${{ steps.build.outputs.output }}/SHA256SUMS
-
-      - name: Publish this run's verified immutable revocation release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
-        run: |
-          set -euo pipefail
-          finalized="$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false)"
-          test "$(jq -r .draft <<<"$finalized")" = "false"
-
-      - name: Remove partial draft after failure
-        if: ${{ always() && !success() }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
-          RELEASE_TAG: ${{ steps.source.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$RELEASE_ID" ]]; then
-            exit 0
-          fi
-          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" 2>/dev/null || true)"
-          if [[ -n "$release_json" && "$(jq -r .draft <<<"$release_json")" == "true" && "$(jq -r .tag_name <<<"$release_json")" == "$RELEASE_TAG" ]]; then
-            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
-          fi
+          name: form-package-revocation-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.candidate.outputs.path }}
+          if-no-files-found: error
+          retention-days: 1

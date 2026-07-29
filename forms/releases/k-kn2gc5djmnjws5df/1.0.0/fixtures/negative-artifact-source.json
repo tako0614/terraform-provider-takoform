@@ -1,0 +1,12 @@
+{
+  "cacheControlSeconds": 300,
+  "errorDocument": "404.html",
+  "indexDocument": "index.html",
+  "name": "static-site",
+  "singlePageApp": false,
+  "source": {
+    "artifactMediaType": "application/vnd.takoform.static-site+tar",
+    "artifactSha256": "not-a-sha256",
+    "artifactUrl": "https://artifacts.portable-conformance.invalid/static-site.tar"
+  }
+}

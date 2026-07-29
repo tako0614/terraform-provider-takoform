@@ -108,21 +108,54 @@ type InventoryEntry struct {
 }
 
 func Generate(root string) error {
-	// A retired Form leaves nothing behind: its package directory goes with it,
-	// so the corpus can never advertise a kind the provider no longer implements.
-	if err := pruneRetiredPackages(root); err != nil {
+	published, err := discoverPublishedReleaseSources(root)
+	if err != nil {
+		return fmt.Errorf("published release source preflight: %w", err)
+	}
+	if err := VerifyFormSemVerHistory(root); err != nil {
+		return fmt.Errorf("existing Form SemVer history: %w", err)
+	}
+	stagingRoot, err := os.MkdirTemp("", "takoform-standard-forms-*")
+	if err != nil {
 		return err
 	}
+	defer os.RemoveAll(stagingRoot)
+
 	entries := make([]InventoryEntry, 0, len(Specs))
 	for _, spec := range Specs {
-		entry, err := generatePackage(root, spec)
+		entry, err := generatePackage(stagingRoot, spec)
 		if err != nil {
 			return err
 		}
-		if err := syncCandidateReleaseSource(root, entry); err != nil {
+		entries = append(entries, entry)
+	}
+	// Prove every generated desiredSchema against the retained history before
+	// replacing any release-source directory.
+	for _, entry := range entries {
+		definitionPath := filepath.Join(stagingRoot, filepath.FromSlash(entry.Path), "definition.json")
+		if err := verifyCandidateFormSemVer(root, definitionPath); err != nil {
+			return fmt.Errorf("%s candidate Form SemVer: %w", entry.Kind, err)
+		}
+	}
+	if err := verifyNoPublishedReleaseOverwrite(root, stagingRoot, entries, published); err != nil {
+		return err
+	}
+
+	// All immutable-source and candidate checks above are read-only against the
+	// repository. Only after the whole candidate set passes may generation
+	// replace tracked candidate surfaces.
+	if err := pruneRetiredPackages(root); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := syncGeneratedPackage(root, stagingRoot, entry); err != nil {
 			return err
 		}
-		entries = append(entries, entry)
+	}
+	for _, entry := range entries {
+		if err := syncCandidateReleaseSource(root, entry, published); err != nil {
+			return err
+		}
 	}
 	inventory := Inventory{
 		Format: "takoform.standard-package-set@v1", Classification: "structural-candidate",
@@ -160,12 +193,75 @@ func Generate(root string) error {
 	if err := generateReleasePlan(root, entries); err != nil {
 		return err
 	}
+	if err := refreshCurrentAdmissionCandidateIdentities(root, entries); err != nil {
+		return err
+	}
 	return generatePublishedSurfaces(root)
 }
 
-func syncCandidateReleaseSource(root string, entry InventoryEntry) error {
+// refreshCurrentAdmissionCandidateIdentities preserves the reviewed ten-kind
+// selection and order while rebinding it to the exact current package bytes.
+// This is source preparation only: it neither publishes nor admits a Form.
+func refreshCurrentAdmissionCandidateIdentities(root string, entries []InventoryEntry) error {
+	path := filepath.Join(root, "forms", "admission-candidate-set.json")
+	var inventory currentAdmissionCandidateInventory
+	if err := readJSON(path, &inventory); err != nil {
+		return err
+	}
+	if inventory.Format != "takoform.admission-candidate-set@v1" ||
+		inventory.Generation != currentAdmissionGeneration ||
+		inventory.AdmissionStatus != "external-required" ||
+		len(inventory.Packages) != 10 {
+		return fmt.Errorf("current admission selection is not the reviewed ten-kind generation")
+	}
+	current := make(map[string]InventoryEntry, len(entries))
+	for _, entry := range entries {
+		current[entry.Kind] = entry
+	}
+	seen := make(map[string]struct{}, len(inventory.Packages))
+	for index := range inventory.Packages {
+		selected := &inventory.Packages[index]
+		entry, ok := current[selected.Kind]
+		kind, declared := formcatalog.ByKind(selected.Kind)
+		if !ok || !declared || selected.Slug != kind.Slug {
+			return fmt.Errorf("current admission selection contains unknown or drifted kind %s", selected.Kind)
+		}
+		if _, duplicate := seen[selected.Kind]; duplicate {
+			return fmt.Errorf("current admission selection duplicates kind %s", selected.Kind)
+		}
+		seen[selected.Kind] = struct{}{}
+		releaseID := releaseIDForKind(selected.Kind)
+		selected.ReleaseID = releaseID
+		selected.Version = entry.FormRef.DefinitionVersion
+		selected.Tag = "forms/" + releaseID + "/v" + selected.Version
+		selected.SourcePath = filepath.ToSlash(filepath.Join("forms", "releases", releaseID, selected.Version))
+		selected.FormRef = entry.FormRef
+		selected.PackageDigest = entry.PackageDigest
+	}
+	return writeJSON(path, inventory)
+}
+
+func syncGeneratedPackage(root, stagingRoot string, entry InventoryEntry) error {
+	source := filepath.Join(stagingRoot, filepath.FromSlash(entry.Path))
+	destination := filepath.Join(root, filepath.FromSlash(entry.Path))
+	if err := os.RemoveAll(destination); err != nil {
+		return err
+	}
+	if err := os.CopyFS(destination, os.DirFS(source)); err != nil {
+		return fmt.Errorf("sync %s generated package: %w", entry.Kind, err)
+	}
+	return nil
+}
+
+func syncCandidateReleaseSource(root string, entry InventoryEntry, published map[string]publishedReleaseSource) error {
+	releaseID := releaseIDForKind(entry.Kind)
+	if _, immutable := published[publishedReleaseKey(releaseID, entry.FormRef.DefinitionVersion)]; immutable {
+		// The staged candidate was proven byte-exact above. Do not rewrite even
+		// equivalent bytes of an identity that already has a published tag.
+		return nil
+	}
 	source := filepath.Join(root, filepath.FromSlash(entry.Path))
-	destination := filepath.Join(root, "forms", "releases", releaseIDForKind(entry.Kind), entry.FormRef.DefinitionVersion)
+	destination := filepath.Join(root, "forms", "releases", releaseID, entry.FormRef.DefinitionVersion)
 	if err := os.RemoveAll(destination); err != nil {
 		return err
 	}
@@ -185,20 +281,26 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 	if err != nil {
 		return InventoryEntry{}, err
 	}
-	negativeFixtures := make([]formpackage.NegativeFixture, 0, len(negatives))
-	negativeFiles := make(map[string]any, len(negatives))
+	negativeFixtures := make([]formpackage.NegativeFixture, 0, len(negatives)+1)
+	negativeFiles := make(map[string]any, len(negatives)+1)
 	for _, negative := range negatives {
-		path := "fixtures/negative-" + negative.Field.HCL + ".json"
+		path := "fixtures/negative-" + negative.Name + ".json"
 		negativeFiles[path] = negative.Desired
 		negativeFixtures = append(negativeFixtures, formpackage.NegativeFixture{
-			Name: "reject-" + negative.Field.HCL, Stage: "desired",
+			Name: "reject-" + negative.Name, Stage: "desired",
 			InputPath: path, ExpectedFailure: "schema_validation_failed",
 		})
 	}
+	const observedNegativePath = "fixtures/negative-observed-foreign-kind-id.json"
+	negativeFiles[observedNegativePath] = kind.ForeignKindObserved()
+	negativeFixtures = append(negativeFixtures, formpackage.NegativeFixture{
+		Name: "reject-observed-foreign-kind-id", Stage: "observed",
+		InputPath: observedNegativePath, ExpectedFailure: "schema_validation_failed",
+	})
 	definition := formpackage.FormDefinition{
 		APIVersion: formpackage.FormAPIVersion, Kind: spec.Kind, DefinitionVersion: spec.Version,
 		Title: spec.Title, Description: spec.Description, Status: "standard",
-		DesiredSchema: kind.DesiredSchema(), ObservedSchema: formcatalog.ObservedSchema(), OutputSchema: kind.OutputSchema(),
+		DesiredSchema: kind.DesiredSchema(), ObservedSchema: kind.ObservedSchema(), OutputSchema: kind.OutputSchema(),
 		ImmutableFields:       append([]string(nil), spec.Immutable...),
 		LifecycleCapabilities: []string{"create", "read", "update", "delete", "import", "observe", "refresh", "drift"},
 		Interfaces:            kind.InterfaceDescriptors(),
@@ -267,6 +369,15 @@ func generatePackage(root string, spec Spec) (InventoryEntry, error) {
 }
 
 func Verify(root string) error {
+	if err := VerifyPublishedReleaseSources(root); err != nil {
+		return fmt.Errorf("published release sources: %w", err)
+	}
+	if err := VerifyFormSemVerHistory(root); err != nil {
+		return fmt.Errorf("Form SemVer history: %w", err)
+	}
+	if err := VerifyPublishedSurfaces(root); err != nil {
+		return fmt.Errorf("catalog-derived public surfaces: %w", err)
+	}
 	var inventory Inventory
 	if err := readJSON(filepath.Join(root, "forms", "standard-package-set.json"), &inventory); err != nil {
 		return err
@@ -291,6 +402,13 @@ func Verify(root string) error {
 		if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
 			return fmt.Errorf("%s inventory digest drift", entry.Kind)
 		}
+		kind, ok := formcatalog.ByKind(entry.Kind)
+		if !ok {
+			return fmt.Errorf("%s inventory kind is not declared", entry.Kind)
+		}
+		if err := verifyGeneratedFixtureContract(packageRoot, kind); err != nil {
+			return fmt.Errorf("%s generated fixture contract: %w", entry.Kind, err)
+		}
 		releaseID := releaseIDForKind(entry.Kind)
 		releaseRoot := filepath.Join(root, "forms", "releases", releaseID, entry.FormRef.DefinitionVersion)
 		if err := verifyReleaseSource(packageRoot, releaseRoot, entry); err != nil {
@@ -312,6 +430,9 @@ func Verify(root string) error {
 		if err := provider.VerifyStandardFormStructure(entry.Kind, desired); err != nil {
 			return err
 		}
+	}
+	if err := verifyPortableHostContract(root, inventory.Packages); err != nil {
+		return err
 	}
 	if err := VerifyReleasePlan(root); err != nil {
 		return err
@@ -390,9 +511,10 @@ func VerifyCandidatePublication(root string) error {
 // VerifyAdmissionClosure is the fail-closed Phase 2 candidate-closure gate.
 // Structural candidates are verified first, then the exact retained
 // standard-admission reports and distribution readbacks must close over the
-// compiled set and pass offline authentication. Passing this check does not
-// activate admission: VerifyReleaseReady separately requires the matching
-// controller-authorized immutable GitHub Release and its live readback.
+// compiled set, pass offline authentication, and resolve their exact Git refs.
+// Passing this check neither publishes an artifact nor mutates a host; the
+// source-retained closure itself is the admission evidence. There is no later
+// set-wide release or controller promotion step.
 func VerifyAdmissionClosure(root string) error {
 	if err := Verify(root); err != nil {
 		return err
@@ -416,6 +538,19 @@ func VerifyCurrentAdmissionClosure(root string) error {
 		return err
 	}
 	return admissionrelease.VerifyAdmissionSetAt(root, currentAdmissionRoot, candidates)
+}
+
+// VerifyCurrentAdmissionMaterial authenticates the exact source-retained v4
+// closure before the create-only checkpoint tag is minted.
+func VerifyCurrentAdmissionMaterial(root string) error {
+	if err := Verify(root); err != nil {
+		return err
+	}
+	candidates, err := CurrentAdmissionCandidateSet(root)
+	if err != nil {
+		return err
+	}
+	return admissionrelease.VerifyAdmissionMaterialAt(root, currentAdmissionRoot, candidates)
 }
 
 // VerifyPublishedPackageSet verifies the retained, immutable distribution
@@ -779,6 +914,21 @@ func updatePortableHostContract(root string, entries []InventoryEntry) error {
 		},
 		PackageDigest: bucket.PackageDigest,
 	}
+	desired, err := portableHostDesired(root, *bucket)
+	if err != nil {
+		return err
+	}
+	name, ok := desired["name"].(string)
+	if !ok || name == "" {
+		return fmt.Errorf("standard ObjectBucket canonical desired fixture has no name")
+	}
+	contract.RunnerInput.Name = name
+	contract.RunnerInput.Desired = desired
+	negativeFixtures, err := portableHostDesiredNegativeFixtures(root, *bucket)
+	if err != nil {
+		return err
+	}
+	contract.RunnerInput.NegativeFixtures = negativeFixtures
 	runnerDigest, err := portableconformance.RunnerEvidenceDigest(contract)
 	if err != nil {
 		return err
@@ -798,6 +948,100 @@ func updatePortableHostContract(root string, entries []InventoryEntry) error {
 		SHA256   string `json:"sha256"`
 	}{Format: "takoform.portable-host-conformance-manifest@v1", Contract: "contract.json", SHA256: hex.EncodeToString(digest[:])}
 	return writeJSON(filepath.Join(root, "conformance", "portable-host-v1", "manifest.json"), manifest)
+}
+
+func verifyPortableHostContract(root string, entries []InventoryEntry) error {
+	var bucket *InventoryEntry
+	for index := range entries {
+		if entries[index].Kind == "ObjectBucket" {
+			bucket = &entries[index]
+			break
+		}
+	}
+	if bucket == nil {
+		return fmt.Errorf("standard ObjectBucket missing")
+	}
+	contract, err := portableconformance.Verify(filepath.Join(root, "conformance", "portable-host-v1"))
+	if err != nil {
+		return fmt.Errorf("portable host contract: %w", err)
+	}
+	wantIdentity := portableconformance.InstalledFormReference{
+		FormRef: portableconformance.FormRef{
+			APIVersion: bucket.FormRef.APIVersion, Kind: bucket.FormRef.Kind,
+			DefinitionVersion: bucket.FormRef.DefinitionVersion, SchemaDigest: bucket.FormRef.SchemaDigest,
+		},
+		PackageDigest: bucket.PackageDigest,
+	}
+	if contract.RunnerInput.Identity != wantIdentity {
+		return fmt.Errorf("portable host contract ObjectBucket identity differs from the structural candidate")
+	}
+	wantDesired, err := portableHostDesired(root, *bucket)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(contract.RunnerInput.Desired, wantDesired) {
+		return fmt.Errorf("portable host contract desired input differs from the exact ObjectBucket canonical fixture")
+	}
+	wantNegativeFixtures, err := portableHostDesiredNegativeFixtures(root, *bucket)
+	if err != nil {
+		return err
+	}
+	if len(contract.RunnerInput.NegativeFixtures) != len(wantNegativeFixtures) {
+		return fmt.Errorf("portable host contract desired negative inventory has %d entries, want %d",
+			len(contract.RunnerInput.NegativeFixtures), len(wantNegativeFixtures))
+	}
+	for index, want := range wantNegativeFixtures {
+		got := contract.RunnerInput.NegativeFixtures[index]
+		if got.Name != want.Name || got.Stage != want.Stage || got.Path != want.Path || got.SHA256 != want.SHA256 {
+			return fmt.Errorf("portable host contract desired negative fixture %d differs from exact ObjectBucket package bytes", index)
+		}
+	}
+	return nil
+}
+
+func portableHostDesired(root string, bucket InventoryEntry) (map[string]any, error) {
+	var desired map[string]any
+	path := filepath.Join(root, filepath.FromSlash(bucket.Path), "fixtures", "desired.json")
+	if err := readJSON(path, &desired); err != nil {
+		return nil, fmt.Errorf("read standard ObjectBucket canonical desired fixture: %w", err)
+	}
+	return desired, nil
+}
+
+func portableHostDesiredNegativeFixtures(root string, bucket InventoryEntry) ([]portableconformance.RunnerNegativeFixture, error) {
+	packageRoot := filepath.Join(root, filepath.FromSlash(bucket.Path))
+	definitionRaw, err := os.ReadFile(filepath.Join(packageRoot, "definition.json"))
+	if err != nil {
+		return nil, err
+	}
+	definition, err := formpackage.ValidateDefinition(definitionRaw)
+	if err != nil {
+		return nil, err
+	}
+	contractRoot := filepath.Join(root, "conformance", "portable-host-v1")
+	fixtures := make([]portableconformance.RunnerNegativeFixture, 0, len(definition.NegativeFixtures))
+	for _, fixture := range definition.NegativeFixtures {
+		if fixture.Stage != "desired" {
+			continue
+		}
+		source := filepath.Join(packageRoot, filepath.FromSlash(fixture.InputPath))
+		raw, err := os.ReadFile(source)
+		if err != nil {
+			return nil, err
+		}
+		relative, err := filepath.Rel(contractRoot, source)
+		if err != nil {
+			return nil, err
+		}
+		fixtures = append(fixtures, portableconformance.RunnerNegativeFixture{
+			Name: fixture.Name, Stage: fixture.Stage,
+			Path: filepath.ToSlash(relative), SHA256: formpackage.DigestBytes(raw),
+		})
+	}
+	if len(fixtures) == 0 {
+		return nil, fmt.Errorf("standard ObjectBucket has no desired-stage negative fixtures for host conformance")
+	}
+	return fixtures, nil
 }
 
 func readJSON(path string, value any) error {

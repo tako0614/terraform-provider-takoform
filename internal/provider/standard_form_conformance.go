@@ -74,7 +74,7 @@ func fieldByWire(kind formcatalog.Kind, wire string) (formcatalog.Field, bool) {
 
 func providerFieldsForDesired(kind formcatalog.Kind, field string) []string {
 	if field == "source" {
-		return []string{"artifact_path", "artifact_url", "artifact_ref", "artifact_sha256"}
+		return []string{"artifact_url", "artifact_sha256", "artifact_media_type"}
 	}
 	if field == "connections" || field == "name" {
 		return []string{field}

@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 var (
@@ -54,8 +55,11 @@ func (d *interfaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				MarkdownDescription: "Author-defined Interface name, for example `example.runtime`.",
 			},
 			"space": schema.StringAttribute{
-				Optional:            true,
-				MarkdownDescription: "Space to read from. Defaults to the provider's space.",
+				Optional: true,
+				Validators: []validator.String{
+					StringSpaceID(),
+				},
+				MarkdownDescription: "Exact opaque SpaceID to read from. Defaults to the provider's SpaceID.",
 			},
 			"version": schema.StringAttribute{
 				Optional: true,
@@ -72,9 +76,11 @@ func (d *interfaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				MarkdownDescription: "Portable Resource kind exposing the interface. Configure together with resource_name; omission succeeds only for one visible instance.",
 			},
 			"resource_name": schema.StringAttribute{
-				Optional:            true,
-				Computed:            true,
-				Validators:          []validator.String{StringToken()},
+				Optional: true,
+				Computed: true,
+				Validators: []validator.String{
+					StringMatches(formcatalog.PatternName, "resource_name must use the canonical portable Resource name grammar"),
+				},
 				MarkdownDescription: "Portable Resource name exposing the interface. Configure together with resource_kind; omission succeeds only for one visible instance.",
 			},
 			"document_json": schema.StringAttribute{
@@ -137,7 +143,15 @@ func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 	if !config.Version.IsNull() {
 		requestedVersion = config.Version.ValueString()
 	}
-	space := effectiveSpace(config.Space, d.data.defaultSpace)
+	space, err := effectiveInterfaceSpace(config.Space, d.data.defaultSpace)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Missing Interface Space",
+			"Set the interface data source `space` attribute or configure a non-empty provider default Space. No host request was made.",
+		)
+		return
+	}
+	config.Space = types.StringValue(space)
 	declared, err := d.data.client.GetInterface(ctx, space, client.InterfaceSelector{
 		Name: config.Name.ValueString(), Version: requestedVersion,
 		ResourceKind: resourceKind, ResourceName: resourceName,
@@ -183,6 +197,14 @@ func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 		config.FormKind = types.StringValue(declared.Form.FormRef.Kind)
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+func effectiveInterfaceSpace(value types.String, fallback string) (string, error) {
+	space, err := validatedEffectiveSpace(value, fallback)
+	if err != nil {
+		return "", fmt.Errorf("interface SpaceID is invalid or missing: %w", err)
+	}
+	return space, nil
 }
 
 func unknownInterfaceReadField(config interfaceDataSourceModel) string {

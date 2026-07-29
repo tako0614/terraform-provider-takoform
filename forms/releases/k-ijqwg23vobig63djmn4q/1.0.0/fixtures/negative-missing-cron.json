@@ -1,0 +1,14 @@
+{
+  "connections": {
+    "origin": {
+      "permissions": [
+        "administer"
+      ],
+      "projection": "sql.admin.v1",
+      "resource": "RelationalDatabase/relational-database"
+    }
+  },
+  "name": "backup-policy",
+  "retentionDays": 14,
+  "timezone": "UTC"
+}

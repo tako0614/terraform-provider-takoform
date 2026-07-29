@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -36,16 +37,17 @@ func TestVersionedTypedReadsGetFenceThenObserveAndMapDrift(t *testing.T) {
 				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/resources/"+kind+"/fixture"):
 					assertProviderExactQuery(t, r, form)
 					w.Header().Set("ETag", `"7"`)
-					_ = json.NewEncoder(w).Encode(providerObservedResource(kind, form, ""))
+					_ = json.NewEncoder(w).Encode(providerObservedResource(kind, form, "7"))
 				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/resources/"+kind+"/fixture/observe"):
 					assertProviderExactQuery(t, r, form)
 					if r.Header.Get("If-Match") != `"7"` {
 						t.Errorf("If-Match = %q, want quoted generation 7", r.Header.Get("If-Match"))
 					}
 					w.Header().Set("ETag", `"7"`)
+					resource := providerObservedResource(kind, form, "7")
+					resource.Status.Observed["driftedFields"] = []any{"/name"}
 					_ = json.NewEncoder(w).Encode(map[string]any{
-						"resource":    providerObservedResource(kind, form, "7"),
-						"observation": map[string]any{"status": "drifted", "summary": "native object drifted"},
+						"resource": resource,
 					})
 				default:
 					http.NotFound(w, r)
@@ -57,9 +59,12 @@ func TestVersionedTypedReadsGetFenceThenObserveAndMapDrift(t *testing.T) {
 			if _, err := formClient.Discover(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			observed, err := observeResourceForRead(context.Background(), formClient, kind, "fixture", "prod", form)
+			observed, currentSpec, err := observeResourceForRead(context.Background(), formClient, kind, "fixture", "prod", form)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if currentSpec["name"] != "fixture" {
+				t.Fatalf("current desired spec = %#v, want fixture identity", currentSpec)
 			}
 			assertTypedDriftState(t, kind, observed, "drifted")
 			if len(requests) != 3 || !strings.Contains(requests[1], "/fixture") || !strings.HasSuffix(requests[2], "/fixture/observe") {
@@ -81,19 +86,61 @@ func TestVersionedTypedReadsStopOnExactGet404(t *testing.T) {
 					writeProviderDiscovery(t, w, server.URL)
 					return
 				}
-				http.NotFound(w, r)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error":{"code":"resource_not_found","message":"missing","requestId":"req-missing","retryable":false}}`))
 			}))
 			defer server.Close()
 			formClient := client.New(server.URL, "", server.Client())
 			if _, err := formClient.Discover(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			_, err := observeResourceForRead(context.Background(), formClient, kind, "fixture", "prod", providerCandidateForms()[kind])
+			_, _, err := observeResourceForRead(context.Background(), formClient, kind, "fixture", "prod", providerCandidateForms()[kind])
 			if !errors.Is(err, client.ErrNotFound) {
 				t.Fatalf("error = %v, want ErrNotFound", err)
 			}
 			if requests != 2 {
 				t.Fatalf("requests = %d, want discovery plus exact GET only", requests)
+			}
+		})
+	}
+}
+
+func TestVersionedTypedReadsRejectObserveAtAnotherGeneration(t *testing.T) {
+	for _, kind := range typedResourceKinds() {
+		kind := kind
+		t.Run(kind, func(t *testing.T) {
+			form := providerCandidateForms()[kind]
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.URL.Path == "/.well-known/takoform":
+					writeProviderDiscovery(t, w, server.URL)
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/resources/"+kind+"/fixture"):
+					w.Header().Set("ETag", `"7"`)
+					_ = json.NewEncoder(w).Encode(providerObservedResource(kind, form, "7"))
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/resources/"+kind+"/fixture/observe"):
+					if got := r.Header.Get("If-Match"); got != `"7"` {
+						t.Errorf("If-Match = %q, want quoted generation 7", got)
+					}
+					w.Header().Set("ETag", `"8"`)
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"resource": providerObservedResource(kind, form, "8"),
+					})
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+
+			formClient := client.New(server.URL, "", server.Client())
+			if _, err := formClient.Discover(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			_, _, err := observeResourceForRead(context.Background(), formClient, kind, "fixture", "prod", form)
+			if err == nil || !strings.Contains(err.Error(), "generation protected by If-Match") {
+				t.Fatalf("error = %v, want generation-fence rejection", err)
 			}
 		})
 	}
@@ -106,12 +153,38 @@ func typedResourceKinds() []string {
 }
 
 func providerObservedResource(kind string, form client.InstalledFormReference, version string) client.Resource {
+	generation, err := strconv.ParseInt(version, 10, 64)
+	if err != nil {
+		panic("provider test has invalid resourceVersion " + version)
+	}
+	status := providerPortableStatus(kind, "fixture", generation)
+	declared, ok := formcatalog.ByKind(kind)
+	if !ok {
+		panic("provider test has no Form declaration for " + kind)
+	}
+	spec := declared.CanonicalDesired()
+	spec["name"] = "fixture"
 	return client.Resource{
 		APIVersion: client.APIVersion, Kind: kind, Form: &form,
 		Metadata: client.Metadata{Name: "fixture", Space: "prod", ResourceVersion: version},
-		Spec:     map[string]any{"name": "fixture"},
-		Status:   &client.Status{Portability: "portable", Outputs: map[string]any{"reference": "fixture-output"}},
+		Spec:     spec,
+		Status:   status,
 	}
+}
+
+func providerPortableStatus(kindName, name string, generation int64) *client.Status {
+	kind, ok := formcatalog.ByKind(kindName)
+	if !ok {
+		panic("provider test has no Form declaration for " + kindName)
+	}
+	observed := kind.CanonicalObserved()
+	output := kind.CanonicalOutput()
+	observed["id"] = kindName + "/" + name
+	output["id"] = kindName + "/" + name
+	output["name"] = name
+	observed["generation"] = generation
+	output["generation"] = generation
+	return &client.Status{Observed: observed, Output: output}
 }
 
 func assertTypedDriftState(t *testing.T, kind string, observed *client.Resource, want string) {
@@ -125,7 +198,16 @@ func assertTypedDriftState(t *testing.T, kind string, observed *client.Resource,
 	resource.Schema(context.Background(), frameworkresource.SchemaRequest{}, &response)
 	state := tfsdk.State{Schema: response.Schema, Raw: tftypes.NewValue(response.Schema.Type().TerraformType(context.Background()), nil)}
 	values := formValues{Fields: map[string]attr.Value{}, Artifact: nullArtifactSourceValues()}
-	if diags := resource.setState(context.Background(), &state, observed, "prod", values, true); diags.HasError() {
+	if diags := resource.setState(
+		context.Background(),
+		&state,
+		observed.Metadata.Name,
+		observed.Spec,
+		observed,
+		"prod",
+		values,
+		true,
+	); diags.HasError() {
 		t.Fatalf("status diagnostics: %v", diags)
 	}
 	var drift types.String

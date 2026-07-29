@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
@@ -86,7 +87,10 @@ func (p *takoformProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 			},
 			"space": schema.StringAttribute{
 				Optional: true,
-				Description: "Default Space for resources that do not set their own. " +
+				Validators: []validator.String{
+					StringSpaceID(),
+				},
+				Description: "Default opaque SpaceID for resources that do not set their own. The exact value is preserved. " +
 					"May also be set via the " + envSpace + " environment variable.",
 			},
 			"token": schema.StringAttribute{
@@ -115,6 +119,25 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 		)
 		return
 	}
+	if cfg.Token.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("token"),
+			"Unknown Takoform token",
+			"The token cannot be determined at configuration time. Set it to a static value "+
+				"or omit it to use the "+envToken+" environment variable.",
+		)
+	}
+	if cfg.Space.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("space"),
+			"Unknown Takoform space",
+			"The default Space cannot be determined at configuration time. Set it to a static value "+
+				"or omit it to use the "+envSpace+" environment variable.",
+		)
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	endpoint := firstNonEmpty(cfg.Endpoint.ValueString(), os.Getenv(envEndpoint))
 	if endpoint == "" {
 		resp.Diagnostics.AddAttributeError(
@@ -127,6 +150,16 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 
 	token := firstNonEmpty(cfg.Token.ValueString(), os.Getenv(envToken))
 	space := firstNonEmpty(cfg.Space.ValueString(), os.Getenv(envSpace))
+	if space != "" {
+		if err := client.ValidateSpaceID(space); err != nil {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("space"),
+				"Invalid Takoform SpaceID",
+				fmt.Sprintf("The configured default Space is invalid: %v", err),
+			)
+			return
+		}
+	}
 
 	httpClient := newResourceAPIHTTPClient()
 
@@ -157,11 +190,10 @@ func newResourceAPIHTTPClient() *http.Client {
 }
 
 func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resource {
-	resources := make([]func() resource.Resource, 0, len(formcatalog.Kinds)+1)
+	resources := make([]func() resource.Resource, 0, len(formcatalog.Kinds))
 	for _, kind := range formcatalog.Kinds {
 		resources = append(resources, NewFormResource(kind))
 	}
-	resources = append(resources, NewInterfaceResource)
 	return resources
 }
 

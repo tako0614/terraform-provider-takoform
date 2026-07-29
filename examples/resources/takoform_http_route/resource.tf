@@ -1,7 +1,8 @@
 terraform {
   required_providers {
     takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 1.0.0"
     }
   }
 }
@@ -12,9 +13,10 @@ provider "takoform" {
 }
 
 resource "takoform_http_route" "example" {
-  name        = "http-route"
-  hostname    = "api.portable-conformance.invalid"
-  path_prefix = "/"
+  name              = "http-route"
+  hostname          = "api.portable-conformance.invalid"
+  path_prefix       = "/"
+  strip_path_prefix = false
 
   connections = [
     {

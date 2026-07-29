@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "TlsCertificate",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:ad317fb03534f86efdef49cc092bf4ed5b660eeb8d65163a7feed71a117e5c27"
+    "schemaDigest": "sha256:741c20ed2f890016cd276bdc5886c3a1d3cb1bd9e04c5c6d506fccf10df03a43"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4554,
-      "digest": "sha256:a22b46c5464d87734bcf8926bf494baeaa1945c0670140f3327306cb687640e8"
+      "size": 5385,
+      "digest": "sha256:9e03b7b62121acd7b4b591deae4a4a76ef8ee9c156ef2c6a2611cc3a3d427982"
     },
     {
       "path": "fixtures/desired.json",
@@ -33,6 +33,24 @@
       "mediaType": "application/json",
       "size": 117,
       "digest": "sha256:97f6e2fa6f2c39a2ece364413d58d98783d8cef79a3fb5d4dec00bf274f4fdeb"
+    },
+    {
+      "path": "fixtures/negative-missing-domains.json",
+      "mediaType": "application/json",
+      "size": 64,
+      "digest": "sha256:b37dda711326a7db2be74c4054b21774dbfe4c483ad82bbed67a9b6747f8085b"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 90,
+      "digest": "sha256:5fc5044631b1360191c0df52f46ee3c938eb1dfb94cb9417c02373653bf40722"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 148,
+      "digest": "sha256:e5ed1feaf5f2b0f80319543a718c635bc87a3e8afc2da0138f6dad14179a6ad3"
     },
     {
       "path": "fixtures/observed.json",

@@ -9,6 +9,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/client"
 )
 
 // stringOneOfValidator validates that a configured string is one of a fixed
@@ -68,6 +70,32 @@ type stringPatternValidator struct {
 // host remains authoritative for capability availability.
 func StringMatches(pattern, description string) validator.String {
 	return stringPatternValidator{pattern: pattern, description: description}
+}
+
+type stringSpaceIDValidator struct{}
+
+// StringSpaceID returns the dedicated validator for the opaque portable Space
+// identity. It deliberately does not reuse the Resource PatternName grammar
+// and does not normalize configured values.
+func StringSpaceID() validator.String {
+	return stringSpaceIDValidator{}
+}
+
+func (stringSpaceIDValidator) Description(_ context.Context) string {
+	return "value must be a case-sensitive opaque SpaceID of 1..255 Unicode code points, with no leading or trailing whitespace, control characters, or slash"
+}
+
+func (v stringSpaceIDValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (stringSpaceIDValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if err := client.ValidateSpaceID(req.ConfigValue.ValueString()); err != nil {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid SpaceID", err.Error())
+	}
 }
 
 func (v stringPatternValidator) Description(_ context.Context) string {

@@ -80,22 +80,79 @@ func ValidateEvidenceBytes(raw []byte, report formpackage.VerificationReport, de
 		return AdmissionEvidence{}, fmt.Errorf("admission evidence security or Interface audit is incomplete")
 	}
 	positiveNames := namesOfPositive(evidence.Fixtures.Positive)
-	negativeNames := namesOfNegative(evidence.Fixtures.Negative)
-	if len(positiveNames) == 0 || len(negativeNames) == 0 || len(positiveNames) != len(evidence.Fixtures.Positive) || len(negativeNames) != len(evidence.Fixtures.Negative) {
+	if len(positiveNames) == 0 || len(evidence.Fixtures.Negative) == 0 || len(positiveNames) != len(evidence.Fixtures.Positive) {
 		return AdmissionEvidence{}, fmt.Errorf("admission evidence fixture closure is empty or duplicated")
+	}
+	hostNegativeNames, err := HostNegativeFixtureNames(evidence.Fixtures.Negative)
+	if err != nil {
+		return AdmissionEvidence{}, err
+	}
+	providerNegativeNames, err := ProviderNegativeFixtureNames(evidence.Fixtures.Negative)
+	if err != nil {
+		return AdmissionEvidence{}, err
+	}
+	if len(hostNegativeNames) == 0 || len(providerNegativeNames) == 0 {
+		return AdmissionEvidence{}, fmt.Errorf("admission evidence requires non-empty host and provider negative-fixture coverage")
 	}
 	for _, fixture := range evidence.Fixtures.Negative {
 		if !validPortableNegativeErrorCode(fixture.ExpectedErrorCode) {
 			return AdmissionEvidence{}, fmt.Errorf("negative fixture %q must use portable wire error code %q", fixture.Name, InvalidArgumentErrorCode)
 		}
 	}
-	if err := verifyProof("host", evidence.Conformance.Host, wantIdentity, positiveNames, negativeNames); err != nil {
+	if err := verifyProof("host", evidence.Conformance.Host, wantIdentity, positiveNames, hostNegativeNames); err != nil {
 		return AdmissionEvidence{}, err
 	}
-	if err := verifyProof("provider", evidence.Conformance.Provider, wantIdentity, positiveNames, negativeNames); err != nil {
+	if err := verifyProof("provider", evidence.Conformance.Provider, wantIdentity, positiveNames, providerNegativeNames); err != nil {
 		return AdmissionEvidence{}, err
 	}
 	return evidence, nil
+}
+
+// HostNegativeFixtureNames returns the exact negative-fixture closure a host
+// conformance proof must cover. Hosts validate desired Resource inputs; an
+// observed-stage rejection is provider state-projection evidence and is not
+// duplicated into the host proof.
+func HostNegativeFixtureNames(fixtures []NegativeFixture) ([]string, error) {
+	return negativeFixtureNamesForProof(fixtures, false)
+}
+
+// ProviderNegativeFixtureNames returns the exact negative-fixture closure a
+// provider conformance proof must cover. A provider must reject invalid desired
+// inputs and invalid observed state before projecting either into provider
+// state.
+func ProviderNegativeFixtureNames(fixtures []NegativeFixture) ([]string, error) {
+	return negativeFixtureNamesForProof(fixtures, true)
+}
+
+func negativeFixtureNamesForProof(fixtures []NegativeFixture, includeObserved bool) ([]string, error) {
+	names := make([]string, 0, len(fixtures))
+	seen := make(map[string]struct{}, len(fixtures))
+	for _, fixture := range fixtures {
+		if strings.TrimSpace(fixture.Name) == "" {
+			return nil, fmt.Errorf("negative fixture name must not be empty")
+		}
+		if _, duplicate := seen[fixture.Name]; duplicate {
+			return nil, fmt.Errorf("negative fixture %q is duplicated", fixture.Name)
+		}
+		seen[fixture.Name] = struct{}{}
+		switch fixture.Stage {
+		case "desired":
+			names = append(names, fixture.Name)
+		case "observed":
+			if includeObserved {
+				names = append(names, fixture.Name)
+			}
+		case "output":
+			// Form Package validation has an output-stage vocabulary, but
+			// standard admission defines no host or provider runner semantics
+			// that can prove this rejection. Fail closed instead of treating a
+			// structural package check as lifecycle evidence.
+			return nil, fmt.Errorf("negative fixture %q uses unsupported admission-proof stage %q", fixture.Name, fixture.Stage)
+		default:
+			return nil, fmt.Errorf("negative fixture %q uses unsupported admission-proof stage %q", fixture.Name, fixture.Stage)
+		}
+	}
+	return names, nil
 }
 
 func validPortableNegativeErrorCode(value string) bool {
@@ -133,14 +190,6 @@ func verifyProof(label string, proof ConformanceProof, identity InstalledFormRef
 }
 
 func namesOfPositive(fixtures []PositiveFixture) []string {
-	names := make([]string, 0, len(fixtures))
-	for _, fixture := range fixtures {
-		names = append(names, fixture.Name)
-	}
-	return names
-}
-
-func namesOfNegative(fixtures []NegativeFixture) []string {
 	names := make([]string, 0, len(fixtures))
 	for _, fixture := range fixtures {
 		names = append(names, fixture.Name)

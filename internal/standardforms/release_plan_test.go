@@ -64,3 +64,46 @@ func TestPlannedReleasesNeverCollideWithPublishedTags(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderReleasePlanUsesOwnerLocalPrepareThenPublish(t *testing.T) {
+	t.Parallel()
+	plan := ReleasePlan{
+		Generation: "portable-v1",
+		Releases: []PlannedFormRelease{{
+			Kind:          "ObjectBucket",
+			ReleaseID:     "k-j5rguzldorbhky3lmv2a",
+			Version:       "1.0.0",
+			Tag:           "forms/k-j5rguzldorbhky3lmv2a/v1.0.0",
+			SourcePath:    "forms/releases/k-j5rguzldorbhky3lmv2a/1.0.0",
+			PackageDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		}},
+	}
+	const expected = `portable-v1: 1 Form releases, each independent
+
+ObjectBucket                 forms/k-j5rguzldorbhky3lmv2a/v1.0.0
+  source forms/releases/k-j5rguzldorbhky3lmv2a/1.0.0
+  digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  prepare bun run deploy -- takoform-form-package-release prepare --tag forms/k-j5rguzldorbhky3lmv2a/v1.0.0 --expected-commit <current-protected-main-commit>
+
+Run each prepare while its planned tag and Release are absent. After its
+reviewed candidate run completes, publish through the same owner entrypoint:
+  bun run deploy -- takoform-form-package-release publish --tag <same-planned-tag> --expected-commit <same-40-character-reviewed-commit> --run-id <candidate-run-id> --run-attempt <candidate-run-attempt>
+Publish verifies the candidate, then create-only materializes the tag and
+immutable Release. Publication proves bytes only; admission still requires
+a conforming host's signed lifecycle report.
+`
+	rendered := renderReleasePlan(plan)
+	if rendered != expected {
+		t.Fatalf("release-plan owner flow drifted\n--- got ---\n%s--- want ---\n%s", rendered, expected)
+	}
+	for _, forbidden := range []string{
+		"workflow_dispatch",
+		"gh workflow",
+		"Dispatch the Release Form Package",
+		"after that exact tag exists",
+	} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("release-plan output retained tag-first/direct-dispatch wording %q", forbidden)
+		}
+	}
+}

@@ -2,12 +2,12 @@
 page_title: "takoform_feature_flag Resource - takoform"
 subcategory: "Service Forms"
 description: |-
-  Portable named runtime switch with an optional percentage rollout.
+  Portable named runtime switch expressed as one complete enabled percentage.
 ---
 
 # takoform_feature_flag
 
-Portable named runtime switch with an optional percentage rollout.
+Portable named runtime switch expressed as one complete enabled percentage.
 
 The configured host selects and operates the concrete backend. This resource
 carries desired state only: it never names a target, a credential, a price, or
@@ -17,16 +17,18 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 
 - `name` (String, required, forces replacement) — Resource name.
 - `flag_key` (String, required, forces replacement) — Stable key applications evaluate. Changing it replaces the flag.
-- `enabled` (Bool, required) — Whether the flag evaluates true by default.
-- `rollout_percentage` (Number, optional) — Optional share of evaluations that receive the enabled value. Between 0 and 100.
+- `enabled_percentage` (Number, required) — Share of stable evaluation subjects receiving true; 0 is always false and 100 is always true. Between 0 and 100.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
 ## Read-only attributes
 
-`id`, `resource_version`, `drift_status`, `portability`, and `outputs` report
-the canonical resource identity, its generation fence, the native observation
-result, and sanitized public host results. Backend placement is never provider
-state.
+`form_api_version`, `form_kind`, `form_definition_version`, `form_schema_digest`, and
+`form_package_digest` bind state to the exact immutable Form identity.
+`id` is the provider-synthesized `Kind/name` identity and `resource_version` is
+the host generation fence. `drift_status`, `portability`, and `outputs` are written
+only after the host's observed and output documents satisfy this exact Form's
+closed schemas, identities, and generation. Undeclared host keys are rejected;
+backend placement is never provider state.
 
 ## Declared runtime interfaces
 

@@ -1,4 +1,6 @@
 {
+  "action": "expire",
+  "afterDays": 90,
   "connections": {
     "store": {
       "permissions": [
@@ -8,7 +10,6 @@
       "resource": "ObjectBucket/object-bucket"
     }
   },
-  "expireAfterDays": 90,
   "name": "object-lifecycle-rule",
   "prefix": "logs/"
 }

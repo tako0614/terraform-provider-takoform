@@ -22,8 +22,8 @@ var semverPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1
 // Forms carry independent versions, so there is no single set version to
 // release them under: each Form is released on its own tag, from its own
 // reviewed release source, and is published or not published independently of
-// every other Form. This plan is what an operator dispatches from; it exists
-// so nobody has to hand-derive a release identifier or guess a version.
+// every other Form. The owner-local deploy entrypoint consumes this plan; it
+// exists so nobody has to hand-derive a release identifier or guess a version.
 type ReleasePlan struct {
 	Format     string               `json:"format"`
 	Generation string               `json:"generation"`
@@ -136,7 +136,7 @@ func RetiredReleaseTags() []string {
 	return tags
 }
 
-// RenderReleasePlan prints the dispatch list an operator works from.
+// RenderReleasePlan prints owner-local prepare invocations for the exact plan.
 func RenderReleasePlan(root string) (string, error) {
 	if err := VerifyReleasePlan(root); err != nil {
 		return "", err
@@ -145,14 +145,24 @@ func RenderReleasePlan(root string) (string, error) {
 	if err := readJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), &plan); err != nil {
 		return "", err
 	}
+	return renderReleasePlan(plan), nil
+}
+
+func renderReleasePlan(plan ReleasePlan) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "%s: %d Form releases, each independent\n\n", plan.Generation, len(plan.Releases))
 	for _, release := range plan.Releases {
-		fmt.Fprintf(&builder, "%-28s %s\n  source %s\n  digest %s\n",
-			release.Kind, release.Tag, release.SourcePath, release.PackageDigest)
+		fmt.Fprintf(
+			&builder,
+			"%-28s %s\n  source %s\n  digest %s\n  prepare bun run deploy -- takoform-form-package-release prepare --tag %s --expected-commit <current-protected-main-commit>\n",
+			release.Kind, release.Tag, release.SourcePath, release.PackageDigest, release.Tag,
+		)
 	}
-	builder.WriteString("\nDispatch the Release Form Package workflow once per tag, after that exact\n" +
-		"tag exists on the reviewed commit. Publishing proves bytes only: admission\n" +
-		"still requires a conforming host's signed lifecycle report.\n")
-	return builder.String(), nil
+	builder.WriteString("\nRun each prepare while its planned tag and Release are absent. After its\n" +
+		"reviewed candidate run completes, publish through the same owner entrypoint:\n" +
+		"  bun run deploy -- takoform-form-package-release publish --tag <same-planned-tag> --expected-commit <same-40-character-reviewed-commit> --run-id <candidate-run-id> --run-attempt <candidate-run-attempt>\n" +
+		"Publish verifies the candidate, then create-only materializes the tag and\n" +
+		"immutable Release. Publication proves bytes only; admission still requires\n" +
+		"a conforming host's signed lifecycle report.\n")
+	return builder.String()
 }

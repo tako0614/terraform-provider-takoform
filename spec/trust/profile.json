@@ -13,7 +13,54 @@
     "provenance": {
       "envelope": "in-toto-statement-v1",
       "predicate": "slsa-provenance-v1",
-      "attestation": "github-artifact-attestation"
+      "canonicalization": "RFC8785",
+      "payloadSubjects": {
+        "count": 13,
+        "fields": [
+          "name",
+          "digest.sha256",
+          "annotations.size"
+        ],
+        "included": [
+          "terraform-provider-takoform_<version>_darwin_amd64.zip",
+          "terraform-provider-takoform_<version>_darwin_arm64.zip",
+          "terraform-provider-takoform_<version>_linux_amd64.zip",
+          "terraform-provider-takoform_<version>_linux_arm64.zip",
+          "terraform-provider-takoform_<version>_windows_amd64.zip",
+          "terraform-provider-takoform_<version>_darwin_amd64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_darwin_arm64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_linux_amd64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_linux_arm64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_windows_amd64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_manifest.json",
+          "terraform-provider-takoform_<version>_SHA256SUMS",
+          "terraform-provider-takoform_<version>_SHA256SUMS.sig"
+        ],
+        "excluded": [
+          "terraform-provider-takoform_<version>_provenance.intoto.json",
+          "terraform-provider-takoform_<version>_provenance.intoto.json.sig"
+        ],
+        "derivation": "public-inventory-minus-provenance-and-signature"
+      },
+      "buildBindings": [
+        "buildDefinition.externalParameters.tag",
+        "buildDefinition.externalParameters.requestId",
+        "buildDefinition.internalParameters.sourceCommit",
+        "buildDefinition.internalParameters.toolingCommit",
+        "buildDefinition.internalParameters.workflow.path",
+        "buildDefinition.internalParameters.workflow.ref",
+        "buildDefinition.internalParameters.run.id",
+        "buildDefinition.internalParameters.run.attempt",
+        "buildDefinition.internalParameters.tagObject.oid",
+        "buildDefinition.internalParameters.tagObject.sha256",
+        "runDetails.metadata.invocationId"
+      ],
+      "signature": {
+        "format": "openpgp-detached-binary",
+        "signedAsset": "terraform-provider-takoform_<version>_provenance.intoto.json",
+        "fingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709"
+      },
+      "publicInventoryAssetCount": 15
     },
     "distribution": {
       "source": "github-release",

@@ -183,21 +183,9 @@ func runVerifyProviderReports(args []string) {
 }
 
 func runMatrix(command string, args []string) {
-	openTofuPath := "tofu"
-	terraformPath := "terraform"
-	for len(args) > 0 {
-		if len(args) < 2 {
-			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance [matrix|render-matrix|registry-matrix|render-registry-matrix] [--opentofu PATH] [--terraform PATH]"))
-		}
-		switch args[0] {
-		case "--opentofu":
-			openTofuPath = args[1]
-		case "--terraform":
-			terraformPath = args[1]
-		default:
-			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance [matrix|render-matrix|registry-matrix|render-registry-matrix] [--opentofu PATH] [--terraform PATH]"))
-		}
-		args = args[2:]
+	openTofuPath, terraformPath, providerBinaryPath, err := parseMatrixArgs(command, args)
+	if err != nil {
+		fail(err)
 	}
 	root, err := providerlifecycle.RepoRoot(".")
 	if err != nil {
@@ -207,6 +195,8 @@ func runMatrix(command string, args []string) {
 	var report providerlifecycle.MatrixReport
 	if registry {
 		report, err = providerlifecycle.RunRegistryMatrix(context.Background(), root, openTofuPath, terraformPath)
+	} else if providerBinaryPath != "" {
+		report, err = providerlifecycle.RunMatrixWithProviderBinary(context.Background(), root, openTofuPath, terraformPath, providerBinaryPath)
 	} else {
 		report, err = providerlifecycle.RunMatrix(context.Background(), root, openTofuPath, terraformPath)
 	}
@@ -226,6 +216,33 @@ func runMatrix(command string, args []string) {
 		mode = "direct Registry install/readback"
 	}
 	fmt.Printf("verified non-publishable supported CLI/FQN candidate matrix (%s): %d CLIs, %d exact typed resources\n", mode, len(report.Reports), len(report.Reports[0].Resources))
+}
+
+func parseMatrixArgs(command string, args []string) (string, string, string, error) {
+	const usage = "usage: go run ./cmd/provider-lifecycle-conformance [matrix|render-matrix|registry-matrix|render-registry-matrix] [--opentofu PATH] [--terraform PATH] [--provider-binary PATH]"
+	openTofuPath := "tofu"
+	terraformPath := "terraform"
+	providerBinaryPath := ""
+	for len(args) > 0 {
+		if len(args) < 2 {
+			return "", "", "", fmt.Errorf("%s", usage)
+		}
+		switch args[0] {
+		case "--opentofu":
+			openTofuPath = args[1]
+		case "--terraform":
+			terraformPath = args[1]
+		case "--provider-binary":
+			providerBinaryPath = args[1]
+		default:
+			return "", "", "", fmt.Errorf("%s", usage)
+		}
+		args = args[2:]
+	}
+	if providerBinaryPath != "" && (command == "registry-matrix" || command == "render-registry-matrix") {
+		return "", "", "", fmt.Errorf("--provider-binary is only valid for matrix and render-matrix")
+	}
+	return openTofuPath, terraformPath, providerBinaryPath, nil
 }
 
 func fail(err error) {

@@ -1,0 +1,14 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "entrypoint": "not a token",
+  "initialBackoffSeconds": 5,
+  "maxAttempts": 3,
+  "name": "workflow",
+  "source": {
+    "artifactMediaType": "text/javascript",
+    "artifactSha256": "8712e09089276b497669472eddc0aa425c6fa2bf766037f7351690a3517d5ac5",
+    "artifactUrl": "https://artifacts.portable-conformance.invalid/workflow.mjs"
+  }
+}

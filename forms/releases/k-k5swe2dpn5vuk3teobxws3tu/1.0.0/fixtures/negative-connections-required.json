@@ -1,0 +1,8 @@
+{
+  "allowedMethods": [
+    "POST"
+  ],
+  "connections": {},
+  "name": "webhook-endpoint",
+  "path": "/hooks"
+}

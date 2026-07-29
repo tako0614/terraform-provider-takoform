@@ -7,9 +7,241 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+const (
+	testObjectBucketKind = "ObjectBucket"
+	testQueueKind        = "Queue"
+)
+
+func TestPortableWireModelContainsOnlyPortableFields(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		typ  reflect.Type
+		want string
+	}{
+		{name: "discovery", typ: reflect.TypeOf(Discovery{}), want: "api_versions,features,endpoints"},
+		{name: "metadata", typ: reflect.TypeOf(Metadata{}), want: "name,space,resourceVersion"},
+		{name: "status", typ: reflect.TypeOf(Status{}), want: "observed,output"},
+		{name: "resource", typ: reflect.TypeOf(Resource{}), want: "apiVersion,kind,form,metadata,spec,status"},
+		{name: "preview", typ: reflect.TypeOf(PreviewResourceResult{}), want: "resource,review"},
+		{name: "preview review", typ: reflect.TypeOf(PreviewReview{}), want: "planDigest,specDigest"},
+		{name: "interface projection", typ: reflect.TypeOf(DeclaredInterface{}), want: "name,version,resource,document,values,resourceUri,form"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fields := make([]string, 0, test.typ.NumField())
+			for index := 0; index < test.typ.NumField(); index++ {
+				name := strings.Split(test.typ.Field(index).Tag.Get("json"), ",")[0]
+				if name != "" && name != "-" {
+					fields = append(fields, name)
+				}
+			}
+			if got := strings.Join(fields, ","); got != test.want {
+				t.Fatalf("JSON fields = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestPortableWireDecoderRejectsUnknownFieldsAndTrailingValues(t *testing.T) {
+	for _, raw := range []string{
+		`{"name":"assets","space":"prod","selectedTarget":"private-host"}`,
+		`{"name":"assets","space":"prod"} {"name":"other","space":"prod"}`,
+	} {
+		var metadata Metadata
+		if err := decodeStrictJSON([]byte(raw), &metadata); err == nil {
+			t.Fatalf("decodeStrictJSON(%s) unexpectedly accepted a non-closed envelope", raw)
+		}
+	}
+}
+
+func TestPortableWireRejectsUndeclaredSuccessStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer server.Close()
+
+	var response map[string]any
+	err := New(server.URL, "", server.Client()).doJSON(
+		context.Background(),
+		http.MethodGet,
+		server.URL,
+		nil,
+		&response,
+	)
+	if err == nil || !strings.Contains(err.Error(), "unexpected success status 201") {
+		t.Fatalf("unexpected status error = %v", err)
+	}
+}
+
+func TestErrorEnvelopeAcquiresStableSemanticsOnlyForExactProtocolTuple(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		status    int
+		raw       string
+		wantCode  string
+		wantRetry bool
+	}{
+		{
+			name:     "resource not found",
+			status:   http.StatusNotFound,
+			raw:      `{"error":{"code":"resource_not_found","message":"missing","requestId":"req-1","retryable":false}}`,
+			wantCode: "resource_not_found",
+		},
+		{
+			name:      "backend unavailable",
+			status:    http.StatusServiceUnavailable,
+			raw:       `{"error":{"code":"backend_unavailable","message":"retry","requestId":"req-2","retryable":true}}`,
+			wantCode:  "backend_unavailable",
+			wantRetry: true,
+		},
+		{
+			name:   "unknown field",
+			status: http.StatusNotFound,
+			raw:    `{"error":{"code":"resource_not_found","message":"missing","requestId":"req-1","retryable":false,"selectedTarget":"private"}}`,
+		},
+		{
+			name:   "duplicate error code",
+			status: http.StatusNotFound,
+			raw:    `{"error":{"code":"resource_not_found","code":"resource_not_found","message":"missing","requestId":"req-1","retryable":false}}`,
+		},
+		{
+			name:   "missing request ID",
+			status: http.StatusNotFound,
+			raw:    `{"error":{"code":"resource_not_found","message":"missing","retryable":false}}`,
+		},
+		{
+			name:   "missing retryable",
+			status: http.StatusNotFound,
+			raw:    `{"error":{"code":"resource_not_found","message":"missing","requestId":"req-1"}}`,
+		},
+		{
+			name:   "unknown code",
+			status: http.StatusNotImplemented,
+			raw:    `{"error":{"code":"not_implemented","message":"unknown","requestId":"req-3","retryable":false}}`,
+		},
+		{
+			name:   "stable code with wrong status",
+			status: http.StatusInternalServerError,
+			raw:    `{"error":{"code":"resource_not_found","message":"missing","requestId":"req-4","retryable":false}}`,
+		},
+		{
+			name:   "non-retryable code claims retryable",
+			status: http.StatusBadRequest,
+			raw:    `{"error":{"code":"invalid_argument","message":"bad","requestId":"req-5","retryable":true}}`,
+		},
+		{
+			name:   "retryable code with wrong status",
+			status: http.StatusConflict,
+			raw:    `{"error":{"code":"backend_unavailable","message":"retry","requestId":"req-6","retryable":true}}`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			apiErr := parseAPIError(test.status, []byte(test.raw))
+			if apiErr.Code != test.wantCode ||
+				apiErr.Retryable != test.wantRetry ||
+				apiErr.ProtocolInvalid != (test.wantCode == "") {
+				t.Fatalf("parseAPIError() = %#v", apiErr)
+			}
+			if test.wantCode == "" && (isResourceNotFound(apiErr) || isPortableRetryable(apiErr)) {
+				t.Fatalf("protocol-invalid envelope acquired stable semantics: %#v", apiErr)
+			}
+		})
+	}
+}
+
+func TestDiscoveryOriginAndOIDCIssuerNormalization(t *testing.T) {
+	parse := func(raw string) *url.URL {
+		t.Helper()
+		parsed, err := url.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return parsed
+	}
+	if !sameOrigin(parse("https://example.test"), parse("https://EXAMPLE.test:443")) {
+		t.Fatal("default HTTPS port should identify the same origin")
+	}
+	if !sameOrigin(parse("http://localhost"), parse("http://LOCALHOST:80")) {
+		t.Fatal("default HTTP port should identify the same origin")
+	}
+	if sameOrigin(parse("https://example.test"), parse("https://example.test:8443")) {
+		t.Fatal("different effective ports must identify different origins")
+	}
+
+	for _, raw := range []string{
+		"http://issuer.example.test",
+		"https://user@issuer.example.test",
+		"https://issuer.example.test?tenant=prod",
+		"https://issuer.example.test#fragment",
+	} {
+		if err := validateOIDCIssuer(raw); err == nil {
+			t.Fatalf("validateOIDCIssuer(%q) unexpectedly passed", raw)
+		}
+	}
+	if err := validateOIDCIssuer("https://issuer.example.test/takoform"); err != nil {
+		t.Fatalf("valid OIDC issuer: %v", err)
+	}
+}
+
+func TestPreviewResultBindsExactRequestedSpecAndFence(t *testing.T) {
+	request := Resource{
+		APIVersion: APIVersion,
+		Kind:       testObjectBucketKind,
+		Form:       &exactObjectBucketFixture,
+		Metadata: Metadata{
+			Name:            "assets",
+			Space:           "prod",
+			ResourceVersion: "7",
+		},
+		Spec: map[string]any{"name": "assets", "storageClass": "standard"},
+	}
+	specDigest, err := canonicalValueDigest(request.Spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := PreviewResourceResult{
+		Resource: request,
+		Review: PreviewReview{
+			PlanDigest: "sha256:" + strings.Repeat("a", 64),
+			SpecDigest: specDigest,
+		},
+	}
+	if err := validatePreviewResult(&request, &valid); err != nil {
+		t.Fatalf("valid preview: %v", err)
+	}
+
+	for name, mutate := range map[string]func(*PreviewResourceResult){
+		"generation": func(result *PreviewResourceResult) {
+			result.Resource.Metadata.ResourceVersion = "8"
+		},
+		"status": func(result *PreviewResourceResult) {
+			result.Resource.Status = &Status{Observed: map[string]any{}}
+		},
+		"spec": func(result *PreviewResourceResult) {
+			result.Resource.Spec = map[string]any{"name": "other", "storageClass": "standard"}
+		},
+		"spec digest": func(result *PreviewResourceResult) {
+			result.Review.SpecDigest = "sha256:" + strings.Repeat("b", 64)
+		},
+		"plan digest": func(result *PreviewResourceResult) {
+			result.Review.PlanDigest = "not-a-digest"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			mutate(&candidate)
+			if err := validatePreviewResult(&request, &candidate); err == nil {
+				t.Fatal("tampered preview unexpectedly passed")
+			}
+		})
+	}
+}
 
 func discoveryBody(serviceForms bool, origin string) string {
 	body := map[string]any{
@@ -24,7 +256,7 @@ func discoveryBody(serviceForms bool, origin string) string {
 		"endpoints": map[string]string{
 			"api":         origin + "/apis/forms.takoform.com/v1alpha1",
 			"forms":       origin + "/apis/forms.takoform.com/v1alpha1/forms",
-			"oidc_issuer": origin,
+			"oidc_issuer": "https://issuer.example.test/takoform",
 		},
 	}
 	raw, _ := json.Marshal(body)
@@ -105,7 +337,7 @@ func TestErrorEnvelope(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusBadRequest)
 		// Nested error envelope: the "error" field is an object.
-		_, _ = io.WriteString(w, `{"error":{"code":"invalid_argument","message":"interfaces must not be empty","requestId":"req-42","details":{"field":"interfaces"}}}`)
+		_, _ = io.WriteString(w, `{"error":{"code":"invalid_argument","message":"interfaces must not be empty","requestId":"req-42","retryable":false,"details":{"field":"interfaces"}}}`)
 	}))
 	defer srv.Close()
 
@@ -113,7 +345,7 @@ func TestErrorEnvelope(t *testing.T) {
 	if _, err := c.Discover(context.Background()); err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
-	_, err := c.GetResource(context.Background(), KindObjectBucket, "assets", "prod", exactObjectBucketFixture)
+	_, err := c.GetResource(context.Background(), testObjectBucketKind, "assets", "prod", exactObjectBucketFixture)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -145,5 +377,85 @@ func TestNewTrimsTrailingSlash(t *testing.T) {
 	c := New("https://takoform.example.com/", "", nil)
 	if c.Endpoint() != "https://takoform.example.com" {
 		t.Fatalf("expected trailing slash trimmed, got %q", c.Endpoint())
+	}
+}
+
+func TestAdvertisedEndpointsCompareEffectiveOrigins(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		configured string
+		advertised string
+		wantError  bool
+	}{
+		{
+			name:       "implicit and explicit HTTPS default port",
+			configured: "https://forms.example.test",
+			advertised: "https://forms.example.test:443/apis/forms.takoform.com/v1alpha1",
+		},
+		{
+			name:       "explicit and implicit HTTPS default port",
+			configured: "https://forms.example.test:443",
+			advertised: "https://forms.example.test/apis/forms.takoform.com/v1alpha1",
+		},
+		{
+			name:       "implicit and explicit loopback HTTP default port",
+			configured: "http://localhost",
+			advertised: "http://localhost:80/apis/forms.takoform.com/v1alpha1",
+		},
+		{
+			name:       "changed port",
+			configured: "https://forms.example.test",
+			advertised: "https://forms.example.test:444/apis/forms.takoform.com/v1alpha1",
+			wantError:  true,
+		},
+		{
+			name:       "changed host",
+			configured: "https://forms.example.test",
+			advertised: "https://other.example.test/apis/forms.takoform.com/v1alpha1",
+			wantError:  true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := New(test.configured, "", nil)
+			_, err := c.validAdvertisedEndpoint(test.advertised)
+			if (err != nil) != test.wantError {
+				t.Fatalf("validAdvertisedEndpoint() error = %v, wantError = %v", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestDiscoveryValidatesOptionalOIDCIssuer(t *testing.T) {
+	base := Discovery{
+		APIVersions: []string{APIVersion},
+		Features: map[string]bool{
+			"service_forms": true, "exact_form_ref": true,
+			"optimistic_concurrency": true, "idempotent_lifecycle": true,
+		},
+		Endpoints: Endpoints{API: "https://forms.example.test/apis/forms.takoform.com/v1alpha1"},
+	}
+	for _, test := range []struct {
+		name      string
+		issuer    string
+		wantError bool
+	}{
+		{name: "omitted"},
+		{name: "cross-origin HTTPS path", issuer: "https://accounts.example.test/realms/takoform"},
+		{name: "HTTPS non-default port", issuer: "https://accounts.example.test:8443/issuer"},
+		{name: "relative", issuer: "/issuer", wantError: true},
+		{name: "HTTP", issuer: "http://accounts.example.test/issuer", wantError: true},
+		{name: "userinfo", issuer: "https://user@accounts.example.test/issuer", wantError: true},
+		{name: "query", issuer: "https://accounts.example.test/issuer?tenant=one", wantError: true},
+		{name: "fragment", issuer: "https://accounts.example.test/issuer#metadata", wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			discovery := base
+			discovery.Endpoints.OIDCIssuer = test.issuer
+			c := New("https://forms.example.test", "", nil)
+			err := c.negotiateEndpoints(discovery)
+			if (err != nil) != test.wantError {
+				t.Fatalf("negotiateEndpoints() error = %v, wantError = %v", err, test.wantError)
+			}
+		})
 	}
 }

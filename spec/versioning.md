@@ -20,6 +20,18 @@ make an existing valid resource configuration invalid. Such a change requires
 provider `v2`. Compatible optional fields, new resource types, and bug fixes
 remain allowed within `v1`.
 
+The initial `v1.0.0` surface is exactly the 34 typed Form resources plus the
+read-only `takoform_interface` data source. The writable
+`takoform_interface` resource published in `v0.2.x` is intentionally outside
+that stable surface because Interface write authority belongs to the host.
+This is not the only v0.2.1 compatibility break: all 33 Form kinds common to
+v0.2.1 and v1.0.0 changed their exact FormRef/package identity, and
+`HttpService` was replaced by `EdgeWorker`. Provider v1 begins resource schema
+version `1`, records the exact Form identity in state, and gives version `0`
+only a diagnostic-only rejection handler with no transformed state or Resource
+lifecycle request. The explicit migration boundary is documented in
+[`../release/migrations/v0.2.1-to-v1.0.0.md`](../release/migrations/v0.2.1-to-v1.0.0.md).
+
 This promise applies only to the provider binary and its Terraform/OpenTofu
 surface. It does not graduate the portable API group, admit a Form as
 `portable-standard`, or make any host implementation stable.
@@ -35,10 +47,11 @@ coordinated merely to share a number:
   identity.
 
 In particular, `EdgeWorker@1.0.0` and `EdgeWorker@1.0.1` are already-published
-immutable identities. The rebuilt provider-neutral definition is therefore
-`EdgeWorker@2.0.0`, including when implemented by provider `v1.0.0`. Reusing
-`EdgeWorker@1.0.0` would make one public identity resolve to different bytes
-and is forbidden.
+immutable identities. The rebuilt provider-neutral line therefore did not
+reuse `EdgeWorker@1.0.0`. Its retained `2.0.0` release source also remains
+unmodified: the later credential-free artifact URL constraint narrows desired
+state and therefore starts `EdgeWorker@3.0.0`, including when implemented by
+provider `v1.0.0`.
 
 The decision is recorded in
 [`decisions/0001-provider-v1-keeps-form-versions-independent.md`](decisions/0001-provider-v1-keeps-form-versions-independent.md).
@@ -57,6 +70,27 @@ different bytes are therefore different Forms, whatever they are called.
   valid desired state MUST stay valid.
 - A **major** change MAY remove a field, tighten a constraint, or change
   meaning. It starts a new major line.
+
+The owner gate scans every published identity discoverable from retained
+package release manifests in admission snapshots, published-package sets, and
+local Form release tags. Before generation mutates the repository, it
+authenticates the retained
+signed package index, exact package digest, and payload byte closure against
+the corresponding `forms/releases` source. Candidates are built in temporary
+staging. If a candidate reuses a published `(kind, definitionVersion)`, it must
+be byte-for-byte identical to that retained source, and generation leaves the
+published directory untouched. A different title, observed/output schema,
+fixture, package-index representation, or any other package byte therefore
+requires a new Form/Package identity even when `desiredSchema` is unchanged.
+
+The SemVer compatibility check is additional to that no-overwrite gate. It
+compares patch `desiredSchema` values after RFC 8785 canonicalization and
+rejects any difference. For a minor, it must conservatively prove that the new
+schema accepts every desired document accepted by every earlier release in
+that major line. Optional fields on closed objects and directly provable
+constraint relaxations pass; conditional, recursive, or otherwise unsupported
+schema changes fail closed until the proof is strengthened or a major version
+is chosen.
 
 A published definition version MUST NOT be reshaped. A kind token whose earlier
 major line was published starts its rebuilt definition at the next major

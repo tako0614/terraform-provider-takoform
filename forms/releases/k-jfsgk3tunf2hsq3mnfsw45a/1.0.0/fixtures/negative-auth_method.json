@@ -1,8 +1,5 @@
 {
   "authMethod": "not-a-declared-choice",
-  "grantTypes": [
-    "authorization_code"
-  ],
   "name": "identity-client",
   "redirectUris": [
     "https://app.portable-conformance.invalid/callback"

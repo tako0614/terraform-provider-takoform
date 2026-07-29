@@ -1,0 +1,6 @@
+{
+  "cron": "0 3 * * *",
+  "name": "backup-policy",
+  "retentionDays": 14,
+  "timezone": "UTC"
+}

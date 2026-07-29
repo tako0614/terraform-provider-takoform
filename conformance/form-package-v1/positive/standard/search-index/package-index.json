@@ -6,15 +6,15 @@
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "SearchIndex",
     "definitionVersion": "1.0.0",
-    "schemaDigest": "sha256:a28d5201b9533410ffc9e5ffe3a99569c7292fda78e94dde1c7dd7e9643f17e4"
+    "schemaDigest": "sha256:12b7fcf22234eaf1556205dd63bd41ba24996d4266cf10950571db19fb7b0419"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4392,
-      "digest": "sha256:7ac2f6d8a183dcce0f4b7242a518eb05b28e81784160cbede807e0cc05db6722"
+      "size": 5209,
+      "digest": "sha256:5dbae96c5c0c18e27a9982f2214395b5f8e2b05087533320263a8a6970821a40"
     },
     {
       "path": "fixtures/desired.json",
@@ -33,6 +33,24 @@
       "mediaType": "application/json",
       "size": 101,
       "digest": "sha256:a4da0b6daa0c1ae5bd4321a28d09e46a1e4568245e10793b29939bfa7543bf04"
+    },
+    {
+      "path": "fixtures/negative-missing-fields.json",
+      "mediaType": "application/json",
+      "size": 49,
+      "digest": "sha256:5634adaacc0dde741e40c8f6420b85a5bd105f11ff2b1c41016cfe0b7f5666e9"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 66,
+      "digest": "sha256:aad256bbd093919d0c3539d483ee9fa8314dea2186d38d2dbdd125b7e7b22afd"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 145,
+      "digest": "sha256:62ad349ecd1bb58f7d5b902bc80da30fc064beea581f09cc4a582ef5e3554a7d"
     },
     {
       "path": "fixtures/observed.json",

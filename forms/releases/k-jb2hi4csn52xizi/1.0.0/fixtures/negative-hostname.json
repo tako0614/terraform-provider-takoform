@@ -10,5 +10,6 @@
   },
   "hostname": "not a hostname",
   "name": "http-route",
-  "pathPrefix": "/"
+  "pathPrefix": "/",
+  "stripPathPrefix": false
 }

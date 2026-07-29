@@ -98,12 +98,20 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 	workflow := string(raw)
 	for _, required := range []string{
 		"permissions: {}",
+		"request_id:",
+		"run-name: ${{ inputs.request_id }}",
+		`[[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`,
 		"ref: ${{ inputs.snapshot_commit }}",
 		"test \"$(git rev-parse HEAD^{tree})\" = \"${SNAPSHOT_TREE}\"",
 		"git merge-base --is-ancestor \"${SNAPSHOT_COMMIT}\" \"${current_main}\"",
 		"git rev-parse \"${SNAPSHOT_COMMIT}:${HOST_CANDIDATE_PATH}\"",
 		"git rev-parse \"${SNAPSHOT_COMMIT}:${PROVIDER_CANDIDATE_PATH}\"",
 		"git rev-parse \"${SNAPSHOT_COMMIT}:${REGISTRY_CANDIDATE_PATH}\"",
+		"test \"${HOST_CANDIDATE_PATH}\" = \"admission/v4/candidates/host-report-${ADMISSION_VERSION}-${HOST_SOURCE_COMMIT:0:12}-${HOST_TAKOFORM_SOURCE_COMMIT:0:12}\"",
+		"test \"${PROVIDER_CANDIDATE_PATH}\" = \"admission/v4/candidates/provider-report-${ADMISSION_VERSION}-${PROVIDER_SOURCE_COMMIT:0:12}\"",
+		"test \"${REGISTRY_CANDIDATE_PATH}\" = \"admission/v4/candidates/registry-readback-${ADMISSION_VERSION}-${PROVIDER_SOURCE_COMMIT:0:12}\"",
+		"jq -er '.version' admission/v4/version.json",
+		"jq -er '.tag' admission/v4/version.json",
 		"--trusted-root admission/v4/trust/trusted-root.json",
 		"--host-id \"${HOST_ID}\"",
 		"admission/v4/conforming-hosts.json",
@@ -112,9 +120,18 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 		"--host-source-commit \"${HOST_SOURCE_COMMIT}\"",
 		"--host-takoform-source-commit \"${HOST_TAKOFORM_SOURCE_COMMIT}\"",
 		"--provider-source-commit \"${PROVIDER_SOURCE_COMMIT}\"",
+		"--host-request-id \"${HOST_REQUEST_ID}\"",
 		"--host-run-id \"${HOST_RUN_ID}\"",
+		"--host-run-attempt \"${HOST_RUN_ATTEMPT}\"",
+		"--host-head-sha \"${HOST_HEAD_SHA}\"",
+		"--provider-request-id \"${PROVIDER_REQUEST_ID}\"",
 		"--provider-run-id \"${PROVIDER_RUN_ID}\"",
+		"--provider-run-attempt \"${PROVIDER_RUN_ATTEMPT}\"",
+		"--provider-head-sha \"${PROVIDER_HEAD_SHA}\"",
+		"--registry-request-id \"${REGISTRY_REQUEST_ID}\"",
 		"--registry-run-id \"${REGISTRY_RUN_ID}\"",
+		"--registry-run-attempt \"${REGISTRY_RUN_ATTEMPT}\"",
+		"--registry-head-sha \"${REGISTRY_HEAD_SHA}\"",
 		"environment: standard-admission-evidence",
 		"artifact-ids: ${{ needs.assemble.outputs.artifact_id }}",
 		"digest-mismatch: error",
@@ -152,13 +169,18 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 
 func TestBuildCurrentRequiresRegistryCandidateAndRunBinding(t *testing.T) {
 	validCommit := strings.Repeat("a", 40)
+	validRequestID := "01234567-89ab-4cde-8f01-23456789abcd"
 	options := CurrentBuildOptions{BuildOptions: BuildOptions{
 		SourceCommit: validCommit, HostSourceCommit: validCommit,
 		HostTakoformSourceCommit: validCommit, ProviderSourceCommit: validCommit,
 		HostWorkflowRunID: "1", ProviderWorkflowRunID: "2",
 		AdmissionVersion: "1.0.0", HostReports: "host", ProviderReports: "provider",
 		OutputDir: "output", HostID: "host",
-	}}
+	},
+		HostRequestID: validRequestID, HostWorkflowRunAttempt: "1", HostHeadSHA: validCommit,
+		ProviderRequestID: validRequestID, ProviderWorkflowRunAttempt: "1", ProviderHeadSHA: validCommit,
+		RegistryRequestID: validRequestID, RegistryWorkflowRunAttempt: "1", RegistryHeadSHA: validCommit,
+	}
 	if err := BuildCurrent(options); err == nil || !strings.Contains(err.Error(), "registry workflow run id") {
 		t.Fatalf("missing registry run binding error = %v", err)
 	}
@@ -216,6 +238,8 @@ func TestRegistryReadbackWorkflowUsesBothCLIsAndAnIsolatedSigner(t *testing.T) {
 		"admission-readback registry",
 		"takoform.provider-registry-readback-candidate@v1",
 		"takoform.provider-registry-readback-signed-candidate@v1",
+		"request_id:",
+		"requestId:process.env.REQUEST_ID",
 		"environment: provider-registry-readback",
 		"artifact-ids: ${{ needs.generate.outputs.artifact_id }}",
 		"digest-mismatch: error",
@@ -237,6 +261,23 @@ func TestRegistryReadbackWorkflowUsesBothCLIsAndAnIsolatedSigner(t *testing.T) {
 		strings.Contains(workflow, "gh release") ||
 		strings.Contains(workflow, "git push") {
 		t.Fatal("Registry evidence workflow gained publication authority")
+	}
+}
+
+func TestCurrentEvidenceRequestIDRequiresCanonicalUUIDv4(t *testing.T) {
+	t.Parallel()
+	if !canonicalUUIDv4Pattern.MatchString("01234567-89ab-4cde-8f01-23456789abcd") {
+		t.Fatal("canonical lowercase UUIDv4 was rejected")
+	}
+	for _, invalid := range []string{
+		"01234567-89ab-3cde-8f01-23456789abcd",
+		"01234567-89ab-4cde-7f01-23456789abcd",
+		"01234567-89AB-4CDE-8F01-23456789ABCD",
+		"req_latest",
+	} {
+		if canonicalUUIDv4Pattern.MatchString(invalid) {
+			t.Errorf("invalid request id %q was accepted", invalid)
+		}
 	}
 }
 

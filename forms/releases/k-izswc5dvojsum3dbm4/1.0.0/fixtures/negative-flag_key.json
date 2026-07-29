@@ -1,6 +1,5 @@
 {
-  "enabled": true,
+  "enabledPercentage": 25,
   "flagKey": "not a key",
-  "name": "feature-flag",
-  "rolloutPercentage": 25
+  "name": "feature-flag"
 }

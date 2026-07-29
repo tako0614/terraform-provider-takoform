@@ -23,9 +23,23 @@ type trustProfile struct {
 			Fingerprint string `json:"fingerprint"`
 		} `json:"signature"`
 		Provenance struct {
-			Envelope    string `json:"envelope"`
-			Predicate   string `json:"predicate"`
-			Attestation string `json:"attestation"`
+			Envelope         string `json:"envelope"`
+			Predicate        string `json:"predicate"`
+			Canonicalization string `json:"canonicalization"`
+			PayloadSubjects  struct {
+				Count      int      `json:"count"`
+				Fields     []string `json:"fields"`
+				Included   []string `json:"included"`
+				Excluded   []string `json:"excluded"`
+				Derivation string   `json:"derivation"`
+			} `json:"payloadSubjects"`
+			BuildBindings []string `json:"buildBindings"`
+			Signature     struct {
+				Format      string `json:"format"`
+				SignedAsset string `json:"signedAsset"`
+				Fingerprint string `json:"fingerprint"`
+			} `json:"signature"`
+			PublicInventoryAssetCount int `json:"publicInventoryAssetCount"`
 		} `json:"provenance"`
 		Distribution struct {
 			Source                   string `json:"source"`
@@ -164,9 +178,42 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		profile.Provider.Signature.Fingerprint != release.SigningFingerprint {
 		t.Fatalf("provider signing profile differs from release descriptor")
 	}
+	providerAssetBase := "terraform-provider-takoform_<version>_"
+	wantPayloadSubjects := make([]string, 0, len(release.Platforms)*2+3)
+	for _, platform := range release.Platforms {
+		wantPayloadSubjects = append(wantPayloadSubjects, providerAssetBase+platform+".zip")
+	}
+	for _, platform := range release.Platforms {
+		wantPayloadSubjects = append(wantPayloadSubjects, providerAssetBase+platform+".zip.spdx.json")
+	}
+	wantPayloadSubjects = append(wantPayloadSubjects,
+		providerAssetBase+"manifest.json",
+		providerAssetBase+"SHA256SUMS",
+		providerAssetBase+"SHA256SUMS.sig",
+	)
 	if profile.Provider.Provenance.Envelope != "in-toto-statement-v1" ||
 		profile.Provider.Provenance.Predicate != "slsa-provenance-v1" ||
-		profile.Provider.Provenance.Attestation != "github-artifact-attestation" {
+		profile.Provider.Provenance.Canonicalization != "RFC8785" ||
+		profile.Provider.Provenance.PayloadSubjects.Count != 13 ||
+		profile.Provider.Provenance.PayloadSubjects.Count != len(profile.Provider.Provenance.PayloadSubjects.Included) ||
+		strings.Join(profile.Provider.Provenance.PayloadSubjects.Fields, ",") !=
+			"name,digest.sha256,annotations.size" ||
+		strings.Join(profile.Provider.Provenance.PayloadSubjects.Included, ",") != strings.Join(wantPayloadSubjects, ",") ||
+		strings.Join(profile.Provider.Provenance.PayloadSubjects.Excluded, ",") !=
+			"terraform-provider-takoform_<version>_provenance.intoto.json,terraform-provider-takoform_<version>_provenance.intoto.json.sig" ||
+		profile.Provider.Provenance.PayloadSubjects.Derivation != "public-inventory-minus-provenance-and-signature" ||
+		strings.Join(profile.Provider.Provenance.BuildBindings, ",") !=
+			"buildDefinition.externalParameters.tag,buildDefinition.externalParameters.requestId,"+
+				"buildDefinition.internalParameters.sourceCommit,buildDefinition.internalParameters.toolingCommit,"+
+				"buildDefinition.internalParameters.workflow.path,buildDefinition.internalParameters.workflow.ref,"+
+				"buildDefinition.internalParameters.run.id,buildDefinition.internalParameters.run.attempt,"+
+				"buildDefinition.internalParameters.tagObject.oid,buildDefinition.internalParameters.tagObject.sha256,"+
+				"runDetails.metadata.invocationId" ||
+		profile.Provider.Provenance.Signature.Format != "openpgp-detached-binary" ||
+		profile.Provider.Provenance.Signature.SignedAsset != "terraform-provider-takoform_<version>_provenance.intoto.json" ||
+		profile.Provider.Provenance.Signature.Fingerprint != profile.Provider.Signature.Fingerprint ||
+		profile.Provider.Provenance.PublicInventoryAssetCount != 15 ||
+		profile.Provider.Provenance.PublicInventoryAssetCount != profile.Provider.Provenance.PayloadSubjects.Count+2 {
 		t.Fatalf("provider provenance profile is incomplete")
 	}
 	if profile.Provider.Distribution.Source != "github-release" ||
@@ -253,54 +300,486 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	}
 }
 
-func TestFormPackageWorkflowsRemainKeylessSeparatedAndCommitPinned(t *testing.T) {
+func TestReleaseWorkflowsOnlyPrepareChecksumClosedCandidates(t *testing.T) {
 	root := repositoryRoot(t)
+	workflows := []struct {
+		name         string
+		path         string
+		environment  string
+		artifact     string
+		signing      string
+		executionRef string
+		required     []string
+	}{
+		{
+			name:         "provider",
+			path:         ".github/workflows/release.yml",
+			environment:  "provider-release",
+			artifact:     "provider-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}",
+			signing:      "gpg --batch --local-user",
+			executionRef: `refs/tags/$RELEASE_TAG`,
+			required: []string{
+				"takoform.provider-release-candidate.v1",
+				`candidate="$RUNNER_TEMP/provider-release-candidate"`,
+				`cd "$candidate"`,
+				`test "$(wc -l < "$RUNNER_TEMP/candidate-assets.txt")" -eq 15`,
+				`test "$(jq -r '.assetCount' "$candidate/metadata.json")" -eq 15`,
+				`provenance="${base}_provenance.intoto.json"`,
+				`provenance_signature="${provenance}.sig"`,
+				`test "$(wc -l < SHA256SUMS)" -eq 16`,
+				"expected-candidate-root.txt",
+				"actual-candidate-root.txt",
+				`diff -u "$RUNNER_TEMP/expected-candidate-root.txt" "$RUNNER_TEMP/actual-candidate-root.txt"`,
+				`echo "path=$candidate" >> "$GITHUB_OUTPUT"`,
+				"path: ${{ steps.candidate.outputs.path }}",
+				"gpg --batch --verify",
+				"refusing overwrite",
+				"Build the second and final unsigned release inventory",
+				"Exercise the exact final linux amd64 provider bytes",
+				`--provider-binary "$binary"`,
+			},
+		},
+		{
+			name:         "Form Package",
+			path:         ".github/workflows/form-package-release.yml",
+			environment:  "form-package-release",
+			artifact:     "form-package-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}",
+			signing:      "cosign sign-blob",
+			executionRef: "refs/heads/main",
+			required: []string{
+				"id-token: write",
+				"takoform.form-package-release-candidate@v1",
+				`candidate="$RUNNER_TEMP/form-package-release-candidate"`,
+				`output="$candidate/assets"`,
+				`cd "$candidate"`,
+				"cosign sign-blob",
+				"cosign verify-blob",
+				"sha256sum metadata.json tag-object",
+				`test "$(wc -l < SHA256SUMS)" -eq 9`,
+				"path: ${{ runner.temp }}/form-package-release-candidate",
+				"refusing overwrite",
+			},
+		},
+		{
+			name:         "Form Package revocation",
+			path:         ".github/workflows/form-package-revocation.yml",
+			environment:  "form-package-release",
+			artifact:     "form-package-revocation-candidate-${{ github.run_id }}-${{ github.run_attempt }}",
+			signing:      "cosign sign-blob",
+			executionRef: "refs/heads/main",
+			required: []string{
+				"id-token: write",
+				"takoform.form-package-revocation-candidate@v1",
+				`candidate="$RUNNER_TEMP/form-package-revocation-candidate"`,
+				`cd "$candidate"`,
+				"cosign sign-blob",
+				"cosign verify-blob",
+				`(cd "$assets" && sha256sum --check --strict SHA256SUMS)`,
+				"tagObjectSha256",
+				`test "$(wc -l < SHA256SUMS)" -eq 8`,
+				"expected-candidate-root.txt",
+				"actual-candidate-root.txt",
+				`diff -u "$RUNNER_TEMP/expected-candidate-root.txt" "$RUNNER_TEMP/actual-candidate-root.txt"`,
+				`echo "path=$candidate" >> "$GITHUB_OUTPUT"`,
+				"path: ${{ steps.candidate.outputs.path }}",
+			},
+		},
+	}
+
+	for _, contract := range workflows {
+		t.Run(contract.name, func(t *testing.T) {
+			workflow := readText(t, filepath.Join(root, filepath.FromSlash(contract.path)))
+			common := []string{
+				"workflow_dispatch:",
+				"expected_commit:",
+				"contents: read",
+				"environment: " + contract.environment,
+				contract.executionRef,
+				"git merge-base --is-ancestor",
+				"SHA256SUMS",
+				"sha256sum --check --strict SHA256SUMS",
+				"metadata.json",
+				"actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+				"name: " + contract.artifact,
+				"if-no-files-found: error",
+				"retention-days: 1",
+			}
+			for _, required := range append(common, contract.required...) {
+				if !strings.Contains(workflow, required) {
+					t.Errorf("workflow lacks candidate-only contract marker %q", required)
+				}
+			}
+			signingJob := workflowJobContaining(t, workflow, contract.signing)
+			if !strings.Contains(signingJob, "environment: "+contract.environment) {
+				t.Errorf("job performing %q is not protected by environment %q", contract.signing, contract.environment)
+			}
+			assertWorkflowHasNoPublicationMutation(t, workflow)
+		})
+	}
+
 	packageWorkflow := readText(t, filepath.Join(root, ".github", "workflows", "form-package-release.yml"))
 	revocationWorkflow := readText(t, filepath.Join(root, ".github", "workflows", "form-package-revocation.yml"))
-	for name, workflow := range map[string]string{"package": packageWorkflow, "revocation": revocationWorkflow} {
-		for _, required := range []string{
-			"workflow_dispatch:",
-			"expected_commit:",
-			"id-token: write",
-			"attestations: write",
-			"environment: form-package-release",
-			"sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6",
-			"cosign sign-blob",
-			"cosign verify-blob",
-			"--certificate-oidc-issuer \"https://token.actions.githubusercontent.com\"",
-			"actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6",
-			"refusing overwrite",
-			"refs/heads/main",
-			"git merge-base --is-ancestor",
-			"path: release-source",
-			"--repo \"$GITHUB_WORKSPACE/release-source\"",
-			"steps.draft.outputs.release_id",
-		} {
-			if !strings.Contains(workflow, required) {
-				t.Fatalf("%s workflow lacks %q", name, required)
-			}
-		}
-		for _, forbidden := range []string{"push:", "GPG_PRIVATE_KEY", "PASSPHRASE", "gpg --", "cosign.key", "--key "} {
-			if strings.Contains(workflow, forbidden) {
-				t.Fatalf("%s workflow crosses the keyless/provider trust boundary with %q", name, forbidden)
-			}
-		}
-		cleanupMarker := "- name: Remove partial draft after failure"
-		cleanupIndex := strings.Index(workflow, cleanupMarker)
-		if cleanupIndex < 0 {
-			t.Fatalf("%s workflow has no failure cleanup", name)
-		}
-		cleanup := workflow[cleanupIndex:]
-		if !strings.Contains(cleanup, "RELEASE_ID: ${{ steps.draft.outputs.release_id }}") ||
-			!strings.Contains(cleanup, "releases/$RELEASE_ID") || strings.Contains(cleanup, "releases/tags/") ||
-			strings.Contains(cleanup, "gh release view") {
-			t.Fatalf("%s workflow cleanup can target a pre-existing release", name)
-		}
-	}
 	if !strings.Contains(packageWorkflow, `^forms/k-[a-z2-7]`) ||
 		!strings.Contains(revocationWorkflow, `^forms/revocations/`) {
 		t.Fatal("package and revocation tag namespaces are not disjoint")
 	}
+}
+
+func TestReleaseIdentityAbsenceProbesFailClosedOnTransportAndAmbiguousStatus(t *testing.T) {
+	root := repositoryRoot(t)
+	providerTag := readText(t, filepath.Join(root, ".github", "workflows", "provider-release-tag.yml"))
+	packageRelease := readText(t, filepath.Join(root, ".github", "workflows", "form-package-release.yml"))
+	revocation := readText(t, filepath.Join(root, ".github", "workflows", "form-package-revocation.yml"))
+	providerRelease := readText(t, filepath.Join(root, ".github", "workflows", "release.yml"))
+
+	for name, workflow := range map[string]string{
+		"provider tag":            providerTag,
+		"Form Package":            packageRelease,
+		"Form Package revocation": revocation,
+	} {
+		t.Run(name+" remote tag", func(t *testing.T) {
+			for _, required := range []string{
+				"if ! git ls-remote --tags origin",
+				`> "$remote_tag_refs"; then`,
+				`if [[ -s "$remote_tag_refs" ]]; then`,
+			} {
+				if !strings.Contains(workflow, required) {
+					t.Errorf("remote tag absence does not require successful exact-empty ls-remote output: missing %q", required)
+				}
+			}
+			if strings.Contains(workflow, `test -z "$(git ls-remote`) {
+				t.Fatal("remote tag absence treats an ls-remote transport failure as empty output")
+			}
+		})
+	}
+	if strings.Count(providerTag, "if ! git ls-remote --tags origin") != 2 {
+		t.Fatal("provider tag lane must prove remote absence before signing and re-prove it immediately before tag-object creation")
+	}
+
+	for name, workflow := range map[string]string{
+		"provider tag":            providerTag,
+		"provider release":        providerRelease,
+		"Form Package":            packageRelease,
+		"Form Package revocation": revocation,
+	} {
+		t.Run(name+" GitHub release", func(t *testing.T) {
+			for _, required := range []string{
+				`if ! github_repository_status="$(curl`,
+				`if [[ "$github_repository_status" != "200" ]]; then`,
+				`/releases?per_page=1`,
+				`type == "array"`,
+				`encoded_release_tag="$(jq -rn --arg tag "$RELEASE_TAG" '$tag | @uri')"`,
+				`if ! github_release_status="$(curl`,
+				`if [[ "$github_release_status" != "404" ]]; then`,
+				`"https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$encoded_release_tag"`,
+			} {
+				if !strings.Contains(workflow, required) {
+					t.Errorf("authenticated GitHub Release absence proof lacks %q", required)
+				}
+			}
+			for _, forbidden := range []string{
+				"if gh release view",
+				`grep -F "HTTP 404"`,
+				`/releases/tags/$RELEASE_TAG`,
+			} {
+				if strings.Contains(workflow, forbidden) {
+					t.Errorf("GitHub Release absence retains ambiguous negative probe %q", forbidden)
+				}
+			}
+		})
+	}
+	for name, workflow := range map[string]string{
+		"provider tag":     providerTag,
+		"provider release": providerRelease,
+	} {
+		t.Run(name+" Registry", func(t *testing.T) {
+			if !strings.Contains(workflow, `if ! registry_status="$(curl`) ||
+				!strings.Contains(workflow, `if [[ "$registry_status" != "404" ]]; then`) {
+				t.Fatal("Registry absence must reject transport failure and every status other than exact 404")
+			}
+		})
+	}
+
+	revocationProbe := strings.Index(revocation, "if ! git ls-remote --tags origin")
+	revocationRelease := strings.Index(revocation, `if ! github_release_status="$(curl`)
+	revocationSign := strings.Index(revocation, "cosign sign-blob")
+	revocationCandidate := strings.Index(revocation, `candidate="$RUNNER_TEMP/form-package-revocation-candidate"`)
+	if revocationProbe < 0 || revocationRelease <= revocationProbe ||
+		revocationSign <= revocationRelease || revocationCandidate <= revocationSign {
+		t.Fatal("revocation tag and Release absence must be proven before protected signing and candidate creation")
+	}
+}
+
+func TestDispatchedReleaseWorkflowsRequireExactRequestCorrelation(t *testing.T) {
+	root := repositoryRoot(t)
+	workflows := []string{
+		".github/workflows/provider-release-tag.yml",
+		".github/workflows/release.yml",
+		".github/workflows/provider-registry-readback.yml",
+		".github/workflows/form-package-release.yml",
+		".github/workflows/form-package-revocation.yml",
+		".github/workflows/standard-provider-report.yml",
+		".github/workflows/standard-admission-evidence.yml",
+	}
+	const canonicalRequestIDValidation = `[[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`
+	for _, path := range workflows {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			workflow := readText(t, filepath.Join(root, filepath.FromSlash(path)))
+			requestInput := workflowDispatchInputBlock(t, workflow, "request_id")
+			if !strings.Contains(requestInput, "required: true") ||
+				!strings.Contains(requestInput, "type: string") {
+				t.Fatal("request_id is not one required string workflow_dispatch input")
+			}
+			var runNames []string
+			for _, line := range strings.Split(workflow, "\n") {
+				if strings.HasPrefix(line, "run-name:") {
+					runNames = append(runNames, strings.TrimSpace(line))
+				}
+			}
+			if len(runNames) != 1 || runNames[0] != "run-name: ${{ inputs.request_id }}" {
+				t.Fatalf("run-name must equal only the exact request UUID, got %v", runNames)
+			}
+			for _, required := range []string{
+				"REQUEST_ID: ${{ inputs.request_id }}",
+				canonicalRequestIDValidation,
+				"requestId",
+			} {
+				if !strings.Contains(workflow, required) {
+					t.Errorf("workflow lacks request correlation binding %q", required)
+				}
+			}
+			if path == ".github/workflows/standard-provider-report.yml" {
+				for _, required := range []string{
+					"workflowRunId",
+					"workflowRunAttempt",
+					"headSha",
+				} {
+					if !strings.Contains(workflow, required) {
+						t.Errorf("provider-report signed metadata lacks exact run binding %q", required)
+					}
+				}
+			}
+			if path == ".github/workflows/provider-registry-readback.yml" {
+				for _, required := range []string{
+					"workflowRunAttempt:Number(process.env.GITHUB_RUN_ATTEMPT)",
+					"takoform-provider-registry-readback-unsigned-${{ inputs.request_id }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.source.outputs.source_commit_short }}",
+					"takoform-provider-registry-readback-candidate-${{ inputs.request_id }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.generate.outputs.source_commit_short }}",
+				} {
+					if !strings.Contains(workflow, required) {
+						t.Errorf("Registry candidate lacks exact rerun binding %q", required)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestReleasePublicationIsOwnedByTheLocalDeployEntrypoint(t *testing.T) {
+	root := repositoryRoot(t)
+	packageJSON := readText(t, filepath.Join(root, "package.json"))
+	if !strings.Contains(packageJSON, `"deploy": "bun scripts/deploy.mjs"`) {
+		t.Fatal("bun run deploy does not route to the repository-owned deploy entrypoint")
+	}
+
+	deploy := readText(t, filepath.Join(root, "scripts", "deploy.mjs"))
+	releaseDeploy := readText(t, filepath.Join(root, "scripts", "release-deploy.mjs"))
+	for _, required := range []string{
+		"./release-deploy.mjs",
+		"RELEASE_SURFACES",
+		"isReleaseSurface",
+		"runReleaseSurface",
+	} {
+		if !strings.Contains(deploy, required) {
+			t.Errorf("deploy.mjs does not wire the owner-local release module marker %q", required)
+		}
+	}
+	dispatchStart := strings.Index(deploy, "if (isReleaseSurface(invocation[0])) {")
+	dispatchEnd := strings.Index(deploy, "\nconst acknowledgedInitialSchemaOriginMint")
+	if dispatchStart < 0 || dispatchEnd <= dispatchStart {
+		t.Fatal("deploy.mjs has no reachable release-surface dispatch branch")
+	}
+	dispatch := deploy[dispatchStart:dispatchEnd]
+	for _, required := range []string{
+		"runReleaseSurface({",
+		"surface: invocation[0]",
+		"args: invocation.slice(1)",
+		"repo,",
+	} {
+		if !strings.Contains(dispatch, required) {
+			t.Errorf("release-surface dispatch branch lacks %q", required)
+		}
+	}
+	wiring := deploy + "\n" + releaseDeploy
+	for _, required := range []string{
+		"takoform-provider-release",
+		"takoform-form-package-release",
+		"prepare",
+		"publish",
+		"readback",
+		"verify",
+		"prepare-revocation",
+		"publish-revocation",
+		"verify-revocation",
+	} {
+		if !strings.Contains(wiring, required) {
+			t.Errorf("owner deploy entrypoint lacks release surface marker %q", required)
+		}
+	}
+	localMutation := strings.NewReplacer(
+		`"`, " ",
+		`'`, " ",
+		",", " ",
+		"[", " ",
+		"]", " ",
+		"(", " ",
+		")", " ",
+	).Replace(releaseDeploy)
+	localMutation = strings.Join(strings.Fields(localMutation), " ")
+	for _, required := range []string{
+		"git push",
+		"gh api --method POST",
+		"releases/${releaseId}/assets?name=",
+		"gh api --method PATCH",
+		"immutable",
+	} {
+		if !strings.Contains(localMutation, required) {
+			t.Errorf("owner-local release deploy lacks publication marker %q", required)
+		}
+	}
+}
+
+func assertWorkflowHasNoPublicationMutation(t *testing.T, workflow string) {
+	t.Helper()
+	normalized := strings.ToLower(strings.Join(strings.Fields(workflow), " "))
+	normalized = strings.NewReplacer(`"`, "", `'`, "").Replace(normalized)
+	allowedAPIRead := "gh api repos/$github_repository/releases/tags/$release_tag"
+	for _, rawLine := range strings.Split(strings.ReplaceAll(workflow, "\\\n", " "), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		line = strings.ToLower(strings.NewReplacer(`"`, "", `'`, "").Replace(line))
+		if strings.Contains(line, "gh api ") {
+			if !strings.Contains(line, allowedAPIRead) {
+				t.Errorf("workflow contains a GitHub API command other than the allowlisted release-existence GET: %s", rawLine)
+			}
+			for _, field := range strings.Fields(line) {
+				field = strings.Trim(field, "\\")
+				if strings.HasPrefix(field, "-f") || strings.HasPrefix(field, "--field") ||
+					strings.HasPrefix(field, "--raw-field") || strings.HasPrefix(field, "--input") {
+					t.Errorf("allowlisted GitHub API GET contains a request-body flag that implies POST: %s", rawLine)
+				}
+			}
+		}
+		if strings.Contains(line, "gh release ") && !strings.Contains(line, "gh release view ") {
+			t.Errorf("workflow contains a gh release command other than the allowlisted read-only view: %s", rawLine)
+		}
+	}
+	for _, forbidden := range []string{
+		"contents: write",
+		"contents:write",
+		"attestations: write",
+		"attestations:write",
+		"write-all",
+		"actions/attest@",
+		"git push",
+		"gh release create",
+		"gh release upload",
+		"gh release edit",
+		"gh release delete",
+		"--method post",
+		"--method=post",
+		"--method patch",
+		"--method=patch",
+		"--method delete",
+		"--method=delete",
+		"-x post",
+		"-xpost",
+		"-x patch",
+		"-xpatch",
+		"-x delete",
+		"-xdelete",
+		"--request post",
+		"--request=post",
+		"--request patch",
+		"--request=patch",
+		"--request delete",
+		"--request=delete",
+		"--data ",
+		"--data=",
+		"--data-binary ",
+		"--data-binary=",
+	} {
+		if strings.Contains(normalized, forbidden) {
+			t.Errorf("workflow retains CI publication mutation %q", forbidden)
+		}
+	}
+}
+
+func workflowJobContaining(t *testing.T, workflow, marker string) string {
+	t.Helper()
+	lines := strings.Split(workflow, "\n")
+	markerLine := -1
+	for index, line := range lines {
+		if strings.Contains(line, marker) {
+			markerLine = index
+			break
+		}
+	}
+	if markerLine < 0 {
+		t.Fatalf("workflow lacks job marker %q", marker)
+	}
+	jobStart := -1
+	for index := markerLine; index >= 0; index-- {
+		line := lines[index]
+		if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "   ") &&
+			strings.HasSuffix(strings.TrimSpace(line), ":") {
+			jobStart = index
+			break
+		}
+	}
+	if jobStart < 0 {
+		t.Fatalf("cannot locate job containing %q", marker)
+	}
+	jobEnd := len(lines)
+	for index := jobStart + 1; index < len(lines); index++ {
+		line := lines[index]
+		if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "   ") &&
+			strings.HasSuffix(strings.TrimSpace(line), ":") {
+			jobEnd = index
+			break
+		}
+	}
+	return strings.Join(lines[jobStart:jobEnd], "\n")
+}
+
+func workflowDispatchInputBlock(t *testing.T, workflow, name string) string {
+	t.Helper()
+	marker := "      " + name + ":"
+	lines := strings.Split(workflow, "\n")
+	start := -1
+	for index, line := range lines {
+		if line == marker {
+			start = index
+			break
+		}
+	}
+	if start < 0 {
+		t.Fatalf("workflow_dispatch lacks input %q", name)
+	}
+	end := len(lines)
+	for index := start + 1; index < len(lines); index++ {
+		line := lines[index]
+		if line == "" {
+			end = index
+			break
+		}
+		if len(line)-len(strings.TrimLeft(line, " ")) <= 6 {
+			end = index
+			break
+		}
+	}
+	return strings.Join(lines[start+1:end], "\n")
 }
 
 func readStrictJSON(t *testing.T, path string, value any) {
