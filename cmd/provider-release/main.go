@@ -38,6 +38,14 @@ type cliCompatibility struct {
 	ProviderAddress string `json:"providerAddress"`
 }
 
+type versioningPolicy struct {
+	ProviderCompatibility  string `json:"providerCompatibility"`
+	PortableAPIVersion     string `json:"portableApiVersion"`
+	FormDefinitionVersions string `json:"formDefinitionVersions"`
+	FormPackageVersions    string `json:"formPackageVersions"`
+	AdmissionGenerations   string `json:"admissionGenerations"`
+}
+
 type descriptor struct {
 	SchemaVersion      int                `json:"schemaVersion"`
 	Version            string             `json:"version"`
@@ -51,6 +59,7 @@ type descriptor struct {
 	PublicKeyPath      string             `json:"publicKeyPath"`
 	Platforms          []string           `json:"platforms"`
 	PublicationStatus  string             `json:"publicationStatus"`
+	Versioning         versioningPolicy   `json:"versioning"`
 }
 
 type sourceEvidence struct {
@@ -530,6 +539,9 @@ func loadDescriptor(repo string) (descriptor, error) {
 	if err := validateCLIMatrix(value.CLIMatrix); err != nil {
 		return value, err
 	}
+	if err := validateVersioningPolicy(value.Versioning); err != nil {
+		return value, err
+	}
 	if value.SigningFingerprint != "3510E75E05BBCC303B92D77934FC18AC897FB709" ||
 		value.PublicKeyPath != "release/keys/provider-signing-key.asc" {
 		return value, errors.New("release descriptor signing identity mismatch")
@@ -570,6 +582,17 @@ func validateCLIMatrix(matrix []cliCompatibility) error {
 			return fmt.Errorf("invalid release CLI/FQN matrix entry for %q", entry.Product)
 		}
 		seen[entry.Product] = true
+	}
+	return nil
+}
+
+func validateVersioningPolicy(policy versioningPolicy) error {
+	if policy.ProviderCompatibility != "semver-major" ||
+		policy.PortableAPIVersion != "forms.takoform.com/v1alpha1" ||
+		policy.FormDefinitionVersions != "independent-immutable-semver" ||
+		policy.FormPackageVersions != "independent-immutable-semver" ||
+		policy.AdmissionGenerations != "independent-non-semver" {
+		return errors.New("release descriptor conflates independent version streams")
 	}
 	return nil
 }

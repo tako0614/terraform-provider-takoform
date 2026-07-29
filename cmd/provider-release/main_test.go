@@ -29,6 +29,12 @@ func TestReleaseDescriptorPinsPublicIdentityAndSigner(t *testing.T) {
 	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
 		t.Fatalf("CLI/FQN matrix: %v", err)
 	}
+	if desc.Version != "1.0.0" {
+		t.Fatalf("first stable provider candidate must be 1.0.0, got %q", desc.Version)
+	}
+	if err := validateVersioningPolicy(desc.Versioning); err != nil {
+		t.Fatalf("versioning policy: %v", err)
+	}
 }
 
 func TestReleaseDescriptorRejectsWrongSigner(t *testing.T) {
@@ -57,6 +63,14 @@ func TestReleaseDescriptorRejectsNonCanonicalCLIMatrix(t *testing.T) {
 	desc.CLIMatrix[0].ProviderAddress = "registry.opentofu.org/tako0614/takoform"
 	if err := validateCLIMatrix(desc.CLIMatrix); err == nil || !strings.Contains(err.Error(), "invalid release CLI/FQN matrix") {
 		t.Fatalf("expected non-canonical CLI/FQN matrix rejection, got %v", err)
+	}
+}
+
+func TestReleaseDescriptorRejectsConflatedVersionStreams(t *testing.T) {
+	policy := testDescriptor().Versioning
+	policy.FormDefinitionVersions = "match-provider-version"
+	if err := validateVersioningPolicy(policy); err == nil || !strings.Contains(err.Error(), "version streams") {
+		t.Fatalf("expected conflated version streams rejection, got %v", err)
 	}
 }
 
@@ -498,6 +512,13 @@ func testDescriptor() descriptor {
 		PublicKeyPath:      "release/keys/provider-signing-key.asc",
 		Platforms:          []string{"linux_amd64"},
 		PublicationStatus:  "candidate-only",
+		Versioning: versioningPolicy{
+			ProviderCompatibility:  "semver-major",
+			PortableAPIVersion:     "forms.takoform.com/v1alpha1",
+			FormDefinitionVersions: "independent-immutable-semver",
+			FormPackageVersions:    "independent-immutable-semver",
+			AdmissionGenerations:   "independent-non-semver",
+		},
 	}
 }
 

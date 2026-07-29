@@ -22,17 +22,25 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-## Provider v0.3.0 resource transition
+## Provider v1.0.0 resource transition
 
-Provider `v0.3.0` removes the active `takoform_http_service` resource and adds
+Provider `v1.0.0` removes the active `takoform_http_service` resource and adds
 `takoform_edge_worker` for the distinct `EdgeWorker@2.0.0` Form identity.
 Published `HttpService@1.0.0` bytes and provider `v0.2.1` remain immutable.
 
 This is not a state-label-only rename: the Form kind, resource type, package,
 and remote identity all change. Existing `takoform_http_service` state must
 stay pinned to provider `v0.2.1` until an operator performs an explicit
-create/cutover/destroy migration. Provider `v0.3.0` does not silently
+create/cutover/destroy migration. Provider `v1.0.0` does not silently
 reinterpret old state as `EdgeWorker`.
+
+This is the first stable provider compatibility line, not a claim that the
+portable specification has graduated from
+`forms.takoform.com/v1alpha1`. Provider, Form definition, Form Package, and
+admission versions remain independent. Published `EdgeWorker@1.0.0` and
+`EdgeWorker@1.0.1` identities cannot be reset, so the provider-neutral
+definition remains `EdgeWorker@2.0.0`. The exact contract is in
+[`../spec/versioning.md`](../spec/versioning.md).
 
 The pre-v1 legacy-provider migration report remains useful structural evidence,
 but its operator-host refresh/rollback drills are external migration evidence,

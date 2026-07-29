@@ -136,6 +136,13 @@ type releaseDescriptor struct {
 	PublicKeyPath      string   `json:"publicKeyPath"`
 	Platforms          []string `json:"platforms"`
 	PublicationStatus  string   `json:"publicationStatus"`
+	Versioning         struct {
+		ProviderCompatibility  string `json:"providerCompatibility"`
+		PortableAPIVersion     string `json:"portableApiVersion"`
+		FormDefinitionVersions string `json:"formDefinitionVersions"`
+		FormPackageVersions    string `json:"formPackageVersions"`
+		AdmissionGenerations   string `json:"admissionGenerations"`
+	} `json:"versioning"`
 }
 
 func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
@@ -166,6 +173,14 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		profile.Provider.Distribution.Registry != "registry.terraform.io/tako0614/takoform" ||
 		profile.Provider.Distribution.OverwriteExistingVersion {
 		t.Fatalf("provider distribution is mutable or has the wrong registry")
+	}
+	if release.Version != "1.0.0" || release.Tag != "v1.0.0" ||
+		release.Versioning.ProviderCompatibility != "semver-major" ||
+		release.Versioning.PortableAPIVersion != "forms.takoform.com/v1alpha1" ||
+		release.Versioning.FormDefinitionVersions != "independent-immutable-semver" ||
+		release.Versioning.FormPackageVersions != "independent-immutable-semver" ||
+		release.Versioning.AdmissionGenerations != "independent-non-semver" {
+		t.Fatalf("provider v1 version streams are not independently locked: %#v", release.Versioning)
 	}
 	if profile.RunnerReport.HostFormat != "takoform.standard-runner-report@v1" ||
 		profile.RunnerReport.ProviderFormat != "takoform.standard-provider-runner-report@v2" ||
