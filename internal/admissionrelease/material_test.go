@@ -3,6 +3,8 @@ package admissionrelease
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"path"
 	"strings"
 	"testing"
 
@@ -88,7 +90,120 @@ func TestBuildCanonicalSetReturnsCanonicalBytes(t *testing.T) {
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Format != setFormat || decoded.DefinitionVersion != "1.0.0" || decoded.PackageVersion != "1.0.0" || decoded.AdmissionReleaseTag != "forms/admissions/v1.0.2" || decoded.Entries[0].Kind != set.Entries[0].Kind {
+	if decoded.Format != setFormatV2 || decoded.DefinitionVersion != "1.0.0" || decoded.PackageVersion != "1.0.0" || decoded.AdmissionReleaseTag != "forms/admissions/v1.0.2" || decoded.Entries[0].Kind != set.Entries[0].Kind {
 		t.Fatalf("unexpected set: %#v", decoded)
+	}
+}
+
+func TestBuildCanonicalSetV3PreservesPerEntryVersions(t *testing.T) {
+	t.Parallel()
+	candidates := CandidateSet{
+		Generation: "ga-core-v1",
+		Entries: []Candidate{
+			testV3Candidate("ObjectBucket", "object-bucket", "2.0.0"),
+			testV3Candidate("KeyValueStore", "key-value-store", "1.0.0"),
+		},
+	}
+	entries := []SetEntry{
+		testV3Entry("ObjectBucket", "object-bucket", "2.0.0"),
+		testV3Entry("KeyValueStore", "key-value-store", "1.0.0"),
+	}
+	set, raw, err := BuildCanonicalSet(
+		candidates,
+		"forms/admissions/v2.0.0",
+		RegistryReadbackRef{Path: "registry/provider-readback.json", Digest: testEvidenceDigest, SigstoreBundle: "registry/provider-readback.sigstore.json"},
+		entries,
+		testV3ProviderClosure(candidates),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set.Format != setFormatV3 || set.Generation != "ga-core-v1" || set.DefinitionVersion != "" || set.PackageVersion != "" {
+		t.Fatalf("unexpected v3 set identity: %#v", set)
+	}
+	if set.Entries[0].ReleaseTag != "forms/"+releaseIDForKind("ObjectBucket")+"/v2.0.0" ||
+		set.Entries[1].ReleaseTag != "forms/"+releaseIDForKind("KeyValueStore")+"/v1.0.0" {
+		t.Fatalf("v3 entry versions collapsed: %#v", set.Entries)
+	}
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil || !bytes.Equal(raw, canonical) {
+		t.Fatalf("v3 set is not canonical: %v", err)
+	}
+}
+
+func testV3ProviderClosure(candidates CandidateSet) ProviderReportClosure {
+	reports := make([]ProviderReportClosureEntry, 0, 34)
+	for _, candidate := range candidates.Entries {
+		reports = append(reports, ProviderReportClosureEntry{
+			Kind: candidate.Kind, Slug: candidate.Slug,
+			Identity:       standardform.InstalledFormReference{FormRef: candidate.FormRef, PackageDigest: candidate.PackageDigest},
+			ReportPath:     path.Join("provider-closure", "packages", candidate.Slug, "provider-report.json"),
+			ReportDigest:   testEvidenceDigest,
+			SigstoreBundle: path.Join("provider-closure", "packages", candidate.Slug, "provider-report.sigstore.json"),
+		})
+	}
+	for index := len(reports); index < 34; index++ {
+		kind := fmt.Sprintf("ExtraKind%02d", index)
+		slug := fmt.Sprintf("extra-kind-%02d", index)
+		reports = append(reports, ProviderReportClosureEntry{
+			Kind: kind, Slug: slug,
+			Identity: standardform.InstalledFormReference{
+				FormRef: formpackage.FormRef{
+					APIVersion: formpackage.FormAPIVersion, Kind: kind,
+					DefinitionVersion: "1.0.0", SchemaDigest: testSchemaDigest,
+				},
+				PackageDigest: testPackageDigest,
+			},
+			ReportPath:     path.Join("provider-closure", "packages", slug, "provider-report.json"),
+			ReportDigest:   testEvidenceDigest,
+			SigstoreBundle: path.Join("provider-closure", "packages", slug, "provider-report.sigstore.json"),
+		})
+	}
+	return ProviderReportClosure{
+		Generation:           "portable-v1",
+		ManifestPath:         "provider-closure/provider-report-manifest.json",
+		ManifestDigest:       testEvidenceDigest,
+		SignedManifestPath:   "provider-closure/signed-provider-report-candidate.json",
+		SignedManifestDigest: testEvidenceDigest,
+		ChecksumsPath:        "provider-closure/SHA256SUMS",
+		ChecksumsDigest:      testEvidenceDigest,
+		Reports:              reports,
+	}
+}
+
+func testV3Candidate(kind, slug, version string) Candidate {
+	return Candidate{
+		Kind: kind, Slug: slug, PackagePath: "forms/releases/" + releaseIDForKind(kind) + "/" + version,
+		FormRef: formpackage.FormRef{
+			APIVersion: formpackage.FormAPIVersion, Kind: kind, DefinitionVersion: version, SchemaDigest: testSchemaDigest,
+		},
+		PackageDigest: testPackageDigest,
+	}
+}
+
+func testV3Entry(kind, slug, version string) SetEntry {
+	releaseID := releaseIDForKind(kind)
+	base := "releases/" + releaseID + "/" + version + "/takoform-form-" + releaseID + "_" + version
+	return SetEntry{
+		Kind: kind, Slug: slug,
+		FormRef: formpackage.FormRef{
+			APIVersion: formpackage.FormAPIVersion, Kind: kind, DefinitionVersion: version, SchemaDigest: testSchemaDigest,
+		},
+		PackageDigest: testPackageDigest,
+		ReleaseTag:    "forms/" + releaseID + "/v" + version, ReleaseCommit: "0123456789abcdef0123456789abcdef01234567",
+		ReleaseToolingCommit:         "89abcdef0123456789abcdef0123456789abcdef",
+		PackageReleaseManifestPath:   "releases/" + releaseID + "/" + version + "/release-manifest.json",
+		PackageReleaseManifestDigest: testEvidenceDigest,
+		PackageIndexPath:             base + "_package-index.json",
+		PackageIndexSigstoreBundle:   base + "_package-index.sigstore.json",
+		EvidencePath:                 "packages/" + slug + "/evidence.json",
+		EvidenceDigest:               testEvidenceDigest,
+		HostReportPath:               "packages/" + slug + "/host-report.json",
+		HostReportDigest:             testEvidenceDigest,
+		HostReportSigstoreBundle:     "packages/" + slug + "/host-report.sigstore.json",
+		ProviderReportPath:           "provider-closure/packages/" + slug + "/provider-report.json",
+		ProviderReportDigest:         testEvidenceDigest,
+		ProviderReportSigstoreBundle: "provider-closure/packages/" + slug + "/provider-report.sigstore.json",
+		AdmissionStatus:              "portable-standard",
 	}
 }

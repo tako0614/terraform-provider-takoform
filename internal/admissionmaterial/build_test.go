@@ -101,14 +101,18 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 		"git merge-base --is-ancestor \"${SNAPSHOT_COMMIT}\" \"${current_main}\"",
 		"git rev-parse \"${SNAPSHOT_COMMIT}:${HOST_CANDIDATE_PATH}\"",
 		"git rev-parse \"${SNAPSHOT_COMMIT}:${PROVIDER_CANDIDATE_PATH}\"",
-		"--trusted-root admission/v1/trust/trusted-root.json",
+		"git rev-parse \"${SNAPSHOT_COMMIT}:${REGISTRY_CANDIDATE_PATH}\"",
+		"--trusted-root admission/v3/trust/trusted-root.json",
 		"--host-id \"${HOST_ID}\"",
-		"admission/v1/conforming-hosts.json",
+		"admission/v3/conforming-hosts.json",
+		"build-current",
+		"--registry-readback \"${REGISTRY_CANDIDATE_PATH}\"",
 		"--host-source-commit \"${HOST_SOURCE_COMMIT}\"",
 		"--host-takoform-source-commit \"${HOST_TAKOFORM_SOURCE_COMMIT}\"",
 		"--provider-source-commit \"${PROVIDER_SOURCE_COMMIT}\"",
 		"--host-run-id \"${HOST_RUN_ID}\"",
 		"--provider-run-id \"${PROVIDER_RUN_ID}\"",
+		"--registry-run-id \"${REGISTRY_RUN_ID}\"",
 		"environment: standard-admission-evidence",
 		"artifact-ids: ${{ needs.assemble.outputs.artifact_id }}",
 		"digest-mismatch: error",
@@ -141,6 +145,62 @@ func TestAdmissionEvidenceWorkflowBindsExactRunsAndSeparatesSignerAuthority(t *t
 	}
 	if strings.Contains(jobs[1], "gh release") || strings.Contains(jobs[1], "git tag") {
 		t.Fatal("evidence signer regained publication authority")
+	}
+}
+
+func TestBuildCurrentRequiresRegistryCandidateAndRunBinding(t *testing.T) {
+	validCommit := strings.Repeat("a", 40)
+	options := CurrentBuildOptions{BuildOptions: BuildOptions{
+		SourceCommit: validCommit, HostSourceCommit: validCommit,
+		HostTakoformSourceCommit: validCommit, ProviderSourceCommit: validCommit,
+		HostWorkflowRunID: "1", ProviderWorkflowRunID: "2",
+		AdmissionVersion: "1.0.0", HostReports: "host", ProviderReports: "provider",
+		OutputDir: "output", HostID: "host",
+	}}
+	if err := BuildCurrent(options); err == nil || !strings.Contains(err.Error(), "registry workflow run id") {
+		t.Fatalf("missing registry run binding error = %v", err)
+	}
+	options.RegistryWorkflowRunID = "3"
+	if err := BuildCurrent(options); err == nil || !strings.Contains(err.Error(), "current host, provider, Registry") {
+		t.Fatalf("missing registry candidate error = %v", err)
+	}
+}
+
+func TestRegistryReadbackWorkflowUsesBothCLIsAndAnIsolatedSigner(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "provider-registry-readback.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(raw)
+	for _, required := range []string{
+		"permissions: {}",
+		"tofu_version: 1.12.1",
+		"terraform_version: 1.15.8",
+		"render-registry-matrix",
+		"admission-readback registry",
+		"takoform.provider-registry-readback-candidate@v1",
+		"takoform.provider-registry-readback-signed-candidate@v1",
+		"environment: provider-registry-readback",
+		"artifact-ids: ${{ needs.generate.outputs.artifact_id }}",
+		"digest-mismatch: error",
+		"provider-readback.sigstore.json",
+		registryIdentity,
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Errorf("Registry workflow omits %q", required)
+		}
+	}
+	jobs := strings.Split(workflow, "\n  sign:\n")
+	if len(jobs) != 2 {
+		t.Fatal("Registry workflow does not contain one isolated sign job")
+	}
+	if strings.Contains(jobs[0], "id-token: write") {
+		t.Fatal("Registry execution job received signing authority")
+	}
+	if strings.Contains(jobs[1], "contents: write") ||
+		strings.Contains(workflow, "gh release") ||
+		strings.Contains(workflow, "git push") {
+		t.Fatal("Registry evidence workflow gained publication authority")
 	}
 }
 

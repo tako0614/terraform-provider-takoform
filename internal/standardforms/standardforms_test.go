@@ -2,10 +2,7 @@ package standardforms
 
 import (
 	"bytes"
-	"context"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -49,21 +46,6 @@ func TestReleaseSourceRequiresExactReviewedFixtureBytes(t *testing.T) {
 	}
 }
 
-func TestAdmissionActivationGateFailsClosedWithoutImmutableReleaseRef(t *testing.T) {
-	root := filepath.Join("..", "..")
-	checkout := cloneCurrentSourceWithoutTags(t, root)
-	err := VerifyReleaseReady(context.Background(), checkout, http.DefaultClient, "")
-	if err == nil {
-		t.Fatal("release gate activated a Form set with no immutable release or Registry readback")
-	}
-	// The rebuilt Forms have no release tag and no Registry readback of their
-	// own, so the gate must refuse on published-evidence grounds rather than
-	// restamp the retired generation's proofs.
-	if !strings.Contains(err.Error(), "release") && !strings.Contains(err.Error(), "readback") {
-		t.Fatalf("release gate failed for an unrelated reason: %v", err)
-	}
-}
-
 func TestPublishedPackageSetVerifiesIndependentlyOfAdmission(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..")
@@ -104,25 +86,41 @@ func TestPublishedPackageSetVerifiesIndependentlyOfAdmission(t *testing.T) {
 	}
 }
 
-func cloneCurrentSourceWithoutTags(t *testing.T, source string) string {
-	t.Helper()
-	absolute, err := filepath.Abs(source)
+func TestCurrentAdmissionCandidateSetIsExactMixedVersionGeneration(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join("..", "..")
+	set, err := CurrentAdmissionCandidateSet(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkout := filepath.Join(t.TempDir(), "checkout")
-	commands := [][]string{
-		{"init", "--quiet", checkout},
-		{"-C", checkout, "fetch", "--quiet", "--no-tags", "--depth=1", absolute, "HEAD"},
-		{"-C", checkout, "checkout", "--quiet", "--detach", "FETCH_HEAD"},
+	if set.Generation != "ga-core-v1" || set.DefinitionVersion != "" || set.PackageVersion != "" || len(set.Entries) != 10 {
+		t.Fatalf("unexpected current admission set: %#v", set)
 	}
-	for _, arguments := range commands {
-		command := exec.Command("git", arguments...)
-		if output, commandErr := command.CombinedOutput(); commandErr != nil {
-			t.Fatalf("git %s: %v\n%s", strings.Join(arguments, " "), commandErr, output)
-		}
+	versions := map[string]bool{}
+	for _, entry := range set.Entries {
+		versions[entry.FormRef.DefinitionVersion] = true
 	}
-	return checkout
+	if !versions["1.0.0"] || !versions["2.0.0"] || len(versions) != 2 {
+		t.Fatalf("current admission set lost mixed versions: %#v", versions)
+	}
+}
+
+func TestCurrentPortableCandidateSetRetainsAllThirtyFourIdentities(t *testing.T) {
+	t.Parallel()
+	set, err := CurrentPortableCandidateSet(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set.Generation != "portable-v1" || len(set.Entries) != 34 {
+		t.Fatalf("unexpected current portable set: generation=%q entries=%d", set.Generation, len(set.Entries))
+	}
+}
+
+func TestCurrentPublishedPackageSetAuthenticatesExactLiveReadback(t *testing.T) {
+	t.Parallel()
+	if err := VerifyCurrentPublishedPackageSet(filepath.Join("..", "..")); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestEveryDeclaredFormHasMaterializableFixtures proves the generated

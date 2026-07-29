@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -61,32 +62,45 @@ type Policy struct {
 // Load reads the allowlist, proves it is the exact pinned bytes, and validates
 // every entry.
 func Load(root string) (Policy, error) {
-	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(PolicyPath)))
+	return LoadAt(root, "admission/v1")
+}
+
+// LoadAt reads one explicit retained admission generation. This keeps the
+// historical v1 policy immutable while allowing a current generation to pin a
+// different manifest format without changing who owns the portable contract.
+func LoadAt(root, retainedRoot string) (Policy, error) {
+	if retainedRoot == "" || path.Clean(retainedRoot) != retainedRoot ||
+		strings.HasPrefix(retainedRoot, "../") || strings.Contains(retainedRoot, `\`) {
+		return Policy{}, fmt.Errorf("invalid retained admission root %q", retainedRoot)
+	}
+	policyPath := path.Join(retainedRoot, "conforming-hosts.json")
+	pinsPath := path.Join(retainedRoot, "trust/offline-sigstore-pins.json")
+	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(policyPath)))
 	if err != nil {
 		return Policy{}, err
 	}
-	if err := verifyPinnedBytes(root, raw); err != nil {
+	if err := verifyPinnedBytesAt(root, policyPath, pinsPath, raw); err != nil {
 		return Policy{}, err
 	}
 	var policy Policy
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&policy); err != nil {
-		return Policy{}, fmt.Errorf("%s: %w", PolicyPath, err)
+		return Policy{}, fmt.Errorf("%s: %w", policyPath, err)
 	}
 	if policy.Format != policyFormat {
-		return Policy{}, fmt.Errorf("%s: format is %q, want %q", PolicyPath, policy.Format, policyFormat)
+		return Policy{}, fmt.Errorf("%s: format is %q, want %q", policyPath, policy.Format, policyFormat)
 	}
 	if len(policy.Hosts) == 0 {
-		return Policy{}, fmt.Errorf("%s: no conforming host is accepted", PolicyPath)
+		return Policy{}, fmt.Errorf("%s: no conforming host is accepted", policyPath)
 	}
 	seen := make(map[string]struct{}, len(policy.Hosts))
 	for _, host := range policy.Hosts {
 		if err := host.validate(); err != nil {
-			return Policy{}, fmt.Errorf("%s: %w", PolicyPath, err)
+			return Policy{}, fmt.Errorf("%s: %w", policyPath, err)
 		}
 		if _, duplicate := seen[host.HostID]; duplicate {
-			return Policy{}, fmt.Errorf("%s: duplicate hostId %q", PolicyPath, host.HostID)
+			return Policy{}, fmt.Errorf("%s: duplicate hostId %q", policyPath, host.HostID)
 		}
 		seen[host.HostID] = struct{}{}
 	}
@@ -139,6 +153,10 @@ func (p Policy) ByHostID(hostID string) (Host, error) {
 }
 
 func verifyPinnedBytes(root string, raw []byte) error {
+	return verifyPinnedBytesAt(root, PolicyPath, pinsPath, raw)
+}
+
+func verifyPinnedBytesAt(root, policyPath, pinsPath string, raw []byte) error {
 	pinsRaw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(pinsPath)))
 	if err != nil {
 		return fmt.Errorf("read %s: %w", pinsPath, err)
@@ -157,7 +175,7 @@ func verifyPinnedBytes(root string, raw []byte) error {
 	}
 	sum := sha256.Sum256(raw)
 	if actual := "sha256:" + hex.EncodeToString(sum[:]); actual != pins.ConformingHosts.Digest {
-		return fmt.Errorf("%s digest %s does not match its pin %s", PolicyPath, actual, pins.ConformingHosts.Digest)
+		return fmt.Errorf("%s digest %s does not match its pin %s", policyPath, actual, pins.ConformingHosts.Digest)
 	}
 	return nil
 }

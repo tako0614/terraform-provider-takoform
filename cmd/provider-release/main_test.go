@@ -52,11 +52,11 @@ func TestReleaseDescriptorRejectsWrongSigner(t *testing.T) {
 	}
 }
 
-func TestReleaseDescriptorRejectsAliasedCLIMatrix(t *testing.T) {
+func TestReleaseDescriptorRejectsNonCanonicalCLIMatrix(t *testing.T) {
 	desc := testDescriptor()
-	desc.CLIMatrix[0].ProviderAddress = desc.ProviderAddress
+	desc.CLIMatrix[0].ProviderAddress = "registry.opentofu.org/tako0614/takoform"
 	if err := validateCLIMatrix(desc.CLIMatrix); err == nil || !strings.Contains(err.Error(), "invalid release CLI/FQN matrix") {
-		t.Fatalf("expected aliased CLI/FQN matrix rejection, got %v", err)
+		t.Fatalf("expected non-canonical CLI/FQN matrix rejection, got %v", err)
 	}
 }
 
@@ -489,7 +489,7 @@ func testDescriptor() descriptor {
 		SourceRepository: "github.com/tako0614/terraform-provider-takoform",
 		ProviderAddress:  "registry.terraform.io/tako0614/takoform",
 		CLIMatrix: []cliCompatibility{
-			{Product: "OpenTofu", Version: "1.12.1", ProviderAddress: "registry.opentofu.org/tako0614/takoform"},
+			{Product: "OpenTofu", Version: "1.12.1", ProviderAddress: "registry.terraform.io/tako0614/takoform"},
 			{Product: "Terraform", Version: "1.15.8", ProviderAddress: "registry.terraform.io/tako0614/takoform"},
 		},
 		GoModule:           "github.com/tako0614/terraform-provider-takoform",

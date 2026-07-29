@@ -156,7 +156,7 @@ func testCandidates() CandidateSet {
 
 func testSet() Set {
 	return Set{
-		Format: setFormat, DefinitionVersion: "1.0.0", PackageVersion: "1.0.0", AdmissionReleaseTag: "forms/admissions/v1.0.0",
+		Format: setFormatV2, DefinitionVersion: "1.0.0", PackageVersion: "1.0.0", AdmissionReleaseTag: "forms/admissions/v1.0.0",
 		ProviderRegistryReadback: RegistryReadbackRef{
 			Path: "registry/provider-readback.json", Digest: testEvidenceDigest,
 			SigstoreBundle: "registry/provider-readback.sigstore.json",

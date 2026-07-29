@@ -22,8 +22,8 @@ The provider follows the Terraform Registry contract:
   are never projected as Registry provider packages;
 - an existing version MUST NOT be overwritten;
 - the `tako0614` public namespace and pinned key ID `34FC18AC897FB709` are
-  registered, while the first clean Terraform Registry/OpenTofu install proof
-  remains a post-publication external gate.
+  registered, while clean Terraform Registry install proof through both
+  OpenTofu and Terraform remains a post-publication external gate.
 
 Form Packages do not reuse the provider GPG key. The standard Takoform
 publisher uses a keyless Sigstore blob signature and bundle bound to the exact
@@ -95,8 +95,9 @@ Provider distribution and standard Form admission use an explicit two-phase
 authority split. Phase 1 may publish a signed, deterministic provider version
 while `release/version.json` and every package entry remain `candidate-only` /
 `external-required`; installability does not admit or activate any Form. Phase
-2 starts only after that same immutable version is available through both
-canonical Registry FQNs. The protected `forms/admissions/v*` workflow then
+2 starts only after that same immutable version is available from the canonical
+Terraform Registry FQN through both supported CLIs. The protected
+`forms/admissions/v*` workflow then
 requires the complete authenticated closure below, reruns and compares the
 direct install matrix, and publishes a separately signed admission activation
 release. Failure in Phase 2 leaves the already-public provider harmlessly
@@ -117,7 +118,7 @@ after repository-enforced immutability is read back.
 
 ## Offline standard-admission verification
 
-Provider `release-check` has an offline verifier for the complete retained
+The admission-closure gate has an offline verifier for the complete retained
 standard-admission closure. For every member of the compiled candidate set it
 requires the exact RFC 8785 admission-evidence document, canonical host and
 provider runner reports, the immutable Form Package release manifest and its
@@ -209,8 +210,32 @@ The canonical `takoform.provider-registry-readback@v1` similarly binds the
 provider version/tag/commit, current release descriptor, candidate-set and
 schema digests, both CLI/FQN/binary identities, and the exact direct-install
 matrix digest. `cmd/admission-readback` renders this unsigned canonical subject
-from a validated direct matrix; only the protected activation workflow signs
-it.
+from a validated direct matrix. Historical v1 evidence retains its original
+publisher identity. Current v3 evidence is signed only by
+`.github/workflows/provider-registry-readback.yml`, whose identity is distinct
+from package, provider-report, host-report, and admission-evidence publishers.
+
+### Current generation-aware v3 lane
+
+`admission/v3` binds the exact mixed-version `ga-core-v1` ten-Form admission
+subset. Its `published-package-set@v2` uses the independent per-Form
+`form-package-release.yml` identity and does not accept the retired aggregate
+publisher. Provider reports use generation `portable-v1` and must close over
+all 34 current Forms before the builder selects the ten exact admission
+identities. The v3 set retains the signed manifest, checksums, and all 34
+provider report/bundle pairs under `provider-closure/`; offline verification
+therefore fails if any of the 24 unselected reports is missing or changed.
+Host reports use generation `ga-core-v1` and contain exactly those
+ten identities. Neither manifest carries a false uniform definition or package
+version.
+
+The current retained layout mirrors the historical role separation under
+`admission/v3`, but uses `standard-admission-set@v3`. The active assembly
+command is `standard-admission-material build-current`; it requires signed
+host, full-provider, and dual-Registry candidates and produces deterministic
+material outside the repository. `standard-admission-evidence.yml` signs only
+the ten evidence subjects. It does not publish a set-wide archive or GitHub
+Release.
 
 Before authentication opens, `admission-closure-check` resolves the admission
 tag, provider tag, and every Form Package tag from fetched local Git refs and
@@ -229,14 +254,11 @@ five-role offline pin manifest are now retained. The signed host/provider and
 admission reports and `standard-admission-set.json` are now retained. The
 canonical Registry matrix/readback for provider `v0.1.3` are also retained, but
 grant nothing until the protected candidate reproduces the exact matrix bytes,
-keyless-signs the readback, and the immutable admission activation Release is
-published. The admission release version is independent from the bound Form
-definition/package versions; advancing activation does not republish package
-bytes. Public `release-check` then requires the completed protected controller
-promotion, immutable exact-asset Release, and retained controller readback;
-missing or mismatched live activation state keeps it fail-closed. The
-approved role identities must still produce exact authenticated evidence; a
-distribution endpoint or a different workflow identity cannot substitute it.
+keyless-signs the readback. The admission checkpoint version is independent
+from the bound Form definition/package versions; advancing it does not
+republish package bytes. The approved role identities must still produce exact
+authenticated evidence; a distribution endpoint, unsigned local output, or a
+different workflow identity cannot substitute it.
 
 ## Rotation and revocation
 

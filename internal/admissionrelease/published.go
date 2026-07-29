@@ -12,13 +12,15 @@ import (
 )
 
 const (
-	publishedPackageSetFormat = "takoform.published-package-set@v1"
-	publishedPackageSetPath   = admissionRootPath + "/published-package-set.json"
-	publishedPackageTrustPath = "trust/published-package-trust.json"
-	publishedPackageTrustFmt  = "takoform.published-package-trust@v1"
-	publishedRepository       = "tako0614/terraform-provider-takoform"
-	registryPublisherIssuer   = "https://token.actions.githubusercontent.com"
-	registryPublisherIdentity = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-admission-release.yml@refs/heads/main"
+	publishedPackageSetFormatV1 = "takoform.published-package-set@v1"
+	publishedPackageSetFormatV2 = "takoform.published-package-set@v2"
+	publishedPackageTrustPath   = "trust/published-package-trust.json"
+	publishedPackageTrustFmtV1  = "takoform.published-package-trust@v1"
+	publishedPackageTrustFmtV2  = "takoform.published-package-trust@v2"
+	publishedRepository         = "tako0614/terraform-provider-takoform"
+	registryPublisherIssuer     = "https://token.actions.githubusercontent.com"
+	registryPublisherIdentityV1 = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-admission-release.yml@refs/heads/main"
+	currentPackagePublisherID   = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
 )
 
 // PublishedPackageSet is a source-reviewed snapshot of the ten live,
@@ -27,8 +29,9 @@ const (
 type PublishedPackageSet struct {
 	Format                     string                   `json:"format"`
 	Repository                 string                   `json:"repository"`
-	DefinitionVersion          string                   `json:"definitionVersion"`
-	PackageVersion             string                   `json:"packageVersion"`
+	Generation                 string                   `json:"generation,omitempty"`
+	DefinitionVersion          string                   `json:"definitionVersion,omitempty"`
+	PackageVersion             string                   `json:"packageVersion,omitempty"`
 	PublicationStatus          string                   `json:"publicationStatus"`
 	AdmissionStatus            string                   `json:"admissionStatus"`
 	RevocationCheckpointStatus string                   `json:"revocationCheckpointStatus"`
@@ -79,32 +82,47 @@ type PublishedPackageEntry struct {
 // live snapshot claim; the cryptographic package closure is independently
 // enforced by the release manifest, SHA256SUMS, Git refs, and Sigstore.
 func VerifyPublishedPackageSet(root string, candidates CandidateSet) error {
+	return VerifyPublishedPackageSetAt(root, admissionRootPath, candidates)
+}
+
+// VerifyPublishedPackageSetAt verifies one explicitly selected retained
+// admission generation. Historical callers remain pinned to admission/v1;
+// current mixed-version callers select their own immutable admission root.
+func VerifyPublishedPackageSetAt(root, retainedRoot string, candidates CandidateSet) error {
 	if err := validateCandidateSet(candidates); err != nil {
 		return fmt.Errorf("published-package candidate set: %w", err)
 	}
-	raw, err := readRetainedRelativeFile(root, publishedPackageSetPath, maxSetBytes)
+	if err := validateRelativePath(retainedRoot); err != nil {
+		return fmt.Errorf("published-package retained root: %w", err)
+	}
+	setPath := path.Join(retainedRoot, "published-package-set.json")
+	raw, err := readRetainedRelativeFile(root, setPath, maxSetBytes)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", publishedPackageSetPath, err)
+		return fmt.Errorf("read %s: %w", setPath, err)
 	}
 	if _, err := formpackage.Canonicalize(raw); err != nil {
-		return fmt.Errorf("%s must contain RFC 8785-compatible I-JSON: %w", publishedPackageSetPath, err)
+		return fmt.Errorf("%s must contain RFC 8785-compatible I-JSON: %w", setPath, err)
 	}
 	var set PublishedPackageSet
 	if err := decodeStrictJSON(raw, &set); err != nil {
-		return fmt.Errorf("decode %s: %w", publishedPackageSetPath, err)
+		return fmt.Errorf("decode %s: %w", setPath, err)
 	}
 	ordered, err := validatePublishedPackageSet(set, candidates)
 	if err != nil {
-		return fmt.Errorf("verify %s: %w", publishedPackageSetPath, err)
+		return fmt.Errorf("verify %s: %w", setPath, err)
 	}
 
-	admissionRoot := path.Join(root, admissionRootPath)
-	_, verifier, err := loadPublishedPackageTrust(admissionRoot, set.Trust, set.PackageVersion)
+	admissionRoot := path.Join(root, retainedRoot)
+	_, verifier, err := loadPublishedPackageTrust(admissionRoot, set.Trust, set)
 	if err != nil {
 		return fmt.Errorf("published-package trust: %w", err)
 	}
 	for _, pair := range ordered {
-		indexRaw, err := verifyPackageReleaseReadback(admissionRoot, pair.matchedEntry, set.PackageVersion)
+		packageVersion := set.PackageVersion
+		if set.Generation != "" {
+			packageVersion = pair.entry.FormRef.DefinitionVersion
+		}
+		indexRaw, err := verifyPackageReleaseReadback(admissionRoot, pair.matchedEntry, packageVersion, set.Generation != "")
 		if err != nil {
 			return fmt.Errorf("%s package release readback: %w", pair.entry.Kind, err)
 		}
@@ -143,11 +161,17 @@ type positionedPublishedEntry struct {
 }
 
 func validatePublishedPackageSet(set PublishedPackageSet, candidates CandidateSet) ([]positionedPublishedEntry, error) {
-	if set.Format != publishedPackageSetFormat || set.Repository != publishedRepository {
+	if set.Repository != publishedRepository {
 		return nil, fmt.Errorf("format/repository does not identify the Takoform published-package set")
 	}
-	if set.DefinitionVersion != candidates.DefinitionVersion || set.PackageVersion != candidates.PackageVersion {
-		return nil, fmt.Errorf("definition/package version does not match the compiled candidate set")
+	if candidates.Generation == "" {
+		if set.Format != publishedPackageSetFormatV1 || set.Generation != "" ||
+			set.DefinitionVersion != candidates.DefinitionVersion || set.PackageVersion != candidates.PackageVersion {
+			return nil, fmt.Errorf("definition/package version does not match the compiled candidate set")
+		}
+	} else if set.Format != publishedPackageSetFormatV2 || set.Generation != candidates.Generation ||
+		set.DefinitionVersion != "" || set.PackageVersion != "" {
+		return nil, fmt.Errorf("generation does not match the compiled mixed-version candidate set")
 	}
 	if set.PublicationStatus != "published-immutable" || set.AdmissionStatus != "external-required" || set.RevocationCheckpointStatus != "external-required" {
 		return nil, fmt.Errorf("published packages must remain immutable publication proof with external admission and revocation proof")
@@ -177,7 +201,11 @@ func validatePublishedPackageSet(set PublishedPackageSet, candidates CandidateSe
 		if entry.Slug != candidate.Slug || entry.FormRef != candidate.FormRef || entry.PackageDigest != candidate.PackageDigest {
 			return nil, fmt.Errorf("%s published identity does not match the compiled candidate", entry.Kind)
 		}
-		expectedReleaseTag := "forms/" + releaseIDForKind(entry.Kind) + "/v" + set.PackageVersion
+		packageVersion := set.PackageVersion
+		if set.Generation != "" {
+			packageVersion = entry.FormRef.DefinitionVersion
+		}
+		expectedReleaseTag := "forms/" + releaseIDForKind(entry.Kind) + "/v" + packageVersion
 		if entry.ReleaseTag != expectedReleaseTag || !packageReleaseTagPattern.MatchString(entry.ReleaseTag) ||
 			!releaseCommitPattern.MatchString(entry.ReleaseCommit) || !releaseCommitPattern.MatchString(entry.ReleaseToolingCommit) {
 			return nil, fmt.Errorf("%s does not bind the canonical immutable release ref", entry.Kind)
@@ -207,7 +235,7 @@ func validatePublishedPackageSet(set PublishedPackageSet, candidates CandidateSe
 			PackageReleaseManifestDigest: entry.PackageReleaseManifestDigest,
 			PackageIndexPath:             entry.PackageIndexPath, PackageIndexSigstoreBundle: entry.PackageIndexSigstoreBundle,
 		}
-		if err := validatePublishedReleasePaths(setEntry, entry.ChecksumsPath, set.PackageVersion); err != nil {
+		if err := validatePublishedReleasePaths(setEntry, entry.ChecksumsPath, packageVersion); err != nil {
 			return nil, fmt.Errorf("%s retained release paths: %w", entry.Kind, err)
 		}
 		ordered = append(ordered, positionedPublishedEntry{matchedEntry: matchedEntry{entry: setEntry, candidate: candidate}, position: position})
@@ -237,7 +265,7 @@ func validatePublishedReleasePaths(entry SetEntry, checksumsPath, packageVersion
 	return nil
 }
 
-func loadPublishedPackageTrust(admissionRoot string, ref PublishedPackageTrustRef, packageVersion string) (PublishedPackageTrust, *offlineRoleVerifier, error) {
+func loadPublishedPackageTrust(admissionRoot string, ref PublishedPackageTrustRef, set PublishedPackageSet) (PublishedPackageTrust, *offlineRoleVerifier, error) {
 	raw, err := readRetainedRelativeFile(admissionRoot, ref.Path, maxOfflineSigstorePinsBytes)
 	if err != nil {
 		return PublishedPackageTrust{}, nil, err
@@ -252,12 +280,21 @@ func loadPublishedPackageTrust(admissionRoot string, ref PublishedPackageTrustRe
 	if err := decodeStrictJSON(raw, &trust); err != nil {
 		return PublishedPackageTrust{}, nil, err
 	}
-	if trust.Format != publishedPackageTrustFmt || trust.TrustedRoot.Path != canonicalTrustedRootPath ||
-		trust.PackageIndexPolicy.Path != canonicalPackageIndexPolicyPath ||
-		trust.RegistryReadbackPolicy.Path != canonicalRegistryReadbackPolicyPath {
+	if trust.TrustedRoot.Path != canonicalTrustedRootPath ||
+		trust.PackageIndexPolicy.Path != canonicalPackageIndexPolicyPath {
 		return PublishedPackageTrust{}, nil, fmt.Errorf("published-package trust paths/format are not canonical")
 	}
 	wantUnsettled := []string{roleAdmissionEvidence, roleHostReport, roleProviderReport}
+	if set.Generation == "" {
+		if trust.Format != publishedPackageTrustFmtV1 || trust.RegistryReadbackPolicy.Path != canonicalRegistryReadbackPolicyPath {
+			return PublishedPackageTrust{}, nil, fmt.Errorf("historical published-package trust paths/format are not canonical")
+		}
+	} else {
+		if trust.Format != publishedPackageTrustFmtV2 || trust.RegistryReadbackPolicy != (RetainedFile{}) {
+			return PublishedPackageTrust{}, nil, fmt.Errorf("current published-package trust paths/format are not canonical")
+		}
+		wantUnsettled = append(wantUnsettled, roleRegistryReadback)
+	}
 	if len(trust.UnsettledPublisherRoles) != len(wantUnsettled) {
 		return PublishedPackageTrust{}, nil, fmt.Errorf("published-package trust must retain the three unsettled publisher roles")
 	}
@@ -285,8 +322,16 @@ func loadPublishedPackageTrust(admissionRoot string, ref PublishedPackageTrustRe
 	if err := decodeStrictJSON(policyRaw, &policy); err != nil {
 		return PublishedPackageTrust{}, nil, err
 	}
-	if policy.OIDCIssuer != packagePublisherIssuer || policy.CertificateIdentity != packagePublisherIdentity(packageVersion) {
+	wantPackageIdentity := currentPackagePublisherID
+	if set.Generation == "" {
+		wantPackageIdentity = packagePublisherIdentity(set.PackageVersion)
+	}
+	if policy.OIDCIssuer != packagePublisherIssuer || policy.CertificateIdentity != wantPackageIdentity {
 		return PublishedPackageTrust{}, nil, fmt.Errorf("package-index policy is not the protected package release workflow")
+	}
+	if set.Generation != "" {
+		verifier, err := newOfflineRoleVerifier(trustedRoot, policy)
+		return trust, verifier, err
 	}
 	registryPolicyRaw, err := readPinnedRetainedFile(admissionRoot, "registry-readback publisher policy", trust.RegistryReadbackPolicy, maxPublisherPolicyBytes)
 	if err != nil {
@@ -299,7 +344,7 @@ func loadPublishedPackageTrust(admissionRoot string, ref PublishedPackageTrustRe
 	if err := decodeStrictJSON(registryPolicyRaw, &registryPolicy); err != nil {
 		return PublishedPackageTrust{}, nil, err
 	}
-	if registryPolicy.OIDCIssuer != registryPublisherIssuer || registryPolicy.CertificateIdentity != registryPublisherIdentity {
+	if registryPolicy.OIDCIssuer != registryPublisherIssuer || registryPolicy.CertificateIdentity != registryPublisherIdentityV1 {
 		return PublishedPackageTrust{}, nil, fmt.Errorf("registry-readback policy is not the protected standard-admission workflow")
 	}
 	if _, err := newOfflineRoleVerifier(trustedRoot, registryPolicy); err != nil {

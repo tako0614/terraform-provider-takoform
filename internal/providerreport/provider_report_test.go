@@ -107,7 +107,7 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 		t.Fatal(err)
 	}
 	for _, generated := range reports {
-		if generated.report.Format != reportFormat || generated.report.Role != providerRole || generated.report.Status != "passed" || !strings.HasPrefix(generated.report.Subject, "provider:registry.opentofu.org/") {
+		if generated.report.Format != reportFormat || generated.report.Role != providerRole || generated.report.Status != "passed" || generated.report.Subject != "provider:"+providerlifecycle.CanonicalProviderAddress {
 			t.Fatalf("invalid provider-report identity for %s: %#v", generated.kind, generated.report)
 		}
 		if generated.digest != formpackage.DigestBytes(generated.canonical) {
@@ -233,18 +233,23 @@ func TestStandardProviderReportWorkflowSeparatesExecutionAndSigningAuthority(t *
 		"provider-report-manifest.json",
 		"signed-provider-report-candidate.json",
 		"SHA256SUMS",
-		"takoform-standard-provider-report-candidate-1.0.1-${{ needs.generate.outputs.source_commit_short }}",
+		"takoform-standard-provider-report-candidate-current-${{ needs.generate.outputs.source_commit_short }}",
 		`--source-commit "${GITHUB_SHA}"`,
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Errorf("workflow omits %q", required)
 		}
 	}
-	if strings.Count(workflow, "actions/checkout@") != 1 {
-		t.Fatal("the checkout-free signer must not execute repository source")
+	if strings.Count(workflow, "actions/checkout@") != 2 {
+		t.Fatal("the signer must read the exact checked-out inventory used to derive its report closure")
 	}
 	signer := strings.Split(workflow, "\n  sign:\n")
-	if len(signer) != 2 || strings.Contains(signer[1], "actions/checkout@") || strings.Contains(signer[1], "contents: write") || strings.Contains(signer[1], "contents: read") || strings.Contains(signer[1], "gh release") {
+	if len(signer) != 2 || !strings.Contains(signer[1], "actions/checkout@") ||
+		!strings.Contains(signer[1], "ref: ${{ needs.generate.outputs.source_commit }}") ||
+		!strings.Contains(signer[1], "contents: read") ||
+		strings.Contains(signer[1], "contents: write") ||
+		strings.Contains(signer[1], "go run") ||
+		strings.Contains(signer[1], "gh release") {
 		t.Fatal("signer permissions or mutation boundary drifted")
 	}
 	for _, forbidden := range []string{"unsignedArtifact:", "sigstoreBundlePath", "sigstoreBundleDigest"} {

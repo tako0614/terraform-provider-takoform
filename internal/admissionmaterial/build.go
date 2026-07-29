@@ -36,7 +36,10 @@ const (
 	providerSignedFormat   = "takoform.standard-provider-report-signed-candidate@v1"
 	providerWorkflow       = ".github/workflows/standard-provider-report.yml"
 	providerIdentity       = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-provider-report.yml@refs/heads/main"
-	providerSubject        = "provider:registry.opentofu.org/tako0614/takoform"
+	// retiredProviderSubject is bound to the retained 1.0.1 evidence set.
+	// Current reports use providerlifecycle.CanonicalProviderAddress through
+	// the generation-aware provider-report lane and must not relabel history.
+	retiredProviderSubject = "provider:registry.opentofu.org/tako0614/takoform"
 	bundleMediaType        = "application/vnd.dev.sigstore.bundle.v0.3+json"
 	maximumMaterialBytes   = 16 << 20
 )
@@ -82,6 +85,7 @@ type reportManifest struct {
 	Status            string                `json:"status"`
 	ProofType         string                `json:"proofType"`
 	Subject           string                `json:"subject"`
+	Generation        string                `json:"generation,omitempty"`
 	DefinitionVersion string                `json:"definitionVersion"`
 	PackageVersion    string                `json:"packageVersion"`
 	RunnerVersion     string                `json:"runnerVersion"`
@@ -109,6 +113,7 @@ type signedManifest struct {
 	Status              string        `json:"status"`
 	ProofType           string        `json:"proofType"`
 	Subject             string        `json:"subject"`
+	Generation          string        `json:"generation,omitempty"`
 	CertificateIdentity string        `json:"certificateIdentity"`
 	Workflow            string        `json:"workflow"`
 	WorkflowRunID       string        `json:"workflowRunId"`
@@ -127,8 +132,12 @@ type reportArtifact struct {
 }
 
 type artifactSet struct {
-	manifest reportManifest
-	byKind   map[string]reportArtifact
+	manifest     reportManifest
+	manifestRaw  []byte
+	signedRaw    []byte
+	checksumsRaw []byte
+	byKind       map[string]reportArtifact
+	allByKind    map[string]reportArtifact
 }
 
 // Build verifies exact artifact inventories and writes a new, non-publishable
@@ -191,7 +200,7 @@ func Build(options BuildOptions) error {
 	if err != nil {
 		return fmt.Errorf("host report candidate: %w", err)
 	}
-	providers, err := loadArtifactSet(root, options.HostID, options.ProviderReports, "provider-report", candidates, options.ProviderSourceCommit, options.ProviderSourceCommit, options.ProviderWorkflowRunID, providerSubject, providerVersion)
+	providers, err := loadArtifactSet(root, options.HostID, options.ProviderReports, "provider-report", candidates, options.ProviderSourceCommit, options.ProviderSourceCommit, options.ProviderWorkflowRunID, retiredProviderSubject, providerVersion)
 	if err != nil {
 		return fmt.Errorf("provider report candidate: %w", err)
 	}

@@ -27,6 +27,8 @@ import (
 const (
 	setPath                = "admission/v1/published-package-set.json"
 	trustPath              = "admission/v1/trust/published-package-trust.json"
+	currentSetPath         = "admission/v3/published-package-set.json"
+	currentTrustPath       = "admission/v3/trust/published-package-trust.json"
 	repository             = "tako0614/terraform-provider-takoform"
 	maxGitHubResponseBytes = 4 << 20
 	maxGitHubAssetBytes    = 64 << 20
@@ -47,6 +49,7 @@ type candidateSet struct {
 
 type candidatePackage struct {
 	Kind          string              `json:"kind"`
+	Slug          string              `json:"slug,omitempty"`
 	Path          string              `json:"path"`
 	FormRef       formpackage.FormRef `json:"formRef"`
 	PackageDigest string              `json:"packageDigest"`
@@ -153,6 +156,25 @@ func main() {
 		if err == nil {
 			fmt.Printf("published-package-set: staged exact live snapshot at %s\n", *outputRoot)
 		}
+	case "download-current":
+		flags := flag.NewFlagSet("published-package-set download-current", flag.ContinueOnError)
+		flags.SetOutput(os.Stderr)
+		outputRoot := flags.String("output-root", "", "new, absent directory that receives the staged admission/v3 snapshot")
+		if parseErr := flags.Parse(os.Args[2:]); parseErr != nil || flags.NArg() != 0 || strings.TrimSpace(*outputRoot) == "" {
+			if parseErr == nil {
+				usage()
+			}
+			os.Exit(2)
+		}
+		client, clientErr := newGitHubClient("https://api.github.com/", os.Getenv("GITHUB_TOKEN"), nil)
+		if clientErr != nil {
+			err = clientErr
+		} else {
+			err = downloadCurrentSnapshot(context.Background(), client, ".", *outputRoot)
+		}
+		if err == nil {
+			fmt.Printf("published-package-set: staged exact current live snapshot at %s\n", *outputRoot)
+		}
 	default:
 		usage()
 		os.Exit(2)
@@ -164,7 +186,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: published-package-set snapshot | published-package-set download --output-root DIRECTORY")
+	fmt.Fprintln(os.Stderr, "usage: published-package-set snapshot | published-package-set download --output-root DIRECTORY | published-package-set download-current --output-root DIRECTORY")
 }
 
 func newGitHubClient(rawBaseURL, token string, httpClient *http.Client) (*githubClient, error) {
@@ -204,7 +226,39 @@ func downloadSnapshot(ctx context.Context, client *githubClient, sourceRoot, out
 	if candidates.DefinitionVersion == "" || !versionPattern.MatchString(candidates.PackageVersion) {
 		return fmt.Errorf("candidate set has an invalid definition/package version")
 	}
-	trustRaw, err := os.ReadFile(filepath.Join(sourceRoot, filepath.FromSlash(trustPath)))
+	return downloadSnapshotForSet(ctx, client, sourceRoot, outputRoot, candidates, "", setPath, trustPath)
+}
+
+func downloadCurrentSnapshot(ctx context.Context, client *githubClient, sourceRoot, outputRoot string) error {
+	current, err := standardforms.CurrentAdmissionCandidateSet(sourceRoot)
+	if err != nil {
+		return err
+	}
+	candidates := candidateSet{Packages: make([]candidatePackage, 0, len(current.Entries))}
+	for _, entry := range current.Entries {
+		candidates.Packages = append(candidates.Packages, candidatePackage{
+			Kind: entry.Kind, Slug: entry.Slug, Path: entry.PackagePath,
+			FormRef: entry.FormRef, PackageDigest: entry.PackageDigest,
+		})
+	}
+	return downloadSnapshotForSet(ctx, client, sourceRoot, outputRoot, candidates, current.Generation, currentSetPath, currentTrustPath)
+}
+
+func downloadSnapshotForSet(ctx context.Context, client *githubClient, sourceRoot, outputRoot string, candidates candidateSet, generation, outputSetPath, outputTrustPath string) (err error) {
+	if client == nil {
+		return fmt.Errorf("GitHub client is required")
+	}
+	if len(candidates.Packages) != expectedPackageCount {
+		return fmt.Errorf("candidate set contains %d packages, want exactly %d", len(candidates.Packages), expectedPackageCount)
+	}
+	if generation == "" {
+		if candidates.DefinitionVersion == "" || !versionPattern.MatchString(candidates.PackageVersion) {
+			return fmt.Errorf("candidate set has an invalid definition/package version")
+		}
+	} else if generation != "ga-core-v1" || candidates.DefinitionVersion != "" || candidates.PackageVersion != "" {
+		return fmt.Errorf("current candidate set has an invalid generation identity")
+	}
+	trustRaw, err := os.ReadFile(filepath.Join(sourceRoot, filepath.FromSlash(outputTrustPath)))
 	if err != nil {
 		return err
 	}
@@ -260,6 +314,7 @@ func downloadSnapshot(ctx context.Context, client *githubClient, sourceRoot, out
 	set := admissionrelease.PublishedPackageSet{
 		Format:                     "takoform.published-package-set@v1",
 		Repository:                 repository,
+		Generation:                 generation,
 		DefinitionVersion:          candidates.DefinitionVersion,
 		PackageVersion:             candidates.PackageVersion,
 		PublicationStatus:          "published-immutable",
@@ -269,6 +324,9 @@ func downloadSnapshot(ctx context.Context, client *githubClient, sourceRoot, out
 			Path: "trust/published-package-trust.json", Digest: formpackage.DigestBytes(trustRaw),
 		},
 		Entries: make([]admissionrelease.PublishedPackageEntry, 0, expectedPackageCount),
+	}
+	if generation != "" {
+		set.Format = "takoform.published-package-set@v2"
 	}
 	seenKinds := make(map[string]struct{}, expectedPackageCount)
 	seenReleaseIDs := make(map[int64]string, expectedPackageCount)
@@ -281,7 +339,13 @@ func downloadSnapshot(ctx context.Context, client *githubClient, sourceRoot, out
 			return fmt.Errorf("candidate set duplicates kind %q", candidate.Kind)
 		}
 		seenKinds[candidate.Kind] = struct{}{}
-		entry, liveID, assetIDs, packageErr := downloadPackage(ctx, client, cleanOutput, candidate, candidates.PackageVersion)
+		packageVersion := candidates.PackageVersion
+		retainedRoot := "admission/v1"
+		if generation != "" {
+			packageVersion = candidate.FormRef.DefinitionVersion
+			retainedRoot = "admission/v3"
+		}
+		entry, liveID, assetIDs, packageErr := downloadPackage(ctx, client, cleanOutput, retainedRoot, candidate, packageVersion)
 		if packageErr != nil {
 			return fmt.Errorf("%s: %w", candidate.Kind, packageErr)
 		}
@@ -306,7 +370,7 @@ func downloadSnapshot(ctx context.Context, client *githubClient, sourceRoot, out
 	if err != nil {
 		return err
 	}
-	stagedSetPath := filepath.Join(cleanOutput, filepath.FromSlash(setPath))
+	stagedSetPath := filepath.Join(cleanOutput, filepath.FromSlash(outputSetPath))
 	if err := os.MkdirAll(filepath.Dir(stagedSetPath), 0o755); err != nil {
 		return err
 	}
@@ -321,6 +385,7 @@ func downloadPackage(
 	ctx context.Context,
 	client *githubClient,
 	outputRoot string,
+	retainedRoot string,
 	candidate candidatePackage,
 	packageVersion string,
 ) (admissionrelease.PublishedPackageEntry, int64, []int64, error) {
@@ -362,7 +427,7 @@ func downloadPackage(
 	}
 
 	releaseDirectory := path.Join("releases", releaseID, packageVersion)
-	stagedDirectory := filepath.Join(outputRoot, "admission", "v1", filepath.FromSlash(releaseDirectory))
+	stagedDirectory := filepath.Join(outputRoot, filepath.FromSlash(retainedRoot), filepath.FromSlash(releaseDirectory))
 	if err := os.MkdirAll(stagedDirectory, 0o755); err != nil {
 		return admissionrelease.PublishedPackageEntry{}, 0, nil, err
 	}
@@ -374,7 +439,7 @@ func downloadPackage(
 	manifestRaw := downloaded["release-manifest.json"]
 	checksumsRaw := downloaded["SHA256SUMS"]
 	entry := admissionrelease.PublishedPackageEntry{
-		Kind: candidate.Kind, Slug: path.Base(candidate.Path), FormRef: candidate.FormRef, PackageDigest: candidate.PackageDigest,
+		Kind: candidate.Kind, Slug: candidateSlug(candidate), FormRef: candidate.FormRef, PackageDigest: candidate.PackageDigest,
 		ReleaseTag: manifest.Tag, ReleaseCommit: manifest.SourceCommit, ReleaseToolingCommit: manifest.ToolingCommit,
 		GitHubReleaseID: live.ID, PublishedAt: live.PublishedAt.UTC().Format(time.RFC3339), Immutable: live.Immutable,
 		PackageReleaseManifestPath: releaseDirectory + "/release-manifest.json", PackageReleaseManifestDigest: formpackage.DigestBytes(manifestRaw),
@@ -382,6 +447,13 @@ func downloadPackage(
 		PackageIndexPath: releaseDirectory + "/" + manifest.SignedSubject, PackageIndexSigstoreBundle: releaseDirectory + "/" + manifest.SignatureBundle,
 	}
 	return entry, live.ID, assetIDs, nil
+}
+
+func candidateSlug(candidate candidatePackage) string {
+	if candidate.Slug != "" {
+		return candidate.Slug
+	}
+	return path.Base(candidate.Path)
 }
 
 func validateLiveRelease(live githubRelease, tag, releaseID, packageVersion string) (map[string]githubReleaseAsset, []int64, error) {

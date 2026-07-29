@@ -327,9 +327,12 @@ func loadProviderReleaseIdentity(root string) (string, []string, error) {
 		if strings.TrimSpace(cli.ProviderAddress) == "" {
 			return "", nil, fmt.Errorf("provider release descriptor contains an empty provider address")
 		}
+		if cli.ProviderAddress != providerlifecycle.CanonicalProviderAddress {
+			return "", nil, fmt.Errorf("provider release descriptor contains non-canonical provider address %q", cli.ProviderAddress)
+		}
 		subject := "provider:" + cli.ProviderAddress
 		if _, duplicate := seen[subject]; duplicate {
-			return "", nil, fmt.Errorf("provider release descriptor duplicates %q", subject)
+			continue
 		}
 		seen[subject] = struct{}{}
 		subjects = append(subjects, subject)

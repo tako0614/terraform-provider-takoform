@@ -30,12 +30,11 @@ const (
 	DirectRegistryInstall = "direct-registry-install"
 	providerProtocol      = "Terraform provider protocol v6 + versioned Form host HTTP"
 
-	OpenTofuProviderAddress  = "registry.opentofu.org/tako0614/takoform"
-	TerraformProviderAddress = "registry.terraform.io/tako0614/takoform"
-	// CanonicalProviderAddress is the provider handshake and Terraform Registry
-	// identity. OpenTofuProviderAddress is a separately published alternative
-	// state identity, never an alias for this address.
-	CanonicalProviderAddress = TerraformProviderAddress
+	// CanonicalProviderAddress is the only provider source and state identity.
+	// Both OpenTofu and Terraform install it from the Terraform Registry.
+	CanonicalProviderAddress = "registry.terraform.io/tako0614/takoform"
+	OpenTofuProviderAddress  = CanonicalProviderAddress
+	TerraformProviderAddress = CanonicalProviderAddress
 )
 
 type CheckEvidence struct {
@@ -538,8 +537,9 @@ func validateMatrix(matrix MatrixReport, requirements []CLIRequirement, installa
 		}
 	}
 	if !seen["OpenTofu"] || !seen["Terraform"] ||
-		requirementByProduct["OpenTofu"].ProviderAddress == requirementByProduct["Terraform"].ProviderAddress {
-		return errors.New("provider CLI/FQN matrix must preserve the canonical Terraform identity and distinct dual-published OpenTofu identity")
+		requirementByProduct["OpenTofu"].ProviderAddress != CanonicalProviderAddress ||
+		requirementByProduct["Terraform"].ProviderAddress != CanonicalProviderAddress {
+		return errors.New("provider CLI matrix must use the canonical Terraform Registry FQN for both OpenTofu and Terraform")
 	}
 	return nil
 }

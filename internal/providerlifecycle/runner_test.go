@@ -140,7 +140,7 @@ func TestStandardFixtureCasesRequireExactExecutedFormIdentity(t *testing.T) {
 	}
 }
 
-func TestLoadCLIMatrixPinsCanonicalAndDualPublishedAddresses(t *testing.T) {
+func TestLoadCLIMatrixPinsOneCanonicalProviderAddress(t *testing.T) {
 	root, err := RepoRoot(".")
 	if err != nil {
 		t.Fatal(err)
@@ -162,14 +162,14 @@ func TestLoadCLIMatrixPinsCanonicalAndDualPublishedAddresses(t *testing.T) {
 	if seen["Terraform"].Version != "1.15.8" || seen["Terraform"].ProviderAddress != TerraformProviderAddress {
 		t.Fatalf("unexpected Terraform matrix entry: %#v", seen["Terraform"])
 	}
-	if CanonicalProviderAddress != TerraformProviderAddress || OpenTofuProviderAddress == CanonicalProviderAddress {
-		t.Fatalf("provider distribution identities collapsed: canonical=%q opentofu=%q", CanonicalProviderAddress, OpenTofuProviderAddress)
+	if CanonicalProviderAddress != TerraformProviderAddress || OpenTofuProviderAddress != CanonicalProviderAddress {
+		t.Fatalf("provider distribution identities differ: canonical=%q opentofu=%q terraform=%q", CanonicalProviderAddress, OpenTofuProviderAddress, TerraformProviderAddress)
 	}
 	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"dual-publishes", "distinct state identities", "state replace-provider"} {
+	for _, required := range []string{"one provider source", "from the Terraform Registry"} {
 		if !strings.Contains(string(readme), required) {
 			t.Fatalf("provider distribution guidance lacks %q", required)
 		}
@@ -178,11 +178,11 @@ func TestLoadCLIMatrixPinsCanonicalAndDualPublishedAddresses(t *testing.T) {
 
 func TestStackConfigUsesExactCLIProviderAddress(t *testing.T) {
 	openTofu := stackConfig("https://forms.example.test", OpenTofuProviderAddress, "1.0.0", 1)
-	if !strings.Contains(openTofu, `source = "`+OpenTofuProviderAddress+`"`) || !strings.Contains(openTofu, `version = "1.0.0"`) || strings.Contains(openTofu, TerraformProviderAddress) {
+	if !strings.Contains(openTofu, `source = "`+CanonicalProviderAddress+`"`) || !strings.Contains(openTofu, `version = "1.0.0"`) {
 		t.Fatalf("OpenTofu config did not retain its exact FQN:\n%s", openTofu)
 	}
 	terra := stackConfig("https://forms.example.test", TerraformProviderAddress, "1.0.0", 1)
-	if !strings.Contains(terra, `source = "`+TerraformProviderAddress+`"`) || strings.Contains(terra, OpenTofuProviderAddress) {
+	if !strings.Contains(terra, `source = "`+CanonicalProviderAddress+`"`) {
 		t.Fatalf("Terraform config did not retain its exact FQN:\n%s", terra)
 	}
 }
@@ -242,7 +242,7 @@ func TestTerraformRunnerEnvironmentRemovesProviderAndCLITaint(t *testing.T) {
 	}
 }
 
-func TestValidateMatrixRejectsAddressAliasingAndEvidenceDrift(t *testing.T) {
+func TestValidateMatrixRejectsNonCanonicalAddressAndEvidenceDrift(t *testing.T) {
 	requirements := []CLIRequirement{
 		{Product: "OpenTofu", Version: "1.12.1", ProviderAddress: OpenTofuProviderAddress},
 		{Product: "Terraform", Version: "1.15.8", ProviderAddress: TerraformProviderAddress},
@@ -272,11 +272,11 @@ func TestValidateMatrixRejectsAddressAliasingAndEvidenceDrift(t *testing.T) {
 		t.Fatalf("valid direct Registry matrix: %v", err)
 	}
 
-	aliased := matrix
-	aliased.Reports = append([]Report(nil), matrix.Reports...)
-	aliased.Reports[0].CLI.ProviderAddress = TerraformProviderAddress
-	if err := ValidateMatrix(aliased, requirements); err == nil {
-		t.Fatal("matrix accepted an aliased OpenTofu provider address")
+	nonCanonical := matrix
+	nonCanonical.Reports = append([]Report(nil), matrix.Reports...)
+	nonCanonical.Reports[0].CLI.ProviderAddress = "registry.opentofu.org/tako0614/takoform"
+	if err := ValidateMatrix(nonCanonical, requirements); err == nil {
+		t.Fatal("matrix accepted a non-canonical OpenTofu provider address")
 	}
 
 	drifted := matrix

@@ -141,7 +141,7 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 
 	registryRef, registryRaw := writeRegistryFixture(t, root, versionRaw, releaseCommit)
 	set := Set{
-		Format: setFormat, DefinitionVersion: "1.0.1", PackageVersion: "1.0.1", AdmissionReleaseTag: "forms/admissions/v1.0.1",
+		Format: setFormatV2, DefinitionVersion: "1.0.1", PackageVersion: "1.0.1", AdmissionReleaseTag: "forms/admissions/v1.0.1",
 		ProviderRegistryReadback: registryRef,
 		Entries: []SetEntry{{
 			Kind: "ObjectBucket", Slug: "object-bucket", FormRef: packageReport.FormRef, PackageDigest: packageReport.PackageDigest,

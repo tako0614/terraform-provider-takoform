@@ -30,6 +30,34 @@ func TestReviewedPolicyLoads(t *testing.T) {
 	}
 }
 
+func TestCurrentReviewedPolicyLoadsWithoutRelabelingV1(t *testing.T) {
+	root := filepath.Join("..", "..")
+	policy, err := LoadAt(root, "admission/v3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, err := policy.ByHostID("takosumi-oss-reference")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.ManifestFormat != "takosumi.standard-form-host-report-candidate@v2" ||
+		host.SignedFormat != "takosumi.standard-form-host-report-signed-candidate@v2" ||
+		host.RunnerVersionPrefix != "1.2.0+git." {
+		t.Fatalf("current host contract drifted: %#v", host)
+	}
+	legacy, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyHost, err := legacy.ByHostID("takosumi-oss-reference")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacyHost.ManifestFormat != "takosumi.standard-form-host-report-candidate@v1" {
+		t.Fatalf("historical host contract was relabeled: %#v", legacyHost)
+	}
+}
+
 // TestPolicyRejectsUnusableEntries keeps the allowlist fail-closed: a malformed
 // entry must not silently widen who may sign admission input.
 func TestPolicyRejectsUnusableEntries(t *testing.T) {

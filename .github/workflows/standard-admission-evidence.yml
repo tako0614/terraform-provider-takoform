@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       host_id:
-        description: Reviewed conforming host in admission/v1/conforming-hosts.json that signed the host reports
+        description: Reviewed conforming host in admission/v3/conforming-hosts.json that signed the host reports
         required: true
         type: string
       snapshot_commit:
@@ -67,6 +67,26 @@ on:
         description: SHA-256 of the retained signed provider candidate
         required: true
         type: string
+      registry_candidate_path:
+        description: Retained provider Registry-readback candidate directory
+        required: true
+        type: string
+      registry_candidate_tree:
+        description: Exact Git tree for the retained Registry candidate
+        required: true
+        type: string
+      registry_run_id:
+        description: Exact protected Registry-readback workflow run retained in source
+        required: true
+        type: string
+      registry_manifest_digest:
+        description: SHA-256 of the retained Registry candidate manifest
+        required: true
+        type: string
+      registry_signed_manifest_digest:
+        description: SHA-256 of the retained signed Registry candidate
+        required: true
+        type: string
       admission_version:
         description: Immutable admission release version to assemble
         required: true
@@ -85,6 +105,7 @@ env:
   EXPECTED_COSIGN_VERSION: "v3.0.6"
   HOST_ID: ${{ inputs.host_id }}
   PROVIDER_REPORT_IDENTITY: https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-provider-report.yml@refs/heads/main
+  REGISTRY_READBACK_IDENTITY: https://github.com/tako0614/terraform-provider-takoform/.github/workflows/provider-registry-readback.yml@refs/heads/main
   EVIDENCE_IDENTITY: https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-admission-evidence.yml@refs/heads/main
   OIDC_ISSUER: https://token.actions.githubusercontent.com
 
@@ -126,6 +147,11 @@ jobs:
           PROVIDER_RUN_ID: ${{ inputs.provider_run_id }}
           PROVIDER_MANIFEST_DIGEST: ${{ inputs.provider_manifest_digest }}
           PROVIDER_SIGNED_MANIFEST_DIGEST: ${{ inputs.provider_signed_manifest_digest }}
+          REGISTRY_CANDIDATE_PATH: ${{ inputs.registry_candidate_path }}
+          REGISTRY_CANDIDATE_TREE: ${{ inputs.registry_candidate_tree }}
+          REGISTRY_RUN_ID: ${{ inputs.registry_run_id }}
+          REGISTRY_MANIFEST_DIGEST: ${{ inputs.registry_manifest_digest }}
+          REGISTRY_SIGNED_MANIFEST_DIGEST: ${{ inputs.registry_signed_manifest_digest }}
           ADMISSION_VERSION: ${{ inputs.admission_version }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -142,20 +168,25 @@ jobs:
           test "$(git rev-parse HEAD)" = "${SNAPSHOT_COMMIT}"
           test "$(git rev-parse HEAD^{tree})" = "${SNAPSHOT_TREE}"
           git merge-base --is-ancestor "${SNAPSHOT_COMMIT}" "${current_main}"
-          [[ "${HOST_CANDIDATE_PATH}" =~ ^admission/v1/candidates/host-report-[0-9][0-9A-Za-z.-]*-[0-9a-f]{12}-[0-9a-f]{12}$ ]]
-          [[ "${PROVIDER_CANDIDATE_PATH}" =~ ^admission/v1/candidates/provider-report-[0-9][0-9A-Za-z.-]*-[0-9a-f]{12}$ ]]
+          [[ "${HOST_CANDIDATE_PATH}" =~ ^admission/v3/candidates/host-report-[0-9A-Za-z.-]+-[0-9a-f]{12}-[0-9a-f]{12}$ ]]
+          [[ "${PROVIDER_CANDIDATE_PATH}" =~ ^admission/v3/candidates/provider-report-[0-9A-Za-z.-]+-[0-9a-f]{12}$ ]]
+          [[ "${REGISTRY_CANDIDATE_PATH}" =~ ^admission/v3/candidates/registry-readback-[0-9A-Za-z.-]+-[0-9a-f]{12}$ ]]
           [[ "${HOST_CANDIDATE_TREE}" =~ ^[0-9a-f]{40}$ ]]
           [[ "${PROVIDER_CANDIDATE_TREE}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${REGISTRY_CANDIDATE_TREE}" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse "${SNAPSHOT_COMMIT}:${HOST_CANDIDATE_PATH}")" = "${HOST_CANDIDATE_TREE}"
           test "$(git rev-parse "${SNAPSHOT_COMMIT}:${PROVIDER_CANDIDATE_PATH}")" = "${PROVIDER_CANDIDATE_TREE}"
+          test "$(git rev-parse "${SNAPSHOT_COMMIT}:${REGISTRY_CANDIDATE_PATH}")" = "${REGISTRY_CANDIDATE_TREE}"
           test "$(git cat-file -t "${HOST_CANDIDATE_TREE}")" = tree
           test "$(git cat-file -t "${PROVIDER_CANDIDATE_TREE}")" = tree
+          test "$(git cat-file -t "${REGISTRY_CANDIDATE_TREE}")" = tree
           for commit in "${HOST_SOURCE_COMMIT}" "${HOST_TAKOFORM_SOURCE_COMMIT}" "${PROVIDER_SOURCE_COMMIT}"; do
             [[ "${commit}" =~ ^[0-9a-f]{40}$ ]]
           done
           [[ "${HOST_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
           [[ "${PROVIDER_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
-          for digest in "${HOST_MANIFEST_DIGEST}" "${HOST_SIGNED_MANIFEST_DIGEST}" "${PROVIDER_MANIFEST_DIGEST}" "${PROVIDER_SIGNED_MANIFEST_DIGEST}"; do
+          [[ "${REGISTRY_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+          for digest in "${HOST_MANIFEST_DIGEST}" "${HOST_SIGNED_MANIFEST_DIGEST}" "${PROVIDER_MANIFEST_DIGEST}" "${PROVIDER_SIGNED_MANIFEST_DIGEST}" "${REGISTRY_MANIFEST_DIGEST}" "${REGISTRY_SIGNED_MANIFEST_DIGEST}"; do
             [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
           done
           [[ "${ADMISSION_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]
@@ -168,10 +199,14 @@ jobs:
           test "$(jq -er '.workflowRunId' "${HOST_CANDIDATE_PATH}/signed-host-report-candidate.json")" = "${HOST_RUN_ID}"
           test "$(jq -er '.source.commit' "${PROVIDER_CANDIDATE_PATH}/provider-report-manifest.json")" = "${PROVIDER_SOURCE_COMMIT}"
           test "$(jq -er '.workflowRunId' "${PROVIDER_CANDIDATE_PATH}/signed-provider-report-candidate.json")" = "${PROVIDER_RUN_ID}"
+          test "$(jq -er '.source.commit' "${REGISTRY_CANDIDATE_PATH}/provider-registry-readback-manifest.json")" = "${PROVIDER_SOURCE_COMMIT}"
+          test "$(jq -er '.workflowRunId' "${REGISTRY_CANDIDATE_PATH}/signed-provider-registry-readback-candidate.json")" = "${REGISTRY_RUN_ID}"
           test "sha256:$(sha256sum "${HOST_CANDIDATE_PATH}/host-report-manifest.json" | cut -d ' ' -f 1)" = "${HOST_MANIFEST_DIGEST}"
           test "sha256:$(sha256sum "${HOST_CANDIDATE_PATH}/signed-host-report-candidate.json" | cut -d ' ' -f 1)" = "${HOST_SIGNED_MANIFEST_DIGEST}"
           test "sha256:$(sha256sum "${PROVIDER_CANDIDATE_PATH}/provider-report-manifest.json" | cut -d ' ' -f 1)" = "${PROVIDER_MANIFEST_DIGEST}"
           test "sha256:$(sha256sum "${PROVIDER_CANDIDATE_PATH}/signed-provider-report-candidate.json" | cut -d ' ' -f 1)" = "${PROVIDER_SIGNED_MANIFEST_DIGEST}"
+          test "sha256:$(sha256sum "${REGISTRY_CANDIDATE_PATH}/provider-registry-readback-manifest.json" | cut -d ' ' -f 1)" = "${REGISTRY_MANIFEST_DIGEST}"
+          test "sha256:$(sha256sum "${REGISTRY_CANDIDATE_PATH}/signed-provider-registry-readback-candidate.json" | cut -d ' ' -f 1)" = "${REGISTRY_SIGNED_MANIFEST_DIGEST}"
           {
             echo "source_commit=${SNAPSHOT_COMMIT}"
             echo "source_commit_short=${SNAPSHOT_COMMIT:0:12}"
@@ -179,11 +214,13 @@ jobs:
           {
             echo "HOST_CANDIDATE_PATH=${HOST_CANDIDATE_PATH}"
             echo "PROVIDER_CANDIDATE_PATH=${PROVIDER_CANDIDATE_PATH}"
+            echo "REGISTRY_CANDIDATE_PATH=${REGISTRY_CANDIDATE_PATH}"
             echo "HOST_SOURCE_COMMIT=${HOST_SOURCE_COMMIT}"
             echo "HOST_TAKOFORM_SOURCE_COMMIT=${HOST_TAKOFORM_SOURCE_COMMIT}"
             echo "PROVIDER_SOURCE_COMMIT=${PROVIDER_SOURCE_COMMIT}"
             echo "HOST_RUN_ID=${HOST_RUN_ID}"
             echo "PROVIDER_RUN_ID=${PROVIDER_RUN_ID}"
+            echo "REGISTRY_RUN_ID=${REGISTRY_RUN_ID}"
           } >> "${GITHUB_ENV}"
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
@@ -200,27 +237,34 @@ jobs:
           grep -F "${EXPECTED_COSIGN_VERSION}" <<<"$(cosign version 2>&1)"
           host_report_identity="$(jq -er --arg id "${HOST_ID}" \
             '.hosts[] | select(.hostId == $id) | .certificateIdentity' \
-            admission/v1/conforming-hosts.json)"
+            admission/v3/conforming-hosts.json)"
           test "$(find "${HOST_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
           test "$(find "${PROVIDER_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
+          test "$(find "${REGISTRY_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
           test "$(find "${HOST_CANDIDATE_PATH}" -type f | wc -l)" -eq 23
-          test "$(find "${PROVIDER_CANDIDATE_PATH}" -type f | wc -l)" -eq 23
+          test "$(find "${PROVIDER_CANDIDATE_PATH}" -type f | wc -l)" -eq 71
+          test "$(find "${REGISTRY_CANDIDATE_PATH}" -type f | wc -l)" -eq 6
           mapfile -t host_reports < <(find "${HOST_CANDIDATE_PATH}/packages" -mindepth 2 -maxdepth 2 -type f -name host-report.json | sort)
           mapfile -t provider_reports < <(find "${PROVIDER_CANDIDATE_PATH}/packages" -mindepth 2 -maxdepth 2 -type f -name provider-report.json | sort)
           test "${#host_reports[@]}" -eq 10
-          test "${#provider_reports[@]}" -eq 10
+          test "${#provider_reports[@]}" -eq 34
           for report in "${host_reports[@]}"; do
             cosign verify-blob "${report}" --bundle "${report%.json}.sigstore.json" \
-              --trusted-root admission/v1/trust/trusted-root.json \
+              --trusted-root admission/v3/trust/trusted-root.json \
               --certificate-identity "${host_report_identity}" \
               --certificate-oidc-issuer "${OIDC_ISSUER}"
           done
           for report in "${provider_reports[@]}"; do
             cosign verify-blob "${report}" --bundle "${report%.json}.sigstore.json" \
-              --trusted-root admission/v1/trust/trusted-root.json \
+              --trusted-root admission/v3/trust/trusted-root.json \
               --certificate-identity "${PROVIDER_REPORT_IDENTITY}" \
               --certificate-oidc-issuer "${OIDC_ISSUER}"
           done
+          cosign verify-blob "${REGISTRY_CANDIDATE_PATH}/provider-readback.json" \
+            --bundle "${REGISTRY_CANDIDATE_PATH}/provider-readback.sigstore.json" \
+            --trusted-root admission/v3/trust/trusted-root.json \
+            --certificate-identity "${REGISTRY_READBACK_IDENTITY}" \
+            --certificate-oidc-issuer "${OIDC_ISSUER}"
 
       - name: Build the exact material twice
         shell: bash
@@ -230,30 +274,34 @@ jobs:
           set -euo pipefail
           first="${RUNNER_TEMP}/material-first"
           second="${RUNNER_TEMP}/material-second"
-          go run ./cmd/standard-admission-material build \
+          go run ./cmd/standard-admission-material build-current \
             --host-id "${HOST_ID}" \
             --host-reports "${HOST_CANDIDATE_PATH}" \
             --provider-reports "${PROVIDER_CANDIDATE_PATH}" \
+            --registry-readback "${REGISTRY_CANDIDATE_PATH}" \
             --output-dir "${first}" \
             --admission-version "${ADMISSION_VERSION}" \
             --host-source-commit "${HOST_SOURCE_COMMIT}" \
             --host-takoform-source-commit "${HOST_TAKOFORM_SOURCE_COMMIT}" \
             --provider-source-commit "${PROVIDER_SOURCE_COMMIT}" \
             --host-run-id "${HOST_RUN_ID}" \
-            --provider-run-id "${PROVIDER_RUN_ID}"
-          go run ./cmd/standard-admission-material build \
+            --provider-run-id "${PROVIDER_RUN_ID}" \
+            --registry-run-id "${REGISTRY_RUN_ID}"
+          go run ./cmd/standard-admission-material build-current \
             --host-id "${HOST_ID}" \
             --host-reports "${HOST_CANDIDATE_PATH}" \
             --provider-reports "${PROVIDER_CANDIDATE_PATH}" \
+            --registry-readback "${REGISTRY_CANDIDATE_PATH}" \
             --output-dir "${second}" \
             --admission-version "${ADMISSION_VERSION}" \
             --host-source-commit "${HOST_SOURCE_COMMIT}" \
             --host-takoform-source-commit "${HOST_TAKOFORM_SOURCE_COMMIT}" \
             --provider-source-commit "${PROVIDER_SOURCE_COMMIT}" \
             --host-run-id "${HOST_RUN_ID}" \
-            --provider-run-id "${PROVIDER_RUN_ID}"
+            --provider-run-id "${PROVIDER_RUN_ID}" \
+            --registry-run-id "${REGISTRY_RUN_ID}"
           diff -ru "${first}" "${second}"
-          test "$(find "${first}" -type f | wc -l)" -eq 51
+          test "$(find "${first}" -type f | wc -l)" -eq 105
           test "$(find "${first}" -type l | wc -l)" -eq 0
 
       - name: Close the unsigned handoff
@@ -264,11 +312,12 @@ jobs:
           mkdir "${handoff}"
           cp -a "${HOST_CANDIDATE_PATH}" "${handoff}/host"
           cp -a "${PROVIDER_CANDIDATE_PATH}" "${handoff}/provider"
+          cp -a "${REGISTRY_CANDIDATE_PATH}" "${handoff}/registry"
           cp -a "${RUNNER_TEMP}/material-first" "${handoff}/material"
           test "$(find "${handoff}" -type l | wc -l)" -eq 0
           (
             cd "${handoff}"
-            find host provider material -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > HANDOFF_SHA256SUMS
+            find host provider registry material -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > HANDOFF_SHA256SUMS
             sha256sum --check --strict HANDOFF_SHA256SUMS
           )
 
@@ -330,7 +379,7 @@ jobs:
               --certificate-identity "${EVIDENCE_IDENTITY}" \
               --certificate-oidc-issuer "${OIDC_ISSUER}"
           done
-          test "$(find "${RUNNER_TEMP}/handoff/material" -type f | wc -l)" -eq 61
+          test "$(find "${RUNNER_TEMP}/handoff/material" -type f | wc -l)" -eq 115
 
       - name: Upload the closed signed candidate without publishing
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

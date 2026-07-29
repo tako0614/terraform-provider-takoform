@@ -1,0 +1,6 @@
+{
+  "format": "takoform.sigstore-publisher-policy@v1",
+  "oidcIssuer": "https://token.actions.githubusercontent.com",
+  "certificateIdentity": "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-provider-report.yml@refs/heads/main",
+  "bundleMediaType": "application/vnd.dev.sigstore.bundle.v0.3+json"
+}

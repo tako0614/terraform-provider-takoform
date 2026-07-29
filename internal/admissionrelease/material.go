@@ -90,11 +90,23 @@ func BuildCanonicalSet(
 	admissionReleaseTag string,
 	registry RegistryReadbackRef,
 	entries []SetEntry,
+	providerClosures ...ProviderReportClosure,
 ) (Set, []byte, error) {
+	format := setFormatV2
+	if candidates.Generation != "" {
+		format = setFormatV3
+	}
 	set := Set{
-		Format: setFormat, DefinitionVersion: candidates.DefinitionVersion,
+		Format: format, Generation: candidates.Generation, DefinitionVersion: candidates.DefinitionVersion,
 		PackageVersion: candidates.PackageVersion, AdmissionReleaseTag: admissionReleaseTag,
 		ProviderRegistryReadback: registry, Entries: append([]SetEntry(nil), entries...),
+	}
+	if len(providerClosures) > 1 {
+		return Set{}, nil, fmt.Errorf("at most one provider report closure is allowed")
+	}
+	if len(providerClosures) == 1 {
+		closure := providerClosures[0]
+		set.ProviderReportClosure = &closure
 	}
 	if _, err := validateSet(set, candidates); err != nil {
 		return Set{}, nil, err

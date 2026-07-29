@@ -18,7 +18,7 @@ env:
 
 jobs:
   generate:
-    name: Execute the provider and close ten unsigned reports
+    name: Execute the provider and close the current unsigned report set
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -47,7 +47,7 @@ jobs:
           {
             echo "source_commit=${GITHUB_SHA}"
             echo "source_commit_short=${GITHUB_SHA:0:12}"
-            echo "artifact_name=takoform-standard-provider-report-unsigned-1.0.1-${GITHUB_SHA:0:12}"
+            echo "artifact_name=takoform-standard-provider-report-unsigned-current-${GITHUB_SHA:0:12}"
           } >> "${GITHUB_OUTPUT}"
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
@@ -89,8 +89,15 @@ jobs:
     needs: generate
     environment: standard-provider-report
     permissions:
+      contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.generate.outputs.source_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Reject an incomplete same-run artifact binding
         shell: bash
         env:
@@ -112,7 +119,7 @@ jobs:
           path: unsigned
           digest-mismatch: error
 
-      - name: Revalidate canonical inventory and all ten subjects
+      - name: Revalidate canonical inventory and every current subject
         shell: bash
         env:
           SOURCE_COMMIT: ${{ needs.generate.outputs.source_commit }}
@@ -133,12 +140,20 @@ jobs:
           // here without a second hand-maintained list to fall out of step.
           const inventory = JSON.parse(fs.readFileSync("forms/standard-package-set.json"));
           const descriptor = JSON.parse(fs.readFileSync("release/version.json"));
-          const expected = new Map(inventory.packages.map((entry) => [
-            entry.path.split("/").pop(),
-            [entry.kind, entry.formRef.schemaDigest, entry.packageDigest],
-          ]));
+          const expected = new Map(inventory.packages.map((entry) => {
+            const slug = entry.path.split("/").pop();
+            const definition = JSON.parse(fs.readFileSync(`${entry.path}/definition.json`));
+            return [slug, {
+              kind:entry.kind,
+              version:entry.formRef.definitionVersion,
+              schemaDigest:entry.formRef.schemaDigest,
+              packageDigest:entry.packageDigest,
+              positive:definition.conformanceFixtures.map((fixture) => fixture.name),
+              negative:definition.negativeConformanceFixtures.map((fixture) => fixture.name),
+            }];
+          }));
           const {value: manifest} = readCanonical("provider-report-manifest.json");
-          if (manifest.format !== "takoform.standard-provider-report-candidate@v1" || manifest.status !== "candidate-only" || manifest.proofType !== "provider" || manifest.subject !== "provider:registry.opentofu.org/tako0614/takoform" || manifest.generation !== inventory.generation || manifest.runnerVersion !== descriptor.version || manifest.source?.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || manifest.source?.commit !== process.env.SOURCE_COMMIT || manifest.reports?.length !== expected.size) throw new Error("provider-report manifest identity drift");
+          if (manifest.format !== "takoform.standard-provider-report-candidate@v1" || manifest.status !== "candidate-only" || manifest.proofType !== "provider" || manifest.subject !== "provider:registry.terraform.io/tako0614/takoform" || manifest.generation !== inventory.generation || manifest.runnerVersion !== descriptor.version || manifest.source?.repository !== "https://github.com/tako0614/terraform-provider-takoform.git" || manifest.source?.commit !== process.env.SOURCE_COMMIT || manifest.reports?.length !== expected.size) throw new Error("provider-report manifest identity drift");
           const files = ["provider-report-manifest.json"];
           const seen = new Set();
           for (const entry of manifest.reports) {
@@ -146,11 +161,13 @@ jobs:
             if (!want || seen.has(entry.slug) || entry.kind !== want[0] || entry.path !== `packages/${entry.slug}/provider-report.json` || entry.bundlePath !== `packages/${entry.slug}/provider-report.sigstore.json`) throw new Error("report descriptor closure drift");
             seen.add(entry.slug);
             const {raw, value: report} = readCanonical(entry.path);
-            const identity = {formRef:{apiVersion:"forms.takoform.com/v1alpha1",kind:want[0],definitionVersion:"1.0.1",schemaDigest:want[1]},packageDigest:want[2]};
+            const identity = {formRef:{apiVersion:"forms.takoform.com/v1alpha1",kind:want.kind,definitionVersion:want.version,schemaDigest:want.schemaDigest},packageDigest:want.packageDigest};
             if (entry.digest !== digest(raw) || !same(entry.identity, identity) || report.format !== "takoform.standard-runner-report@v1" || report.role !== "provider-report" || report.status !== "passed" || report.subject !== manifest.subject || report.runnerVersion !== manifest.runnerVersion || !same(report.identity, identity)) throw new Error(`${entry.slug} identity or digest drift`);
             const lifecycleKeys = ["create","delete","drift","import","observe","read","refresh","update"];
             const reportKeys = ["format","identity","lifecycle","negativeFixtures","positiveFixtures","role","runnerVersion","status","subject"];
-            if (!same(Object.keys(report).sort(), reportKeys) || !same(Object.keys(report.lifecycle ?? {}).sort(), lifecycleKeys) || !Object.values(report.lifecycle ?? {}).every((value) => value === true) || !same(report.positiveFixtures,[{name:"canonical",passed:true}]) || !same(report.negativeFixtures,[{errorCode:"invalid_argument",name:"reject-invalid-semantics",passed:true}])) throw new Error(`${entry.slug} proof closure drift`);
+            const positive = want.positive.map((name) => ({name,passed:true}));
+            const negative = want.negative.map((name) => ({errorCode:"invalid_argument",name,passed:true}));
+            if (!same(Object.keys(report).sort(), reportKeys) || !same(Object.keys(report.lifecycle ?? {}).sort(), lifecycleKeys) || !Object.values(report.lifecycle ?? {}).every((value) => value === true) || !same(report.positiveFixtures,positive) || !same(report.negativeFixtures,negative)) throw new Error(`${entry.slug} proof closure drift`);
             files.push(entry.path);
           }
           if (seen.size !== expected.size) throw new Error("report set incomplete");
@@ -193,6 +210,7 @@ jobs:
           });
           const candidate = {
             format:"takoform.standard-provider-report-signed-candidate@v1", status:"candidate-only", proofType:"provider",
+            generation:manifest.generation,
             subject:manifest.subject, certificateIdentity:process.env.REPORT_IDENTITY,
             workflow:".github/workflows/standard-provider-report.yml", workflowRunId:process.env.GITHUB_RUN_ID,
             workflowRunAttempt:1, source:manifest.source,
@@ -207,7 +225,7 @@ jobs:
       - name: Upload the signed provider-report candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: takoform-standard-provider-report-candidate-1.0.1-${{ needs.generate.outputs.source_commit_short }}
+          name: takoform-standard-provider-report-candidate-current-${{ needs.generate.outputs.source_commit_short }}
           path: unsigned/
           if-no-files-found: error
           retention-days: 90

@@ -40,7 +40,7 @@ func testPublishedSet(candidates CandidateSet) PublishedPackageSet {
 	releaseDirectory := "releases/" + releaseID + "/" + candidates.PackageVersion
 	base := "takoform-form-" + releaseID + "_" + candidates.PackageVersion + "_package-index"
 	return PublishedPackageSet{
-		Format: publishedPackageSetFormat, Repository: publishedRepository,
+		Format: publishedPackageSetFormatV1, Repository: publishedRepository,
 		DefinitionVersion: candidates.DefinitionVersion, PackageVersion: candidates.PackageVersion,
 		PublicationStatus: "published-immutable", AdmissionStatus: "external-required", RevocationCheckpointStatus: "external-required",
 		Trust: PublishedPackageTrustRef{Path: publishedPackageTrustPath, Digest: testEvidenceDigest},

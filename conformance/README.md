@@ -55,23 +55,17 @@ executed full lifecycle checks and writes one strict RFC 8785
 kind. It refuses to write under `admission/`, signs nothing, publishes nothing,
 and does not change `external-required` admission status. Its output directory
 must be new or empty. Authentication and admission remain separate protected
-release decisions. Each report subject records the executing CLI's exact
-distribution identity: Terraform uses
-`provider:registry.terraform.io/tako0614/takoform`, while OpenTofu uses
-`provider:registry.opentofu.org/tako0614/takoform`. The two addresses are not
-interchangeable Registry sources.
+release decisions. Each report subject records the one canonical provider
+identity, `provider:registry.terraform.io/tako0614/takoform`, regardless of
+whether OpenTofu or Terraform executes it.
 
 The matrix is intentionally classified `generic-lifecycle-candidate` with
 `publicationReady: false` and
 `bindingStatus: exact-structural-candidate-set`. It does not publish a
 checked-in passed report or claim standard Form admission. The matrix requires
-Terraform `1.15.8` under the canonical identity
-`registry.terraform.io/tako0614/takoform` and OpenTofu `1.12.1` under the
-dual-published alternative identity
-`registry.opentofu.org/tako0614/takoform`, then requires identical provider
-schema, exact FormRef/package identity, and lifecycle evidence. The exact FQN is
-retained as state identity; switching distributions requires
-`state replace-provider` and never occurs as a silent alias. Immutable
+Terraform `1.15.8` and OpenTofu `1.12.1` under the same canonical identity,
+`registry.terraform.io/tako0614/takoform`, then requires identical provider
+schema, exact FormRef/package identity, and lifecycle evidence. Immutable
 release/readback plus authenticated signed external admission are still
 required before these structural candidates can become portable standards.
 
@@ -158,4 +152,3 @@ host conformance layers remain unimplemented.
 FormRef/package identity, concurrency/idempotency rules, stable error taxonomy,
 and required cross-repo black-box runner checks. The provider client consumes
 the same contract in adversarial HTTP tests.
-
