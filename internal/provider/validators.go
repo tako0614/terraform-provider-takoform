@@ -412,13 +412,15 @@ func (v mapKeysPatternValidator) MarkdownDescription(ctx context.Context) string
 	return v.Description(ctx)
 }
 
-func (v mapKeysPatternValidator) ValidateMap(ctx context.Context, req validator.MapRequest, resp *validator.MapResponse) {
+func (v mapKeysPatternValidator) ValidateMap(_ context.Context, req validator.MapRequest, resp *validator.MapResponse) {
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
-	var entries map[string]string
-	resp.Diagnostics.Append(req.ConfigValue.ElementsAs(ctx, &entries, false)...)
-	for key := range entries {
+	// Only map keys belong to this validator. Values may legitimately remain
+	// unknown while OpenTofu validates a module whose configuration is derived
+	// from variables or another Resource. Iterating the framework values keeps
+	// that unknown state intact instead of trying to coerce it into Go strings.
+	for key := range req.ConfigValue.Elements() {
 		if !v.pattern.MatchString(key) {
 			resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", v.description)
 			return
