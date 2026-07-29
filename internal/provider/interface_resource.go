@@ -377,7 +377,7 @@ func applyDeclaredInterface(model *interfaceResourceModel, space string, declare
 	model.Version = types.StringValue(declared.Version)
 	model.ResourceKind = types.StringValue(declared.Resource.Kind)
 	model.ResourceName = types.StringValue(declared.Resource.Name)
-	model.DocumentJSON = types.StringValue(documentJSON)
+	model.DocumentJSON = preserveEquivalentJSON(model.DocumentJSON, documentJSON)
 	if declared.DocumentSchema == nil {
 		model.DocumentSchemaJSON = types.StringNull()
 	} else {
@@ -385,9 +385,9 @@ func applyDeclaredInterface(model *interfaceResourceModel, space string, declare
 		if err != nil {
 			return err
 		}
-		model.DocumentSchemaJSON = types.StringValue(encoded)
+		model.DocumentSchemaJSON = preserveEquivalentJSON(model.DocumentSchemaJSON, encoded)
 	}
-	model.InputsJSON = types.StringValue(string(inputsJSON))
+	model.InputsJSON = preserveEquivalentJSON(model.InputsJSON, string(inputsJSON))
 	if declared.ResourceURIInput == "" {
 		model.ResourceURIInput = types.StringNull()
 	} else {
@@ -410,6 +410,23 @@ func applyDeclaredInterface(model *interfaceResourceModel, space string, declare
 	return nil
 }
 
+func preserveEquivalentJSON(current types.String, encoded string) types.String {
+	if current.IsNull() || current.IsUnknown() || current.ValueString() == "" {
+		return types.StringValue(encoded)
+	}
+	var currentValue any
+	var encodedValue any
+	if json.Unmarshal([]byte(current.ValueString()), &currentValue) == nil &&
+		json.Unmarshal([]byte(encoded), &encodedValue) == nil {
+		currentCanonical, currentErr := json.Marshal(currentValue)
+		encodedCanonical, encodedErr := json.Marshal(encodedValue)
+		if currentErr == nil && encodedErr == nil && string(currentCanonical) == string(encodedCanonical) {
+			return current
+		}
+	}
+	return types.StringValue(encoded)
+}
+
 func decodeJSONObject(raw, field string) (map[string]any, error) {
 	var value map[string]any
 	if err := json.Unmarshal([]byte(raw), &value); err != nil || value == nil {
@@ -428,7 +445,6 @@ func unknownInterfaceResourceField(model interfaceResourceModel) string {
 	}{
 		{name: "name", value: model.Name},
 		{name: "version", value: model.Version},
-		{name: "space", value: model.Space},
 		{name: "resource_kind", value: model.ResourceKind},
 		{name: "resource_name", value: model.ResourceName},
 		{name: "document_json", value: model.DocumentJSON},
