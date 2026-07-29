@@ -158,7 +158,7 @@ jobs:
           const seen = new Set();
           for (const entry of manifest.reports) {
             const want = expected.get(entry.slug);
-            if (!want || seen.has(entry.slug) || entry.kind !== want[0] || entry.path !== `packages/${entry.slug}/provider-report.json` || entry.bundlePath !== `packages/${entry.slug}/provider-report.sigstore.json`) throw new Error("report descriptor closure drift");
+            if (!want || seen.has(entry.slug) || entry.kind !== want.kind || entry.path !== `packages/${entry.slug}/provider-report.json` || entry.bundlePath !== `packages/${entry.slug}/provider-report.sigstore.json`) throw new Error("report descriptor closure drift");
             seen.add(entry.slug);
             const {raw, value: report} = readCanonical(entry.path);
             const identity = {formRef:{apiVersion:"forms.takoform.com/v1alpha1",kind:want.kind,definitionVersion:want.version,schemaDigest:want.schemaDigest},packageDigest:want.packageDigest};
