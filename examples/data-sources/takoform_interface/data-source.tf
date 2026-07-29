@@ -13,13 +13,13 @@ provider "takoform" {
 
 # Version is explicit because interface identity is the pair (name, version).
 # Omitting it is allowed only when this name has one visible version.
-data "takoform_interface" "mcp" {
-  name          = "mcp.server"
-  version       = "2025-11-25"
-  resource_kind = "EdgeWorker"
+data "takoform_interface" "runtime" {
+  name          = "example.runtime"
+  version       = "1"
+  resource_kind = "HttpService"
   resource_name = "api"
 }
 
-output "mcp_interface_document" {
-  value = data.takoform_interface.mcp.document_json
+output "runtime_interface_document" {
+  value = data.takoform_interface.runtime.document_json
 }

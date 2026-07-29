@@ -30,8 +30,9 @@ Reads one runtime interface declaration from a conforming host. See the
 - `form_kind` — declaring Form kind when the host reports it.
 
 This data source grants nothing. It never reads or creates bindings,
-permissions, tokens, credentials, or lifecycle state, and there is no matching
-write resource. Host responses that violate the portable data-only field policy
+permissions, tokens, credentials, or lifecycle state. A matching generic
+[`takoform_interface` resource](../resources/interface.md) may own the
+declaration, but never its consumer authorization. Host responses that violate the portable data-only field policy
 are rejected before `document_json` or `values_json` enters non-sensitive
 Terraform state. No host Interface id is exposed. The host must advertise
 `features.interface_declarations`.

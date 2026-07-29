@@ -51,7 +51,7 @@ func (d *interfaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				Validators: []validator.String{
 					StringMatches(`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$`, "name must use the portable interface-name grammar"),
 				},
-				MarkdownDescription: "Declared interface name, for example `mcp.server`.",
+				MarkdownDescription: "Author-defined Interface name, for example `example.runtime`.",
 			},
 			"space": schema.StringAttribute{
 				Optional:            true,

@@ -75,16 +75,22 @@ lifecycle action and may do materially more work than a read-only observation.
 
 ## Interface declarations
 
-A host MAY expose the OPTIONAL read-only surface defined by
+A host MAY expose the OPTIONAL surface defined by
 [`spec/interface-declaration`](../interface-declaration/README.md):
 
 - `GET {api}/interfaces` lists visible declarations;
 - `GET {api}/interfaces/{name}?version={version}&resourceKind={kind}&resourceName={name}`
   reads the exact runtime declaration.
+- `PUT {api}/interfaces/{name}?version={version}&resourceKind={kind}&resourceName={name}`
+  creates or updates one exact declaration.
+- `DELETE {api}/interfaces/{name}?version={version}&resourceKind={kind}&resourceName={name}`
+  deletes one exact declaration.
 
 A host that exposes it MUST advertise `features.interface_declarations = true`
-and MAY advertise a same-origin `endpoints.interfaces`. The feature is not part
-of required host negotiation, so a host without it remains conforming. If `version` is omitted, the read succeeds only when exactly one
+and MAY advertise a same-origin `endpoints.interfaces`. A host accepting PUT
+and DELETE MUST additionally advertise
+`features.interface_declaration_writes = true`; read-only hosts remain
+conforming. Neither feature is part of required host negotiation. If `version` is omitted, the read succeeds only when exactly one
 visible declaration has that name. No match is `resource_not_found`; multiple
 versions fail closed as `interface_identity_ambiguous` (HTTP 409). Resource
 selectors must be supplied together. If they are omitted, the read succeeds
@@ -94,7 +100,10 @@ as `interface_instance_ambiguous` (HTTP 409).
 The response carries the exact identity, the exact non-secret descriptor
 `document`, resolved public `values`, a required portable
 `resource: {kind,name}` reference, and optionally the exact
-`InstalledFormReference` that declared it. The host MUST NOT invent or alter the
+`InstalledFormReference` that declared it. A standalone declaration also
+round-trips `documentSchema`, `inputs`, `resourceUriInput`, and the current
+opaque `resourceVersion`. When `resourceUriInput` is present, the response MAY
+include the resolved credential-free HTTPS `resourceUri`. The host MUST NOT invent or alter the
 document. Both document and values must satisfy the same portable data-only
 forbidden-field policy as a Form Definition; a provider rejects the response
 before non-sensitive state if they contain secret/credential/host-authority,
@@ -105,6 +114,12 @@ A host advertising the feature must enforce `required` readiness semantics. A
 host without the feature remains conforming, but must reject activation of a
 Form whose required declaration it cannot honor rather than reporting the
 Resource Ready. Optional skipped descriptors must not be listed.
+
+Write operations require the exact complete identity. Create uses
+`If-None-Match: *`; update and delete use one quoted `If-Match`
+`resourceVersion`; both carry a deterministic `Idempotency-Key`. A response
+MUST return the current resource version in both `ETag` and
+`resourceVersion`. Deleting an already absent exact declaration is successful.
 
 Descriptor identity remains `(name, version)`. Runtime declaration identity is
 `(space, resource.kind, resource.name, name, version)`. No host Interface id,

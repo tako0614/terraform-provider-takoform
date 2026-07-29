@@ -8,9 +8,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
 func interfaceHost(t *testing.T, advertise bool, handler http.HandlerFunc) *httptest.Server {
+	return interfaceHostWithWrites(t, advertise, false, handler)
+}
+
+func interfaceHostWithWrites(t *testing.T, advertise, writes bool, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -21,6 +27,9 @@ func interfaceHost(t *testing.T, advertise bool, handler http.HandlerFunc) *http
 			}
 			if advertise {
 				features[FeatureInterfaceDeclarations] = true
+			}
+			if writes {
+				features[FeatureInterfaceDeclarationWrites] = true
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"api_versions": []string{APIVersion},
@@ -36,6 +45,118 @@ func interfaceHost(t *testing.T, advertise bool, handler http.HandlerFunc) *http
 	}))
 	t.Cleanup(server.Close)
 	return server
+}
+
+func TestInterfaceWriteUsesPortableIdentityAndFences(t *testing.T) {
+	var methods []string
+	var preconditions []string
+	var keys []string
+	server := interfaceHostWithWrites(t, true, true, func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method)
+		preconditions = append(preconditions, r.Header.Get("If-None-Match")+r.Header.Get("If-Match"))
+		keys = append(keys, r.Header.Get("Idempotency-Key"))
+		if r.URL.Path != "/apis/forms.takoform.com/v1alpha1/interfaces/example.runtime" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("space") != "prod" ||
+			r.URL.Query().Get("version") != "1" ||
+			r.URL.Query().Get("resourceKind") != "HttpService" ||
+			r.URL.Query().Get("resourceName") != "api" {
+			t.Fatalf("query = %s", r.URL.RawQuery)
+		}
+		switch r.Method {
+		case http.MethodPut:
+			var body DeclaredInterface
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Document["title"] != "Example" || body.ResourceURIInput != "resource_uri" {
+				t.Fatalf("body = %+v", body)
+			}
+			body.Values = map[string]any{
+				"endpoint":     "https://api.example.test",
+				"resource_uri": "https://api.example.test",
+			}
+			body.ResourceURI = "https://api.example.test"
+			body.ResourceVersion = "7"
+			w.Header().Set("ETag", `"7"`)
+			_ = json.NewEncoder(w).Encode(body)
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	c := discoveredClient(t, server)
+	desired := DeclaredInterface{
+		Name: "example.runtime", Version: "1",
+		Resource: InterfaceResourceRef{Kind: "HttpService", Name: "api"},
+		Document: map[string]any{"title": "Example"},
+		Inputs: []formpackage.InterfaceInputDeclaration{
+			{Name: "endpoint", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/url"},
+			{Name: "resource_uri", Source: formpackage.InterfaceInputSourceResourceURI},
+		},
+		ResourceURIInput: "resource_uri",
+	}
+	created, err := c.PutInterface(context.Background(), "prod", desired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ResourceVersion != "7" || created.ResourceURI != "https://api.example.test" {
+		t.Fatalf("created = %+v", created)
+	}
+	if err := c.DeleteInterface(context.Background(), "prod", InterfaceSelector{
+		Name: "example.runtime", Version: "1", ResourceKind: "HttpService", ResourceName: "api",
+	}, created.ResourceVersion); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(methods, ",") != "PUT,DELETE" ||
+		preconditions[0] != "*" || preconditions[1] != `"7"` ||
+		keys[0] == "" || keys[1] == "" {
+		t.Fatalf("methods=%v preconditions=%v keys=%v", methods, preconditions, keys)
+	}
+}
+
+func TestInterfaceWriteRequiresSeparateCapability(t *testing.T) {
+	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unsupported write reached host: %s", r.URL.Path)
+	})
+	c := discoveredClient(t, server)
+	_, err := c.PutInterface(context.Background(), "prod", DeclaredInterface{
+		Name: "example.runtime", Version: "1",
+		Resource: InterfaceResourceRef{Kind: "HttpService", Name: "api"},
+		Document: map[string]any{},
+	})
+	if !errors.Is(err, ErrInterfaceDeclarationWritesUnsupported) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestInterfaceWriteRejectsHostAuthoredFieldSubstitution(t *testing.T) {
+	server := interfaceHostWithWrites(t, true, true, func(w http.ResponseWriter, r *http.Request) {
+		var body DeclaredInterface
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		body.Inputs = []formpackage.InterfaceInputDeclaration{
+			{Name: "endpoint", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/substituted"},
+		}
+		body.ResourceVersion = "1"
+		w.Header().Set("ETag", `"1"`)
+		_ = json.NewEncoder(w).Encode(body)
+	})
+	c := discoveredClient(t, server)
+	_, err := c.PutInterface(context.Background(), "prod", DeclaredInterface{
+		Name: "example.runtime", Version: "1",
+		Resource: InterfaceResourceRef{Kind: "HttpService", Name: "api"},
+		Document: map[string]any{"title": "Example"},
+		Inputs: []formpackage.InterfaceInputDeclaration{
+			{Name: "endpoint", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/url"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "altered the authored interface declaration") {
+		t.Fatalf("err = %v, want authored declaration substitution rejection", err)
+	}
 }
 
 func discoveredClient(t *testing.T, server *httptest.Server) *Client {

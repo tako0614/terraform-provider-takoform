@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -84,169 +83,24 @@ func TestStandardAdmissionPromotionInputContractIsClosedAndDigestSensitive(t *te
 	}
 }
 
-func TestStandardAdmissionWorkflowClosesCandidateMaterials(t *testing.T) {
+func TestRepositoryDoesNotReintroduceSetWideReleaseWorkflows(t *testing.T) {
 	t.Parallel()
-	workflow := readStandardAdmissionWorkflow(t)
-
-	required := []string{
-		`release-candidate-contract.json`,
-		`go run ./cmd/standard-form-conformance admission-closure-check`,
-		`policyDigest: sha(fs.readFileSync("admission/v1/trust/offline-sigstore-pins.json"))`,
-		`candidate.policyDigest !== digestFile("admission/v1/trust/offline-sigstore-pins.json")`,
-		`set.entries.length !== contract.standardAdmissionSet.entryCount`,
-		`subjects.length !== contract.retainedSubjects.count`,
-		`packages: [rootPackage, ...packages], files, relationships`,
-		`retainedSubjectCount: contract.provenance.retainedSubjectCount`,
-		`...packageDependencies, ...subjectDependencies`,
-		`dependencies.length !== contract.provenance.resolvedDependencyCount`,
-		`candidate.configDigest !== byName.get("standard-admission-set.json")`,
-		`JSON.stringify(candidate.sbomDigests) !== JSON.stringify([byName.get(sbomName)])`,
-		`JSON.stringify(candidate.provenanceDigests) !== JSON.stringify([byName.get(provenanceName)])`,
-		`JSON.stringify(candidate.artifactDigests) !== JSON.stringify(candidate.releaseAssets.map(({ digest }) => digest))`,
-		`cmp admission/v1/registry/provider-lifecycle-matrix.json "${fresh}"`,
-		`cmp "${output}/fresh-provider-lifecycle-matrix.json" "${RUNNER_TEMP}/archived-provider-lifecycle-matrix.json"`,
-		`cmp candidate/fresh-provider-lifecycle-matrix.json "${RUNNER_TEMP}/promoted-archived-provider-lifecycle-matrix.json"`,
-		`admissionReleaseVersion: version, definitionVersion: set.definitionVersion, packageVersion: set.packageVersion`,
-		`versionInfo: set.packageVersion`,
-		`rootPackages[0].versionInfo !== process.env.VERSION`,
-		`pkg.versionInfo !== set.packageVersion`,
-	}
-	for _, fragment := range required {
-		if !strings.Contains(workflow, fragment) {
-			t.Errorf("standard-admission workflow lacks material-closure contract %q", fragment)
-		}
-	}
-
-	forbidden := []string{
-		`go run ./cmd/standard-form-conformance release-check`,
-		`policyDigest: sha(fs.readFileSync("admission/v1/trust/registry-readback-policy.json"))`,
-		`resolvedDependencies: []`,
-		`packages: [{ name: "Takoform standard Form admission", SPDXID: "SPDXRef-Package"`,
-		`set.definitionVersion !== version`,
-		`set.packageVersion !== version`,
-		`set.definitionVersion !== process.env.VERSION`,
-		`set.packageVersion !== process.env.VERSION`,
-		`pkg.versionInfo !== process.env.VERSION`,
-	}
-	for _, fragment := range forbidden {
-		if strings.Contains(workflow, fragment) {
-			t.Errorf("standard-admission workflow retains incomplete candidate metadata %q", fragment)
-		}
-	}
-}
-
-func TestStandardAdmissionCandidateManifestShapeRemainsControllerCompatible(t *testing.T) {
-	t.Parallel()
-	workflow := readStandardAdmissionWorkflow(t)
-
-	// The shared machine-readable contract remains
-	// takos.release-candidate-manifest@v1 with the same exact keys and seven
-	// release assets. Both the workflow and fixed adapter consume byte-identical
-	// copies of this fixture.
-	required := []string{
-		`kind: "takos.release-candidate-manifest@v1", surfaceId: "takoform-standard-form-admission"`,
-		`const candidateKeys = [...contract.candidateManifest.keys].sort();`,
-		`const expectedNames = contract.candidateManifest.releaseAssets.map(expandVersion).sort();`,
-		`JSON.stringify(Object.keys(candidate).sort()) !== JSON.stringify(candidateKeys)`,
-	}
-	for _, fragment := range required {
-		if !strings.Contains(workflow, fragment) {
-			t.Errorf("standard-admission candidate/controller compatibility lacks %q", fragment)
-		}
-	}
-}
-
-func TestStandardAdmissionPromotionAuthenticatesAttestationReadback(t *testing.T) {
-	t.Parallel()
-	workflow := readStandardAdmissionWorkflow(t)
-
-	promote := strings.Index(workflow, "\n  promote:")
-	start := strings.Index(workflow, "- name: Verify envelope bindings and every candidate byte")
-	end := strings.Index(workflow, "- name: Preflight signed tag and deterministic target")
-	if promote < 0 || start <= promote || end <= start {
-		t.Fatal("locate promotion candidate-verification step")
-	}
-	if !strings.Contains(workflow[promote:start], "attestations: read") {
-		t.Fatal("promotion job must grant read-only GitHub attestation access")
-	}
-	step := workflow[start:end]
-	if !strings.Contains(step, `GH_TOKEN: ${{ github.token }}`) {
-		t.Fatal("promotion candidate-verification step must authenticate GitHub attestation readback")
-	}
-	if !strings.Contains(step, `gh attestation verify candidate/standard-admission-set.json`) ||
-		!strings.Contains(step, `gh attestation verify candidate/takoform-standard-admission-v1.tar.gz`) {
-		t.Fatal("promotion candidate-verification step must verify both GitHub attestations")
-	}
-}
-
-func TestStandardAdmissionPromotionUsesOnlyOneUseControllerAuthorization(t *testing.T) {
-	t.Parallel()
-	workflow := readStandardAdmissionWorkflow(t)
-	promote := strings.Index(workflow, "\n  promote:")
-	if promote < 0 {
-		t.Fatal("locate admission promotion job")
-	}
-	promotion := workflow[promote:]
-	for _, required := range []string{
-		`inputs.authorization_secret_name`,
-		`AUTHORIZATION_SECRET_JSON: ${{ secrets[inputs.authorization_secret_name] }}`,
-		`takos.release-safety-one-use-authorization@v1`,
-		`release/standard-admission-promotion-input-contract.json`,
-		`.promotionInputDigest == $promotion_input_digest`,
-		`.authorizationDigest == $digest and .releaseId == $release_id and .envelopeDigest == $envelope`,
-		`age_seconds <= 300`,
-		`remaining_seconds > 0 && remaining_seconds <= 300`,
-		`- name: Preflight signed tag and deterministic target`,
-	} {
-		if !strings.Contains(promotion, required) {
-			t.Errorf("standard-admission promotion lacks one-use controller authorization marker %q", required)
-		}
-	}
-	for _, binding := range []string{
-		`phase: process.env.PHASE`,
-		`release_id: process.env.RELEASE_ID`,
-		`version: process.env.VERSION`,
-		`tag: process.env.TAG`,
-		`source_commit: process.env.SOURCE_COMMIT`,
-		`candidate_run_id: process.env.CANDIDATE_RUN_ID`,
-		`candidate_manifest_digest: process.env.CANDIDATE_MANIFEST_DIGEST`,
-		`envelope_digest: process.env.ENVELOPE_DIGEST`,
-		`controller_commit: process.env.CONTROLLER_COMMIT`,
-		`controller_digest: process.env.CONTROLLER_DIGEST`,
-		`adapter_digest: process.env.ADAPTER_DIGEST`,
-		`authorization_digest: process.env.AUTHORIZATION_DIGEST`,
-		`authorization_secret_name: process.env.AUTHORIZATION_SECRET_NAME`,
-		`artifact_digests_b64: process.env.ARTIFACT_DIGESTS_B64`,
-		`health_checks_b64: process.env.HEALTH_CHECKS_B64`,
-		`target_fingerprint: process.env.TARGET_FINGERPRINT`,
-	} {
-		if !strings.Contains(promotion, binding) {
-			t.Errorf("standard-admission promotion digest omits exact binding %q", binding)
-		}
-	}
-	for _, forbidden := range []string{
-		`secrets.RELEASE_SAFETY_AUTHORIZATION_DIGEST`,
-		`RELEASE_SAFETY_RULESET_AUDIT_TOKEN`,
-		`RULESET_AUDIT_TOKEN`,
-		`/immutable-releases`,
-		`/rulesets`,
-	} {
-		if strings.Contains(promotion, forbidden) {
-			t.Errorf("standard-admission promotion retains controller-owned policy audit %q", forbidden)
-		}
-	}
-}
-
-func readStandardAdmissionWorkflow(t *testing.T) string {
-	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("resolve workflow contract test path")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
-	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "standard-admission-release.yml"))
-	if err != nil {
-		t.Fatalf("read standard-admission workflow: %v", err)
+	for _, retired := range []string{
+		".github/workflows/standard-admission-release.yml",
+		".github/workflows/standard-form-package-set-release.yml",
+	} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(retired))); err == nil {
+			t.Errorf("%s reintroduces one mutable set-wide release lane", retired)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("inspect %s: %v", retired, err)
+		}
 	}
-	return string(raw)
+	if _, err := os.Stat(filepath.Join(root, "forms", "release-plan.json")); err != nil {
+		t.Fatalf("the independent per-Form release plan is missing: %v", err)
+	}
 }

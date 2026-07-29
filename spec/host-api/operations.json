@@ -8,7 +8,10 @@
     "optimistic_concurrency",
     "idempotent_lifecycle"
   ],
-  "optionalFeatures": ["interface_declarations"],
+  "optionalFeatures": [
+    "interface_declarations",
+    "interface_declaration_writes"
+  ],
   "requiredEndpoints": ["api"],
   "optionalEndpoints": ["forms", "interfaces", "oidc_issuer"],
   "exactFormQueryParameters": [
@@ -110,6 +113,26 @@
       "precondition": "none",
       "idempotencyKey": false,
       "mutates": false,
+      "optional": true
+    },
+    {
+      "name": "apply_interface",
+      "method": "PUT",
+      "path": "/interfaces/{name}",
+      "exactFormQuery": false,
+      "precondition": "if-none-match-on-create-otherwise-if-match",
+      "idempotencyKey": true,
+      "mutates": true,
+      "optional": true
+    },
+    {
+      "name": "delete_interface",
+      "method": "DELETE",
+      "path": "/interfaces/{name}",
+      "exactFormQuery": false,
+      "precondition": "if-match",
+      "idempotencyKey": true,
+      "mutates": true,
       "optional": true
     }
   ],
