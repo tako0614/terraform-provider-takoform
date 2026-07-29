@@ -86,22 +86,27 @@ func TestPublishedPackageSetVerifiesIndependentlyOfAdmission(t *testing.T) {
 	}
 }
 
-func TestCurrentAdmissionCandidateSetIsExactMixedVersionGeneration(t *testing.T) {
+func TestCurrentAdmissionCandidateSetIsExactMixedVersionSuccessorGeneration(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..")
 	set, err := CurrentAdmissionCandidateSet(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if set.Generation != "ga-core-v1" || set.DefinitionVersion != "" || set.PackageVersion != "" || len(set.Entries) != 10 {
+	if set.Generation != "ga-core-v2" || set.DefinitionVersion != "" || set.PackageVersion != "" || len(set.Entries) != 10 {
 		t.Fatalf("unexpected current admission set: %#v", set)
 	}
 	versions := map[string]bool{}
+	kinds := map[string]bool{}
 	for _, entry := range set.Entries {
 		versions[entry.FormRef.DefinitionVersion] = true
+		kinds[entry.Kind] = true
 	}
 	if !versions["1.0.0"] || !versions["2.0.0"] || len(versions) != 2 {
 		t.Fatalf("current admission set lost mixed versions: %#v", versions)
+	}
+	if !kinds["EdgeWorker"] || kinds["HttpService"] {
+		t.Fatalf("current admission set does not carry the portable EdgeWorker successor: %#v", kinds)
 	}
 }
 
@@ -114,12 +119,34 @@ func TestCurrentPortableCandidateSetRetainsAllThirtyFourIdentities(t *testing.T)
 	if set.Generation != "portable-v1" || len(set.Entries) != 34 {
 		t.Fatalf("unexpected current portable set: generation=%q entries=%d", set.Generation, len(set.Entries))
 	}
+	kinds := make(map[string]bool, len(set.Entries))
+	for _, entry := range set.Entries {
+		kinds[entry.Kind] = true
+	}
+	if !kinds["EdgeWorker"] || kinds["HttpService"] {
+		t.Fatalf("current portable set does not carry the portable EdgeWorker successor: %#v", kinds)
+	}
 }
 
-func TestCurrentPublishedPackageSetAuthenticatesExactLiveReadback(t *testing.T) {
+func TestFormSurfaceRegenerationPreservesInterfaceResource(t *testing.T) {
 	t.Parallel()
-	if err := VerifyCurrentPublishedPackageSet(filepath.Join("..", "..")); err != nil {
+	if _, ok := declaredResourceTypes()["takoform_interface"]; !ok {
+		t.Fatal("Form surface regeneration would prune the independent interface resource example")
+	}
+}
+
+func TestRetainedGaCoreV1PackageSetAuthenticatesExactLiveReadback(t *testing.T) {
+	t.Parallel()
+	if err := VerifyRetainedGaCoreV1PublishedPackageSet(filepath.Join("..", "..")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCurrentPublishedPackageSetFailsClosedBeforeSuccessorPublication(t *testing.T) {
+	t.Parallel()
+	err := VerifyCurrentPublishedPackageSet(filepath.Join("..", ".."))
+	if err == nil || !strings.Contains(err.Error(), "admission/v4/published-package-set.json") {
+		t.Fatalf("unpublished successor error = %v", err)
 	}
 }
 

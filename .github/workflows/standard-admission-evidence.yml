@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       host_id:
-        description: Reviewed conforming host in admission/v3/conforming-hosts.json that signed the host reports
+        description: Reviewed conforming host in admission/v4/conforming-hosts.json that signed the host reports
         required: true
         type: string
       snapshot_commit:
@@ -24,7 +24,7 @@ on:
         required: true
         type: string
       host_source_commit:
-        description: Exact Takosumi source commit authenticated by the host candidate
+        description: Exact conforming-host source commit authenticated by the host candidate
         required: true
         type: string
       host_takoform_source_commit:
@@ -168,9 +168,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "${SNAPSHOT_COMMIT}"
           test "$(git rev-parse HEAD^{tree})" = "${SNAPSHOT_TREE}"
           git merge-base --is-ancestor "${SNAPSHOT_COMMIT}" "${current_main}"
-          [[ "${HOST_CANDIDATE_PATH}" =~ ^admission/v3/candidates/host-report-[0-9A-Za-z.-]+-[0-9a-f]{12}-[0-9a-f]{12}$ ]]
-          [[ "${PROVIDER_CANDIDATE_PATH}" =~ ^admission/v3/candidates/provider-report-[0-9A-Za-z.-]+-[0-9a-f]{12}$ ]]
-          [[ "${REGISTRY_CANDIDATE_PATH}" =~ ^admission/v3/candidates/registry-readback-[0-9A-Za-z.-]+-[0-9a-f]{12}$ ]]
+          [[ "${HOST_CANDIDATE_PATH}" =~ ^admission/v4/candidates/host-report-[0-9A-Za-z.-]+-[0-9a-f]{12}-[0-9a-f]{12}$ ]]
+          [[ "${PROVIDER_CANDIDATE_PATH}" =~ ^admission/v4/candidates/provider-report-[0-9A-Za-z.-]+-[0-9a-f]{12}$ ]]
+          [[ "${REGISTRY_CANDIDATE_PATH}" =~ ^admission/v4/candidates/registry-readback-[0-9A-Za-z.-]+-[0-9a-f]{12}$ ]]
           [[ "${HOST_CANDIDATE_TREE}" =~ ^[0-9a-f]{40}$ ]]
           [[ "${PROVIDER_CANDIDATE_TREE}" =~ ^[0-9a-f]{40}$ ]]
           [[ "${REGISTRY_CANDIDATE_TREE}" =~ ^[0-9a-f]{40}$ ]]
@@ -237,7 +237,7 @@ jobs:
           grep -F "${EXPECTED_COSIGN_VERSION}" <<<"$(cosign version 2>&1)"
           host_report_identity="$(jq -er --arg id "${HOST_ID}" \
             '.hosts[] | select(.hostId == $id) | .certificateIdentity' \
-            admission/v3/conforming-hosts.json)"
+            admission/v4/conforming-hosts.json)"
           test "$(find "${HOST_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
           test "$(find "${PROVIDER_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
           test "$(find "${REGISTRY_CANDIDATE_PATH}" -type l | wc -l)" -eq 0
@@ -250,19 +250,19 @@ jobs:
           test "${#provider_reports[@]}" -eq 34
           for report in "${host_reports[@]}"; do
             cosign verify-blob "${report}" --bundle "${report%.json}.sigstore.json" \
-              --trusted-root admission/v3/trust/trusted-root.json \
+              --trusted-root admission/v4/trust/trusted-root.json \
               --certificate-identity "${host_report_identity}" \
               --certificate-oidc-issuer "${OIDC_ISSUER}"
           done
           for report in "${provider_reports[@]}"; do
             cosign verify-blob "${report}" --bundle "${report%.json}.sigstore.json" \
-              --trusted-root admission/v3/trust/trusted-root.json \
+              --trusted-root admission/v4/trust/trusted-root.json \
               --certificate-identity "${PROVIDER_REPORT_IDENTITY}" \
               --certificate-oidc-issuer "${OIDC_ISSUER}"
           done
           cosign verify-blob "${REGISTRY_CANDIDATE_PATH}/provider-readback.json" \
             --bundle "${REGISTRY_CANDIDATE_PATH}/provider-readback.sigstore.json" \
-            --trusted-root admission/v3/trust/trusted-root.json \
+            --trusted-root admission/v4/trust/trusted-root.json \
             --certificate-identity "${REGISTRY_READBACK_IDENTITY}" \
             --certificate-oidc-issuer "${OIDC_ISSUER}"
 

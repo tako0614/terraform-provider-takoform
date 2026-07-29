@@ -1,7 +1,7 @@
 {
   "driftedFields": [],
   "generation": 1,
-  "id": "HttpService/http-service",
+  "id": "EdgeWorker/edge-worker",
   "imported": true,
   "portability": "portable",
   "ready": true

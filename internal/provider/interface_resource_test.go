@@ -14,7 +14,7 @@ func TestDesiredInterfaceUsesProviderSpaceWhenComputedResourceSpaceIsUnknown(t *
 		Name:               types.StringValue("app.launcher"),
 		Version:            types.StringValue("1"),
 		Space:              types.StringUnknown(),
-		ResourceKind:       types.StringValue("HttpService"),
+		ResourceKind:       types.StringValue("EdgeWorker"),
 		ResourceName:       types.StringValue("app"),
 		DocumentJSON:       types.StringValue(`{"launcher":true}`),
 		DocumentSchemaJSON: types.StringNull(),
@@ -39,7 +39,7 @@ func TestInterfaceIdentityStillRejectsUnknownStoredSpace(t *testing.T) {
 		Name:         types.StringValue("app.launcher"),
 		Version:      types.StringValue("1"),
 		Space:        types.StringUnknown(),
-		ResourceKind: types.StringValue("HttpService"),
+		ResourceKind: types.StringValue("EdgeWorker"),
 		ResourceName: types.StringValue("app"),
 	}
 
@@ -59,7 +59,7 @@ func TestApplyDeclaredInterfacePreservesEquivalentPlannedJSON(t *testing.T) {
 	declared := client.DeclaredInterface{
 		Name:     "app.launcher",
 		Version:  "1",
-		Resource: client.InterfaceResourceRef{Kind: "HttpService", Name: "app"},
+		Resource: client.InterfaceResourceRef{Kind: "EdgeWorker", Name: "app"},
 		Document: map[string]any{
 			"display":  map[string]any{"title": "App"},
 			"launcher": true,

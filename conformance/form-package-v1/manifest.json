@@ -12,9 +12,9 @@
       "kind": "ExampleInterfaceService"
     },
     {
-      "name": "standard-http-service-package",
-      "path": "positive/standard/http-service",
-      "kind": "HttpService"
+      "name": "standard-edge-worker-package",
+      "path": "positive/standard/edge-worker",
+      "kind": "EdgeWorker"
     },
     {
       "name": "standard-container-service-package",

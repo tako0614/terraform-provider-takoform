@@ -60,7 +60,7 @@ func TestInterfaceWriteUsesPortableIdentityAndFences(t *testing.T) {
 		}
 		if r.URL.Query().Get("space") != "prod" ||
 			r.URL.Query().Get("version") != "1" ||
-			r.URL.Query().Get("resourceKind") != "HttpService" ||
+			r.URL.Query().Get("resourceKind") != "EdgeWorker" ||
 			r.URL.Query().Get("resourceName") != "api" {
 			t.Fatalf("query = %s", r.URL.RawQuery)
 		}
@@ -90,7 +90,7 @@ func TestInterfaceWriteUsesPortableIdentityAndFences(t *testing.T) {
 	c := discoveredClient(t, server)
 	desired := DeclaredInterface{
 		Name: "example.runtime", Version: "1",
-		Resource: InterfaceResourceRef{Kind: "HttpService", Name: "api"},
+		Resource: InterfaceResourceRef{Kind: "EdgeWorker", Name: "api"},
 		Document: map[string]any{"title": "Example"},
 		Inputs: []formpackage.InterfaceInputDeclaration{
 			{Name: "endpoint", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/url"},
@@ -106,7 +106,7 @@ func TestInterfaceWriteUsesPortableIdentityAndFences(t *testing.T) {
 		t.Fatalf("created = %+v", created)
 	}
 	if err := c.DeleteInterface(context.Background(), "prod", InterfaceSelector{
-		Name: "example.runtime", Version: "1", ResourceKind: "HttpService", ResourceName: "api",
+		Name: "example.runtime", Version: "1", ResourceKind: "EdgeWorker", ResourceName: "api",
 	}, created.ResourceVersion); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestInterfaceWriteRequiresSeparateCapability(t *testing.T) {
 	c := discoveredClient(t, server)
 	_, err := c.PutInterface(context.Background(), "prod", DeclaredInterface{
 		Name: "example.runtime", Version: "1",
-		Resource: InterfaceResourceRef{Kind: "HttpService", Name: "api"},
+		Resource: InterfaceResourceRef{Kind: "EdgeWorker", Name: "api"},
 		Document: map[string]any{},
 	})
 	if !errors.Is(err, ErrInterfaceDeclarationWritesUnsupported) {
@@ -148,7 +148,7 @@ func TestInterfaceWriteRejectsHostAuthoredFieldSubstitution(t *testing.T) {
 	c := discoveredClient(t, server)
 	_, err := c.PutInterface(context.Background(), "prod", DeclaredInterface{
 		Name: "example.runtime", Version: "1",
-		Resource: InterfaceResourceRef{Kind: "HttpService", Name: "api"},
+		Resource: InterfaceResourceRef{Kind: "EdgeWorker", Name: "api"},
 		Document: map[string]any{"title": "Example"},
 		Inputs: []formpackage.InterfaceInputDeclaration{
 			{Name: "endpoint", Source: formpackage.InterfaceInputSourceOutput, Pointer: "/url"},

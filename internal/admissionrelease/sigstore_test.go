@@ -156,9 +156,11 @@ func TestRepositoryOfflineTrustPinsLoadFiveDistinctPublishers(t *testing.T) {
 }
 
 func TestCurrentRepositoryOfflineTrustPinsLoadFiveDistinctPublishers(t *testing.T) {
-	admissionRoot := filepath.Join("..", "..", "admission", "v3")
-	if err := VerifyOfflineTrust(admissionRoot); err != nil {
-		t.Fatalf("verify current repository offline trust: %v", err)
+	for _, version := range []string{"v3", "v4"} {
+		admissionRoot := filepath.Join("..", "..", "admission", version)
+		if err := VerifyOfflineTrust(admissionRoot); err != nil {
+			t.Fatalf("verify %s repository offline trust: %v", version, err)
+		}
 	}
 }
 

@@ -17,11 +17,9 @@ import (
 )
 
 const (
-	currentAdmissionRoot            = "admission/v3"
-	currentAdmissionGeneration      = "ga-core-v1"
+	currentAdmissionRoot            = "admission/v4"
+	currentAdmissionGeneration      = "ga-core-v2"
 	currentProviderGeneration       = "portable-v1"
-	currentHostManifestFormat       = "takosumi.standard-form-host-report-candidate@v2"
-	currentHostSignedFormat         = "takosumi.standard-form-host-report-signed-candidate@v2"
 	registryManifestName            = "provider-registry-readback-manifest.json"
 	registrySignedName              = "signed-provider-registry-readback-candidate.json"
 	registryManifestFormat          = "takoform.provider-registry-readback-candidate@v1"
@@ -113,8 +111,8 @@ type currentArtifactConfig struct {
 	retainedPolicyRoot string
 }
 
-// BuildCurrent builds generation-aware v3 material. Provider reports are
-// verified over all 34 portable-v1 Forms before the exact ga-core-v1 ten are
+// BuildCurrent builds generation-aware v4 material. Provider reports are
+// verified over all 34 portable-v1 Forms before the exact ga-core-v2 ten are
 // selected; host reports must close over those ten directly.
 func BuildCurrent(options CurrentBuildOptions) error {
 	if err := validateCurrentBuildOptions(options); err != nil {
@@ -133,7 +131,7 @@ func BuildCurrent(options CurrentBuildOptions) error {
 		return err
 	}
 	if selected.Generation != currentAdmissionGeneration || len(selected.Entries) != 10 {
-		return fmt.Errorf("current admission requires exact ga-core-v1 ten-Form candidates")
+		return fmt.Errorf("current admission requires exact ga-core-v2 ten-Form candidates")
 	}
 	portable, err := standardforms.CurrentPortableCandidateSet(root)
 	if err != nil {
@@ -333,7 +331,7 @@ func loadCurrentArtifactSet(config currentArtifactConfig) (artifactSet, error) {
 		return artifactSet{}, err
 	}
 	manifestName, signedName := hostManifestName, hostSignedName
-	manifestFormat, signedFormat := currentHostManifestFormat, currentHostSignedFormat
+	manifestFormat, signedFormat := "", ""
 	workflow, identity := "", ""
 	var acceptedHost hostpolicy.Host
 	if config.role == "provider-report" {

@@ -16,7 +16,7 @@ provider "takoform" {
 data "takoform_interface" "runtime" {
   name          = "example.runtime"
   version       = "1"
-  resource_kind = "HttpService"
+  resource_kind = "EdgeWorker"
   resource_name = "api"
 }
 

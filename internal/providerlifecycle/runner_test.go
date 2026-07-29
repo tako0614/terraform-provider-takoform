@@ -78,7 +78,7 @@ locals {
   prefix = var.project_name
 }
 
-resource "takoform_http_service" "worker" {
+resource "takoform_edge_worker" "worker" {
   name            = local.prefix
   artifact_url    = "https://example.test/yurucommu-worker.js"
   artifact_sha256 = "sha256:683c5ed5bc5f537087b703bf24ad3b306508dd3778918d0c31eb4561777fbe13"

@@ -1,17 +1,17 @@
 ---
-page_title: "takoform_http_service Resource - takoform"
+page_title: "takoform_edge_worker Resource - takoform"
 subcategory: "Service Forms"
 description: |-
-  Portable HTTP application served from a prebuilt immutable artifact.
+  Portable edge/event-driven application served from a prebuilt immutable artifact.
 ---
 
-# takoform_http_service
+# takoform_edge_worker
 
-Portable HTTP application served from a prebuilt immutable artifact.
+Portable edge/event-driven application served from a prebuilt immutable artifact.
 
 The configured host selects and operates the concrete backend. This resource
 carries desired state only: it never names a target, a credential, a price, or
-an implementation. See the [complete example](../../examples/resources/takoform_http_service/resource.tf).
+an implementation. See the [complete example](../../examples/resources/takoform_edge_worker/resource.tf).
 
 ## Arguments
 
@@ -35,7 +35,7 @@ state.
 
 ## Declared runtime interfaces
 
-- `http.request@1` — Portable HTTP request surface exposed by an application. Operations: `request`.
+- `http.request@1` — Portable HTTP request surface exposed by an edge application. Operations: `request`.
 
 A declaration says what exists. It carries no credential and grants no
 consumer access; the host creates the record and authorizes its use.
@@ -43,6 +43,6 @@ consumer access; the host creates the record and authorizes its use.
 ## Import
 
 ```console
-terraform import takoform_http_service.example NAME
-terraform import takoform_http_service.example SPACE/NAME
+terraform import takoform_edge_worker.example NAME
+terraform import takoform_edge_worker.example SPACE/NAME
 ```

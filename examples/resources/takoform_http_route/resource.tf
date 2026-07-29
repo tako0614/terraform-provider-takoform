@@ -19,7 +19,7 @@ resource "takoform_http_route" "example" {
   connections = [
     {
       name        = "application"
-      resource    = "HttpService/http-service"
+      resource    = "EdgeWorker/edge-worker"
       permissions = ["request"]
       projection  = "http.route.v1"
     },
