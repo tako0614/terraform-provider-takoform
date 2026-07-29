@@ -130,12 +130,12 @@ func i64(value int64) *int64 { return &value }
 var Kinds = []Kind{
 	// ---------------------------------------------------------------- compute
 	{
-		Kind: "HttpService", Slug: "http-service", ResourceType: "takoform_http_service",
-		Domain: "compute", Title: "HTTP Service",
-		Description: "Portable HTTP application served from a prebuilt immutable artifact.",
+		Kind: "EdgeWorker", DefinitionVersion: "2.0.0", Slug: "edge-worker", ResourceType: "takoform_edge_worker",
+		Domain: "compute", Title: "Edge Worker",
+		Description: "Portable edge/event-driven application served from a prebuilt immutable artifact.",
 		Artifact:    true, Connections: ConnectionsOptional,
 		ArtifactExample: map[string]any{
-			"artifactRef":    "portable-conformance/v1/http-service.tar",
+			"artifactRef":    "portable-conformance/v1/edge-worker.tar",
 			"artifactSha256": "0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37",
 		},
 		ConnectionExample: connection("assets", "ObjectBucket/object-bucket", []any{"read"}, "object.binding.v1"),
@@ -153,7 +153,7 @@ var Kinds = []Kind{
 				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
 				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
 		},
-		Interfaces: []Interface{{Name: "http.request", Description: "Portable HTTP request surface exposed by an application.", Operations: []string{"request"}}},
+		Interfaces: []Interface{{Name: "http.request", Description: "Portable HTTP request surface exposed by an edge application.", Operations: []string{"request"}}},
 	},
 	{
 		Kind: "ContainerService", DefinitionVersion: "2.0.0", Slug: "container-service", ResourceType: "takoform_container_service",
@@ -536,7 +536,7 @@ var Kinds = []Kind{
 		Domain: "network", Title: "HTTP Route",
 		Description:       "Portable hostname and path binding that sends HTTP traffic to one connected Resource.",
 		Connections:       ConnectionsRequired,
-		ConnectionExample: connection("application", "HttpService/http-service", []any{"request"}, "http.route.v1"),
+		ConnectionExample: connection("application", "EdgeWorker/edge-worker", []any{"request"}, "http.route.v1"),
 		Fields: []Field{
 			{HCL: "hostname", Wire: "hostname", Type: TypeString, Required: true, Grammar: GrammarHostname,
 				Doc: "Hostname this route answers.", Example: "api.portable-conformance.invalid",

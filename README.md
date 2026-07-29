@@ -77,7 +77,7 @@ network access or code execution:
 go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
 go run ./cmd/standard-form-conformance published-package-check
-go run ./cmd/standard-form-conformance current-published-package-check
+go run ./cmd/standard-form-conformance retained-ga-core-v1-published-package-check
 go run ./cmd/form-package verify conformance/form-package-v1/positive/example-store
 ```
 
@@ -97,16 +97,18 @@ pass the offline `published-package-check`. Those bytes are never rewritten,
 re-signed, or reshaped; [`forms/retired-package-set.json`](forms/retired-package-set.json)
 records exactly what they were.
 
-Ten rebuilt Forms now have immutable, keyless-signed package releases and an
-offline-verified current publication snapshot under
-[`admission/v3/`](admission/v3/):
-`HttpService`, `RelationalDatabase`, `ObjectBucket`, `KeyValueStore`, `Queue`,
-`Schedule`, `ContainerService`, `StatefulEntity`, `VectorIndex`, and
-`ModelEndpoint`. Publication proves only those exact package bytes. The
-rebuilt set still has no retained signed conforming-host, current provider,
-dual-Registry, or admission-evidence candidate, so current admission remains
-fail-closed. The current lane verifies provider reports over all 34
-`portable-v1` Forms before selecting the exact ten `ga-core-v1` identities.
+The first rebuilt ten-Form publication snapshot under
+[`admission/v3/`](admission/v3/) remains immutable history. Product review
+found that its `HttpService@1.0.0` name described the `http.request@1`
+Interface rather than the requested execution class. The active successor is
+the provider-neutral `EdgeWorker@2.0.0`: it keeps the neutral runtime,
+concurrency, configuration, and immutable-artifact contract without restoring
+Cloudflare compatibility fields. Its package and provider `v0.3.0` remain
+unpublished candidates, so current admission is intentionally fail-closed
+until new package, provider, host, dual-Registry, and admission evidence is
+retained under the distinct [`admission/v4/`](admission/v4/) `ga-core-v2`
+lane. The successor lane verifies provider reports over all 34
+`portable-v1` Forms before selecting the exact ten successor identities.
 GitHub Actions supplies distinct keyless publisher identities; all generation,
 rederivation, and closure checks remain local Go commands.
 
@@ -127,9 +129,14 @@ go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
 go run ./cmd/standard-form-conformance candidate-publication-check
 go run ./cmd/standard-form-conformance published-package-check
-go run ./cmd/standard-form-conformance current-published-package-check
+go run ./cmd/standard-form-conformance retained-ga-core-v1-published-package-check
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 ```
+
+After the successor packages are published,
+`current-published-package-check` authenticates the exact `admission/v4`
+readback. It is intentionally outside `bun run check` because live publication
+is a separate operator cadence.
 
 `matrix` is the local `dev_overrides` regression gate. The separate
 `render-registry-matrix` command performs a version-pinned direct Registry
@@ -139,9 +146,9 @@ remain immutable GitHub Releases. Terraform Registry rejected `v0.1.1`
 because its checksum manifest projected SPDX evidence as provider packages,
 and rejected `v0.1.2` because it omitted the required Registry metadata
 manifest checksum. The exact six-entry `v0.1.3` release is the non-overwriting
-successor. The rebuilt Form set uses published provider `v0.2.1`; the remaining
-current Registry evidence is the separately signed Terraform/OpenTofu
-readback.
+successor. The first rebuilt Form set uses immutable provider `v0.2.1`; the
+`EdgeWorker@2.0.0` successor is implemented by the candidate provider
+`v0.3.0`, whose Registry readback can exist only after publication.
 
 Provider publication and Standard Form admission are separate authorities.
 Provider publication never changes admission status. Current admission is a
@@ -154,8 +161,8 @@ Provider releases use the fail-closed signed `v*` tag workflow documented in
 the private key remains outside the repository. The `tako0614` public namespace
 and pinned signing key are registered. Do not create a new release tag until
 the release descriptor and provider compatibility gates are complete. Existing
-version paths are immutable, so retired provider `0.1.3` and current provider
-`0.2.1` retain independent evidence.
+version paths are immutable, so retired provider `0.1.3`, published provider
+`0.2.1`, and candidate successor `0.3.0` remain distinct identities.
 
 ## License
 

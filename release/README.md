@@ -22,6 +22,18 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
+## Provider v0.3.0 resource transition
+
+Provider `v0.3.0` removes the active `takoform_http_service` resource and adds
+`takoform_edge_worker` for the distinct `EdgeWorker@2.0.0` Form identity.
+Published `HttpService@1.0.0` bytes and provider `v0.2.1` remain immutable.
+
+This is not a state-label-only rename: the Form kind, resource type, package,
+and remote identity all change. Existing `takoform_http_service` state must
+stay pinned to provider `v0.2.1` until an operator performs an explicit
+create/cutover/destroy migration. Provider `v0.3.0` does not silently
+reinterpret old state as `EdgeWorker`.
+
 The pre-v1 legacy-provider migration report remains useful structural evidence,
 but its operator-host refresh/rollback drills are external migration evidence,
 not authority to publish this candidate-only provider. The tag and artifact
@@ -110,18 +122,21 @@ Current Phase 2 has no set-wide release or promotion lane. The protected
 `provider-registry-readback.yml` workflow executes both direct Registry
 installs and keyless-signs only the canonical readback with its own publisher
 identity. `standard-provider-report.yml` independently signs all 34
-`portable-v1` provider reports. A conforming host signs the exact ten
-`ga-core-v1` host reports. The admission material retains and
+`portable-v1` provider reports using
+`takoform.standard-provider-runner-report@v2`, including the exact installed
+provider binary digest. A conforming host signs the exact ten
+`ga-core-v2` host reports. The admission material retains and
 offline-authenticates the complete 34-report provider candidate, including the
 24 reports outside the selected ten. Finally, `standard-admission-evidence.yml` verifies
-those retained candidates, builds the generation-aware v3 set twice, and signs
+those retained candidates, builds the generation-aware v4 set twice, and signs
 only the ten admission-evidence subjects. It does not create a tag, release,
 registry entry, or production mutation.
 
-The active local gates are
-`current-published-package-check` and `current-admission-closure-check`.
-Admission remains fail-closed until all retained subjects and exact Git refs
-verify offline. The removed `standard-admission-release.yml`, controller
+The portable source gate authenticates historical `ga-core-v1` publication
+with `retained-ga-core-v1-published-package-check`.
+`current-published-package-check` and `current-admission-closure-check` are
+post-publication v4 gates and remain fail-closed until all retained subjects
+and exact Git refs verify offline. The removed `standard-admission-release.yml`, controller
 promotion input, release archive, and `release-check` path described a
 set-wide artifact promotion that is not part of current Takoform.
 

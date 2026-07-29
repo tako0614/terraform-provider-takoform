@@ -32,18 +32,20 @@ func TestReviewedPolicyLoads(t *testing.T) {
 
 func TestCurrentReviewedPolicyLoadsWithoutRelabelingV1(t *testing.T) {
 	root := filepath.Join("..", "..")
-	policy, err := LoadAt(root, "admission/v3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	host, err := policy.ByHostID("takosumi-oss-reference")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if host.ManifestFormat != "takosumi.standard-form-host-report-candidate@v2" ||
-		host.SignedFormat != "takosumi.standard-form-host-report-signed-candidate@v2" ||
-		host.RunnerVersionPrefix != "1.2.0+git." {
-		t.Fatalf("current host contract drifted: %#v", host)
+	for _, retainedRoot := range []string{"admission/v3", "admission/v4"} {
+		policy, err := LoadAt(root, retainedRoot)
+		if err != nil {
+			t.Fatalf("%s: %v", retainedRoot, err)
+		}
+		host, err := policy.ByHostID("takosumi-oss-reference")
+		if err != nil {
+			t.Fatalf("%s: %v", retainedRoot, err)
+		}
+		if host.ManifestFormat != "takosumi.standard-form-host-report-candidate@v2" ||
+			host.SignedFormat != "takosumi.standard-form-host-report-signed-candidate@v2" ||
+			host.RunnerVersionPrefix != "1.2.0+git." {
+			t.Fatalf("%s current host contract drifted: %#v", retainedRoot, host)
+		}
 	}
 	legacy, err := Load(root)
 	if err != nil {

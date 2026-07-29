@@ -9,7 +9,7 @@ or an implementation: those stay with the host that realizes the Form.
 
 | Kind | Resource | Version | Portable intent |
 | --- | --- | --- | --- |
-| `HttpService` | `takoform_http_service` | `1.0.0` | Portable HTTP application served from a prebuilt immutable artifact. |
+| `EdgeWorker` | `takoform_edge_worker` | `2.0.0` | Portable edge/event-driven application served from a prebuilt immutable artifact. |
 | `ContainerService` | `takoform_container_service` | `2.0.0` | Portable OCI container service pinned to an immutable image digest. |
 | `ComputeInstance` | `takoform_compute_instance` | `1.0.0` | Portable long-running machine instance built from an immutable image. |
 | `StaticSite` | `takoform_static_site` | `1.0.0` | Portable static asset site served from a prebuilt immutable artifact. |
@@ -74,7 +74,7 @@ lifecycle.
 
 | Kind | Interface |
 | --- | --- |
-| `HttpService` | `http.request@1` (request) |
+| `EdgeWorker` | `http.request@1` (request) |
 | `ContainerService` | `http.request@1` (request) |
 | `StaticSite` | `http.request@1` (request) |
 | `Workflow` | `workflow.invoke@1` (cancel, invoke, status) |
@@ -110,7 +110,7 @@ fields; the protocol lifecycle proves both.
 
 | Kind | Immutable |
 | --- | --- |
-| `HttpService` | `/name` |
+| `EdgeWorker` | `/name` |
 | `ContainerService` | `/name` |
 | `ComputeInstance` | `/name` |
 | `StaticSite` | `/name` |

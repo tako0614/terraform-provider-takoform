@@ -11,9 +11,9 @@ provider "takoform" {
   space    = "prod"
 }
 
-resource "takoform_http_service" "example" {
-  name            = "http-service"
-  artifact_ref    = "portable-conformance/v1/http-service.tar"
+resource "takoform_edge_worker" "example" {
+  name            = "edge-worker"
+  artifact_ref    = "portable-conformance/v1/edge-worker.tar"
   artifact_sha256 = "0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37"
   runtime         = "javascript"
   configuration   = { "LOG_LEVEL" = "info" }
@@ -28,6 +28,6 @@ resource "takoform_http_service" "example" {
   ]
 }
 
-output "http_service_outputs" {
-  value = takoform_http_service.example.outputs
+output "edge_worker_outputs" {
+  value = takoform_edge_worker.example.outputs
 }

@@ -152,7 +152,7 @@ func generateResourceDocs(root string) error {
 	if err := os.MkdirAll(docsRoot, 0o755); err != nil {
 		return err
 	}
-	expected := map[string]struct{}{}
+	expected := map[string]struct{}{"interface.md": {}}
 	for _, kind := range formcatalog.Kinds {
 		expected[docBasename(kind)] = struct{}{}
 	}
@@ -285,10 +285,14 @@ func docConstraint(field formcatalog.Field) string {
 }
 
 func declaredResourceTypes() map[string]struct{} {
-	expected := make(map[string]struct{}, len(formcatalog.Kinds))
+	expected := make(map[string]struct{}, len(formcatalog.Kinds)+1)
 	for _, kind := range formcatalog.Kinds {
 		expected[kind.ResourceType] = struct{}{}
 	}
+	// takoform_interface is a portable provider resource, but not a Service
+	// Form. Its hand-written example and reference doc have a different owner
+	// and must survive regeneration of the Form-derived surfaces.
+	expected["takoform_interface"] = struct{}{}
 	return expected
 }
 

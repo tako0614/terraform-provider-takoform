@@ -27,8 +27,8 @@ import (
 const (
 	setPath                = "admission/v1/published-package-set.json"
 	trustPath              = "admission/v1/trust/published-package-trust.json"
-	currentSetPath         = "admission/v3/published-package-set.json"
-	currentTrustPath       = "admission/v3/trust/published-package-trust.json"
+	currentSetPath         = "admission/v4/published-package-set.json"
+	currentTrustPath       = "admission/v4/trust/published-package-trust.json"
 	repository             = "tako0614/terraform-provider-takoform"
 	maxGitHubResponseBytes = 4 << 20
 	maxGitHubAssetBytes    = 64 << 20
@@ -159,7 +159,7 @@ func main() {
 	case "download-current":
 		flags := flag.NewFlagSet("published-package-set download-current", flag.ContinueOnError)
 		flags.SetOutput(os.Stderr)
-		outputRoot := flags.String("output-root", "", "new, absent directory that receives the staged admission/v3 snapshot")
+		outputRoot := flags.String("output-root", "", "new, absent directory that receives the staged admission/v4 snapshot")
 		if parseErr := flags.Parse(os.Args[2:]); parseErr != nil || flags.NArg() != 0 || strings.TrimSpace(*outputRoot) == "" {
 			if parseErr == nil {
 				usage()
@@ -255,7 +255,7 @@ func downloadSnapshotForSet(ctx context.Context, client *githubClient, sourceRoo
 		if candidates.DefinitionVersion == "" || !versionPattern.MatchString(candidates.PackageVersion) {
 			return fmt.Errorf("candidate set has an invalid definition/package version")
 		}
-	} else if generation != "ga-core-v1" || candidates.DefinitionVersion != "" || candidates.PackageVersion != "" {
+	} else if generation != "ga-core-v2" || candidates.DefinitionVersion != "" || candidates.PackageVersion != "" {
 		return fmt.Errorf("current candidate set has an invalid generation identity")
 	}
 	trustRaw, err := os.ReadFile(filepath.Join(sourceRoot, filepath.FromSlash(outputTrustPath)))
@@ -343,7 +343,7 @@ func downloadSnapshotForSet(ctx context.Context, client *githubClient, sourceRoo
 		retainedRoot := "admission/v1"
 		if generation != "" {
 			packageVersion = candidate.FormRef.DefinitionVersion
-			retainedRoot = "admission/v3"
+			retainedRoot = "admission/v4"
 		}
 		entry, liveID, assetIDs, packageErr := downloadPackage(ctx, client, cleanOutput, retainedRoot, candidate, packageVersion)
 		if packageErr != nil {

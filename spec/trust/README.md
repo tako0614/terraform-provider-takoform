@@ -226,31 +226,35 @@ provider version/tag/commit, current release descriptor, candidate-set and
 schema digests, both CLI/FQN/binary identities, and the exact direct-install
 matrix digest. `cmd/admission-readback` renders this unsigned canonical subject
 from a validated direct matrix. Historical v1 evidence retains its original
-publisher identity. Current v3 evidence is signed only by
+publisher identity. Current Registry evidence is signed only by
 `.github/workflows/provider-registry-readback.yml`, whose identity is distinct
 from package, provider-report, host-report, and admission-evidence publishers.
 
-### Current generation-aware v3 lane
+### Generation-aware successor lane
 
-`admission/v3` binds the exact mixed-version `ga-core-v1` ten-Form admission
-subset. Its `published-package-set@v2` uses the independent per-Form
-`form-package-release.yml` identity and does not accept the retired aggregate
-publisher. Provider reports use generation `portable-v1` and must close over
-all 34 current Forms before the builder selects the ten exact admission
-identities. The v3 set retains the signed manifest, checksums, and all 34
-provider report/bundle pairs under `provider-closure/`; offline verification
-therefore fails if any of the 24 unselected reports is missing or changed.
-Host reports use generation `ga-core-v1` and contain exactly those
-ten identities. Neither manifest carries a false uniform definition or package
-version.
+`admission/v3` is immutable `ga-core-v1` history. Its
+`published-package-set@v2` authenticates the exact ten per-Form releases,
+including `HttpService@1.0.0`, with the independent
+`form-package-release.yml` identity. The retained signed report candidates
+remain evidence of what ran, but do not grant admission and are not reused for
+the successor.
 
-The current retained layout mirrors the historical role separation under
-`admission/v3`, but uses `standard-admission-set@v3`. The active assembly
-command is `standard-admission-material build-current`; it requires signed
-host, full-provider, and dual-Registry candidates and produces deterministic
-material outside the repository. `standard-admission-evidence.yml` signs only
-the ten evidence subjects. It does not publish a set-wide archive or GitHub
-Release.
+`admission/v4` is the active `ga-core-v2` candidate lane. It selects the exact
+mixed-version ten-Form subset containing the provider-neutral
+`EdgeWorker@2.0.0`. Provider reports use generation `portable-v1` and must
+close over all 34 current Forms before the builder selects the ten exact
+admission identities. Host reports use generation `ga-core-v2` and contain
+exactly those ten identities. Neither manifest carries a false uniform
+definition or package version.
+
+The active assembly command is `standard-admission-material build-current`; it
+requires signed host, full-provider, and dual-Registry candidates and produces
+deterministic material outside the repository. Provider reports use
+`takoform.standard-provider-runner-report@v2` and bind the exact provider
+binary digest. `standard-admission-evidence.yml` signs only the ten evidence
+subjects. It does not publish a set-wide archive or GitHub Release. Before
+successor publication, v4 contains only reviewed trust and conforming-host
+policy and all current publication/admission gates fail closed.
 
 Before authentication opens, `admission-closure-check` resolves the admission
 tag, provider tag, and every Form Package tag from fetched local Git refs and

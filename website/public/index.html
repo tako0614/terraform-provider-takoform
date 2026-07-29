@@ -188,7 +188,7 @@
     </p>
       <h3 class="resource-domain">Compute and application</h3>
       <div class="resource-grid">
-        <div class="resource"><code>takoform_http_service</code><span>HTTP application served from a prebuilt immutable artifact</span></div>
+        <div class="resource"><code>takoform_edge_worker</code><span>Edge/event-driven application served from a prebuilt immutable artifact</span></div>
         <div class="resource"><code>takoform_container_service</code><span>OCI container service pinned to an immutable image digest</span></div>
         <div class="resource"><code>takoform_compute_instance</code><span>Long-running machine instance built from an immutable image</span></div>
         <div class="resource"><code>takoform_static_site</code><span>Static asset site served from a prebuilt immutable artifact</span></div>
@@ -299,7 +299,7 @@
       </div>
     </div>
     <p class="fineprint">
-      <code>takoform_http_service</code>, <code>takoform_container_service</code>,
+      <code>takoform_edge_worker</code>, <code>takoform_container_service</code>,
       <code>takoform_compute_instance</code>, <code>takoform_workflow</code>, and
       <code>takoform_stateful_entity</code> take a configuration map. Elsewhere the
       added settings are ordinary typed arguments: size class, initial database name,
@@ -566,7 +566,7 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
     <p class="section-lede">計算・データ・分析・ネットワーク・運用にまたがる 34 種類のリソースがあります。どれも「何が欲しいか」だけを書き、「誰が動かすか」は書きません。</p>
       <h3 class="resource-domain">計算とアプリケーション</h3>
       <div class="resource-grid">
-        <div class="resource"><code>takoform_http_service</code><span>HTTP アプリケーション</span></div>
+        <div class="resource"><code>takoform_edge_worker</code><span>エッジ／イベント駆動アプリケーション</span></div>
         <div class="resource"><code>takoform_container_service</code><span>コンテナサービス</span></div>
         <div class="resource"><code>takoform_compute_instance</code><span>マシンインスタンス</span></div>
         <div class="resource"><code>takoform_static_site</code><span>静的サイト</span></div>
@@ -662,7 +662,7 @@ go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform t
         <span>これは configuration には書けません。マップのキーにも、通常のフィールドと同じデータのみのポリシーがかかります。認証情報を設定に紛れ込ませることはできません。シークレットは state に載せるものではなく、ホストが自前の経路で注入します。</span>
       </div>
     </div>
-    <p class="fineprint">configuration マップを持つのは <code>takoform_http_service</code> / <code>takoform_container_service</code> / <code>takoform_compute_instance</code> / <code>takoform_workflow</code> / <code>takoform_stateful_entity</code> です。ほかに増えたのは普通の型付き引数で、リレーショナルデータベースのサイズクラス・初期データベース名・スタンバイ、コンテナサービスのレプリカ数とヘルスチェックパス、ロードバランサーの内部限定リスナーとアイドルタイムアウト、キューの保持期間・最大メッセージサイズ・配信遅延・順序保証があります。キューは、配信できなかったメッセージの送り先を connections で指せるようにもなりました。</p>
+    <p class="fineprint">configuration マップを持つのは <code>takoform_edge_worker</code> / <code>takoform_container_service</code> / <code>takoform_compute_instance</code> / <code>takoform_workflow</code> / <code>takoform_stateful_entity</code> です。ほかに増えたのは普通の型付き引数で、リレーショナルデータベースのサイズクラス・初期データベース名・スタンバイ、コンテナサービスのレプリカ数とヘルスチェックパス、ロードバランサーの内部限定リスナーとアイドルタイムアウト、キューの保持期間・最大メッセージサイズ・配信遅延・順序保証があります。キューは、配信できなかったメッセージの送り先を connections で指せるようにもなりました。</p>
   </div>
 </section>
 

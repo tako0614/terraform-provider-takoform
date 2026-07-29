@@ -17,17 +17,17 @@
   "conformanceManifest": "conformance/form-package-v1/manifest.json",
   "packages": [
     {
-      "kind": "HttpService",
-      "path": "conformance/form-package-v1/positive/standard/http-service",
+      "kind": "EdgeWorker",
+      "path": "conformance/form-package-v1/positive/standard/edge-worker",
       "admissionStatus": "external-required",
-      "conformanceCase": "standard-http-service-package",
+      "conformanceCase": "standard-edge-worker-package",
       "formRef": {
         "apiVersion": "forms.takoform.com/v1alpha1",
-        "kind": "HttpService",
-        "definitionVersion": "1.0.0",
-        "schemaDigest": "sha256:58e3aa716b1b3a7ddf2bdf97371a28966634905cee3ae9bc0d616cc75478bdf3"
+        "kind": "EdgeWorker",
+        "definitionVersion": "2.0.0",
+        "schemaDigest": "sha256:f9c6e207f1bd8b88483b03640c016014f2bc671430cb9b6ea6caca9d1ae0ad2b"
       },
-      "packageDigest": "sha256:e5fe7cabfdb976d5cd5a503ab81a94dcffbf1d34870be7bd1ef7ea521f2ac446"
+      "packageDigest": "sha256:f5d6966bb01fb2bbf5e4a4850cede152f1606b6ddcb484142c172c044e3ac3dc"
     },
     {
       "kind": "ContainerService",
@@ -313,7 +313,7 @@
         "definitionVersion": "1.0.0",
         "schemaDigest": "sha256:6763d5a72dc37e24c1d6305f27d96777666b45232ee32ffb3acac3fd3e668540"
       },
-      "packageDigest": "sha256:2ba7f12ce3681422a0712d801f421353b495d729e404313b2fcde4077144dd68"
+      "packageDigest": "sha256:89d929e061e0954c412f8cfd4e4e6b485250890d31ac9dd27644fdeb1a50c2d2"
     },
     {
       "kind": "LoadBalancer",

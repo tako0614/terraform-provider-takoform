@@ -191,7 +191,7 @@ func TestInterfaceResourceImportsItsPortableCompoundIdentity(t *testing.T) {
 			nil,
 		),
 	}
-	id := `["prod","HttpService","api","example.runtime","1"]`
+	id := `["prod","EdgeWorker","api","example.runtime","1"]`
 	response := frameworkresource.ImportStateResponse{State: empty}
 	resource.ImportState(
 		ctx,
@@ -204,7 +204,7 @@ func TestInterfaceResourceImportsItsPortableCompoundIdentity(t *testing.T) {
 	for attribute, want := range map[string]string{
 		"id":            id,
 		"space":         "prod",
-		"resource_kind": "HttpService",
+		"resource_kind": "EdgeWorker",
 		"resource_name": "api",
 		"name":          "example.runtime",
 		"version":       "1",

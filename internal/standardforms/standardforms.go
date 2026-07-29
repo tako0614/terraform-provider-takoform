@@ -54,6 +54,12 @@ const retiredPackageVersion = "1.0.1"
 // can start a new major line without renumbering every other Form.
 const portableGeneration = "portable-v1"
 
+const (
+	currentAdmissionGeneration = "ga-core-v2"
+	currentAdmissionRoot       = "admission/v4"
+	retainedGaCoreV1Root       = "admission/v3"
+)
+
 // RetiredKinds is the exact published set whose immutable bytes and admission
 // evidence remain verifiable. Those releases are never rewritten, re-signed,
 // or reshaped; they are simply no longer the set this provider implements.
@@ -409,7 +415,7 @@ func VerifyCurrentAdmissionClosure(root string) error {
 	if err != nil {
 		return err
 	}
-	return admissionrelease.VerifyAdmissionSetAt(root, "admission/v3", candidates)
+	return admissionrelease.VerifyAdmissionSetAt(root, currentAdmissionRoot, candidates)
 }
 
 // VerifyPublishedPackageSet verifies the retained, immutable distribution
@@ -424,14 +430,74 @@ func VerifyPublishedPackageSet(root string) error {
 	return admissionrelease.VerifyPublishedPackageSet(root, candidates)
 }
 
+// VerifyRetainedGaCoreV1PublishedPackageSet verifies the immutable per-Form
+// releases selected by the retained ga-core-v1 generation. It reconstructs
+// that historical candidate set from the retained publication snapshot so an
+// unpublished successor cannot make old publication proof unverifiable.
+func VerifyRetainedGaCoreV1PublishedPackageSet(root string) error {
+	candidates, err := retainedMixedVersionCandidateSet(root, retainedGaCoreV1Root, "ga-core-v1")
+	if err != nil {
+		return err
+	}
+	return admissionrelease.VerifyPublishedPackageSetAt(root, retainedGaCoreV1Root, candidates)
+}
+
 // VerifyCurrentPublishedPackageSet verifies the immutable per-Form releases
-// selected by the current mixed-version admission generation.
+// selected by the active successor generation. This is a post-publication
+// evidence gate, not part of the portable source check.
 func VerifyCurrentPublishedPackageSet(root string) error {
 	candidates, err := CurrentAdmissionCandidateSet(root)
 	if err != nil {
 		return err
 	}
-	return admissionrelease.VerifyPublishedPackageSetAt(root, "admission/v3", candidates)
+	return admissionrelease.VerifyPublishedPackageSetAt(root, currentAdmissionRoot, candidates)
+}
+
+func retainedMixedVersionCandidateSet(root, retainedRoot, generation string) (admissionrelease.CandidateSet, error) {
+	var published admissionrelease.PublishedPackageSet
+	if err := readJSON(filepath.Join(root, filepath.FromSlash(retainedRoot), "published-package-set.json"), &published); err != nil {
+		return admissionrelease.CandidateSet{}, err
+	}
+	if published.Format != "takoform.published-package-set@v2" ||
+		published.Generation != generation ||
+		published.DefinitionVersion != "" ||
+		published.PackageVersion != "" ||
+		len(published.Entries) != 10 {
+		return admissionrelease.CandidateSet{}, fmt.Errorf("%s published package set identity is invalid", generation)
+	}
+	seenKinds := make(map[string]struct{}, len(published.Entries))
+	seenSlugs := make(map[string]struct{}, len(published.Entries))
+	candidates := make([]admissionrelease.Candidate, 0, len(published.Entries))
+	for index, entry := range published.Entries {
+		if entry.Kind == "" || entry.Slug == "" ||
+			entry.FormRef.APIVersion != formpackage.FormAPIVersion ||
+			entry.FormRef.Kind != entry.Kind ||
+			!formpackage.ValidDigest(entry.FormRef.SchemaDigest) ||
+			!formpackage.ValidDigest(entry.PackageDigest) {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s published packages[%d] has invalid exact identity", generation, index)
+		}
+		if _, duplicate := seenKinds[entry.Kind]; duplicate {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s published packages[%d] duplicates kind %s", generation, index, entry.Kind)
+		}
+		seenKinds[entry.Kind] = struct{}{}
+		if _, duplicate := seenSlugs[entry.Slug]; duplicate {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s published packages[%d] duplicates slug %s", generation, index, entry.Slug)
+		}
+		seenSlugs[entry.Slug] = struct{}{}
+		packagePath := filepath.ToSlash(filepath.Join("forms", "releases", releaseIDForKind(entry.Kind), entry.FormRef.DefinitionVersion))
+		report, err := formpackage.VerifyDirectory(filepath.Join(root, filepath.FromSlash(packagePath)))
+		if err != nil {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s historical published package source: %w", entry.Kind, err)
+		}
+		if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s historical published package source identity drift", entry.Kind)
+		}
+		candidates = append(candidates, admissionrelease.Candidate{
+			Kind: entry.Kind, Slug: entry.Slug, PackagePath: packagePath,
+			FormRef: entry.FormRef, PackageDigest: entry.PackageDigest,
+		})
+	}
+	return admissionrelease.CandidateSet{Generation: generation, Entries: candidates}, nil
 }
 
 // publishedPackageCandidateSet reconstructs the historical immutable set from
@@ -578,7 +644,7 @@ func CurrentPortableCandidateSet(root string) (admissionrelease.CandidateSet, er
 }
 
 // CurrentAdmissionCandidateSet returns the exact mixed-version package
-// identities selected for the generation-aware v3 admission lane. Publication
+// identities selected for the generation-aware v4 admission lane. Publication
 // and admission evidence remain separate: this function verifies only the
 // reviewed inventory and its local data-only package bytes.
 func CurrentAdmissionCandidateSet(root string) (admissionrelease.CandidateSet, error) {
@@ -591,7 +657,7 @@ func CurrentAdmissionCandidateSet(root string) (admissionrelease.CandidateSet, e
 		return admissionrelease.CandidateSet{}, fmt.Errorf("read current standard package set: %w", err)
 	}
 	if inventory.Format != "takoform.admission-candidate-set@v1" ||
-		inventory.Generation != "ga-core-v1" ||
+		inventory.Generation != currentAdmissionGeneration ||
 		inventory.AdmissionStatus != "external-required" ||
 		len(inventory.Packages) != 10 {
 		return admissionrelease.CandidateSet{}, fmt.Errorf("current admission inventory identity is invalid")

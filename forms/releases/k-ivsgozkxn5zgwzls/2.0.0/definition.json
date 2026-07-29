@@ -1,9 +1,9 @@
 {
   "apiVersion": "forms.takoform.com/v1alpha1",
-  "kind": "HttpService",
-  "definitionVersion": "1.0.0",
-  "title": "HTTP Service",
-  "description": "Portable HTTP application served from a prebuilt immutable artifact.",
+  "kind": "EdgeWorker",
+  "definitionVersion": "2.0.0",
+  "title": "Edge Worker",
+  "description": "Portable edge/event-driven application served from a prebuilt immutable artifact.",
   "status": "standard",
   "desiredSchema": {
     "$defs": {
@@ -208,7 +208,7 @@
         "type": "string"
       },
       "kind": {
-        "const": "HttpService",
+        "const": "EdgeWorker",
         "type": "string"
       },
       "name": {
@@ -246,7 +246,7 @@
     {
       "name": "http.request",
       "version": "1",
-      "description": "Portable HTTP request surface exposed by an application.",
+      "description": "Portable HTTP request surface exposed by an edge application.",
       "required": true,
       "document": {
         "operations": [
