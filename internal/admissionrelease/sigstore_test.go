@@ -155,6 +155,13 @@ func TestRepositoryOfflineTrustPinsLoadFiveDistinctPublishers(t *testing.T) {
 	}
 }
 
+func TestCurrentRepositoryOfflineTrustPinsLoadFiveDistinctPublishers(t *testing.T) {
+	admissionRoot := filepath.Join("..", "..", "admission", "v3")
+	if err := VerifyOfflineTrust(admissionRoot); err != nil {
+		t.Fatalf("verify current repository offline trust: %v", err)
+	}
+}
+
 func TestReadRetainedRelativeFileRejectsSymlinkedParent(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

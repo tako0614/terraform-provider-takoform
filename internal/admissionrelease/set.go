@@ -3,14 +3,21 @@
 // registry, or grant host, placement, credential, or commercial authority.
 package admissionrelease
 
-import "github.com/tako0614/terraform-provider-takoform/formpackage"
+import (
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/standardform"
+)
 
-const setFormat = "takoform.standard-admission-set@v2"
+const (
+	setFormatV2 = "takoform.standard-admission-set@v2"
+	setFormatV3 = "takoform.standard-admission-set@v3"
+)
 
 // CandidateSet is the exact structural Form set compiled into the provider.
 // Admission evidence must close over this set without adding, dropping, or
 // replacing a candidate identity.
 type CandidateSet struct {
+	Generation        string
 	DefinitionVersion string
 	PackageVersion    string
 	Entries           []Candidate
@@ -29,12 +36,38 @@ type Candidate struct {
 // binds artifacts together; its portable-standard claims are not trusted
 // until every retained subject and its release provenance are authenticated.
 type Set struct {
-	Format                   string              `json:"format"`
-	DefinitionVersion        string              `json:"definitionVersion"`
-	PackageVersion           string              `json:"packageVersion"`
-	AdmissionReleaseTag      string              `json:"admissionReleaseTag"`
-	ProviderRegistryReadback RegistryReadbackRef `json:"providerRegistryReadback"`
-	Entries                  []SetEntry          `json:"entries"`
+	Format                   string                 `json:"format"`
+	Generation               string                 `json:"generation,omitempty"`
+	DefinitionVersion        string                 `json:"definitionVersion,omitempty"`
+	PackageVersion           string                 `json:"packageVersion,omitempty"`
+	AdmissionReleaseTag      string                 `json:"admissionReleaseTag"`
+	ProviderReportClosure    *ProviderReportClosure `json:"providerReportClosure,omitempty"`
+	ProviderRegistryReadback RegistryReadbackRef    `json:"providerRegistryReadback"`
+	Entries                  []SetEntry             `json:"entries"`
+}
+
+// ProviderReportClosure retains the full current provider-report generation.
+// The admission subset may select fewer Forms, but it cannot discard the
+// signed proof that the provider executed every current portable Form.
+type ProviderReportClosure struct {
+	Generation           string                       `json:"generation"`
+	ManifestPath         string                       `json:"manifestPath"`
+	ManifestDigest       string                       `json:"manifestDigest"`
+	SignedManifestPath   string                       `json:"signedManifestPath"`
+	SignedManifestDigest string                       `json:"signedManifestDigest"`
+	ChecksumsPath        string                       `json:"checksumsPath"`
+	ChecksumsDigest      string                       `json:"checksumsDigest"`
+	Reports              []ProviderReportClosureEntry `json:"reports"`
+}
+
+// ProviderReportClosureEntry binds one full-catalog report and signature.
+type ProviderReportClosureEntry struct {
+	Kind           string                              `json:"kind"`
+	Slug           string                              `json:"slug"`
+	Identity       standardform.InstalledFormReference `json:"identity"`
+	ReportPath     string                              `json:"reportPath"`
+	ReportDigest   string                              `json:"reportDigest"`
+	SigstoreBundle string                              `json:"sigstoreBundle"`
 }
 
 // RegistryReadbackRef binds the one provider-version install/readback report

@@ -8,7 +8,7 @@
     {
       "product": "OpenTofu",
       "version": "1.12.1",
-      "providerAddress": "registry.opentofu.org/tako0614/takoform"
+      "providerAddress": "registry.terraform.io/tako0614/takoform"
     },
     {
       "product": "Terraform",

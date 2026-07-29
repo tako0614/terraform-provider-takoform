@@ -13,7 +13,7 @@ import (
 func main() {
 	command := "verify"
 	args := os.Args[1:]
-	if len(args) > 0 && (args[0] == "verify" || args[0] == "render" || args[0] == "matrix" || args[0] == "render-matrix" || args[0] == "registry-matrix" || args[0] == "render-registry-matrix" || args[0] == "provider-reports" || args[0] == "verify-provider-reports") {
+	if len(args) > 0 && (args[0] == "verify" || args[0] == "render" || args[0] == "matrix" || args[0] == "render-matrix" || args[0] == "registry-report" || args[0] == "render-registry-report" || args[0] == "registry-matrix" || args[0] == "render-registry-matrix" || args[0] == "provider-reports" || args[0] == "verify-provider-reports") {
 		// Commands are deliberately limited below; parsing them before --cli keeps
 		// the common `verify --cli /path` invocation terse.
 		command = args[0]
@@ -25,6 +25,10 @@ func main() {
 	}
 	if command == "verify-provider-reports" {
 		runVerifyProviderReports(args)
+		return
+	}
+	if command == "registry-report" || command == "render-registry-report" {
+		runRegistryReport(command, args)
 		return
 	}
 	if command == "matrix" || command == "render-matrix" || command == "registry-matrix" || command == "render-registry-matrix" {
@@ -65,6 +69,40 @@ func main() {
 	default:
 		fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance [verify|render] [--cli PATH]"))
 	}
+}
+
+func runRegistryReport(command string, args []string) {
+	cliPath := ""
+	for len(args) > 0 {
+		if len(args) < 2 || args[0] != "--cli" {
+			fail(fmt.Errorf("usage: go run ./cmd/provider-lifecycle-conformance [registry-report|render-registry-report] --cli PATH"))
+		}
+		cliPath = args[1]
+		args = args[2:]
+	}
+	if cliPath == "" {
+		fail(fmt.Errorf("registry report requires --cli PATH"))
+	}
+	root, err := providerlifecycle.RepoRoot(".")
+	if err != nil {
+		fail(err)
+	}
+	report, err := providerlifecycle.RunRegistry(context.Background(), root, cliPath)
+	if err != nil {
+		fail(err)
+	}
+	if err := providerlifecycle.ValidateRegistry(report); err != nil {
+		fail(err)
+	}
+	if command == "render-registry-report" {
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(report); err != nil {
+			fail(err)
+		}
+		return
+	}
+	fmt.Printf("verified non-publishable direct Registry lifecycle report: %s %s, %d exact typed resources\n", report.CLI.Product, report.CLI.Version, len(report.Resources))
 }
 
 func runProviderReports(args []string) {

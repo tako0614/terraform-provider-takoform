@@ -25,20 +25,23 @@ import (
 )
 
 const (
-	runnerReportFormat             = "takoform.standard-runner-report@v1"
-	registryReadbackFormat         = "takoform.provider-registry-readback@v1"
-	packageReleaseSchema           = 1
-	packageReleaseType             = "form-package"
-	sourceRepository               = "github.com/tako0614/terraform-provider-takoform"
-	packageReleaseWorkflow         = ".github/workflows/standard-form-package-set-release.yml"
-	packageIndexMediaType          = "application/vnd.takoform.package-index.v1+json"
-	packagePublisherIssuer         = "https://token.actions.githubusercontent.com"
-	packagePublisherIdentityPrefix = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-form-package-set-release.yml@refs/tags/standard-forms/v"
-	packagePublisherTagPattern     = "refs/tags/standard-forms/v*"
-	registryProviderAddress        = "registry.terraform.io/tako0614/takoform"
-	maxReportBytes                 = 16 << 20
-	maxReleaseManifestBytes        = 4 << 20
-	maxReleaseAssetBytes           = 64 << 20
+	runnerReportFormat                = "takoform.standard-runner-report@v1"
+	registryReadbackFormat            = "takoform.provider-registry-readback@v1"
+	packageReleaseSchema              = 1
+	packageReleaseType                = "form-package"
+	sourceRepository                  = "github.com/tako0614/terraform-provider-takoform"
+	packageReleaseWorkflow            = ".github/workflows/standard-form-package-set-release.yml"
+	currentPackageReleaseWorkflow     = ".github/workflows/form-package-release.yml"
+	packageIndexMediaType             = "application/vnd.takoform.package-index.v1+json"
+	packagePublisherIssuer            = "https://token.actions.githubusercontent.com"
+	packagePublisherIdentityPrefix    = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-form-package-set-release.yml@refs/tags/standard-forms/v"
+	packagePublisherTagPattern        = "refs/tags/standard-forms/v*"
+	currentPackagePublisherIdentity   = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
+	currentPackagePublisherTagPattern = "refs/tags/forms/k-*/v*"
+	registryProviderAddress           = "registry.terraform.io/tako0614/takoform"
+	maxReportBytes                    = 16 << 20
+	maxReleaseManifestBytes           = 4 << 20
+	maxReleaseAssetBytes              = 64 << 20
 )
 
 func packagePublisherIdentity(packageVersion string) string {
@@ -510,7 +513,7 @@ func containsString(values []string, expected string) bool {
 	return false
 }
 
-func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packageVersion string) ([]byte, error) {
+func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packageVersion string, currentGeneration ...bool) ([]byte, error) {
 	entry := pair.entry
 	manifestRaw, err := readRetainedRelativeFile(admissionRoot, entry.PackageReleaseManifestPath, maxReleaseManifestBytes)
 	if err != nil {
@@ -527,7 +530,7 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 	if manifest.SchemaVersion != packageReleaseSchema || manifest.ReleaseType != packageReleaseType ||
 		manifest.Tag != entry.ReleaseTag || manifest.SourceRepository != sourceRepository || manifest.SourceCommit != entry.ReleaseCommit ||
 		manifest.ToolingCommit != entry.ReleaseToolingCommit ||
-		manifest.Workflow != packageReleaseWorkflow || manifest.PackageVersion != packageVersion ||
+		manifest.PackageVersion != packageVersion ||
 		manifest.ReleaseID != expectedReleaseID || manifest.PackageDigest != entry.PackageDigest || manifest.FormRef != entry.FormRef ||
 		manifest.Canonicalization != "RFC8785" || manifest.SignatureMediaType != sigstoreBundleMediaTypeV03 ||
 		!manifest.PublicationReady || len(manifest.PublicationBlockers) != 0 {
@@ -538,8 +541,19 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 		entry.PackageIndexSigstoreBundle != path.Join(manifestDir, manifest.SignatureBundle) {
 		return nil, fmt.Errorf("package release signed subject/bundle path drift")
 	}
-	if manifest.PublisherPolicy.OIDCIssuer != packagePublisherIssuer || manifest.PublisherPolicy.Identity != packagePublisherIdentity(packageVersion) ||
-		manifest.PublisherPolicy.TagPattern != packagePublisherTagPattern || manifest.PublisherPolicy.ToolingCommit != manifest.ToolingCommit {
+	legacyPublisher := manifest.Workflow == packageReleaseWorkflow &&
+		manifest.PublisherPolicy.Identity == packagePublisherIdentity(packageVersion) &&
+		manifest.PublisherPolicy.TagPattern == packagePublisherTagPattern
+	currentPublisher := manifest.Workflow == currentPackageReleaseWorkflow &&
+		manifest.PublisherPolicy.Identity == currentPackagePublisherIdentity &&
+		manifest.PublisherPolicy.TagPattern == currentPackagePublisherTagPattern
+	wantCurrentPublisher := len(currentGeneration) == 1 && currentGeneration[0]
+	publisherMatches := legacyPublisher
+	if wantCurrentPublisher {
+		publisherMatches = currentPublisher
+	}
+	if manifest.PublisherPolicy.OIDCIssuer != packagePublisherIssuer || !publisherMatches ||
+		manifest.PublisherPolicy.ToolingCommit != manifest.ToolingCommit {
 		return nil, fmt.Errorf("package release publisher policy is not the protected Takoform package workflow")
 	}
 	if len(manifest.Assets) != 5 {

@@ -1,18 +1,15 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"os"
-	"time"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
 )
 
 func main() {
-	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "materializability-check" && os.Args[1] != "release-plan" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "published-package-check" && os.Args[1] != "admission-closure-check" && os.Args[1] != "release-check") {
-		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|release-plan|materializability-check|candidate-publication-check|published-package-check|admission-closure-check|release-check")
+	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "materializability-check" && os.Args[1] != "release-plan" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "published-package-check" && os.Args[1] != "current-published-package-check" && os.Args[1] != "admission-closure-check" && os.Args[1] != "current-admission-closure-check") {
+		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|release-plan|materializability-check|candidate-publication-check|published-package-check|current-published-package-check|admission-closure-check|current-admission-closure-check")
 		os.Exit(2)
 	}
 	var err error
@@ -32,12 +29,12 @@ func main() {
 		err = standardforms.VerifyCandidatePublication(".")
 	} else if os.Args[1] == "published-package-check" {
 		err = standardforms.VerifyPublishedPackageSet(".")
+	} else if os.Args[1] == "current-published-package-check" {
+		err = standardforms.VerifyCurrentPublishedPackageSet(".")
 	} else if os.Args[1] == "admission-closure-check" {
 		err = standardforms.VerifyAdmissionClosure(".")
 	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		err = standardforms.VerifyReleaseReady(ctx, ".", &http.Client{Timeout: 30 * time.Second}, os.Getenv("GITHUB_TOKEN"))
+		err = standardforms.VerifyCurrentAdmissionClosure(".")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "standard-form-conformance:", err)

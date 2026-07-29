@@ -10,7 +10,7 @@
     "format:check": "set -e; command -v gofmt >/dev/null; unformatted=\"$(gofmt -l .)\"; if [ -n \"$unformatted\" ]; then printf 'The following files need gofmt:\\n%s\\n' \"$unformatted\"; exit 1; fi; tofu fmt -check -recursive examples",
     "lint": "go mod verify && go vet ./... && go -C cmd/provider-release mod verify && go -C cmd/provider-release vet ./...",
     "typecheck": "go test -run '^$' ./... && go -C cmd/provider-release test -run '^$' ./...",
-    "test:portable": "go test ./... && go -C cmd/provider-release test ./... && go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform && go run ./cmd/form-package conformance && go run ./cmd/standard-form-conformance verify && go run ./cmd/standard-form-conformance release-plan && go run ./cmd/standard-form-conformance candidate-publication-check && go run ./cmd/standard-form-conformance published-package-check",
+    "test:portable": "go test ./... && go -C cmd/provider-release test ./... && go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform && go run ./cmd/form-package conformance && go run ./cmd/standard-form-conformance verify && go run ./cmd/standard-form-conformance release-plan && go run ./cmd/standard-form-conformance candidate-publication-check && go run ./cmd/standard-form-conformance published-package-check && go run ./cmd/standard-form-conformance current-published-package-check",
     "build:portable": "set -e; build_dir=\"$(mktemp -d)\"; trap 'rm -rf \"$build_dir\"' EXIT; mkdir -p \"$build_dir/root\"; go build -o \"$build_dir/root/\" ./...; go -C cmd/provider-release build -o \"$build_dir/provider-release\" ."
   }
 }

@@ -38,7 +38,8 @@ const (
 	roleRegistryReadback                = "registry-readback"
 )
 
-// OfflineSigstorePins binds the reviewed trust inputs used by release-check.
+// OfflineSigstorePins binds the reviewed trust inputs used by the offline
+// admission-closure verifier.
 // The pin manifest itself is protected source, not evidence discovered from a
 // release or distribution endpoint.
 type OfflineSigstorePins struct {
@@ -246,7 +247,7 @@ func validatePublisherPolicy(policy PublisherPolicy) error {
 }
 
 func (v *offlineRetainedSubjectVerifier) VerifyRetainedSubjects(admissionRoot string, set Set, subjects []RetainedSubject) error {
-	wantCount := len(set.Entries)*4 + 1
+	wantCount := expectedRetainedSubjectCount(set)
 	if len(subjects) != wantCount {
 		return fmt.Errorf("retained subject closure has %d entries, want %d", len(subjects), wantCount)
 	}
@@ -301,7 +302,7 @@ type retainedSubjectBinding struct {
 }
 
 func expectedRetainedSubjects(set Set) map[string]retainedSubjectBinding {
-	expected := make(map[string]retainedSubjectBinding, len(set.Entries)*4+1)
+	expected := make(map[string]retainedSubjectBinding, expectedRetainedSubjectCount(set))
 	for _, entry := range set.Entries {
 		expected[roleAdmissionEvidence+":"+entry.Kind] = retainedSubjectBinding{
 			Path: entry.EvidencePath, Digest: entry.EvidenceDigest,
@@ -310,17 +311,33 @@ func expectedRetainedSubjects(set Set) map[string]retainedSubjectBinding {
 		expected[roleHostReport+":"+entry.Kind] = retainedSubjectBinding{
 			Path: entry.HostReportPath, Digest: entry.HostReportDigest, Bundle: entry.HostReportSigstoreBundle,
 		}
-		expected[roleProviderReport+":"+entry.Kind] = retainedSubjectBinding{
-			Path: entry.ProviderReportPath, Digest: entry.ProviderReportDigest, Bundle: entry.ProviderReportSigstoreBundle,
+		if set.ProviderReportClosure == nil {
+			expected[roleProviderReport+":"+entry.Kind] = retainedSubjectBinding{
+				Path: entry.ProviderReportPath, Digest: entry.ProviderReportDigest, Bundle: entry.ProviderReportSigstoreBundle,
+			}
 		}
 		expected[rolePackageIndex+":"+entry.Kind] = retainedSubjectBinding{
 			Path: entry.PackageIndexPath, Digest: entry.PackageDigest, Bundle: entry.PackageIndexSigstoreBundle,
+		}
+	}
+	if set.ProviderReportClosure != nil {
+		for _, report := range set.ProviderReportClosure.Reports {
+			expected[roleProviderReport+":"+report.Kind] = retainedSubjectBinding{
+				Path: report.ReportPath, Digest: report.ReportDigest, Bundle: report.SigstoreBundle,
+			}
 		}
 	}
 	expected[roleRegistryReadback+":provider"] = retainedSubjectBinding{
 		Path: set.ProviderRegistryReadback.Path, Digest: set.ProviderRegistryReadback.Digest, Bundle: set.ProviderRegistryReadback.SigstoreBundle,
 	}
 	return expected
+}
+
+func expectedRetainedSubjectCount(set Set) int {
+	if set.ProviderReportClosure == nil {
+		return len(set.Entries)*4 + 1
+	}
+	return len(set.Entries)*3 + len(set.ProviderReportClosure.Reports) + 1
 }
 
 func (v *offlineRoleVerifier) verifyCanonicalSubject(retainedBundle *bundle.Bundle, canonical []byte) error {

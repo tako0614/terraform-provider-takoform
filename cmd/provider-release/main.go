@@ -557,7 +557,7 @@ func loadDescriptor(repo string) (descriptor, error) {
 
 func validateCLIMatrix(matrix []cliCompatibility) error {
 	expected := map[string]string{
-		"OpenTofu":  "registry.opentofu.org/tako0614/takoform",
+		"OpenTofu":  "registry.terraform.io/tako0614/takoform",
 		"Terraform": "registry.terraform.io/tako0614/takoform",
 	}
 	if len(matrix) != len(expected) {

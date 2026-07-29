@@ -38,35 +38,52 @@ var (
 // and admission-structure checks. Every retained report, package index, and
 // Registry readback is then authenticated offline before Form admission opens.
 func VerifyAdmissionSet(root string, candidates CandidateSet) error {
-	return verifyAdmissionSet(root, candidates, nil, gitReleaseRefVerifier{})
+	return VerifyAdmissionSetAt(root, admissionRootPath, candidates)
+}
+
+// VerifyAdmissionSetAt verifies one explicitly selected immutable admission
+// generation. It lets the retired v2 set remain pinned under admission/v1
+// while current mixed-version sets advance under a different retained root.
+func VerifyAdmissionSetAt(root, retainedRoot string, candidates CandidateSet) error {
+	return verifyAdmissionSetAt(root, retainedRoot, candidates, nil, gitReleaseRefVerifier{})
 }
 
 func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedSubjectVerifier, refVerifier ReleaseRefVerifier) error {
+	return verifyAdmissionSetAt(root, admissionRootPath, candidates, verifier, refVerifier)
+}
+
+func verifyAdmissionSetAt(root, retainedRoot string, candidates CandidateSet, verifier RetainedSubjectVerifier, refVerifier ReleaseRefVerifier) error {
 	if err := validateCandidateSet(candidates); err != nil {
 		return fmt.Errorf("standard-admission candidate set: %w", err)
 	}
+	if err := validateRelativePath(retainedRoot); err != nil {
+		return fmt.Errorf("standard-admission retained root: %w", err)
+	}
 
-	admissionRoot := filepath.Join(root, filepath.FromSlash(admissionRootPath))
-	raw, err := readRetainedRelativeFile(root, setManifestPath, maxSetBytes)
+	admissionRoot := filepath.Join(root, filepath.FromSlash(retainedRoot))
+	manifestPath := path.Join(retainedRoot, setManifestName)
+	raw, err := readRetainedRelativeFile(root, manifestPath, maxSetBytes)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("Form admission activation is blocked: missing %s", setManifestPath)
+			return fmt.Errorf("Form admission activation is blocked: missing %s", manifestPath)
 		}
-		return fmt.Errorf("read %s: %w", setManifestPath, err)
+		return fmt.Errorf("read %s: %w", manifestPath, err)
 	}
 	var set Set
 	if err := decodeStrictJSON(raw, &set); err != nil {
-		return fmt.Errorf("decode %s: %w", setManifestPath, err)
+		return fmt.Errorf("decode %s: %w", manifestPath, err)
 	}
 	ordered, err := validateSet(set, candidates)
 	if err != nil {
-		return fmt.Errorf("verify %s: %w", setManifestPath, err)
+		return fmt.Errorf("verify %s: %w", manifestPath, err)
 	}
 
-	subjects := make([]RetainedSubject, 0, len(ordered)*4+1)
+	subjects := make([]RetainedSubject, 0, expectedRetainedSubjectCount(set))
+	selectedKinds := make(map[string]struct{}, len(ordered))
 	for _, pair := range ordered {
+		selectedKinds[pair.entry.Kind] = struct{}{}
 		evidenceFile := filepath.Join(admissionRoot, filepath.FromSlash(pair.entry.EvidencePath))
-		evidenceRaw, err := readRetainedRelativeFile(root, path.Join(admissionRootPath, pair.entry.EvidencePath), maxEvidenceBytes)
+		evidenceRaw, err := readRetainedRelativeFile(root, path.Join(retainedRoot, pair.entry.EvidencePath), maxEvidenceBytes)
 		if err != nil {
 			return fmt.Errorf("read %s evidence %q: %w", pair.entry.Kind, pair.entry.EvidencePath, err)
 		}
@@ -144,7 +161,11 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedS
 			})
 		}
 
-		packageIndex, err := verifyPackageReleaseReadback(admissionRoot, pair, set.PackageVersion)
+		packageVersion := set.PackageVersion
+		if set.Generation != "" {
+			packageVersion = pair.entry.FormRef.DefinitionVersion
+		}
+		packageIndex, err := verifyPackageReleaseReadback(admissionRoot, pair, packageVersion, set.Generation != "")
 		if err != nil {
 			return fmt.Errorf("%s package release readback: %w", pair.entry.Kind, err)
 		}
@@ -154,9 +175,20 @@ func verifyAdmissionSet(root string, candidates CandidateSet, verifier RetainedS
 		})
 	}
 
+	extraProviderSubjects, providerIdentity, err := verifyFullProviderReportClosure(root, retainedRoot, set, selectedKinds)
+	if err != nil {
+		return fmt.Errorf("full provider-report closure: %w", err)
+	}
+	subjects = append(subjects, extraProviderSubjects...)
+
 	registryReadback, registryRaw, err := verifyRegistryReadback(root, admissionRoot, set)
 	if err != nil {
 		return fmt.Errorf("provider Registry install/readback: %w", err)
+	}
+	if set.Generation != "" &&
+		(providerIdentity.sourceCommit != registryReadback.ProviderReleaseCommit ||
+			providerIdentity.runnerVersion != registryReadback.ProviderVersion) {
+		return fmt.Errorf("provider-report closure source/version does not match Registry readback")
 	}
 	subjects = append(subjects, RetainedSubject{
 		Kind: "provider", Role: roleRegistryReadback, Path: set.ProviderRegistryReadback.Path,
@@ -288,11 +320,23 @@ type matchedEntry struct {
 }
 
 func validateSet(set Set, candidates CandidateSet) ([]matchedEntry, error) {
-	if set.Format != setFormat {
-		return nil, fmt.Errorf("format is %q, want %q", set.Format, setFormat)
-	}
-	if set.DefinitionVersion != candidates.DefinitionVersion || set.PackageVersion != candidates.PackageVersion {
-		return nil, fmt.Errorf("definition/package version does not match the compiled candidate set")
+	if candidates.Generation == "" {
+		if set.Format != setFormatV2 {
+			return nil, fmt.Errorf("format is %q, want %q", set.Format, setFormatV2)
+		}
+		if set.Generation != "" || set.DefinitionVersion != candidates.DefinitionVersion || set.PackageVersion != candidates.PackageVersion {
+			return nil, fmt.Errorf("definition/package version does not match the compiled candidate set")
+		}
+		if set.ProviderReportClosure != nil {
+			return nil, fmt.Errorf("historical set must not relabel a current provider-report closure")
+		}
+	} else {
+		if set.Format != setFormatV3 {
+			return nil, fmt.Errorf("format is %q, want %q", set.Format, setFormatV3)
+		}
+		if set.Generation != candidates.Generation || set.DefinitionVersion != "" || set.PackageVersion != "" {
+			return nil, fmt.Errorf("generation does not match the compiled mixed-version candidate set")
+		}
 	}
 	if !admissionReleaseTagPattern.MatchString(set.AdmissionReleaseTag) {
 		return nil, fmt.Errorf("admissionReleaseTag %q is not a forms/admissions/v* release tag", set.AdmissionReleaseTag)
@@ -309,6 +353,10 @@ func validateSet(set Set, candidates CandidateSet) ([]matchedEntry, error) {
 	expected := make(map[string]Candidate, len(candidates.Entries))
 	for _, candidate := range candidates.Entries {
 		expected[candidate.Kind] = candidate
+	}
+	providerClosure, err := validateProviderReportClosure(set.ProviderReportClosure, candidates)
+	if err != nil {
+		return nil, err
 	}
 	seenKinds := make(map[string]struct{}, len(set.Entries))
 	seenSlugs := make(map[string]struct{}, len(set.Entries))
@@ -332,7 +380,11 @@ func validateSet(set Set, candidates CandidateSet) ([]matchedEntry, error) {
 		if entry.AdmissionStatus != "portable-standard" {
 			return nil, fmt.Errorf("%s admissionStatus is %q, want portable-standard", entry.Kind, entry.AdmissionStatus)
 		}
-		expectedReleaseTag := "forms/" + releaseIDForKind(entry.Kind) + "/v" + candidates.PackageVersion
+		packageVersion := candidates.PackageVersion
+		if candidates.Generation != "" {
+			packageVersion = entry.FormRef.DefinitionVersion
+		}
+		expectedReleaseTag := "forms/" + releaseIDForKind(entry.Kind) + "/v" + packageVersion
 		if !packageReleaseTagPattern.MatchString(entry.ReleaseTag) || entry.ReleaseTag != expectedReleaseTag {
 			return nil, fmt.Errorf("%s releaseTag %q is not the canonical kind release tag", entry.Kind, entry.ReleaseTag)
 		}
@@ -349,8 +401,17 @@ func validateSet(set Set, candidates CandidateSet) ([]matchedEntry, error) {
 				return nil, fmt.Errorf("%s %s is not a canonical SHA-256 digest", entry.Kind, label)
 			}
 		}
-		if err := validateEntryPaths(entry, candidates.PackageVersion); err != nil {
+		if err := validateEntryPaths(entry, packageVersion, candidates.Generation != ""); err != nil {
 			return nil, fmt.Errorf("%s retained paths: %w", entry.Kind, err)
+		}
+		if candidates.Generation != "" {
+			retained, ok := providerClosure[entry.Kind]
+			if !ok || retained.Identity != (standardform.InstalledFormReference{FormRef: entry.FormRef, PackageDigest: entry.PackageDigest}) ||
+				retained.ReportPath != entry.ProviderReportPath ||
+				retained.ReportDigest != entry.ProviderReportDigest ||
+				retained.SigstoreBundle != entry.ProviderReportSigstoreBundle {
+				return nil, fmt.Errorf("%s selected provider report is not the exact member of the full closure", entry.Kind)
+			}
 		}
 		ordered = append(ordered, matchedEntry{entry: entry, candidate: candidate})
 	}
@@ -358,8 +419,13 @@ func validateSet(set Set, candidates CandidateSet) ([]matchedEntry, error) {
 }
 
 func validateCandidateSet(candidates CandidateSet) error {
-	if strings.TrimSpace(candidates.DefinitionVersion) == "" || strings.TrimSpace(candidates.PackageVersion) == "" || len(candidates.Entries) == 0 {
-		return fmt.Errorf("versions and entries are required")
+	legacy := strings.TrimSpace(candidates.Generation) == "" &&
+		strings.TrimSpace(candidates.DefinitionVersion) != "" &&
+		strings.TrimSpace(candidates.PackageVersion) != ""
+	generationAware := strings.TrimSpace(candidates.Generation) != "" &&
+		candidates.DefinitionVersion == "" && candidates.PackageVersion == ""
+	if (!legacy && !generationAware) || len(candidates.Entries) == 0 {
+		return fmt.Errorf("exactly one legacy-version or generation-aware identity and entries are required")
 	}
 	seenKinds := make(map[string]struct{}, len(candidates.Entries))
 	seenSlugs := make(map[string]struct{}, len(candidates.Entries))
@@ -376,7 +442,9 @@ func validateCandidateSet(candidates CandidateSet) error {
 		}
 		seenSlugs[candidate.Slug] = struct{}{}
 		if candidate.FormRef.APIVersion != formpackage.FormAPIVersion || candidate.FormRef.Kind != candidate.Kind ||
-			candidate.FormRef.DefinitionVersion != candidates.DefinitionVersion || !formpackage.ValidDigest(candidate.FormRef.SchemaDigest) ||
+			candidate.FormRef.DefinitionVersion == "" ||
+			(legacy && candidate.FormRef.DefinitionVersion != candidates.DefinitionVersion) ||
+			!formpackage.ValidDigest(candidate.FormRef.SchemaDigest) ||
 			!formpackage.ValidDigest(candidate.PackageDigest) {
 			return fmt.Errorf("entries[%d] has an invalid exact candidate identity", index)
 		}
@@ -387,7 +455,7 @@ func validateCandidateSet(candidates CandidateSet) error {
 	return nil
 }
 
-func validateEntryPaths(entry SetEntry, packageVersion string) error {
+func validateEntryPaths(entry SetEntry, packageVersion string, current bool) error {
 	directory := path.Join("packages", entry.Slug)
 	for label, value := range map[string]string{
 		"evidencePath":                 entry.EvidencePath,
@@ -403,11 +471,17 @@ func validateEntryPaths(entry SetEntry, packageVersion string) error {
 			return fmt.Errorf("%s: %w", label, err)
 		}
 	}
+	wantProviderReport := path.Join(directory, "provider-report.json")
+	wantProviderBundle := path.Join(directory, "provider-report.sigstore.json")
+	if current {
+		wantProviderReport = path.Join("provider-closure", "packages", entry.Slug, "provider-report.json")
+		wantProviderBundle = path.Join("provider-closure", "packages", entry.Slug, "provider-report.sigstore.json")
+	}
 	if entry.EvidencePath != path.Join(directory, "evidence.json") ||
 		entry.HostReportPath != path.Join(directory, "host-report.json") ||
 		entry.HostReportSigstoreBundle != path.Join(directory, "host-report.sigstore.json") ||
-		entry.ProviderReportPath != path.Join(directory, "provider-report.json") ||
-		entry.ProviderReportSigstoreBundle != path.Join(directory, "provider-report.sigstore.json") {
+		entry.ProviderReportPath != wantProviderReport ||
+		entry.ProviderReportSigstoreBundle != wantProviderBundle {
 		return fmt.Errorf("package evidence/report paths must use the canonical %s directory", directory)
 	}
 	releaseID := releaseIDForKind(entry.Kind)
@@ -419,6 +493,72 @@ func validateEntryPaths(entry SetEntry, packageVersion string) error {
 		return fmt.Errorf("package release paths must use the canonical %s directory and asset names", releaseDirectory)
 	}
 	return nil
+}
+
+func validateProviderReportClosure(closure *ProviderReportClosure, candidates CandidateSet) (map[string]ProviderReportClosureEntry, error) {
+	if candidates.Generation == "" {
+		return nil, nil
+	}
+	if closure == nil || closure.Generation != "portable-v1" || len(closure.Reports) != 34 {
+		return nil, fmt.Errorf("current admission requires the exact portable-v1 34-report provider closure")
+	}
+	for label, value := range map[string]string{
+		"manifestPath":       closure.ManifestPath,
+		"signedManifestPath": closure.SignedManifestPath,
+		"checksumsPath":      closure.ChecksumsPath,
+	} {
+		if err := validateRelativePath(value); err != nil {
+			return nil, fmt.Errorf("providerReportClosure %s: %w", label, err)
+		}
+	}
+	if closure.ManifestPath != "provider-closure/provider-report-manifest.json" ||
+		closure.SignedManifestPath != "provider-closure/signed-provider-report-candidate.json" ||
+		closure.ChecksumsPath != "provider-closure/SHA256SUMS" {
+		return nil, fmt.Errorf("providerReportClosure manifest paths are not canonical")
+	}
+	for label, digest := range map[string]string{
+		"manifestDigest":       closure.ManifestDigest,
+		"signedManifestDigest": closure.SignedManifestDigest,
+		"checksumsDigest":      closure.ChecksumsDigest,
+	} {
+		if !formpackage.ValidDigest(digest) {
+			return nil, fmt.Errorf("providerReportClosure %s is not a canonical SHA-256", label)
+		}
+	}
+	byKind := make(map[string]ProviderReportClosureEntry, len(closure.Reports))
+	seenSlugs := make(map[string]struct{}, len(closure.Reports))
+	for index, report := range closure.Reports {
+		if report.Kind == "" || report.Identity.FormRef.Kind != report.Kind ||
+			report.Identity.FormRef.APIVersion != formpackage.FormAPIVersion ||
+			report.Identity.FormRef.DefinitionVersion == "" ||
+			!formpackage.ValidDigest(report.Identity.FormRef.SchemaDigest) ||
+			!formpackage.ValidDigest(report.Identity.PackageDigest) ||
+			!slugPattern.MatchString(report.Slug) ||
+			!formpackage.ValidDigest(report.ReportDigest) {
+			return nil, fmt.Errorf("providerReportClosure reports[%d] has invalid identity", index)
+		}
+		if _, duplicate := byKind[report.Kind]; duplicate {
+			return nil, fmt.Errorf("providerReportClosure reports[%d] duplicates kind %s", index, report.Kind)
+		}
+		if _, duplicate := seenSlugs[report.Slug]; duplicate {
+			return nil, fmt.Errorf("providerReportClosure reports[%d] duplicates slug %s", index, report.Slug)
+		}
+		seenSlugs[report.Slug] = struct{}{}
+		wantDirectory := path.Join("provider-closure", "packages", report.Slug)
+		if report.ReportPath != path.Join(wantDirectory, "provider-report.json") ||
+			report.SigstoreBundle != path.Join(wantDirectory, "provider-report.sigstore.json") {
+			return nil, fmt.Errorf("providerReportClosure reports[%d] paths are not canonical", index)
+		}
+		byKind[report.Kind] = report
+	}
+	for _, candidate := range candidates.Entries {
+		report, ok := byKind[candidate.Kind]
+		if !ok || report.Slug != candidate.Slug ||
+			report.Identity != (standardform.InstalledFormReference{FormRef: candidate.FormRef, PackageDigest: candidate.PackageDigest}) {
+			return nil, fmt.Errorf("providerReportClosure omits exact selected %s identity", candidate.Kind)
+		}
+	}
+	return byKind, nil
 }
 
 func validateRelativePath(value string) error {

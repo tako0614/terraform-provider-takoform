@@ -398,16 +398,40 @@ func VerifyAdmissionClosure(root string) error {
 	return admissionrelease.VerifyAdmissionSet(root, candidates)
 }
 
+// VerifyCurrentAdmissionClosure verifies only the current Takoform FormRef
+// lane. It does not describe or gate unrelated Cloud services that have no
+// Takoform definition.
+func VerifyCurrentAdmissionClosure(root string) error {
+	if err := Verify(root); err != nil {
+		return err
+	}
+	candidates, err := CurrentAdmissionCandidateSet(root)
+	if err != nil {
+		return err
+	}
+	return admissionrelease.VerifyAdmissionSetAt(root, "admission/v3", candidates)
+}
+
 // VerifyPublishedPackageSet verifies the retained, immutable distribution
 // readback for the complete structural candidate set. Passing this gate proves
 // package publication and its package-index publisher identity only. It does
-// not upgrade any Form to portable-standard or replace release-check.
+// not upgrade any Form to portable-standard.
 func VerifyPublishedPackageSet(root string) error {
 	candidates, err := publishedPackageCandidateSet(root)
 	if err != nil {
 		return err
 	}
 	return admissionrelease.VerifyPublishedPackageSet(root, candidates)
+}
+
+// VerifyCurrentPublishedPackageSet verifies the immutable per-Form releases
+// selected by the current mixed-version admission generation.
+func VerifyCurrentPublishedPackageSet(root string) error {
+	candidates, err := CurrentAdmissionCandidateSet(root)
+	if err != nil {
+		return err
+	}
+	return admissionrelease.VerifyPublishedPackageSetAt(root, "admission/v3", candidates)
 }
 
 // publishedPackageCandidateSet reconstructs the historical immutable set from
@@ -459,9 +483,10 @@ func publishedPackageCandidateSet(root string) (admissionrelease.CandidateSet, e
 // AdmissionCandidateSet returns the exact retired published set whose
 // admission evidence this repository retains.
 //
-// It is deliberately not the active candidate set: the rebuilt portable Forms
-// have no published packages and no admission evidence, so binding an
-// admission lane to them would manufacture a claim that does not exist.
+// It is deliberately not the active candidate set: only a subset of the
+// rebuilt portable Forms has published packages and none has complete
+// admission evidence, so binding this retained lane to them would manufacture
+// a claim that does not exist.
 func AdmissionCandidateSet(root string) (admissionrelease.CandidateSet, error) {
 	candidates := make([]admissionrelease.Candidate, 0, len(RetiredKinds))
 	for _, spec := range RetiredKinds {
@@ -480,6 +505,151 @@ func AdmissionCandidateSet(root string) (admissionrelease.CandidateSet, error) {
 		PackageVersion:    retiredPackageVersion,
 		Entries:           candidates,
 	}, nil
+}
+
+type currentAdmissionCandidateInventory struct {
+	Format          string                             `json:"format"`
+	Generation      string                             `json:"generation"`
+	AdmissionStatus string                             `json:"admissionStatus"`
+	Packages        []currentAdmissionCandidatePackage `json:"packages"`
+}
+
+type currentAdmissionCandidatePackage struct {
+	Kind          string              `json:"kind"`
+	Slug          string              `json:"slug"`
+	ReleaseID     string              `json:"releaseId"`
+	Version       string              `json:"version"`
+	Tag           string              `json:"tag"`
+	SourcePath    string              `json:"sourcePath"`
+	FormRef       formpackage.FormRef `json:"formRef"`
+	PackageDigest string              `json:"packageDigest"`
+}
+
+// CurrentPortableCandidateSet returns the complete current portable-v1
+// catalog as exact local release-source identities. Provider conformance must
+// close over this full set before a smaller admission generation selects any
+// subset from it.
+func CurrentPortableCandidateSet(root string) (admissionrelease.CandidateSet, error) {
+	if err := Verify(root); err != nil {
+		return admissionrelease.CandidateSet{}, fmt.Errorf("verify current portable catalog: %w", err)
+	}
+	var inventory Inventory
+	if err := readJSON(filepath.Join(root, "forms", "standard-package-set.json"), &inventory); err != nil {
+		return admissionrelease.CandidateSet{}, err
+	}
+	if inventory.Format != "takoform.standard-package-set@v1" ||
+		inventory.Generation != "portable-v1" ||
+		len(inventory.Packages) != len(Specs) || len(inventory.Packages) != 34 {
+		return admissionrelease.CandidateSet{}, fmt.Errorf("current portable catalog identity is invalid")
+	}
+	specByKind := make(map[string]Spec, len(Specs))
+	for _, spec := range Specs {
+		specByKind[spec.Kind] = spec
+	}
+	seen := make(map[string]struct{}, len(inventory.Packages))
+	candidates := make([]admissionrelease.Candidate, 0, len(inventory.Packages))
+	for index, entry := range inventory.Packages {
+		spec, ok := specByKind[entry.Kind]
+		if !ok || filepath.Base(entry.Path) != spec.Slug ||
+			entry.AdmissionStatus != "external-required" ||
+			entry.FormRef.Kind != entry.Kind ||
+			!formpackage.ValidDigest(entry.FormRef.SchemaDigest) ||
+			!formpackage.ValidDigest(entry.PackageDigest) {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("current portable packages[%d] has invalid exact identity", index)
+		}
+		if _, duplicate := seen[entry.Kind]; duplicate {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("current portable packages[%d] duplicates kind %s", index, entry.Kind)
+		}
+		seen[entry.Kind] = struct{}{}
+		packagePath := filepath.ToSlash(filepath.Join("forms", "releases", releaseIDForKind(entry.Kind), entry.FormRef.DefinitionVersion))
+		report, err := formpackage.VerifyDirectory(filepath.Join(root, filepath.FromSlash(packagePath)))
+		if err != nil {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s current portable release source: %w", entry.Kind, err)
+		}
+		if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s current portable release-source identity drift", entry.Kind)
+		}
+		candidates = append(candidates, admissionrelease.Candidate{
+			Kind: entry.Kind, Slug: spec.Slug, PackagePath: packagePath,
+			FormRef: entry.FormRef, PackageDigest: entry.PackageDigest,
+		})
+	}
+	return admissionrelease.CandidateSet{Generation: inventory.Generation, Entries: candidates}, nil
+}
+
+// CurrentAdmissionCandidateSet returns the exact mixed-version package
+// identities selected for the generation-aware v3 admission lane. Publication
+// and admission evidence remain separate: this function verifies only the
+// reviewed inventory and its local data-only package bytes.
+func CurrentAdmissionCandidateSet(root string) (admissionrelease.CandidateSet, error) {
+	var inventory currentAdmissionCandidateInventory
+	if err := readJSON(filepath.Join(root, "forms", "admission-candidate-set.json"), &inventory); err != nil {
+		return admissionrelease.CandidateSet{}, err
+	}
+	var standard Inventory
+	if err := readJSON(filepath.Join(root, "forms", "standard-package-set.json"), &standard); err != nil {
+		return admissionrelease.CandidateSet{}, fmt.Errorf("read current standard package set: %w", err)
+	}
+	if inventory.Format != "takoform.admission-candidate-set@v1" ||
+		inventory.Generation != "ga-core-v1" ||
+		inventory.AdmissionStatus != "external-required" ||
+		len(inventory.Packages) != 10 {
+		return admissionrelease.CandidateSet{}, fmt.Errorf("current admission inventory identity is invalid")
+	}
+	if standard.Format != "takoform.standard-package-set@v1" ||
+		standard.Generation != "portable-v1" ||
+		len(standard.Packages) != 34 {
+		return admissionrelease.CandidateSet{}, fmt.Errorf("current standard package set identity is invalid")
+	}
+	standardByKind := make(map[string]InventoryEntry, len(standard.Packages))
+	for index, item := range standard.Packages {
+		if _, duplicate := standardByKind[item.Kind]; duplicate {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("current standard packages[%d] duplicates kind %s", index, item.Kind)
+		}
+		standardByKind[item.Kind] = item
+	}
+	seenKinds := make(map[string]struct{}, len(inventory.Packages))
+	seenSlugs := make(map[string]struct{}, len(inventory.Packages))
+	candidates := make([]admissionrelease.Candidate, 0, len(inventory.Packages))
+	for index, item := range inventory.Packages {
+		if _, duplicate := seenKinds[item.Kind]; duplicate {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("current admission packages[%d] duplicates kind %s", index, item.Kind)
+		}
+		seenKinds[item.Kind] = struct{}{}
+		if _, duplicate := seenSlugs[item.Slug]; duplicate {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("current admission packages[%d] duplicates slug %s", index, item.Slug)
+		}
+		seenSlugs[item.Slug] = struct{}{}
+		releaseID := releaseIDForKind(item.Kind)
+		wantTag := "forms/" + releaseID + "/v" + item.Version
+		wantPath := filepath.ToSlash(filepath.Join("forms", "releases", releaseID, item.Version))
+		if item.Kind == "" || item.Slug == "" || item.ReleaseID != releaseID ||
+			item.Version == "" || item.Version != item.FormRef.DefinitionVersion ||
+			item.Tag != wantTag || item.SourcePath != wantPath ||
+			item.FormRef.APIVersion != formpackage.FormAPIVersion ||
+			item.FormRef.Kind != item.Kind || !formpackage.ValidDigest(item.FormRef.SchemaDigest) ||
+			!formpackage.ValidDigest(item.PackageDigest) {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("current admission packages[%d] has invalid exact identity", index)
+		}
+		standardItem, ok := standardByKind[item.Kind]
+		if !ok || filepath.Base(standardItem.Path) != item.Slug ||
+			standardItem.FormRef != item.FormRef ||
+			standardItem.PackageDigest != item.PackageDigest {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("current admission packages[%d] is not an exact member of portable-v1", index)
+		}
+		report, err := formpackage.VerifyDirectory(filepath.Join(root, filepath.FromSlash(item.SourcePath)))
+		if err != nil {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s current admission package: %w", item.Kind, err)
+		}
+		if report.FormRef != item.FormRef || report.PackageDigest != item.PackageDigest {
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s current admission package bytes drift from inventory", item.Kind)
+		}
+		candidates = append(candidates, admissionrelease.Candidate{
+			Kind: item.Kind, Slug: item.Slug, PackagePath: item.SourcePath,
+			FormRef: item.FormRef, PackageDigest: item.PackageDigest,
+		})
+	}
+	return admissionrelease.CandidateSet{Generation: inventory.Generation, Entries: candidates}, nil
 }
 
 func updateConformanceManifest(root string, entries []InventoryEntry, successors ...InventoryEntry) error {

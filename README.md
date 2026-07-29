@@ -4,7 +4,6 @@
 
 - GitHub: `github.com/tako0614/terraform-provider-takoform`
 - Terraform Registry: `registry.terraform.io/tako0614/takoform`
-- OpenTofu Registry: `registry.opentofu.org/tako0614/takoform`
 - Service Form API: `forms.takoform.com/v1alpha1`
 
 ## Usage
@@ -30,14 +29,11 @@ resource "takoform_object_bucket" "assets" {
 ```
 
 `endpoint`, `space`, and the sensitive bearer `token` can instead be supplied as `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
-The canonical provider identity is
-`registry.terraform.io/tako0614/takoform`; OpenTofu dual-publishes the same
-reviewed provider under the alternative identity
-`registry.opentofu.org/tako0614/takoform`. The lifecycle matrix proves both
-FQNs independently. They are distinct state identities, so changing between
-them requires an explicit `state replace-provider` after updating
-`required_providers`; matching bytes never makes them silent aliases. The
-provider follows the same-origin versioned endpoint advertised by discovery.
+There is one provider source and state identity:
+`registry.terraform.io/tako0614/takoform`. Both OpenTofu and Terraform install
+that exact FQN from the Terraform Registry, and the lifecycle matrix proves
+both CLI executions independently. The provider follows the same-origin
+versioned endpoint advertised by discovery.
 A host that advertises no versioned endpoint is rejected; there is no
 unversioned lane to downgrade into.
 
@@ -81,6 +77,7 @@ network access or code execution:
 go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
 go run ./cmd/standard-form-conformance published-package-check
+go run ./cmd/standard-form-conformance current-published-package-check
 go run ./cmd/form-package verify conformance/form-package-v1/positive/example-store
 ```
 
@@ -100,12 +97,18 @@ pass the offline `published-package-check`. Those bytes are never rewritten,
 re-signed, or reshaped; [`forms/retired-package-set.json`](forms/retired-package-set.json)
 records exactly what they were.
 
-The rebuilt Forms have no published release, no Registry readback, and no
-admission evidence of their own, so every publication gate fails closed and
-this build refuses to reissue the retired generation's proofs under a new
-provider identity. All candidate generation and verification runs through the
-local Go CLI; GitHub Actions is an optional automation and the current keyless
-OIDC signer, not a prerequisite for the local gates.
+Ten rebuilt Forms now have immutable, keyless-signed package releases and an
+offline-verified current publication snapshot under
+[`admission/v3/`](admission/v3/):
+`HttpService`, `RelationalDatabase`, `ObjectBucket`, `KeyValueStore`, `Queue`,
+`Schedule`, `ContainerService`, `StatefulEntity`, `VectorIndex`, and
+`ModelEndpoint`. Publication proves only those exact package bytes. The
+rebuilt set still has no retained signed conforming-host, current provider,
+dual-Registry, or admission-evidence candidate, so current admission remains
+fail-closed. The current lane verifies provider reports over all 34
+`portable-v1` Forms before selecting the exact ten `ga-core-v1` identities.
+GitHub Actions supplies distinct keyless publisher identities; all generation,
+rederivation, and closure checks remain local Go commands.
 
 ## Development
 
@@ -124,6 +127,7 @@ go run ./cmd/form-package conformance
 go run ./cmd/standard-form-conformance verify
 go run ./cmd/standard-form-conformance candidate-publication-check
 go run ./cmd/standard-form-conformance published-package-check
+go run ./cmd/standard-form-conformance current-published-package-check
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 ```
 
@@ -134,26 +138,24 @@ namespace and signing key are registered. Providers `v0.1.1` and `v0.1.2`
 remain immutable GitHub Releases. Terraform Registry rejected `v0.1.1`
 because its checksum manifest projected SPDX evidence as provider packages,
 and rejected `v0.1.2` because it omitted the required Registry metadata
-manifest checksum. The exact six-entry `v0.1.3` release is the
-non-overwriting successor, and its retained Registry readback belongs to the
-Forms it shipped. The rebuilt Form set takes the next minor line, `0.2.0`,
-which has no release and no readback of its own yet.
+manifest checksum. The exact six-entry `v0.1.3` release is the non-overwriting
+successor. The rebuilt Form set uses published provider `v0.2.1`; the remaining
+current Registry evidence is the separately signed Terraform/OpenTofu
+readback.
 
-Provider publication and Standard Form admission are separate releases. The
-provider `v*` workflow can publish only while the descriptor and inventory are
-candidate-only; this never changes admission status. A later protected
-`forms/admissions/v*` workflow runs `admission-closure-check` over real signed
-package, runner, Registry, and admission evidence. After controller-authorized
-promotion, public `release-check` requires the completed protected workflow and
-exact immutable Release readback; only that combined authority activates admission.
+Provider publication and Standard Form admission are separate authorities.
+Provider publication never changes admission status. Current admission is a
+source-retained, offline-authenticated closure over package, runner, Registry,
+and admission-evidence subjects; there is no set-wide release artifact or
+controller promotion path.
 
 Provider releases use the fail-closed signed `v*` tag workflow documented in
 [release/README.md](release/README.md). The signing key is pinned by fingerprint;
 the private key remains outside the repository. The `tako0614` public namespace
 and pinned signing key are registered. Do not create a new release tag until
 the release descriptor and provider compatibility gates are complete. Existing
-version paths are immutable, so the retired coordinated `1.0.1` Form pin keeps
-provider `0.1.3` and the rebuilt set starts at `0.2.0`.
+version paths are immutable, so retired provider `0.1.3` and current provider
+`0.2.1` retain independent evidence.
 
 ## License
 

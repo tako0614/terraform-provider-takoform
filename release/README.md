@@ -51,13 +51,10 @@ while `v0.1.2` omitted the required Registry manifest. The corrected `v0.1.3`
 candidate supersedes both without replacing any published byte.
 
 `release/version.json` also pins the supported CLI/FQN matrix. Release CI must
-exercise Terraform `1.15.8` with the canonical identity
-`registry.terraform.io/tako0614/takoform` and OpenTofu `1.12.1` with the
-dual-published alternative identity
-`registry.opentofu.org/tako0614/takoform`. Both must expose the same schema and
-complete lifecycle evidence for the exact embedded structural candidate set.
-The addresses remain distinct state identities and switching requires an
-explicit `state replace-provider`; they are never rewritten as aliases.
+exercise Terraform `1.15.8` and OpenTofu `1.12.1` with the same canonical
+identity, `registry.terraform.io/tako0614/takoform`. Both must expose the same
+schema and complete lifecycle evidence for the exact embedded structural
+candidate set.
 
 Provider publication is Phase 1 only. The `v*` workflow runs
 `candidate-publication-check`, which requires `publicationStatus:
@@ -76,15 +73,31 @@ post-publication readback with:
 ```console
 go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
   --opentofu tofu --terraform terraform \
-  > admission/v1/registry/provider-lifecycle-matrix.json
+  > /tmp/provider-lifecycle-matrix.json
 go run ./cmd/admission-readback registry \
-  --matrix admission/v1/registry/provider-lifecycle-matrix.json \
+  --matrix /tmp/provider-lifecycle-matrix.json \
   --provider-release-commit "$(git rev-list -n 1 "$(jq -r .tag release/version.json)")" \
-  --output admission/v1/registry/provider-readback.json
+  --output /tmp/provider-readback.json
 ```
 
-That mode pins the exact descriptor version in generated configuration, runs
-`init` with only `direct {}`, locates and hashes the downloaded provider
+During Terraform Registry propagation, a maintainer can diagnose one exact CLI
+execution without weakening the dual-CLI matrix gate:
+
+```console
+go run ./cmd/provider-lifecycle-conformance render-registry-report \
+  --cli /absolute/path/to/terraform
+go run ./cmd/provider-lifecycle-conformance render-registry-report \
+  --cli /absolute/path/to/tofu
+```
+
+Each command still performs the complete provider lifecycle through
+`direct {}` and validates the resulting report, but the single-CLI report is
+non-publishable diagnostic evidence. Only `render-registry-matrix` proves that
+both reviewed CLIs install the canonical FQN and expose identical bytes,
+schema, and lifecycle.
+
+The matrix mode pins the exact descriptor version in generated configuration,
+runs `init` with only `direct {}`, locates and hashes the downloaded provider
 binary, and repeats the complete lifecycle. Its report carries
 `installationSource: direct-registry-install`; the admission validator rejects
 otherwise-valid matrices carrying `local-dev-override`. The matrix is still
@@ -93,44 +106,28 @@ canonical `takoform.provider-registry-readback@v1` document binds its digest,
 installed binary/schema digests, CLI/FQN identities, provider tag, and source
 commit.
 
-Phase 2 is the separate protected
-`.github/workflows/standard-admission-release.yml` lane selected by an exact
-`forms/admissions/v*` tag at the current protected-main commit. Candidate mode
-runs from protected `main` and proves that the signed annotated admission tag
-resolves to that exact commit. It runs the closure-only
-`admission-closure-check` after rerunning both direct Registry installs in an
-isolated read-only job with no Environment, token-minting, attestation, or
-repository-write authority. That job exports only the canonical matrix. A
-fresh exact-commit checkout in the protected authentication job compares the
-artifact to reviewed source before signing anything and emits one
-checksum-closed Actions candidate without creating a Release. A separate
-write-authorized promotion accepts only the ecosystem release-safety
-controller's fixed envelope, adapter, authorization, artifact, health-check,
-and target digests. Before dispatch, that controller reads back the exact
-`standard-admission-release` Environment branch/tag policies, immutable-release
-setting, and no-bypass admission-tag ruleset. It then installs only the exact
-release/envelope-bound authorization as a randomly named one-use Environment
-secret with an absolute five-minute expiry, then removes that exact secret
-after the workflow completes. A failed or interrupted cleanup blocks the next
-dispatch; no long-lived ruleset-audit token is stored in Actions. The workflow
-reverifies the signed tag, deterministic target, exact
-candidate bytes, and controller authorization, includes the controller
-readback before making one new draft stable, and reads every immutable byte
-back. The fixed controller then runs public
-`release-check` against that completed successful promotion run and immutable
-eight-asset Release. An existing admission version is never
-overwritten; a failure after stability requires a new version. Only that
-immutable GitHub Release is Form admission activation. It needs a separately reviewed
-`standard-admission-release` Environment; provider signing credentials are not
-reused.
+Current Phase 2 has no set-wide release or promotion lane. The protected
+`provider-registry-readback.yml` workflow executes both direct Registry
+installs and keyless-signs only the canonical readback with its own publisher
+identity. `standard-provider-report.yml` independently signs all 34
+`portable-v1` provider reports. A conforming host signs the exact ten
+`ga-core-v1` host reports. The admission material retains and
+offline-authenticates the complete 34-report provider candidate, including the
+24 reports outside the selected ten. Finally, `standard-admission-evidence.yml` verifies
+those retained candidates, builds the generation-aware v3 set twice, and signs
+only the ten admission-evidence subjects. It does not create a tag, release,
+registry entry, or production mutation.
 
-The admission release semver is independent from the exact Form definition and
-Form Package semvers it activates. For example, admission `1.0.2` may activate
-the already immutable definition/package `1.0.1` closure. The release SBOM and
-provenance bind all three versions explicitly: the root package uses the
-admission release version, while the retired component packages use the retained
-Form Package version. The retained Registry matrix, the fresh direct-Registry
-matrix, and the matrix inside the release archive must be byte-identical.
+The active local gates are
+`current-published-package-check` and `current-admission-closure-check`.
+Admission remains fail-closed until all retained subjects and exact Git refs
+verify offline. The removed `standard-admission-release.yml`, controller
+promotion input, release archive, and `release-check` path described a
+set-wide artifact promotion that is not part of current Takoform.
+
+The admission checkpoint semver is independent from each exact Form definition
+and Form Package semver. It identifies one immutable source-retained closure;
+it does not republish package bytes or create another distributable artifact.
 
 `admission-closure-check` also resolves the admission tag, provider tag, and every
 package tag from fetched local Git refs and requires their exact retained

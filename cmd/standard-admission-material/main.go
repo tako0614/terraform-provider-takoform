@@ -19,9 +19,10 @@ func main() {
 }
 
 func run(args []string, output io.Writer) error {
-	if len(args) == 0 || args[0] != "build" {
+	if len(args) == 0 || (args[0] != "build" && args[0] != "build-current") {
 		return usageError()
 	}
+	commandName := args[0]
 	values := map[string]string{}
 	for args = args[1:]; len(args) > 0; args = args[2:] {
 		if len(args) < 2 || !strings.HasPrefix(args[0], "--") {
@@ -33,12 +34,16 @@ func run(args []string, output io.Writer) error {
 		}
 		values[key] = args[1]
 	}
-	for _, key := range []string{"host-id", "host-reports", "provider-reports", "output-dir", "admission-version", "host-source-commit", "host-takoform-source-commit", "provider-source-commit", "host-run-id", "provider-run-id"} {
+	required := []string{"host-id", "host-reports", "provider-reports", "output-dir", "admission-version", "host-source-commit", "host-takoform-source-commit", "provider-source-commit", "host-run-id", "provider-run-id"}
+	if commandName == "build-current" {
+		required = append(required, "registry-readback", "registry-run-id")
+	}
+	for _, key := range required {
 		if values[key] == "" {
 			return usageError()
 		}
 	}
-	if len(values) != 10 {
+	if len(values) != len(required) {
 		return usageError()
 	}
 	root, err := providerlifecycle.RepoRoot(".")
@@ -59,19 +64,28 @@ func run(args []string, output io.Writer) error {
 			return fmt.Errorf("%s is not an ancestor of current source %s", label, commit)
 		}
 	}
-	if err := admissionmaterial.Build(admissionmaterial.BuildOptions{
+	options := admissionmaterial.BuildOptions{
 		Root: root, HostReports: values["host-reports"], ProviderReports: values["provider-reports"],
 		OutputDir: values["output-dir"], AdmissionVersion: values["admission-version"], SourceCommit: commit,
 		HostSourceCommit: values["host-source-commit"], HostTakoformSourceCommit: values["host-takoform-source-commit"], ProviderSourceCommit: values["provider-source-commit"],
 		HostWorkflowRunID: values["host-run-id"], ProviderWorkflowRunID: values["provider-run-id"],
 		HostID: values["host-id"],
-	}); err != nil {
+	}
+	if commandName == "build-current" {
+		err = admissionmaterial.BuildCurrent(admissionmaterial.CurrentBuildOptions{
+			BuildOptions: options, RegistryReadback: values["registry-readback"],
+			RegistryWorkflowRunID: values["registry-run-id"],
+		})
+	} else {
+		err = admissionmaterial.Build(options)
+	}
+	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(output, "standard-admission-material: built non-publishable admission %s material at %s\n", values["admission-version"], values["output-dir"])
+	_, err = fmt.Fprintf(output, "standard-admission-material: built non-publishable %s admission %s material at %s\n", commandName, values["admission-version"], values["output-dir"])
 	return err
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: standard-admission-material build --host-id ID --host-reports DIR --provider-reports DIR --output-dir DIR --admission-version VERSION --host-source-commit COMMIT --host-takoform-source-commit COMMIT --provider-source-commit COMMIT --host-run-id ID --provider-run-id ID")
+	return fmt.Errorf("usage: standard-admission-material build [legacy options] | build-current --host-id ID --host-reports DIR --provider-reports DIR --registry-readback DIR --output-dir DIR --admission-version VERSION --host-source-commit COMMIT --host-takoform-source-commit COMMIT --provider-source-commit COMMIT --host-run-id ID --provider-run-id ID --registry-run-id ID")
 }
