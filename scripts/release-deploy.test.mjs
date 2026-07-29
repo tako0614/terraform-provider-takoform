@@ -533,6 +533,56 @@ describe("workflow dispatch authority and correlation", () => {
       ),
     ).toThrow("ambiguous");
   });
+
+  test("binds a reviewed workflow run to its exact attempt URL", () => {
+    const reviewedRun = (url) =>
+      context((_executable, args) => {
+        expect(args).toContain("--attempt");
+        expect(args).toContain("2");
+        return JSON.stringify({
+          attempt: 2,
+          conclusion: "success",
+          databaseId: 123,
+          displayTitle: requestId,
+          event: "workflow_dispatch",
+          headBranch: "main",
+          headSha: commit,
+          status: "completed",
+          url,
+          workflowName: "Author provider release tag",
+        });
+      });
+    const exactUrl =
+      "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123/attempts/2";
+    expect(
+      releaseDeployTestHooks.requireSuccessfulRun(
+        reviewedRun(exactUrl),
+        "123",
+        "2",
+        {
+          workflowName: "Author provider release tag",
+          headSha: commit,
+        },
+      ).url,
+    ).toBe(exactUrl);
+    for (const wrongUrl of [
+      "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123",
+      "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123/attempts/1",
+      "https://github.com/tako0614/terraform-provider-takoform/actions/runs/124/attempts/2",
+    ]) {
+      expect(() =>
+        releaseDeployTestHooks.requireSuccessfulRun(
+          reviewedRun(wrongUrl),
+          "123",
+          "2",
+          {
+            workflowName: "Author provider release tag",
+            headSha: commit,
+          },
+        ),
+      ).toThrow("not the exact successful reviewed candidate");
+    }
+  });
 });
 
 describe("owner gate final fence and pinned release tools", () => {
@@ -761,7 +811,7 @@ test("top-level deep semantic rejection cannot push a tag, mutate a Release, or 
           conclusion: "success",
           displayTitle: requestId,
           url:
-            "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123",
+            "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123/attempts/1",
         });
       }
       if (
