@@ -180,6 +180,9 @@ func BuildCurrent(options CurrentBuildOptions) error {
 	if err != nil {
 		return fmt.Errorf("current provider Registry candidate: %w", err)
 	}
+	if err := validateCurrentProviderRegistryIdentity(providers, registry); err != nil {
+		return fmt.Errorf("current provider report/Registry identity: %w", err)
+	}
 
 	if err := os.Mkdir(output, 0o700); err != nil {
 		return err
@@ -423,6 +426,7 @@ func loadCurrentArtifactSet(config currentArtifactConfig) (artifactSet, error) {
 		bySigned[entry.Kind] = entry
 	}
 	allArtifacts := make(map[string]reportArtifact, len(config.closure.Entries))
+	providerBinarySHA256 := ""
 	for _, candidate := range config.closure.Entries {
 		var entry *reportManifestEntry
 		for index := range manifest.Reports {
@@ -476,6 +480,16 @@ func loadCurrentArtifactSet(config currentArtifactConfig) (artifactSet, error) {
 			parsed.RunnerVersion != manifest.RunnerVersion || !reflect.DeepEqual(parsed.Identity, identity) {
 			return artifactSet{}, fmt.Errorf("%s current report identity or fixture closure is invalid: %w", candidate.Kind, err)
 		}
+		if config.role == "provider-report" {
+			if !formpackage.ValidDigest(parsed.ProviderBinarySHA256) {
+				return artifactSet{}, fmt.Errorf("%s current provider report does not bind an exact provider binary", candidate.Kind)
+			}
+			if providerBinarySHA256 == "" {
+				providerBinarySHA256 = parsed.ProviderBinarySHA256
+			} else if parsed.ProviderBinarySHA256 != providerBinarySHA256 {
+				return artifactSet{}, fmt.Errorf("%s current provider report used a different provider binary", candidate.Kind)
+			}
+		}
 		signedEntry, ok := bySigned[candidate.Kind]
 		if !ok || signedEntry.Slug != candidate.Slug || signedEntry.ReportPath != entry.Path ||
 			signedEntry.ReportDigest != entry.Digest || signedEntry.BundlePath != entry.BundlePath ||
@@ -505,8 +519,29 @@ func loadCurrentArtifactSet(config currentArtifactConfig) (artifactSet, error) {
 	}
 	return artifactSet{
 		manifest: manifest, manifestRaw: manifestRaw, signedRaw: signedRaw, checksumsRaw: checksumsRaw,
-		byKind: selected, allByKind: allArtifacts,
+		byKind: selected, allByKind: allArtifacts, providerBinarySHA256: providerBinarySHA256,
 	}, nil
+}
+
+func validateCurrentProviderRegistryIdentity(providers artifactSet, registry registryArtifactSet) error {
+	if !formpackage.ValidDigest(providers.providerBinarySHA256) ||
+		providers.manifest.RunnerVersion != "" && providers.manifest.RunnerVersion != registry.parsed.ProviderVersion ||
+		len(providers.allByKind) == 0 || len(registry.parsed.Installs) == 0 {
+		return fmt.Errorf("provider reports or Registry readback lack a complete binary identity")
+	}
+	for kind, provider := range providers.allByKind {
+		if provider.report.RunnerVersion != registry.parsed.ProviderVersion ||
+			provider.report.ProviderBinarySHA256 != providers.providerBinarySHA256 {
+			return fmt.Errorf("%s provider report binary identity differs from the provider closure", kind)
+		}
+	}
+	for _, install := range registry.parsed.Installs {
+		if install.ProviderVersion != registry.parsed.ProviderVersion ||
+			install.ProviderBinarySHA256 != providers.providerBinarySHA256 {
+			return fmt.Errorf("%s Registry binary identity differs from provider reports", install.Product)
+		}
+	}
+	return nil
 }
 
 func loadCurrentRegistryArtifact(repositoryRoot, artifactRoot, sourceCommit, workflowRunID string) (registryArtifactSet, error) {

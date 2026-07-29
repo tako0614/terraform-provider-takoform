@@ -26,8 +26,9 @@ var providerClosurePositiveDecimalPattern = regexp.MustCompile(`^[1-9][0-9]*$`)
 var providerClosureChecksumPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type providerClosureIdentity struct {
-	sourceCommit  string
-	runnerVersion string
+	sourceCommit         string
+	runnerVersion        string
+	providerBinarySHA256 string
 }
 
 type providerClosureSource struct {
@@ -228,6 +229,7 @@ func verifyFullProviderReportClosure(root, retainedRoot string, set Set, selecte
 	}
 
 	subjects := make([]RetainedSubject, 0, len(closure.Reports)-len(selected))
+	providerBinarySHA256 := ""
 	for _, retained := range closure.Reports {
 		inventoryEntry, inventoryOK := inventoryByKind[retained.Kind]
 		if !inventoryOK ||
@@ -291,6 +293,15 @@ func verifyFullProviderReportClosure(root, retainedRoot string, set Set, selecte
 		if report.Subject != manifest.Subject || report.RunnerVersion != manifest.RunnerVersion {
 			return nil, providerClosureIdentity{}, fmt.Errorf("provider-report closure report %s subject or runner version differs from its manifest", retained.Kind)
 		}
+		if report.Format != providerRunnerReportFormatV2 ||
+			!formpackage.ValidDigest(report.ProviderBinarySHA256) {
+			return nil, providerClosureIdentity{}, fmt.Errorf("provider-report closure report %s does not bind an exact provider binary", retained.Kind)
+		}
+		if providerBinarySHA256 == "" {
+			providerBinarySHA256 = report.ProviderBinarySHA256
+		} else if report.ProviderBinarySHA256 != providerBinarySHA256 {
+			return nil, providerClosureIdentity{}, fmt.Errorf("provider-report closure report %s used a different provider binary", retained.Kind)
+		}
 		if _, alreadySelected := selected[retained.Kind]; !alreadySelected {
 			subjects = append(subjects, RetainedSubject{
 				Kind: retained.Kind, Role: roleProviderReport,
@@ -301,7 +312,24 @@ func verifyFullProviderReportClosure(root, retainedRoot string, set Set, selecte
 	}
 	return subjects, providerClosureIdentity{
 		sourceCommit: manifest.Source.Commit, runnerVersion: manifest.RunnerVersion,
+		providerBinarySHA256: providerBinarySHA256,
 	}, nil
+}
+
+func validateProviderRegistryIdentity(identity providerClosureIdentity, readback ProviderRegistryReadback) error {
+	if identity.runnerVersion != readback.ProviderVersion {
+		return fmt.Errorf("provider-report closure version does not match Registry readback")
+	}
+	if !formpackage.ValidDigest(identity.providerBinarySHA256) || len(readback.Installs) == 0 {
+		return fmt.Errorf("provider-report closure or Registry readback lacks an exact provider binary identity")
+	}
+	for _, install := range readback.Installs {
+		if install.ProviderVersion != identity.runnerVersion ||
+			install.ProviderBinarySHA256 != identity.providerBinarySHA256 {
+			return fmt.Errorf("provider-report closure binary does not match %s Registry readback", install.Product)
+		}
+	}
+	return nil
 }
 
 func parseProviderClosureChecksums(raw []byte) (map[string]string, error) {

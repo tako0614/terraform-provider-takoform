@@ -181,14 +181,29 @@ of admitted or customer state. Test fixtures use an explicit in-process fake
 subject verifier and are never written under the repository's `admission/`
 path; they do not represent signatures or live evidence.
 
-Each canonical `takoform.standard-runner-report@v1` document is role-bound as
-`host-report` or `provider-report` and contains only its runner subject and
-version, exact `(FormRef, packageDigest)`, `passed` status, all eight lifecycle
-booleans, named positive fixture results, and named negative results normalized
-to `invalid_argument`. Its canonical SHA-256 must equal both the v2 set entry's
-role digest and the corresponding `AdmissionEvidence.conformance.*.evidenceDigest`.
-Unknown fields, duplicate/failed fixtures, incomplete lifecycle, identity
-substitution, and non-portable negative codes fail closed.
+Canonical host reports remain
+`takoform.standard-runner-report@v1`. Historical provider reports may also use
+that format; v1 contains only its runner subject and version, exact
+`(FormRef, packageDigest)`, `passed` status, all eight lifecycle booleans,
+named positive fixture results, and named negative results normalized to
+`invalid_argument`.
+
+Current provider reports use the distinct
+`takoform.standard-provider-runner-report@v2` format. It adds the required
+`providerBinarySha256` field so the report binds the exact provider executable
+used by the lifecycle and fixture runs. Current closure verification requires
+all provider reports to carry the same digest and requires that digest and
+provider version to equal every direct Registry installation readback. The
+evidence-tooling source commit remains provenance for the report generator; it
+is not incorrectly equated with the older immutable provider-release commit.
+`profile.json` schema v2 locks the host/provider format split and digest
+algorithm.
+
+Each canonical report SHA-256 must equal both the admission set entry's role
+digest and the corresponding
+`AdmissionEvidence.conformance.*.evidenceDigest`. Unknown fields,
+duplicate/failed fixtures, incomplete lifecycle, identity substitution, and
+non-portable negative codes fail closed.
 
 The deterministic package readback does not trust a download URL. The v2 set
 pins the exact release-manifest bytes; the validator rereads all five assets,

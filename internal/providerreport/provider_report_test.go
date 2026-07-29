@@ -120,6 +120,9 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 		if generated.report.Identity != exactIdentity[generated.kind] || generated.report.Identity.FormRef.DefinitionVersion != declared.Version() || generated.report.RunnerVersion != providerReleaseVersion(t, root) {
 			t.Fatalf("report %s relabeled executed candidate identity: %#v", generated.kind, generated.report)
 		}
+		if !formpackage.ValidDigest(generated.report.ProviderBinarySHA256) {
+			t.Fatalf("report %s does not bind the exact executed provider binary: %#v", generated.kind, generated.report)
+		}
 		declaredNegatives := make([]string, 0, len(generated.report.NegativeFixtures))
 		for _, negative := range generated.report.NegativeFixtures {
 			declaredNegatives = append(declaredNegatives, negative.Name)
@@ -233,6 +236,7 @@ func TestStandardProviderReportWorkflowSeparatesExecutionAndSigningAuthority(t *
 		"provider-report-manifest.json",
 		"signed-provider-report-candidate.json",
 		"SHA256SUMS",
+		"providerBinarySha256",
 		"takoform-standard-provider-report-candidate-current-${{ needs.generate.outputs.source_commit_short }}",
 		`--source-commit "${GITHUB_SHA}"`,
 	} {

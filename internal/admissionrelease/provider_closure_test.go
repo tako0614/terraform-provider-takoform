@@ -39,6 +39,7 @@ func TestFullProviderReportClosureRejectsTamperedUnselectedReport(t *testing.T) 
 	const retainedRoot = "admission/v3"
 	const sourceCommit = "0123456789abcdef0123456789abcdef01234567"
 	const runnerVersion = "fixture-1.0.1"
+	const providerBinarySHA256 = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	bundleRaw := []byte(`{}`)
 	manifest := providerClosureManifest{
 		Format: currentProviderManifestFormat, Status: "candidate-only", ProofType: "provider",
@@ -78,7 +79,9 @@ func TestFullProviderReportClosureRejectsTamperedUnselectedReport(t *testing.T) 
 			negatives = append(negatives, fixture.Name)
 		}
 		report := completeRunnerReport(roleProviderReport, currentProviderSubject, identity, positives, negatives)
+		report.Format = providerRunnerReportFormatV2
 		report.RunnerVersion = runnerVersion
+		report.ProviderBinarySHA256 = providerBinarySHA256
 		reportRaw := canonicalFixture(t, report)
 		reportRelative := path.Join("packages", slug, "provider-report.json")
 		bundleRelative := path.Join("packages", slug, "provider-report.sigstore.json")
@@ -134,7 +137,8 @@ func TestFullProviderReportClosureRejectsTamperedUnselectedReport(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(extra) != 24 || identity.sourceCommit != sourceCommit || identity.runnerVersion != runnerVersion {
+	if len(extra) != 24 || identity.sourceCommit != sourceCommit || identity.runnerVersion != runnerVersion ||
+		identity.providerBinarySHA256 != providerBinarySHA256 {
 		t.Fatalf("unexpected full provider closure result: extra=%d identity=%#v", len(extra), identity)
 	}
 
@@ -143,5 +147,31 @@ func TestFullProviderReportClosureRejectsTamperedUnselectedReport(t *testing.T) 
 	if _, _, err := verifyFullProviderReportClosure(root, retainedRoot, Set{ProviderReportClosure: &closure}, selected); err == nil ||
 		!strings.Contains(err.Error(), "closure bytes differ") {
 		t.Fatalf("tampered unselected provider report error = %v", err)
+	}
+}
+
+func TestProviderClosureMatchesRegistryByVersionAndBinaryNotToolingCommit(t *testing.T) {
+	t.Parallel()
+	const binaryDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	identity := providerClosureIdentity{
+		sourceCommit:         "0123456789abcdef0123456789abcdef01234567",
+		runnerVersion:        "0.2.1",
+		providerBinarySHA256: binaryDigest,
+	}
+	readback := ProviderRegistryReadback{
+		ProviderVersion:       "0.2.1",
+		ProviderReleaseCommit: "89abcdef0123456789abcdef0123456789abcdef",
+		Installs: []RegistryInstall{
+			{Product: "OpenTofu", ProviderVersion: "0.2.1", ProviderBinarySHA256: binaryDigest},
+			{Product: "Terraform", ProviderVersion: "0.2.1", ProviderBinarySHA256: binaryDigest},
+		},
+	}
+	if err := validateProviderRegistryIdentity(identity, readback); err != nil {
+		t.Fatalf("different evidence tooling and provider release commits must be accepted when exact binary identity matches: %v", err)
+	}
+	readback.Installs[1].ProviderBinarySHA256 = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	if err := validateProviderRegistryIdentity(identity, readback); err == nil ||
+		!strings.Contains(err.Error(), "binary") {
+		t.Fatalf("provider binary substitution error = %v", err)
 	}
 }

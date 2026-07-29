@@ -107,6 +107,12 @@ type trustProfile struct {
 			AllowCredentialsOrOperatorFields bool `json:"allowCredentialsOrOperatorFields"`
 		} `json:"contentPolicy"`
 	} `json:"formPackage"`
+	RunnerReport struct {
+		HostFormat           string `json:"hostFormat"`
+		ProviderFormat       string `json:"providerFormat"`
+		ProviderBinaryDigest string `json:"providerBinaryDigest"`
+		UnknownFields        string `json:"unknownFields"`
+	} `json:"runnerReport"`
 	Separation struct {
 		ReuseProviderGPGKeyForFormPackages bool `json:"reuseProviderGPGKeyForFormPackages"`
 		ReuseForTakosumiLegacyProvider     bool `json:"reuseForTakosumiLegacyProvider"`
@@ -139,7 +145,7 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	var release releaseDescriptor
 	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
 
-	if profile.SchemaVersion != 1 || profile.Status != "decision-approved-implementation-in-progress" {
+	if profile.SchemaVersion != 2 || profile.Status != "decision-approved-implementation-in-progress" {
 		t.Fatalf("unexpected trust profile identity: version=%d status=%q", profile.SchemaVersion, profile.Status)
 	}
 	if profile.Provider.Status != "implemented-registry-key-registered-first-install-proof-pending" ||
@@ -160,6 +166,12 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		profile.Provider.Distribution.Registry != "registry.terraform.io/tako0614/takoform" ||
 		profile.Provider.Distribution.OverwriteExistingVersion {
 		t.Fatalf("provider distribution is mutable or has the wrong registry")
+	}
+	if profile.RunnerReport.HostFormat != "takoform.standard-runner-report@v1" ||
+		profile.RunnerReport.ProviderFormat != "takoform.standard-provider-runner-report@v2" ||
+		profile.RunnerReport.ProviderBinaryDigest != "sha256" ||
+		profile.RunnerReport.UnknownFields != "reject" {
+		t.Fatalf("runner-report contract lock is invalid: %#v", profile.RunnerReport)
 	}
 
 	packageTrust := profile.FormPackage

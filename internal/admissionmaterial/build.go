@@ -132,12 +132,13 @@ type reportArtifact struct {
 }
 
 type artifactSet struct {
-	manifest     reportManifest
-	manifestRaw  []byte
-	signedRaw    []byte
-	checksumsRaw []byte
-	byKind       map[string]reportArtifact
-	allByKind    map[string]reportArtifact
+	manifest             reportManifest
+	manifestRaw          []byte
+	signedRaw            []byte
+	checksumsRaw         []byte
+	byKind               map[string]reportArtifact
+	allByKind            map[string]reportArtifact
+	providerBinarySHA256 string
 }
 
 // Build verifies exact artifact inventories and writes a new, non-publishable

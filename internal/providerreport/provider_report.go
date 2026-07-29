@@ -33,7 +33,7 @@ import (
 var sourceCommitPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 const (
-	reportFormat             = "takoform.standard-runner-report@v1"
+	reportFormat             = "takoform.standard-provider-runner-report@v2"
 	providerRole             = "provider-report"
 	providerProtocol         = "Terraform provider protocol v6 + versioned Form host HTTP"
 	directoryInventoryFormat = "takoform.standard-provider-report-candidate@v1"
@@ -466,7 +466,8 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 		report := admissionrelease.RunnerReport{
 			Format: reportFormat, Role: providerRole,
 			Subject: "provider:" + lifecycle.CLI.ProviderAddress, RunnerVersion: lifecycle.ProviderBinary.Version,
-			Identity: fixture.Identity, Status: "passed",
+			ProviderBinarySHA256: lifecycle.ProviderBinary.SHA256,
+			Identity:             fixture.Identity, Status: "passed",
 			Lifecycle: standardform.LifecycleAudit{
 				Create: checks.Create, Read: checks.Read, Update: checks.Update, Delete: checks.Delete,
 				Import: checks.NativeImport && checks.CLIImport, Observe: checks.Observe, Refresh: checks.Refresh, Drift: checks.DriftState,
