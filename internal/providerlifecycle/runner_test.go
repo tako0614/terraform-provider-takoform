@@ -1,6 +1,8 @@
 package providerlifecycle
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +11,104 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
+
+func TestOpenTofuValidateAcceptsYurucommuComputedConfigurationValues(t *testing.T) {
+	root, err := RepoRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	version, err := loadProviderVersion(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	temp := t.TempDir()
+	binDir := filepath.Join(temp, "bin")
+	stackDir := filepath.Join(temp, "stack")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(stackDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	providerBinary := filepath.Join(binDir, "terraform-provider-takoform")
+	ctx := context.Background()
+	if output, err := runCommand(
+		ctx,
+		root,
+		nil,
+		"go",
+		"build",
+		"-trimpath",
+		"-buildvcs=false",
+		"-ldflags",
+		"-buildid= -X main.version="+version,
+		"-o",
+		providerBinary,
+		".",
+	); err != nil {
+		t.Fatalf("build provider binary: %v\n%s", err, output)
+	}
+	cliConfig := filepath.Join(temp, "terraformrc")
+	if err := os.WriteFile(cliConfig, []byte(fmt.Sprintf(`provider_installation {
+  dev_overrides {
+    %q = %q
+  }
+  direct {}
+}
+`, OpenTofuProviderAddress, binDir)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// This is the configuration shape used by Yurucommu's portable module.
+	// Module variables remain unknown during `tofu validate`, so values derived
+	// from project_name must remain framework String values until planning.
+	stack := fmt.Sprintf(`terraform {
+  required_providers {
+    takoform = {
+      source = %q
+    }
+  }
+}
+
+variable "project_name" {
+  type    = string
+  default = "yurucommu"
+}
+
+locals {
+  prefix = var.project_name
+}
+
+resource "takoform_http_service" "worker" {
+  name            = local.prefix
+  artifact_url    = "https://example.test/yurucommu-worker.js"
+  artifact_sha256 = "sha256:683c5ed5bc5f537087b703bf24ad3b306508dd3778918d0c31eb4561777fbe13"
+  runtime         = "javascript"
+
+  configuration = {
+    DELIVERY_QUEUE_NAME = "${local.prefix}-delivery"
+    DELIVERY_DLQ_NAME   = "${local.prefix}-delivery-dlq"
+  }
+}
+`, OpenTofuProviderAddress)
+	if err := os.WriteFile(filepath.Join(stackDir, "main.tf"), []byte(stack), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, err := runCommand(
+		ctx,
+		root,
+		terraformRunnerEnvironment(cliConfig),
+		"tofu",
+		"-chdir="+stackDir,
+		"validate",
+		"-no-color",
+	)
+	if err != nil {
+		t.Fatalf("tofu validate rejected Yurucommu computed configuration values: %v\n%s", err, output)
+	}
+	if !strings.Contains(output, "Success! The configuration is valid") {
+		t.Fatalf("tofu validate did not report success:\n%s", output)
+	}
+}
 
 func TestStandardFixtureCasesRequireExactExecutedFormIdentity(t *testing.T) {
 	forms := candidateForms()
