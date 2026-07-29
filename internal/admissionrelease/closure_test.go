@@ -268,7 +268,7 @@ func completeRunnerReport(role, subject string, identity standardform.InstalledF
 		negativeResults = append(negativeResults, result)
 	}
 	report := RunnerReport{
-		Format: runnerReportFormat, Role: role, Subject: subject, RunnerVersion: "fixture-1.0.1", Identity: identity, Status: "passed",
+		Format: runnerReportFormatV1, Role: role, Subject: subject, RunnerVersion: "fixture-1.0.1", Identity: identity, Status: "passed",
 		Lifecycle:        standardform.LifecycleAudit{Create: true, Read: true, Update: true, Delete: true, Import: true, Observe: true, Refresh: true, Drift: true},
 		PositiveFixtures: positiveResults, NegativeFixtures: negativeResults,
 	}

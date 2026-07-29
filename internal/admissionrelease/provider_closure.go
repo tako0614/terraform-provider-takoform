@@ -293,7 +293,8 @@ func verifyFullProviderReportClosure(root, retainedRoot string, set Set, selecte
 		if report.Subject != manifest.Subject || report.RunnerVersion != manifest.RunnerVersion {
 			return nil, providerClosureIdentity{}, fmt.Errorf("provider-report closure report %s subject or runner version differs from its manifest", retained.Kind)
 		}
-		if !formpackage.ValidDigest(report.ProviderBinarySHA256) {
+		if report.Format != providerRunnerReportFormatV2 ||
+			!formpackage.ValidDigest(report.ProviderBinarySHA256) {
 			return nil, providerClosureIdentity{}, fmt.Errorf("provider-report closure report %s does not bind an exact provider binary", retained.Kind)
 		}
 		if providerBinarySHA256 == "" {

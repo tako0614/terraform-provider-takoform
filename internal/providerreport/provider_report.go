@@ -33,7 +33,7 @@ import (
 var sourceCommitPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 const (
-	reportFormat             = "takoform.standard-runner-report@v1"
+	reportFormat             = "takoform.standard-provider-runner-report@v2"
 	providerRole             = "provider-report"
 	providerProtocol         = "Terraform provider protocol v6 + versioned Form host HTTP"
 	directoryInventoryFormat = "takoform.standard-provider-report-candidate@v1"

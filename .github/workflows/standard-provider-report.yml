@@ -163,7 +163,7 @@ jobs:
             seen.add(entry.slug);
             const {raw, value: report} = readCanonical(entry.path);
             const identity = {formRef:{apiVersion:"forms.takoform.com/v1alpha1",kind:want.kind,definitionVersion:want.version,schemaDigest:want.schemaDigest},packageDigest:want.packageDigest};
-            if (entry.digest !== digest(raw) || !same(entry.identity, identity) || report.format !== "takoform.standard-runner-report@v1" || report.role !== "provider-report" || report.status !== "passed" || report.subject !== manifest.subject || report.runnerVersion !== manifest.runnerVersion || !same(report.identity, identity)) throw new Error(`${entry.slug} identity or digest drift`);
+            if (entry.digest !== digest(raw) || !same(entry.identity, identity) || report.format !== "takoform.standard-provider-runner-report@v2" || report.role !== "provider-report" || report.status !== "passed" || report.subject !== manifest.subject || report.runnerVersion !== manifest.runnerVersion || !same(report.identity, identity)) throw new Error(`${entry.slug} identity or digest drift`);
             const lifecycleKeys = ["create","delete","drift","import","observe","read","refresh","update"];
             const reportKeys = ["format","identity","lifecycle","negativeFixtures","positiveFixtures","providerBinarySha256","role","runnerVersion","status","subject"];
             const positive = want.positive.map((name) => ({name,passed:true}));

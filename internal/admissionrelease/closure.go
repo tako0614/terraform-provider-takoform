@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	runnerReportFormat                = "takoform.standard-runner-report@v1"
+	runnerReportFormatV1              = "takoform.standard-runner-report@v1"
+	providerRunnerReportFormatV2      = "takoform.standard-provider-runner-report@v2"
 	registryReadbackFormat            = "takoform.provider-registry-readback@v1"
 	packageReleaseSchema              = 1
 	packageReleaseType                = "form-package"
@@ -378,7 +379,7 @@ func validateRunnerReport(
 	positives, negatives []string,
 	positiveBindings, negativeBindings map[string]fixtureDigestBinding,
 ) error {
-	if report.Format != runnerReportFormat || report.Role != role || report.Status != "passed" ||
+	if report.Role != role || report.Status != "passed" ||
 		strings.TrimSpace(report.Subject) == "" || strings.TrimSpace(report.RunnerVersion) == "" ||
 		report.Subject != proof.Subject || report.RunnerVersion != proof.RunnerVersion ||
 		!reflect.DeepEqual(report.Identity, proof.Identity) || proof.Status != "passed" {
@@ -422,6 +423,9 @@ func validateRunnerReport(
 		}
 	}
 	if role == roleHostReport {
+		if report.Format != runnerReportFormatV1 {
+			return fmt.Errorf("%s runner report format is invalid", role)
+		}
 		if report.ProviderBinarySHA256 != "" {
 			return fmt.Errorf("%s must not claim provider binary identity", role)
 		}
@@ -429,8 +433,17 @@ func validateRunnerReport(
 			return fmt.Errorf("%s execution evidence: %w", role, err)
 		}
 	} else {
-		if report.ProviderBinarySHA256 != "" && !formpackage.ValidDigest(report.ProviderBinarySHA256) {
-			return fmt.Errorf("%s provider binary identity is invalid", role)
+		switch report.Format {
+		case runnerReportFormatV1:
+			if report.ProviderBinarySHA256 != "" {
+				return fmt.Errorf("%s v1 report must not claim provider binary identity", role)
+			}
+		case providerRunnerReportFormatV2:
+			if !formpackage.ValidDigest(report.ProviderBinarySHA256) {
+				return fmt.Errorf("%s v2 provider binary identity is invalid", role)
+			}
+		default:
+			return fmt.Errorf("%s runner report format is invalid", role)
 		}
 		if report.ExecutionEvidence != nil || report.ExecutionEvidenceDigest != "" {
 			return fmt.Errorf("%s provider report must not claim host execution evidence", role)

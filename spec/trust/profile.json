@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "decision-approved-implementation-in-progress",
   "provider": {
     "status": "implemented-registry-key-registered-first-install-proof-pending",
@@ -103,6 +103,12 @@
       "allowExecutableFiles": false,
       "allowCredentialsOrOperatorFields": false
     }
+  },
+  "runnerReport": {
+    "hostFormat": "takoform.standard-runner-report@v1",
+    "providerFormat": "takoform.standard-provider-runner-report@v2",
+    "providerBinaryDigest": "sha256",
+    "unknownFields": "reject"
   },
   "separation": {
     "reuseProviderGPGKeyForFormPackages": false,

@@ -79,6 +79,7 @@ func TestFullProviderReportClosureRejectsTamperedUnselectedReport(t *testing.T) 
 			negatives = append(negatives, fixture.Name)
 		}
 		report := completeRunnerReport(roleProviderReport, currentProviderSubject, identity, positives, negatives)
+		report.Format = providerRunnerReportFormatV2
 		report.RunnerVersion = runnerVersion
 		report.ProviderBinarySHA256 = providerBinarySHA256
 		reportRaw := canonicalFixture(t, report)
