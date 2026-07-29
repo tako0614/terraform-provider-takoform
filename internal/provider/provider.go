@@ -157,10 +157,11 @@ func newResourceAPIHTTPClient() *http.Client {
 }
 
 func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resource {
-	resources := make([]func() resource.Resource, 0, len(formcatalog.Kinds))
+	resources := make([]func() resource.Resource, 0, len(formcatalog.Kinds)+1)
 	for _, kind := range formcatalog.Kinds {
 		resources = append(resources, NewFormResource(kind))
 	}
+	resources = append(resources, NewInterfaceResource)
 	return resources
 }
 

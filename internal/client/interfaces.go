@@ -2,6 +2,9 @@ package client
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,12 +15,16 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-const FeatureInterfaceDeclarations = "interface_declarations"
+const (
+	FeatureInterfaceDeclarations      = "interface_declarations"
+	FeatureInterfaceDeclarationWrites = "interface_declaration_writes"
+)
 
 var (
-	ErrInterfaceDeclarationsUnsupported = errors.New("takoform: host does not advertise features.interface_declarations")
-	ErrInterfaceIdentityAmbiguous       = errors.New("takoform: interface name resolves to multiple versions")
-	ErrInterfaceInstanceAmbiguous       = errors.New("takoform: interface identity resolves to multiple resource instances")
+	ErrInterfaceDeclarationsUnsupported      = errors.New("takoform: host does not advertise features.interface_declarations")
+	ErrInterfaceDeclarationWritesUnsupported = errors.New("takoform: host does not advertise features.interface_declaration_writes")
+	ErrInterfaceIdentityAmbiguous            = errors.New("takoform: interface name resolves to multiple versions")
+	ErrInterfaceInstanceAmbiguous            = errors.New("takoform: interface identity resolves to multiple resource instances")
 )
 
 type InterfaceResourceRef struct {
@@ -36,16 +43,26 @@ type InterfaceSelector struct {
 // Identity is the exact (Name, Version) pair. Document and Values are
 // non-secret data; presence implies no consumer authorization.
 type DeclaredInterface struct {
-	Name     string                  `json:"name"`
-	Version  string                  `json:"version"`
-	Resource InterfaceResourceRef    `json:"resource"`
-	Document map[string]any          `json:"document"`
-	Values   map[string]any          `json:"values,omitempty"`
-	Form     *InstalledFormReference `json:"form,omitempty"`
+	Name             string                                  `json:"name"`
+	Version          string                                  `json:"version"`
+	Resource         InterfaceResourceRef                    `json:"resource"`
+	Document         map[string]any                          `json:"document"`
+	DocumentSchema   map[string]any                          `json:"documentSchema,omitempty"`
+	Inputs           []formpackage.InterfaceInputDeclaration `json:"inputs,omitempty"`
+	ResourceURIInput string                                  `json:"resourceUriInput,omitempty"`
+	Values           map[string]any                          `json:"values,omitempty"`
+	ResourceURI      string                                  `json:"resourceUri,omitempty"`
+	ResourceVersion  string                                  `json:"resourceVersion,omitempty"`
+	Form             *InstalledFormReference                 `json:"form,omitempty"`
 }
 
 func (c *Client) SupportsInterfaceDeclarations() bool {
 	return c.interfacesURL != ""
+}
+
+func (c *Client) SupportsInterfaceDeclarationWrites() bool {
+	return c.SupportsInterfaceDeclarations() &&
+		c.Discovery.HasFeature(FeatureInterfaceDeclarationWrites)
 }
 
 // ListInterfaces reads all declarations visible to the caller in a space.
@@ -171,6 +188,219 @@ func (c *Client) GetInterface(ctx context.Context, space string, selector Interf
 	return declared, nil
 }
 
+// PutInterface creates or updates one exact generic declaration. The provider
+// carries application-authored data only; a host owns authorization, bindings,
+// value resolution, and the canonical record.
+func (c *Client) PutInterface(ctx context.Context, space string, desired DeclaredInterface) (DeclaredInterface, error) {
+	if !c.SupportsInterfaceDeclarationWrites() {
+		return DeclaredInterface{}, ErrInterfaceDeclarationWritesUnsupported
+	}
+	if strings.TrimSpace(space) == "" {
+		return DeclaredInterface{}, errors.New("takoform: interface declaration write requires a space")
+	}
+	if err := validateWritableInterface(desired); err != nil {
+		return DeclaredInterface{}, err
+	}
+	target := c.interfaceURL(space, InterfaceSelector{
+		Name: desired.Name, Version: desired.Version,
+		ResourceKind: desired.Resource.Kind, ResourceName: desired.Resource.Name,
+	})
+	headers := map[string]string{
+		"Idempotency-Key": interfaceMutationKey("apply", space, desired),
+	}
+	if desired.ResourceVersion == "" {
+		headers["If-None-Match"] = "*"
+	} else {
+		if !validResourceVersion(desired.ResourceVersion) {
+			return DeclaredInterface{}, errors.New("takoform: interface resourceVersion is invalid")
+		}
+		headers["If-Match"] = quoteResourceVersion(desired.ResourceVersion)
+	}
+	transport := desired
+	transport.Values = nil
+	transport.ResourceURI = ""
+	transport.Form = nil
+	var declared DeclaredInterface
+	responseHeaders, err := c.doJSONWithHeaders(ctx, http.MethodPut, target, headers, &transport, &declared, true)
+	if err != nil {
+		return DeclaredInterface{}, err
+	}
+	if err := verifyInterfaceResponse(desired, declared); err != nil {
+		return DeclaredInterface{}, err
+	}
+	if err := captureInterfaceResourceVersion(&declared, responseHeaders); err != nil {
+		return DeclaredInterface{}, err
+	}
+	return declared, nil
+}
+
+// DeleteInterface removes one exact declaration. Missing is already deleted.
+func (c *Client) DeleteInterface(ctx context.Context, space string, selector InterfaceSelector, resourceVersion string) error {
+	if !c.SupportsInterfaceDeclarationWrites() {
+		return ErrInterfaceDeclarationWritesUnsupported
+	}
+	if strings.TrimSpace(space) == "" {
+		return errors.New("takoform: interface declaration delete requires a space")
+	}
+	if !validResourceVersion(resourceVersion) {
+		return errors.New("takoform: interface delete requires a valid resourceVersion")
+	}
+	if selector.Name == "" || selector.Version == "" || selector.ResourceKind == "" || selector.ResourceName == "" {
+		return errors.New("takoform: interface delete requires the exact complete identity")
+	}
+	headers := map[string]string{
+		"If-Match":        quoteResourceVersion(resourceVersion),
+		"Idempotency-Key": interfaceMutationKey("delete", space, selector, resourceVersion),
+	}
+	if _, err := c.doJSONWithHeaders(ctx, http.MethodDelete, c.interfaceURL(space, selector), headers, nil, nil, true); err != nil {
+		if code, ok := statusCode(err); ok && code == http.StatusNotFound {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func (c *Client) interfaceURL(space string, selector InterfaceSelector) string {
+	query := spaceQuery(space)
+	if query == nil {
+		query = url.Values{}
+	}
+	query.Set("version", selector.Version)
+	query.Set("resourceKind", selector.ResourceKind)
+	query.Set("resourceName", selector.ResourceName)
+	return fmt.Sprintf("%s/%s?%s", c.interfacesURL, url.PathEscape(selector.Name), query.Encode())
+}
+
+func interfaceMutationKey(values ...any) string {
+	raw, _ := json.Marshal(values)
+	digest := sha256.Sum256(raw)
+	return "interface-" + hex.EncodeToString(digest[:])
+}
+
+func validateWritableInterface(declared DeclaredInterface) error {
+	if declared.ResourceVersion != "" && !validResourceVersion(declared.ResourceVersion) {
+		return errors.New("takoform: interface resourceVersion is invalid")
+	}
+	if err := validateDeclaredInterfaceIdentity(declared); err != nil {
+		return err
+	}
+	if err := formpackage.ValidatePortableData(declared.DocumentSchema); err != nil {
+		return fmt.Errorf("takoform: forbidden interface document schema: %w", err)
+	}
+	if err := validateInterfaceInputs(declared.ResourceURIInput, declared.Inputs); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateInterfaceInputs(resourceURIInput string, inputs []formpackage.InterfaceInputDeclaration) error {
+	seen := make(map[string]struct{}, len(inputs))
+	resourceURICount := 0
+	resourceURIMatch := 0
+	for _, input := range inputs {
+		if strings.TrimSpace(input.Name) == "" {
+			return errors.New("takoform: interface input name is required")
+		}
+		if _, duplicate := seen[input.Name]; duplicate {
+			return fmt.Errorf("takoform: duplicate interface input %q", input.Name)
+		}
+		seen[input.Name] = struct{}{}
+		switch input.Source {
+		case formpackage.InterfaceInputSourceLiteral:
+			if len(input.Value) == 0 || input.Pointer != "" {
+				return fmt.Errorf("takoform: literal interface input %q requires value and forbids pointer", input.Name)
+			}
+			var value any
+			if err := json.Unmarshal(input.Value, &value); err != nil {
+				return fmt.Errorf("takoform: literal interface input %q has invalid JSON: %w", input.Name, err)
+			}
+			if err := formpackage.ValidatePortableData(value); err != nil {
+				return fmt.Errorf("takoform: literal interface input %q is forbidden: %w", input.Name, err)
+			}
+		case formpackage.InterfaceInputSourceOutput:
+			if len(input.Value) != 0 {
+				return fmt.Errorf("takoform: output interface input %q must not carry value", input.Name)
+			}
+		case formpackage.InterfaceInputSourceResourceURI:
+			resourceURICount++
+			if input.Name == resourceURIInput {
+				resourceURIMatch++
+			}
+			if len(input.Value) != 0 || input.Pointer != "" {
+				return fmt.Errorf("takoform: resource_uri interface input %q must not carry pointer or value", input.Name)
+			}
+		default:
+			if !strings.Contains(input.Source, ".") || len(input.Value) != 0 {
+				return fmt.Errorf("takoform: interface input %q has invalid source %q", input.Name, input.Source)
+			}
+		}
+	}
+	if resourceURIInput == "" && resourceURICount != 0 {
+		return errors.New("takoform: resource_uri input requires resource_uri_input")
+	}
+	if resourceURIInput != "" && (resourceURICount != 1 || resourceURIMatch != 1) {
+		return errors.New("takoform: resource_uri_input must name the single resource_uri input")
+	}
+	return nil
+}
+
+func verifyInterfaceResponse(want, got DeclaredInterface) error {
+	if err := validateDeclaredInterfaceIdentity(got); err != nil {
+		return err
+	}
+	if got.Name != want.Name || got.Version != want.Version ||
+		got.Resource.Kind != want.Resource.Kind || got.Resource.Name != want.Resource.Name {
+		return errors.New("takoform: host substituted interface identity")
+	}
+	wantAuthored, _ := json.Marshal(struct {
+		Document         map[string]any                          `json:"document"`
+		DocumentSchema   map[string]any                          `json:"documentSchema,omitempty"`
+		Inputs           []formpackage.InterfaceInputDeclaration `json:"inputs,omitempty"`
+		ResourceURIInput string                                  `json:"resourceUriInput,omitempty"`
+	}{
+		Document:         want.Document,
+		DocumentSchema:   want.DocumentSchema,
+		Inputs:           want.Inputs,
+		ResourceURIInput: want.ResourceURIInput,
+	})
+	gotAuthored, _ := json.Marshal(struct {
+		Document         map[string]any                          `json:"document"`
+		DocumentSchema   map[string]any                          `json:"documentSchema,omitempty"`
+		Inputs           []formpackage.InterfaceInputDeclaration `json:"inputs,omitempty"`
+		ResourceURIInput string                                  `json:"resourceUriInput,omitempty"`
+	}{
+		Document:         got.Document,
+		DocumentSchema:   got.DocumentSchema,
+		Inputs:           got.Inputs,
+		ResourceURIInput: got.ResourceURIInput,
+	})
+	if string(wantAuthored) != string(gotAuthored) {
+		return errors.New("takoform: host altered the authored interface declaration")
+	}
+	return nil
+}
+
+func captureInterfaceResourceVersion(declared *DeclaredInterface, headers http.Header) error {
+	bodyVersion := declared.ResourceVersion
+	etag := headers.Get("ETag")
+	etagVersion := ""
+	if etag != "" {
+		if len(etag) < 3 || etag[0] != '"' || etag[len(etag)-1] != '"' {
+			return errors.New("takoform: host returned an invalid Interface ETag")
+		}
+		etagVersion = etag[1 : len(etag)-1]
+	}
+	if bodyVersion == "" {
+		bodyVersion = etagVersion
+	}
+	if !validResourceVersion(bodyVersion) || (etagVersion != "" && etagVersion != bodyVersion) {
+		return errors.New("takoform: host omitted or substituted the interface resourceVersion fence")
+	}
+	declared.ResourceVersion = bodyVersion
+	return nil
+}
+
 func validateDeclaredInterfaceIdentity(declared DeclaredInterface) error {
 	if strings.TrimSpace(declared.Name) == "" || strings.TrimSpace(declared.Version) == "" ||
 		strings.TrimSpace(declared.Resource.Kind) == "" || strings.TrimSpace(declared.Resource.Name) == "" {
@@ -184,6 +414,13 @@ func validateDeclaredInterfaceIdentity(declared DeclaredInterface) error {
 	}
 	if err := formpackage.ValidatePortableData(declared.Values); err != nil {
 		return fmt.Errorf("takoform: host returned forbidden interface values: %w", err)
+	}
+	if declared.ResourceURI != "" {
+		parsed, err := url.Parse(declared.ResourceURI)
+		if err != nil || !parsed.IsAbs() || parsed.Scheme != "https" || parsed.Host == "" ||
+			parsed.User != nil || parsed.Fragment != "" {
+			return errors.New("takoform: host returned an invalid credential-free HTTPS resourceUri")
+		}
 	}
 	if declared.Form != nil {
 		if err := validateInstalledFormReference(declared.Form.FormRef.Kind, *declared.Form); err != nil {

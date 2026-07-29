@@ -9,14 +9,18 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	frameworkdatasource "github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
@@ -147,6 +151,79 @@ func TestInterfaceDataSourceIsReadOnlyAndVersionExact(t *testing.T) {
 		if _, ok := schemaResponse.Schema.Attributes[forbidden]; ok {
 			t.Errorf("declaration read exposes forbidden attribute %s", forbidden)
 		}
+	}
+}
+
+func TestInterfaceResourceIsGenericDataOnlyDeclaration(t *testing.T) {
+	var schemaResponse frameworkresource.SchemaResponse
+	NewInterfaceResource().Schema(context.Background(), frameworkresource.SchemaRequest{}, &schemaResponse)
+	for _, required := range []string{
+		"name", "version", "resource_kind", "resource_name", "document_json",
+	} {
+		if attribute := schemaResponse.Schema.Attributes[required]; attribute == nil || !attribute.IsRequired() {
+			t.Errorf("%s must be required", required)
+		}
+	}
+	for _, computed := range []string{"id", "values_json", "resource_uri", "resource_version"} {
+		if attribute := schemaResponse.Schema.Attributes[computed]; attribute == nil || !attribute.IsComputed() {
+			t.Errorf("%s must be computed", computed)
+		}
+	}
+	for _, forbidden := range []string{
+		"mcp", "http", "ui", "s3", "binding", "permission", "grant", "token",
+		"credential", "secret", "target", "price", "billing", "quota",
+	} {
+		if _, exists := schemaResponse.Schema.Attributes[forbidden]; exists {
+			t.Errorf("generic declaration exposes protocol or host authority field %s", forbidden)
+		}
+	}
+}
+
+func TestInterfaceResourceImportsItsPortableCompoundIdentity(t *testing.T) {
+	ctx := context.Background()
+	resource := NewInterfaceResource().(*interfaceResource)
+	var schemaResponse frameworkresource.SchemaResponse
+	resource.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
+	empty := tfsdk.State{
+		Schema: schemaResponse.Schema,
+		Raw: tftypes.NewValue(
+			schemaResponse.Schema.Type().TerraformType(ctx),
+			nil,
+		),
+	}
+	id := `["prod","HttpService","api","example.runtime","1"]`
+	response := frameworkresource.ImportStateResponse{State: empty}
+	resource.ImportState(
+		ctx,
+		frameworkresource.ImportStateRequest{ID: id},
+		&response,
+	)
+	if response.Diagnostics.HasError() {
+		t.Fatalf("import: %v", response.Diagnostics)
+	}
+	for attribute, want := range map[string]string{
+		"id":            id,
+		"space":         "prod",
+		"resource_kind": "HttpService",
+		"resource_name": "api",
+		"name":          "example.runtime",
+		"version":       "1",
+	} {
+		var got types.String
+		response.State.GetAttribute(ctx, path.Root(attribute), &got)
+		if got.ValueString() != want {
+			t.Errorf("%s = %q, want %q", attribute, got.ValueString(), want)
+		}
+	}
+
+	invalid := frameworkresource.ImportStateResponse{State: empty}
+	resource.ImportState(
+		ctx,
+		frameworkresource.ImportStateRequest{ID: "prod/api"},
+		&invalid,
+	)
+	if !invalid.Diagnostics.HasError() {
+		t.Fatal("invalid compound identity was accepted")
 	}
 }
 
@@ -297,9 +374,10 @@ func TestProviderExampleResourcesMatchCurrentResources(t *testing.T) {
 func TestPublishedHCLUsesFullyQualifiedProviderAddress(t *testing.T) {
 	t.Helper()
 	const (
-		fullAddress  = `source = "registry.terraform.io/tako0614/takoform"`
+		fullAddress  = `registry.terraform.io/tako0614/takoform`
 		shortAddress = `source = "tako0614/takoform"`
 	)
+	fullAddressPattern := regexp.MustCompile(`source\s*=\s*"registry\.terraform\.io/tako0614/takoform"`)
 	paths := []string{
 		filepath.Clean("../../README.md"),
 		filepath.Clean("../../docs/index.md"),
@@ -323,17 +401,18 @@ func TestPublishedHCLUsesFullyQualifiedProviderAddress(t *testing.T) {
 		if strings.Contains(contents, shortAddress) {
 			t.Errorf("%s uses the two-segment provider shorthand, which OpenTofu resolves under the wrong registry", filename)
 		}
-		if !strings.Contains(contents, fullAddress) {
+		if !fullAddressPattern.MatchString(contents) {
 			t.Errorf("%s must use the exact provider address %q", filename, fullAddress)
 		}
 	}
 }
 
 func currentProviderResourceTypeNames() []string {
-	names := make([]string, 0, len(formcatalog.Kinds))
+	names := make([]string, 0, len(formcatalog.Kinds)+1)
 	for _, kind := range formcatalog.Kinds {
 		names = append(names, kind.ResourceType)
 	}
+	names = append(names, "takoform_interface")
 	sort.Strings(names)
 	return names
 }

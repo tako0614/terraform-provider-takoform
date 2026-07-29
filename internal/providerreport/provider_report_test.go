@@ -234,6 +234,7 @@ func TestStandardProviderReportWorkflowSeparatesExecutionAndSigningAuthority(t *
 		"signed-provider-report-candidate.json",
 		"SHA256SUMS",
 		"takoform-standard-provider-report-candidate-1.0.1-${{ needs.generate.outputs.source_commit_short }}",
+		`--source-commit "${GITHUB_SHA}"`,
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Errorf("workflow omits %q", required)
@@ -250,13 +251,6 @@ func TestStandardProviderReportWorkflowSeparatesExecutionAndSigningAuthority(t *
 		if strings.Contains(workflow, forbidden) {
 			t.Fatalf("workflow reintroduced non-canonical signed handoff field %q", forbidden)
 		}
-	}
-	qualityRaw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "quality.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(qualityRaw), `--source-commit "${GITHUB_SHA}"`) {
-		t.Fatal("quality workflow does not bind provider reports to its exact source commit")
 	}
 }
 
