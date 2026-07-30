@@ -916,7 +916,7 @@ function readLocalTag(context, tag) {
   const result = runCommand(
     context,
     "git",
-    ["show-ref", "--verify", "--hash", `refs/tags/${tag}`],
+    ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}`],
     { allowFailure: true, captureOnly: true },
   );
   if (result.status === 1 && result.stdout === "") return null;

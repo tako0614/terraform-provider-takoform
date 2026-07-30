@@ -1213,7 +1213,10 @@ function fakeCommands({
       if (tag === descriptor.tag) identity = state.remoteCurrent;
       return success(remoteTagOutput(tag, identity));
     }
-    if (args[0] === "show-ref") {
+    if (
+      joined ===
+      `rev-parse --verify --quiet refs/tags/${descriptor.tag}`
+    ) {
       return state.local
         ? success(`${state.local.tagObject}\n`)
         : { status: 1, stdout: "", stderr: "" };
