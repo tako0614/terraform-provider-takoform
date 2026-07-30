@@ -11,22 +11,37 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-func TestCommittedPublishedReleaseSourcesCoverEveryRetainedIdentity(t *testing.T) {
+func TestCommittedPublishedReleaseSourcesCoverCurrentPlanAndHistory(t *testing.T) {
 	t.Parallel()
 
-	published, err := discoverPublishedReleaseSources(filepath.Join("..", ".."))
+	root := filepath.Join("..", "..")
+	published, err := discoverPublishedReleaseSources(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	retainedCount := 0
-	for _, source := range published {
-		if source.AdmissionGeneration != "" {
-			retainedCount++
+
+	var plan ReleasePlan
+	if err := readJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), &plan); err != nil {
+		t.Fatal(err)
+	}
+	currentCount := 0
+	for _, release := range plan.Releases {
+		source, ok := published[publishedReleaseKey(release.ReleaseID, release.Version)]
+		if !ok {
+			t.Fatalf("retained publication history omits current %s@%s", release.Kind, release.Version)
 		}
+		if source.AdmissionGeneration != "v4" ||
+			source.Tag != release.Tag ||
+			source.FormRef != release.FormRef ||
+			source.PackageDigest != release.PackageDigest {
+			t.Fatalf("retained current publication drift for %s@%s: %#v", release.Kind, release.Version, source)
+		}
+		currentCount++
 	}
-	if retainedCount != 30 {
-		t.Fatalf("retained published release source count = %d, want 30", retainedCount)
+	if currentCount != len(plan.Releases) || currentCount != 34 {
+		t.Fatalf("retained current publication count = %d, want exact plan count %d", currentCount, len(plan.Releases))
 	}
+
 	for _, identity := range []struct {
 		kind, version string
 	}{
