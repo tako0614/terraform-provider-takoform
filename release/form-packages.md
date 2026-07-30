@@ -51,6 +51,38 @@ bun run deploy -- takoform-form-package-release verify \
   --expected-commit <40-character-reviewed-commit>
 ```
 
+When several independently reviewed candidates are ready at the same protected
+`main` commit, an operator may publish them serially in one process:
+
+```console
+bun run deploy -- takoform-form-package-release publish-batch \
+  --input /absolute/path/outside/the/repository/form-publish-batch.json
+```
+
+The input is a non-empty, canonical recursively key-sorted JSON array. It must
+be a regular non-symbolic-link file no larger than 1 MiB, and every object must
+contain exactly four string fields:
+
+```json
+[{"expectedCommit":"0123456789abcdef0123456789abcdef01234567","runAttempt":"1","runId":"123456789","tag":"forms/k-ivsgozkxn5zgwzls/v3.0.0"}]
+```
+
+Every tag must be one canonical release-plan identity, and tags and exact
+workflow run/attempt pairs may not repeat. `publish-batch` validates the whole
+operator input before running the complete owner check exactly once. That gate
+produces a process-local proof bound to the clean protected-main commit and
+tree. The ordinary `publish` flow is then reused synchronously for each entry:
+before tag push, Release draft creation, and final draft publication it freshly
+fetches protected `origin/main`, requires the same clean HEAD and tree, and
+re-runs the selected Form's release-authority path fence. GitHub writers are
+never parallel.
+
+A batch is not atomic across independent public identities. It stops at the
+first failure and reports the already completed tags plus the failed tag. Do
+not retry the original input after any possible mutation. Inspect the named tag
+and Release authoritatively, then create a new input containing only identities
+proven absent; use the explicit recovery phases for a retained partial identity.
+
 `publish` is create-only and is never a retry mechanism after a tag-side
 partial failure. If authoritative readback proves the one narrow state in
 which the reviewed annotated tag exists locally and remotely at its exact

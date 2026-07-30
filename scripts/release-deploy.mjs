@@ -2,11 +2,16 @@ import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
+  closeSync,
+  constants as fsConstants,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
+  readSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -35,6 +40,7 @@ const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const COMMIT = /^[0-9a-f]{40}$/u;
 const GIT_OBJECT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/u;
+const FORM_BATCH_MAX_BYTES = 1024 * 1024;
 const REQUEST_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PROVIDER_TAG = /^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u;
@@ -145,13 +151,13 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN, accepts only one of the exact 34 canonical release-plan tags or one exact source-backed revocation tag, requires a clean non-shallow current protected main, runs the complete owner check before dispatch or mutation, checksum-closes an explicit successful same-run candidate, verifies its source/tooling commits and Sigstore identity, and records the exact tag object and asset digests",
+        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN, accepts only exact canonical release-plan tags or one exact source-backed revocation tag; ordinary phases accept one Form tag and explicit publish-batch accepts a non-empty unique ordered set, requires a clean non-shallow current protected main, runs the complete owner check before dispatch or mutation, or exactly once for an explicit serial publish-batch whose process-scoped proof is bound to the same clean protected-main commit and tree and revalidated immediately before each tag push, Release draft creation, and final draft publication, checksum-closes every explicit successful same-run candidate, verifies its source/tooling commits and Sigstore identity, and records every exact tag object and asset digest",
       "post-conditions":
         "after local tag/release publication requires exact remote tag resolution, immutable release id/tag, exact API asset digests, and a fresh seven-file package or six-file revocation download; verify-all delegates all 34 semantic readbacks to the repository's Go verifier and writes one create-only external publication set",
       reversal:
         "Form Package and revocation identities are append-only and cannot be replaced; an exact tag-only partial state may only be completed forward by recover-tag-only without changing the tag, and its exact retained draft may only be resumed by recover-draft without replacing any identity, while a bad identity requires a corrected package version or later cumulative revocation checkpoint",
       "failure-handling":
-        "prints raw diagnostics, retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, reports local and remote ref state after a tag-side partial failure, refuses blind retry whenever mutation state is indeterminate, exposes an explicit tag-only recovery that requires the exact candidate object/commit and a completely absent Release, and exposes a separate exact-draft recovery that accepts only a named matching draft and uploads only its missing same-candidate assets",
+        "prints raw diagnostics, retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, reports local and remote ref state after a tag-side partial failure, serial publish-batch preserves input order, stops on the first failure, and reports completedTags plus failedTag, refuses blind retry whenever mutation state is indeterminate, exposes an explicit tag-only recovery that requires the exact candidate object/commit and a completely absent Release, and exposes a separate exact-draft recovery that accepts only a named matching draft and uploads only its missing same-candidate assets",
       "independent-review":
         "the form-package-release protected Environment reviews and signs the exact candidate; local publication consumes only that named successful run/attempt and independently verifies its checksum and Sigstore closure",
       "no-overwrite":
@@ -174,6 +180,7 @@ const PHASES = {
     plan: [],
     prepare: ["tag", "expected-commit"],
     publish: ["tag", "expected-commit", "run-id", "run-attempt"],
+    "publish-batch": ["input"],
     "recover-tag-only": [
       "tag",
       "expected-commit",
@@ -273,6 +280,9 @@ export function parseReleaseSurfaceArgs(surface, args) {
   if (values["output-root"] && !isAbsolute(values["output-root"])) {
     throw new Error("--output-root must be an absolute path");
   }
+  if (values.input && !isAbsolute(values.input)) {
+    throw new Error("--input must be an absolute path");
+  }
   return { phase, ...values };
 }
 
@@ -357,6 +367,12 @@ function runForm(context, options) {
       return formPrepare(context, options, readReleasePlan(context.repo));
     case "publish":
       return formPublish(context, options, readReleasePlan(context.repo));
+    case "publish-batch":
+      return formPublishBatch(
+        context,
+        options,
+        readReleasePlan(context.repo),
+      );
     case "recover-tag-only":
       return formRecoverTagOnly(
         context,
@@ -518,8 +534,75 @@ function runOwnerCheck(context) {
 
 function ownerGateAndFence(context, expectedCommit, options) {
   verifyLocalReleaseToolchain(context);
+  if (context.formPublishBatchOwnerGateProof) {
+    return assertReusableOwnerGateProof(
+      context,
+      context.formPublishBatchOwnerGateProof,
+      expectedCommit,
+      options,
+    );
+  }
   runOwnerCheck(context);
   return assertCurrentProtectedMain(context, expectedCommit, options);
+}
+
+function establishFormPublishBatchOwnerGateProof(context) {
+  if (context.formPublishBatchOwnerGateProof) {
+    throw new Error("Form Package batch owner gate proof is already active");
+  }
+  verifyLocalReleaseToolchain(context);
+  const initialMain = assertCurrentProtectedMain(context);
+  runOwnerCheck(context);
+  const checkedMain = assertCurrentProtectedMain(context, initialMain);
+  const tree = git(context, "rev-parse", "HEAD^{tree}");
+  const proof = Object.freeze({
+    repo: context.repo,
+    commit: checkedMain,
+    tree,
+  });
+  context.formPublishBatchOwnerGateProof = proof;
+  return proof;
+}
+
+function assertReusableOwnerGateProof(
+  context,
+  proof,
+  expectedCommit,
+  options,
+) {
+  if (
+    !proof ||
+    proof.repo !== context.repo ||
+    !COMMIT.test(proof.commit ?? "") ||
+    !GIT_OBJECT.test(proof.tree ?? "")
+  ) {
+    throw new Error("Form Package batch owner gate proof is invalid");
+  }
+  const currentMain = assertCurrentProtectedMain(context, proof.commit);
+  const currentTree = git(context, "rev-parse", "HEAD^{tree}");
+  if (currentTree !== proof.tree) {
+    throw new Error(
+      `release blocked: protected-main tree changed after the batch owner gate; expected ${proof.tree}, observed ${currentTree}`,
+    );
+  }
+  if (expectedCommit) {
+    const exact = options?.exact ?? true;
+    if (exact && expectedCommit !== currentMain) {
+      throw new Error(
+        `release blocked: expected commit ${expectedCommit} is not current protected main ${currentMain}`,
+      );
+    }
+    command(context, "git", ["cat-file", "-e", `${expectedCommit}^{commit}`]);
+    if (!exact) {
+      command(context, "git", [
+        "merge-base",
+        "--is-ancestor",
+        expectedCommit,
+        currentMain,
+      ]);
+    }
+  }
+  return currentMain;
 }
 
 function verifyLocalReleaseToolchain(context) {
@@ -3655,6 +3738,203 @@ function formPrepare(context, options, plan) {
   });
 }
 
+function readFormPublishBatch(
+  input,
+  plan,
+  {
+    open = openSync,
+    fstat = fstatSync,
+    read = readSync,
+    close = closeSync,
+  } = {},
+) {
+  let descriptor;
+  try {
+    descriptor = open(
+      input,
+      fsConstants.O_RDONLY |
+        fsConstants.O_NOFOLLOW |
+        fsConstants.O_NONBLOCK,
+    );
+  } catch (error) {
+    throw new Error(
+      `Form Package batch input cannot be opened without following symbolic links: ${error.message}`,
+    );
+  }
+  let raw;
+  let stat;
+  try {
+    stat = fstat(descriptor);
+    if (!stat.isFile()) {
+      throw new Error("Form Package batch input must be a regular file");
+    }
+    if (stat.size > FORM_BATCH_MAX_BYTES) {
+      throw new Error("Form Package batch input exceeds 1 MiB");
+    }
+    const buffer = Buffer.alloc(FORM_BATCH_MAX_BYTES + 1);
+    let offset = 0;
+    while (offset < buffer.length) {
+      const bytesRead = read(
+        descriptor,
+        buffer,
+        offset,
+        buffer.length - offset,
+        null,
+      );
+      if (
+        !Number.isSafeInteger(bytesRead) ||
+        bytesRead < 0 ||
+        bytesRead > buffer.length - offset
+      ) {
+        throw new Error(
+          "Form Package batch input read returned an invalid byte count",
+        );
+      }
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    if (offset > FORM_BATCH_MAX_BYTES) {
+      throw new Error("Form Package batch input exceeds 1 MiB");
+    }
+    raw = buffer.subarray(0, offset);
+    if (raw.length !== stat.size) {
+      throw new Error("Form Package batch input changed while it was read");
+    }
+  } finally {
+    close(descriptor);
+  }
+  const value = parseCanonicalCandidateMetadata(
+    raw,
+    "Form Package batch input",
+  );
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > plan.releases.length
+  ) {
+    throw new Error(
+      `Form Package batch input must contain 1-${plan.releases.length} entries`,
+    );
+  }
+  const tags = new Set();
+  const runs = new Set();
+  return value.map((entry, index) => {
+    const label = `Form Package batch input entry ${index + 1}`;
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      Array.isArray(entry) ||
+      JSON.stringify(Object.keys(entry).sort()) !==
+        JSON.stringify(
+          ["expectedCommit", "runAttempt", "runId", "tag"].sort(),
+        )
+    ) {
+      throw new Error(
+        `${label} must contain exactly tag, expectedCommit, runId, and runAttempt`,
+      );
+    }
+    for (const [name, field] of [
+      ["tag", entry.tag],
+      ["expectedCommit", entry.expectedCommit],
+      ["runId", entry.runId],
+      ["runAttempt", entry.runAttempt],
+    ]) {
+      if (typeof field !== "string" || field === "") {
+        throw new Error(`${label} ${name} must be a non-empty string`);
+      }
+    }
+    const options = parseReleaseSurfaceArgs(FORM_SURFACE, [
+      "publish",
+      "--tag",
+      entry.tag,
+      "--expected-commit",
+      entry.expectedCommit,
+      "--run-id",
+      entry.runId,
+      "--run-attempt",
+      entry.runAttempt,
+    ]);
+    plannedRelease(plan, options.tag);
+    const run = `${options["run-id"]}/${options["run-attempt"]}`;
+    if (tags.has(options.tag)) {
+      throw new Error(`${label} duplicates tag ${options.tag}`);
+    }
+    if (runs.has(run)) {
+      throw new Error(`${label} duplicates workflow run/attempt ${run}`);
+    }
+    tags.add(options.tag);
+    runs.add(run);
+    return options;
+  });
+}
+
+function formPublishBatch(
+  context,
+  options,
+  plan,
+  publishOne = formPublish,
+) {
+  const entries = readFormPublishBatch(options.input, plan);
+  const proof = establishFormPublishBatchOwnerGateProof(context);
+  const results = [];
+  let active = null;
+  try {
+    for (const entry of entries) {
+      active = entry;
+      results.push(publishOne(context, entry, plan));
+    }
+  } catch (error) {
+    context.stderr.write(
+      `${JSON.stringify({
+        kind: "takos.deploy-failure@v1",
+        surface: FORM_SURFACE,
+        phase: "publish-batch",
+        ownerGateCommit: proof.commit,
+        completedTags: results.map((result) => result.tag),
+        failedTag: active?.tag ?? null,
+        instruction:
+          "stop; inspect the exact failed tag and Release state, then create a new input containing only identities authoritatively proven absent",
+      })}\n`,
+    );
+    throw error;
+  } finally {
+    delete context.formPublishBatchOwnerGateProof;
+  }
+  return emit(context, {
+    kind: "takos.deploy-result@v1",
+    surface: FORM_SURFACE,
+    phase: "publish-batch",
+    commit: proof.commit,
+    ownerGateTree: proof.tree,
+    releases: results.map((result) => ({
+      tag: result.tag,
+      commit: result.commit,
+      tagObject: result.tagObject,
+      candidateRun: result.candidateRun,
+      releaseId: result.releaseId,
+      releaseUrl: result.releaseUrl,
+      assetDigests: result.assetDigests,
+      productionReadback: result.productionReadback,
+    })),
+    status: "VERIFIED",
+  });
+}
+
+function formPublicationMutationFence(
+  context,
+  { expectedCommit, toolingCommit, entry, label },
+) {
+  const currentMain = ownerGateAndFence(context);
+  assertFormReleaseAuthorityFence(context, {
+    sourceCommit: expectedCommit,
+    toolingCommit,
+    currentMain,
+    sourcePath: entry.sourcePath,
+    label,
+  });
+  return currentMain;
+}
+
 function formPublish(context, options, plan) {
   const entry = plannedRelease(plan, options.tag);
   const expectedCommit = options["expected-commit"];
@@ -3696,12 +3976,10 @@ function formPublish(context, options, plan) {
     });
     let tagObject = "";
     try {
-      const mutationMain = ownerGateAndFence(context);
-      assertFormReleaseAuthorityFence(context, {
-        sourceCommit: expectedCommit,
+      formPublicationMutationFence(context, {
+        expectedCommit,
         toolingCommit,
-        currentMain: mutationMain,
-        sourcePath: entry.sourcePath,
+        entry,
         label: "Form Package tag mutation fence",
       });
       tagObject = ensureCandidateTagPublished(
@@ -3711,12 +3989,10 @@ function formPublish(context, options, plan) {
         candidate,
         verified.metadata,
       );
-      const releaseMain = ownerGateAndFence(context);
-      assertFormReleaseAuthorityFence(context, {
-        sourceCommit: expectedCommit,
+      formPublicationMutationFence(context, {
+        expectedCommit,
         toolingCommit,
-        currentMain: releaseMain,
-        sourcePath: entry.sourcePath,
+        entry,
         label: "Form Package release mutation fence",
       });
       const release = publishReleaseLocally(context, {
@@ -3726,12 +4002,10 @@ function formPublish(context, options, plan) {
           "Data-only Takoform Form Package release. Verify the canonical package index, Sigstore bundle, and publisher identity before installation.",
         temporaryRoot,
         prePublishFence: () => {
-          const publishMain = ownerGateAndFence(context);
-          assertFormReleaseAuthorityFence(context, {
-            sourceCommit: expectedCommit,
+          formPublicationMutationFence(context, {
+            expectedCommit,
             toolingCommit,
-            currentMain: publishMain,
-            sourcePath: entry.sourcePath,
+            entry,
             label: "Form Package pre-publish fence",
           });
         },
@@ -4555,12 +4829,16 @@ function revocationVerify(context, options) {
 export const releaseDeployTestHooks = Object.freeze({
   assertFormReleaseAuthorityFence,
   assertFormTagOnlyRecoveryFence,
+  assertReusableOwnerGateProof,
   assertReleaseAbsent,
   assertRegistryVersionAbsent,
   assertTagOnlyRecoveryState,
   command,
   dispatchWorkflow,
+  establishFormPublishBatchOwnerGateProof,
   expectedFormTagObject,
+  formPublishBatch,
+  formPublicationMutationFence,
   formVerifyAll,
   githubUploadEnvironment,
   ownerGateAndFence,
@@ -4572,6 +4850,7 @@ export const releaseDeployTestHooks = Object.freeze({
   reportTagFailure,
   resumeDraftReleaseLocally,
   reconstructCandidateTagObject,
+  readFormPublishBatch,
   requireSuccessfulRun,
   validateReleaseReadback,
   validateDraftBeforePublication,
