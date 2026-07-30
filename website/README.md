@@ -65,8 +65,9 @@ clean, exact-commit checked, and re-hashed after validation and before every
 writer. Only the archive is used for the credential scan, digest manifest, and
 upload, and every archive byte is verified against the commit's Git blobs.
 Ignored and untracked files below a publication path are rejected. Wrangler is
-installed from the exact committed `bun.lock`; a PATH-provided Wrangler is
-never used.
+installed from the exact committed `bun.lock` and executed by the fixed
+absolute Node entrypoint; neither a PATH-provided Wrangler nor its environment
+shebang is used.
 
 Publication is staged: `versions upload --strict` creates a non-public version,
 the source/deployment/domain fences and whole-tree digest are checked again,
