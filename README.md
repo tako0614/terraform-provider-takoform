@@ -171,9 +171,17 @@ go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
 `check:public-surfaces`, and therefore `bun run check`, authenticates the exact
 retained all-34 publication set and the protected `admission/v4` closure before
-deriving any public availability claim. The gate is offline: it verifies the
-retained signatures, immutable release refs, Registry readback, and admission
-tag without performing publication or contacting a hosted Resource backend.
+deriving any public availability claim. Retained-evidence authentication uses
+only source-retained bytes and Git objects: it verifies signatures, immutable
+release refs, Registry readback, and the admission tag without contacting a
+distribution target or hosted Resource backend. The production entrypoint may
+fill its isolated, checksum-verified Go module cache from the pinned public Go
+proxy before that authentication runs.
+It is a composite of `check:public-authority`, which requires complete isolated
+Git authority, and `check:public-snapshot`, which verifies the static website,
+schema, copy, and deploy-safety surfaces without requiring repository metadata.
+The production website entrypoint runs those halves from separate frozen roots
+of the same exact commit.
 
 `matrix` is the local `dev_overrides` regression gate. The separate
 `render-registry-matrix` command performs a version-pinned direct Registry

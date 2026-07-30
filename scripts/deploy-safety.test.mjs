@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -20,6 +21,7 @@ import {
   createHardenedGateEnvironment,
   createHardenedGitEnvironment,
   createPublicationManifest,
+  createPublicationManifestFromEntries,
   inspectUncommittedPublicationPaths,
   parseCurrentProductionDeployment,
   pinnedWranglerInvocation,
@@ -128,8 +130,38 @@ describe("committed publication snapshot", () => {
   test("is isolated from a later live-worktree edit and matches Git blobs", () => {
     const { directory, git } = temporaryGitRepository();
     const commit = git("rev-parse", "HEAD");
-    const snapshot = createCommittedSnapshot({ commit, repo: directory });
+    const snapshot = createCommittedSnapshot({
+      commit,
+      environment: createHardenedGitEnvironment({
+        ...process.env,
+        GIT_DIR: "/tmp/attacker-git-dir",
+        GIT_OBJECT_DIRECTORY: "/tmp/attacker-objects",
+        GIT_WORK_TREE: "/tmp/attacker-worktree",
+      }),
+      repo: directory,
+    });
     try {
+      expect(existsSync(join(snapshot.root, ".git"))).toBe(false);
+      expect(
+        execFileSync(
+          "git",
+          ["-C", snapshot.authorityRoot, "rev-parse", "HEAD"],
+          { encoding: "utf8" },
+        ).trim(),
+      ).toBe(commit);
+      expect(
+        execFileSync(
+          "git",
+          ["-C", snapshot.authorityRoot, "rev-parse", "--abbrev-ref", "HEAD"],
+          { encoding: "utf8" },
+        ).trim(),
+      ).toBe("HEAD");
+      expect(
+        existsSync(
+          join(snapshot.authorityRoot, ".git", "objects", "info", "alternates"),
+        ),
+      ).toBe(false);
+
       const expected = createCommittedPublicationManifest({
         commit,
         paths: ["."],
@@ -137,8 +169,18 @@ describe("committed publication snapshot", () => {
       });
       const before = createPublicationManifest(snapshot.root, ["."]);
       expect(before).toEqual(expected);
+      expect(
+        createPublicationManifestFromEntries(
+          snapshot.authorityRoot,
+          expected.entries,
+        ),
+      ).toEqual(expected);
 
       writeFileSync(join(directory, "website", "public", "index.html"), "v2\n");
+      git("add", "website/public/index.html");
+      git("commit", "-m", "advance source after snapshot");
+      git("tag", "post-snapshot-live-ref");
+      expect(git("rev-parse", "HEAD")).not.toBe(commit);
 
       const after = createPublicationManifest(snapshot.root, ["."]);
       expect(after).toEqual(before);
@@ -148,6 +190,19 @@ describe("committed publication snapshot", () => {
           "utf8",
         ),
       ).toBe("v1\n");
+      expect(() =>
+        execFileSync(
+          "git",
+          [
+            "-C",
+            snapshot.authorityRoot,
+            "show-ref",
+            "--verify",
+            "refs/tags/post-snapshot-live-ref",
+          ],
+          { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+        ),
+      ).toThrow();
     } finally {
       snapshot.dispose();
     }
@@ -226,14 +281,20 @@ test("hardened Git environment removes inherited Git configuration", () => {
   const environment = createHardenedGitEnvironment({
     GIT_CONFIG_COUNT: "1",
     GIT_CONFIG_KEY_0: "url.file:///attacker/.insteadOf",
-    GIT_CONFIG_VALUE_0: "https://github.com/",
-    GIT_REPLACE_REF_BASE: "refs/evil/",
+      GIT_CONFIG_VALUE_0: "https://github.com/",
+      GIT_DIR: "/tmp/attacker.git",
+      GIT_OBJECT_DIRECTORY: "/tmp/attacker-objects",
+      GIT_REPLACE_REF_BASE: "refs/evil/",
+      GIT_WORK_TREE: "/tmp/attacker-worktree",
     PATH: "/usr/bin",
   });
 
   expect(environment.PATH).toBe("/usr/bin");
   expect(environment.GIT_CONFIG_COUNT).toBeUndefined();
+  expect(environment.GIT_DIR).toBeUndefined();
+  expect(environment.GIT_OBJECT_DIRECTORY).toBeUndefined();
   expect(environment.GIT_REPLACE_REF_BASE).toBeUndefined();
+  expect(environment.GIT_WORK_TREE).toBeUndefined();
   expect(environment).toMatchObject({
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
@@ -246,7 +307,12 @@ test("snapshot gate cannot resolve Bun or authority from ambient PATH", () => {
   const environment = createHardenedGateEnvironment(
     {
       BUN_CONFIG_FILE: "/tmp/attacker.toml",
+      CGO_CFLAGS: "-include /tmp/attacker.h",
       CLOUDFLARE_API_TOKEN: "must-not-reach-gate",
+      GOENV: "/tmp/attacker-goenv",
+      GOFLAGS: "-toolexec=/tmp/attacker",
+      GOPROXY: "https://attacker.invalid",
+      GOWORK: "/tmp/attacker.work",
       HOME: "/tmp/attacker-home",
       NODE_OPTIONS: "--require=/tmp/attacker.cjs",
       npm_config_userconfig: "/tmp/attacker-npmrc",
@@ -262,6 +328,18 @@ test("snapshot gate cannot resolve Bun or authority from ambient PATH", () => {
   );
   expect(environment.CLOUDFLARE_API_TOKEN).toBeUndefined();
   expect(environment.BUN_CONFIG_FILE).toBeUndefined();
+  expect(environment.CGO_CFLAGS).toBeUndefined();
+  expect(environment.CGO_ENABLED).toBe("0");
+  expect(environment.GOAUTH).toBe("off");
+  expect(environment.GOENV).toBe("off");
+  expect(environment.GOFLAGS).toBe("-mod=readonly -buildvcs=false");
+  expect(environment.GOMODCACHE).toBe("/private/gate-home/go/pkg/mod");
+  expect(environment.GOPATH).toBe("/private/gate-home/go");
+  expect(environment.GOPROXY).toBe("https://proxy.golang.org");
+  expect(environment.GOSUMDB).toBe("sum.golang.org");
+  expect(environment.GOTOOLCHAIN).toBe("local");
+  expect(environment.GOVCS).toBe("*:off");
+  expect(environment.GOWORK).toBe("off");
   expect(environment.HOME).toBe("/private/gate-home");
   expect(environment.NODE_OPTIONS).toBeUndefined();
   expect(environment.npm_config_userconfig).toBeUndefined();
