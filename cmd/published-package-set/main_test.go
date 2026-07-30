@@ -8,10 +8,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -21,8 +24,104 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
+	"github.com/tako0614/terraform-provider-takoform/internal/formpublication"
 	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
 )
+
+func TestUsageExposesOnlyOneCurrentPublicationDownloadCommand(t *testing.T) {
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalStderr := os.Stderr
+	os.Stderr = write
+	usage()
+	os.Stderr = originalStderr
+	if err := write.Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := read.Close(); err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if strings.Contains(text, "download-current") {
+		t.Fatalf("usage retains removed download-current alias: %q", text)
+	}
+	if strings.Count(text, "download-plan") != 1 {
+		t.Fatalf("usage must expose download-plan exactly once: %q", text)
+	}
+}
+
+func TestRemovedDownloadCurrentAliasIsUnknownRegardlessOfTokenSource(t *testing.T) {
+	baseEnvironment := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		switch name {
+		case "GITHUB_TOKEN", "GH_TOKEN", "PUBLISHED_PACKAGE_SET_COMMAND_HELPER",
+			"PUBLISHED_PACKAGE_SET_COMMAND_OUTPUT_ROOT":
+			continue
+		default:
+			baseEnvironment = append(baseEnvironment, entry)
+		}
+	}
+	tokenSources := []struct {
+		name string
+		env  string
+	}{
+		{name: "GITHUB_TOKEN", env: "GITHUB_TOKEN=github-token-must-not-select-an-alias"},
+		{name: "GH_TOKEN", env: "GH_TOKEN=gh-token-must-not-select-an-alias"},
+	}
+	var commonOutput string
+	for _, tokenSource := range tokenSources {
+		t.Run(tokenSource.name, func(t *testing.T) {
+			command := exec.Command(os.Args[0], "-test.run=^TestPublishedPackageSetCommandHelper$")
+			command.Env = append(
+				append([]string(nil), baseEnvironment...),
+				"PUBLISHED_PACKAGE_SET_COMMAND_HELPER=1",
+				"PUBLISHED_PACKAGE_SET_COMMAND_OUTPUT_ROOT="+filepath.Join(t.TempDir(), "unused"),
+				tokenSource.env,
+			)
+			raw, err := command.CombinedOutput()
+			var exitError *exec.ExitError
+			if !errors.As(err, &exitError) || exitError.ExitCode() != 2 {
+				t.Fatalf("removed command exit = %v, output = %q", err, raw)
+			}
+			output := string(raw)
+			if strings.Contains(output, "download-current") {
+				t.Fatalf("removed alias remains public: %q", output)
+			}
+			if !strings.Contains(output, "download-plan") {
+				t.Fatalf("replacement command missing from usage: %q", output)
+			}
+			if strings.Contains(output, "GITHUB_TOKEN") || strings.Contains(output, "GH_TOKEN") {
+				t.Fatalf("removed alias reached token handling: %q", output)
+			}
+			if commonOutput == "" {
+				commonOutput = output
+			} else if output != commonOutput {
+				t.Fatalf("removed alias depends on ambient token source:\nfirst: %q\nthis:  %q", commonOutput, output)
+			}
+		})
+	}
+}
+
+func TestPublishedPackageSetCommandHelper(t *testing.T) {
+	if os.Getenv("PUBLISHED_PACKAGE_SET_COMMAND_HELPER") != "1" {
+		return
+	}
+	os.Args = []string{
+		"published-package-set",
+		"download-current",
+		"--output-root",
+		os.Getenv("PUBLISHED_PACKAGE_SET_COMMAND_OUTPUT_ROOT"),
+	}
+	main()
+	t.Fatal("published-package-set main returned")
+}
 
 func TestDownloadSnapshotStagesExactTenBySevenClosure(t *testing.T) {
 	repoRoot := testRepositoryRoot(t)
@@ -220,7 +319,9 @@ func TestDownloadPlanStagesExactCurrentPublicationClosure(t *testing.T) {
 		t.Fatal(err)
 	}
 	outputRoot := filepath.Join(t.TempDir(), "publication")
-	if err := downloadPlan(context.Background(), client, source.root, outputRoot); err != nil {
+	if err := downloadPlanWithVerifier(
+		context.Background(), client, source.root, outputRoot, verifySyntheticPublication,
+	); err != nil {
 		t.Fatalf("download plan: %v", err)
 	}
 
@@ -417,7 +518,9 @@ func TestDownloadPlanRetainsHistoricalPerToolingAuthorityAfterSelectionAdvance(t
 		t.Fatal(err)
 	}
 	outputRoot := filepath.Join(t.TempDir(), "publication")
-	if err := downloadPlan(context.Background(), client, source.root, outputRoot); err != nil {
+	if err := downloadPlanWithVerifier(
+		context.Background(), client, source.root, outputRoot, verifySyntheticPublication,
+	); err != nil {
 		t.Fatalf("download plan after selection advance: %v", err)
 	}
 	var set formPackagePublicationSet
@@ -490,6 +593,28 @@ func TestDownloadPlanRejectsSemanticSigstoreDriftAndRemovesOutput(t *testing.T) 
 	}
 	if _, statErr := os.Lstat(outputRoot); !os.IsNotExist(statErr) {
 		t.Fatalf("failed publication left output root: %v", statErr)
+	}
+}
+
+func TestDownloadPlanProductionPathInvokesCommonVerifierAndFailsClosed(t *testing.T) {
+	source := newCompletePlanSourceRepository(t)
+	fake := newPlanFakeGitHub(t, source)
+	server := httptest.NewServer(fake)
+	defer server.Close()
+	client, err := newGitHubClient(server.URL+"/", "fixture-token", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputRoot := filepath.Join(t.TempDir(), "failed-common-verification")
+	err = downloadPlan(context.Background(), client, source.root, outputRoot)
+	if err == nil || !strings.Contains(err.Error(), "verify staged publication set") {
+		t.Fatalf("common publication verification error = %v", err)
+	}
+	if strings.Contains(err.Error(), "load exact current portable candidate set") {
+		t.Fatalf("production path did not reach the common publication verifier: %v", err)
+	}
+	if _, statErr := os.Lstat(outputRoot); !os.IsNotExist(statErr) {
+		t.Fatalf("failed common verification left output root: %v", statErr)
 	}
 }
 
@@ -915,6 +1040,60 @@ type planSourceFixture struct {
 	plan         standardforms.ReleasePlan
 	sourceCommit string
 	mainCommit   string
+}
+
+func verifySyntheticPublication(
+	repositoryRoot string,
+	publicationRoot string,
+	_ string,
+) (formpublication.Set, error) {
+	raw, err := os.ReadFile(filepath.Join(
+		repositoryRoot, filepath.FromSlash(standardforms.ReleasePlanPath),
+	))
+	if err != nil {
+		return formpublication.Set{}, err
+	}
+	var plan standardforms.ReleasePlan
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&plan); err != nil {
+		return formpublication.Set{}, err
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		return formpublication.Set{}, err
+	}
+	expected := admissionrelease.CandidateSet{
+		Generation: plan.Generation,
+		Entries:    make([]admissionrelease.Candidate, 0, len(plan.Releases)),
+	}
+	for _, planned := range plan.Releases {
+		expected.Entries = append(expected.Entries, admissionrelease.Candidate{
+			Kind: planned.Kind, Slug: planned.Slug, PackagePath: planned.SourcePath,
+			FormRef: planned.FormRef, PackageDigest: planned.PackageDigest,
+		})
+	}
+	return formpublication.VerifyStructure(publicationRoot, expected)
+}
+
+func newCompletePlanSourceRepository(t *testing.T) planSourceFixture {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "source")
+	command := exec.Command("git", "clone", "--quiet", "--no-hardlinks", testRepositoryRoot(t), root)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("clone complete source fixture: %v: %s", err, strings.TrimSpace(string(output)))
+	}
+	planRaw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(standardforms.ReleasePlanPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plan standardforms.ReleasePlan
+	if err := json.Unmarshal(planRaw, &plan); err != nil {
+		t.Fatal(err)
+	}
+	head := strings.TrimSpace(mustTestGit(t, root, "rev-parse", "HEAD"))
+	return planSourceFixture{
+		root: root, planRaw: planRaw, plan: plan, sourceCommit: head, mainCommit: head,
+	}
 }
 
 func newPlanSourceRepository(t *testing.T) planSourceFixture {

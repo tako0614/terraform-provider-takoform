@@ -12,6 +12,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissioncheckpoint"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
+	"github.com/tako0614/terraform-provider-takoform/internal/formpublication"
 	"github.com/tako0614/terraform-provider-takoform/internal/hostpolicy"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformance"
 	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
@@ -162,15 +163,16 @@ func BuildCurrent(options CurrentBuildOptions) error {
 	if portable.Generation != currentProviderGeneration || len(portable.Entries) != 34 {
 		return fmt.Errorf("current provider reports require exact portable-v1 34-Form closure")
 	}
-	if err := standardforms.VerifyCurrentPublishedPackageSet(root); err != nil {
+	publishedSet, err := standardforms.CurrentPublishedPackageSet(root)
+	if err != nil {
 		return fmt.Errorf("current published package closure: %w", err)
 	}
 	if err := admissionrelease.VerifyOfflineTrust(filepath.Join(root, currentAdmissionRoot)); err != nil {
 		return fmt.Errorf("current offline admission trust: %w", err)
 	}
-	published, err := loadCurrentPublishedSet(root, selected)
+	published, err := projectCurrentPublishedSet(publishedSet, selected)
 	if err != nil {
-		return err
+		return fmt.Errorf("current published package projection: %w", err)
 	}
 	providerVersion, err := loadProviderVersion(root)
 	if err != nil {
@@ -801,35 +803,19 @@ func loadCurrentRegistryArtifact(
 	return registryArtifactSet{matrix: matrix, readback: readback, bundle: bundle, parsed: parsed}, nil
 }
 
-func loadCurrentPublishedSet(root string, candidates admissionrelease.CandidateSet) (map[string]admissionrelease.PublishedPackageEntry, error) {
-	raw, err := readRegular(root, path.Join(currentAdmissionRoot, "published-package-set.json"), maximumMaterialBytes)
+func projectCurrentPublishedSet(
+	set formpublication.Set,
+	selected admissionrelease.CandidateSet,
+) (map[string]admissionrelease.PublishedPackageEntry, error) {
+	if selected.Generation != currentAdmissionGeneration || len(selected.Entries) != 10 {
+		return nil, fmt.Errorf("current published package projection requires exact ga-core-v2 ten-Form selection")
+	}
+	projected, err := formpublication.ProjectEntries(set, selected)
 	if err != nil {
 		return nil, err
 	}
-	var set admissionrelease.PublishedPackageSet
-	if err := decodeStrict(raw, &set); err != nil {
-		return nil, err
+	if len(projected) != 10 {
+		return nil, fmt.Errorf("current published package projection returned %d entries, want 10", len(projected))
 	}
-	if set.Format != "takoform.published-package-set@v2" ||
-		set.Generation != candidates.Generation ||
-		set.DefinitionVersion != "" || set.PackageVersion != "" ||
-		set.PublicationStatus != "published-immutable" ||
-		len(set.Entries) != len(candidates.Entries) {
-		return nil, fmt.Errorf("current published package set does not match the selected generation")
-	}
-	result := make(map[string]admissionrelease.PublishedPackageEntry, len(set.Entries))
-	for _, entry := range set.Entries {
-		if _, duplicate := result[entry.Kind]; duplicate {
-			return nil, fmt.Errorf("current published package set duplicates %s", entry.Kind)
-		}
-		result[entry.Kind] = entry
-	}
-	for _, candidate := range candidates.Entries {
-		entry, ok := result[candidate.Kind]
-		if !ok || entry.Slug != candidate.Slug || entry.FormRef != candidate.FormRef ||
-			entry.PackageDigest != candidate.PackageDigest {
-			return nil, fmt.Errorf("current published package set omits exact %s", candidate.Kind)
-		}
-	}
-	return result, nil
+	return projected, nil
 }

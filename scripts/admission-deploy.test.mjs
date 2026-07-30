@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import {
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -13,12 +15,17 @@ import { fileURLToPath } from "node:url";
 import {
   ADMISSION_SURFACE,
   buildAdmissionTagMessage,
+  createLocalTag,
   isAdmissionSurface,
   parseAdmissionArguments,
   parseAdmissionDescriptor,
   parseAdmissionTagRulesetProtection,
   parseRemoteAdmissionTag,
+  readAdmissionGitStatus,
+  requireCanonicalAdmissionOrigin,
+  resolveAdmissionGitHubCLI,
   runAdmissionSurface,
+  verifyAuthenticatedGitCredential,
 } from "./admission-deploy.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -286,18 +293,386 @@ describe("admission deploy execution", () => {
     ).toBe(2);
     const protectionInventoryCalls = fake.state.calls.filter(
       ([command, args]) =>
-        command === "gh" && args[0] === "api" && args[1].includes("rulesets?"),
+        isGitHubCLI(command) &&
+        args[0] === "api" &&
+        args[1].includes("rulesets?"),
     );
     expect(protectionInventoryCalls).toHaveLength(5);
+    expect(
+      fake.state.calls.some(
+        ([command, args]) =>
+          command === "git" &&
+          args
+            .join(" ")
+            .startsWith(
+              "-c user.name=Takoform Standard Admission -c user.email=admission@takoform.invalid -c core.hooksPath=/dev/null tag --no-sign -a ",
+            ),
+      ),
+    ).toBe(true);
+    const pushCall = fake.state.calls.find(
+      ([command, args]) => command === "git" && args.includes("push"),
+    );
+    expect(pushCall?.[1]).toContain(
+      "https://github.com/tako0614/terraform-provider-takoform.git",
+    );
+    expect(pushCall?.[1]).not.toContain("origin");
     for (const [command, , options] of fake.state.calls) {
-      if (command === "gh") {
+      if (isGitHubCLI(command)) {
         expect(options.env.GH_TOKEN).toBe(githubToken);
         expect(options.env.GITHUB_TOKEN).toBeUndefined();
       } else {
         expect(options.env.GH_TOKEN).toBeUndefined();
         expect(options.env.GITHUB_TOKEN).toBeUndefined();
       }
+      if (command === "git") {
+        expect(options.env.GIT_NO_REPLACE_OBJECTS).toBe("1");
+        expect(options.env.GIT_GRAFT_FILE).toBe("/dev/null");
+        expect(options.env.GIT_CONFIG_COUNT).toBe("5");
+        expect(options.env.GIT_CONFIG_KEY_0).toBe("advice.graftFileDeprecated");
+        expect(options.env.GIT_CONFIG_VALUE_0).toBe("false");
+        expect(options.env.GIT_CONFIG_KEY_1).toBe("core.fsmonitor");
+        expect(options.env.GIT_CONFIG_VALUE_1).toBe("false");
+        expect(options.env.GIT_CONFIG_KEY_2).toBe("core.hooksPath");
+        expect(options.env.GIT_CONFIG_VALUE_2).toBe("/dev/null");
+        expect(options.env.GIT_CONFIG_KEY_3).toBe("credential.helper");
+        expect(options.env.GIT_CONFIG_VALUE_3).toBe("");
+        expect(options.env.GIT_CONFIG_KEY_4).toBe("core.attributesFile");
+        expect(options.env.GIT_CONFIG_VALUE_4).toBe("/dev/null");
+        expect(options.env.GIT_ATTR_NOSYSTEM).toBe("1");
+        expect(options.env.GIT_CONFIG_NOSYSTEM).toBe("1");
+        expect(options.env.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+        expect(options.env.GIT_CONFIG_SYSTEM).toBe("/dev/null");
+      }
     }
+  });
+
+  test("scrubs ambient Git config and replacement authority from every Git subprocess", async () => {
+    process.env.GIT_DIR = "/tmp/attacker-git-dir";
+    process.env.GIT_WORK_TREE = "/tmp/attacker-work-tree";
+    process.env.GIT_REPLACE_REF_BASE = "refs/attacker/";
+    process.env.GIT_CONFIG_PARAMETERS = "'gpg.program=/tmp/fake-gpg'";
+    process.env.GIT_CONFIG_COUNT = "1";
+    process.env.GIT_CONFIG_KEY_0 = "gpg.program";
+    process.env.GIT_CONFIG_VALUE_0 = "/tmp/fake-gpg";
+    process.env.GH_ENTERPRISE_TOKEN = "attacker-enterprise-token";
+    process.env.GITHUB_ENTERPRISE_TOKEN = "attacker-github-enterprise-token";
+    process.env.GH_HOST = "attacker.invalid";
+    process.env.LD_AUDIT = "/tmp/attacker-audit.so";
+    process.env.LD_LIBRARY_PATH = "/tmp/attacker-library";
+    process.env.LD_PRELOAD = "/tmp/attacker-preload.so";
+    process.env.DYLD_INSERT_LIBRARIES = "/tmp/attacker-dyld.dylib";
+    try {
+      const fake = fakeCommands();
+      await runAdmissionSurface({
+        surface: ADMISSION_SURFACE.surface,
+        args: ["prepare", "--expected-commit", expectedCommit],
+        repo: sourceFixture(),
+        stdout: memoryIO().stdout,
+        stderr: memoryIO().stderr,
+        commandRunner: fake.run,
+        githubToken,
+      });
+      const gitCalls = fake.state.calls.filter(
+        ([command]) => command === "git",
+      );
+      expect(gitCalls.length).toBeGreaterThan(0);
+      for (const [, , options] of gitCalls) {
+        expect(options.env.GIT_DIR).toBeUndefined();
+        expect(options.env.GIT_WORK_TREE).toBeUndefined();
+        expect(options.env.GIT_REPLACE_REF_BASE).toBeUndefined();
+        expect(options.env.GIT_CONFIG_PARAMETERS).toBeUndefined();
+        expect(options.env.GIT_CONFIG_COUNT).toBe("5");
+        expect(options.env.GIT_CONFIG_KEY_0).toBe("advice.graftFileDeprecated");
+        expect(options.env.GIT_CONFIG_VALUE_0).toBe("false");
+        expect(options.env.GIT_CONFIG_KEY_1).toBe("core.fsmonitor");
+        expect(options.env.GIT_CONFIG_VALUE_1).toBe("false");
+        expect(options.env.GIT_CONFIG_KEY_2).toBe("core.hooksPath");
+        expect(options.env.GIT_CONFIG_VALUE_2).toBe("/dev/null");
+        expect(options.env.GIT_CONFIG_KEY_3).toBe("credential.helper");
+        expect(options.env.GIT_CONFIG_VALUE_3).toBe("");
+        expect(options.env.GIT_CONFIG_KEY_4).toBe("core.attributesFile");
+        expect(options.env.GIT_CONFIG_VALUE_4).toBe("/dev/null");
+        expect(options.env.GIT_ATTR_NOSYSTEM).toBe("1");
+        expect(options.env.GIT_NO_REPLACE_OBJECTS).toBe("1");
+        expect(options.env.GIT_GRAFT_FILE).toBe("/dev/null");
+        expect(options.env.GIT_CONFIG_NOSYSTEM).toBe("1");
+        expect(options.env.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+        expect(options.env.GIT_CONFIG_SYSTEM).toBe("/dev/null");
+        expect(options.env.GH_ENTERPRISE_TOKEN).toBeUndefined();
+        expect(options.env.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
+        expect(options.env.GH_HOST).toBeUndefined();
+        expect(options.env.LD_AUDIT).toBeUndefined();
+        expect(options.env.LD_LIBRARY_PATH).toBeUndefined();
+        expect(options.env.LD_PRELOAD).toBeUndefined();
+        expect(options.env.DYLD_INSERT_LIBRARIES).toBeUndefined();
+      }
+      for (const [, , options] of fake.state.calls.filter(([command]) =>
+        isGitHubCLI(command),
+      )) {
+        expect(options.env.GH_TOKEN).toBe(githubToken);
+        expect(options.env.GH_ENTERPRISE_TOKEN).toBeUndefined();
+        expect(options.env.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
+        expect(options.env.GH_HOST).toBeUndefined();
+        expect(options.env.LD_AUDIT).toBeUndefined();
+        expect(options.env.LD_LIBRARY_PATH).toBeUndefined();
+        expect(options.env.LD_PRELOAD).toBeUndefined();
+        expect(options.env.DYLD_INSERT_LIBRARIES).toBeUndefined();
+      }
+    } finally {
+      delete process.env.GIT_DIR;
+      delete process.env.GIT_WORK_TREE;
+      delete process.env.GIT_REPLACE_REF_BASE;
+      delete process.env.GIT_CONFIG_PARAMETERS;
+      delete process.env.GIT_CONFIG_COUNT;
+      delete process.env.GIT_CONFIG_KEY_0;
+      delete process.env.GIT_CONFIG_VALUE_0;
+      delete process.env.GH_ENTERPRISE_TOKEN;
+      delete process.env.GITHUB_ENTERPRISE_TOKEN;
+      delete process.env.GH_HOST;
+      delete process.env.LD_AUDIT;
+      delete process.env.LD_LIBRARY_PATH;
+      delete process.env.LD_PRELOAD;
+      delete process.env.DYLD_INSERT_LIBRARIES;
+    }
+  });
+
+  test("rejects repository-local Git graft authority before owner Git checks", async () => {
+    const repo = sourceFixture();
+    writeFileSync(
+      join(repo, ".git/info/grafts"),
+      `${expectedCommit} ffffffffffffffffffffffffffffffffffffffff\n`,
+    );
+    const fake = fakeCommands();
+    await expect(
+      runAdmissionSurface({
+        surface: ADMISSION_SURFACE.surface,
+        args: ["prepare", "--expected-commit", expectedCommit],
+        repo,
+        stdout: memoryIO().stdout,
+        stderr: memoryIO().stderr,
+        commandRunner: fake.run,
+        githubToken,
+      }),
+    ).rejects.toThrow("Git authority is forbidden");
+    expect(
+      fake.state.calls.some(
+        ([command, args]) =>
+          command === "git" &&
+          args.join(" ") ===
+            "rev-parse --path-format=absolute --git-dir --git-common-dir --show-toplevel",
+      ),
+    ).toBe(true);
+  });
+
+  test("real Git mutation uses the fixed unsigned tagger and isolated explicit credential", () => {
+    const repo = mkdtempSync(join(tmpdir(), "takoform-admission-real-git-"));
+    temporaryDirectories.push(repo);
+    runTestGit(repo, "init", "--quiet", "--initial-branch=main");
+    writeFileSync(join(repo, "fixture.txt"), "fixture\n");
+    runTestGit(repo, "add", "fixture.txt");
+    runTestGit(
+      repo,
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@takoform.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "fixture",
+    );
+    const commit = runTestGit(repo, "rev-parse", "HEAD").trim();
+    const programRoot = mkdtempSync(
+      join(tmpdir(), "takoform-admission-ambient-"),
+    );
+    temporaryDirectories.push(programRoot);
+    const marker = join(programRoot, "ambient-program-ran");
+    const fakeProgram = join(programRoot, "ambient-program");
+    writeFileSync(
+      fakeProgram,
+      `#!/bin/sh\nprintf ran > ${JSON.stringify(marker)}\nexit 1\n`,
+      { mode: 0o700 },
+    );
+    const fakeBin = join(programRoot, "bin");
+    mkdirSync(fakeBin, { recursive: true });
+    const fakeGHMarker = join(programRoot, "fake-gh-ran");
+    writeFileSync(
+      join(fakeBin, "gh"),
+      `#!/bin/sh\nprintf ran > ${JSON.stringify(fakeGHMarker)}\nexit 1\n`,
+      { mode: 0o700 },
+    );
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${fakeBin}:${previousPath ?? ""}`;
+    try {
+      const resolvedGH = resolveAdmissionGitHubCLI();
+      expect(resolvedGH).not.toBe(join(fakeBin, "gh"));
+      execFileSync(resolvedGH, ["--version"], { stdio: "ignore" });
+    } finally {
+      if (previousPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = previousPath;
+      }
+    }
+    expect(() => lstatSync(fakeGHMarker)).toThrow();
+    runTestGit(repo, "config", "tag.gpgSign", "true");
+    runTestGit(repo, "config", "gpg.program", fakeProgram);
+    runTestGit(repo, "config", "core.fsmonitor", fakeProgram);
+    runTestGit(repo, "config", "user.name", "Ambient Identity");
+    runTestGit(repo, "config", "user.email", "ambient@example.invalid");
+
+    const io = memoryIO();
+    const context = {
+      repo,
+      githubToken,
+      stdout: io.stdout,
+      stderr: io.stderr,
+    };
+    const tag = "forms/admissions/v9.9.9";
+    expect(readAdmissionGitStatus(context)).toBe("");
+    expect(() => lstatSync(marker)).toThrow();
+    createLocalTag(context, { tag }, commit, "exact mutation fixture\n");
+    const tagObject = runTestGit(repo, "cat-file", "tag", `refs/tags/${tag}`);
+    expect(tagObject).toContain(
+      "tagger Takoform Standard Admission <admission@takoform.invalid>",
+    );
+    expect(tagObject).not.toContain("BEGIN PGP SIGNATURE");
+    expect(() => lstatSync(marker)).toThrow();
+
+    runTestGit(
+      repo,
+      "remote",
+      "add",
+      "origin",
+      "git@github.com:tako0614/terraform-provider-takoform.git",
+    );
+    expect(() => requireCanonicalAdmissionOrigin(context)).toThrow(
+      "canonical HTTPS",
+    );
+    expect(() => lstatSync(marker)).toThrow();
+
+    const globalConfig = join(programRoot, "ambient-global-config");
+    writeFileSync(globalConfig, `[credential]\n\thelper = !${fakeProgram}\n`, {
+      mode: 0o600,
+    });
+    const ghConfig = join(programRoot, "gh-config");
+    mkdirSync(ghConfig, { recursive: true });
+    writeFileSync(
+      join(ghConfig, "hosts.yml"),
+      "github.com:\n    user: stored-operator\n    oauth_token: stored-operator-token\n    git_protocol: https\n",
+      { mode: 0o600 },
+    );
+    const previousGitConfig = process.env.GIT_CONFIG_GLOBAL;
+    const previousGHConfig = process.env.GH_CONFIG_DIR;
+    process.env.GIT_CONFIG_GLOBAL = globalConfig;
+    process.env.GH_CONFIG_DIR = ghConfig;
+    try {
+      verifyAuthenticatedGitCredential(context);
+    } finally {
+      if (previousGitConfig === undefined) {
+        delete process.env.GIT_CONFIG_GLOBAL;
+      } else {
+        process.env.GIT_CONFIG_GLOBAL = previousGitConfig;
+      }
+      if (previousGHConfig === undefined) {
+        delete process.env.GH_CONFIG_DIR;
+      } else {
+        process.env.GH_CONFIG_DIR = previousGHConfig;
+      }
+    }
+    expect(() => lstatSync(marker)).toThrow();
+
+    const filterMarker = join(programRoot, "filter-ran");
+    const filterProgram = join(programRoot, "filter-program");
+    writeFileSync(
+      filterProgram,
+      `#!/bin/sh\nprintf ran > ${JSON.stringify(filterMarker)}\nprintf "fixture\\n"\n`,
+      { mode: 0o700 },
+    );
+    writeFileSync(join(repo, ".gitattributes"), "fixture.txt filter=review\n");
+    runTestGit(repo, "add", ".gitattributes");
+    runTestGit(
+      repo,
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@takoform.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "attributes fixture",
+    );
+    runTestGit(repo, "config", "filter.review.clean", filterProgram);
+    writeFileSync(join(repo, "fixture.txt"), "different worktree bytes\n");
+    expect(() => readAdmissionGitStatus(context)).toThrow(
+      "Git executable, attribute, worktree, or transport authority is forbidden",
+    );
+    expect(() => lstatSync(filterMarker)).toThrow();
+
+    runTestGit(repo, "config", "--unset-all", "filter.review.clean");
+    writeFileSync(join(repo, "fixture.txt"), "fixture\n");
+    expect(() => readAdmissionGitStatus(context)).toThrow(
+      "working-tree Git attribute authority is forbidden",
+    );
+    runTestGit(repo, "rm", "--quiet", ".gitattributes");
+    runTestGit(
+      repo,
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@takoform.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "remove attributes fixture",
+    );
+    runTestGit(repo, "update-index", "--assume-unchanged", "fixture.txt");
+    expect(() => readAdmissionGitStatus(context)).toThrow(
+      "assume-unchanged or skip-worktree",
+    );
+    runTestGit(repo, "update-index", "--no-assume-unchanged", "fixture.txt");
+    runTestGit(repo, "update-index", "--skip-worktree", "fixture.txt");
+    expect(() => readAdmissionGitStatus(context)).toThrow(
+      "assume-unchanged or skip-worktree",
+    );
+    runTestGit(repo, "update-index", "--no-skip-worktree", "fixture.txt");
+
+    writeFileSync(join(repo, ".git/info/attributes"), "* -diff\n");
+    expect(() => readAdmissionGitStatus(context)).toThrow(
+      "Git authority is forbidden",
+    );
+    rmSync(join(repo, ".git/info/attributes"));
+
+    runTestGit(repo, "config", "http.sslVerify", "false");
+    expect(() => readAdmissionGitStatus(context)).toThrow(
+      "transport authority is forbidden",
+    );
+    runTestGit(repo, "config", "--unset-all", "http.sslVerify");
+
+    runTestGit(
+      repo,
+      "config",
+      "url.https://attacker.invalid/.insteadOf",
+      "https://github.com/",
+    );
+    expect(() => readAdmissionGitStatus(context)).toThrow(
+      "transport authority is forbidden",
+    );
+    runTestGit(
+      repo,
+      "config",
+      "--unset-all",
+      "url.https://attacker.invalid/.insteadOf",
+    );
+
+    const alternateWorktree = mkdtempSync(
+      join(tmpdir(), "takoform-admission-alternate-worktree-"),
+    );
+    temporaryDirectories.push(alternateWorktree);
+    runTestGit(repo, "config", "core.worktree", alternateWorktree);
+    expect(() => readAdmissionGitStatus(context)).toThrow(
+      /source root differs|worktree.*authority is forbidden/u,
+    );
   });
 
   test("rejects a moved historical tag and a minted abandoned v1.0.5", async () => {
@@ -375,7 +750,7 @@ describe("admission deploy execution", () => {
       ).rejects.toThrow("publication outcome is ambiguous");
       expect(
         fake.state.calls.filter(
-          ([command, args]) => command === "git" && args[0] === "push",
+          ([command, args]) => command === "git" && args.includes("push"),
         ),
       ).toHaveLength(1);
     }
@@ -403,6 +778,25 @@ describe("admission deploy execution", () => {
     ).toBe(false);
   });
 
+  test("refuses a non-canonical push URL before local tag mutation", async () => {
+    const fake = fakeCommands({
+      pushURL: "https://attacker.invalid/takoform.git",
+    });
+    await expect(
+      runAdmissionSurface({
+        surface: ADMISSION_SURFACE.surface,
+        args: ["publish", "--expected-commit", expectedCommit],
+        repo: sourceFixture(),
+        stdout: memoryIO().stdout,
+        stderr: memoryIO().stderr,
+        commandRunner: fake.run,
+        githubToken,
+      }),
+    ).rejects.toThrow("push URL is not one exact canonical");
+    expect(fake.state.local).toBeNull();
+    expect(fake.state.pushAttempts).toBe(0);
+  });
+
   test("fails closed after a successful push if exact protection changes and never retries", async () => {
     const repo = sourceFixture();
     const fake = fakeCommands({ changeProtectionAfterPush: true });
@@ -422,7 +816,7 @@ describe("admission deploy execution", () => {
     );
     expect(
       fake.state.calls.filter(
-        ([command, args]) => command === "git" && args[0] === "push",
+        ([command, args]) => command === "git" && args.includes("push"),
       ),
     ).toHaveLength(1);
   });
@@ -447,7 +841,7 @@ describe("admission deploy execution", () => {
     );
     expect(
       fake.state.calls.filter(
-        ([command, args]) => command === "git" && args[0] === "push",
+        ([command, args]) => command === "git" && args.includes("push"),
       ),
     ).toHaveLength(1);
   });
@@ -490,7 +884,7 @@ describe("admission deploy execution", () => {
     expect(
       fake.state.calls.filter(
         ([command, args]) =>
-          command === "gh" &&
+          isGitHubCLI(command) &&
           args[0] === "api" &&
           /\/rulesets\/[0-9]+\?/u.test(args[1]),
       ),
@@ -520,6 +914,7 @@ function sourceFixture() {
   const repo = mkdtempSync(join(tmpdir(), "takoform-admission-deploy-"));
   temporaryDirectories.push(repo);
   for (const relative of [
+    ".git/info",
     "admission/v4",
     "admission/v3/candidates/host-report-1.0.5-63dabf0c64be-bd0b3184aaad",
     "admission/v3/candidates/provider-report-1.0.5-bd0b3184aaad",
@@ -633,6 +1028,7 @@ function fakeCommands({
   omitNonFastForward = false,
   paginationAmbiguous = false,
   remoteCurrent = null,
+  pushURL = "https://github.com/tako0614/terraform-provider-takoform.git",
 } = {}) {
   const historical = new Map([
     [
@@ -723,7 +1119,7 @@ function fakeCommands({
       }
       return success("gate passed\n");
     }
-    if (command === "gh") {
+    if (isGitHubCLI(command)) {
       if (args[0] !== "api") {
         throw new Error(`unexpected gh command: ${args.join(" ")}`);
       }
@@ -755,7 +1151,27 @@ function fakeCommands({
     }
     if (command !== "git") throw new Error(`unexpected command ${command}`);
     const joined = args.join(" ");
-    if (joined === "status --porcelain") return success();
+    if (
+      joined ===
+      "rev-parse --path-format=absolute --git-dir --git-common-dir --show-toplevel"
+    ) {
+      return success(
+        `${join(options.cwd, ".git")}\n${join(options.cwd, ".git")}\n${options.cwd}\n`,
+      );
+    }
+    if (
+      joined ===
+      "config --show-scope --show-origin --get-regexp ^(filter\\.|core\\.(attributesfile|sshcommand|worktree)$|http\\.|url\\.)"
+    ) {
+      return { status: 1, stdout: "", stderr: "" };
+    }
+    if (joined === "ls-files -v -z") return success();
+    if (
+      joined ===
+      "status --porcelain --untracked-files=all --ignore-submodules=none"
+    ) {
+      return success();
+    }
     if (joined === "rev-parse --is-shallow-repository") {
       return success("false\n");
     }
@@ -765,6 +1181,9 @@ function fakeCommands({
       return success(
         "https://github.com/tako0614/terraform-provider-takoform.git\n",
       );
+    }
+    if (joined === "remote get-url --push --all origin") {
+      return success(`${pushURL}\n`);
     }
     if (joined === "ls-remote --exit-code origin refs/heads/main") {
       state.mainReads += 1;
@@ -799,7 +1218,12 @@ function fakeCommands({
         ? success(`${state.local.tagObject}\n`)
         : { status: 1, stdout: "", stderr: "" };
     }
-    if (args[0] === "tag" && args[1] === "-a") {
+    const tagCommand = args.indexOf("tag");
+    if (
+      tagCommand >= 0 &&
+      args[tagCommand + 1] === "--no-sign" &&
+      args[tagCommand + 2] === "-a"
+    ) {
       state.local = {
         tagObject: "6666666666666666666666666666666666666666",
         commit: expectedCommit,
@@ -819,7 +1243,15 @@ function fakeCommands({
         `object ${expectedCommit}\ntype commit\ntag ${descriptor.tag}\ntagger Test <test@example.invalid> 0 +0000\n\n${state.local.message}`,
       );
     }
-    if (args[0] === "push") {
+    if (joined.endsWith("credential fill")) {
+      expect(options.input).toBe("protocol=https\nhost=github.com\n\n");
+      expect(options.env.GH_TOKEN).toBeUndefined();
+      expect(options.env.GITHUB_TOKEN).toBeUndefined();
+      return success(
+        "protocol=https\nhost=github.com\nusername=stored-operator\npassword=stored-operator-token\n",
+      );
+    }
+    if (args.includes("push")) {
       state.pushAttempts += 1;
       if (pushExactButError) {
         state.remoteCurrent = {
@@ -861,4 +1293,20 @@ function memoryIO() {
     stderr: { write: (value) => (output += value) },
     read: () => output,
   };
+}
+
+function runTestGit(repo, ...args) {
+  return execFileSync("git", ["-C", repo, ...args], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_SYSTEM: "/dev/null",
+    },
+  });
+}
+
+function isGitHubCLI(command) {
+  return command === "gh" || command.endsWith("/gh");
 }
