@@ -1,0 +1,77 @@
+{
+  "assetCount": 15,
+  "assets": [
+    {
+      "name": "terraform-provider-takoform_1.0.1_SHA256SUMS",
+      "sha256": "sha256:c77a80a39c6a435492b4d13a67d3471bcaa71288bf5c6741df637e801ad50044"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_SHA256SUMS.sig",
+      "sha256": "sha256:2581fec39c93945c503daab8b2cd20b1f6d87cb5f4afba2a445ad8736ca3474e"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_darwin_amd64.zip",
+      "sha256": "sha256:0c3ec1124121d55d4114e2598bb5aaf993172a49c1037400a54321c05c7d6c0c"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_darwin_amd64.zip.spdx.json",
+      "sha256": "sha256:d25334c7bd12e4a151564f83967402c60ae9997a8b9ab92aa0b788abc871391d"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_darwin_arm64.zip",
+      "sha256": "sha256:97df0255567a4fca5585c26888ac1080b270ebc98bacb11c85a6da39d1dcaaa1"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_darwin_arm64.zip.spdx.json",
+      "sha256": "sha256:a9a64c2c03f07391854a2da9a8fdf2193186e29ca06d8224959063378fd8c99b"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_linux_amd64.zip",
+      "sha256": "sha256:252ddcf65c37154ca82d208c23cb60c6de71ea5daf96c3e4d426166d8d43bc20"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_linux_amd64.zip.spdx.json",
+      "sha256": "sha256:2158e0d1f9379e048036a3d5660a0d36ca7f0d9f0e97de2be6da89c0159e7ef8"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_linux_arm64.zip",
+      "sha256": "sha256:b4ab4b6089bc8a30870f5980e6622ad2a537ba42c6a764a6630281c1595026f9"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_linux_arm64.zip.spdx.json",
+      "sha256": "sha256:9c237c946ff2927dfc2642c4e0ee01dd9b987c208a47c93d9bbfaaa178e69606"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_manifest.json",
+      "sha256": "sha256:f809ab383cca0a5f83072981c64208cbd7fa67e986a86ee02dd2c82333221e32"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_provenance.intoto.json",
+      "sha256": "sha256:4279c88382a7f519050d069cc513a233b4f66f0adff41d4a89be3f5f1db294ce"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_provenance.intoto.json.sig",
+      "sha256": "sha256:b32a7efc838b9b0239f36bd1f78fe1a0e3d89bf990cc90c0cc5549b272d34499"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_windows_amd64.zip",
+      "sha256": "sha256:27e808b6c5ee8a5c1864ac68794ae686d7b6df249f06968f0040169c5cf0b1fa"
+    },
+    {
+      "name": "terraform-provider-takoform_1.0.1_windows_amd64.zip.spdx.json",
+      "sha256": "sha256:1b7c10da62c21ad227cae61ed56b9d45b4f1584c6602244954ce7e9d6fe3f638"
+    }
+  ],
+  "attempt": "1",
+  "format": "takoform.provider-release-candidate.v1",
+  "repository": "tako0614/terraform-provider-takoform",
+  "requestId": "19bfcddc-949d-4272-8075-43718879d254",
+  "runId": "30507374579",
+  "sourceCommit": "44e1da0bc7e5b2581e2197ccedb107e5d9a7e9db",
+  "tag": "v1.0.1",
+  "tagObjectOid": "e824793f019a941be11fde0a908fd8d1ea813ba8",
+  "tagObjectSha256": "sha256:a589e9af8257020dd631030eef0431730a2a3a12e73c590329361ce2a9980ccc",
+  "toolingCommit": "44e1da0bc7e5b2581e2197ccedb107e5d9a7e9db",
+  "workflowPath": ".github/workflows/release.yml",
+  "workflowRef": "tako0614/terraform-provider-takoform/.github/workflows/release.yml@refs/tags/v1.0.1"
+}

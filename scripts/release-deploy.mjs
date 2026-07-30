@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
+  accessSync,
   chmodSync,
   closeSync,
   constants as fsConstants,
@@ -11,6 +12,7 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
+  realpathSync,
   readSync,
   readdirSync,
   rmSync,
@@ -18,6 +20,7 @@ import {
 } from "node:fs";
 import {
   basename,
+  delimiter,
   dirname,
   isAbsolute,
   join,
@@ -83,6 +86,13 @@ const FORM_TAG_ONLY_RECOVERY_STABLE_PATHS = Object.freeze([
   "internal/hostpolicy",
   "standardform",
 ]);
+const PROVIDER_RECOVERY_ALLOWED_PATHS = Object.freeze([
+  "release/README.md",
+  "scripts/check-public-surfaces.mjs",
+  "scripts/release-deploy.mjs",
+  "scripts/release-deploy.test.mjs",
+  "scripts/testdata/provider-release-candidate-30507374579-1-metadata.json",
+]);
 const FORM_TAG_ONLY_RELEASE_BODY =
   "Data-only Takoform Form Package release completed forward from an exact tag-only partial state. Verify the canonical package index, Sigstore bundle, and publisher identity before installation.";
 
@@ -120,15 +130,15 @@ export const RELEASE_SURFACES = Object.freeze([
       provenance:
         "requires local operator GH_TOKEN authority, a clean non-shallow main checkout equal to a freshly fetched canonical origin/main, the complete owner check before every dispatch, tag push, or release mutation, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; GH_TOKEN is never printed or retained",
       "post-conditions":
-        "publishes the exact verified same-run bytes locally, requires GitHub's immutable release readback and a fresh download with identical digests, then separately installs the indexed provider with both supported Registry clients and checksum-closes the signed direct-install readback",
+        "publishes the exact verified same-run bytes locally under exclusive single-writer authority because GitHub REST has no atomic asset-plus-metadata precondition, immediately rereads the empty and complete exact draft, restates the full exact identity on PATCH, requires GitHub's immutable release readback and a fresh download with identical digests, rechecks the pinned signed tag before VERIFIED, then separately installs the indexed provider with both supported Registry clients and checksum-closes the signed direct-install readback",
       reversal:
-        "provider versions, signed tags, and release assets are immutable and cannot be rolled back or overwritten; a bad publication is halted, retained, and repaired forward under a new version",
+        "provider versions, signed tags, and release assets are immutable and cannot be rolled back or overwritten; an exact signed tag-only partial state may only be completed by recover-tag-only, and an exact retained draft may only be resumed by recover-draft without changing the tag, candidate, or draft identity; any other bad publication is halted and repaired forward under a new version",
       "failure-handling":
-        "prints raw command diagnostics and distinguishes failure before tag creation, after local tag materialization, after remote tag push, after draft creation, and after immutable publication; it retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, and refuses blind retry after an indeterminate mutation",
+        "prints raw command diagnostics and distinguishes failure before tag creation, after local tag materialization, after remote tag push, after draft creation, and after immutable publication; it retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, refuses blind retry after an indeterminate mutation, and exposes only explicit exact-tag and exact-draft recovery bound to the original release commit, tag object, run attempt, and current reviewed recovery commit",
       "independent-review":
         "the provider-release protected Environment reviews the signed tag and release candidates; the local publisher accepts only that exact successful run/attempt and re-verifies it independently before using local GitHub authority",
       "no-overwrite":
-        "requires the descriptor tag, refuses any pre-existing local/remote tag, Registry version, or GitHub Release before creation, uses zero-object-id compare-and-swap for local refs, pushes an exact ref, and accepts only an immutable release with the exact candidate inventory",
+        "requires the descriptor tag, refuses any pre-existing local/remote tag, Registry version, or GitHub Release before creation, uses zero-object-id compare-and-swap for local refs, pushes an exact ref, and accepts only an immutable release with the exact candidate inventory; recovery never mutates or deletes a tag and accepts only the exact pinned signed local/remote annotated object",
       halt:
         "prepare, tag, and readback stop after one exact workflow dispatch and return its URL as AWAITING_REVIEW; cancel that exact run before approval on any input or evidence mismatch, and never continue by selecting a latest run",
     },
@@ -173,6 +183,23 @@ const PHASES = {
     prepare: ["tag", "expected-commit"],
     tag: ["tag", "expected-commit", "run-id", "run-attempt"],
     publish: ["tag", "expected-commit", "run-id", "run-attempt"],
+    "recover-tag-only": [
+      "tag",
+      "expected-release-commit",
+      "expected-tag-object",
+      "expected-recovery-commit",
+      "run-id",
+      "run-attempt",
+    ],
+    "recover-draft": [
+      "tag",
+      "expected-release-commit",
+      "expected-tag-object",
+      "expected-recovery-commit",
+      "release-id",
+      "run-id",
+      "run-attempt",
+    ],
     readback: ["tag", "expected-commit"],
     verify: ["tag", "expected-commit", "run-id", "run-attempt"],
   },
@@ -251,7 +278,11 @@ export function parseReleaseSurfaceArgs(surface, args) {
   ) {
     throw usageError(surface);
   }
-  for (const name of ["expected-commit", "expected-recovery-commit"]) {
+  for (const name of [
+    "expected-commit",
+    "expected-release-commit",
+    "expected-recovery-commit",
+  ]) {
     if (values[name] && !COMMIT.test(values[name])) {
       throw new Error(
         `--${name} must be an exact lowercase 40-character commit`,
@@ -350,6 +381,10 @@ function runProvider(context, options) {
       return providerTag(context, options, descriptor);
     case "publish":
       return providerPublish(context, options, descriptor);
+    case "recover-tag-only":
+      return providerRecoverTagOnly(context, options, descriptor);
+    case "recover-draft":
+      return providerRecoverDraft(context, options, descriptor);
     case "readback":
       return providerReadback(context, options, descriptor);
     case "verify":
@@ -404,13 +439,25 @@ function command(
   context,
   executable,
   args,
-  { cwd = context.repo, input, echo = false, label, env } = {},
+  {
+    cwd = context.repo,
+    input,
+    echo = false,
+    label,
+    env,
+    encoding,
+  } = {},
 ) {
   try {
     const output = context.execFile(executable, args, {
       cwd,
       input,
-      encoding: input instanceof Uint8Array ? null : "utf8",
+      encoding:
+        encoding === undefined
+          ? input instanceof Uint8Array
+            ? null
+            : "utf8"
+          : encoding,
       stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: 128 * 1024 * 1024,
       env: env ?? subprocessEnvironment(executable),
@@ -503,6 +550,94 @@ function gitPushEnvironment() {
     `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${process.env.GH_TOKEN}`, "utf8").toString("base64")}`;
   environment.GIT_CONFIG_KEY_4 = "core.hooksPath";
   environment.GIT_CONFIG_VALUE_4 = "/dev/null";
+  return environment;
+}
+
+function recoveryReadOnlyGitEnvironment() {
+  const environment = environmentWithoutGitHubAuthority();
+  const unsafeNames = new Set([
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_ASKPASS",
+    "GIT_ATTR_NOSYSTEM",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_DIFF_OPTS",
+    "GIT_DIR",
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+    "GIT_EXEC_PATH",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE",
+    "GIT_INTERNAL_SUPER_PREFIX",
+    "GIT_NAMESPACE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_PREFIX",
+    "GIT_PROXY_COMMAND",
+    "GIT_QUARANTINE_PATH",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_SHALLOW_FILE",
+    "GIT_SSH",
+    "GIT_SSH_COMMAND",
+    "GIT_TEMPLATE_DIR",
+    "GIT_WORK_TREE",
+    "SSH_ASKPASS",
+  ]);
+  for (const name of Object.keys(environment)) {
+    if (
+      unsafeNames.has(name) ||
+      /^GIT_CONFIG_/u.test(name) ||
+      /^GIT_TRACE/u.test(name)
+    ) {
+      delete environment[name];
+    }
+  }
+  environment.GIT_CONFIG_NOSYSTEM = "1";
+  environment.GIT_CONFIG_GLOBAL = "/dev/null";
+  environment.GIT_CONFIG_SYSTEM = "/dev/null";
+  environment.GIT_NO_REPLACE_OBJECTS = "1";
+  environment.GIT_OPTIONAL_LOCKS = "0";
+  return environment;
+}
+
+function recoveryGit(context, args, options = {}) {
+  return command(context, "git", args, {
+    ...options,
+    env: recoveryReadOnlyGitEnvironment(),
+  });
+}
+
+function trustedGpgExecutable() {
+  const candidates = [
+    "/usr/bin/gpg",
+    "/usr/local/bin/gpg",
+    "/opt/homebrew/bin/gpg",
+    ...(process.env.PATH ?? "")
+      .split(delimiter)
+      .filter((directory) => isAbsolute(directory))
+      .map((directory) => resolve(directory, "gpg")),
+  ];
+  for (const candidate of new Set(candidates)) {
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      const executable = realpathSync(candidate);
+      if (isAbsolute(executable) && lstatSync(executable).isFile()) {
+        return executable;
+      }
+    } catch {
+      // Continue to the next operator-installed absolute candidate.
+    }
+  }
+  throw new Error("release blocked: no absolute trusted gpg executable");
+}
+
+function isolatedGpgEnvironment(gpgHome) {
+  const environment = recoveryReadOnlyGitEnvironment();
+  delete environment.GNUPGHOME;
+  delete environment.GPG_AGENT_INFO;
+  delete environment.GPG_TTY;
+  environment.GNUPGHOME = gpgHome;
+  environment.LC_ALL = "C";
   return environment;
 }
 
@@ -689,6 +824,23 @@ function assertCommitAncestor(context, ancestor, descendant, label) {
   ], { label: `${label}: ${ancestor} must be an ancestor of ${descendant}` });
 }
 
+function assertRecoveryCommitAncestor(
+  context,
+  ancestor,
+  descendant,
+  label,
+) {
+  if (!COMMIT.test(ancestor ?? "") || !COMMIT.test(descendant ?? "")) {
+    throw new Error(`${label} requires exact lowercase commits`);
+  }
+  recoveryGit(context, ["cat-file", "-e", `${ancestor}^{commit}`]);
+  recoveryGit(
+    context,
+    ["merge-base", "--is-ancestor", ancestor, descendant],
+    { label: `${label}: ${ancestor} must be an ancestor of ${descendant}` },
+  );
+}
+
 function assertFormReleaseAuthorityFence(
   context,
   {
@@ -777,6 +929,56 @@ function assertFormTagOnlyRecoveryFence(
   );
 }
 
+function assertProviderRecoveryFence(
+  context,
+  { releaseCommit, recoveryCommit, label },
+) {
+  assertRecoveryCommitAncestor(
+    context,
+    releaseCommit,
+    recoveryCommit,
+    `${label} release/recovery ancestry`,
+  );
+  const rawChanged = recoveryGit(context, [
+    "-c",
+    "diff.renames=false",
+    "diff",
+    "--no-renames",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--name-only",
+    "-z",
+    "--diff-filter=ACDMRTUXB",
+    releaseCommit,
+    recoveryCommit,
+    "--",
+  ]);
+  if (
+    typeof rawChanged !== "string" ||
+    (rawChanged !== "" && !rawChanged.endsWith("\0"))
+  ) {
+    throw new Error(`${label}: recovery diff path output is ambiguous`);
+  }
+  const changed =
+    rawChanged === "" ? [] : rawChanged.slice(0, -1).split("\0");
+  if (
+    changed.some((path) => path === "" || /[\r\n]/u.test(path)) ||
+    new Set(changed).size !== changed.length
+  ) {
+    throw new Error(`${label}: recovery diff contains an ambiguous path`);
+  }
+  if (
+    changed.length === 0 ||
+    !changed.includes("scripts/release-deploy.mjs") ||
+    changed.some((path) => !PROVIDER_RECOVERY_ALLOWED_PATHS.includes(path))
+  ) {
+    throw new Error(
+      `${label}: release/recovery diff must contain only the exact reviewed recovery implementation, tests, and documentation; observed ${changed.join(", ") || "no changes"}`,
+    );
+  }
+  return changed;
+}
+
 function isCanonicalOrigin(origin) {
   return [
     `https://github.com/${GITHUB_REPOSITORY}.git`,
@@ -814,7 +1016,17 @@ function requireCanonicalSortedJSON(raw, value, label) {
   }
 }
 
-function parseCanonicalCandidateMetadata(raw, label) {
+function parseCandidateMetadata(
+  raw,
+  label,
+  { profile = "compact-optional-lf" } = {},
+) {
+  if (
+    profile !== "compact-optional-lf" &&
+    profile !== "pretty-required-lf"
+  ) {
+    throw new Error(`${label} uses unsupported metadata profile: ${profile}`);
+  }
   let value;
   try {
     value = JSON.parse(raw);
@@ -828,12 +1040,29 @@ function parseCanonicalCandidateMetadata(raw, label) {
     canonical,
     Buffer.from("\n"),
   ]);
-  if (!raw.equals(canonical) && !raw.equals(canonicalWithNewline)) {
+  const prettyWithNewline = Buffer.from(
+    `${JSON.stringify(recursivelySorted(value), null, 2)}\n`,
+  );
+  const accepted =
+    profile === "compact-optional-lf"
+      ? raw.equals(canonical) || raw.equals(canonicalWithNewline)
+      : raw.equals(prettyWithNewline);
+  if (!accepted) {
     throw new Error(
-      `${label} must be exact recursively key-sorted canonical JSON`,
+      `${label} must be exact recursively key-sorted ${profile === "pretty-required-lf" ? "two-space pretty JSON with one trailing LF" : "compact canonical JSON"}`,
     );
   }
   return value;
+}
+
+function parseCanonicalCandidateMetadata(raw, label) {
+  return parseCandidateMetadata(raw, label);
+}
+
+function parsePrettyCandidateMetadata(raw, label) {
+  return parseCandidateMetadata(raw, label, {
+    profile: "pretty-required-lf",
+  });
 }
 
 function readProviderDescriptor(repo) {
@@ -1267,7 +1496,10 @@ function validateCandidateAssets(
   );
 }
 
-function verifyCandidateRoot(root, { tagObject = false } = {}) {
+function verifyCandidateRoot(
+  root,
+  { tagObject = false, metadataProfile = "compact-optional-lf" } = {},
+) {
   const expectedRoot = [
     "SHA256SUMS",
     "assets",
@@ -1291,9 +1523,10 @@ function verifyCandidateRoot(root, { tagObject = false } = {}) {
     );
   }
   verifyChecksumClosure(root);
-  return parseCanonicalCandidateMetadata(
+  return parseCandidateMetadata(
     readFileSync(join(root, "metadata.json")),
     "candidate metadata",
+    { profile: metadataProfile },
   );
 }
 
@@ -1315,9 +1548,29 @@ function localTagOID(context, tag) {
   );
 }
 
+function recoveryLocalTagOID(context, tag) {
+  return recoveryGit(context, [
+    "for-each-ref",
+    "--format=%(objectname)",
+    `refs/tags/${tag}`,
+  ]).trim();
+}
+
 function remoteTagState(context, tag) {
   const ref = `refs/tags/${tag}`;
   const output = git(context, "ls-remote", "--tags", "origin", ref, `${ref}^{}`);
+  return parseRemoteTagState(output, ref);
+}
+
+function recoveryRemoteTagState(context, tag) {
+  const ref = `refs/tags/${tag}`;
+  const output = recoveryGit(context, [
+    "ls-remote",
+    "--tags",
+    SOURCE_REPOSITORY,
+    ref,
+    `${ref}^{}`,
+  ]).trim();
   return parseRemoteTagState(output, ref);
 }
 
@@ -1381,6 +1634,25 @@ function assertExactRemoteTag(context, tag, expectedCommit, expectedObject) {
     !state.object ||
     state.commit !== expectedCommit ||
     (expectedObject && state.object !== expectedObject)
+  ) {
+    throw new Error(
+      `remote tag ${tag} is not the exact annotated object/commit: ${JSON.stringify(state)}`,
+    );
+  }
+  return state;
+}
+
+function assertRecoveryExactRemoteTag(
+  context,
+  tag,
+  expectedCommit,
+  expectedObject,
+) {
+  const state = recoveryRemoteTagState(context, tag);
+  if (
+    !state.object ||
+    state.commit !== expectedCommit ||
+    state.object !== expectedObject
   ) {
     throw new Error(
       `remote tag ${tag} is not the exact annotated object/commit: ${JSON.stringify(state)}`,
@@ -1488,6 +1760,192 @@ function assertTagOnlyRecoveryState(
   );
   assertReleaseAbsent(context, tag);
   return { local: { object: local, type: localType, commit: localCommit }, remote };
+}
+
+function splitSignedProviderTagObject(raw, tag, expectedCommit) {
+  if (!Buffer.isBuffer(raw)) {
+    throw new Error(
+      `provider tag ${tag} exact object bytes were not read as a Buffer`,
+    );
+  }
+  const object = raw;
+  const signatureBegin = Buffer.from("-----BEGIN PGP SIGNATURE-----\n");
+  const signatureEnd = Buffer.from("-----END PGP SIGNATURE-----\n");
+  const signatureOffset = object.indexOf(signatureBegin);
+  if (
+    signatureOffset <= 0 ||
+    object[signatureOffset - 1] !== 0x0a ||
+    object.indexOf(signatureBegin, signatureOffset + 1) !== -1 ||
+    object.length < signatureEnd.length ||
+    !object.subarray(object.length - signatureEnd.length).equals(signatureEnd)
+  ) {
+    throw new Error(
+      `provider tag ${tag} does not contain one exact armored OpenPGP signature`,
+    );
+  }
+  const payload = object.subarray(0, signatureOffset);
+  const signature = object.subarray(signatureOffset);
+  const expectedHeader = Buffer.from(
+    `object ${expectedCommit}\ntype commit\ntag ${tag}\n`,
+  );
+  if (
+    payload.length <= expectedHeader.length ||
+    !payload.subarray(0, expectedHeader.length).equals(expectedHeader)
+  ) {
+    throw new Error(
+      `provider tag ${tag} signed payload identity differs`,
+    );
+  }
+  return { payload, signature };
+}
+
+function assertPinnedProviderGpgVerification(verification, tag) {
+  const valid = asText(verification.output)
+    .split("\n")
+    .map((line) =>
+      /^\[GNUPG:\] VALIDSIG ([0-9A-F]{40})\b/u.exec(line)?.[1],
+    )
+    .filter(Boolean);
+  if (
+    !verification.ok ||
+    valid.length !== 1 ||
+    valid[0] !== PROVIDER_SIGNER
+  ) {
+    throw new Error(
+      `provider tag ${tag} is not signed by the pinned exact signer`,
+    );
+  }
+  return PROVIDER_SIGNER;
+}
+
+function assertExactSignedProviderTag(
+  context,
+  { tag, expectedCommit, expectedObject },
+) {
+  const local = recoveryLocalTagOID(context, tag);
+  const localType = local
+    ? recoveryGit(
+        context,
+        ["cat-file", "-t", `refs/tags/${tag}`],
+      ).trim()
+    : "";
+  const localCommit = local
+    ? recoveryGit(
+        context,
+        ["rev-parse", `refs/tags/${tag}^{commit}`],
+      ).trim()
+    : "";
+  if (
+    local !== expectedObject ||
+    localType !== "tag" ||
+    localCommit !== expectedCommit
+  ) {
+    throw new Error(
+      `provider recovery requires exact local annotated tag object ${expectedObject} -> ${expectedCommit}; observed ${JSON.stringify({
+        object: local || null,
+        type: localType || null,
+        commit: localCommit || null,
+      })}`,
+    );
+  }
+  const remote = assertRecoveryExactRemoteTag(
+    context,
+    tag,
+    expectedCommit,
+    expectedObject,
+  );
+  const rawTagObject = recoveryGit(
+    context,
+    ["cat-file", "tag", expectedObject],
+    { encoding: null },
+  );
+  const signed = splitSignedProviderTagObject(
+    rawTagObject,
+    tag,
+    expectedCommit,
+  );
+  withTemporaryDirectory("takoform-provider-recovery-gpg", (gpgHome) => {
+    chmodSync(gpgHome, 0o700);
+    const gpgExecutable = trustedGpgExecutable();
+    const gpgEnvironment = isolatedGpgEnvironment(gpgHome);
+    const key = join(context.repo, "release/keys/provider-signing-key.asc");
+    const inspect = command(
+      context,
+      gpgExecutable,
+      [
+        "--no-options",
+        "--homedir",
+        gpgHome,
+        "--batch",
+        "--no-tty",
+        "--with-colons",
+        "--import-options",
+        "show-only",
+        "--import",
+        key,
+      ],
+      { env: gpgEnvironment },
+    );
+    const fingerprints = inspect
+      .split("\n")
+      .filter((line) => line.startsWith("fpr:"))
+      .map((line) => line.split(":")[9])
+      .filter(Boolean);
+    if (
+      fingerprints.length !== 1 ||
+      fingerprints[0] !== PROVIDER_SIGNER
+    ) {
+      throw new Error("provider public signing key fingerprint drifted");
+    }
+    command(
+      context,
+      gpgExecutable,
+      [
+        "--no-options",
+        "--homedir",
+        gpgHome,
+        "--batch",
+        "--no-tty",
+        "--import",
+        key,
+      ],
+      { env: gpgEnvironment },
+    );
+    const payloadPath = join(gpgHome, "tag-payload");
+    const signaturePath = join(gpgHome, "tag-signature.asc");
+    writeFileSync(payloadPath, signed.payload, { mode: 0o600 });
+    writeFileSync(signaturePath, signed.signature, { mode: 0o600 });
+    const verification = attemptCommand(
+      context,
+      gpgExecutable,
+      [
+        "--no-options",
+        "--homedir",
+        gpgHome,
+        "--batch",
+        "--no-tty",
+        "--no-auto-key-retrieve",
+        "--status-fd",
+        "1",
+        "--verify",
+        signaturePath,
+        payloadPath,
+      ],
+      { env: gpgEnvironment },
+    );
+    try {
+      assertPinnedProviderGpgVerification(verification, tag);
+    } catch (error) {
+      if (verification.output) context.stdout.write(verification.output);
+      if (verification.stderr) context.stderr.write(verification.stderr);
+      throw error;
+    }
+  });
+  return {
+    local: { object: local, type: localType, commit: localCommit },
+    remote,
+    signerFingerprint: PROVIDER_SIGNER,
+  };
 }
 
 function ensureCandidateTagPublished(
@@ -1826,7 +2284,63 @@ function readExactRetainedDraft(
   };
 }
 
-function reportRetainedDraftFailure(context, tag, releaseId) {
+function validateExactReleasePatchResponse(
+  response,
+  { releaseId, tag, prerelease, body, assets },
+) {
+  const expectedAssetsURL =
+    `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/` +
+    `${releaseId}/assets`;
+  const expectedUploadURL =
+    `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/` +
+    `${releaseId}/assets{?name,label}`;
+  if (
+    response.id !== releaseId ||
+    response.tag_name !== tag ||
+    response.target_commitish !== "main" ||
+    response.name !== tag ||
+    response.body !== body ||
+    response.draft !== false ||
+    response.prerelease !== prerelease ||
+    response.assets_url !== expectedAssetsURL ||
+    response.upload_url !== expectedUploadURL ||
+    !Array.isArray(response.assets) ||
+    response.assets.length !== assets.size
+  ) {
+    throw new Error(
+      `release ${releaseId} PATCH response differs from the exact retained draft identity`,
+    );
+  }
+  const seenNames = new Set();
+  const seenIDs = new Set();
+  for (const remote of response.assets) {
+    const local = assets.get(remote.name);
+    if (
+      !local ||
+      seenNames.has(remote.name) ||
+      !Number.isSafeInteger(remote.id) ||
+      remote.id <= 0 ||
+      seenIDs.has(remote.id) ||
+      remote.state !== "uploaded" ||
+      remote.digest !== local.sha256 ||
+      remote.size !== lstatSync(local.path).size
+    ) {
+      throw new Error(
+        `release ${releaseId} PATCH response asset closure differs from the exact candidate`,
+      );
+    }
+    seenNames.add(remote.name);
+    seenIDs.add(remote.id);
+  }
+  return response;
+}
+
+function reportRetainedDraftFailure(
+  context,
+  tag,
+  releaseId,
+  { surface = FORM_SURFACE } = {},
+) {
   let mutationState = "REMOTE_STATE_UNREADABLE";
   let observedReleaseIDs = [];
   const listed = attemptCommand(context, "gh", releaseListArguments());
@@ -1848,7 +2362,7 @@ function reportRetainedDraftFailure(context, tag, releaseId) {
   context.stderr.write(
     `${JSON.stringify({
       kind: "takos.deploy-failure@v1",
-      surface: FORM_SURFACE,
+      surface,
       phase: "recover-draft",
       tag,
       releaseId,
@@ -1869,6 +2383,7 @@ function resumeDraftReleaseLocally(
     body,
     prerelease = false,
     temporaryRoot,
+    surface = FORM_SURFACE,
     prePublishFence = () => {},
   },
 ) {
@@ -1924,7 +2439,7 @@ function resumeDraftReleaseLocally(
       assets,
       requireComplete: true,
     });
-    prePublishFence();
+    prePublishFence(releaseId);
     readExactRetainedDraft(context, {
       releaseId,
       tag,
@@ -1975,21 +2490,13 @@ function resumeDraftReleaseLocally(
       }
       patchResponse = release;
     }
-    if (
-      patchResponse.id !== releaseId ||
-      patchResponse.tag_name !== tag ||
-      patchResponse.target_commitish !== "main" ||
-      patchResponse.name !== tag ||
-      patchResponse.body !== body ||
-      patchResponse.draft !== false ||
-      patchResponse.prerelease !== prerelease ||
-      patchResponse.assets_url !== expectedAssetsURL ||
-      patchResponse.upload_url !== expectedUploadURL
-    ) {
-      throw new Error(
-        `release ${releaseId} PATCH response differs from the exact retained draft identity`,
-      );
-    }
+    validateExactReleasePatchResponse(patchResponse, {
+      releaseId,
+      tag,
+      prerelease,
+      body,
+      assets,
+    });
     let release;
     let published = false;
     for (let attempt = 1; attempt <= 12; attempt += 1) {
@@ -2022,7 +2529,7 @@ function resumeDraftReleaseLocally(
     assertUniqueReleaseIdentity(context, tag, releaseId, false);
     return release;
   } catch (error) {
-    reportRetainedDraftFailure(context, tag, releaseId);
+    reportRetainedDraftFailure(context, tag, releaseId, { surface });
     throw error;
   }
 }
@@ -2035,6 +2542,7 @@ function publishReleaseLocally(
     body,
     prerelease = false,
     temporaryRoot,
+    strictIdentity = false,
     prePublishFence = () => {},
   },
 ) {
@@ -2053,6 +2561,7 @@ function publishReleaseLocally(
         `repos/${GITHUB_REPOSITORY}/releases`,
         "-f",
         `tag_name=${tag}`,
+        ...(strictIdentity ? ["-f", "target_commitish=main"] : []),
         "-f",
         `name=${tag}`,
         "-F",
@@ -2079,6 +2588,23 @@ function publishReleaseLocally(
     const orderedAssets = [...assets.values()].sort((left, right) =>
       compareNames(left.name, right.name),
     );
+    if (strictIdentity) {
+      const initial = readExactRetainedDraft(context, {
+        releaseId,
+        tag,
+        prerelease,
+        body,
+        assets,
+      });
+      if (
+        initial.draft.assets.length !== 0 ||
+        initial.missing.length !== assets.size
+      ) {
+        throw new Error(
+          `new exact draft ${releaseId} is not empty before upload`,
+        );
+      }
+    }
     progress(context, `upload ${orderedAssets.length} exact assets`);
     for (const asset of orderedAssets) {
       const uploaded = JSON.parse(
@@ -2106,31 +2632,78 @@ function publishReleaseLocally(
         );
       }
     }
-    const draft = JSON.parse(
+    if (strictIdentity) {
+      readExactRetainedDraft(context, {
+        releaseId,
+        tag,
+        prerelease,
+        body,
+        assets,
+        requireComplete: true,
+      });
+    } else {
+      const draft = JSON.parse(
+        command(context, "gh", [
+          "api",
+          `repos/${GITHUB_REPOSITORY}/releases/${releaseId}`,
+        ]),
+      );
+      validateDraftBeforePublication(draft, {
+        releaseId,
+        tag,
+        prerelease,
+        assets,
+      });
+    }
+    prePublishFence(releaseId);
+    if (strictIdentity) {
+      readExactRetainedDraft(context, {
+        releaseId,
+        tag,
+        prerelease,
+        body,
+        assets,
+        requireComplete: true,
+      });
+    } else {
+      assertUniqueReleaseIdentity(context, tag, releaseId, true);
+    }
+    progress(context, `publish exact draft ${releaseId}`);
+    const patchResponse = JSON.parse(
       command(context, "gh", [
         "api",
+        "--method",
+        "PATCH",
         `repos/${GITHUB_REPOSITORY}/releases/${releaseId}`,
+        ...(strictIdentity
+          ? [
+              "-f",
+              `tag_name=${tag}`,
+              "-f",
+              "target_commitish=main",
+              "-f",
+              `name=${tag}`,
+              "-f",
+              `body=${body}`,
+              "-F",
+              `prerelease=${prerelease}`,
+            ]
+          : []),
+        "-F",
+        "draft=false",
+        "-f",
+        "make_latest=false",
       ]),
     );
-    validateDraftBeforePublication(draft, {
-      releaseId,
-      tag,
-      prerelease,
-      assets,
-    });
-    prePublishFence();
-    assertUniqueReleaseIdentity(context, tag, releaseId, true);
-    progress(context, `publish exact draft ${releaseId}`);
-    command(context, "gh", [
-      "api",
-      "--method",
-      "PATCH",
-      `repos/${GITHUB_REPOSITORY}/releases/${releaseId}`,
-      "-F",
-      "draft=false",
-      "-f",
-      "make_latest=false",
-    ]);
+    if (strictIdentity) {
+      validateExactReleasePatchResponse(patchResponse, {
+        releaseId,
+        tag,
+        prerelease,
+        body,
+        assets,
+      });
+    }
     let release;
     for (let attempt = 1; attempt <= 12; attempt += 1) {
       release = getRelease(context, tag);
@@ -2151,7 +2724,21 @@ function publishReleaseLocally(
         `release ${releaseId} did not converge to immutable exact publication`,
       );
     }
-    validateReleaseReadback(release, tag, assets, { prerelease });
+    validateReleaseReadback(release, tag, assets, {
+      prerelease,
+      ...(strictIdentity
+        ? {
+            expectedReleaseId: releaseId,
+            expectedName: tag,
+            expectedBody: body,
+            expectedTargetCommitish: "main",
+            expectedAssetsURL:
+              `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets`,
+            expectedUploadURL:
+              `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets{?name,label}`,
+          }
+        : {}),
+    });
     downloadAndCompareRelease(context, tag, assets, temporaryRoot);
     assertUniqueReleaseIdentity(context, tag, releaseId, false);
     return release;
@@ -2314,6 +2901,25 @@ function assertRegistryVersionAbsent(context, version) {
   }
 }
 
+function assertReleaseImmutabilityEnabled(context) {
+  const value = JSON.parse(
+    command(context, "gh", [
+      "api",
+      `repos/${GITHUB_REPOSITORY}/immutable-releases`,
+    ]),
+  );
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    value.enabled !== true
+  ) {
+    throw new Error(
+      "provider recovery requires repository immutable releases to be enabled",
+    );
+  }
+}
+
 function providerAssetNames(descriptor) {
   const base = `terraform-provider-takoform_${descriptor.version}`;
   const archives = descriptor.platforms
@@ -2427,7 +3033,9 @@ function verifyProviderCandidate(
     tagObjectOid,
   },
 ) {
-  const metadata = verifyCandidateRoot(root);
+  const metadata = verifyCandidateRoot(root, {
+    metadataProfile: "pretty-required-lf",
+  });
   requireExactKeys(
     metadata,
     [
@@ -2570,6 +3178,13 @@ function publicAssets(root, names) {
   );
 }
 
+function providerReleaseBody(descriptor) {
+  return (
+    "Signed deterministic Takoform provider release. Provider publication does not activate Standard Forms.\n\nBreaking upgrade from v0.2.1: follow the migration guide before using provider v1 with existing state: " +
+    `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v0.2.1-to-v1.0.1.md`
+  );
+}
+
 function providerPrepare(context, options, descriptor) {
   const commit = assertCurrentProtectedMain(context, options["expected-commit"]);
   assertTagAbsent(context, descriptor.tag);
@@ -2693,6 +3308,13 @@ function providerTag(context, options, descriptor) {
 
 function providerPublish(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
+  const releaseBody = providerReleaseBody(descriptor);
+  if (
+    !releaseBody.includes("Breaking upgrade from v0.2.1") ||
+    !releaseBody.includes("release/migrations/v0.2.1-to-v1.0.1.md")
+  ) {
+    throw new Error("provider release body omits the exact v1 migration guide");
+  }
   assertCurrentProtectedMain(context, expectedCommit);
   const localObject = localTagOID(context, descriptor.tag);
   if (!localObject) throw new Error(`local signed provider tag ${descriptor.tag} is missing`);
@@ -2731,9 +3353,7 @@ function providerPublish(context, options, descriptor) {
       tag: descriptor.tag,
       assets,
       prerelease: descriptor.version.includes("-"),
-      body:
-        "Signed deterministic Takoform provider release. Provider publication does not activate Standard Forms.\n\nBreaking upgrade from v0.2.1: follow the migration guide before using provider v1 with existing state: " +
-        `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v0.2.1-to-v1.0.1.md`,
+      body: releaseBody,
       temporaryRoot,
       prePublishFence: () => {
         ownerGateAndFence(context, expectedCommit);
@@ -2759,11 +3379,260 @@ function providerPublish(context, options, descriptor) {
   });
 }
 
+function providerRecoveryMutationFence(
+  context,
+  {
+    descriptor,
+    releaseCommit,
+    recoveryCommit,
+    expectedObject,
+    releaseId,
+    label,
+  },
+) {
+  const currentMain = ownerGateAndFence(context, recoveryCommit);
+  assertProviderRecoveryFence(context, {
+    releaseCommit,
+    recoveryCommit: currentMain,
+    label,
+  });
+  const tag = assertExactSignedProviderTag(context, {
+    tag: descriptor.tag,
+    expectedCommit: releaseCommit,
+    expectedObject,
+  });
+  assertRegistryVersionAbsent(context, descriptor.version);
+  assertReleaseImmutabilityEnabled(context);
+  if (releaseId === undefined) {
+    assertReleaseAbsent(context, descriptor.tag);
+  } else {
+    assertUniqueReleaseIdentity(
+      context,
+      descriptor.tag,
+      releaseId,
+      true,
+    );
+  }
+  return { currentMain, tag };
+}
+
+function providerRecoverTagOnly(context, options, descriptor) {
+  const releaseCommit = options["expected-release-commit"];
+  const expectedObject = options["expected-tag-object"];
+  const recoveryCommit = options["expected-recovery-commit"];
+  const initialMain = assertCurrentProtectedMain(context, recoveryCommit);
+  assertProviderRecoveryFence(context, {
+    releaseCommit,
+    recoveryCommit: initialMain,
+    label: "provider tag-only reviewed recovery fence",
+  });
+  const run = requireSuccessfulRun(
+    context,
+    options["run-id"],
+    options["run-attempt"],
+    {
+      workflowName: "Prepare provider release candidate",
+      headSha: releaseCommit,
+      headBranch: descriptor.tag,
+    },
+  );
+  return withTemporaryDirectory(
+    "takoform-provider-tag-only-recovery",
+    (temporaryRoot) => {
+      const candidate = downloadArtifact(
+        context,
+        options["run-id"],
+        `provider-release-candidate-${options["run-id"]}-${options["run-attempt"]}`,
+        join(temporaryRoot, "candidate"),
+      );
+      const assets = verifyProviderCandidate(context, candidate, {
+        descriptor,
+        runId: options["run-id"],
+        runAttempt: options["run-attempt"],
+        requestId: run.displayTitle,
+        expectedCommit: releaseCommit,
+        tagObjectOid: expectedObject,
+      });
+      try {
+        providerRecoveryMutationFence(context, {
+          descriptor,
+          releaseCommit,
+          recoveryCommit,
+          expectedObject,
+          label: "provider tag-only pre-draft recovery fence",
+        });
+        const release = publishReleaseLocally(context, {
+          tag: descriptor.tag,
+          assets,
+          prerelease: descriptor.version.includes("-"),
+          body: providerReleaseBody(descriptor),
+          temporaryRoot,
+          strictIdentity: true,
+          prePublishFence: (releaseId) =>
+            providerRecoveryMutationFence(context, {
+              descriptor,
+              releaseCommit,
+              recoveryCommit,
+              expectedObject,
+              releaseId,
+              label: "provider tag-only pre-publication recovery fence",
+            }),
+        });
+        assertExactSignedProviderTag(context, {
+          tag: descriptor.tag,
+          expectedCommit: releaseCommit,
+          expectedObject,
+        });
+        return emit(context, {
+          kind: "takos.deploy-result@v1",
+          surface: PROVIDER_SURFACE,
+          phase: "recover-tag-only",
+          target: `github-release:${GITHUB_REPOSITORY}/${descriptor.tag}`,
+          commit: recoveryCommit,
+          releaseCommit,
+          candidateToolingCommit: releaseCommit,
+          recoveryCommit,
+          tag: descriptor.tag,
+          tagObject: expectedObject,
+          signerFingerprint: PROVIDER_SIGNER,
+          recoveredFrom: "EXACT_SIGNED_TAG_PRESENT_RELEASE_ABSENT",
+          candidateRun: {
+            id: options["run-id"],
+            attempt: options["run-attempt"],
+            url: run.url,
+          },
+          releaseId: release.id,
+          releaseUrl: release.html_url,
+          assetDigests: Object.fromEntries(
+            [...assets].map(([name, asset]) => [name, asset.sha256]),
+          ),
+          productionReadback: "EXACT_IMMUTABLE_RELEASE",
+          status: "VERIFIED",
+        });
+      } catch (error) {
+        reportTagFailure(context, descriptor.tag, expectedObject, {
+          surface: PROVIDER_SURFACE,
+          phase: "recover-tag-only",
+        });
+        throw error;
+      }
+    },
+  );
+}
+
+function providerRecoverDraft(context, options, descriptor) {
+  const releaseCommit = options["expected-release-commit"];
+  const expectedObject = options["expected-tag-object"];
+  const recoveryCommit = options["expected-recovery-commit"];
+  const releaseId = Number(options["release-id"]);
+  const initialMain = assertCurrentProtectedMain(context, recoveryCommit);
+  assertProviderRecoveryFence(context, {
+    releaseCommit,
+    recoveryCommit: initialMain,
+    label: "provider retained-draft reviewed recovery fence",
+  });
+  const run = requireSuccessfulRun(
+    context,
+    options["run-id"],
+    options["run-attempt"],
+    {
+      workflowName: "Prepare provider release candidate",
+      headSha: releaseCommit,
+      headBranch: descriptor.tag,
+    },
+  );
+  return withTemporaryDirectory(
+    "takoform-provider-draft-recovery",
+    (temporaryRoot) => {
+      const candidate = downloadArtifact(
+        context,
+        options["run-id"],
+        `provider-release-candidate-${options["run-id"]}-${options["run-attempt"]}`,
+        join(temporaryRoot, "candidate"),
+      );
+      const assets = verifyProviderCandidate(context, candidate, {
+        descriptor,
+        runId: options["run-id"],
+        runAttempt: options["run-attempt"],
+        requestId: run.displayTitle,
+        expectedCommit: releaseCommit,
+        tagObjectOid: expectedObject,
+      });
+      try {
+        providerRecoveryMutationFence(context, {
+          descriptor,
+          releaseCommit,
+          recoveryCommit,
+          expectedObject,
+          releaseId,
+          label: "provider retained-draft mutation recovery fence",
+        });
+        const release = resumeDraftReleaseLocally(context, {
+          releaseId,
+          tag: descriptor.tag,
+          assets,
+          prerelease: descriptor.version.includes("-"),
+          body: providerReleaseBody(descriptor),
+          temporaryRoot,
+          surface: PROVIDER_SURFACE,
+          prePublishFence: (retainedReleaseId) =>
+            providerRecoveryMutationFence(context, {
+              descriptor,
+              releaseCommit,
+              recoveryCommit,
+              expectedObject,
+              releaseId: retainedReleaseId,
+              label:
+                "provider retained-draft pre-publication recovery fence",
+            }),
+        });
+        assertExactSignedProviderTag(context, {
+          tag: descriptor.tag,
+          expectedCommit: releaseCommit,
+          expectedObject,
+        });
+        return emit(context, {
+          kind: "takos.deploy-result@v1",
+          surface: PROVIDER_SURFACE,
+          phase: "recover-draft",
+          target: `github-release:${GITHUB_REPOSITORY}/${descriptor.tag}`,
+          commit: recoveryCommit,
+          releaseCommit,
+          candidateToolingCommit: releaseCommit,
+          recoveryCommit,
+          tag: descriptor.tag,
+          tagObject: expectedObject,
+          signerFingerprint: PROVIDER_SIGNER,
+          recoveredFrom: "EXACT_RETAINED_DRAFT",
+          candidateRun: {
+            id: options["run-id"],
+            attempt: options["run-attempt"],
+            url: run.url,
+          },
+          releaseId: release.id,
+          releaseUrl: release.html_url,
+          assetDigests: Object.fromEntries(
+            [...assets].map(([name, asset]) => [name, asset.sha256]),
+          ),
+          productionReadback: "EXACT_IMMUTABLE_RELEASE",
+          status: "VERIFIED",
+        });
+      } catch (error) {
+        reportTagFailure(context, descriptor.tag, expectedObject, {
+          surface: PROVIDER_SURFACE,
+          phase: "recover-draft",
+        });
+        throw error;
+      }
+    },
+  );
+}
+
 function readProviderPublicRelease(
   context,
   descriptor,
   temporaryRoot,
-  expectedCommit,
+  releaseCommit,
 ) {
   const names = providerAssetNames(descriptor);
   const release = getRelease(context, descriptor.tag);
@@ -2798,6 +3667,14 @@ function readProviderPublicRelease(
   }
   validateReleaseReadback(release, descriptor.tag, assets, {
     prerelease: descriptor.version.includes("-"),
+    expectedReleaseId: release.id,
+    expectedName: descriptor.tag,
+    expectedBody: providerReleaseBody(descriptor),
+    expectedTargetCommitish: "main",
+    expectedAssetsURL:
+      `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${release.id}/assets`,
+    expectedUploadURL:
+      `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release.id}/assets{?name,label}`,
   });
   const actual = listRegularFiles(output);
   if (JSON.stringify(actual) !== JSON.stringify(names.all)) {
@@ -2821,8 +3698,8 @@ function readProviderPublicRelease(
     provenance.tagObjectOid,
   ]);
   if (
-    provenance.sourceCommit !== expectedCommit ||
-    provenance.toolingCommit !== expectedCommit ||
+    provenance.sourceCommit !== releaseCommit ||
+    provenance.toolingCommit !== releaseCommit ||
     provenance.tagObjectOid !== localObject ||
     sha256(Buffer.from(tagObject, "utf8")) !== provenance.tagObjectSha256
   ) {
@@ -2847,18 +3724,47 @@ function readProviderPublicRelease(
   return { release, assets };
 }
 
+function assertProviderReadbackCommitBinding(
+  context,
+  { sourceCommit, providerReleaseCommit },
+) {
+  assertCommitAncestor(
+    context,
+    providerReleaseCommit,
+    sourceCommit,
+    "provider readback release/current-source ancestry",
+  );
+  return { sourceCommit, providerReleaseCommit };
+}
+
 function providerReadback(context, options, descriptor) {
-  const expectedCommit = options["expected-commit"];
-  assertCurrentProtectedMain(context, expectedCommit);
+  const currentCommit = options["expected-commit"];
+  assertCurrentProtectedMain(context, currentCommit);
   const localObject = localTagOID(context, descriptor.tag);
   if (!localObject) throw new Error(`local provider tag ${descriptor.tag} is missing`);
-  assertExactRemoteTag(context, descriptor.tag, git(context, "rev-list", "-n", "1", descriptor.tag), localObject);
+  const releaseCommit = git(
+    context,
+    "rev-list",
+    "-n",
+    "1",
+    descriptor.tag,
+  );
+  assertProviderReadbackCommitBinding(context, {
+    sourceCommit: currentCommit,
+    providerReleaseCommit: releaseCommit,
+  });
+  assertExactRemoteTag(
+    context,
+    descriptor.tag,
+    releaseCommit,
+    localObject,
+  );
   return withTemporaryDirectory("takoform-provider-readback", (temporaryRoot) => {
     readProviderPublicRelease(
       context,
       descriptor,
       temporaryRoot,
-      expectedCommit,
+      releaseCommit,
     );
     const status = registryStatus(context, descriptor.version);
     if (status !== "200") {
@@ -2866,19 +3772,21 @@ function providerReadback(context, options, descriptor) {
         `Terraform Registry has not indexed ${descriptor.version}: HTTP ${status}`,
       );
     }
-    ownerGateAndFence(context, expectedCommit);
+    ownerGateAndFence(context, currentCommit);
     const dispatched = dispatchWorkflow(
       context,
       "provider-registry-readback.yml",
       {},
-      { headSha: expectedCommit },
+      { headSha: currentCommit },
     );
     return emit(context, {
       kind: "takos.deploy-result@v1",
       surface: PROVIDER_SURFACE,
       phase: "readback",
       target: PROVIDER_ADDRESS,
-      commit: expectedCommit,
+      commit: currentCommit,
+      sourceCommit: currentCommit,
+      providerReleaseCommit: releaseCommit,
       tag: descriptor.tag,
       dispatchStatus: "DISPATCHED",
       status: "AWAITING_REVIEW",
@@ -2919,6 +3827,8 @@ function providerVerify(context, options, descriptor) {
       phase: "verify",
       target: PROVIDER_ADDRESS,
       commit: expectedCommit,
+      sourceCommit: expectedCommit,
+      providerReleaseCommit: proof.providerReleaseCommit,
       tag: descriptor.tag,
       candidateRun: { id: options["run-id"], attempt: options["run-attempt"], url: run.url },
       candidateDigest: fileDigest(join(candidate, "SHA256SUMS")),
@@ -3016,6 +3926,10 @@ function verifyRegistryCandidate(
     "signed Registry readback",
   );
   const providerCommit = git(context, "rev-list", "-n", "1", descriptor.tag);
+  assertProviderReadbackCommitBinding(context, {
+    sourceCommit: expectedCommit,
+    providerReleaseCommit: providerCommit,
+  });
   const certificateIdentity =
     `https://github.com/${GITHUB_REPOSITORY}/.github/workflows/` +
     "provider-registry-readback.yml@refs/heads/main";
@@ -3110,6 +4024,7 @@ function verifyRegistryCandidate(
   ]);
   return {
     installedProviderDigest: readback.installs[0].providerBinarySha256,
+    providerReleaseCommit: providerCommit,
   };
 }
 
@@ -3610,7 +4525,10 @@ function verifyRevocationCandidate(
   root,
   { tag, runId, runAttempt, requestId, expectedCommit, toolingCommit },
 ) {
-  const metadata = verifyCandidateRoot(root, { tagObject: true });
+  const metadata = verifyCandidateRoot(root, {
+    tagObject: true,
+    metadataProfile: "pretty-required-lf",
+  });
   requireExactKeys(
     metadata,
     [
@@ -4827,8 +5745,13 @@ function revocationVerify(context, options) {
 // callers use runReleaseSurface; these hooks keep tests off live git/GitHub
 // authority while exercising the same mutation and verification code paths.
 export const releaseDeployTestHooks = Object.freeze({
+  assertExactSignedProviderTag,
+  assertPinnedProviderGpgVerification,
+  assertReleaseImmutabilityEnabled,
   assertFormReleaseAuthorityFence,
   assertFormTagOnlyRecoveryFence,
+  assertProviderRecoveryFence,
+  assertProviderReadbackCommitBinding,
   assertReusableOwnerGateProof,
   assertReleaseAbsent,
   assertRegistryVersionAbsent,
@@ -4843,7 +5766,9 @@ export const releaseDeployTestHooks = Object.freeze({
   githubUploadEnvironment,
   ownerGateAndFence,
   observeTagFailureState,
+  parseCandidateMetadata,
   parseCanonicalCandidateMetadata,
+  parsePrettyCandidateMetadata,
   publishReleaseLocally,
   providerAssetNames,
   pushExactTag,
@@ -4857,6 +5782,7 @@ export const releaseDeployTestHooks = Object.freeze({
   verifyChecksumClosure,
   verifyFormSemanticClosure,
   verifyProviderCandidate,
+  verifyRegistryCandidate,
   verifyProviderReleaseProvenance,
   verifyProviderSignature,
   verifyRevocationSemanticClosure,
