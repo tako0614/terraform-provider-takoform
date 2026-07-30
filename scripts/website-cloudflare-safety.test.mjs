@@ -87,6 +87,42 @@ describe("explicit Cloudflare authority", () => {
     });
   });
 
+  test("accepts and removes only the exact inert bun run markers", () => {
+    const bunLocalPrefix = "/reviewed/takoform";
+    const bunUserAgent = "bun/1.3.14 npm/? node/v24.3.0 linux x64";
+    expect(
+      createPinnedWranglerEnvironment(
+        {
+          PATH: "/usr/bin",
+          npm_config_local_prefix: bunLocalPrefix,
+          npm_config_user_agent: bunUserAgent,
+        },
+        { accountId, bunLocalPrefix, bunUserAgent },
+      ),
+    ).toEqual({
+      CLOUDFLARE_ACCOUNT_ID: accountId,
+      PATH: "/usr/bin",
+    });
+    expect(() =>
+      createPinnedWranglerEnvironment(
+        {
+          npm_config_local_prefix: "/different/repository",
+          npm_config_user_agent: bunUserAgent,
+        },
+        { accountId, bunLocalPrefix, bunUserAgent },
+      ),
+    ).toThrow("npm_config_local_prefix");
+    expect(() =>
+      createPinnedWranglerEnvironment(
+        {
+          npm_config_local_prefix: bunLocalPrefix,
+          npm_config_user_agent: `${bunUserAgent} attacker`,
+        },
+        { accountId, bunLocalPrefix, bunUserAgent },
+      ),
+    ).toThrow("npm_config_user_agent");
+  });
+
   test("binds one OAuth profile account and exact permissions", () => {
     const whoami = {
       accounts: [{ id: accountId }, { id: "c".repeat(32) }],

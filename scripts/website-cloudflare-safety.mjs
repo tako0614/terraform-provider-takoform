@@ -143,11 +143,21 @@ export function parseWebsiteWranglerConfig(
 
 export function createPinnedWranglerEnvironment(
   environment,
-  { accountId },
+  { accountId, bunLocalPrefix, bunUserAgent },
 ) {
   const forbidden = [];
   const cleaned = {};
   for (const [name, value] of Object.entries(environment)) {
+    const exactBunRunMarker =
+      (name === "npm_config_local_prefix" &&
+        typeof bunLocalPrefix === "string" &&
+        value === bunLocalPrefix) ||
+      (name === "npm_config_user_agent" &&
+        typeof bunUserAgent === "string" &&
+        value === bunUserAgent);
+    if (exactBunRunMarker) {
+      continue;
+    }
     if (
       name.startsWith("BUN_") ||
       name.startsWith("CF_") ||
