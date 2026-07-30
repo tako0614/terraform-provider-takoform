@@ -426,6 +426,28 @@ describe("release surface contract and strict parsing", () => {
     );
     expect(recovery.phase).toBe("recover-tag-only");
     expect(recovery["expected-tag-object"]).toBe("a".repeat(40));
+    const draftRecovery = parseReleaseSurfaceArgs(
+      "takoform-form-package-release",
+      [
+        "recover-draft",
+        "--tag",
+        "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0",
+        "--expected-commit",
+        commit,
+        "--expected-tag-object",
+        "a".repeat(40),
+        "--expected-recovery-commit",
+        "89abcdef0123456789abcdef0123456789abcdef",
+        "--release-id",
+        "362120999",
+        "--run-id",
+        "123",
+        "--run-attempt",
+        "1",
+      ],
+    );
+    expect(draftRecovery.phase).toBe("recover-draft");
+    expect(draftRecovery["release-id"]).toBe("362120999");
     for (const invalid of ["HEAD", "A".repeat(40), "a".repeat(39), "a".repeat(41)]) {
       expect(() =>
         parseReleaseSurfaceArgs("takoform-form-package-release", [
@@ -438,6 +460,27 @@ describe("release surface contract and strict parsing", () => {
           invalid,
           "--expected-recovery-commit",
           "89abcdef0123456789abcdef0123456789abcdef",
+          "--run-id",
+          "123",
+          "--run-attempt",
+          "1",
+        ]),
+      ).toThrow();
+    }
+    for (const releaseId of ["0", "-1", "1.0", "9007199254740992"]) {
+      expect(() =>
+        parseReleaseSurfaceArgs("takoform-form-package-release", [
+          "recover-draft",
+          "--tag",
+          "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0",
+          "--expected-commit",
+          commit,
+          "--expected-tag-object",
+          "a".repeat(40),
+          "--expected-recovery-commit",
+          "89abcdef0123456789abcdef0123456789abcdef",
+          "--release-id",
+          releaseId,
           "--run-id",
           "123",
           "--run-attempt",
@@ -1822,6 +1865,18 @@ describe("local immutable GitHub Release publication", () => {
     };
   }
 
+  function retainedDraftFixture() {
+    const fixture = assetFixture();
+    const secondPath = join(fixture.root, "candidate", "second.txt");
+    writeFileSync(secondPath, "second candidate bytes\n");
+    fixture.assets.set("second.txt", {
+      name: "second.txt",
+      path: secondPath,
+      sha256: sha256(readFileSync(secondPath)),
+    });
+    return fixture;
+  }
+
   test("preflight rejects an existing draft and duplicate exact-tag identities", () => {
     for (const releases of [
       [
@@ -1908,6 +1963,286 @@ describe("local immutable GitHub Release publication", () => {
     expect(
       calls.filter((args) => args.includes("POST")).length,
     ).toBe(1);
+  });
+
+  test("retained draft recovery resumes after a lost upload response and uploads only missing assets", () => {
+    const fixture = retainedDraftFixture();
+    const tag = "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0";
+    const body = "exact retained draft body";
+    const calls = [];
+    const remoteAssets = [];
+    let loseFirstUploadResponse = true;
+    let published = false;
+    let fenceCalls = 0;
+    const draft = () => ({
+      id: 7,
+      tag_name: tag,
+      target_commitish: "main",
+      name: tag,
+      body,
+      draft: true,
+      prerelease: false,
+      immutable: false,
+      published_at: null,
+      assets_url:
+        "https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets",
+      upload_url:
+        "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+      assets: remoteAssets,
+    });
+    const publicRelease = () => ({
+      id: 7,
+      tag_name: tag,
+      target_commitish: "main",
+      name: tag,
+      body,
+      draft: false,
+      prerelease: false,
+      immutable: true,
+      html_url: "https://github.com/example/recovered-release",
+      assets_url:
+        "https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets",
+      upload_url:
+        "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+      assets: remoteAssets,
+    });
+    const fake = (_executable, args) => {
+      calls.push([...args]);
+      if (isReleaseList(args)) {
+        return JSON.stringify([
+          [{ id: 7, tag_name: tag, draft: !published }],
+        ]);
+      }
+      if (
+        args[0] === "api" &&
+        args[1] ===
+          "repos/tako0614/terraform-provider-takoform/releases/7"
+      ) {
+        return JSON.stringify(draft());
+      }
+      if (
+        args.includes("POST") &&
+        args.some((argument) => argument.includes("/assets?name="))
+      ) {
+        const path = args[args.indexOf("--input") + 1];
+        const name = decodeURIComponent(
+          args
+            .find((argument) => argument.includes("/assets?name="))
+            .split("/assets?name=")[1],
+        );
+        const asset = {
+          id: remoteAssets.length + 100,
+          name,
+          state: "uploaded",
+          digest: sha256(readFileSync(path)),
+          size: readFileSync(path).length,
+        };
+        remoteAssets.push(asset);
+        if (loseFirstUploadResponse) {
+          loseFirstUploadResponse = false;
+          throw commandFailure("connection lost after asset upload");
+        }
+        return JSON.stringify(asset);
+      }
+      if (args.includes("PATCH")) {
+        published = true;
+        return JSON.stringify(publicRelease());
+      }
+      if (args[0] === "api" && args[1]?.includes("/releases/tags/")) {
+        return JSON.stringify(publicRelease());
+      }
+      if (args[0] === "release" && args[1] === "download") {
+        const output = args[args.indexOf("--dir") + 1];
+        for (const asset of fixture.assets.values()) {
+          copyFileSync(asset.path, join(output, asset.name));
+        }
+        return "";
+      }
+      throw new Error(`unexpected gh ${args.join(" ")}`);
+    };
+    const execution = context(fake);
+    expect(() =>
+      releaseDeployTestHooks.resumeDraftReleaseLocally(execution, {
+        releaseId: 7,
+        tag,
+        assets: fixture.assets,
+        body,
+        temporaryRoot: fixture.root,
+      }),
+    ).toThrow("gh api");
+    expect(remoteAssets).toHaveLength(1);
+    expect(execution.io.errors).toContain("MATCHING_DRAFT_RETAINED");
+
+    const release = releaseDeployTestHooks.resumeDraftReleaseLocally(
+      execution,
+      {
+        releaseId: 7,
+        tag,
+        assets: fixture.assets,
+        body,
+        temporaryRoot: fixture.root,
+        prePublishFence: () => {
+          fenceCalls += 1;
+        },
+      },
+    );
+    expect(release.id).toBe(7);
+    expect(published).toBe(true);
+    expect(remoteAssets).toHaveLength(2);
+    expect(fenceCalls).toBe(1);
+    expect(
+      calls.filter(
+        (args) =>
+          args.includes("POST") &&
+          args.some((argument) => argument.includes("/assets?name=")),
+      ),
+    ).toHaveLength(2);
+    expect(
+      calls.some(
+        (args) =>
+          args.includes("POST") &&
+          !args.some((argument) => argument.includes("/assets?name=")),
+      ),
+    ).toBe(false);
+    expect(calls.some((args) => args.includes("DELETE"))).toBe(false);
+    const patch = calls.find((args) => args.includes("PATCH"));
+    expect(patch).toContain(`tag_name=${tag}`);
+    expect(patch).toContain("target_commitish=main");
+    expect(patch).toContain(`name=${tag}`);
+    expect(patch).toContain(`body=${body}`);
+    expect(patch).toContain("draft=false");
+    expect(patch).toContain("prerelease=false");
+  });
+
+  test("retained draft recovery rejects asset drift and a competing identity before PATCH", () => {
+    const fixture = retainedDraftFixture();
+    const tag = "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0";
+    const body = "exact retained draft body";
+    const first = [...fixture.assets.values()][0];
+    for (const remoteAssets of [
+      [
+        {
+          id: 100,
+          name: first.name,
+          state: "uploaded",
+          digest: `sha256:${"f".repeat(64)}`,
+          size: readFileSync(first.path).length,
+        },
+      ],
+      [
+        {
+          id: 100,
+          name: "unexpected.txt",
+          state: "uploaded",
+          digest: first.sha256,
+          size: readFileSync(first.path).length,
+        },
+      ],
+    ]) {
+      const calls = [];
+      const fake = (_executable, args) => {
+        calls.push([...args]);
+        if (isReleaseList(args)) {
+          return JSON.stringify([
+            [{ id: 7, tag_name: tag, draft: true }],
+          ]);
+        }
+        if (
+          args[0] === "api" &&
+          args[1] ===
+            "repos/tako0614/terraform-provider-takoform/releases/7"
+        ) {
+          return JSON.stringify({
+            id: 7,
+            tag_name: tag,
+            target_commitish: "main",
+            name: tag,
+            body,
+            draft: true,
+            prerelease: false,
+            immutable: false,
+            published_at: null,
+            assets_url:
+              "https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets",
+            upload_url:
+              "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+            assets: remoteAssets,
+          });
+        }
+        throw new Error(`unexpected gh ${args.join(" ")}`);
+      };
+      expect(() =>
+        releaseDeployTestHooks.resumeDraftReleaseLocally(context(fake), {
+          releaseId: 7,
+          tag,
+          assets: fixture.assets,
+          body,
+          temporaryRoot: fixture.root,
+        }),
+      ).toThrow("unknown, duplicate, or drifted asset");
+      expect(calls.some((args) => args.includes("PATCH"))).toBe(false);
+      expect(calls.some((args) => args.includes("POST"))).toBe(false);
+    }
+
+    const calls = [];
+    let competing = false;
+    const remoteAssets = [...fixture.assets.values()].map((asset, index) => ({
+      id: index + 100,
+      name: asset.name,
+      state: "uploaded",
+      digest: asset.sha256,
+      size: readFileSync(asset.path).length,
+    }));
+    const fake = (_executable, args) => {
+      calls.push([...args]);
+      if (isReleaseList(args)) {
+        return JSON.stringify([
+          competing
+            ? [
+                { id: 7, tag_name: tag, draft: true },
+                { id: 8, tag_name: tag, draft: true },
+              ]
+            : [{ id: 7, tag_name: tag, draft: true }],
+        ]);
+      }
+      if (
+        args[0] === "api" &&
+        args[1] ===
+          "repos/tako0614/terraform-provider-takoform/releases/7"
+      ) {
+        return JSON.stringify({
+          id: 7,
+          tag_name: tag,
+          target_commitish: "main",
+          name: tag,
+          body,
+          draft: true,
+          prerelease: false,
+          immutable: false,
+          published_at: null,
+          assets_url:
+            "https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets",
+          upload_url:
+            "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+          assets: remoteAssets,
+        });
+      }
+      throw new Error(`unexpected gh ${args.join(" ")}`);
+    };
+    expect(() =>
+      releaseDeployTestHooks.resumeDraftReleaseLocally(context(fake), {
+        releaseId: 7,
+        tag,
+        assets: fixture.assets,
+        body,
+        temporaryRoot: fixture.root,
+        prePublishFence: () => {
+          competing = true;
+        },
+      }),
+    ).toThrow("expected only release 7:draft");
+    expect(calls.some((args) => args.includes("PATCH"))).toBe(false);
+    expect(calls.some((args) => args.includes("POST"))).toBe(false);
   });
 
   test("publishes exact bytes without moving the floating Latest identity", () => {
@@ -2652,6 +2987,65 @@ describe("local immutable GitHub Release publication", () => {
       (candidate) => (candidate.assets[1].id = candidate.assets[0].id),
     ]) {
       const candidate = structuredClone(draft);
+      mutate(candidate);
+      expect(() => validate(candidate)).toThrow();
+    }
+  });
+
+  test("retained-draft public readback rejects release metadata drift", () => {
+    const fixture = assetFixture();
+    const tag = "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0";
+    const body = "exact retained draft body";
+    const assetsURL =
+      "https://api.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets";
+    const uploadURL =
+      "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}";
+    const release = {
+      id: 7,
+      tag_name: tag,
+      target_commitish: "main",
+      name: tag,
+      body,
+      draft: false,
+      prerelease: false,
+      immutable: true,
+      html_url: "https://github.com/example/recovered-release",
+      assets_url: assetsURL,
+      upload_url: uploadURL,
+      assets: [
+        {
+          id: 100,
+          name: "asset.txt",
+          state: "uploaded",
+          digest: fixture.digest,
+          size: readFileSync(fixture.path).length,
+        },
+      ],
+    };
+    const validate = (candidate) =>
+      releaseDeployTestHooks.validateReleaseReadback(
+        candidate,
+        tag,
+        fixture.assets,
+        {
+          expectedReleaseId: 7,
+          expectedName: tag,
+          expectedBody: body,
+          expectedTargetCommitish: "main",
+          expectedAssetsURL: assetsURL,
+          expectedUploadURL: uploadURL,
+        },
+      );
+    expect(() => validate(structuredClone(release))).not.toThrow();
+    for (const mutate of [
+      (candidate) => (candidate.id = 8),
+      (candidate) => (candidate.name = "changed"),
+      (candidate) => (candidate.body = "changed"),
+      (candidate) => (candidate.target_commitish = "changed"),
+      (candidate) => (candidate.assets_url = "https://example.invalid/assets"),
+      (candidate) => (candidate.upload_url = "https://example.invalid/upload"),
+    ]) {
+      const candidate = structuredClone(release);
       mutate(candidate);
       expect(() => validate(candidate)).toThrow();
     }

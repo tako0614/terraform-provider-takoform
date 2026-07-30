@@ -78,6 +78,30 @@ wrong-commit, or locally divergent tag. Any existing draft or public Release
 also stops this phase for manual authoritative inspection; it is not resumed
 or replaced automatically.
 
+If `recover-tag-only` itself stops after GitHub has created one exact retained
+draft, resume only that explicitly named draft with:
+
+```console
+bun run deploy -- takoform-form-package-release recover-draft \
+  --tag forms/<release-id>/v<semver> \
+  --expected-commit <candidate-source-commit> \
+  --expected-tag-object <candidate-annotated-tag-object-id> \
+  --expected-recovery-commit <current-reviewed-protected-main-commit> \
+  --release-id <retained-github-release-id> \
+  --run-id <original-candidate-workflow-run-id> \
+  --run-attempt <original-candidate-workflow-run-attempt>
+```
+
+`recover-draft` repeats the original candidate, tag, protected-main, stable
+recovery-path, and owner-gate proofs. It accepts only one exact draft identity
+with the original tag, name, body, upload endpoint, and candidate asset subset.
+Every existing asset must have a unique positive GitHub ID and the exact name,
+state, size, and digest from the same candidate. The phase uploads only missing
+assets, re-reads the complete draft, repeats the owner and tag fences, publishes
+that same Release ID, and performs immutable download readback. It never creates
+or deletes a Release and never creates, moves, or deletes a tag. An extra,
+duplicate, unknown, drifted, public, or competing identity stops recovery.
+
 Repeat prepare/publish/verify for all 34 plan entries. Once every independent
 release exists, retain one deterministic, create-only publication record
 outside the repository:
