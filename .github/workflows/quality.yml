@@ -43,7 +43,7 @@ jobs:
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # pinned: v2
         with:
-          tofu_version: 1.12.1
+          tofu_version: 1.12.3
           tofu_wrapper: false
 
       - name: Setup Terraform
