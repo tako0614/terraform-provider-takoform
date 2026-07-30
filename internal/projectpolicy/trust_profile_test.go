@@ -300,6 +300,71 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	}
 }
 
+func TestReleaseWorkflowsPinTheReviewedCLIMatrix(t *testing.T) {
+	root := repositoryRoot(t)
+	var release releaseDescriptor
+	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
+
+	versions := make(map[string]string, len(release.CLIMatrix))
+	for _, entry := range release.CLIMatrix {
+		if entry.Version == "" {
+			t.Fatalf("release CLI matrix has no version for %s", entry.Product)
+		}
+		versions[entry.Product] = entry.Version
+	}
+	if len(versions) != 2 || versions["OpenTofu"] == "" || versions["Terraform"] == "" {
+		t.Fatalf("release CLI matrix is incomplete: %#v", versions)
+	}
+
+	workflows, err := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := []struct {
+		product string
+		action  string
+		key     string
+	}{
+		{product: "OpenTofu", action: "opentofu/setup-opentofu@", key: "tofu_version"},
+		{product: "Terraform", action: "hashicorp/setup-terraform@", key: "terraform_version"},
+	}
+	for _, workflowPath := range workflows {
+		workflow := readText(t, workflowPath)
+		for _, tool := range tools {
+			actionCount := strings.Count(workflow, tool.action)
+			if actionCount == 0 {
+				continue
+			}
+			want := tool.key + ": " + versions[tool.product]
+			versionCount := 0
+			for _, line := range strings.Split(workflow, "\n") {
+				line = strings.TrimSpace(line)
+				if !strings.HasPrefix(line, tool.key+":") {
+					continue
+				}
+				versionCount++
+				if line != want {
+					t.Errorf(
+						"%s pins %q, want the reviewed %q",
+						filepath.Base(workflowPath),
+						line,
+						want,
+					)
+				}
+			}
+			if versionCount != actionCount {
+				t.Errorf(
+					"%s has %d %s setup actions but %d exact version pins",
+					filepath.Base(workflowPath),
+					actionCount,
+					tool.product,
+					versionCount,
+				)
+			}
+		}
+	}
+}
+
 func TestReleaseWorkflowsOnlyPrepareChecksumClosedCandidates(t *testing.T) {
 	root := repositoryRoot(t)
 	workflows := []struct {

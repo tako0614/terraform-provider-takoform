@@ -436,7 +436,7 @@ func TestRegistryReadbackWorkflowUsesBothCLIsAndAnIsolatedSigner(t *testing.T) {
 	workflow := string(raw)
 	for _, required := range []string{
 		"permissions: {}",
-		"tofu_version: 1.12.1",
+		"tofu_version: 1.12.3",
 		"terraform_version: 1.15.8",
 		"render-registry-matrix",
 		"admission-readback registry",
