@@ -1,8 +1,11 @@
 # takoform.com website
 
-Static public site for the Takoform project, served as a Cloudflare Worker with
-static assets. There is no build step or server-side application: everything
-under [`public/`](public/) is deployed as-is.
+Static public site for the Takoform project, currently served through a
+Cloudflare Worker's static-asset support. Cloudflare is used only to host
+`takoform.com` and the immutable public schema URLs; the Takoform provider,
+Service Form API contract, Form Packages, and provider-neutral `EdgeWorker`
+resource do not require Cloudflare. There is no build step or server-side
+application: everything under [`public/`](public/) is deployed as-is.
 
 The landing page is bilingual on one URL.
 [`public/index.html`](public/index.html) contains English and Japanese `.l10n`
@@ -77,7 +80,7 @@ requires its served bytes to equal the candidate exactly. A changed body,
 redirect, non-200 response, transport error, or partially existing origin
 blocks publication; an existing `$id` is never repaired in place.
 
-The first deployment currently also creates the schema origin. It is allowed
+If the schema origin has never been minted, its first deployment is allowed
 only when every schema URL fails specifically with DNS `ENOTFOUND` and the
 operator explicitly acknowledges that one-time mint:
 
@@ -137,8 +140,15 @@ operator and are never committed here.
 ## Content policy
 
 The site must claim nothing beyond signed, committed evidence in this
-repository. In particular it must not state that a Form Package is admitted,
-that a candidate Form is `portable-standard`, or that provider `v1.0.1` is
-installable from a Registry until the corresponding live evidence exists. See
+repository. The current public truth is: provider `v1.0.1` is published and
+Registry-verified; all 34 current Form Packages are published and immutable;
+`forms/admissions/v1.0.6` admits exactly 10 as `portable-standard`; and the
+remaining 24 are published but not admitted. The API nevertheless remains
+`forms.takoform.com/v1alpha1`.
+
+`release/version.json` keeps `publicationStatus: candidate-only` as descriptor
+metadata and must not be presented as live availability state. Any later
+publication, admission, or revocation claim still requires the corresponding
+retained evidence. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),
 and the repository [`AGENTS.md`](../AGENTS.md).

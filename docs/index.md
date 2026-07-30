@@ -17,7 +17,8 @@ is `registry.terraform.io/tako0614/takoform`.
   pin the exact version and let Terraform or OpenTofu verify its signed
   checksums during installation.
 - **Availability is verified, not declared by this immutable documentation.**
-  Check the canonical
+  Provider `v1.0.1` has a signed release and retained authenticated direct
+  installation readback from both Terraform and OpenTofu. Check the canonical
   [Registry version endpoint](https://registry.terraform.io/v1/providers/tako0614/takoform/versions)
   for exact version `1.0.1`, then run `terraform init` or `tofu init` with the
   exact pin. A source tag, documentation page, or local build alone is not
@@ -25,13 +26,22 @@ is `registry.terraform.io/tako0614/takoform`.
 - **The API remains `forms.takoform.com/v1alpha1`.** Provider SemVer and API
   stability are independent; provider `v1.0.1` does not graduate the API to
   `v1`.
-- **The 34 Service Forms below are `structural-candidate`.** Their generated
-  schemas, fixtures, provider types, examples, and local lifecycle checks agree,
-  but the current Forms are not admitted as `portable-standard`.
+- **All 34 Service Form Packages below are published and immutable.** The
+  protected `forms/admissions/v1.0.6` closure admits exactly 10 as
+  `portable-standard`: `EdgeWorker`, `ContainerService`, `StatefulEntity`,
+  `Schedule`, `ObjectBucket`, `KeyValueStore`, `RelationalDatabase`, `Queue`,
+  `VectorIndex`, and `ModelEndpoint`. The remaining 24 are published but not
+  admitted.
 - **The read-only `takoform_interface` data source is independent of the
   34-Form resource inventory.** Forms declare generic non-secret runtime
   Interfaces in their Form Definitions, the host materializes them, and the
   provider may read them. The provider has no Interface write resource.
+
+`release/version.json` retains `publicationStatus: candidate-only` as
+release-descriptor metadata, not live availability state. It does not override
+the signed provider release and canonical Registry readback that establish
+provider publication. The protected admission tag and offline-authenticated
+retained closure separately establish Standard Form admission.
 
 See [versioning](../spec/versioning.md), the
 [generated Form inventory](../forms/README.md), and
@@ -58,7 +68,7 @@ composition, if a host offers it, is outside portable Resource desired state.
 
 ## Configuration
 
-The following configuration pins the exact `v1.0.1` release candidate in the
+The following configuration pins the exact published `v1.0.1` release in the
 provider's `v1` compatibility line.
 
 ```hcl
@@ -108,7 +118,7 @@ installation evidence.
 
 The endpoint must advertise `features.service_forms = true`, API version
 `forms.takoform.com/v1alpha1`, its same-origin versioned endpoint, and exact
-availability for every build-pinned candidate FormRef used by the
+availability for every build-pinned FormRef used by the
 configuration. There is no unversioned fallback.
 
 ## Compute and application

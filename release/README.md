@@ -22,6 +22,13 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
+Provider `v1.0.1` is the current published `v1` release. Its signed GitHub
+Release and authenticated Terraform/OpenTofu installation readback from the
+canonical Registry are retained evidence. `release/version.json` continues to
+say `publicationStatus: candidate-only` because it is the descriptor metadata
+for the candidate that minted this immutable release, not a live availability
+field.
+
 ## Provider v1.0.1 resource transition
 
 Provider `v1.0.1` removes the active `takoform_http_service` resource and adds
@@ -33,7 +40,7 @@ bindings, write fencing, authorization, and lifecycle belong to the host.
 Published `HttpService@1.0.0` bytes and provider `v0.2.1` remain immutable.
 
 The compatibility break is broader than those two removed resource types.
-Provider `v0.2.1` and candidate `v1.0.1` each compile 34 Form identities. They
+Provider `v0.2.1` and published `v1.0.1` each compile 34 Form identities. They
 share 33 kind names, but all 33 shared exact FormRefs/packages changed; there
 are zero unchanged exact identities. Common names, artifacts, connections, and
 semantic field contracts also changed. Every existing v0.2.1 Form resource,
@@ -110,8 +117,8 @@ Providers `v0.1.1`, `v0.1.2`, and the then-corrective `v0.1.3` describe
 historical pre-v1 layouts only. `v0.1.1` included SPDX evidence in
 `SHA256SUMS`; `v0.1.2` omitted the required Registry manifest; and `v0.1.3`
 corrected that historical checksum closure without replacing a published byte.
-None of those layouts defines the current provider `v1.0.1` candidate. The v1
-candidate is governed by the 15-asset provenance closure above and MUST NOT
+None of those layouts defines the current provider `v1.0.1` release. The v1
+release is governed by the 15-asset provenance closure above and MUST NOT
 overwrite or inherit the identity of any historical version.
 
 The signed annotated `v1.0.0` tag is immutable but never became a GitHub
@@ -452,7 +459,7 @@ overwritten. At that historical point the corrected six-entry candidate was
 `v0.1.3`, and direct Terraform/OpenTofu Registry install evidence remained
 post-publication; the coordinated Form `1.0.1` candidate therefore used
 provider `0.1.3`. Those retained facts do not define the current provider
-`v1.0.1` candidate or its 15-asset provenance closure.
+published `v1.0.1` release or its 15-asset provenance closure.
 
 Key rotation is additive and review-gated: create a distinct repo-external key,
 change the pinned fingerprint/public key in one reviewed commit, register that

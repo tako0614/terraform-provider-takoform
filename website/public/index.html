@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Takoform — Vendor-neutral resources for Terraform &amp; OpenTofu</title>
-<meta name="description" content="Takoform defines 34 structural-candidate Service Form resources and a typed Terraform/OpenTofu provider. A conforming host can realize the portable desired-state contract; current candidates are not admitted standards.">
+<meta name="description" content="Takoform provides a Registry-verified Terraform/OpenTofu provider and 34 immutable Service Form Packages. Exactly 10 are admitted portable-standard; the API remains v1alpha1.">
 <meta property="og:title" content="Takoform — Vendor-neutral resources for Terraform &amp; OpenTofu">
-<meta property="og:description" content="34 structural-candidate Service Form resources for a host-neutral desired-state contract. Current Form and provider candidates remain unpublished and unadmitted.">
+<meta property="og:description" content="A host-neutral desired-state contract with provider v1.0.1, 34 published Form Packages, and 10 admitted portable-standard Forms.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Takoform">
 <meta property="og:url" content="https://takoform.com/">
@@ -25,8 +25,8 @@
     ja: "Takoform — ベンダー名を書かない Terraform / OpenTofu リソース"
   };
   var DESCRIPTIONS = {
-    en: "Takoform defines 34 structural-candidate Service Form resources and a typed Terraform/OpenTofu provider. A conforming host can realize the portable desired-state contract; current candidates are not admitted standards.",
-    ja: "Takoform は、34 種類の構造検証済み候補 Service Form と型付き Terraform/OpenTofu プロバイダを定義します。対応ホストはベンダー中立な desired state を実現できますが、現在の候補はまだ標準として admission されていません。"
+    en: "Takoform provides a Registry-verified Terraform/OpenTofu provider and 34 immutable Service Form Packages. Exactly 10 are admitted portable-standard; the API remains v1alpha1.",
+    ja: "Takoform は Registry 検証済みの Terraform/OpenTofu プロバイダと、公開済みの immutable な Service Form Package 34 件を提供します。そのうち正確な 10 件が portable-standard として admission 済みで、API は v1alpha1 のままです。"
   };
   function apply(lang) {
     document.documentElement.setAttribute("data-lang", lang);
@@ -77,7 +77,7 @@
 <section class="hero">
   <div class="container hero-grid">
     <div class="hero-copy">
-      <p class="eyebrow"><span class="dot"></span> forms.takoform.com/v1alpha1 · pre-release</p>
+      <p class="eyebrow"><span class="dot"></span> provider v1.0.1 · Registry verified</p>
       <h1>Take the vendor out of your Terraform code.</h1>
       <p class="lede">
         Takoform is an open-source specification and a Terraform/OpenTofu provider.
@@ -93,7 +93,8 @@
       </div>
       <ul class="badges">
         <li>MIT license</li>
-        <li>34 structural-candidate Form resources</li>
+        <li>34 published immutable Form Packages</li>
+        <li>Exactly 10 admitted <code>portable-standard</code></li>
         <li>One read-only <code>data "takoform_interface"</code> projection</li>
         <li>Definitions are data, not code</li>
       </ul>
@@ -110,7 +111,7 @@
   }
 }
 
-<span class="c"># Candidate only — not on the Registry yet.</span>
+<span class="c"># Published on the canonical Registry; keep the exact pin.</span>
 <span class="k">provider</span> <span class="s">"takoform"</span> {
   <span class="a">endpoint</span> = <span class="s">"https://forms.example.com"</span>
   <span class="a">space</span>    = <span class="s">"prod"</span>
@@ -156,8 +157,9 @@
     <p class="section-lede">
       The provider delivers typed desired state to a host and observes the result.
       A conforming host implements the Takoform API, validates the exact Form
-      identity, and owns creating, changing, and deleting the backend. There is
-      not yet signed lifecycle evidence from a live conforming host.
+      identity, and owns creating, changing, and deleting the backend. The
+      selected-ten admission retains a signed Takosumi host report; every other
+      host must still prove its own exact support.
     </p>
     <div class="cards three">
       <article class="card">
@@ -194,11 +196,13 @@
 
 <section id="resources" class="section">
   <div class="container">
-    <h2>The structural-candidate Form resources</h2>
+    <h2>The published Form resources</h2>
     <p class="section-lede">
-      34 portable Form resources across compute, data, analytics, networking,
-      and operations. They are locally verified structural candidates, not
-      admitted standards. Each describes what you want, never who runs it.
+      All 34 portable Form Packages across compute, data, analytics, networking,
+      and operations are published and immutable. Exactly 10 are admitted as
+      <code>portable-standard</code> under
+      <code>forms/admissions/v1.0.6</code>; the other 24 are published but not
+      admitted. Each describes what you want, never who runs it.
     </p>
       <h3 class="resource-domain">Compute and application</h3>
       <div class="resource-grid">
@@ -253,7 +257,7 @@
       <div class="grow-copy">
         <h3>More are coming</h3>
         <p>
-          This candidate set is a starting point, not the limit. The specification
+          This published set is a starting point, not the limit. The specification
           can define additional service kinds in the same data-only format. A new
           Form still needs its own specification, tests, publication, host evidence,
           and admission. If something you need is missing, propose it on GitHub.
@@ -339,9 +343,9 @@
       <article class="card">
         <h3>Verify, then trust</h3>
         <p>
-          Published releases are signed and pinned by digest. The current
-          candidates stay rejected until their publication and admission
-          evidence can be verified.
+          Published releases are signed and pinned by digest. All 34 current
+          packages have immutable releases; only the exact 10 bound by the
+          admission evidence may be called <code>portable-standard</code>.
         </p>
       </article>
       <article class="card">
@@ -407,28 +411,30 @@
   <div class="container">
     <h2>Current status</h2>
     <p class="section-lede">
-      What works today and what does not yet, as of the latest commit.
+      The published identities and the limits that remain, as of the latest
+      retained evidence.
     </p>
     <div class="status-grid">
       <div class="status-col done">
         <h3>Working today</h3>
         <ul>
           <li>The schemas and an offline package verifier</li>
-          <li>34 statically typed structural-candidate Form resources with create, update, delete, import, and drift detection against an in-process test host</li>
+          <li>Published provider <code>v1.0.1</code>, installed and read back from the canonical Registry with Terraform and OpenTofu</li>
+          <li>34 statically typed Form resources with create, update, delete, import, and drift detection against an in-process test host</li>
           <li>One read-only <code>data "takoform_interface"</code> projection; Form definitions declare interfaces, while the host owns their records, bindings, authorization, and lifecycle</li>
           <li>Non-secret <code>configuration</code> on the application resources</li>
           <li>Lifecycle tests on both Terraform and OpenTofu, run against an in-process test host</li>
-          <li>A fail-closed signed publication pipeline; historical published releases remain verifiable</li>
+          <li>All 34 current Form Packages as signed, immutable releases</li>
+          <li><code>forms/admissions/v1.0.6</code>, admitting exactly 10 packages as <code>portable-standard</code></li>
         </ul>
       </div>
       <div class="status-col pending">
-        <h3>Not yet</h3>
+        <h3>Limits that remain</h3>
         <ul>
-          <li>All 34 current Form Packages are unpublished; <code>ga-core-v2</code> selects exactly ten of them for the first successor admission closure</li>
-          <li>Provider <code>v1.0.1</code> is unpublished, candidate-only, and not yet installable from the Registry</li>
-          <li>The 34 Form definitions are structural candidates, not admitted standards</li>
-          <li>There is no signed lifecycle proof from a live conforming host</li>
-          <li>Current package, provider, Registry-readback, host, and admission evidence is still required</li>
+          <li>The API is still <code>forms.takoform.com/v1alpha1</code>; provider SemVer does not make it stable</li>
+          <li>The other 24 published Form Packages are not admitted as <code>portable-standard</code></li>
+          <li>The retained Takosumi host report covers the exact admitted 10; it is not universal proof for every host</li>
+          <li>Backend availability, placement, credentials, support, and migration remain host/operator responsibilities</li>
         </ul>
       </div>
     </div>
@@ -436,7 +442,11 @@
       The historical generation published before the rebuild is retired, not
       erased. Its releases keep their immutable bytes, signatures, and admission
       evidence, and still verify offline. Nothing there is rewritten or re-signed,
-      and the current <code>ga-core-v2</code> candidates do not inherit those proofs.
+      and the current <code>ga-core-v2</code> closure does not inherit those
+      proofs. In the source descriptor,
+      <code>publicationStatus: candidate-only</code> is candidate metadata;
+      signed release and readback evidence establish the live status of
+      <code>v1.0.1</code>.
     </p>
   </div>
 </section>
@@ -452,7 +462,7 @@ cd terraform-provider-takoform
 
 bun run check
 
-<span class="c"># run the structural-candidate verifier directly</span>
+<span class="c"># run the source conformance verifier directly</span>
 go run ./cmd/standard-form-conformance verify</code></pre>
     </figure>
   </div>
@@ -509,7 +519,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
 <section class="hero">
   <div class="container hero-grid">
     <div class="hero-copy">
-      <p class="eyebrow"><span class="dot"></span> forms.takoform.com/v1alpha1 · pre-release</p>
+      <p class="eyebrow"><span class="dot"></span> provider v1.0.1 · Registry 検証済み</p>
       <h1>Terraform のコードから、<br>ベンダー名をなくす。</h1>
       <p class="lede">Takoform は、サービスをベンダー中立に書くためのオープンな仕様と、その Terraform/OpenTofu プロバイダです。コードに書くのはバケット・キュー・データベースといった必要なものだけ。対応ホストは、その正確なポータブル契約に対してバックエンドを選び、運用できます。ただし、対応状況・置換・移行はホストと明示的な運用計画に依存します。</p>
       <div class="cta-row">
@@ -519,7 +529,8 @@ go run ./cmd/standard-form-conformance verify</code></pre>
       </div>
       <ul class="badges">
         <li>MIT ライセンス</li>
-        <li>構造検証済み候補の Form リソース 34 種類</li>
+        <li>公開済みの immutable な Form Package 34 件</li>
+        <li>正確な 10 件を <code>portable-standard</code> として admission</li>
         <li>読み取り専用の <code>data "takoform_interface"</code> projection 1 種類</li>
         <li>定義はデータのみで、コードを含みません</li>
       </ul>
@@ -536,7 +547,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
   }
 }
 
-<span class="c"># 候補版のみ。まだ Registry から取得できない。</span>
+<span class="c"># canonical Registry で公開済み。正確な version を pin する。</span>
 <span class="k">provider</span> <span class="s">"takoform"</span> {
   <span class="a">endpoint</span> = <span class="s">"https://forms.example.com"</span>
   <span class="a">space</span>    = <span class="s">"prod"</span>
@@ -573,7 +584,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
 <section id="how-ja" class="section alt">
   <div class="container">
     <h2>しくみ</h2>
-    <p class="section-lede">プロバイダは、型付き desired state をホストへ届け、結果を観測します。対応ホストは Takoform API を実装し、正確な Form identity を検証したうえで、バックエンドを作る・変える・消す責任を持ちます。現時点では、仕様に沿った実ホストによる署名付きライフサイクル証跡はありません。</p>
+    <p class="section-lede">プロバイダは、型付き desired state をホストへ届け、結果を観測します。対応ホストは Takoform API を実装し、正確な Form identity を検証したうえで、バックエンドを作る・変える・消す責任を持ちます。選択された 10 Form の admission には署名付き Takosumi host report が保持されていますが、ほかのホストはそれぞれ正確な対応を証明する必要があります。</p>
     <div class="cards three">
       <article class="card">
         <span class="step">01</span>
@@ -596,8 +607,8 @@ go run ./cmd/standard-form-conformance verify</code></pre>
 
 <section id="resources-ja" class="section">
   <div class="container">
-    <h2>構造検証済み候補の Form リソース</h2>
-    <p class="section-lede">計算・データ・分析・ネットワーク・運用にまたがる 34 種類のポータブル Form リソースがあります。ローカルで構造を検証した候補であり、admission 済みの標準ではありません。どれも「何が欲しいか」だけを書き、「誰が動かすか」は書きません。</p>
+    <h2>公開済みの Form リソース</h2>
+    <p class="section-lede">計算・データ・分析・ネットワーク・運用にまたがる Form Package 34 件はすべて公開済みで immutable です。<code>forms/admissions/v1.0.6</code> で正確な 10 件を <code>portable-standard</code> として admission し、残り 24 件は公開済みですが admission されていません。どれも「何が欲しいか」だけを書き、「誰が動かすか」は書きません。</p>
       <h3 class="resource-domain">計算とアプリケーション</h3>
       <div class="resource-grid">
         <div class="resource"><code>takoform_edge_worker</code><span>エッジ／イベント駆動アプリケーション</span></div>
@@ -650,7 +661,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
     <div class="grow-card">
       <div class="grow-copy">
         <h3>ここで終わりではありません</h3>
-        <p>この候補セットが上限ではありません。仕様は、別のサービス種別も同じデータ形式で定義できます。ただし、新しい Form ごとに仕様・テスト・公開・ホスト証跡・admission が必要です。足りないものがあれば GitHub で提案してください。</p>
+        <p>この公開済みセットが上限ではありません。仕様は、別のサービス種別も同じデータ形式で定義できます。ただし、新しい Form ごとに仕様・テスト・公開・ホスト証跡・admission が必要です。足りないものがあれば GitHub で提案してください。</p>
       </div>
       <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform/issues">リソースを提案する</a>
     </div>
@@ -710,7 +721,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
       </article>
       <article class="card">
         <h3>検証してから信頼する</h3>
-        <p>公開済みリリースには署名が付き、内容は digest で固定されます。現在の候補は、公開と admission の証跡を検証できるまで受け入れません。</p>
+        <p>公開済みリリースには署名が付き、内容は digest で固定されます。現在の Form Package 34 件はすべて immutable に公開済みで、admission 証跡に束ねた正確な 10 件だけを <code>portable-standard</code> と呼びます。</p>
       </article>
       <article class="card">
         <h3>運用はホストに任せる</h3>
@@ -770,25 +781,26 @@ go run ./cmd/standard-form-conformance verify</code></pre>
         <h3>できていること</h3>
         <ul>
           <li>スキーマ一式と、オフラインで動くパッケージ検証ツール</li>
-          <li>プロセス内のテスト用ホストに対して、作成・更新・削除・import・drift 検出まで対応した型付きの構造検証済み候補 Form 34 種類</li>
+          <li>canonical Registry から Terraform / OpenTofu の両方で install と readback を確認した provider <code>v1.0.1</code></li>
+          <li>プロセス内のテスト用ホストに対して、作成・更新・削除・import・drift 検出まで対応した型付き Form 34 種類</li>
           <li>読み取り専用の <code>data "takoform_interface"</code> projection 1 種類。Form 定義が interface を宣言し、record・binding・認可・lifecycle はホストが所有します</li>
           <li>アプリケーション系リソースの、シークレットを含まない <code>configuration</code></li>
           <li>Terraform / OpenTofu それぞれでのライフサイクルテスト。相手はプロセス内のテスト用ホストです</li>
-          <li>fail-closed な署名付き公開パイプライン。過去の公開済みリリースは今も検証できます</li>
+          <li>現在の Form Package 34 件すべての署名付き immutable release</li>
+          <li><code>forms/admissions/v1.0.6</code> による、正確な 10 件の <code>portable-standard</code> admission</li>
         </ul>
       </div>
       <div class="status-col pending">
-        <h3>まだできていないこと</h3>
+        <h3>残っている境界</h3>
         <ul>
-          <li>現在の Form Package 34 件はすべて未公開です。<code>ga-core-v2</code> は、そのうち正確な 10 件だけを最初の successor admission closure に選びます</li>
-          <li>プロバイダ <code>v1.0.1 candidate-only</code> は未公開で、まだ Registry からインストールできません</li>
-          <li>34 Form の定義は構造検証済み候補であり、admission 済みの標準ではありません</li>
-          <li>仕様に沿った実ホストによる署名付きライフサイクル証跡はありません</li>
-          <li>現在の package・provider・Registry readback・host・admission の証跡がまだ必要です</li>
+          <li>API は <code>forms.takoform.com/v1alpha1</code> のままです。provider SemVer は API を stable にしません</li>
+          <li>残り 24 件の公開済み Form Package は <code>portable-standard</code> として admission されていません</li>
+          <li>保持された Takosumi host report が証明するのは正確な 10 件だけで、すべての host に共通する証明ではありません</li>
+          <li>バックエンドの availability・placement・credential・support・migration は host / operator の責務です</li>
         </ul>
       </div>
     </div>
-    <p class="fineprint">作り直す前に公開した過去の世代は、消さずに retire しています。リリースの immutable bytes・署名・admission の証跡はそのまま残り、いまもオフラインで検証できます。書き換えも署名し直しもしませんし、現在の <code>ga-core-v2</code> 候補がその証跡を引き継ぐこともありません。</p>
+    <p class="fineprint">作り直す前に公開した過去の世代は、消さずに retire しています。リリースの immutable bytes・署名・admission の証跡はそのまま残り、いまもオフラインで検証できます。書き換えも署名し直しもしませんし、現在の <code>ga-core-v2</code> closure がその証跡を引き継ぐこともありません。source descriptor の <code>publicationStatus: candidate-only</code> は candidate metadata であり、<code>v1.0.1</code> の live status は署名付き release と readback evidence が確定します。</p>
   </div>
 </section>
 
@@ -803,7 +815,7 @@ cd terraform-provider-takoform
 
 bun run check
 
-<span class="c"># 構造検証済み候補の verifier を直接実行する</span>
+<span class="c"># source conformance verifier を直接実行する</span>
 go run ./cmd/standard-form-conformance verify</code></pre>
     </figure>
   </div>

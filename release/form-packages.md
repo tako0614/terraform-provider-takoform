@@ -318,7 +318,12 @@ release evidence. The current `forms/retired-package-set.json` and
 `standard-form-conformance published-package-check` authenticates that selected
 set and its production package-publisher trust inputs offline. The retained
 `1.0.0` history is not rewritten and is not the selected input to that current
-check. No admission activation or revocation release exists. Host fetch/install,
-the remaining role-specific publisher authorities, direct Registry readback,
-portable lifecycle evidence, activation, and live revocation proof remain
-separate consumer/operator work.
+check.
+
+All 34 current plan entries have signed immutable releases. The protected
+`forms/admissions/v1.0.6` tag identifies the retained standard-admission set
+and admits exactly 10 as `portable-standard`. Publication alone grants no
+admission; the other 24 are published but not admitted. The retained Takosumi
+host report proves the selected 10 on that exact host, not universal support.
+Other hosts' fetch/install and lifecycle evidence, plus live revocation proof,
+remain separate consumer/operator work.

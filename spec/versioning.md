@@ -13,7 +13,7 @@ up meaning nothing.
 
 ## Provider releases
 
-The provider `v1.0.1` candidate begins the stable `v1` provider compatibility
+The published provider `v1.0.1` begins the stable `v1` provider compatibility
 line. Within `v1.x`, a release MUST NOT remove an existing
 resource type, silently reinterpret persisted state as a different Form, or
 make an existing valid resource configuration invalid. Such a change requires
@@ -35,6 +35,15 @@ lifecycle request. The explicit migration boundary is documented in
 This promise applies only to the provider binary and its Terraform/OpenTofu
 surface. It does not graduate the portable API group, admit a Form as
 `portable-standard`, or make any host implementation stable.
+
+Provider `v1.0.1` is published and verified by authenticated direct Registry
+installation with Terraform and OpenTofu. All 34 current Form Packages are
+published as immutable identities. The protected
+`forms/admissions/v1.0.6` closure admits exactly 10 as `portable-standard`; the
+remaining 24 are published but not admitted. Package publication grants no
+admission by itself. Neither those publication facts nor the admission
+graduates
+`forms.takoform.com/v1alpha1`.
 
 Provider, Form definition, Form Package, and admission versions MUST NOT be
 coordinated merely to share a number:

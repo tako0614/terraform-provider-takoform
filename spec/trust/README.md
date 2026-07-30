@@ -26,8 +26,9 @@ The provider follows the Terraform Registry contract:
   key;
 - an existing version MUST NOT be overwritten;
 - the `tako0614` public namespace and pinned key ID `34FC18AC897FB709` are
-  registered, while clean Terraform Registry install proof through both
-  OpenTofu and Terraform remains a post-publication external gate.
+  registered; provider `v1.0.1` is published, and its retained authenticated
+  readback proves direct canonical Registry installation through both OpenTofu
+  and Terraform.
 
 Form Packages do not reuse the provider GPG key. The standard Takoform
 publisher uses a keyless Sigstore blob signature and bundle bound to the exact
@@ -97,36 +98,35 @@ release builder, keyless Sigstore workflow, and append-only revocation delivery
 lane now exist. The retired `1.0.1` packages have real immutable releases; their
 exact release closures and signed indexes are retained under `admission/v1`
 with a TUF-authenticated production root and a digest-pinned, version-bound
-historical aggregate package publisher policy. No revocation statement has
-been released. Admission is a source-retained, offline-authenticated evidence
+historical aggregate package publisher policy. All 34 current Form Packages
+also have signed immutable releases, and provider `v1.0.1` has retained
+authenticated direct-Registry readback. No revocation statement has been
+released. Admission is a source-retained, offline-authenticated evidence
 decision, not another package or activation release. Remote host
 distribution/install, host-side publisher-policy enforcement, activation, and
-revocation consumption still require implementation and live evidence. The
-current provider resources have local deterministic `standard`
-definition candidate bytes and structural fixtures only. Their
-inventory is `structural-candidate`, not `portable-standard`; definition status
-does not admit them. Passed host/provider lifecycle reports, portable negative
-wire-code coverage, Registry installation/readback, authenticated admission
-evidence, and live revocation proof are still missing. Signature and
-immutable-tag evidence now prove package publication only. Only authenticated
-host/provider evidence can classify the exact
-package `portable-standard`. The legacy packages remain compatibility
-candidates.
+revocation consumption remain host/operator work.
+
+The generated all-34 source inventory remains `structural-candidate`; that
+local classification and definition `status: standard` do not admit a Form.
+The exact 10 package identities authenticated by the retained v4 closure and
+protected `forms/admissions/v1.0.6` tag are `portable-standard`. The other 24
+are published but not admitted. The retained Takosumi host closure proves only
+those exact 10 on that host. Source definition status, package publication, or
+a different host report cannot inherit that classification. The legacy
+packages remain compatibility candidates.
 
 Provider distribution and standard Form admission use an explicit two-phase
-authority split. Phase 1 may publish a signed, deterministic provider version;
-installability does not admit or activate any Form. Phase 2 starts only after
-that immutable version is available from the canonical Terraform Registry FQN
-through both supported CLIs. Independent protected workflows then produce
-signed host reports, provider reports, one canonical Registry readback, and ten
-admission-evidence subjects. Reviewed source retains those exact candidates,
-package-release readbacks, and the resulting admission set. The closure gate
-authenticates them offline and resolves the exact provider, package, and
-admission checkpoint tags. It does not publish an aggregate archive or GitHub
-Release and has no controller promotion step. Failure leaves the already-public
-provider and packages unadmitted. Provider GPG authority, independent package
-publisher identity, and host, provider, Registry-readback, and
-admission-evidence identities remain distinct.
+authority split. Phase 1 published signed provider `v1.0.1`; installability did
+not admit or activate any Form. After both supported CLIs installed that exact
+version from the canonical Registry FQN, independent protected workflows
+produced signed host reports, all-34 provider reports, one canonical Registry
+readback, and 10 admission-evidence subjects. Reviewed source retains those
+exact candidates, package-release readbacks, and the resulting admission set.
+The closure gate authenticates them offline and resolves the exact provider,
+package, and `forms/admissions/v1.0.6` tags. It publishes no aggregate archive
+or GitHub Release and performs no controller promotion. Provider GPG
+authority, independent package publisher identity, and host, provider,
+Registry-readback, and admission-evidence identities remain distinct.
 
 The direct Registry provider is untrusted executable code. It runs only in a
 read-only job with no protected Environment, OIDC token, attestation, or
@@ -199,13 +199,16 @@ verified certificate-transparency SCT. It reads only retained regular files
 below `admission/v1`; parent-directory symlinks and network lookups are
 rejected by construction.
 
-The admission set format is `takoform.standard-admission-set@v2`. The earlier
-v1 formats were an intentionally non-opening pre-release foundation: no real
-set or trust pins were installed and no provider release could pass them.
-Therefore v2 is a clean pre-publication contract replacement, not a migration
-of admitted or customer state. Test fixtures use an explicit in-process fake
-subject verifier and are never written under the repository's `admission/`
-path; they do not represent signatures or live evidence.
+The historical `admission/v1` set uses
+`takoform.standard-admission-set@v2`; the current retained `admission/v4`
+closure uses `takoform.standard-admission-set@v3`. The earlier v1 formats were
+an intentionally non-opening pre-release foundation: no real set or trust pins
+were installed and no provider release could pass them. Therefore v2 was a
+clean pre-publication contract replacement, not a migration of admitted or
+customer state, while v3 adds the generation-aware current closure. Test
+fixtures use an explicit in-process fake subject verifier and are never written
+under the repository's `admission/` path; they do not represent signatures or
+live evidence.
 
 Canonical host reports remain
 `takoform.standard-runner-report@v1`. Historical provider reports may also use
@@ -271,8 +274,8 @@ including `HttpService@1.0.0`, with the independent
 remain evidence of what ran, but do not grant admission and are not reused for
 the successor.
 
-`admission/v4` is the active `ga-core-v2` candidate lane. It selects the exact
-mixed-version ten-Form subset containing the provider-neutral
+`admission/v4` is the retained admitted `ga-core-v2` closure. It selects the
+exact mixed-version ten-Form subset containing the provider-neutral
 `EdgeWorker@3.0.0`. Provider reports use generation `portable-v1` and must
 close over all 34 current Forms before the builder selects the ten exact
 admission identities. Host reports use generation `ga-core-v2` and contain
@@ -285,15 +288,16 @@ readback candidate binding the two-CLI direct-install matrix, and produces
 deterministic material outside the repository. Provider reports use
 `takoform.standard-provider-runner-report@v2` and bind the exact provider
 binary digest. `standard-admission-evidence.yml` signs only the ten evidence
-subjects. It does not publish a set-wide archive or GitHub Release. Before the
-signed candidates and assembled closure are retained in reviewed source, v4
-contains only reviewed trust and conforming-host policy and all current
-publication/admission gates fail closed.
+subjects. It publishes no set-wide archive or GitHub Release. The exact signed
+output and assembled closure are retained under `admission/v4`; the final
+offline gate authenticates those retained bytes rather than an Actions
+artifact.
 
-Before authentication opens, `admission-closure-check` resolves the admission
-tag, provider tag, and every Form Package tag from fetched local Git refs and
-requires the exact retained commit. The admission tag must point at the current
-checkout, and the annotated provider tag must verify against the pinned
+During authentication, `admission-closure-check` resolves the admission tag,
+provider tag, and every Form Package tag from fetched local Git refs and
+requires their exact retained commits. The admission tag may identify an
+ancestor of the current checkout only while the complete retained-root tree is
+byte-identical, and the annotated provider tag must verify against the pinned
 `3510E75E05BBCC303B92D77934FC18AC897FB709` GPG fingerprint. Package index
 Sigstore authentication remains separate from that Git ref-existence fence.
 
@@ -303,17 +307,18 @@ readbacks are installed and digest-pinned by
 `admission/v1/published-package-set.json`. They pass the separate offline
 `published-package-check` but grant no admission authority. Exact mutually
 distinct admission-evidence, host-report, and provider-report policies and the
-five-role offline pin manifest are now retained. The signed host/provider and
-admission reports and `standard-admission-set.json` are now retained. The
-historical canonical Registry matrix/readback for provider `v0.1.3` are also
+five-role offline pin manifest are retained. The v4 signed host/provider and
+admission reports, canonical Registry readback, and
+`standard-admission-set.json` are retained and authenticated.
+The historical canonical Registry matrix/readback for provider `v0.1.3` are also
 retained under the retired v1 evidence lane, but grant no current admission
 authority. The current v4 lane requires a separately signed readback for the
 exact provider `v1.0.1` release and its two-CLI direct-Registry matrix. The
 admission checkpoint version is independent from the bound Form
 definition/package versions; advancing it does not republish package bytes.
-The approved role identities must still produce exact authenticated evidence;
-a distribution endpoint, unsigned local output, or a different workflow
-identity cannot substitute it.
+Only the approved role identities can produce that evidence; a distribution
+endpoint, unsigned local output, or a different workflow identity cannot
+substitute it.
 
 ## Rotation and revocation
 

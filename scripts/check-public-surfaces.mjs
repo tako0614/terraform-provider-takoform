@@ -11,6 +11,10 @@ import {
   discoverPublicSchemas,
   PUBLIC_SCHEMA_ROUTE,
 } from "./public-schema-manifest.mjs";
+import {
+  loadPublicationTruth,
+  validatePublicationClaimText,
+} from "./publication-truth.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -446,12 +450,6 @@ function checkStaleWebsiteContent() {
       source: visibleText,
     },
     {
-      label: "false active ten-package publication claim",
-      pattern:
-        /\bTen rebuilt package identities are published and signed\b|(?:現行|作り直した)[^.。]{0,100}10[^.。]{0,100}(?:公開済み|公開されています)/i,
-      source: visibleText,
-    },
-    {
       label: "stale ComputeInstance immutable-image description",
       pattern: /\bbuilt from an immutable image\b/i,
       source: visibleText,
@@ -526,19 +524,25 @@ function providerCodeBlocksFromHtml(source) {
     );
 }
 
-function hasExactV1CandidatePin(block) {
-  return /\bversion\s*=\s*"= 1\.0\.1"/.test(block);
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function checkTerraformProviderExample(filePath) {
+function hasExactProviderPin(block, providerVersion) {
+  return new RegExp(
+    `\\bversion\\s*=\\s*"= ${escapeRegExp(providerVersion)}"`,
+  ).test(block);
+}
+
+function checkTerraformProviderExample(filePath, providerVersion) {
   const source = read(filePath);
   if (!source.includes("registry.terraform.io/tako0614/takoform")) {
     fail(`${relative(filePath)}: missing canonical provider source`);
     return;
   }
-  if (!hasExactV1CandidatePin(source)) {
+  if (!hasExactProviderPin(source, providerVersion)) {
     fail(
-      `${relative(filePath)}: provider example must contain version = "= 1.0.1"`,
+      `${relative(filePath)}: provider example must contain version = "= ${providerVersion}"`,
     );
   }
 }
@@ -552,21 +556,22 @@ function hasNotInstallableWording(text) {
   );
 }
 
-function checkImmutableProviderTagDocs(source) {
+function checkImmutableProviderTagDocs(source, truth) {
+  const escapedVersion = escapeRegExp(truth.providerVersion);
   const forbidden = [
     {
-      label: "candidate-only provider status",
-      pattern: /\bcandidate-only\b/i,
+      label: "stale unpublished provider status",
+      pattern: new RegExp(
+        `\\bv?${escapedVersion}\\b[^.\\n]{0,140}\\b(?:unpublished|unavailable)\\b`,
+        "i",
+      ),
     },
     {
-      label: "mutable current publication status",
-      pattern:
-        /\b(?:currently|now)\s+(?:published|unpublished|available|unavailable|installable)\b/i,
-    },
-    {
-      label: "asserted live provider availability",
-      pattern:
-        /\b(?:provider\s+)?`?v1\.0\.1`?[^.\n]{0,100}\b(?:is|remains)\s+(?:not\s+)?(?:published|unpublished|available|unavailable|installable)\b/i,
+      label: "stale not-installable provider status",
+      pattern: new RegExp(
+        `\\bv?${escapedVersion}\\b[^.\\n]{0,140}\\bnot (?:yet )?installable\\b`,
+        "i",
+      ),
     },
     {
       label: "publication-pending wording",
@@ -602,7 +607,9 @@ function checkImmutableProviderTagDocs(source) {
     },
     {
       label: "exact provider tag checkout",
-      pattern: /git checkout --detach v1\.0\.1/,
+      pattern: new RegExp(
+        `git checkout --detach v${escapeRegExp(truth.providerVersion)}`,
+      ),
     },
     {
       label: "full provider source clone",
@@ -622,7 +629,10 @@ function checkImmutableProviderTagDocs(source) {
   }
 }
 
-function checkProviderCandidateExamples() {
+function checkPublishedProviderExamples(truth) {
+  if (truth === null) {
+    return;
+  }
   const docsIndex = path.join(repositoryRoot, "docs", "index.md");
   const docsSource = read(docsIndex);
   const docsBlocks = providerCodeBlocksFromMarkdown(docsSource);
@@ -630,13 +640,14 @@ function checkProviderCandidateExamples() {
     fail("docs/index.md: missing provider source example");
   }
   for (const [index, block] of docsBlocks.entries()) {
-    if (!hasExactV1CandidatePin(block)) {
+    if (!hasExactProviderPin(block, truth.providerVersion)) {
       fail(
-        `docs/index.md: provider example ${index + 1} must contain version = "= 1.0.1"`,
+        `docs/index.md: provider example ${index + 1} must contain version ` +
+          `= "= ${truth.providerVersion}"`,
       );
     }
   }
-  checkImmutableProviderTagDocs(docsSource);
+  checkImmutableProviderTagDocs(docsSource, truth);
 
   const htmlFiles = walkFiles(publicRoot, (filePath) =>
     filePath.endsWith(".html"),
@@ -648,40 +659,138 @@ function checkProviderCandidateExamples() {
       continue;
     }
     for (const [index, block] of blocks.entries()) {
-      if (!hasExactV1CandidatePin(block)) {
+      if (!hasExactProviderPin(block, truth.providerVersion)) {
         fail(
-          `${relative(filePath)}: provider example ${index + 1} must contain version = "= 1.0.1"`,
+          `${relative(filePath)}: provider example ${index + 1} must contain ` +
+            `version = "= ${truth.providerVersion}"`,
         );
       }
     }
     const visibleText = visibleHtmlText(source);
-    if (!/\bcandidate-only\b/i.test(visibleText)) {
-      fail(`${relative(filePath)}: missing candidate-only status wording`);
+    if (hasNotInstallableWording(visibleText)) {
+      fail(`${relative(filePath)}: contains stale not-installable wording`);
     }
-    if (!hasNotInstallableWording(visibleText)) {
-      fail(
-        `${relative(filePath)}: missing explicit not-installable status wording`,
-      );
+  }
+}
+
+function checkRetainedPublicationTruthCopy(truth) {
+  if (truth === null) {
+    return;
+  }
+  const truthFiles = [
+    path.join(repositoryRoot, "README.md"),
+    path.join(repositoryRoot, "SECURITY.md"),
+    path.join(repositoryRoot, "docs", "index.md"),
+    path.join(repositoryRoot, "website", "README.md"),
+    path.join(publicRoot, "index.html"),
+    path.join(publicRoot, "docs", "index.html"),
+    path.join(publicRoot, "spec", "index.html"),
+  ];
+  const textByFile = new Map(
+    truthFiles.map((filePath) => {
+      const source = read(filePath);
+      const text = filePath.endsWith(".html")
+        ? visibleHtmlText(source)
+        : source.replace(/\s+/g, " ");
+      return [filePath, text];
+    }),
+  );
+
+  for (const filePath of truthFiles) {
+    const text = textByFile.get(filePath) ?? "";
+    for (const [label, value] of [
+      ["provider version", truth.providerVersion],
+      ["admission identity", truth.admissionTag],
+      ["portable-standard status", "portable-standard"],
+    ]) {
+      if (!text.includes(value)) {
+        fail(`${relative(filePath)}: missing evidence-derived ${label} ${value}`);
+      }
+    }
+    try {
+      validatePublicationClaimText(text, truth, relative(filePath));
+    } catch (error) {
+      fail(error.message);
+    }
+    if (!/\bRegistry\b/.test(text)) {
+      fail(`${relative(filePath)}: missing canonical Registry evidence boundary`);
     }
   }
 
-  const mainIndex = path.join(publicRoot, "index.html");
-  const localizedSections = extractLocalizedSections(read(mainIndex));
-  for (const lang of ["en", "ja"]) {
-    const section = localizedSections.get(lang);
-    if (section === undefined) {
-      continue;
+  const apiTruthFiles = truthFiles.filter(
+    (filePath) => filePath !== path.join(repositoryRoot, "SECURITY.md"),
+  );
+  for (const filePath of apiTruthFiles) {
+    if (
+      !(textByFile.get(filePath) ?? "").includes(
+        "forms.takoform.com/v1alpha1",
+      )
+    ) {
+      fail(`${relative(filePath)}: missing v1alpha1 API boundary`);
     }
-    const visibleText = visibleHtmlText(section);
-    if (!/\bcandidate-only\b/i.test(visibleText)) {
-      fail(
-        `${relative(mainIndex)}: ${lang} copy is missing candidate-only status wording`,
-      );
+  }
+
+  const descriptorFiles = new Set([
+    path.join(repositoryRoot, "README.md"),
+    path.join(repositoryRoot, "SECURITY.md"),
+    path.join(repositoryRoot, "docs", "index.md"),
+    path.join(repositoryRoot, "website", "README.md"),
+    path.join(publicRoot, "index.html"),
+    path.join(publicRoot, "docs", "index.html"),
+  ]);
+  for (const [filePath, text] of textByFile) {
+    const escapedVersion = escapeRegExp(truth.providerVersion);
+    const staleProvider = new RegExp(
+      `\\bv?${escapedVersion}\\b[^.。]{0,180}` +
+        `(?:\\bunpublished\\b|\\bunavailable\\b|` +
+        `\\bnot (?:yet )?installable\\b|未公開|インストールできません)`,
+      "i",
+    );
+    if (staleProvider.test(text)) {
+      fail(`${relative(filePath)}: contains stale provider publication status`);
     }
-    if (!hasNotInstallableWording(visibleText)) {
-      fail(
-        `${relative(mainIndex)}: ${lang} copy is missing explicit not-installable status wording`,
-      );
+    if (descriptorFiles.has(filePath)) {
+      for (const match of text.matchAll(/\bcandidate-only\b/gi)) {
+        const context = text.slice(
+          Math.max(0, match.index - 220),
+          Math.min(text.length, match.index + 320),
+        );
+        if (
+          !/(?:release\/version\.json|source descriptor)/i.test(context) ||
+          !/\bmetadata\b/i.test(context) ||
+          !/\blive\b/i.test(context)
+        ) {
+          fail(
+            `${relative(filePath)}: candidate-only appears outside the ` +
+              "release descriptor metadata explanation",
+          );
+        }
+      }
+    }
+  }
+
+  for (const filePath of [
+    path.join(repositoryRoot, "README.md"),
+    path.join(repositoryRoot, "docs", "index.md"),
+    path.join(publicRoot, "docs", "index.html"),
+  ]) {
+    const text = textByFile.get(filePath) ?? "";
+    for (const kind of truth.admittedKinds) {
+      if (!text.includes(kind)) {
+        fail(`${relative(filePath)}: missing admitted Form ${kind}`);
+      }
+    }
+  }
+
+  const websiteReadme =
+    textByFile.get(path.join(repositoryRoot, "website", "README.md")) ?? "";
+  for (const required of [
+    /Cloudflare is used only to host/,
+    /provider-neutral `EdgeWorker`/,
+    /do not require Cloudflare/,
+  ]) {
+    if (!required.test(websiteReadme)) {
+      fail("website/README.md: missing static-hosting-only Cloudflare boundary");
     }
   }
 }
@@ -836,9 +945,9 @@ if (standardSet.admissionStatus !== "external-required") {
 const packages = Array.isArray(standardSet.packages)
   ? standardSet.packages
   : [];
-if (packages.length !== 34) {
+if (packages.length === 0) {
   fail(
-    `forms/standard-package-set.json: expected 34 Forms, found ${packages.length}`,
+    "forms/standard-package-set.json: packages must not be empty",
   );
 }
 
@@ -891,14 +1000,33 @@ compareExact(
 const releaseVersion = readJson(
   path.join(repositoryRoot, "release", "version.json"),
 );
-if (releaseVersion.version !== "1.0.1") {
-  fail("release/version.json: version must be 1.0.1");
-}
-if (releaseVersion.tag !== "v1.0.1") {
-  fail("release/version.json: tag must be v1.0.1");
-}
 if (releaseVersion.publicationStatus !== "candidate-only") {
   fail("release/version.json: publicationStatus must be candidate-only");
+}
+if (
+  typeof releaseVersion.version !== "string" ||
+  !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(
+    releaseVersion.version,
+  )
+) {
+  fail("release/version.json: version must be exact SemVer");
+}
+if (releaseVersion.tag !== `v${releaseVersion.version}`) {
+  fail("release/version.json: tag must match version");
+}
+
+let publicationTruth = null;
+try {
+  publicationTruth = loadPublicationTruth(repositoryRoot);
+} catch (error) {
+  fail(`retained publication truth: ${error.message}`);
+}
+if (publicationTruth !== null) {
+  compareExact(
+    "published Form Package kinds",
+    publicationTruth.publishedKinds,
+    forms.map(({ kind }) => kind),
+  );
 }
 
 const formDocNames = forms.map(({ docName }) => docName);
@@ -936,7 +1064,7 @@ compareExact(
   expectedResourceExampleFiles,
 );
 for (const example of resourceExampleFiles) {
-  checkTerraformProviderExample(example);
+  checkTerraformProviderExample(example, releaseVersion.version);
 }
 
 const dataSourceDocs = path.join(repositoryRoot, "docs", "data-sources");
@@ -965,7 +1093,7 @@ compareExact(
   ["takoform_interface/data-source.tf"],
 );
 for (const example of dataSourceExampleFiles) {
-  checkTerraformProviderExample(example);
+  checkTerraformProviderExample(example, releaseVersion.version);
 }
 
 const docsIndexPath = path.join(repositoryRoot, "docs", "index.md");
@@ -999,7 +1127,8 @@ checkHtmlFiles();
 checkLocalizedResourceCards(formDocNames);
 checkDocsPageLinks(formDocNames);
 checkStaleWebsiteContent();
-checkProviderCandidateExamples();
+checkPublishedProviderExamples(publicationTruth);
+checkRetainedPublicationTruthCopy(publicationTruth);
 checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
 checkPublicSchemas();
@@ -1014,6 +1143,10 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(
-    "Public surfaces OK: 34 Form candidates, interface data source, docs, examples, website links, and normative schema URLs are consistent.",
+    `Public surfaces OK: provider v${publicationTruth.providerVersion}, ` +
+      `${publicationTruth.publishedCount} published Form Packages, ` +
+      `${publicationTruth.admittedCount} admitted Forms, interface data ` +
+      "source, docs, examples, website links, and normative schema URLs " +
+      "are consistent.",
   );
 }
