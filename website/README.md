@@ -56,11 +56,17 @@ It is not a force flag and does not replace any check.
 
 The entrypoint rejects ambient Cloudflare/Wrangler credentials and runtime
 overrides, then binds the local Wrangler OAuth profile to those exact IDs. It
-archives the exact protected-main commit into an isolated snapshot, verifies
-the whole snapshot against Git blobs, and uses that same snapshot for the
-public-surface gate, credential scan, digest manifest, and upload. Ignored and
-untracked files below a publication path are rejected. Wrangler is installed
-from the exact committed `bun.lock`; a PATH-provided Wrangler is never used.
+freezes the exact protected-main commit twice: a Git-metadata-free archive for
+the public bytes and an independent non-local, detached clone for offline Git
+authority. The clone has no remote or object alternates. The retained
+publication/admission checks run only in that clone; the static website,
+schema, copy, and deploy-safety checks run only in the archive. Both roots are
+clean, exact-commit checked, and re-hashed after validation and before every
+writer. Only the archive is used for the credential scan, digest manifest, and
+upload, and every archive byte is verified against the commit's Git blobs.
+Ignored and untracked files below a publication path are rejected. Wrangler is
+installed from the exact committed `bun.lock`; a PATH-provided Wrangler is
+never used.
 
 Publication is staged: `versions upload --strict` creates a non-public version,
 the source/deployment/domain fences and whole-tree digest are checked again,

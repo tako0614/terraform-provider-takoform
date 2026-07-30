@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -116,7 +117,9 @@ export function createHardenedGateEnvironment(
     if (
       name.startsWith("BUN_") ||
       name.startsWith("CF_") ||
+      name.startsWith("CGO_") ||
       name.startsWith("CLOUDFLARE_") ||
+      name.startsWith("GO") ||
       name.startsWith("NODE_") ||
       name.startsWith("NPM_CONFIG_") ||
       name.startsWith("TAKOFORM_CLOUDFLARE_") ||
@@ -128,6 +131,21 @@ export function createHardenedGateEnvironment(
   }
   return {
     ...hardened,
+    CGO_ENABLED: "0",
+    GOAUTH: "off",
+    GOCACHE: join(managedHome, "go-build"),
+    GOENV: "off",
+    GOFLAGS: "-mod=readonly -buildvcs=false",
+    GOMODCACHE: join(managedHome, "go", "pkg", "mod"),
+    GONOPROXY: "",
+    GONOSUMDB: "",
+    GOPATH: join(managedHome, "go"),
+    GOPRIVATE: "",
+    GOPROXY: "https://proxy.golang.org",
+    GOSUMDB: "sum.golang.org",
+    GOTOOLCHAIN: "local",
+    GOVCS: "*:off",
+    GOWORK: "off",
     HOME: managedHome,
     PATH: [
       dirname(bunExecutable),
@@ -250,7 +268,10 @@ export function createCommittedSnapshot({
   );
   chmodSync(temporaryRoot, 0o700);
   const root = join(temporaryRoot, "source");
+  const authorityRoot = join(temporaryRoot, "git-authority");
+  const emptyTemplateRoot = join(temporaryRoot, "empty-git-template");
   mkdirSync(root, { mode: 0o700 });
+  mkdirSync(emptyTemplateRoot, { mode: 0o700 });
   try {
     const archive = runGit({
       args: ["archive", "--format=tar", commit],
@@ -269,12 +290,56 @@ export function createCommittedSnapshot({
         stdio: ["pipe", "pipe", "pipe"],
       },
     );
+    runGit({
+      args: [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "clone",
+        "--no-local",
+        "--no-checkout",
+        "--quiet",
+        "--template",
+        emptyTemplateRoot,
+        "--",
+        repo,
+        authorityRoot,
+      ],
+      environment,
+      gitExecutable,
+      repo: "/",
+    });
+    runGit({
+      args: [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "checkout",
+        "--detach",
+        "--force",
+        commit,
+      ],
+      environment,
+      gitExecutable,
+      repo: authorityRoot,
+    });
+    runGit({
+      args: ["remote", "remove", "origin"],
+      environment,
+      gitExecutable,
+      repo: authorityRoot,
+    });
+    assertCommittedGitAuthority({
+      authorityRoot,
+      commit,
+      environment,
+      gitExecutable,
+    });
   } catch (error) {
     rmSync(temporaryRoot, { force: true, recursive: true });
     throw error;
   }
   let disposed = false;
   return {
+    authorityRoot,
     root,
     dispose() {
       if (disposed) return;
@@ -282,6 +347,112 @@ export function createCommittedSnapshot({
       rmSync(temporaryRoot, { force: true, recursive: true });
     },
   };
+}
+
+export function assertCommittedGitAuthority({
+  authorityRoot,
+  commit,
+  environment = createHardenedGitEnvironment(),
+  gitExecutable = "git",
+}) {
+  if (!/^[0-9a-f]{40}$/u.test(commit)) {
+    throw new Error(`Git authority commit is not a full object id: ${commit}`);
+  }
+  const text = (args) =>
+    runGit({
+      args,
+      encoding: "utf8",
+      environment,
+      gitExecutable,
+      repo: authorityRoot,
+    }).trim();
+  const raw = (args) =>
+    runGit({
+      args,
+      encoding: "utf8",
+      environment,
+      gitExecutable,
+      repo: authorityRoot,
+    });
+  const directories = text([
+    "rev-parse",
+    "--path-format=absolute",
+    "--git-dir",
+    "--git-common-dir",
+    "--show-toplevel",
+  ]).split("\n");
+  const expectedGitDirectory = join(resolve(authorityRoot), ".git");
+  if (
+    directories.length !== 3 ||
+    directories[0] !== expectedGitDirectory ||
+    directories[1] !== expectedGitDirectory ||
+    directories[2] !== resolve(authorityRoot)
+  ) {
+    throw new Error("Git authority clone directories are not isolated");
+  }
+  const absent = (path) => {
+    try {
+      lstatSync(path);
+      return false;
+    } catch (error) {
+      if (error?.code === "ENOENT") return true;
+      throw error;
+    }
+  };
+  if (
+    !absent(join(expectedGitDirectory, "objects", "info", "alternates")) ||
+    !absent(join(expectedGitDirectory, "info", "grafts")) ||
+    !absent(join(expectedGitDirectory, "shallow")) ||
+    readdirSync(join(expectedGitDirectory, "objects", "pack")).some((name) =>
+      name.endsWith(".promisor"),
+    )
+  ) {
+    throw new Error(
+      "Git authority clone has external, partial, shallow, or graft authority",
+    );
+  }
+  const configEntries = splitNullTerminated(
+    raw(["config", "--local", "-z", "--list"]),
+  );
+  const allowedConfig = new Set([
+    "core.bare",
+    "core.filemode",
+    "core.logallrefupdates",
+    "core.repositoryformatversion",
+  ]);
+  const config = new Map();
+  for (const entry of configEntries) {
+    const separator = entry.indexOf("\n");
+    const name = separator < 0 ? entry : entry.slice(0, separator);
+    const value = separator < 0 ? "" : entry.slice(separator + 1);
+    if (!allowedConfig.has(name) || config.has(name)) {
+      throw new Error(`Git authority clone has unexpected config ${name}`);
+    }
+    config.set(name, value);
+  }
+  if (
+    config.get("core.repositoryformatversion") !== "0" ||
+    config.get("core.bare") !== "false" ||
+    config.get("core.logallrefupdates") !== "true" ||
+    !new Set(["true", "false"]).has(config.get("core.filemode"))
+  ) {
+    throw new Error("Git authority clone core config is not exact");
+  }
+  if (
+    text(["rev-parse", "HEAD"]) !== commit ||
+    text(["rev-parse", "--abbrev-ref", "HEAD"]) !== "HEAD" ||
+    text(["rev-parse", "--is-shallow-repository"]) !== "false" ||
+    text(["rev-parse", "--show-object-format"]) !== "sha1" ||
+    text([
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=all",
+      "--ignored=matching",
+    ]) !== ""
+  ) {
+    throw new Error("Git authority clone is not the exact clean detached commit");
+  }
+  raw(["fsck", "--strict", "--connectivity-only"]);
 }
 
 export function createPinnedWranglerInstallation({
@@ -383,6 +554,39 @@ export function createPublicationManifest(root, paths) {
     }
     files.push(path);
   }
+  return manifest(files.map((path) => publicationEntry(absoluteRoot, path)));
+}
+
+export function createPublicationManifestFromEntries(root, entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new Error("publication manifest entries must be non-empty");
+  }
+  const absoluteRoot = resolve(root);
+  const seen = new Set();
+  const files = entries.map((entry) => {
+    if (
+      entry === null ||
+      typeof entry !== "object" ||
+      typeof entry.path !== "string" ||
+      entry.path === "" ||
+      seen.has(entry.path)
+    ) {
+      throw new Error("publication manifest has an invalid or duplicate path");
+    }
+    seen.add(entry.path);
+    const path = resolve(absoluteRoot, entry.path);
+    const name = relative(absoluteRoot, path).split(sep).join("/");
+    if (name !== entry.path) {
+      throw new Error(`publication manifest path escaped its root: ${entry.path}`);
+    }
+    const metadata = lstatSync(path);
+    if (metadata.isSymbolicLink() || !metadata.isFile()) {
+      throw new Error(
+        `publication manifest path is not a regular file: ${entry.path}`,
+      );
+    }
+    return path;
+  });
   return manifest(files.map((path) => publicationEntry(absoluteRoot, path)));
 }
 

@@ -215,7 +215,18 @@ test("website deploy contract declares the published identity obligation", () =>
     "TAKOFORM_CLOUDFLARE_ACCOUNT_ID",
     "TAKOFORM_CLOUDFLARE_ZONE_ID",
   ]);
-  expect(website.requiresTools).toEqual(["git", "bun", "tar"]);
+  expect(website.requiresTools).toEqual(["git", "bun", "go", "tar"]);
+  expect(website.requiresScripts).toEqual([
+    "check:public-surfaces",
+    "check:public-authority",
+    "check:public-snapshot",
+  ]);
+  expect(website.obligations.provenance).toContain(
+    "independent non-local detached Git authority clone",
+  );
+  expect(website.obligations.provenance).toContain(
+    "static public-surface gate",
+  );
   expect(website.obligations["no-overwrite"]).toContain(
     INITIAL_SCHEMA_ORIGIN_MINT_ACK,
   );

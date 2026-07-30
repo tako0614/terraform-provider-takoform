@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 import {
+  assertCommittedGitAuthority,
   assertPublicationManifest,
   assertSafeRepositoryGitConfiguration,
   collectRegularFiles,
@@ -29,6 +30,7 @@ import {
   createHardenedGitEnvironment,
   createPinnedWranglerInstallation,
   createPublicationManifest,
+  createPublicationManifestFromEntries,
   inspectUncommittedPublicationPaths,
   parseCurrentProductionDeployment,
   pinnedWranglerInvocation,
@@ -82,7 +84,9 @@ const SITE = {
   worker: "takoform-website",
   assets: "website/public",
   config: "website/wrangler.jsonc",
+  authorityGate: "check:public-authority",
   gate: "check:public-surfaces",
+  snapshotGate: "check:public-snapshot",
   url: "https://takoform.com",
 };
 const PUBLICATION_PATHS = [SITE.config, SITE.assets];
@@ -108,14 +112,18 @@ const CONTRACT = {
       surface: SITE.surface,
       target: `cloudflare-worker:${SITE.worker}`,
       covers: ["website/wrangler.jsonc"],
-      requiresScripts: [SITE.gate],
-      requiresTools: ["git", "bun", "tar"],
+      requiresScripts: [
+        SITE.gate,
+        SITE.authorityGate,
+        SITE.snapshotGate,
+      ],
+      requiresTools: ["git", "bun", "go", "tar"],
       requiresEnv: [CLOUDFLARE_ACCOUNT_ENV, CLOUDFLARE_ZONE_ENV],
       // 静的 asset だけを配る Worker で、durable state も server handler も
       // 持ちません。ただし schema $id は consumer が固定する公開 identity です。
       triggers: ["irreversible", "authority", "published-identity"],
       obligations: {
-        provenance: `refuses a dirty or shallow worktree, rejects ignored and untracked publication files, requires main HEAD to equal a fresh read of the canonical HTTPS origin/main ref, creates an isolated git-archive snapshot of that exact commit, proves every snapshotted config/asset byte against its Git blob, runs the narrow \`bun run ${SITE.gate}\` gate and credential scan against that same snapshot, and records its complete asset manifest. Wrangler reads only the re-hashed snapshot and is installed from the exact committed lock. The repository-wide \`bun run check\` remains separate handoff evidence because its Go and OpenTofu checks do not validate these static bytes.`,
+        provenance: `refuses a dirty or shallow worktree, rejects ignored and untracked publication files, requires main HEAD to equal a fresh read of the canonical HTTPS origin/main ref, creates both an isolated git-archive content snapshot and an independent non-local detached Git authority clone of that exact commit, and removes the clone's remote. The source-retained publication/admission authority gate runs only in the frozen clone; the static public-surface gate, credential scan, digest manifest, and Wrangler input run only in the archive. Both roots are hardened and re-hashed before and after validation and again before every writer. Every archive byte is also proved against its Git blob. Wrangler is installed from the exact committed lock. \`bun run ${SITE.gate}\` remains the composite source gate, while the repository-wide \`bun run check\` remains separate handoff evidence because its other Go and OpenTofu checks do not validate these static bytes.`,
         "post-conditions": `requires the exact three-domain Cloudflare control-plane closure, queries every hostname independently, and reads back ${SITE.url}/, the www root, docs, spec, sitemap, static assets, the custom 404 body/status, and every normative schema $id with the exact committed digest`,
         reversal: `the current version id is read and printed before publishing. A previous version may be restored with \`wrangler versions deploy <previous-id>@100%\` only after proving it still serves every already-minted schema $id byte-for-byte. The initial schema-origin mint has no schema-safe rollback to a version without those identities; repair it forward while preserving the minted bytes.`,
         "failure-handling":
@@ -408,6 +416,8 @@ if (originMain !== commit) {
 
 let snapshot;
 let committedPublicationManifest;
+let verifiedAuthorityContentManifest;
+let verifiedAuthorityManifest;
 let verifiedPublicationManifest;
 try {
   snapshot = createCommittedSnapshot({
@@ -433,6 +443,24 @@ try {
     committedPublicationManifest,
     verifiedPublicationManifest,
   );
+  assertCommittedGitAuthority({
+    authorityRoot: snapshot.authorityRoot,
+    commit,
+    environment: gitEnvironment,
+    gitExecutable,
+  });
+  verifiedAuthorityManifest = createPublicationManifest(
+    snapshot.authorityRoot,
+    ["."],
+  );
+  verifiedAuthorityContentManifest = createPublicationManifestFromEntries(
+    snapshot.authorityRoot,
+    committedPublicationManifest.entries,
+  );
+  assertPublicationManifest(
+    committedPublicationManifest,
+    verifiedAuthorityContentManifest,
+  );
   parseWebsiteWranglerConfig(
     readFileSync(join(snapshot.root, SITE.config), "utf8"),
     {
@@ -445,45 +473,156 @@ try {
   die(`cannot create the exact committed publication snapshot: ${error.message}`);
 }
 const publicationRepo = snapshot.root;
-const gateHome = resolve(publicationRepo, "..", "gate-home");
-mkdirSync(gateHome, { mode: 0o700 });
-const gateEnvironment = createHardenedGateEnvironment(
+const authorityRepo = snapshot.authorityRoot;
+const authorityGitRaw = (...args) =>
+  execFileSync(
+    gitExecutable,
+    [
+      "--no-replace-objects",
+      "-c",
+      "advice.graftFileDeprecated=false",
+      "-c",
+      "core.fsmonitor=false",
+      "-c",
+      "credential.helper=",
+      "-c",
+      "core.hooksPath=/dev/null",
+      ...args,
+    ],
+    {
+      cwd: authorityRepo,
+      encoding: "utf8",
+      env: gitEnvironment,
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+const authorityGit = (...args) => authorityGitRaw(...args).trim();
+const authorityGateHome = resolve(publicationRepo, "..", "authority-gate-home");
+const snapshotGateHome = resolve(publicationRepo, "..", "snapshot-gate-home");
+mkdirSync(authorityGateHome, { mode: 0o700 });
+mkdirSync(snapshotGateHome, { mode: 0o700 });
+const authorityGateEnvironment = createHardenedGateEnvironment(
   process.env,
   process.execPath,
-  gateHome,
+  authorityGateHome,
+);
+const snapshotGateEnvironment = createHardenedGateEnvironment(
+  process.env,
+  process.execPath,
+  snapshotGateHome,
 );
 process.stdout.write(
   `publication snapshot ${verifiedPublicationManifest.entries.length} files sha256 ${verifiedPublicationManifest.sha256}\n`,
 );
+process.stdout.write(
+  `Git authority snapshot ${verifiedAuthorityManifest.entries.length} files sha256 ${verifiedAuthorityManifest.sha256}\n`,
+);
 
-// No build step: what is published is exactly what is committed. Validate the
-// website/docs bytes and the canonical inventory/status claims they expose.
-// The repository-wide owner gate remains separate handoff evidence: its Go and
-// OpenTofu checks cannot fail because of these static files.
-process.stdout.write(`\n==> bun run ${SITE.gate}\n`);
+// The Go authority checks need complete Git history and immutable tag objects,
+// so they run in a separate non-local clone frozen at the same exact commit.
+// The archive remains free of Git metadata; only its static bytes reach the
+// public-surface checks and Wrangler.
+process.stdout.write(`\n==> bun run ${SITE.authorityGate}\n`);
 try {
   process.stdout.write(
     run(
       process.execPath,
-      ["--config=/dev/null", "--no-env-file", "run", SITE.gate],
+      ["--config=/dev/null", "--no-env-file", "run", SITE.authorityGate],
       {
-        cwd: publicationRepo,
-        environment: gateEnvironment,
+        cwd: authorityRepo,
+        environment: authorityGateEnvironment,
       },
+    ),
+  );
+  assertCommittedGitAuthority({
+    authorityRoot: authorityRepo,
+    commit,
+    environment: gitEnvironment,
+    gitExecutable,
+  });
+  assertPublicationManifest(
+    verifiedAuthorityManifest,
+    createPublicationManifest(authorityRepo, ["."]),
+  );
+  assertPublicationManifest(
+    committedPublicationManifest,
+    createPublicationManifestFromEntries(
+      authorityRepo,
+      committedPublicationManifest.entries,
     ),
   );
 } catch (error) {
   process.stderr.write(`${error.stdout ?? ""}${error.stderr ?? ""}\n`);
-  die("the public-surface gate failed before publication; production is unchanged");
+  die("the public authority gate failed before publication; production is unchanged");
+}
+
+process.stdout.write(`\n==> bun run ${SITE.snapshotGate}\n`);
+try {
+  process.stdout.write(
+    run(
+      process.execPath,
+      ["--config=/dev/null", "--no-env-file", "run", SITE.snapshotGate],
+      {
+        cwd: publicationRepo,
+        environment: snapshotGateEnvironment,
+      },
+    ),
+  );
+  assertPublicationManifest(
+    verifiedPublicationManifest,
+    createPublicationManifest(publicationRepo, VERIFIED_SNAPSHOT_PATHS),
+  );
+  assertPublicationManifest(
+    verifiedAuthorityManifest,
+    createPublicationManifest(authorityRepo, ["."]),
+  );
+  assertPublicationManifest(
+    committedPublicationManifest,
+    createPublicationManifestFromEntries(
+      authorityRepo,
+      committedPublicationManifest.entries,
+    ),
+  );
+} catch (error) {
+  process.stderr.write(`${error.stdout ?? ""}${error.stderr ?? ""}\n`);
+  die("the public snapshot gate failed before publication; production is unchanged");
 }
 
 let schemaIdentities;
 try {
-  git("ls-files", "--error-unmatch", PUBLIC_SCHEMA_IDENTITY_LEDGER);
+  const ledgerObjectAt = (revision) => {
+    const listing = authorityGitRaw(
+      "ls-tree",
+      "-z",
+      "--full-tree",
+      revision,
+      "--",
+      PUBLIC_SCHEMA_IDENTITY_LEDGER,
+    );
+    if (listing === "") return null;
+    const match = new RegExp(
+      `^100644 blob ([0-9a-f]{40})\\t${PUBLIC_SCHEMA_IDENTITY_LEDGER.replaceAll(".", "\\.")}\\u0000$`,
+      "u",
+    ).exec(listing);
+    if (!match) {
+      throw new Error(
+        `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@${revision} is not one exact regular Git blob`,
+      );
+    }
+    return match[1];
+  };
+  if (ledgerObjectAt(commit) === null) {
+    throw new Error(
+      `${PUBLIC_SCHEMA_IDENTITY_LEDGER} is absent from captured commit ${commit}`,
+    );
+  }
   schemaIdentities = readPublicSchemaIdentityLedger(publicationRepo);
-  const ledgerCommits = git(
+  const ledgerCommits = authorityGit(
     "log",
+    "--full-history",
     "--format=%H",
+    commit,
     "--",
     PUBLIC_SCHEMA_IDENTITY_LEDGER,
   )
@@ -494,17 +633,11 @@ try {
   }
   const historicalSets = [];
   for (const ledgerCommit of ledgerCommits) {
-    let historical;
-    try {
-      historical = git(
-        "show",
-        `${ledgerCommit}:${PUBLIC_SCHEMA_IDENTITY_LEDGER}`,
-      );
-    } catch {
-      // A deletion commit has no blob at this path. An earlier reachable
-      // revision still carries the retained set and is checked below.
-      continue;
-    }
+    const ledgerObject = ledgerObjectAt(ledgerCommit);
+    // A deletion commit has no blob at this path. An earlier reachable
+    // revision still carries the retained set and is checked below.
+    if (ledgerObject === null) continue;
+    const historical = authorityGitRaw("cat-file", "blob", ledgerObject);
     historicalSets.push({
       identities: parsePublicSchemaIdentityLedger(
         historical,
@@ -519,6 +652,23 @@ try {
   );
   process.stdout.write(
     `schema identity ledger retains ${schemaIdentities.length} identities across ${historicalSets.length} committed revision(s)\n`,
+  );
+  assertCommittedGitAuthority({
+    authorityRoot: authorityRepo,
+    commit,
+    environment: gitEnvironment,
+    gitExecutable,
+  });
+  assertPublicationManifest(
+    verifiedAuthorityManifest,
+    createPublicationManifest(authorityRepo, ["."]),
+  );
+  assertPublicationManifest(
+    verifiedAuthorityContentManifest,
+    createPublicationManifestFromEntries(
+      authorityRepo,
+      committedPublicationManifest.entries,
+    ),
   );
 } catch (error) {
   die(`cannot prove append-only schema identity history: ${error.message}`);
@@ -824,6 +974,23 @@ const assertSourceAndDeploymentFence = (expectedDeployment) => {
   );
   assertPublicationManifest(verifiedPublicationManifest, fencedManifest);
   assertPublicationManifest(committedPublicationManifest, fencedManifest);
+  assertCommittedGitAuthority({
+    authorityRoot: authorityRepo,
+    commit,
+    environment: gitEnvironment,
+    gitExecutable,
+  });
+  assertPublicationManifest(
+    verifiedAuthorityManifest,
+    createPublicationManifest(authorityRepo, ["."]),
+  );
+  assertPublicationManifest(
+    verifiedAuthorityContentManifest,
+    createPublicationManifestFromEntries(
+      authorityRepo,
+      committedPublicationManifest.entries,
+    ),
+  );
 
   const fencedResidue = inspectUncommittedPublicationPaths({
     environment: gitEnvironment,
