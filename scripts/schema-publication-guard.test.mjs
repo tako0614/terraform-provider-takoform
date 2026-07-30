@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 import {
   enforceSchemaPublicationNoOverwrite,
@@ -184,6 +185,18 @@ test("post-publication readback rejects redirects", async () => {
   ).rejects.toThrow("redirect rejected");
 });
 
+test("post-publication readback can bind the exact custom 404 body", async () => {
+  const expected = await readPublishedDigest(
+    "https://takoform.com/__missing__",
+    {
+      expectedStatus: 404,
+      fetchImpl: async () => new Response("not found\n", { status: 404 }),
+    },
+  );
+  const digest = createHash("sha256").update("not found\n").digest("hex");
+  expect(expected).toBe(digest);
+});
+
 test("website deploy contract declares the published identity obligation", () => {
   const result = Bun.spawnSync({
     cmd: [process.execPath, "scripts/deploy.mjs", "--contract"],
@@ -198,7 +211,29 @@ test("website deploy contract declares the published identity obligation", () =>
   );
 
   expect(website.triggers).toContain("published-identity");
+  expect(website.requiresEnv).toEqual([
+    "TAKOFORM_CLOUDFLARE_ACCOUNT_ID",
+    "TAKOFORM_CLOUDFLARE_ZONE_ID",
+  ]);
+  expect(website.requiresTools).toEqual(["git", "bun", "tar"]);
   expect(website.obligations["no-overwrite"]).toContain(
     INITIAL_SCHEMA_ORIGIN_MINT_ACK,
   );
+});
+
+test("website deploy parsing cannot route a release surface through website writers", () => {
+  const result = Bun.spawnSync({
+    cmd: [
+      process.execPath,
+      "scripts/deploy.mjs",
+      "--acknowledge-exclusive-cloudflare-writer",
+      "takoform-provider-release",
+    ],
+    cwd: new URL("..", import.meta.url).pathname,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toContain("usage:");
+  expect(result.stderr.toString()).not.toContain("publishing");
 });

@@ -34,14 +34,19 @@ function errorDetail(error) {
 
 export async function readPublishedDigest(
   url,
-  { fetchImpl = globalThis.fetch } = {},
+  { expectedStatus = 200, fetchImpl = globalThis.fetch } = {},
 ) {
   const response = await fetchImpl(url, {
-    headers: { "cache-control": "no-cache" },
+    headers: {
+      "cache-control": "no-cache",
+      pragma: "no-cache",
+    },
     redirect: "error",
   });
-  if (response.status !== 200) {
-    throw new Error(`${url} responded ${response.status}`);
+  if (response.status !== expectedStatus) {
+    throw new Error(
+      `${url} responded ${response.status}, expected ${expectedStatus}`,
+    );
   }
   return sha256(Buffer.from(await response.arrayBuffer()));
 }
