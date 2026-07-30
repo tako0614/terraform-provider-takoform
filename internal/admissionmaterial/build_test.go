@@ -2,13 +2,17 @@ package admissionmaterial
 
 import (
 	"crypto/sha256"
+	"encoding/base32"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
+	"github.com/tako0614/terraform-provider-takoform/internal/formpublication"
 )
 
 func TestPrepareOutputPathRejectsRepositoryAndExistingPaths(t *testing.T) {
@@ -222,6 +226,199 @@ func TestCurrentProviderReportsMatchRegistryByExactBinary(t *testing.T) {
 		!strings.Contains(err.Error(), "binary") {
 		t.Fatalf("provider binary substitution error = %v", err)
 	}
+}
+
+func TestProjectCurrentPublishedSetSelectsExactTenFromAllPortablePackages(t *testing.T) {
+	t.Parallel()
+	set, selected := currentPublishedProjectionFixture()
+	projected, err := projectCurrentPublishedSet(set, selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projected) != 10 {
+		t.Fatalf("projected packages = %d, want 10", len(projected))
+	}
+	first := set.Entries[0]
+	got := projected[first.Kind]
+	releaseRoot := "releases/" + first.ReleaseID + "/" + first.Version
+	base := "takoform-form-" + first.ReleaseID + "_" + first.Version
+	manifestDigest := ""
+	for _, asset := range first.Assets {
+		if asset.Name == "release-manifest.json" {
+			manifestDigest = asset.SHA256
+		}
+	}
+	if got.ReleaseTag != first.Tag ||
+		got.ReleaseCommit != first.SourceCommit ||
+		got.ReleaseToolingCommit != first.ToolingCommit ||
+		got.PackageReleaseManifestPath != releaseRoot+"/release-manifest.json" ||
+		got.PackageReleaseManifestDigest != manifestDigest ||
+		got.PackageIndexPath != releaseRoot+"/"+base+"_package-index.json" ||
+		got.PackageIndexSigstoreBundle != releaseRoot+"/"+base+"_package-index.sigstore.json" {
+		t.Fatalf("projected first package = %#v", got)
+	}
+}
+
+func TestProjectCurrentPublishedSetFailsClosedOnIncompleteOrSubstitutedClosure(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		mutate func(*formpublication.Set, *admissionrelease.CandidateSet)
+		want   string
+	}{
+		{
+			name: "missing portable publication",
+			mutate: func(set *formpublication.Set, _ *admissionrelease.CandidateSet) {
+				set.Entries = set.Entries[:len(set.Entries)-1]
+			},
+			want: "34",
+		},
+		{
+			name: "duplicate publication kind",
+			mutate: func(set *formpublication.Set, _ *admissionrelease.CandidateSet) {
+				set.Entries[1] = set.Entries[0]
+			},
+			want: "duplicates",
+		},
+		{
+			name: "substituted package identity",
+			mutate: func(set *formpublication.Set, _ *admissionrelease.CandidateSet) {
+				set.Entries[0].PackageDigest = "sha256:" + strings.Repeat("f", 64)
+			},
+			want: "digest differs",
+		},
+		{
+			name: "missing release asset",
+			mutate: func(set *formpublication.Set, _ *admissionrelease.CandidateSet) {
+				set.Entries[0].Assets = set.Entries[0].Assets[:len(set.Entries[0].Assets)-1]
+			},
+			want: "asset closure",
+		},
+		{
+			name: "duplicate release asset",
+			mutate: func(set *formpublication.Set, _ *admissionrelease.CandidateSet) {
+				set.Entries[0].Assets[1] = set.Entries[0].Assets[0]
+			},
+			want: "canonical release asset",
+		},
+		{
+			name: "selected package outside portable closure",
+			mutate: func(_ *formpublication.Set, selected *admissionrelease.CandidateSet) {
+				selected.Entries[0].Kind = "SubstitutedKind"
+			},
+			want: "selected",
+		},
+		{
+			name: "incomplete admission selection",
+			mutate: func(_ *formpublication.Set, selected *admissionrelease.CandidateSet) {
+				selected.Entries = selected.Entries[:len(selected.Entries)-1]
+			},
+			want: "ten-Form",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			set, selected := currentPublishedProjectionFixture()
+			test.mutate(&set, &selected)
+			if _, err := projectCurrentPublishedSet(set, selected); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("projection error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func currentPublishedProjectionFixture() (formpublication.Set, admissionrelease.CandidateSet) {
+	planDigest := "sha256:" + strings.Repeat("1", 64)
+	rootDigest := "sha256:" + strings.Repeat("2", 64)
+	set := formpublication.Set{
+		Format:                     formpublication.SetFormat,
+		Generation:                 currentProviderGeneration,
+		Repository:                 "tako0614/terraform-provider-takoform",
+		PublicationStatus:          "published-immutable",
+		AdmissionStatus:            "external-required",
+		RevocationCheckpointStatus: "external-required",
+		GitObjectFormat:            "sha1",
+		ProtectedMainCommit:        strings.Repeat("a", 40),
+		SourcePlan: formpublication.SourcePlan{
+			Path: "release-plan.json", SourcePath: "forms/release-plan.json", SHA256: planDigest,
+		},
+		VerificationPolicy: formpublication.VerificationPolicy{
+			TrustedRoot: formpublication.SourcePlan{
+				Path: "trust/trusted-root.json", SourcePath: "admission/v4/trust/trusted-root.json", SHA256: rootDigest,
+			},
+			CertificateIdentity: "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main",
+			OIDCIssuer:          "https://token.actions.githubusercontent.com",
+			BundleMediaType:     "application/vnd.dev.sigstore.bundle.v0.3+json",
+		},
+		Entries: make([]formpublication.Entry, 0, 34),
+	}
+	selected := admissionrelease.CandidateSet{Generation: currentAdmissionGeneration, Entries: make([]admissionrelease.Candidate, 0, 10)}
+	for index := 0; index < 34; index++ {
+		kind := fmt.Sprintf("Kind%02d", index)
+		slug := fmt.Sprintf("kind-%02d", index)
+		releaseID := "k-" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(kind)))
+		version := "2.0.0"
+		formRef := formpackage.FormRef{
+			APIVersion:        formpackage.FormAPIVersion,
+			Kind:              kind,
+			DefinitionVersion: version,
+			SchemaDigest:      fmt.Sprintf("sha256:%064x", index+101),
+		}
+		packageDigest := fmt.Sprintf("sha256:%064x", index+1)
+		sourcePath := "forms/releases/" + releaseID + "/" + version
+		candidate := admissionrelease.Candidate{
+			Kind: kind, Slug: slug, PackagePath: sourcePath,
+			FormRef: formRef, PackageDigest: packageDigest,
+		}
+		if index < 10 {
+			selected.Entries = append(selected.Entries, candidate)
+		}
+		base := "takoform-form-" + releaseID + "_" + version
+		assetNames := []string{
+			"release-manifest.json",
+			"SHA256SUMS",
+			base + ".tar.gz",
+			base + "_package-index.json",
+			base + "_package-index.sigstore.json",
+			base + "_provenance.intoto.json",
+			base + "_sbom.spdx.json",
+		}
+		sort.Strings(assetNames)
+		assets := make([]formpublication.Asset, 0, len(assetNames))
+		for assetIndex, name := range assetNames {
+			digest := fmt.Sprintf("sha256:%064x", index*10+assetIndex+1)
+			if name == base+"_package-index.json" {
+				digest = packageDigest
+			}
+			assets = append(assets, formpublication.Asset{
+				Name: name, SHA256: digest, Size: 1,
+			})
+		}
+		sourceCommit := strings.Repeat("a", 40)
+		toolingCommit := strings.Repeat("b", 40)
+		set.Entries = append(set.Entries, formpublication.Entry{
+			Kind: kind, ReleaseID: releaseID, Version: version,
+			Tag: "forms/" + releaseID + "/v" + version, SourcePath: sourcePath,
+			FormRef: formRef, PackageDigest: packageDigest,
+			TagObjectOID: fmt.Sprintf("%040x", index+1),
+			PeeledCommit: sourceCommit, SourceCommit: sourceCommit, ToolingCommit: toolingCommit,
+			ReleasePlan: formpublication.SourcePlan{
+				Path:       "authority/" + toolingCommit + "/release-plan.json",
+				SourcePath: "forms/release-plan.json", SHA256: planDigest,
+			},
+			TrustedRoot: formpublication.SourcePlan{
+				Path:       "authority/" + toolingCommit + "/trusted-root.json",
+				SourcePath: "admission/v4/trust/trusted-root.json", SHA256: rootDigest,
+			},
+			GitHubReleaseID: fmt.Sprintf("%d", index+1),
+			PublishedAt:     "2026-07-30T00:00:00Z",
+			Immutable:       true,
+			Assets:          assets,
+		})
+	}
+	return set, selected
 }
 
 func TestRegistryReadbackWorkflowUsesBothCLIsAndAnIsolatedSigner(t *testing.T) {

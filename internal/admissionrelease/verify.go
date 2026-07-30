@@ -187,7 +187,7 @@ func verifyAdmissionSetAt(root, retainedRoot string, candidates CandidateSet, ve
 		if set.Generation != "" {
 			packageVersion = pair.entry.FormRef.DefinitionVersion
 		}
-		packageIndex, err := verifyPackageReleaseReadback(admissionRoot, pair, packageVersion, set.Generation != "")
+		packageIndex, err := verifyPackageReleaseReadback(root, admissionRoot, pair, packageVersion, set.Generation != "")
 		if err != nil {
 			return fmt.Errorf("%s package release readback: %w", pair.entry.Kind, err)
 		}

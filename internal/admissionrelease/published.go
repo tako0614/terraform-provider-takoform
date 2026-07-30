@@ -3,6 +3,7 @@ package admissionrelease
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,9 +24,9 @@ const (
 	currentPackagePublisherID   = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
 )
 
-// PublishedPackageSet is a source-reviewed snapshot of the ten live,
-// immutable Form Package releases. It proves only distribution publication;
-// portable-standard admission remains governed by standard-admission-set.json.
+// PublishedPackageSet is a source-reviewed immutable Form Package release
+// closure. It proves only distribution publication; portable-standard
+// admission remains governed by standard-admission-set.json.
 type PublishedPackageSet struct {
 	Format                     string                   `json:"format"`
 	Repository                 string                   `json:"repository"`
@@ -111,9 +112,40 @@ func VerifyPublishedPackageSetAt(root, retainedRoot string, candidates Candidate
 	if err != nil {
 		return fmt.Errorf("verify %s: %w", setPath, err)
 	}
+	admissionRoot := admissionRootPathFor(root, retainedRoot)
+	return verifyPublishedPackageSetValue(root, admissionRoot, admissionRoot, set, ordered)
+}
 
-	admissionRoot := path.Join(root, retainedRoot)
-	_, verifier, err := loadPublishedPackageTrust(admissionRoot, set.Trust, set)
+// VerifyPublishedPackageSetValue authenticates a caller-decoded immutable
+// publication manifest against one evidence root. A distinct trust root is
+// accepted so an external create-only download can be verified against the
+// reviewed repository policy before those exact bytes are retained under the
+// admission root.
+func VerifyPublishedPackageSetValue(
+	repositoryRoot string,
+	evidenceRoot string,
+	trustRoot string,
+	candidates CandidateSet,
+	set PublishedPackageSet,
+) error {
+	if err := validateCandidateSet(candidates); err != nil {
+		return fmt.Errorf("published-package candidate set: %w", err)
+	}
+	ordered, err := validatePublishedPackageSet(set, candidates)
+	if err != nil {
+		return fmt.Errorf("verify published package set value: %w", err)
+	}
+	return verifyPublishedPackageSetValue(repositoryRoot, evidenceRoot, trustRoot, set, ordered)
+}
+
+func verifyPublishedPackageSetValue(
+	repositoryRoot string,
+	evidenceRoot string,
+	trustRoot string,
+	set PublishedPackageSet,
+	ordered []positionedPublishedEntry,
+) error {
+	_, verifier, err := loadPublishedPackageTrust(trustRoot, set.Trust, set)
 	if err != nil {
 		return fmt.Errorf("published-package trust: %w", err)
 	}
@@ -122,15 +154,15 @@ func VerifyPublishedPackageSetAt(root, retainedRoot string, candidates Candidate
 		if set.Generation != "" {
 			packageVersion = pair.entry.FormRef.DefinitionVersion
 		}
-		indexRaw, err := verifyPackageReleaseReadback(admissionRoot, pair.matchedEntry, packageVersion, set.Generation != "")
+		indexRaw, err := verifyPackageReleaseReadback(repositoryRoot, evidenceRoot, pair.matchedEntry, packageVersion, set.Generation != "")
 		if err != nil {
 			return fmt.Errorf("%s package release readback: %w", pair.entry.Kind, err)
 		}
 		published := set.Entries[pair.position]
-		if err := verifyReleaseChecksums(admissionRoot, published); err != nil {
+		if err := verifyReleaseChecksums(evidenceRoot, published); err != nil {
 			return fmt.Errorf("%s release checksums: %w", pair.entry.Kind, err)
 		}
-		bundleRaw, err := readRetainedRelativeFile(admissionRoot, pair.entry.PackageIndexSigstoreBundle, maxSigstoreBundleBytes)
+		bundleRaw, err := readRetainedRelativeFile(evidenceRoot, pair.entry.PackageIndexSigstoreBundle, maxSigstoreBundleBytes)
 		if err != nil {
 			return fmt.Errorf("%s package-index bundle: %w", pair.entry.Kind, err)
 		}
@@ -141,18 +173,22 @@ func VerifyPublishedPackageSetAt(root, retainedRoot string, candidates Candidate
 		if err := verifier.verifyCanonicalSubject(&retainedBundle, indexRaw); err != nil {
 			return fmt.Errorf("%s package-index publisher: %w", pair.entry.Kind, err)
 		}
-		if err := requireTagCommit(root, pair.entry.Kind+" package release", pair.entry.ReleaseTag, pair.entry.ReleaseCommit); err != nil {
+		if err := requireTagCommit(repositoryRoot, pair.entry.Kind+" package release", pair.entry.ReleaseTag, pair.entry.ReleaseCommit); err != nil {
 			return err
 		}
-		head, err := resolveCommit(root, "HEAD")
+		head, err := resolveCommit(repositoryRoot, "HEAD")
 		if err != nil {
 			return err
 		}
-		if err := requireCommitAncestor(root, pair.entry.Kind+" release tooling", pair.entry.ReleaseToolingCommit, head); err != nil {
+		if err := requireCommitAncestor(repositoryRoot, pair.entry.Kind+" release tooling", pair.entry.ReleaseToolingCommit, head); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func admissionRootPathFor(root, retainedRoot string) string {
+	return filepath.Join(root, filepath.FromSlash(retainedRoot))
 }
 
 type positionedPublishedEntry struct {

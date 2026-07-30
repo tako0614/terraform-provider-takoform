@@ -145,7 +145,7 @@ func TestRetainedGaCoreV1PackageSetAuthenticatesExactLiveReadback(t *testing.T) 
 func TestCurrentPublishedPackageSetFailsClosedBeforeSuccessorPublication(t *testing.T) {
 	t.Parallel()
 	err := VerifyCurrentPublishedPackageSet(filepath.Join("..", ".."))
-	if err == nil || !strings.Contains(err.Error(), "admission/v4/published-package-set.json") {
+	if err == nil || !strings.Contains(err.Error(), "admission/v4/form-package-publication-set.json") {
 		t.Fatalf("unpublished successor error = %v", err)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/formpublication"
 	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformance"
 	"github.com/tako0614/terraform-provider-takoform/internal/provider"
@@ -578,14 +579,24 @@ func VerifyRetainedGaCoreV1PublishedPackageSet(root string) error {
 }
 
 // VerifyCurrentPublishedPackageSet verifies the immutable per-Form releases
-// selected by the active successor generation. This is a post-publication
-// evidence gate, not part of the portable source check.
+// for the complete current portable catalog. This is a post-publication
+// evidence gate, not part of the portable source check or the smaller
+// admission selection.
 func VerifyCurrentPublishedPackageSet(root string) error {
-	candidates, err := CurrentAdmissionCandidateSet(root)
+	_, err := CurrentPublishedPackageSet(root)
+	return err
+}
+
+// CurrentPublishedPackageSet authenticates and returns the exact retained
+// all-Form publication manifest. Callers may project a reviewed admission
+// subset from this value, but must not introduce a second publication
+// authority for that subset.
+func CurrentPublishedPackageSet(root string) (formpublication.Set, error) {
+	candidates, err := CurrentPortableCandidateSet(root)
 	if err != nil {
-		return err
+		return formpublication.Set{}, err
 	}
-	return admissionrelease.VerifyPublishedPackageSetAt(root, currentAdmissionRoot, candidates)
+	return formpublication.VerifyAt(root, currentAdmissionRoot, candidates)
 }
 
 func retainedMixedVersionCandidateSet(root, retainedRoot, generation string) (admissionrelease.CandidateSet, error) {

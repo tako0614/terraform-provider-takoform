@@ -557,9 +557,9 @@ func containsString(values []string, expected string) bool {
 	return false
 }
 
-func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packageVersion string, currentGeneration ...bool) ([]byte, error) {
+func verifyPackageReleaseReadback(repositoryRoot, evidenceRoot string, pair matchedEntry, packageVersion string, currentGeneration ...bool) ([]byte, error) {
 	entry := pair.entry
-	manifestRaw, err := readRetainedRelativeFile(admissionRoot, entry.PackageReleaseManifestPath, maxReleaseManifestBytes)
+	manifestRaw, err := readRetainedRelativeFile(evidenceRoot, entry.PackageReleaseManifestPath, maxReleaseManifestBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -613,7 +613,7 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 		if _, duplicate := assets[asset.Name]; duplicate {
 			return nil, fmt.Errorf("package release duplicates asset %q", asset.Name)
 		}
-		assetRaw, err := readRetainedRelativeFile(admissionRoot, path.Join(manifestDir, asset.Name), maxReleaseAssetBytes)
+		assetRaw, err := readRetainedRelativeFile(evidenceRoot, path.Join(manifestDir, asset.Name), maxReleaseAssetBytes)
 		if err != nil {
 			return nil, fmt.Errorf("read package release asset %q: %w", asset.Name, err)
 		}
@@ -640,7 +640,7 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 			return nil, fmt.Errorf("package release omits required %q asset", name)
 		}
 	}
-	indexRaw, err := readRetainedRelativeFile(admissionRoot, entry.PackageIndexPath, maxEvidenceBytes)
+	indexRaw, err := readRetainedRelativeFile(evidenceRoot, entry.PackageIndexPath, maxEvidenceBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -648,7 +648,7 @@ func verifyPackageReleaseReadback(admissionRoot string, pair matchedEntry, packa
 	if err != nil || !bytes.Equal(indexRaw, canonical) || formpackage.DigestBytes(indexRaw) != entry.PackageDigest {
 		return nil, fmt.Errorf("package release index is not the exact canonical admitted package index")
 	}
-	packageRoot := filepath.Join(admissionRoot, "..", "..", filepath.FromSlash(pair.candidate.PackagePath))
+	packageRoot := filepath.Join(repositoryRoot, filepath.FromSlash(pair.candidate.PackagePath))
 	localIndex, err := readRetainedRegularFile(filepath.Join(packageRoot, formpackage.PackageIndexFilename), maxEvidenceBytes)
 	if err != nil {
 		return nil, err

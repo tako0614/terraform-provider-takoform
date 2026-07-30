@@ -32,16 +32,15 @@ import (
 	sigstoreroot "github.com/sigstore/sigstore-go/pkg/root"
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
+	"github.com/tako0614/terraform-provider-takoform/internal/formpublication"
 	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
 )
 
 const (
 	setPath                = "admission/v1/published-package-set.json"
 	trustPath              = "admission/v1/trust/published-package-trust.json"
-	currentSetPath         = "admission/v4/published-package-set.json"
-	currentTrustPath       = "admission/v4/trust/published-package-trust.json"
-	publicationSetPath     = "form-package-publication-set.json"
-	publicationSetFormat   = "takoform.form-package-publication-set@v1"
+	publicationSetPath     = formpublication.SetFilename
+	publicationSetFormat   = formpublication.SetFormat
 	planVerificationFormat = "takoform.form-package-directory-verification@v1"
 	repository             = "tako0614/terraform-provider-takoform"
 	maxGitHubResponseBytes = 4 << 20
@@ -258,58 +257,11 @@ type githubClient struct {
 	token      string
 }
 
-type formPackagePublicationSet struct {
-	Format                     string                        `json:"format"`
-	Generation                 string                        `json:"generation"`
-	Repository                 string                        `json:"repository"`
-	PublicationStatus          string                        `json:"publicationStatus"`
-	AdmissionStatus            string                        `json:"admissionStatus"`
-	RevocationCheckpointStatus string                        `json:"revocationCheckpointStatus"`
-	GitObjectFormat            string                        `json:"gitObjectFormat"`
-	ProtectedMainCommit        string                        `json:"protectedMainCommit"`
-	SourcePlan                 publicationSetSourcePlan      `json:"sourcePlan"`
-	VerificationPolicy         publicationSetVerification    `json:"verificationPolicy"`
-	Entries                    []formPackagePublicationEntry `json:"entries"`
-}
-
-type publicationSetSourcePlan struct {
-	Path       string `json:"path"`
-	SourcePath string `json:"sourcePath"`
-	SHA256     string `json:"sha256"`
-}
-
-type publicationSetVerification struct {
-	TrustedRoot         publicationSetSourcePlan `json:"trustedRoot"`
-	CertificateIdentity string                   `json:"certificateIdentity"`
-	OIDCIssuer          string                   `json:"oidcIssuer"`
-	BundleMediaType     string                   `json:"bundleMediaType"`
-}
-
-type formPackagePublicationEntry struct {
-	Kind            string                   `json:"kind"`
-	ReleaseID       string                   `json:"releaseId"`
-	Version         string                   `json:"version"`
-	Tag             string                   `json:"tag"`
-	SourcePath      string                   `json:"sourcePath"`
-	FormRef         formpackage.FormRef      `json:"formRef"`
-	PackageDigest   string                   `json:"packageDigest"`
-	TagObjectOID    string                   `json:"tagObjectOid"`
-	PeeledCommit    string                   `json:"peeledCommit"`
-	SourceCommit    string                   `json:"sourceCommit"`
-	ToolingCommit   string                   `json:"toolingCommit"`
-	ReleasePlan     publicationSetSourcePlan `json:"releasePlan"`
-	TrustedRoot     publicationSetSourcePlan `json:"trustedRoot"`
-	GitHubReleaseID string                   `json:"githubReleaseId"`
-	PublishedAt     string                   `json:"publishedAt"`
-	Immutable       bool                     `json:"immutable"`
-	Assets          []publicationSetAsset    `json:"assets"`
-}
-
-type publicationSetAsset struct {
-	Name   string `json:"name"`
-	SHA256 string `json:"sha256"`
-	Size   int64  `json:"size"`
-}
+type formPackagePublicationSet = formpublication.Set
+type publicationSetSourcePlan = formpublication.SourcePlan
+type publicationSetVerification = formpublication.VerificationPolicy
+type formPackagePublicationEntry = formpublication.Entry
+type publicationSetAsset = formpublication.Asset
 
 type planDirectoryVerification struct {
 	Format              string                   `json:"format"`
@@ -388,25 +340,6 @@ func main() {
 		if err == nil {
 			fmt.Printf("published-package-set: staged exact live snapshot at %s\n", *outputRoot)
 		}
-	case "download-current":
-		flags := flag.NewFlagSet("published-package-set download-current", flag.ContinueOnError)
-		flags.SetOutput(os.Stderr)
-		outputRoot := flags.String("output-root", "", "new, absent directory that receives the staged admission/v4 snapshot")
-		if parseErr := flags.Parse(os.Args[2:]); parseErr != nil || flags.NArg() != 0 || strings.TrimSpace(*outputRoot) == "" {
-			if parseErr == nil {
-				usage()
-			}
-			os.Exit(2)
-		}
-		client, clientErr := newGitHubClient("https://api.github.com/", os.Getenv("GITHUB_TOKEN"), nil)
-		if clientErr != nil {
-			err = clientErr
-		} else {
-			err = downloadCurrentSnapshot(context.Background(), client, ".", *outputRoot)
-		}
-		if err == nil {
-			fmt.Printf("published-package-set: staged exact current live snapshot at %s\n", *outputRoot)
-		}
 	case "download-plan":
 		flags := flag.NewFlagSet("published-package-set download-plan", flag.ContinueOnError)
 		flags.SetOutput(os.Stderr)
@@ -476,7 +409,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: published-package-set snapshot | published-package-set download --output-root DIRECTORY | published-package-set download-current --output-root DIRECTORY | published-package-set download-plan --output-root DIRECTORY | published-package-set verify-plan-directory --asset-root DIRECTORY --source-root REPOSITORY --kind KIND --tag TAG --source-commit SHA --tooling-commit SHA --trusted-root FILE")
+	fmt.Fprintln(os.Stderr, "usage: published-package-set snapshot | published-package-set download --output-root DIRECTORY | published-package-set download-plan --output-root DIRECTORY | published-package-set verify-plan-directory --asset-root DIRECTORY --source-root REPOSITORY --kind KIND --tag TAG --source-commit SHA --tooling-commit SHA --trusted-root FILE")
 }
 
 func newGitHubClient(rawBaseURL, token string, httpClient *http.Client) (*githubClient, error) {
@@ -516,27 +449,43 @@ func downloadSnapshot(ctx context.Context, client *githubClient, sourceRoot, out
 	if candidates.DefinitionVersion == "" || !versionPattern.MatchString(candidates.PackageVersion) {
 		return fmt.Errorf("candidate set has an invalid definition/package version")
 	}
-	return downloadSnapshotForSet(ctx, client, sourceRoot, outputRoot, candidates, "", setPath, trustPath)
+	return downloadSnapshotForSet(ctx, client, sourceRoot, outputRoot, candidates, setPath, trustPath)
 }
 
-func downloadCurrentSnapshot(ctx context.Context, client *githubClient, sourceRoot, outputRoot string) error {
-	current, err := standardforms.CurrentAdmissionCandidateSet(sourceRoot)
+type publicationVerifier func(
+	repositoryRoot string,
+	publicationRoot string,
+	trustRoot string,
+) (formpublication.Set, error)
+
+func downloadPlan(ctx context.Context, client *githubClient, sourceRoot, outputRoot string) error {
+	return downloadPlanWithVerifier(ctx, client, sourceRoot, outputRoot, verifyCurrentPublication)
+}
+
+func verifyCurrentPublication(
+	repositoryRoot string,
+	publicationRoot string,
+	trustRoot string,
+) (formpublication.Set, error) {
+	expected, err := standardforms.CurrentPortableCandidateSet(repositoryRoot)
 	if err != nil {
-		return err
+		return formpublication.Set{}, fmt.Errorf("load exact current portable candidate set: %w", err)
 	}
-	candidates := candidateSet{Packages: make([]candidatePackage, 0, len(current.Entries))}
-	for _, entry := range current.Entries {
-		candidates.Packages = append(candidates.Packages, candidatePackage{
-			Kind: entry.Kind, Slug: entry.Slug, Path: entry.PackagePath,
-			FormRef: entry.FormRef, PackageDigest: entry.PackageDigest,
-		})
-	}
-	return downloadSnapshotForSet(ctx, client, sourceRoot, outputRoot, candidates, current.Generation, currentSetPath, currentTrustPath)
+	return formpublication.Verify(repositoryRoot, publicationRoot, trustRoot, expected)
 }
 
-func downloadPlan(ctx context.Context, client *githubClient, sourceRoot, outputRoot string) (err error) {
+func downloadPlanWithVerifier(
+	ctx context.Context,
+	client *githubClient,
+	sourceRoot string,
+	outputRoot string,
+	verify publicationVerifier,
+) (err error) {
 	if client == nil {
 		return fmt.Errorf("GitHub client is required")
+	}
+	if verify == nil {
+		return fmt.Errorf("publication verifier is required")
 	}
 	planPath := filepath.Join(sourceRoot, filepath.FromSlash(standardforms.ReleasePlanPath))
 	planInfo, err := os.Lstat(planPath)
@@ -802,6 +751,10 @@ func downloadPlan(ctx context.Context, client *githubClient, sourceRoot, outputR
 		trustedRootRaw,
 	); err != nil {
 		return err
+	}
+	trustRoot := filepath.Join(sourceRoot, "admission", "v4")
+	if _, err := verify(sourceRoot, outputAbsolute, trustRoot); err != nil {
+		return fmt.Errorf("verify staged publication set: %w", err)
 	}
 	complete = true
 	return nil
@@ -1471,19 +1424,15 @@ func gitOutput(ctx context.Context, sourceRoot string, arguments ...string) ([]b
 	return output, nil
 }
 
-func downloadSnapshotForSet(ctx context.Context, client *githubClient, sourceRoot, outputRoot string, candidates candidateSet, generation, outputSetPath, outputTrustPath string) (err error) {
+func downloadSnapshotForSet(ctx context.Context, client *githubClient, sourceRoot, outputRoot string, candidates candidateSet, outputSetPath, outputTrustPath string) (err error) {
 	if client == nil {
 		return fmt.Errorf("GitHub client is required")
 	}
 	if len(candidates.Packages) != expectedPackageCount {
 		return fmt.Errorf("candidate set contains %d packages, want exactly %d", len(candidates.Packages), expectedPackageCount)
 	}
-	if generation == "" {
-		if candidates.DefinitionVersion == "" || !versionPattern.MatchString(candidates.PackageVersion) {
-			return fmt.Errorf("candidate set has an invalid definition/package version")
-		}
-	} else if generation != "ga-core-v2" || candidates.DefinitionVersion != "" || candidates.PackageVersion != "" {
-		return fmt.Errorf("current candidate set has an invalid generation identity")
+	if candidates.DefinitionVersion == "" || !versionPattern.MatchString(candidates.PackageVersion) {
+		return fmt.Errorf("candidate set has an invalid definition/package version")
 	}
 	trustRaw, err := os.ReadFile(filepath.Join(sourceRoot, filepath.FromSlash(outputTrustPath)))
 	if err != nil {
@@ -1541,7 +1490,6 @@ func downloadSnapshotForSet(ctx context.Context, client *githubClient, sourceRoo
 	set := admissionrelease.PublishedPackageSet{
 		Format:                     "takoform.published-package-set@v1",
 		Repository:                 repository,
-		Generation:                 generation,
 		DefinitionVersion:          candidates.DefinitionVersion,
 		PackageVersion:             candidates.PackageVersion,
 		PublicationStatus:          "published-immutable",
@@ -1551,9 +1499,6 @@ func downloadSnapshotForSet(ctx context.Context, client *githubClient, sourceRoo
 			Path: "trust/published-package-trust.json", Digest: formpackage.DigestBytes(trustRaw),
 		},
 		Entries: make([]admissionrelease.PublishedPackageEntry, 0, expectedPackageCount),
-	}
-	if generation != "" {
-		set.Format = "takoform.published-package-set@v2"
 	}
 	seenKinds := make(map[string]struct{}, expectedPackageCount)
 	seenReleaseIDs := make(map[int64]string, expectedPackageCount)
@@ -1568,10 +1513,6 @@ func downloadSnapshotForSet(ctx context.Context, client *githubClient, sourceRoo
 		seenKinds[candidate.Kind] = struct{}{}
 		packageVersion := candidates.PackageVersion
 		retainedRoot := "admission/v1"
-		if generation != "" {
-			packageVersion = candidate.FormRef.DefinitionVersion
-			retainedRoot = "admission/v4"
-		}
 		entry, liveID, assetIDs, packageErr := downloadPackage(ctx, client, sourceRoot, cleanOutput, retainedRoot, candidate, packageVersion)
 		if packageErr != nil {
 			return fmt.Errorf("%s: %w", candidate.Kind, packageErr)
