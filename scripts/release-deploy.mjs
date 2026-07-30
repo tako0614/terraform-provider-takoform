@@ -77,6 +77,8 @@ const FORM_TAG_ONLY_RECOVERY_STABLE_PATHS = Object.freeze([
   "internal/hostpolicy",
   "standardform",
 ]);
+const FORM_TAG_ONLY_RELEASE_BODY =
+  "Data-only Takoform Form Package release completed forward from an exact tag-only partial state. Verify the canonical package index, Sigstore bundle, and publisher identity before installation.";
 
 const PROVIDER_SURFACE = "takoform-provider-release";
 const FORM_SURFACE = "takoform-form-package-release";
@@ -147,9 +149,9 @@ export const RELEASE_SURFACES = Object.freeze([
       "post-conditions":
         "after local tag/release publication requires exact remote tag resolution, immutable release id/tag, exact API asset digests, and a fresh seven-file package or six-file revocation download; verify-all delegates all 34 semantic readbacks to the repository's Go verifier and writes one create-only external publication set",
       reversal:
-        "Form Package and revocation identities are append-only and cannot be replaced; an exact tag-only partial state may only be completed forward by recover-tag-only without changing the tag, while a bad identity requires a corrected package version or later cumulative revocation checkpoint",
+        "Form Package and revocation identities are append-only and cannot be replaced; an exact tag-only partial state may only be completed forward by recover-tag-only without changing the tag, and its exact retained draft may only be resumed by recover-draft without replacing any identity, while a bad identity requires a corrected package version or later cumulative revocation checkpoint",
       "failure-handling":
-        "prints raw diagnostics, retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, reports local and remote ref state after a tag-side partial failure, refuses blind retry whenever mutation state is indeterminate, and exposes an explicit tag-only recovery that requires the exact candidate object/commit and a completely absent Release",
+        "prints raw diagnostics, retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, reports local and remote ref state after a tag-side partial failure, refuses blind retry whenever mutation state is indeterminate, exposes an explicit tag-only recovery that requires the exact candidate object/commit and a completely absent Release, and exposes a separate exact-draft recovery that accepts only a named matching draft and uploads only its missing same-candidate assets",
       "independent-review":
         "the form-package-release protected Environment reviews and signs the exact candidate; local publication consumes only that named successful run/attempt and independently verifies its checksum and Sigstore closure",
       "no-overwrite":
@@ -177,6 +179,15 @@ const PHASES = {
       "expected-commit",
       "expected-tag-object",
       "expected-recovery-commit",
+      "run-id",
+      "run-attempt",
+    ],
+    "recover-draft": [
+      "tag",
+      "expected-commit",
+      "expected-tag-object",
+      "expected-recovery-commit",
+      "release-id",
       "run-id",
       "run-attempt",
     ],
@@ -248,9 +259,15 @@ export function parseReleaseSurfaceArgs(surface, args) {
       "--expected-tag-object must be an exact lowercase Git object id",
     );
   }
-  for (const name of ["run-id", "run-attempt"]) {
+  for (const name of ["release-id", "run-id", "run-attempt"]) {
     if (values[name] && !POSITIVE_INTEGER.test(values[name])) {
       throw new Error(`--${name} must be a positive decimal integer`);
+    }
+    if (
+      values[name] &&
+      !Number.isSafeInteger(Number(values[name]))
+    ) {
+      throw new Error(`--${name} must be a safe positive decimal integer`);
     }
   }
   if (values["output-root"] && !isAbsolute(values["output-root"])) {
@@ -342,6 +359,12 @@ function runForm(context, options) {
       return formPublish(context, options, readReleasePlan(context.repo));
     case "recover-tag-only":
       return formRecoverTagOnly(
+        context,
+        options,
+        readReleasePlan(context.repo),
+      );
+    case "recover-draft":
+      return formRecoverDraft(
         context,
         options,
         readReleasePlan(context.repo),
@@ -1509,12 +1532,34 @@ function expectedAssetMap(assets) {
   );
 }
 
-function validateReleaseReadback(release, tag, assets, { prerelease = false } = {}) {
+function validateReleaseReadback(
+  release,
+  tag,
+  assets,
+  {
+    prerelease = false,
+    expectedReleaseId,
+    expectedName,
+    expectedBody,
+    expectedTargetCommitish,
+    expectedAssetsURL,
+    expectedUploadURL,
+  } = {},
+) {
   const expected = expectedAssetMap(assets);
   if (
     !Number.isSafeInteger(release.id) ||
     release.id <= 0 ||
+    (expectedReleaseId !== undefined && release.id !== expectedReleaseId) ||
     release.tag_name !== tag ||
+    (expectedName !== undefined && release.name !== expectedName) ||
+    (expectedBody !== undefined && release.body !== expectedBody) ||
+    (expectedTargetCommitish !== undefined &&
+      release.target_commitish !== expectedTargetCommitish) ||
+    (expectedAssetsURL !== undefined &&
+      release.assets_url !== expectedAssetsURL) ||
+    (expectedUploadURL !== undefined &&
+      release.upload_url !== expectedUploadURL) ||
     release.draft !== false ||
     release.prerelease !== prerelease ||
     release.immutable !== true ||
@@ -1611,6 +1656,285 @@ function validateDraftBeforePublication(
     }
     draftAssets.set(remote.name, remote);
     assetIDs.add(remote.id);
+  }
+}
+
+function readExactRetainedDraft(
+  context,
+  {
+    releaseId,
+    tag,
+    prerelease = false,
+    body,
+    assets,
+    requireComplete = false,
+  },
+) {
+  assertUniqueReleaseIdentity(context, tag, releaseId, true);
+  const draft = JSON.parse(
+    command(context, "gh", [
+      "api",
+      `repos/${GITHUB_REPOSITORY}/releases/${releaseId}`,
+    ]),
+  );
+  const expectedUploadURL =
+    `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/` +
+    `${releaseId}/assets{?name,label}`;
+  const expectedAssetsURL =
+    `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/` +
+    `${releaseId}/assets`;
+  if (
+    draft.id !== releaseId ||
+    draft.tag_name !== tag ||
+    draft.target_commitish !== "main" ||
+    draft.name !== tag ||
+    draft.body !== body ||
+    draft.draft !== true ||
+    draft.prerelease !== prerelease ||
+    draft.immutable !== false ||
+    draft.published_at !== null ||
+    draft.assets_url !== expectedAssetsURL ||
+    draft.upload_url !== expectedUploadURL ||
+    !Array.isArray(draft.assets)
+  ) {
+    throw new Error(
+      `retained draft ${releaseId} identity/state differs from the exact recovery input`,
+    );
+  }
+  const seenNames = new Set();
+  const seenIDs = new Set();
+  for (const remote of draft.assets) {
+    const local = assets.get(remote.name);
+    if (
+      !local ||
+      seenNames.has(remote.name) ||
+      !Number.isSafeInteger(remote.id) ||
+      remote.id <= 0 ||
+      seenIDs.has(remote.id) ||
+      remote.state !== "uploaded" ||
+      remote.digest !== local.sha256 ||
+      remote.size !== lstatSync(local.path).size
+    ) {
+      throw new Error(
+        `retained draft ${releaseId} contains an unknown, duplicate, or drifted asset`,
+      );
+    }
+    seenNames.add(remote.name);
+    seenIDs.add(remote.id);
+  }
+  if (requireComplete && seenNames.size !== assets.size) {
+    throw new Error(
+      `retained draft ${releaseId} does not contain the complete exact candidate`,
+    );
+  }
+  return {
+    draft,
+    missing: [...assets.values()]
+      .filter((asset) => !seenNames.has(asset.name))
+      .sort((left, right) => compareNames(left.name, right.name)),
+  };
+}
+
+function reportRetainedDraftFailure(context, tag, releaseId) {
+  let mutationState = "REMOTE_STATE_UNREADABLE";
+  let observedReleaseIDs = [];
+  const listed = attemptCommand(context, "gh", releaseListArguments());
+  if (listed.ok) {
+    try {
+      const matches = parseReleasePages(listed.output, tag);
+      observedReleaseIDs = matches.map((release) => release.id);
+      if (matches.length !== 1 || matches[0].id !== releaseId) {
+        mutationState = "REMOTE_STATE_AMBIGUOUS";
+      } else if (matches[0].draft === true) {
+        mutationState = "MATCHING_DRAFT_RETAINED";
+      } else {
+        mutationState = "PUBLICATION_INDETERMINATE";
+      }
+    } catch {
+      mutationState = "REMOTE_STATE_UNREADABLE";
+    }
+  }
+  context.stderr.write(
+    `${JSON.stringify({
+      kind: "takos.deploy-failure@v1",
+      surface: FORM_SURFACE,
+      phase: "recover-draft",
+      tag,
+      releaseId,
+      observedReleaseIDs,
+      mutationState,
+      instruction:
+        "read the authoritative tag/release state; rerun recover-draft only if the same exact draft is retained",
+    })}\n`,
+  );
+}
+
+function resumeDraftReleaseLocally(
+  context,
+  {
+    releaseId,
+    tag,
+    assets,
+    body,
+    prerelease = false,
+    temporaryRoot,
+    prePublishFence = () => {},
+  },
+) {
+  const expectedAssetsURL =
+    `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/` +
+    `${releaseId}/assets`;
+  const expectedUploadURL =
+    `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/` +
+    `${releaseId}/assets{?name,label}`;
+  try {
+    const initial = readExactRetainedDraft(context, {
+      releaseId,
+      tag,
+      prerelease,
+      body,
+      assets,
+    });
+    progress(
+      context,
+      `resume exact draft ${releaseId}: upload ${initial.missing.length} missing assets`,
+    );
+    for (const asset of initial.missing) {
+      const uploaded = JSON.parse(
+        command(context, "gh", [
+          "api",
+          "--hostname",
+          "uploads.github.com",
+          "--method",
+          "POST",
+          `repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
+          "--header",
+          "Content-Type: application/octet-stream",
+          "--input",
+          asset.path,
+        ]),
+      );
+      if (
+        !Number.isSafeInteger(uploaded.id) ||
+        uploaded.id <= 0 ||
+        uploaded.name !== asset.name ||
+        uploaded.state !== "uploaded" ||
+        uploaded.digest !== asset.sha256 ||
+        uploaded.size !== lstatSync(asset.path).size
+      ) {
+        throw new Error(
+          `exact retained draft ${releaseId} asset upload mismatch: ${asset.name}`,
+        );
+      }
+    }
+    readExactRetainedDraft(context, {
+      releaseId,
+      tag,
+      prerelease,
+      body,
+      assets,
+      requireComplete: true,
+    });
+    prePublishFence();
+    readExactRetainedDraft(context, {
+      releaseId,
+      tag,
+      prerelease,
+      body,
+      assets,
+      requireComplete: true,
+    });
+    progress(context, `publish exact retained draft ${releaseId}`);
+    let patchResponse;
+    try {
+      patchResponse = JSON.parse(
+        command(context, "gh", [
+          "api",
+          "--method",
+          "PATCH",
+          `repos/${GITHUB_REPOSITORY}/releases/${releaseId}`,
+          "-f",
+          `tag_name=${tag}`,
+          "-f",
+          "target_commitish=main",
+          "-f",
+          `name=${tag}`,
+          "-f",
+          `body=${body}`,
+          "-F",
+          "draft=false",
+          "-F",
+          `prerelease=${prerelease}`,
+          "-f",
+          "make_latest=false",
+        ]),
+      );
+    } catch (error) {
+      const observed = attemptCommand(context, "gh", [
+        "api",
+        apiTagPath(tag),
+      ]);
+      if (!observed.ok) throw error;
+      let release;
+      try {
+        release = JSON.parse(observed.output);
+      } catch {
+        throw error;
+      }
+      if (release.id !== releaseId || release.draft !== false) {
+        throw error;
+      }
+      patchResponse = release;
+    }
+    if (
+      patchResponse.id !== releaseId ||
+      patchResponse.tag_name !== tag ||
+      patchResponse.target_commitish !== "main" ||
+      patchResponse.name !== tag ||
+      patchResponse.body !== body ||
+      patchResponse.draft !== false ||
+      patchResponse.prerelease !== prerelease ||
+      patchResponse.assets_url !== expectedAssetsURL ||
+      patchResponse.upload_url !== expectedUploadURL
+    ) {
+      throw new Error(
+        `release ${releaseId} PATCH response differs from the exact retained draft identity`,
+      );
+    }
+    let release;
+    let published = false;
+    for (let attempt = 1; attempt <= 12; attempt += 1) {
+      release = getRelease(context, tag);
+      if (
+        release.id === releaseId &&
+        release.draft === false &&
+        release.immutable === true
+      ) {
+        published = true;
+        break;
+      }
+      if (attempt < 12) context.wait(1000);
+    }
+    if (!published) {
+      throw new Error(
+        `release ${releaseId} did not converge to immutable exact publication`,
+      );
+    }
+    validateReleaseReadback(release, tag, assets, {
+      prerelease,
+      expectedReleaseId: releaseId,
+      expectedName: tag,
+      expectedBody: body,
+      expectedTargetCommitish: "main",
+      expectedAssetsURL,
+      expectedUploadURL,
+    });
+    downloadAndCompareRelease(context, tag, assets, temporaryRoot);
+    assertUniqueReleaseIdentity(context, tag, releaseId, false);
+    return release;
+  } catch (error) {
+    reportRetainedDraftFailure(context, tag, releaseId);
+    throw error;
   }
 }
 
@@ -3507,8 +3831,7 @@ function formRecoverTagOnly(context, options, plan) {
         const release = publishReleaseLocally(context, {
           tag: entry.tag,
           assets: verified.assets,
-          body:
-            "Data-only Takoform Form Package release completed forward from an exact tag-only partial state. Verify the canonical package index, Sigstore bundle, and publisher identity before installation.",
+          body: FORM_TAG_ONLY_RELEASE_BODY,
           temporaryRoot,
           prePublishFence: () => {
             const publishMain = ownerGateAndFence(context, recoveryCommit);
@@ -3560,6 +3883,154 @@ function formRecoverTagOnly(context, options, plan) {
       } catch (error) {
         reportTagFailure(context, entry.tag, "", {
           phase: "recover-tag-only",
+        });
+        throw error;
+      }
+    },
+  );
+}
+
+function formRecoverDraft(context, options, plan) {
+  const entry = plannedRelease(plan, options.tag);
+  const expectedCommit = options["expected-commit"];
+  const expectedObject = options["expected-tag-object"];
+  const recoveryCommit = options["expected-recovery-commit"];
+  const releaseId = Number(options["release-id"]);
+  const initialMain = assertCurrentProtectedMain(context, recoveryCommit);
+  const run = requireSuccessfulRun(
+    context,
+    options["run-id"],
+    options["run-attempt"],
+    {
+      workflowName: "Prepare signed Form Package release candidate",
+    },
+  );
+  const toolingCommit = run.headSha;
+  assertFormTagOnlyRecoveryFence(context, {
+    sourceCommit: expectedCommit,
+    toolingCommit,
+    recoveryCommit: initialMain,
+    sourcePath: entry.sourcePath,
+    label: "Form Package retained-draft reviewed candidate fence",
+  });
+  return withTemporaryDirectory(
+    "takoform-form-draft-recovery",
+    (temporaryRoot) => {
+      const candidate = downloadArtifact(
+        context,
+        options["run-id"],
+        `form-package-release-candidate-${options["run-id"]}-${options["run-attempt"]}`,
+        join(temporaryRoot, "candidate"),
+      );
+      const verified = verifyFormCandidate(context, candidate, {
+        entry,
+        runId: options["run-id"],
+        runAttempt: options["run-attempt"],
+        requestId: run.displayTitle,
+        expectedCommit,
+        toolingCommit,
+      });
+      try {
+        const candidateObject = reconstructCandidateTagObject(
+          context,
+          entry.tag,
+          expectedCommit,
+          candidate,
+          verified.metadata,
+        );
+        if (
+          candidateObject !== expectedObject ||
+          verified.metadata.tagObjectOid !== expectedObject
+        ) {
+          throw new Error(
+            `draft recovery candidate object ${candidateObject} does not equal explicitly expected ${expectedObject}`,
+          );
+        }
+        assertExactRemoteTag(
+          context,
+          entry.tag,
+          expectedCommit,
+          expectedObject,
+        );
+        const local = localTagOID(context, entry.tag);
+        if (local !== expectedObject) {
+          throw new Error(
+            `draft recovery local tag differs: ${local || "absent"}`,
+          );
+        }
+        const mutationMain = ownerGateAndFence(context, recoveryCommit);
+        assertFormTagOnlyRecoveryFence(context, {
+          sourceCommit: expectedCommit,
+          toolingCommit,
+          recoveryCommit: mutationMain,
+          sourcePath: entry.sourcePath,
+          label: "Form Package retained-draft mutation fence",
+        });
+        assertExactRemoteTag(
+          context,
+          entry.tag,
+          expectedCommit,
+          expectedObject,
+        );
+        const release = resumeDraftReleaseLocally(context, {
+          releaseId,
+          tag: entry.tag,
+          assets: verified.assets,
+          body: FORM_TAG_ONLY_RELEASE_BODY,
+          temporaryRoot,
+          prePublishFence: () => {
+            const publishMain = ownerGateAndFence(context, recoveryCommit);
+            assertFormTagOnlyRecoveryFence(context, {
+              sourceCommit: expectedCommit,
+              toolingCommit,
+              recoveryCommit: publishMain,
+              sourcePath: entry.sourcePath,
+              label: "Form Package retained-draft pre-publish fence",
+            });
+            const publishState = assertExactRemoteTag(
+              context,
+              entry.tag,
+              expectedCommit,
+              expectedObject,
+            );
+            const publishLocal = localTagOID(context, entry.tag);
+            if (publishLocal !== expectedObject) {
+              throw new Error(
+                `draft recovery local tag changed before publication: ${publishLocal || "absent"}`,
+              );
+            }
+            return publishState;
+          },
+        });
+        return emit(context, {
+          kind: "takos.deploy-result@v1",
+          surface: FORM_SURFACE,
+          phase: "recover-draft",
+          commit: expectedCommit,
+          toolingCommit,
+          recoveryCommit,
+          tag: entry.tag,
+          tagObject: expectedObject,
+          recoveredFrom: "EXACT_RETAINED_DRAFT",
+          candidateRun: {
+            id: options["run-id"],
+            attempt: options["run-attempt"],
+            url: run.url,
+          },
+          releaseId: release.id,
+          releaseUrl: release.html_url,
+          assetDigests: Object.fromEntries(
+            [...verified.assets].map(([name, asset]) => [
+              name,
+              asset.sha256,
+            ]),
+          ),
+          productionReadback: "EXACT_IMMUTABLE_RELEASE",
+          status: "VERIFIED",
+        });
+      } catch (error) {
+        reportTagFailure(context, entry.tag, "", {
+          phase: "recover-draft",
         });
         throw error;
       }
@@ -4094,6 +4565,7 @@ export const releaseDeployTestHooks = Object.freeze({
   providerAssetNames,
   pushExactTag,
   reportTagFailure,
+  resumeDraftReleaseLocally,
   reconstructCandidateTagObject,
   requireSuccessfulRun,
   validateReleaseReadback,
