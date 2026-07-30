@@ -87,7 +87,7 @@ func (r *formResource) UpgradeState(_ context.Context) map[int64]resource.StateU
 					"Provider v1 requires explicit Form migration",
 					"Schema-version-zero state cannot be transformed in place because it does not record the exact Form identity or provider version that created it. "+
 						"State was not modified and no Resource lifecycle request was made. Pin the exact provider version that wrote this state. "+
-						"If that version is v0.2.1, follow release/migrations/v0.2.1-to-v1.0.0.md; do not refresh v0.1.x state through v0.2.1.",
+						"If that version is v0.2.1, follow release/migrations/v0.2.1-to-v1.0.1.md; do not refresh v0.1.x state through v0.2.1.",
 				)
 			},
 		},
@@ -556,7 +556,7 @@ func (r *formResource) assertStateFormIdentity(values formValues, diags *diag.Di
 			"State has no exact Form identity",
 			"This state predates the provider v1 Form-identity fence. Do not refresh it with provider v1: "+
 				"pin the exact provider version that wrote the state and perform an explicit migration. "+
-				"If that version is v0.2.1, follow release/migrations/v0.2.1-to-v1.0.0.md; do not refresh v0.1.x state through v0.2.1. "+
+				"If that version is v0.2.1, follow release/migrations/v0.2.1-to-v1.0.1.md; do not refresh v0.1.x state through v0.2.1. "+
 				"Provider v1 intentionally has no automatic state upgrader because pre-v1 state cannot prove its exact FormRef.",
 		)
 		return false

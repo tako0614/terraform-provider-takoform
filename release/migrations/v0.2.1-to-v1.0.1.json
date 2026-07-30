@@ -11,8 +11,8 @@
     "openTofuProviderAddress": "registry.opentofu.org/tako0614/takoform"
   },
   "to": {
-    "providerVersion": "1.0.0",
-    "providerTag": "v1.0.0",
+    "providerVersion": "1.0.1",
+    "providerTag": "v1.0.1",
     "candidateRefsSha256": "sha256:d54b838930aabeeac611dab5ec43a89b17512b652964492980f264c80dce5910",
     "formResourceCount": 34,
     "totalResourceCount": 34,

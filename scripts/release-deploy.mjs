@@ -33,6 +33,7 @@ const PINNED_GH_VERSION = "2.96.0";
 const PINNED_COSIGN_VERSION = "v3.0.6";
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const COMMIT = /^[0-9a-f]{40}$/u;
+const GIT_OBJECT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/u;
 const REQUEST_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -61,6 +62,19 @@ const FORM_RELEASE_AUTHORITY_PATHS = Object.freeze([
   "internal/standardforms",
   "package.json",
   "scripts/release-deploy.mjs",
+  "standardform",
+]);
+const FORM_TAG_ONLY_RECOVERY_STABLE_PATHS = Object.freeze([
+  ".github/workflows/form-package-release.yml",
+  TRUSTED_ROOT,
+  "cmd/form-package-release",
+  "formpackage",
+  "go.mod",
+  "go.sum",
+  "internal/client",
+  "internal/formcatalog",
+  "internal/formregistry",
+  "internal/hostpolicy",
   "standardform",
 ]);
 
@@ -133,9 +147,9 @@ export const RELEASE_SURFACES = Object.freeze([
       "post-conditions":
         "after local tag/release publication requires exact remote tag resolution, immutable release id/tag, exact API asset digests, and a fresh seven-file package or six-file revocation download; verify-all delegates all 34 semantic readbacks to the repository's Go verifier and writes one create-only external publication set",
       reversal:
-        "Form Package and revocation identities are append-only and cannot be replaced; recovery retains the bad identity and publishes a corrected package version or later cumulative revocation checkpoint",
+        "Form Package and revocation identities are append-only and cannot be replaced; an exact tag-only partial state may only be completed forward by recover-tag-only without changing the tag, while a bad identity requires a corrected package version or later cumulative revocation checkpoint",
       "failure-handling":
-        "prints raw diagnostics, retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, reports local and remote ref state after a tag-side partial failure, and refuses blind retry whenever mutation state is indeterminate",
+        "prints raw diagnostics, retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, reports local and remote ref state after a tag-side partial failure, refuses blind retry whenever mutation state is indeterminate, and exposes an explicit tag-only recovery that requires the exact candidate object/commit and a completely absent Release",
       "independent-review":
         "the form-package-release protected Environment reviews and signs the exact candidate; local publication consumes only that named successful run/attempt and independently verifies its checksum and Sigstore closure",
       "no-overwrite":
@@ -158,6 +172,14 @@ const PHASES = {
     plan: [],
     prepare: ["tag", "expected-commit"],
     publish: ["tag", "expected-commit", "run-id", "run-attempt"],
+    "recover-tag-only": [
+      "tag",
+      "expected-commit",
+      "expected-tag-object",
+      "expected-recovery-commit",
+      "run-id",
+      "run-attempt",
+    ],
     verify: ["tag", "expected-commit"],
     "verify-all": ["output-root"],
     "prepare-revocation": ["tag", "expected-commit"],
@@ -211,9 +233,19 @@ export function parseReleaseSurfaceArgs(surface, args) {
   ) {
     throw usageError(surface);
   }
-  if (values["expected-commit"] && !COMMIT.test(values["expected-commit"])) {
+  for (const name of ["expected-commit", "expected-recovery-commit"]) {
+    if (values[name] && !COMMIT.test(values[name])) {
+      throw new Error(
+        `--${name} must be an exact lowercase 40-character commit`,
+      );
+    }
+  }
+  if (
+    values["expected-tag-object"] &&
+    !GIT_OBJECT.test(values["expected-tag-object"])
+  ) {
     throw new Error(
-      "--expected-commit must be an exact lowercase 40-character commit",
+      "--expected-tag-object must be an exact lowercase Git object id",
     );
   }
   for (const name of ["run-id", "run-attempt"]) {
@@ -308,6 +340,12 @@ function runForm(context, options) {
       return formPrepare(context, options, readReleasePlan(context.repo));
     case "publish":
       return formPublish(context, options, readReleasePlan(context.repo));
+    case "recover-tag-only":
+      return formRecoverTagOnly(
+        context,
+        options,
+        readReleasePlan(context.repo),
+      );
     case "verify":
       return formVerify(context, options);
     case "verify-all":
@@ -578,6 +616,49 @@ function assertFormReleaseAuthorityFence(
     ],
     {
       label: `${label}: release authority paths changed after reviewed tooling commit`,
+    },
+  );
+}
+
+function assertFormTagOnlyRecoveryFence(
+  context,
+  {
+    sourceCommit,
+    toolingCommit,
+    recoveryCommit,
+    sourcePath,
+    label,
+  },
+) {
+  assertCommitAncestor(
+    context,
+    sourceCommit,
+    toolingCommit,
+    `${label} source/tooling ancestry`,
+  );
+  assertCommitAncestor(
+    context,
+    toolingCommit,
+    recoveryCommit,
+    `${label} tooling/recovery ancestry`,
+  );
+  command(
+    context,
+    "git",
+    [
+      "diff",
+      "--quiet",
+      toolingCommit,
+      recoveryCommit,
+      "--",
+      "forms/release-plan.json",
+      sourcePath,
+      ...FORM_TAG_ONLY_RECOVERY_STABLE_PATHS,
+    ],
+    {
+      label:
+        `${label}: candidate generation, identity, signing, or trust inputs ` +
+        "changed after the reviewed candidate",
     },
   );
 }
@@ -1194,7 +1275,13 @@ function assertExactRemoteTag(context, tag, expectedCommit, expectedObject) {
   return state;
 }
 
-function materializeTagObject(context, tag, expectedCommit, root, metadata) {
+function reconstructCandidateTagObject(
+  context,
+  tag,
+  expectedCommit,
+  root,
+  metadata,
+) {
   const tagObject = readFileSync(join(root, "tag-object"));
   if (
     metadata.objectFormat !== git(context, "rev-parse", "--show-object-format") ||
@@ -1230,6 +1317,17 @@ function materializeTagObject(context, tag, expectedCommit, root, metadata) {
       `candidate tag object OID ${metadata.tagObjectOid} reconstructed as ${reconstructed}`,
     );
   }
+  return reconstructed;
+}
+
+function materializeTagObject(context, tag, expectedCommit, root, metadata) {
+  const reconstructed = reconstructCandidateTagObject(
+    context,
+    tag,
+    expectedCommit,
+    root,
+    metadata,
+  );
   if (localTagOID(context, tag)) {
     throw new Error(`local tag ${tag} already exists; refusing resume`);
   }
@@ -1241,6 +1339,41 @@ function materializeTagObject(context, tag, expectedCommit, root, metadata) {
     zero,
   ]);
   return reconstructed;
+}
+
+function assertTagOnlyRecoveryState(
+  context,
+  { tag, expectedCommit, expectedObject },
+) {
+  const local = localTagOID(context, tag);
+  if (local !== expectedObject) {
+    throw new Error(
+      `tag-only recovery requires exact local annotated tag object ${expectedObject}; observed ${local || "absent"}`,
+    );
+  }
+  const localType = git(context, "cat-file", "-t", `refs/tags/${tag}`);
+  const localCommit = git(
+    context,
+    "rev-parse",
+    `refs/tags/${tag}^{commit}`,
+  );
+  if (localType !== "tag" || localCommit !== expectedCommit) {
+    throw new Error(
+      `tag-only recovery local tag is not the exact annotated object/commit: ${JSON.stringify({
+        object: local,
+        type: localType,
+        commit: localCommit,
+      })}`,
+    );
+  }
+  const remote = assertExactRemoteTag(
+    context,
+    tag,
+    expectedCommit,
+    expectedObject,
+  );
+  assertReleaseAbsent(context, tag);
+  return { local: { object: local, type: localType, commit: localCommit }, remote };
 }
 
 function ensureCandidateTagPublished(
@@ -2189,7 +2322,7 @@ function providerPublish(context, options, descriptor) {
       prerelease: descriptor.version.includes("-"),
       body:
         "Signed deterministic Takoform provider release. Provider publication does not activate Standard Forms.\n\nBreaking upgrade from v0.2.1: follow the migration guide before using provider v1 with existing state: " +
-        `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v0.2.1-to-v1.0.0.md`,
+        `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v0.2.1-to-v1.0.1.md`,
       temporaryRoot,
       prePublishFence: () => {
         ownerGateAndFence(context, expectedCommit);
@@ -3298,6 +3431,142 @@ function formPublish(context, options, plan) {
   });
 }
 
+function formRecoverTagOnly(context, options, plan) {
+  const entry = plannedRelease(plan, options.tag);
+  const expectedCommit = options["expected-commit"];
+  const expectedObject = options["expected-tag-object"];
+  const recoveryCommit = options["expected-recovery-commit"];
+  const initialMain = assertCurrentProtectedMain(context, recoveryCommit);
+  const run = requireSuccessfulRun(
+    context,
+    options["run-id"],
+    options["run-attempt"],
+    {
+      workflowName: "Prepare signed Form Package release candidate",
+    },
+  );
+  const toolingCommit = run.headSha;
+  assertFormTagOnlyRecoveryFence(context, {
+    sourceCommit: expectedCommit,
+    toolingCommit,
+    recoveryCommit: initialMain,
+    sourcePath: entry.sourcePath,
+    label: "Form Package tag-only reviewed candidate fence",
+  });
+  return withTemporaryDirectory(
+    "takoform-form-tag-only-recovery",
+    (temporaryRoot) => {
+      const candidate = downloadArtifact(
+        context,
+        options["run-id"],
+        `form-package-release-candidate-${options["run-id"]}-${options["run-attempt"]}`,
+        join(temporaryRoot, "candidate"),
+      );
+      const verified = verifyFormCandidate(context, candidate, {
+        entry,
+        runId: options["run-id"],
+        runAttempt: options["run-attempt"],
+        requestId: run.displayTitle,
+        expectedCommit,
+        toolingCommit,
+      });
+      try {
+        const candidateObject = reconstructCandidateTagObject(
+          context,
+          entry.tag,
+          expectedCommit,
+          candidate,
+          verified.metadata,
+        );
+        if (
+          candidateObject !== expectedObject ||
+          verified.metadata.tagObjectOid !== expectedObject
+        ) {
+          throw new Error(
+            `tag-only recovery candidate object ${candidateObject} does not equal explicitly expected ${expectedObject}`,
+          );
+        }
+        assertTagOnlyRecoveryState(context, {
+          tag: entry.tag,
+          expectedCommit,
+          expectedObject,
+        });
+        const mutationMain = ownerGateAndFence(context, recoveryCommit);
+        assertFormTagOnlyRecoveryFence(context, {
+          sourceCommit: expectedCommit,
+          toolingCommit,
+          recoveryCommit: mutationMain,
+          sourcePath: entry.sourcePath,
+          label: "Form Package tag-only release mutation fence",
+        });
+        assertTagOnlyRecoveryState(context, {
+          tag: entry.tag,
+          expectedCommit,
+          expectedObject,
+        });
+        const release = publishReleaseLocally(context, {
+          tag: entry.tag,
+          assets: verified.assets,
+          body:
+            "Data-only Takoform Form Package release completed forward from an exact tag-only partial state. Verify the canonical package index, Sigstore bundle, and publisher identity before installation.",
+          temporaryRoot,
+          prePublishFence: () => {
+            const publishMain = ownerGateAndFence(context, recoveryCommit);
+            assertFormTagOnlyRecoveryFence(context, {
+              sourceCommit: expectedCommit,
+              toolingCommit,
+              recoveryCommit: publishMain,
+              sourcePath: entry.sourcePath,
+              label: "Form Package tag-only pre-publish fence",
+            });
+            const state = assertExactRemoteTag(
+              context,
+              entry.tag,
+              expectedCommit,
+              expectedObject,
+            );
+            const local = localTagOID(context, entry.tag);
+            if (local !== expectedObject) {
+              throw new Error(
+                `tag-only recovery local tag changed before publication: ${local || "absent"}`,
+              );
+            }
+            return state;
+          },
+        });
+        return emit(context, {
+          kind: "takos.deploy-result@v1",
+          surface: FORM_SURFACE,
+          phase: "recover-tag-only",
+          commit: expectedCommit,
+          toolingCommit,
+          recoveryCommit,
+          tag: entry.tag,
+          tagObject: expectedObject,
+          recoveredFrom: "EXACT_TAG_PRESENT_RELEASE_ABSENT",
+          candidateRun: {
+            id: options["run-id"],
+            attempt: options["run-attempt"],
+            url: run.url,
+          },
+          releaseId: release.id,
+          releaseUrl: release.html_url,
+          assetDigests: Object.fromEntries(
+            [...verified.assets].map(([name, asset]) => [name, asset.sha256]),
+          ),
+          productionReadback: "EXACT_IMMUTABLE_RELEASE",
+          status: "VERIFIED",
+        });
+      } catch (error) {
+        reportTagFailure(context, entry.tag, "", {
+          phase: "recover-tag-only",
+        });
+        throw error;
+      }
+    },
+  );
+}
+
 function reportTagFailure(
   context,
   tag,
@@ -3810,8 +4079,10 @@ function revocationVerify(context, options) {
 // authority while exercising the same mutation and verification code paths.
 export const releaseDeployTestHooks = Object.freeze({
   assertFormReleaseAuthorityFence,
+  assertFormTagOnlyRecoveryFence,
   assertReleaseAbsent,
   assertRegistryVersionAbsent,
+  assertTagOnlyRecoveryState,
   command,
   dispatchWorkflow,
   expectedFormTagObject,
@@ -3823,6 +4094,7 @@ export const releaseDeployTestHooks = Object.freeze({
   providerAssetNames,
   pushExactTag,
   reportTagFailure,
+  reconstructCandidateTagObject,
   requireSuccessfulRun,
   validateReleaseReadback,
   validateDraftBeforePublication,

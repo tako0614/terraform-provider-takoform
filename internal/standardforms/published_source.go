@@ -321,31 +321,96 @@ func verifyLocalPublishedFormTags(root string, published map[string]publishedRel
 	}
 	tags := strings.Fields(string(raw))
 	sort.Strings(tags)
+	var plannedByTag map[string]PlannedFormRelease
 	for _, tag := range tags {
 		parts := strings.Split(tag, "/")
 		if len(parts) != 3 || parts[0] != "forms" || !strings.HasPrefix(parts[1], "k-") || !strings.HasPrefix(parts[2], "v") {
 			return fmt.Errorf("published Form tag %q has invalid identity", tag)
 		}
+		command := exec.Command("git", "-C", root, "cat-file", "-t", tag)
+		objectType, err := command.Output()
+		if err != nil {
+			return fmt.Errorf("inspect published Form tag object %s: %w", tag, err)
+		}
+		if strings.TrimSpace(string(objectType)) != "tag" {
+			return fmt.Errorf("published Form tag %s must be an annotated tag", tag)
+		}
 		version := strings.TrimPrefix(parts[2], "v")
-		source, ok := published[publishedReleaseKey(parts[1], version)]
+		key := publishedReleaseKey(parts[1], version)
+		source, ok := published[key]
+		unretained := !ok
 		if !ok {
-			return fmt.Errorf("published Form tag %s has no retained admission release manifest", tag)
+			if plannedByTag == nil {
+				var err error
+				plannedByTag, err = verifiedCurrentReleasePlanByTag(root)
+				if err != nil {
+					return fmt.Errorf("published Form tag %s is unretained and the current release plan is invalid: %w", tag, err)
+				}
+			}
+			planned, exists := plannedByTag[tag]
+			if !exists {
+				return fmt.Errorf(
+					"published Form tag %s has no retained admission release manifest and is not in the current release plan",
+					tag,
+				)
+			}
+			report, err := formpackage.VerifyDirectory(
+				filepath.Join(root, filepath.FromSlash(planned.SourcePath)),
+			)
+			if err != nil {
+				return fmt.Errorf("planned release source for unretained Form tag %s: %w", tag, err)
+			}
+			if planned.ReleaseID != parts[1] ||
+				planned.Version != version ||
+				report.FormRef != planned.FormRef ||
+				report.PackageDigest != planned.PackageDigest {
+				return fmt.Errorf("unretained Form tag %s drifts from the current release plan identity", tag)
+			}
+			source = publishedReleaseSource{
+				ReleaseID:     planned.ReleaseID,
+				Version:       planned.Version,
+				Tag:           planned.Tag,
+				FormRef:       planned.FormRef,
+				PackageDigest: planned.PackageDigest,
+				SourcePath:    planned.SourcePath,
+			}
 		}
 		if source.Tag != tag {
 			return fmt.Errorf("published Form tag %s drifts from retained admission release manifest", tag)
 		}
-		command := exec.Command(
+		compareCommand := exec.Command(
 			"git", "-C", root, "diff", "--quiet", "--no-ext-diff", "--no-textconv",
 			tag, "--", source.SourcePath,
 		)
-		if err := command.Run(); err != nil {
+		if err := compareCommand.Run(); err != nil {
 			if exit, ok := err.(*exec.ExitError); ok && exit.ExitCode() == 1 {
 				return fmt.Errorf("published release source %s differs byte-for-byte from immutable tag %s", source.SourcePath, tag)
 			}
 			return fmt.Errorf("compare published release source with immutable tag %s: %w", tag, err)
 		}
+		if unretained {
+			published[key] = source
+		}
 	}
 	return nil
+}
+
+func verifiedCurrentReleasePlanByTag(root string) (map[string]PlannedFormRelease, error) {
+	if err := VerifyReleasePlan(root); err != nil {
+		return nil, err
+	}
+	var plan ReleasePlan
+	if err := readJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), &plan); err != nil {
+		return nil, err
+	}
+	byTag := make(map[string]PlannedFormRelease, len(plan.Releases))
+	for _, release := range plan.Releases {
+		if _, duplicate := byTag[release.Tag]; duplicate {
+			return nil, fmt.Errorf("release plan reuses tag %s", release.Tag)
+		}
+		byTag[release.Tag] = release
+	}
+	return byTag, nil
 }
 
 func verifyNoPublishedReleaseOverwrite(root, stagingRoot string, entries []InventoryEntry, published map[string]publishedReleaseSource) error {

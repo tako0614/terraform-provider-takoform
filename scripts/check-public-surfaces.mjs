@@ -527,7 +527,7 @@ function providerCodeBlocksFromHtml(source) {
 }
 
 function hasExactV1CandidatePin(block) {
-  return /\bversion\s*=\s*"= 1\.0\.0"/.test(block);
+  return /\bversion\s*=\s*"= 1\.0\.1"/.test(block);
 }
 
 function checkTerraformProviderExample(filePath) {
@@ -538,7 +538,7 @@ function checkTerraformProviderExample(filePath) {
   }
   if (!hasExactV1CandidatePin(source)) {
     fail(
-      `${relative(filePath)}: provider example must contain version = "= 1.0.0"`,
+      `${relative(filePath)}: provider example must contain version = "= 1.0.1"`,
     );
   }
 }
@@ -566,7 +566,7 @@ function checkImmutableProviderTagDocs(source) {
     {
       label: "asserted live provider availability",
       pattern:
-        /\b(?:provider\s+)?`?v1\.0\.0`?[^.\n]{0,100}\b(?:is|remains)\s+(?:not\s+)?(?:published|unpublished|available|unavailable|installable)\b/i,
+        /\b(?:provider\s+)?`?v1\.0\.1`?[^.\n]{0,100}\b(?:is|remains)\s+(?:not\s+)?(?:published|unpublished|available|unavailable|installable)\b/i,
     },
     {
       label: "publication-pending wording",
@@ -602,7 +602,7 @@ function checkImmutableProviderTagDocs(source) {
     },
     {
       label: "exact provider tag checkout",
-      pattern: /git checkout --detach v1\.0\.0/,
+      pattern: /git checkout --detach v1\.0\.1/,
     },
     {
       label: "full provider source clone",
@@ -632,7 +632,7 @@ function checkProviderCandidateExamples() {
   for (const [index, block] of docsBlocks.entries()) {
     if (!hasExactV1CandidatePin(block)) {
       fail(
-        `docs/index.md: provider example ${index + 1} must contain version = "= 1.0.0"`,
+        `docs/index.md: provider example ${index + 1} must contain version = "= 1.0.1"`,
       );
     }
   }
@@ -650,7 +650,7 @@ function checkProviderCandidateExamples() {
     for (const [index, block] of blocks.entries()) {
       if (!hasExactV1CandidatePin(block)) {
         fail(
-          `${relative(filePath)}: provider example ${index + 1} must contain version = "= 1.0.0"`,
+          `${relative(filePath)}: provider example ${index + 1} must contain version = "= 1.0.1"`,
         );
       }
     }
@@ -693,7 +693,7 @@ function checkSingleRegistryVocabulary() {
       repositoryRoot,
       "release",
       "migrations",
-      "v0.2.1-to-v1.0.0.md",
+      "v0.2.1-to-v1.0.1.md",
     ),
   ]);
   const documentationFiles = [
@@ -890,11 +890,11 @@ compareExact(
 const releaseVersion = readJson(
   path.join(repositoryRoot, "release", "version.json"),
 );
-if (releaseVersion.version !== "1.0.0") {
-  fail("release/version.json: version must be 1.0.0");
+if (releaseVersion.version !== "1.0.1") {
+  fail("release/version.json: version must be 1.0.1");
 }
-if (releaseVersion.tag !== "v1.0.0") {
-  fail("release/version.json: tag must be v1.0.0");
+if (releaseVersion.tag !== "v1.0.1") {
+  fail("release/version.json: tag must be v1.0.1");
 }
 if (releaseVersion.publicationStatus !== "candidate-only") {
   fail("release/version.json: publicationStatus must be candidate-only");

@@ -87,7 +87,7 @@ operator and are never committed here.
 
 The site must claim nothing beyond signed, committed evidence in this
 repository. In particular it must not state that a Form Package is admitted,
-that a candidate Form is `portable-standard`, or that provider `v1.0.0` is
+that a candidate Form is `portable-standard`, or that provider `v1.0.1` is
 installable from a Registry until the corresponding live evidence exists. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),
 and the repository [`AGENTS.md`](../AGENTS.md).

@@ -22,9 +22,9 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-## Provider v1.0.0 resource transition
+## Provider v1.0.1 resource transition
 
-Provider `v1.0.0` removes the active `takoform_http_service` resource and adds
+Provider `v1.0.1` removes the active `takoform_http_service` resource and adds
 `takoform_edge_worker` for the distinct `EdgeWorker@3.0.0` Form identity. It
 also removes the writable `takoform_interface` resource: portable Form
 Definitions may declare non-secret Interface descriptors and the provider
@@ -33,7 +33,7 @@ bindings, write fencing, authorization, and lifecycle belong to the host.
 Published `HttpService@1.0.0` bytes and provider `v0.2.1` remain immutable.
 
 The compatibility break is broader than those two removed resource types.
-Provider `v0.2.1` and candidate `v1.0.0` each compile 34 Form identities. They
+Provider `v0.2.1` and candidate `v1.0.1` each compile 34 Form identities. They
 share 33 kind names, but all 33 shared exact FormRefs/packages changed; there
 are zero unchanged exact identities. Common names, artifacts, connections, and
 semantic field contracts also changed. Every existing v0.2.1 Form resource,
@@ -62,9 +62,9 @@ normalize it with an explicit, reviewed `tofu state replace-provider` while
 the resource version remains pinned to v0.2.1. Address replacement does not
 migrate any Form resource. The full inventory, backup, address-normalization,
 and per-resource cutover procedure is
-[`migrations/v0.2.1-to-v1.0.0.md`](migrations/v0.2.1-to-v1.0.0.md), backed by
+[`migrations/v0.2.1-to-v1.0.1.md`](migrations/v0.2.1-to-v1.0.1.md), backed by
 the machine-readable
-[`migration audit`](migrations/v0.2.1-to-v1.0.0.json).
+[`migration audit`](migrations/v0.2.1-to-v1.0.1.json).
 
 This is the first stable provider compatibility line, not a claim that the
 portable specification has graduated from
@@ -110,9 +110,17 @@ Providers `v0.1.1`, `v0.1.2`, and the then-corrective `v0.1.3` describe
 historical pre-v1 layouts only. `v0.1.1` included SPDX evidence in
 `SHA256SUMS`; `v0.1.2` omitted the required Registry manifest; and `v0.1.3`
 corrected that historical checksum closure without replacing a published byte.
-None of those layouts defines the current provider `v1.0.0` candidate. The v1
+None of those layouts defines the current provider `v1.0.1` candidate. The v1
 candidate is governed by the 15-asset provenance closure above and MUST NOT
 overwrite or inherit the identity of any historical version.
+
+The signed annotated `v1.0.0` tag is immutable but never became a GitHub
+Release or Terraform Registry version. Its candidate workflow failed before
+publication because the embedded provenance generator did not parse.
+`v1.0.0` is permanently abandoned: never move, delete, or reuse that tag.
+Provider `v1.0.1` is the forward repair, and workflow-embedded Node programs
+are now parsed in the portable gate while this provenance generator is also
+executed against its exact 13-subject contract.
 
 `release/version.json` also pins the supported CLI/FQN matrix. Release CI must
 exercise Terraform `1.15.8` and OpenTofu `1.12.1` with the same canonical
@@ -260,7 +268,7 @@ descriptor tag and current protected-main commit:
 
 ```console
 bun run deploy -- takoform-provider-release prepare \
-  --tag v1.0.0 \
+  --tag v1.0.1 \
   --expected-commit <40-character-protected-main-commit>
 ```
 
@@ -280,7 +288,7 @@ exact signed-tag run through the same owner entrypoint:
 
 ```console
 bun run deploy -- takoform-provider-release tag \
-  --tag v1.0.0 \
+  --tag v1.0.1 \
   --expected-commit <same-40-character-commit> \
   --run-id <signed-tag-workflow-run-id> \
   --run-attempt <signed-tag-workflow-attempt>
@@ -317,7 +325,7 @@ After that second run succeeds, publish only its exact run/attempt:
 
 ```console
 bun run deploy -- takoform-provider-release publish \
-  --tag v1.0.0 \
+  --tag v1.0.1 \
   --expected-commit <same-40-character-commit> \
   --run-id <provider-release-candidate-run-id> \
   --run-attempt <provider-release-candidate-run-attempt>
@@ -339,11 +347,11 @@ succeeds may `main` advance to evidence or status commits.
 
 ```console
 bun run deploy -- takoform-provider-release readback \
-  --tag v1.0.0 \
+  --tag v1.0.1 \
   --expected-commit <same-signed-tag-40-character-commit>
 
 bun run deploy -- takoform-provider-release verify \
-  --tag v1.0.0 \
+  --tag v1.0.1 \
   --expected-commit <same-signed-tag-40-character-commit> \
   --run-id <registry-readback-workflow-run-id> \
   --run-attempt <registry-readback-workflow-attempt>
@@ -381,7 +389,7 @@ overwritten. At that historical point the corrected six-entry candidate was
 `v0.1.3`, and direct Terraform/OpenTofu Registry install evidence remained
 post-publication; the coordinated Form `1.0.1` candidate therefore used
 provider `0.1.3`. Those retained facts do not define the current provider
-`v1.0.0` candidate or its 15-asset provenance closure.
+`v1.0.1` candidate or its 15-asset provenance closure.
 
 Key rotation is additive and review-gated: create a distinct repo-external key,
 change the pinned fingerprint/public key in one reviewed commit, register that

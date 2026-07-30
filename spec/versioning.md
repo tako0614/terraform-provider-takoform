@@ -13,24 +13,24 @@ up meaning nothing.
 
 ## Provider releases
 
-The provider `v1.0.0` candidate establishes the first stable provider
-compatibility line. Within `v1.x`, a release MUST NOT remove an existing
+The provider `v1.0.1` candidate begins the stable `v1` provider compatibility
+line. Within `v1.x`, a release MUST NOT remove an existing
 resource type, silently reinterpret persisted state as a different Form, or
 make an existing valid resource configuration invalid. Such a change requires
 provider `v2`. Compatible optional fields, new resource types, and bug fixes
 remain allowed within `v1`.
 
-The initial `v1.0.0` surface is exactly the 34 typed Form resources plus the
+The initial `v1.0.1` surface is exactly the 34 typed Form resources plus the
 read-only `takoform_interface` data source. The writable
 `takoform_interface` resource published in `v0.2.x` is intentionally outside
 that stable surface because Interface write authority belongs to the host.
 This is not the only v0.2.1 compatibility break: all 33 Form kinds common to
-v0.2.1 and v1.0.0 changed their exact FormRef/package identity, and
+v0.2.1 and v1.0.1 changed their exact FormRef/package identity, and
 `HttpService` was replaced by `EdgeWorker`. Provider v1 begins resource schema
 version `1`, records the exact Form identity in state, and gives version `0`
 only a diagnostic-only rejection handler with no transformed state or Resource
 lifecycle request. The explicit migration boundary is documented in
-[`../release/migrations/v0.2.1-to-v1.0.0.md`](../release/migrations/v0.2.1-to-v1.0.0.md).
+[`../release/migrations/v0.2.1-to-v1.0.1.md`](../release/migrations/v0.2.1-to-v1.0.1.md).
 
 This promise applies only to the provider binary and its Terraform/OpenTofu
 surface. It does not graduate the portable API group, admit a Form as
@@ -51,7 +51,7 @@ immutable identities. The rebuilt provider-neutral line therefore did not
 reuse `EdgeWorker@1.0.0`. Its retained `2.0.0` release source also remains
 unmodified: the later credential-free artifact URL constraint narrows desired
 state and therefore starts `EdgeWorker@3.0.0`, including when implemented by
-provider `v1.0.0`.
+provider `v1.0.1`.
 
 The decision is recorded in
 [`decisions/0001-provider-v1-keeps-form-versions-independent.md`](decisions/0001-provider-v1-keeps-form-versions-independent.md).

@@ -60,7 +60,7 @@ type providerMigrationAudit struct {
 func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	root := repositoryRoot(t)
 	var audit providerMigrationAudit
-	readStrictJSON(t, filepath.Join(root, "release", "migrations", "v0.2.1-to-v1.0.0.json"), &audit)
+	readStrictJSON(t, filepath.Join(root, "release", "migrations", "v0.2.1-to-v1.0.1.json"), &audit)
 
 	const (
 		oldAddress                = "registry.opentofu.org/tako0614/takoform"
@@ -75,7 +75,7 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 		!audit.From.WritableInterfaceResource || audit.From.OpenTofuProviderAddress != oldAddress {
 		t.Fatalf("unexpected v0.2.1 migration source: %#v", audit.From)
 	}
-	if audit.To.ProviderVersion != "1.0.0" || audit.To.ProviderTag != "v1.0.0" ||
+	if audit.To.ProviderVersion != "1.0.1" || audit.To.ProviderTag != "v1.0.1" ||
 		audit.To.CandidateRefsSHA256 != targetCandidateRefsSHA256 ||
 		audit.To.FormResourceCount != 34 || audit.To.TotalResourceCount != 34 ||
 		audit.To.ResourceSchemaVersion != 1 || audit.To.WritableInterfaceResource ||
@@ -135,7 +135,7 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 		t.Fatalf("migration target differs from release descriptor")
 	}
 
-	guideRaw, err := os.ReadFile(filepath.Join(root, "release", "migrations", "v0.2.1-to-v1.0.0.md"))
+	guideRaw, err := os.ReadFile(filepath.Join(root, "release", "migrations", "v0.2.1-to-v1.0.1.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,8 +174,8 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	providerPublish := localPublisher[providerPublishStart:providerPublishEnd]
 	if !strings.Contains(providerPublish, "body:") ||
 		!strings.Contains(providerPublish, "Breaking upgrade from v0.2.1") ||
-		!strings.Contains(providerPublish, "release/migrations/v0.2.1-to-v1.0.0.md") {
-		t.Fatal("owner-local provider publication does not link the breaking v0.2.1-to-v1.0.0 migration guide")
+		!strings.Contains(providerPublish, "release/migrations/v0.2.1-to-v1.0.1.md") {
+		t.Fatal("owner-local provider publication does not link the breaking v0.2.1-to-v1.0.1 migration guide")
 	}
 
 	resourceDocs, err := filepath.Glob(filepath.Join(root, "docs", "resources", "*.md"))
