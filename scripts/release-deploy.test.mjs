@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
+  constants as fsConstants,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -9,6 +10,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -799,6 +801,485 @@ describe("owner gate final fence and pinned release tools", () => {
       releaseDeployTestHooks.ownerGateAndFence(context(fake), commit),
     ).toThrow("release toolchain drift");
     expect(ranOwnerCheck).toBe(false);
+  });
+});
+
+describe("serial Form Package batch publication", () => {
+  const tree = "a".repeat(40);
+
+  function writeBatchInput(entries) {
+    const directory = temporaryDirectory("form-publish-batch");
+    const path = join(directory, "input.json");
+    writeFileSync(
+      path,
+      `${JSON.stringify(recursivelySorted(entries))}\n`,
+    );
+    return path;
+  }
+
+  function batchExec(calls, timeline = []) {
+    return (executable, args) => {
+      calls.push({ executable, args: [...args] });
+      if (executable === "gh" && args[0] === "--version") {
+        return "gh version 2.96.0 (2026-07-02)\n";
+      }
+      if (executable === "cosign" && args[0] === "version") {
+        return "GitVersion:    v3.0.6\n";
+      }
+      if (executable === "bun" && args.join(" ") === "run check") {
+        return "";
+      }
+      if (executable === "git") {
+        if (args[0] === "status") return "";
+        if (args.join(" ") === "rev-parse --is-shallow-repository") {
+          return "false\n";
+        }
+        if (args.join(" ") === "remote get-url origin") {
+          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+        }
+        if (args[0] === "symbolic-ref") return "main\n";
+        if (args[0] === "fetch") {
+          timeline.push("fresh-protected-main");
+          return "";
+        }
+        if (
+          args.join(" ") === "rev-parse HEAD" ||
+          args.join(" ") === "rev-parse refs/remotes/origin/main"
+        ) {
+          return `${commit}\n`;
+        }
+        if (args.join(" ") === "rev-parse HEAD^{tree}") {
+          return `${tree}\n`;
+        }
+        if (args[0] === "diff") {
+          timeline.push("authority-path-fence");
+          return "";
+        }
+        if (args[0] === "cat-file" || args[0] === "merge-base") {
+          return "";
+        }
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+  }
+
+  test("two entries share exactly one owner check and retain serial mutation fences", () => {
+    const plan = JSON.parse(
+      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
+    );
+    const selected = plan.releases.slice(0, 2);
+    const input = writeBatchInput(
+      selected.map((entry, index) => ({
+        tag: entry.tag,
+        expectedCommit: commit,
+        runId: String(100 + index),
+        runAttempt: "1",
+      })),
+    );
+    const calls = [];
+    const timeline = [];
+    const execution = context(batchExec(calls, timeline));
+    const result = releaseDeployTestHooks.formPublishBatch(
+      execution,
+      { input },
+      plan,
+      (activeContext, options) => {
+        timeline.push(`start:${options.tag}`);
+        const entry = selected.find(
+          (candidate) => candidate.tag === options.tag,
+        );
+        for (const phase of ["tag", "release", "publish"]) {
+          releaseDeployTestHooks.formPublicationMutationFence(
+            activeContext,
+            {
+              expectedCommit: options["expected-commit"],
+              toolingCommit: commit,
+              entry,
+              label: `${phase} test fence`,
+            },
+          );
+          timeline.push(`mutation:${options.tag}:${phase}`);
+        }
+        timeline.push(`done:${options.tag}`);
+        return {
+          tag: options.tag,
+          commit: options["expected-commit"],
+          tagObject: "b".repeat(40),
+          candidateRun: {
+            id: options["run-id"],
+            attempt: options["run-attempt"],
+          },
+          releaseId: Number(options["run-id"]),
+          releaseUrl: `https://example.invalid/${options["run-id"]}`,
+          assetDigests: {},
+          productionReadback: "EXACT_IMMUTABLE_RELEASE",
+        };
+      },
+    );
+
+    expect(
+      calls.filter(
+        (call) =>
+          call.executable === "bun" &&
+          call.args.join(" ") === "run check",
+      ),
+    ).toHaveLength(1);
+    expect(result.releases.map((release) => release.tag)).toEqual(
+      selected.map((entry) => entry.tag),
+    );
+    for (const entry of selected) {
+      const start = timeline.indexOf(`start:${entry.tag}`);
+      const done = timeline.indexOf(`done:${entry.tag}`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(done).toBeGreaterThan(start);
+      const segment = timeline.slice(start + 1, done);
+      expect(segment).toEqual([
+        "fresh-protected-main",
+        "authority-path-fence",
+        `mutation:${entry.tag}:tag`,
+        "fresh-protected-main",
+        "authority-path-fence",
+        `mutation:${entry.tag}:release`,
+        "fresh-protected-main",
+        "authority-path-fence",
+        `mutation:${entry.tag}:publish`,
+      ]);
+    }
+    expect(timeline.indexOf(`done:${selected[0].tag}`)).toBeLessThan(
+      timeline.indexOf(`start:${selected[1].tag}`),
+    );
+  });
+
+  test("an invalid later candidate stops before its own mutation", () => {
+    const plan = JSON.parse(
+      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
+    );
+    const selected = plan.releases.slice(0, 2);
+    const input = writeBatchInput(
+      selected.map((entry, index) => ({
+        tag: entry.tag,
+        expectedCommit: commit,
+        runId: String(200 + index),
+        runAttempt: "1",
+      })),
+    );
+    const calls = [];
+    const mutations = [];
+    const execution = context(batchExec(calls));
+    expect(() =>
+      releaseDeployTestHooks.formPublishBatch(
+        execution,
+        { input },
+        plan,
+        (activeContext, options) => {
+          if (options.tag === selected[1].tag) {
+            throw new Error("reviewed candidate is invalid");
+          }
+          releaseDeployTestHooks.formPublicationMutationFence(
+            activeContext,
+            {
+              expectedCommit: options["expected-commit"],
+              toolingCommit: commit,
+              entry: selected[0],
+              label: "tag test fence",
+            },
+          );
+          mutations.push(options.tag);
+          return {
+            tag: options.tag,
+            commit: options["expected-commit"],
+            tagObject: "b".repeat(40),
+            candidateRun: {
+              id: options["run-id"],
+              attempt: options["run-attempt"],
+            },
+            releaseId: Number(options["run-id"]),
+            releaseUrl: `https://example.invalid/${options["run-id"]}`,
+            assetDigests: {},
+            productionReadback: "EXACT_IMMUTABLE_RELEASE",
+          };
+        },
+      ),
+    ).toThrow("reviewed candidate is invalid");
+    expect(mutations).toEqual([selected[0].tag]);
+    expect(execution.io.errors).toContain(
+      `"failedTag":"${selected[1].tag}"`,
+    );
+  });
+
+  test("blocks dirty, HEAD, origin/main, and tree drift after the proof before a writer", () => {
+    const plan = JSON.parse(
+      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
+    );
+    const entry = plan.releases[0];
+    const advanced = "89abcdef0123456789abcdef0123456789abcdef";
+    for (const drift of ["dirty", "head", "origin-main", "tree"]) {
+      let proofEstablished = false;
+      let writerCalled = false;
+      const fake = (executable, args) => {
+        if (executable === "gh" && args[0] === "--version") {
+          return "gh version 2.96.0 (2026-07-02)\n";
+        }
+        if (executable === "cosign" && args[0] === "version") {
+          return "GitVersion:    v3.0.6\n";
+        }
+        if (executable === "bun" && args.join(" ") === "run check") {
+          return "";
+        }
+        if (executable === "git") {
+          if (args[0] === "status") {
+            return proofEstablished && drift === "dirty"
+              ? " M scripts/release-deploy.mjs\n"
+              : "";
+          }
+          if (args.join(" ") === "rev-parse --is-shallow-repository") {
+            return "false\n";
+          }
+          if (args.join(" ") === "remote get-url origin") {
+            return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+          }
+          if (args[0] === "symbolic-ref") return "main\n";
+          if (args[0] === "fetch") return "";
+          if (args.join(" ") === "rev-parse HEAD") {
+            return `${proofEstablished && drift === "head" ? advanced : commit}\n`;
+          }
+          if (args.join(" ") === "rev-parse refs/remotes/origin/main") {
+            return `${proofEstablished && drift === "origin-main" ? advanced : commit}\n`;
+          }
+          if (args.join(" ") === "rev-parse HEAD^{tree}") {
+            return `${proofEstablished && drift === "tree" ? advanced : tree}\n`;
+          }
+          if (
+            args[0] === "cat-file" ||
+            args[0] === "merge-base" ||
+            args[0] === "diff"
+          ) {
+            return "";
+          }
+        }
+        throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+      };
+      const execution = context(fake);
+      releaseDeployTestHooks.establishFormPublishBatchOwnerGateProof(
+        execution,
+      );
+      proofEstablished = true;
+      expect(() => {
+        releaseDeployTestHooks.formPublicationMutationFence(execution, {
+          expectedCommit: commit,
+          toolingCommit: commit,
+          entry,
+          label: `${drift} test fence`,
+        });
+        writerCalled = true;
+      }).toThrow();
+      expect(writerCalled).toBe(false);
+    }
+  });
+
+  test("clears the reusable proof after both success and failure", () => {
+    const plan = JSON.parse(
+      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
+    );
+    const entry = plan.releases[0];
+    const input = writeBatchInput([
+      {
+        tag: entry.tag,
+        expectedCommit: commit,
+        runId: "250",
+        runAttempt: "1",
+      },
+    ]);
+    for (const outcome of ["success", "failure"]) {
+      const calls = [];
+      const execution = context(batchExec(calls));
+      const run = () =>
+        releaseDeployTestHooks.formPublishBatch(
+          execution,
+          { input },
+          plan,
+          (_activeContext, options) => {
+            if (outcome === "failure") {
+              throw new Error("candidate failed");
+            }
+            return {
+              tag: options.tag,
+              commit: options["expected-commit"],
+              tagObject: "b".repeat(40),
+              candidateRun: {
+                id: options["run-id"],
+                attempt: options["run-attempt"],
+              },
+              releaseId: Number(options["run-id"]),
+              releaseUrl: `https://example.invalid/${options["run-id"]}`,
+              assetDigests: {},
+              productionReadback: "EXACT_IMMUTABLE_RELEASE",
+            };
+          },
+        );
+      if (outcome === "failure") {
+        expect(run).toThrow("candidate failed");
+      } else {
+        expect(run().status).toBe("VERIFIED");
+      }
+      releaseDeployTestHooks.ownerGateAndFence(execution, commit);
+      expect(
+        calls.filter(
+          (call) =>
+            call.executable === "bun" &&
+            call.args.join(" ") === "run check",
+        ),
+      ).toHaveLength(2);
+    }
+  });
+
+  test("opens without following links and inspects and reads the same file descriptor", () => {
+    const plan = JSON.parse(
+      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
+    );
+    const entry = plan.releases[0];
+    const raw = Buffer.from(
+      `${JSON.stringify(
+        recursivelySorted([
+          {
+            tag: entry.tag,
+            expectedCommit: commit,
+            runId: "275",
+            runAttempt: "1",
+          },
+        ]),
+      )}\n`,
+    );
+    const descriptor = 91;
+    const events = [];
+    const parsed = releaseDeployTestHooks.readFormPublishBatch(
+      "/absolute/operator/input.json",
+      plan,
+      {
+        open: (path, flags) => {
+          events.push(["open", path, flags]);
+          return descriptor;
+        },
+        fstat: (fd) => {
+          events.push(["fstat", fd]);
+          return { isFile: () => true, size: raw.length };
+        },
+        read: (fd, buffer, offset, length, position) => {
+          events.push([
+            "read",
+            fd,
+            buffer.length,
+            offset,
+            length,
+            position,
+          ]);
+          if (offset === 0) {
+            raw.copy(buffer, offset);
+            return raw.length;
+          }
+          return 0;
+        },
+        close: (fd) => {
+          events.push(["close", fd]);
+        },
+      },
+    );
+    expect(events).toEqual([
+      [
+        "open",
+        "/absolute/operator/input.json",
+        fsConstants.O_RDONLY |
+          fsConstants.O_NOFOLLOW |
+          fsConstants.O_NONBLOCK,
+      ],
+      ["fstat", descriptor],
+      [
+        "read",
+        descriptor,
+        1024 * 1024 + 1,
+        0,
+        1024 * 1024 + 1,
+        null,
+      ],
+      [
+        "read",
+        descriptor,
+        1024 * 1024 + 1,
+        raw.length,
+        1024 * 1024 + 1 - raw.length,
+        null,
+      ],
+      ["close", descriptor],
+    ]);
+    expect(parsed).toEqual([
+      {
+        phase: "publish",
+        tag: entry.tag,
+        "expected-commit": commit,
+        "run-id": "275",
+        "run-attempt": "1",
+      },
+    ]);
+  });
+
+  test("rejects non-canonical, duplicate, symlink, oversized, and relative input", () => {
+    const plan = JSON.parse(
+      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
+    );
+    const [entry, second] = plan.releases;
+    const exact = {
+      tag: entry.tag,
+      expectedCommit: commit,
+      runId: "300",
+      runAttempt: "1",
+    };
+    const duplicateInput = writeBatchInput([exact, exact]);
+    expect(() =>
+      releaseDeployTestHooks.readFormPublishBatch(duplicateInput, plan),
+    ).toThrow("duplicates tag");
+
+    const duplicateRunInput = writeBatchInput([
+      exact,
+      { ...exact, tag: second.tag },
+    ]);
+    expect(() =>
+      releaseDeployTestHooks.readFormPublishBatch(duplicateRunInput, plan),
+    ).toThrow("duplicates workflow run/attempt");
+
+    const nonCanonicalDirectory = temporaryDirectory(
+      "form-publish-batch-noncanonical",
+    );
+    const nonCanonicalInput = join(nonCanonicalDirectory, "input.json");
+    writeFileSync(nonCanonicalInput, JSON.stringify([exact], null, 2));
+    expect(() =>
+      releaseDeployTestHooks.readFormPublishBatch(nonCanonicalInput, plan),
+    ).toThrow("canonical JSON");
+
+    const symlinkDirectory = temporaryDirectory(
+      "form-publish-batch-symlink",
+    );
+    const symlinkInput = join(symlinkDirectory, "input.json");
+    symlinkSync(duplicateInput, symlinkInput);
+    expect(() =>
+      releaseDeployTestHooks.readFormPublishBatch(symlinkInput, plan),
+    ).toThrow("without following symbolic links");
+
+    const oversizedDirectory = temporaryDirectory(
+      "form-publish-batch-oversized",
+    );
+    const oversizedInput = join(oversizedDirectory, "input.json");
+    writeFileSync(oversizedInput, Buffer.alloc(1024 * 1024 + 1));
+    expect(() =>
+      releaseDeployTestHooks.readFormPublishBatch(oversizedInput, plan),
+    ).toThrow("exceeds 1 MiB");
+
+    expect(() =>
+      parseReleaseSurfaceArgs("takoform-form-package-release", [
+        "publish-batch",
+        "--input",
+        "relative.json",
+      ]),
+    ).toThrow("--input must be an absolute path");
   });
 });
 
