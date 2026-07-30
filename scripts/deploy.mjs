@@ -306,7 +306,13 @@ try {
   expectedCloudflare = readExpectedCloudflareIdentity(process.env);
   wranglerEnvironment = createPinnedWranglerEnvironment(
     process.env,
-    expectedCloudflare,
+    {
+      ...expectedCloudflare,
+      bunLocalPrefix: repo,
+      bunUserAgent:
+        `bun/${Bun.version} npm/? node/v${process.versions.node} ` +
+        `${process.platform} ${process.arch}`,
+    },
   );
 } catch (error) {
   die(`Cloudflare authority is not explicit and isolated: ${error.message}`);
