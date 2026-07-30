@@ -161,6 +161,13 @@ describe("publication truth", () => {
     });
   });
 
+  test("keeps retained admission readback independent from a later provider release", () => {
+    const material = fixture();
+    material.releaseVersion.version = "9.2.1";
+    material.releaseVersion.tag = "v9.2.1";
+    expect(derivePublicationTruth(material).providerVersion).toBe("9.2.1");
+  });
+
   test("rejects an admission identity outside the published set", () => {
     const material = fixture();
     material.admissionSet.entries[0].kind = "Gamma";

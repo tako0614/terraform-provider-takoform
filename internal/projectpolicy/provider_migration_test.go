@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blang/semver"
 )
 
 type providerMigrationAudit struct {
@@ -130,9 +132,25 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 
 	var release releaseDescriptor
 	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
-	if release.Version != audit.To.ProviderVersion || release.Tag != audit.To.ProviderTag ||
+	currentVersion, err := semver.Parse(release.Version)
+	if err != nil {
+		t.Fatalf("parse current provider version: %v", err)
+	}
+	migrationTarget, err := semver.Parse(audit.To.ProviderVersion)
+	if err != nil {
+		t.Fatalf("parse migration target provider version: %v", err)
+	}
+	if release.Tag != "v"+release.Version ||
+		currentVersion.Major != migrationTarget.Major ||
+		currentVersion.LT(migrationTarget) ||
 		release.ProviderAddress != audit.To.CanonicalProviderAddress {
-		t.Fatalf("migration target differs from release descriptor")
+		t.Fatalf(
+			"current release %s (%s) is not a compatible successor of migration target %s (%s)",
+			release.Version,
+			release.ProviderAddress,
+			audit.To.ProviderVersion,
+			audit.To.CanonicalProviderAddress,
+		)
 	}
 
 	guideRaw, err := os.ReadFile(filepath.Join(root, "release", "migrations", "v0.2.1-to-v1.0.1.md"))

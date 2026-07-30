@@ -924,16 +924,13 @@ func verifyRegistryReadback(root, admissionRoot string, set Set) (ProviderRegist
 	if err := decodeStrictJSON(raw, &readback); err != nil {
 		return ProviderRegistryReadback{}, nil, err
 	}
-	requirements, descriptorDigest, err := providerlifecycle.LoadCLIMatrix(root)
+	requirements, err := retainedCLIRequirements(readback)
 	if err != nil {
 		return ProviderRegistryReadback{}, nil, err
 	}
-	providerVersion, err := readProviderVersion(root)
-	if err != nil {
-		return ProviderRegistryReadback{}, nil, err
-	}
+	providerVersion := readback.ProviderVersion
 	if readback.Format != registryReadbackFormat || !readback.PublicationReady || readback.ProviderAddress != registryProviderAddress ||
-		readback.ProviderVersion != providerVersion || readback.ProviderReleaseTag != "v"+providerVersion ||
+		!stableProviderVersion(providerVersion) || readback.ProviderReleaseTag != "v"+providerVersion ||
 		!releaseCommitPattern.MatchString(readback.ProviderReleaseCommit) ||
 		readback.CandidateSetSHA256 != providerlifecycle.CandidateSetSHA256() ||
 		!formpackage.ValidDigest(readback.ProviderSchemaSHA256) || !formpackage.ValidDigest(readback.LifecycleMatrixDigest) ||
@@ -957,7 +954,7 @@ func verifyRegistryReadback(root, admissionRoot string, set Set) (ProviderRegist
 	if err := providerlifecycle.ValidateRegistryMatrix(matrix, requirements); err != nil {
 		return ProviderRegistryReadback{}, nil, err
 	}
-	if matrix.ReleaseDescriptorSHA256 != descriptorDigest || matrix.CandidateSetSHA256 != readback.CandidateSetSHA256 ||
+	if matrix.CandidateSetSHA256 != readback.CandidateSetSHA256 ||
 		matrix.ProviderSchemaSHA256 != readback.ProviderSchemaSHA256 {
 		return ProviderRegistryReadback{}, nil, fmt.Errorf("provider Registry matrix/readback identity mismatch")
 	}
@@ -975,11 +972,42 @@ func verifyRegistryReadback(root, admissionRoot string, set Set) (ProviderRegist
 	for _, report := range matrix.Reports {
 		install, ok := installByProduct[report.CLI.Product]
 		if !ok || install.CLIVersion != report.CLI.Version || install.ProviderAddress != report.CLI.ProviderAddress ||
+			report.ProviderBinary.Version != providerVersion ||
 			install.ProviderBinarySHA256 != report.ProviderBinary.SHA256 || install.ProviderSchemaSHA256 != report.ProviderSchemaSHA256 {
 			return ProviderRegistryReadback{}, nil, fmt.Errorf("provider Registry install does not bind the %s lifecycle report", report.CLI.Product)
 		}
 	}
 	return readback, raw, nil
+}
+
+func retainedCLIRequirements(readback ProviderRegistryReadback) ([]providerlifecycle.CLIRequirement, error) {
+	if len(readback.Installs) != 2 {
+		return nil, fmt.Errorf("provider Registry readback must contain exactly two CLI installs")
+	}
+	requirements := make([]providerlifecycle.CLIRequirement, 0, len(readback.Installs))
+	seen := make(map[string]struct{}, len(readback.Installs))
+	for _, install := range readback.Installs {
+		if _, duplicate := seen[install.Product]; duplicate {
+			return nil, fmt.Errorf("provider Registry readback duplicates %q", install.Product)
+		}
+		if (install.Product != "OpenTofu" && install.Product != "Terraform") ||
+			install.CLIVersion == "" ||
+			install.ProviderAddress != registryProviderAddress ||
+			install.ProviderVersion != readback.ProviderVersion {
+			return nil, fmt.Errorf("provider Registry readback contains an invalid %s CLI requirement", install.Product)
+		}
+		seen[install.Product] = struct{}{}
+		requirements = append(requirements, providerlifecycle.CLIRequirement{
+			Product: install.Product, Version: install.CLIVersion, ProviderAddress: install.ProviderAddress,
+		})
+	}
+	if _, ok := seen["OpenTofu"]; !ok {
+		return nil, fmt.Errorf("provider Registry readback omits OpenTofu")
+	}
+	if _, ok := seen["Terraform"]; !ok {
+		return nil, fmt.Errorf("provider Registry readback omits Terraform")
+	}
+	return requirements, nil
 }
 
 func readProviderVersion(root string) (string, error) {

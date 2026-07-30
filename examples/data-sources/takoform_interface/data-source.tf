@@ -2,7 +2,7 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.1"
+      version = "= 1.0.2"
     }
   }
 }
@@ -23,4 +23,8 @@ data "takoform_interface" "runtime" {
 
 output "runtime_interface_document" {
   value = data.takoform_interface.runtime.document_json
+}
+
+output "runtime_interface_resource_uri" {
+  value = data.takoform_interface.runtime.resource_uri
 }

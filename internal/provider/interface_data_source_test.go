@@ -119,3 +119,15 @@ func TestInterfaceDataSourceResourceNameUsesCanonicalPortableGrammar(t *testing.
 		})
 	}
 }
+
+func TestInterfaceDataSourceProjectsOptionalHostResourceURI(t *testing.T) {
+	t.Parallel()
+
+	if got := interfaceResourceURIValue(""); !got.IsNull() {
+		t.Fatalf("omitted resource URI = %#v, want null", got)
+	}
+	const endpoint = "https://api.example.test/"
+	if got := interfaceResourceURIValue(endpoint); got.IsNull() || got.ValueString() != endpoint {
+		t.Fatalf("resource URI = %#v, want %q", got, endpoint)
+	}
+}

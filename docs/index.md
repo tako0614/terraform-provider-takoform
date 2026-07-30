@@ -1,7 +1,7 @@
 ---
 page_title: "Provider: Takoform"
 description: |-
-  Reference for the Takoform v1.0.1 provider, its 34 portable Service Form resources, and read-only Interface data source.
+  Reference for the Takoform v1.0.2 provider, its 34 portable Service Form resources, and read-only Interface data source.
 ---
 
 # Takoform Provider
@@ -12,19 +12,19 @@ is `registry.terraform.io/tako0614/takoform`.
 
 ## Version and scope
 
-- **This documentation is version-bound to provider `v1.0.1`.** The canonical
+- **This documentation is version-bound to provider `v1.0.2`.** The canonical
   distribution is `registry.terraform.io/tako0614/takoform`; consumers should
   pin the exact version and let Terraform or OpenTofu verify its signed
   checksums during installation.
 - **Availability is verified, not declared by this immutable documentation.**
-  Provider `v1.0.1` has a signed release and retained authenticated direct
+  Provider `v1.0.2` has a signed release and retained authenticated direct
   installation readback from both Terraform and OpenTofu. Check the canonical
   [Registry version endpoint](https://registry.terraform.io/v1/providers/tako0614/takoform/versions)
-  for exact version `1.0.1`, then run `terraform init` or `tofu init` with the
+  for exact version `1.0.2`, then run `terraform init` or `tofu init` with the
   exact pin. A source tag, documentation page, or local build alone is not
   Registry publication or installation evidence.
 - **The API remains `forms.takoform.com/v1alpha1`.** Provider SemVer and API
-  stability are independent; provider `v1.0.1` does not graduate the API to
+  stability are independent; provider `v1.0.2` does not graduate the API to
   `v1`.
 - **All 34 Service Form Packages below are published and immutable.** The
   protected `forms/admissions/v1.0.6` closure admits exactly 10 as
@@ -68,7 +68,7 @@ composition, if a host offers it, is outside portable Resource desired state.
 
 ## Configuration
 
-The following configuration pins the exact published `v1.0.1` release in the
+The following configuration pins the exact published `v1.0.2` release in the
 provider's `v1` compatibility line.
 
 ```hcl
@@ -76,7 +76,7 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.1"
+      version = "= 1.0.2"
     }
   }
 }
@@ -99,7 +99,7 @@ To verify the source and portable conformance corpus independently:
 ```console
 git clone https://github.com/tako0614/terraform-provider-takoform.git
 cd terraform-provider-takoform
-git checkout --detach v1.0.1
+git checkout --detach v1.0.2
 bun run check
 ```
 

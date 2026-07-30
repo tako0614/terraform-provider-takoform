@@ -29,6 +29,9 @@ Reads one runtime interface declaration from a conforming host. See the
   (also usable as paired optional selectors).
 - `document_json` — exact non-secret declaration document as JSON.
 - `values_json` — resolved public values as JSON.
+- `resource_uri` — host-resolved credential-free HTTPS endpoint when the
+  Interface has one. This is runtime location, not portable Resource state or
+  an authorization grant.
 - `form_kind` — declaring Form kind when the host reports it.
 
 This data source grants nothing. It never reads or creates bindings,
@@ -45,3 +48,8 @@ The provider sends the effective Space on every Interface list or exact read
 and stores that exact value in data source state. A host scopes visibility and
 ambiguity checks to the requested Space; it cannot silently select another
 one.
+
+`resource_uri` is a normal computed Terraform value, so a module can pass it
+to another resource, local, or output. It remains `null` when the host does not
+report an endpoint. Opaque Interface-specific values remain available through
+`jsondecode(values_json)`.

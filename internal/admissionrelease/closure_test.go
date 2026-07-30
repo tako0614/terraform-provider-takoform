@@ -140,6 +140,21 @@ func TestVerifyAdmissionSetAcceptsCompleteAuthenticatedLocalFixture(t *testing.T
 	writeRetainedTestFile(t, filepath.Join(root, "admission", "v1"), path.Join(releaseDirectory, "release-manifest.json"), manifestRaw)
 
 	registryRef, registryRaw := writeRegistryFixture(t, root, versionRaw, releaseCommit)
+	// Admission authenticates its retained provider readback. A later compatible
+	// provider release must not relabel or invalidate that immutable closure.
+	var advancedDescriptor map[string]any
+	if err := json.Unmarshal(versionRaw, &advancedDescriptor); err != nil {
+		t.Fatal(err)
+	}
+	advancedDescriptor["version"] = "1.0.3"
+	advancedDescriptor["tag"] = "v1.0.3"
+	advancedRaw, err := json.Marshal(advancedDescriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "release", "version.json"), advancedRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	set := Set{
 		Format: setFormatV2, DefinitionVersion: "1.0.1", PackageVersion: "1.0.1", AdmissionReleaseTag: "forms/admissions/v1.0.1",
 		ProviderRegistryReadback: registryRef,

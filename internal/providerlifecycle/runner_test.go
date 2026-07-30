@@ -382,7 +382,7 @@ func TestLoadCLIMatrixPinsOneCanonicalProviderAddress(t *testing.T) {
 	for _, requirement := range requirements {
 		seen[requirement.Product] = requirement
 	}
-	if seen["OpenTofu"].Version != "1.12.1" || seen["OpenTofu"].ProviderAddress != OpenTofuProviderAddress {
+	if seen["OpenTofu"].Version != "1.12.3" || seen["OpenTofu"].ProviderAddress != OpenTofuProviderAddress {
 		t.Fatalf("unexpected OpenTofu matrix entry: %#v", seen["OpenTofu"])
 	}
 	if seen["Terraform"].Version != "1.15.8" || seen["Terraform"].ProviderAddress != TerraformProviderAddress {
