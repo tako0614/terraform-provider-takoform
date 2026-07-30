@@ -296,16 +296,14 @@ func TestStandardAdmissionEvidenceSelectsOneExactProviderReportAttempt(t *testin
 		t.Fatal(err)
 	}
 	workflow := string(raw)
+	bindingsRaw, err := os.ReadFile(filepath.Join(root, "scripts", "admission-evidence-bindings.mjs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings := string(bindingsRaw)
 	for _, required := range []string{
 		"run-name: ${{ inputs.request_id }}",
-		"provider_request_id:",
-		"provider_run_id:",
-		"provider_run_attempt:",
-		"provider_head_sha:",
-		"PROVIDER_REQUEST_ID: ${{ inputs.provider_request_id }}",
-		"PROVIDER_RUN_ID: ${{ inputs.provider_run_id }}",
-		"PROVIDER_RUN_ATTEMPT: ${{ inputs.provider_run_attempt }}",
-		"PROVIDER_HEAD_SHA: ${{ inputs.provider_head_sha }}",
+		"EVIDENCE_BINDINGS: ${{ inputs.evidence_bindings }}",
 		`[[ "${PROVIDER_REQUEST_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`,
 		`test "${PROVIDER_HEAD_SHA}" = "${PROVIDER_SOURCE_COMMIT}"`,
 		`'.requestId' "${PROVIDER_CANDIDATE_PATH}/signed-provider-report-candidate.json"`,
@@ -319,6 +317,16 @@ func TestStandardAdmissionEvidenceSelectsOneExactProviderReportAttempt(t *testin
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Errorf("standard admission provider selection omits %q", required)
+		}
+	}
+	for field, environment := range map[string]string{
+		"provider_request_id":  "PROVIDER_REQUEST_ID",
+		"provider_run_id":      "PROVIDER_RUN_ID",
+		"provider_run_attempt": "PROVIDER_RUN_ATTEMPT",
+		"provider_head_sha":    "PROVIDER_HEAD_SHA",
+	} {
+		if !strings.Contains(bindings, field+":") || !strings.Contains(bindings, `environment: "`+environment+`"`) {
+			t.Errorf("canonical admission binding omits %s -> %s", field, environment)
 		}
 	}
 }
