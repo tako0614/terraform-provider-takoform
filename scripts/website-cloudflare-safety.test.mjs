@@ -69,15 +69,20 @@ describe("explicit Cloudflare authority", () => {
           BUN_CONFIG_FILE: "/tmp/attacker.toml",
           CLOUDFLARE_API_BASE_URL: "https://attacker.invalid",
           CLOUDFLARE_API_TOKEN: "attacker",
+          LD_AUDIT: "/tmp/attacker.so",
           NODE_EXTRA_CA_CERTS: "/tmp/attacker.pem",
+          OPENSSL_CONF: "/tmp/attacker-openssl.cnf",
+          OPENSSL_MODULES: "/tmp/attacker-providers",
           PATH: "/usr/bin",
+          SSL_CERT_DIR: "/tmp/attacker-certs",
+          SSL_CERT_FILE: "/tmp/attacker-ca.pem",
           WRANGLER_CI_OVERRIDE_NAME: "other-worker",
           npm_config_userconfig: "/tmp/attacker-npmrc",
         },
         { accountId },
       ),
     ).toThrow(
-      "BUN_CONFIG_FILE, CLOUDFLARE_API_BASE_URL, CLOUDFLARE_API_TOKEN, NODE_EXTRA_CA_CERTS, WRANGLER_CI_OVERRIDE_NAME, npm_config_userconfig",
+      "BUN_CONFIG_FILE, CLOUDFLARE_API_BASE_URL, CLOUDFLARE_API_TOKEN, LD_AUDIT, NODE_EXTRA_CA_CERTS, OPENSSL_CONF, OPENSSL_MODULES, SSL_CERT_DIR, SSL_CERT_FILE, WRANGLER_CI_OVERRIDE_NAME, npm_config_userconfig",
     );
     expect(
       createPinnedWranglerEnvironment({ PATH: "/usr/bin" }, { accountId }),

@@ -117,13 +117,13 @@ const CONTRACT = {
         SITE.authorityGate,
         SITE.snapshotGate,
       ],
-      requiresTools: ["git", "bun", "go", "tar"],
+      requiresTools: ["git", "bun", "go", "node", "tar"],
       requiresEnv: [CLOUDFLARE_ACCOUNT_ENV, CLOUDFLARE_ZONE_ENV],
       // 静的 asset だけを配る Worker で、durable state も server handler も
       // 持ちません。ただし schema $id は consumer が固定する公開 identity です。
       triggers: ["irreversible", "authority", "published-identity"],
       obligations: {
-        provenance: `refuses a dirty or shallow worktree, rejects ignored and untracked publication files, requires main HEAD to equal a fresh read of the canonical HTTPS origin/main ref, creates both an isolated git-archive content snapshot and an independent non-local detached Git authority clone of that exact commit, and removes the clone's remote. The source-retained publication/admission authority gate runs only in the frozen clone; the static public-surface gate, credential scan, digest manifest, and Wrangler input run only in the archive. Both roots are hardened and re-hashed before and after validation and again before every writer. Every archive byte is also proved against its Git blob. Wrangler is installed from the exact committed lock. \`bun run ${SITE.gate}\` remains the composite source gate, while the repository-wide \`bun run check\` remains separate handoff evidence because its other Go and OpenTofu checks do not validate these static bytes.`,
+        provenance: `refuses a dirty or shallow worktree, rejects ignored and untracked publication files, requires main HEAD to equal a fresh read of the canonical HTTPS origin/main ref, creates both an isolated git-archive content snapshot and an independent non-local detached Git authority clone of that exact commit, and removes the clone's remote. The source-retained publication/admission authority gate runs only in the frozen clone; the static public-surface gate, credential scan, digest manifest, and Wrangler input run only in the archive. Both roots are hardened and re-hashed before and after validation and again before every writer. Every archive byte is also proved against its Git blob. Wrangler is installed from the exact committed lock and executed through the fixed absolute Node entrypoint, bypassing PATH and its environment shebang. \`bun run ${SITE.gate}\` remains the composite source gate, while the repository-wide \`bun run check\` remains separate handoff evidence because its other Go and OpenTofu checks do not validate these static bytes.`,
         "post-conditions": `requires the exact three-domain Cloudflare control-plane closure, queries every hostname independently, and reads back ${SITE.url}/, the www root, docs, spec, sitemap, static assets, the custom 404 body/status, and every normative schema $id with the exact committed digest`,
         reversal: `the current version id is read and printed before publishing. A previous version may be restored with \`wrangler versions deploy <previous-id>@100%\` only after proving it still serves every already-minted schema $id byte-for-byte. The initial schema-origin mint has no schema-safe rollback to a version without those identities; repair it forward while preserving the minted bytes.`,
         "failure-handling":
@@ -244,9 +244,14 @@ const initialDomainRecoveryCommand = (deploymentId, versionId) =>
   `bun run deploy -- ${SITE.surface} ${EXCLUSIVE_WRITER_ACK} ${INITIAL_SCHEMA_ORIGIN_MINT_ACK} ${INITIAL_DOMAIN_RECOVERY} ${EXPECTED_DEPLOYMENT_PREFIX}${deploymentId} ${EXPECTED_VERSION_PREFIX}${versionId}`;
 
 const gitExecutable = "/usr/bin/git";
+const nodeExecutable = "/usr/bin/node";
 const tarExecutable = "/usr/bin/tar";
-if (!existsSync(gitExecutable) || !existsSync(tarExecutable)) {
-  die("publication requires /usr/bin/git and /usr/bin/tar");
+if (
+  !existsSync(gitExecutable) ||
+  !existsSync(nodeExecutable) ||
+  !existsSync(tarExecutable)
+) {
+  die("publication requires /usr/bin/git, /usr/bin/node, and /usr/bin/tar");
 }
 const gitEnvironment = createHardenedGitEnvironment(process.env);
 const git = (...args) =>
@@ -767,6 +772,7 @@ try {
     const invocation = pinnedWranglerInvocation(
       wranglerInstallation.script,
       args,
+      nodeExecutable,
     );
     return run(invocation.command, invocation.args, options);
   };

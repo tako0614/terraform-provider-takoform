@@ -387,21 +387,16 @@ test("repository Git configuration rejects local transport rewrites", () => {
   ).toThrow("can influence publication: core.sshcommand");
 });
 
-test("pinned Wrangler bypasses PATH and its env-based node shebang", () => {
+test("pinned Wrangler uses an absolute Node executable and bypasses PATH and its shebang", () => {
   expect(
     pinnedWranglerInvocation(
       "/sealed/node_modules/wrangler/bin/wrangler.js",
       ["--version"],
-      "/trusted/bun",
+      "/trusted/node",
     ),
   ).toEqual({
-    args: [
-      "--config=/dev/null",
-      "--no-env-file",
-      "/sealed/node_modules/wrangler/bin/wrangler.js",
-      "--version",
-    ],
-    command: "/trusted/bun",
+    args: ["/sealed/node_modules/wrangler/bin/wrangler.js", "--version"],
+    command: "/trusted/node",
   });
   expect(() =>
     pinnedWranglerInvocation(
@@ -409,5 +404,5 @@ test("pinned Wrangler bypasses PATH and its env-based node shebang", () => {
       [],
       "node",
     ),
-  ).toThrow("absolute paths");
+  ).toThrow("absolute Node");
 });

@@ -14,12 +14,17 @@ const RUNTIME_INJECTION_ENV = new Set([
   "BUN_OPTIONS",
   "DYLD_INSERT_LIBRARIES",
   "DYLD_LIBRARY_PATH",
+  "GCONV_PATH",
+  "GLIBC_TUNABLES",
   "HTTPS_PROXY",
   "HTTP_PROXY",
   "LD_LIBRARY_PATH",
   "LD_PRELOAD",
+  "LOCPATH",
+  "NLSPATH",
   "NODE_EXTRA_CA_CERTS",
   "NODE_OPTIONS",
+  "SSLKEYLOGFILE",
   "all_proxy",
   "https_proxy",
   "http_proxy",
@@ -162,8 +167,12 @@ export function createPinnedWranglerEnvironment(
       name.startsWith("BUN_") ||
       name.startsWith("CF_") ||
       name.startsWith("CLOUDFLARE_") ||
+      name.startsWith("DYLD_") ||
+      name.startsWith("LD_") ||
       name.startsWith("NODE_") ||
       name.startsWith("NPM_CONFIG_") ||
+      name.startsWith("OPENSSL_") ||
+      name.startsWith("SSL_CERT_") ||
       name.startsWith("WRANGLER_") ||
       name.startsWith("npm_config_") ||
       RUNTIME_INJECTION_ENV.has(name)

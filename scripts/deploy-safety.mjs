@@ -520,19 +520,16 @@ export function createPinnedWranglerInstallation({
 export function pinnedWranglerInvocation(
   script,
   args,
-  bunExecutable = process.execPath,
+  nodeExecutable = "/usr/bin/node",
 ) {
-  if (!bunExecutable.startsWith("/") || !script.startsWith("/")) {
-    throw new Error("pinned Wrangler invocation requires absolute paths");
+  if (!nodeExecutable.startsWith("/") || !script.startsWith("/")) {
+    throw new Error(
+      "pinned Wrangler invocation requires absolute Node and script paths",
+    );
   }
   return {
-    args: [
-      "--config=/dev/null",
-      "--no-env-file",
-      script,
-      ...args,
-    ],
-    command: bunExecutable,
+    args: [script, ...args],
+    command: nodeExecutable,
   };
 }
 

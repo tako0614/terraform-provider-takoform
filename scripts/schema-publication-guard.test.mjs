@@ -215,7 +215,13 @@ test("website deploy contract declares the published identity obligation", () =>
     "TAKOFORM_CLOUDFLARE_ACCOUNT_ID",
     "TAKOFORM_CLOUDFLARE_ZONE_ID",
   ]);
-  expect(website.requiresTools).toEqual(["git", "bun", "go", "tar"]);
+  expect(website.requiresTools).toEqual([
+    "git",
+    "bun",
+    "go",
+    "node",
+    "tar",
+  ]);
   expect(website.requiresScripts).toEqual([
     "check:public-surfaces",
     "check:public-authority",
