@@ -185,7 +185,12 @@ proofs, then uses only the operator machine's Git/GitHub authority to create the
 tag, draft, upload, and immutable release. It downloads the public assets again
 and requires the same release ID, tag, names, sizes, and digests. When
 repository release immutability is enabled, that final local publication locks
-the tag and assets.
+the tag and assets. Asset POSTs use the exact absolute
+`https://uploads.github.com/repos/...` URL returned by the release API; passing
+that host through `gh api --hostname` is invalid because the CLI rewrites it to
+the nonexistent `api.uploads.github.com`. The upload subprocess receives the
+operator token only as its host-scoped `GH_ENTERPRISE_TOKEN` environment; the
+token is never placed in argv or retained in the repository.
 
 ## Verification
 
