@@ -51,6 +51,33 @@ bun run deploy -- takoform-form-package-release verify \
   --expected-commit <40-character-reviewed-commit>
 ```
 
+`publish` is create-only and is never a retry mechanism after a tag-side
+partial failure. If authoritative readback proves the one narrow state in
+which the reviewed annotated tag exists locally and remotely at its exact
+candidate object, peels to the exact source commit, and no draft or public
+GitHub Release exists, complete that same identity forward with:
+
+```console
+bun run deploy -- takoform-form-package-release recover-tag-only \
+  --tag forms/<release-id>/v<semver> \
+  --expected-commit <candidate-source-commit> \
+  --expected-tag-object <candidate-annotated-tag-object-id> \
+  --expected-recovery-commit <current-reviewed-protected-main-commit> \
+  --run-id <original-candidate-workflow-run-id> \
+  --run-attempt <original-candidate-workflow-run-attempt>
+```
+
+This phase re-downloads and re-verifies the original run/attempt with the
+current reviewed verifier. It requires source/tooling/recovery ancestry and
+proves that the release plan, selected source directory, Form candidate build
+workflow, trusted root, package builder, and package semantic inputs did not
+change after the reviewed candidate. It runs the complete owner gate before
+draft creation and again before publication. It never pushes, creates, moves,
+or deletes a tag and refuses an absent, lightweight, unreadable, wrong-object,
+wrong-commit, or locally divergent tag. Any existing draft or public Release
+also stops this phase for manual authoritative inspection; it is not resumed
+or replaced automatically.
+
 Repeat prepare/publish/verify for all 34 plan entries. Once every independent
 release exists, retain one deterministic, create-only publication record
 outside the repository:

@@ -14,7 +14,7 @@ under `admission/v3`.
 
 This directory intentionally contains only reviewed trust and conforming-host
 policy before publication. After the all-34 portable Form Package publication
-plan and provider `v1.0.0` are complete, an operator stages immutable readbacks
+plan and provider `v1.0.1` are complete, an operator stages immutable readbacks
 for the exact selected-ten `ga-core-v2` admission subset plus the signed
 all-34 provider, selected-ten host, and Registry candidates outside the
 repository. The publication plan and the admission subset are distinct: v4

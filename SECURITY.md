@@ -12,7 +12,7 @@ The current `main` branch and the latest published provider line receive
 security fixes. A version in `release/version.json` with
 `publicationStatus: candidate-only` is not a published release.
 
-When provider `v1.0.0` is published, `v1` becomes the stable provider line and
+When provider `v1.0.1` is published, `v1` becomes the stable provider line and
 the latest `v1.x` release receives fixes. The pre-v1 provider line then becomes
 unsupported unless a security advisory explicitly says otherwise. Historical
 release bytes remain available for verification and migration; support never

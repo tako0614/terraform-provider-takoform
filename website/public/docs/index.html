@@ -50,7 +50,7 @@
           <div class="status-col pending">
             <h3>Candidate status / 現在の状態</h3>
             <ul>
-              <li>Provider <code>v1.0.0</code> is candidate-only.</li>
+              <li>Provider <code>v1.0.1</code> is candidate-only.</li>
               <li>It is not installable from the Registry yet.</li>
               <li>The API remains explicitly <code>v1alpha1</code>.</li>
               <li>All 34 Forms are structural candidates, not admitted standards.</li>
@@ -111,13 +111,13 @@
         <div class="container">
           <h2>Candidate configuration / 候補版の設定</h2>
           <p class="section-lede">
-            This is valid for the intended provider <code>v1.0.0</code>
+            This is valid for the intended provider <code>v1.0.1</code>
             contract, but <code>tofu init</code> and <code>terraform init</code>
             cannot install that version from the Registry until it is published
             and read back successfully.
             <br>
             <span lang="ja">
-              これはprovider <code>v1.0.0</code>候補の正しい設定です。ただし公開と
+              これはprovider <code>v1.0.1</code>候補の正しい設定です。ただし公開と
               readbackが完了するまでRegistryからはinstallできません。
             </span>
           </p>
@@ -127,7 +127,7 @@
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.0"
+      version = "= 1.0.1"
     }
   }
 }
@@ -298,7 +298,7 @@ resource "takoform_object_bucket" "assets" {
             <div class="status-col pending">
               <h3>Still external / 外部証拠が必要</h3>
               <ul>
-                <li>Provider <code>v1.0.0</code> publication and Registry readback.</li>
+                <li>Provider <code>v1.0.1</code> publication and Registry readback.</li>
                 <li>Signed current Form Package publication evidence.</li>
                 <li>Conforming-host lifecycle and Interface materialization reports.</li>
                 <li>Signed admission closure for any portable standard claim.</li>

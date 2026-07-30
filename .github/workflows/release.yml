@@ -549,7 +549,7 @@ jobs:
             const archive = `${base}_${platform}.zip`;
             return [archive, `${archive}.spdx.json`];
           }).concat(`${base}_manifest.json`, `${base}_SHA256SUMS`, `${base}_SHA256SUMS.sig`).sort();
-          const subjectNames = rows.map(({name}) => name;
+          const subjectNames = rows.map(({name}) => name);
           if (rows.length !== 13 || JSON.stringify(subjectNames) !== JSON.stringify(expectedNames)) {
             throw new Error("provenance subjects do not exactly close the sorted 13-file payload");
           }

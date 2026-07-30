@@ -101,7 +101,7 @@ func TestNormativeIdentitiesAgree(t *testing.T) {
 	if host.DiscoveryPath != conformance.DiscoveryPath {
 		t.Errorf("discovery path disagrees: host=%q conformance=%q", host.DiscoveryPath, conformance.DiscoveryPath)
 	}
-	if release.Version != "1.0.0" || release.Tag != "v"+release.Version || release.PublicationStatus != "candidate-only" {
+	if release.Version != "1.0.1" || release.Tag != "v"+release.Version || release.PublicationStatus != "candidate-only" {
 		t.Errorf("provider candidate lock disagrees: version=%q tag=%q status=%q", release.Version, release.Tag, release.PublicationStatus)
 	}
 	products := map[string]bool{}

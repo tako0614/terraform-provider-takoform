@@ -308,7 +308,7 @@ admission reports and `standard-admission-set.json` are now retained. The
 historical canonical Registry matrix/readback for provider `v0.1.3` are also
 retained under the retired v1 evidence lane, but grant no current admission
 authority. The current v4 lane requires a separately signed readback for the
-exact provider `v1.0.0` release and its two-CLI direct-Registry matrix. The
+exact provider `v1.0.1` release and its two-CLI direct-Registry matrix. The
 admission checkpoint version is independent from the bound Form
 definition/package versions; advancing it does not republish package bytes.
 The approved role identities must still produce exact authenticated evidence;

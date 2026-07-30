@@ -221,7 +221,7 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		profile.Provider.Distribution.OverwriteExistingVersion {
 		t.Fatalf("provider distribution is mutable or has the wrong registry")
 	}
-	if release.Version != "1.0.0" || release.Tag != "v1.0.0" ||
+	if release.Version != "1.0.1" || release.Tag != "v1.0.1" ||
 		release.Versioning.ProviderCompatibility != "semver-major" ||
 		release.Versioning.PortableAPIVersion != "forms.takoform.com/v1alpha1" ||
 		release.Versioning.FormDefinitionVersions != "independent-immutable-semver" ||
