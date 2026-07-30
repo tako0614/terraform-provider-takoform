@@ -39,15 +39,32 @@ local preview does not publish anything.
 Production is deployed only through the owning repository's deploy entrypoint:
 
 ```console
-bun run deploy -- takoform-website
+TAKOFORM_CLOUDFLARE_ACCOUNT_ID=<32-lowercase-hex-account-id> \
+TAKOFORM_CLOUDFLARE_ZONE_ID=<32-lowercase-hex-zone-id> \
+bun run deploy -- takoform-website \
+  --acknowledge-exclusive-cloudflare-writer
 ```
 
-Run it from the repository root. The entrypoint runs the narrow
-`bun run check:public-surfaces` gate for the bytes and claims this static site
-publishes, then performs the credential scan, provenance recording, Cloudflare
-publication, production readback, and reversal bookkeeping. Do not run
-`wrangler deploy` directly; Wrangler is an implementation detail of the
-owner-controlled entrypoint, not independent release authority.
+Run it from the repository root. The two IDs are operator-realized identity,
+not secrets, but are still not committed because they select production
+authority. The acknowledgement asserts that protected `main`, the Worker
+deployment, and its custom domains have one writer for the complete attempt.
+It is not a force flag and does not replace any check.
+
+The entrypoint rejects ambient Cloudflare/Wrangler credentials and runtime
+overrides, then binds the local Wrangler OAuth profile to those exact IDs. It
+archives the exact protected-main commit into an isolated snapshot, verifies
+the whole snapshot against Git blobs, and uses that same snapshot for the
+public-surface gate, credential scan, digest manifest, and upload. Ignored and
+untracked files below a publication path are rejected. Wrangler is installed
+from the exact committed `bun.lock`; a PATH-provided Wrangler is never used.
+
+Publication is staged: `versions upload --strict` creates a non-public version,
+the source/deployment/domain fences and whole-tree digest are checked again,
+and only that version is then deployed at 100%. Custom domains are changed
+separately through a no-override API request. This avoids Wrangler's
+non-interactive custom-domain override behavior. Do not run `wrangler deploy`,
+`wrangler versions deploy`, or a domain API request directly.
 
 The repository-wide `bun run check` remains required handoff evidence for a
 source change. It is deliberately separate from website publication: its Go,
@@ -65,15 +82,49 @@ only when every schema URL fails specifically with DNS `ENOTFOUND` and the
 operator explicitly acknowledges that one-time mint:
 
 ```console
-bun run deploy -- takoform-website --acknowledge-initial-schema-origin-mint
+TAKOFORM_CLOUDFLARE_ACCOUNT_ID=<account-id> \
+TAKOFORM_CLOUDFLARE_ZONE_ID=<zone-id> \
+bun run deploy -- takoform-website \
+  --acknowledge-exclusive-cloudflare-writer \
+  --acknowledge-initial-schema-origin-mint
 ```
 
-That acknowledgement is not a force flag. The entrypoint rejects it as soon as
-any schema URL resolves, and it never bypasses differing bytes, HTTP 404, a
+That acknowledgement is not a force flag. Outside the ID-bound recovery lane,
+the entrypoint rejects it as soon as any schema URL resolves, and it never
+bypasses differing bytes, HTTP 404, a
 redirect, timeout, connection failure, or a partially existing origin. After
-the first mint, use the ordinary deploy command. A rollback is permitted only
-to a version proven to retain all already-minted schema bytes; an initial-mint
-failure requires authoritative readback and forward repair.
+the first mint, use the ordinary deploy command. Before creating the hostname,
+the entrypoint proves the exact no-conflict Cloudflare changeset, Cloudflare
+zone/delegation, ENOTFOUND from every authoritative nameserver, and all seven
+candidate schema bytes through the already-routed apex Worker. It then writes
+the full three-domain closure with both origin and DNS override flags disabled.
+
+If the version is current but the initial domain write or readback becomes
+indeterminate, do not repeat the normal deploy. Use the exact deployment and
+version IDs printed by the failed attempt:
+
+```console
+TAKOFORM_CLOUDFLARE_ACCOUNT_ID=<account-id> \
+TAKOFORM_CLOUDFLARE_ZONE_ID=<zone-id> \
+bun run deploy -- takoform-website \
+  --acknowledge-exclusive-cloudflare-writer \
+  --acknowledge-initial-schema-origin-mint \
+  --recover-initial-schema-domain \
+  --expected-deployment=<deployment-uuid> \
+  --expected-version=<version-uuid>
+```
+
+Recovery uploads and deploys no Worker version. It requires current production
+to equal both IDs, requires that version's committed message and static-only
+resource closure, and checks all seven candidate schema bytes through the apex.
+It creates the domain only from a still-safe absent changeset; if the exact
+domain is already attached it performs readback only. Any competing state
+blocks recovery.
+
+A rollback is permitted only to a version proven to retain all already-minted
+schema bytes. The postreadback covers apex and `www` roots, docs, spec,
+sitemap, static assets, the custom 404 response, all seven schema identities,
+and the exact three-domain control-plane closure.
 
 [`wrangler.jsonc`](wrangler.jsonc) attaches the `takoform.com` and
 `www.takoform.com` custom domains. It also attaches
