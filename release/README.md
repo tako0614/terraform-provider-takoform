@@ -337,22 +337,85 @@ a draft, upload the exact fifteen assets, compare their public API digests,
 publish that same draft, and require an immutable exact-ID/tag readback. A
 dispatch, tag push, or candidate artifact is not publication success.
 
+The provider candidate metadata is exact recursively key-sorted, two-space
+pretty JSON with exactly one trailing LF, matching the `jq -S` workflow output.
+Compact JSON, a missing or extra LF, different indentation, unsorted keys, and
+duplicate keys are rejected before any publication mutation.
+
+If the exact signed annotated tag already exists locally and remotely but no
+GitHub Release or Registry version exists, normal `publish` remains
+intentionally unusable. Complete only that exact partial identity with:
+
+```console
+bun run deploy -- takoform-provider-release recover-tag-only \
+  --tag v1.0.1 \
+  --expected-release-commit <signed-tag-peeled-release-commit-E> \
+  --expected-tag-object <exact-annotated-signed-tag-object> \
+  --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
+  --run-id <original-provider-candidate-run-id> \
+  --run-attempt <original-provider-candidate-run-attempt>
+```
+
+This phase requires `E` to be an ancestor of `F`, and the exact `E..F` diff may
+contain only the reviewed recovery implementation, its tests, and this release
+documentation. It requires current protected `main` to equal `F`; the exact
+local and remote annotated tag object must still peel to `E` and verify with
+the pinned provider key; the GitHub Release and Registry version must still be
+absent; and the successful candidate run must have exact head `E`, branch
+`v1.0.1`, run, attempt, checksums, 15 assets, GPG signatures, and provenance.
+The owner gate and the same recovery fence run immediately before draft
+creation and again immediately before publication. Recovery never moves,
+deletes, or recreates the tag.
+
+If that phase stops after retaining one exact draft, resume only the named
+identity:
+
+```console
+bun run deploy -- takoform-provider-release recover-draft \
+  --tag v1.0.1 \
+  --expected-release-commit <signed-tag-peeled-release-commit-E> \
+  --expected-tag-object <exact-annotated-signed-tag-object> \
+  --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
+  --release-id <exact-retained-github-release-id> \
+  --run-id <original-provider-candidate-run-id> \
+  --run-attempt <original-provider-candidate-run-attempt>
+```
+
+`recover-draft` re-verifies the same candidate, tag, Registry absence, owner
+gate, and `E..F` recovery fence. It accepts only the exact draft id, tag, name,
+body, target commitish, upload/assets endpoints, and already-uploaded subset;
+it uploads only missing assets, rereads the complete draft, repeats the fence,
+and publishes that same draft. Any competing, public, unknown, duplicate, or
+drifted identity fails closed without deletion or blind retry.
+
+Both recovery phases require exclusive single-writer operator authority from
+draft creation or resumption through immutable publication. GitHub's REST API
+has no atomic precondition spanning release metadata and all assets, so the
+strongest available closure is used: an immediate authoritative empty-draft
+read after creation, a complete exact-draft reread before publication, a PATCH
+that restates the full tag/name/body/target/prerelease identity, an immutable
+exact Release readback and download, and one final pinned signed-tag check
+before reporting `VERIFIED`.
+
 After the immutable GitHub Release exists and the public Registry has indexed
 it, dispatch the signed direct-install readback and then verify that exact run:
 
-Protected `main` must remain exactly the signed provider tag's peeled commit
-from `prepare` through the successful Registry `verify` phase. Use that same
-commit for every `--expected-commit` below; only after Registry verification
-succeeds may `main` advance to evidence or status commits.
+For the ordinary lane, protected `main` may still equal the signed tag's peeled
+commit. After an exact recovery, `--expected-commit` is instead the current
+reviewed protected-main source/tooling commit `F`. The immutable provider
+release provenance and provider commit remain the tag's peeled commit `E`.
+The readback workflow and local verifier require `E` to be an ancestor of `F`
+and preserve those two bindings separately; they never relabel the released
+provider bytes as having been built from `F`.
 
 ```console
 bun run deploy -- takoform-provider-release readback \
   --tag v1.0.1 \
-  --expected-commit <same-signed-tag-40-character-commit>
+  --expected-commit <current-reviewed-protected-main-source-commit>
 
 bun run deploy -- takoform-provider-release verify \
   --tag v1.0.1 \
-  --expected-commit <same-signed-tag-40-character-commit> \
+  --expected-commit <same-current-reviewed-protected-main-source-commit> \
   --run-id <registry-readback-workflow-run-id> \
   --run-attempt <registry-readback-workflow-attempt>
 ```

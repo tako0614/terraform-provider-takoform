@@ -744,18 +744,19 @@ function checkSingleRegistryVocabulary() {
   }
 }
 
-function checkProviderReleaseMainFreeze() {
+function checkProviderReleaseCommitBindings() {
   const releaseGuide = read(path.join(repositoryRoot, "release", "README.md"));
   for (const required of [
-    "Protected `main` must remain exactly the signed provider tag's peeled commit",
-    "from `prepare` through the successful Registry `verify` phase.",
-    "only after Registry verification",
-    "succeeds may `main` advance to evidence or status commits.",
-    "--expected-commit <same-signed-tag-40-character-commit>",
+    "--expected-release-commit <signed-tag-peeled-release-commit-E>",
+    "--expected-recovery-commit <current-reviewed-protected-main-commit-F>",
+    "After an exact recovery, `--expected-commit` is instead the current",
+    "release provenance and provider commit remain the tag's peeled commit `E`.",
+    "require `E` to be an ancestor of `F`",
+    "--expected-commit <current-reviewed-protected-main-source-commit>",
   ]) {
     if (!releaseGuide.includes(required)) {
       fail(
-        `release/README.md: provider Registry verification is missing exact-main freeze wording ${JSON.stringify(required)}`,
+        `release/README.md: provider release/readback is missing split E/F binding wording ${JSON.stringify(required)}`,
       );
     }
   }
@@ -1000,7 +1001,7 @@ checkDocsPageLinks(formDocNames);
 checkStaleWebsiteContent();
 checkProviderCandidateExamples();
 checkSingleRegistryVocabulary();
-checkProviderReleaseMainFreeze();
+checkProviderReleaseCommitBindings();
 checkPublicSchemas();
 
 if (failures.length > 0) {
