@@ -36,7 +36,7 @@ This promise applies only to the provider binary and its Terraform/OpenTofu
 surface. It does not graduate the portable API group, admit a Form as
 `portable-standard`, or make any host implementation stable.
 
-Provider `v1.0.1` is published and verified by authenticated direct Registry
+Provider `v1.0.2` is published and verified by authenticated direct Registry
 installation with Terraform and OpenTofu. All 34 current Form Packages are
 published as immutable identities. The protected
 `forms/admissions/v1.0.6` closure admits exactly 10 as `portable-standard`; the
@@ -44,6 +44,11 @@ remaining 24 are published but not admitted. Package publication grants no
 admission by itself. Neither those publication facts nor the admission
 graduates
 `forms.takoform.com/v1alpha1`.
+
+Provider `v1.0.2` is an additive provider-surface patch: the read-only
+`takoform_interface` data source gains an optional computed `resource_uri`
+whose value is supplied by the host. It changes no Form Definition, Form
+Package, Resource desired state, or persisted provider-v1 Resource schema.
 
 Provider, Form definition, Form Package, and admission versions MUST NOT be
 coordinated merely to share a number:

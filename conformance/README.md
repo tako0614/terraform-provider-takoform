@@ -69,7 +69,7 @@ The matrix is intentionally classified `generic-lifecycle-candidate` with
 `publicationReady: false` and
 `bindingStatus: exact-structural-candidate-set`. It does not publish a
 checked-in passed report or claim standard Form admission. The matrix requires
-Terraform `1.15.8` and OpenTofu `1.12.1` under the same canonical identity,
+Terraform `1.15.8` and OpenTofu `1.12.3` under the same canonical identity,
 `registry.terraform.io/tako0614/takoform`, then requires identical provider
 schema, exact FormRef/package identity, and lifecycle evidence. Immutable
 release/readback plus authenticated signed external admission are still

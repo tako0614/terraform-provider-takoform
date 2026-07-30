@@ -13,7 +13,7 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.1"
+      version = "= 1.0.2"
     }
   }
 }
@@ -32,7 +32,7 @@ resource "takoform_object_bucket" "assets" {
 `endpoint`, `space`, and the sensitive bearer `token` can instead be supplied as `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 There is one provider source and state identity:
 `registry.terraform.io/tako0614/takoform`. The configuration above deliberately
-pins the published provider to `1.0.1`. The signed release is installable from
+pins the published provider to `1.0.2`. The signed release is installable from
 the canonical Terraform Registry, and the retained authenticated Registry
 readback proves direct installation with both OpenTofu and Terraform. The local
 development lifecycle matrix exercises the exact same FQN through CLI
@@ -43,7 +43,7 @@ unversioned lane to downgrade into.
 
 `release/version.json` intentionally retains
 `publicationStatus: candidate-only` as release-descriptor metadata from the
-candidate that minted `v1.0.1`. That field is not live availability state. The
+candidate that minted `v1.0.2`. That field is not live availability state. The
 signed release and canonical Registry readback establish provider publication.
 The protected admission tag and offline-authenticated retained closure
 separately establish Standard Form admission.

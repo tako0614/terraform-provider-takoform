@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "version": "1.0.1",
-  "tag": "v1.0.1",
+  "version": "1.0.2",
+  "tag": "v1.0.2",
   "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
   "providerAddress": "registry.terraform.io/tako0614/takoform",
   "cliMatrix": [
     {
       "product": "OpenTofu",
-      "version": "1.12.1",
+      "version": "1.12.3",
       "providerAddress": "registry.terraform.io/tako0614/takoform"
     },
     {

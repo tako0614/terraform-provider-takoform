@@ -259,7 +259,7 @@ func exampleHCL(kind formcatalog.Kind) string {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.1"
+      version = "= 1.0.2"
     }
   }
 }

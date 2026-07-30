@@ -1077,10 +1077,35 @@ func verifySyntheticPublication(
 
 func newCompletePlanSourceRepository(t *testing.T) planSourceFixture {
 	t.Helper()
+	workingRoot := testRepositoryRoot(t)
 	root := filepath.Join(t.TempDir(), "source")
-	command := exec.Command("git", "clone", "--quiet", "--no-hardlinks", testRepositoryRoot(t), root)
+	command := exec.Command("git", "clone", "--quiet", "--no-hardlinks", workingRoot, root)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("clone complete source fixture: %v: %s", err, strings.TrimSpace(string(output)))
+	}
+	// The production command verifies the current worktree, and the portable
+	// gate must remain runnable before those bytes are committed. Keep the
+	// fixture's Git history for provenance checks while projecting the current
+	// generated public surfaces into the temporary worktree.
+	for _, relativeRoot := range []string{"docs/resources", "examples/resources"} {
+		destination := filepath.Join(root, filepath.FromSlash(relativeRoot))
+		if err := os.RemoveAll(destination); err != nil {
+			t.Fatal(err)
+		}
+		copyTestTree(t,
+			filepath.Join(workingRoot, filepath.FromSlash(relativeRoot)),
+			destination,
+		)
+	}
+	copyTestFile(t,
+		filepath.Join(workingRoot, "forms", "README.md"),
+		filepath.Join(root, "forms", "README.md"),
+	)
+	if strings.TrimSpace(mustTestGit(t, root, "status", "--short")) != "" {
+		mustTestGit(t, root, "config", "user.name", "Takoform test")
+		mustTestGit(t, root, "config", "user.email", "takoform-test@example.invalid")
+		mustTestGit(t, root, "add", "--", "docs/resources", "examples/resources", "forms/README.md")
+		mustTestGit(t, root, "commit", "-q", "-m", "fixture current generated surfaces")
 	}
 	planRaw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(standardforms.ReleasePlanPath)))
 	if err != nil {

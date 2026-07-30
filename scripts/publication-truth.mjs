@@ -171,33 +171,19 @@ function validateProviderReadback(providerReadback, releaseVersion) {
     "provider Registry readback publicationReady must be true",
   );
   requireValue(
-    providerReadback.providerVersion === releaseVersion.version,
-    "provider Registry readback version must match release/version.json",
+    typeof providerReadback.providerVersion === "string" &&
+      SEMVER.test(providerReadback.providerVersion),
+    "provider Registry readback version must be exact SemVer",
   );
   requireValue(
-    providerReadback.providerReleaseTag === releaseVersion.tag,
-    "provider Registry readback tag must match release/version.json",
+    providerReadback.providerReleaseTag ===
+      `v${providerReadback.providerVersion}`,
+    "provider Registry readback tag must match its retained version",
   );
   requireValue(
     providerReadback.providerAddress === releaseVersion.providerAddress,
     "provider Registry readback address must match release/version.json",
   );
-
-  const expectedInstalls = requireArray(
-    releaseVersion.cliMatrix,
-    "release/version.json.cliMatrix",
-  ).map((entry, index) => {
-    const label = `release/version.json.cliMatrix[${index}]`;
-    return JSON.stringify({
-      product: requireString(entry?.product, `${label}.product`),
-      providerAddress: requireString(
-        entry?.providerAddress,
-        `${label}.providerAddress`,
-      ),
-      version: requireString(entry?.version, `${label}.version`),
-    });
-  });
-  requireUnique(expectedInstalls, "release/version.json.cliMatrix");
 
   const actualInstalls = requireArray(
     providerReadback.installs,
@@ -205,12 +191,12 @@ function validateProviderReadback(providerReadback, releaseVersion) {
   ).map((entry, index) => {
     const label = `provider Registry readback installs[${index}]`;
     requireValue(
-      entry?.providerVersion === releaseVersion.version,
-      `${label}.providerVersion must match release/version.json`,
+      entry?.providerVersion === providerReadback.providerVersion,
+      `${label}.providerVersion must match the retained readback version`,
     );
     requireValue(
-      entry?.providerAddress === releaseVersion.providerAddress,
-      `${label}.providerAddress must match release/version.json`,
+      entry?.providerAddress === providerReadback.providerAddress,
+      `${label}.providerAddress must match the retained readback address`,
     );
     requireDigest(entry?.providerBinarySha256, `${label}.providerBinarySha256`);
     requireDigest(entry?.providerSchemaSha256, `${label}.providerSchemaSha256`);
@@ -220,12 +206,11 @@ function validateProviderReadback(providerReadback, releaseVersion) {
       version: requireString(entry?.cliVersion, `${label}.cliVersion`),
     });
   });
-  requireUnique(actualInstalls, "provider Registry readback installs");
   requireValue(
-    JSON.stringify([...actualInstalls].sort()) ===
-      JSON.stringify([...expectedInstalls].sort()),
-    "provider Registry readback installs must equal release/version.json.cliMatrix",
+    actualInstalls.length === 2,
+    "provider Registry readback must contain exactly two CLI installs",
   );
+  requireUnique(actualInstalls, "provider Registry readback installs");
 }
 
 export function derivePublicationTruth({

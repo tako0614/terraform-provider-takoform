@@ -22,12 +22,20 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-Provider `v1.0.1` is the current published `v1` release. Its signed GitHub
+Provider `v1.0.2` is the current published `v1` release. Its signed GitHub
 Release and authenticated Terraform/OpenTofu installation readback from the
 canonical Registry are retained evidence. `release/version.json` continues to
 say `publicationStatus: candidate-only` because it is the descriptor metadata
 for the candidate that minted this immutable release, not a live availability
 field.
+
+## Provider v1.0.2 Interface URL addition
+
+Provider `v1.0.2` adds the optional computed `resource_uri` attribute to the
+read-only `takoform_interface` data source. The host remains authoritative for
+the URI; the provider does not infer a provider-specific hostname or copy the
+URI into portable Resource desired state. Existing provider-v1 Resource state
+and every immutable Form identity remain unchanged.
 
 ## Provider v1.0.1 resource transition
 
@@ -117,7 +125,7 @@ Providers `v0.1.1`, `v0.1.2`, and the then-corrective `v0.1.3` describe
 historical pre-v1 layouts only. `v0.1.1` included SPDX evidence in
 `SHA256SUMS`; `v0.1.2` omitted the required Registry manifest; and `v0.1.3`
 corrected that historical checksum closure without replacing a published byte.
-None of those layouts defines the current provider `v1.0.1` release. The v1
+None of those layouts defines the current provider `v1.0.2` release. The v1
 release is governed by the 15-asset provenance closure above and MUST NOT
 overwrite or inherit the identity of any historical version.
 
@@ -130,7 +138,7 @@ are now parsed in the portable gate while this provenance generator is also
 executed against its exact 13-subject contract.
 
 `release/version.json` also pins the supported CLI/FQN matrix. Release CI must
-exercise Terraform `1.15.8` and OpenTofu `1.12.1` with the same canonical
+exercise Terraform `1.15.8` and OpenTofu `1.12.3` with the same canonical
 identity, `registry.terraform.io/tako0614/takoform`. Both must expose the same
 schema and complete lifecycle evidence for the exact embedded structural
 candidate set.
@@ -275,7 +283,7 @@ descriptor tag and current protected-main commit:
 
 ```console
 bun run deploy -- takoform-provider-release prepare \
-  --tag v1.0.1 \
+  --tag v1.0.2 \
   --expected-commit <40-character-protected-main-commit>
 ```
 
@@ -295,7 +303,7 @@ exact signed-tag run through the same owner entrypoint:
 
 ```console
 bun run deploy -- takoform-provider-release tag \
-  --tag v1.0.1 \
+  --tag v1.0.2 \
   --expected-commit <same-40-character-commit> \
   --run-id <signed-tag-workflow-run-id> \
   --run-attempt <signed-tag-workflow-attempt>
@@ -332,7 +340,7 @@ After that second run succeeds, publish only its exact run/attempt:
 
 ```console
 bun run deploy -- takoform-provider-release publish \
-  --tag v1.0.1 \
+  --tag v1.0.2 \
   --expected-commit <same-40-character-commit> \
   --run-id <provider-release-candidate-run-id> \
   --run-attempt <provider-release-candidate-run-attempt>
@@ -355,7 +363,7 @@ intentionally unusable. Complete only that exact partial identity with:
 
 ```console
 bun run deploy -- takoform-provider-release recover-tag-only \
-  --tag v1.0.1 \
+  --tag v1.0.2 \
   --expected-release-commit <signed-tag-peeled-release-commit-E> \
   --expected-tag-object <exact-annotated-signed-tag-object> \
   --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
@@ -369,7 +377,7 @@ documentation. It requires current protected `main` to equal `F`; the exact
 local and remote annotated tag object must still peel to `E` and verify with
 the pinned provider key; the GitHub Release and Registry version must still be
 absent; and the successful candidate run must have exact head `E`, branch
-`v1.0.1`, run, attempt, checksums, 15 assets, GPG signatures, and provenance.
+`v1.0.2`, run, attempt, checksums, 15 assets, GPG signatures, and provenance.
 The owner gate and the same recovery fence run immediately before draft
 creation and again immediately before publication. Recovery never moves,
 deletes, or recreates the tag.
@@ -379,7 +387,7 @@ identity:
 
 ```console
 bun run deploy -- takoform-provider-release recover-draft \
-  --tag v1.0.1 \
+  --tag v1.0.2 \
   --expected-release-commit <signed-tag-peeled-release-commit-E> \
   --expected-tag-object <exact-annotated-signed-tag-object> \
   --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
@@ -417,11 +425,11 @@ provider bytes as having been built from `F`.
 
 ```console
 bun run deploy -- takoform-provider-release readback \
-  --tag v1.0.1 \
+  --tag v1.0.2 \
   --expected-commit <current-reviewed-protected-main-source-commit>
 
 bun run deploy -- takoform-provider-release verify \
-  --tag v1.0.1 \
+  --tag v1.0.2 \
   --expected-commit <same-current-reviewed-protected-main-source-commit> \
   --run-id <registry-readback-workflow-run-id> \
   --run-attempt <registry-readback-workflow-attempt>

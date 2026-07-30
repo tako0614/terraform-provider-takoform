@@ -36,6 +36,7 @@ type interfaceDataSourceModel struct {
 	ResourceName types.String `tfsdk:"resource_name"`
 	DocumentJSON types.String `tfsdk:"document_json"`
 	ValuesJSON   types.String `tfsdk:"values_json"`
+	ResourceURI  types.String `tfsdk:"resource_uri"`
 	FormKind     types.String `tfsdk:"form_kind"`
 }
 
@@ -90,6 +91,10 @@ func (d *interfaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			"values_json": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Resolved public values, encoded as JSON. Credentials never appear here.",
+			},
+			"resource_uri": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Host-resolved credential-free HTTPS endpoint for this Interface, when the host reports one. This is runtime location, not Resource state or an authorization grant.",
 			},
 			"form_kind": schema.StringAttribute{
 				Computed:            true,
@@ -191,12 +196,20 @@ func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 	config.ValuesJSON = types.StringValue(valuesJSON)
+	config.ResourceURI = interfaceResourceURIValue(declared.ResourceURI)
 	if declared.Form == nil {
 		config.FormKind = types.StringNull()
 	} else {
 		config.FormKind = types.StringValue(declared.Form.FormRef.Kind)
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+func interfaceResourceURIValue(value string) types.String {
+	if value == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(value)
 }
 
 func effectiveInterfaceSpace(value types.String, fallback string) (string, error) {
