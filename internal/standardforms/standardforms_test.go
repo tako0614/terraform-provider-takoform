@@ -142,11 +142,17 @@ func TestRetainedGaCoreV1PackageSetAuthenticatesExactLiveReadback(t *testing.T) 
 	}
 }
 
-func TestCurrentPublishedPackageSetFailsClosedBeforeSuccessorPublication(t *testing.T) {
+func TestCurrentPublishedPackageSetAuthenticatesAllThirtyFourSuccessors(t *testing.T) {
 	t.Parallel()
-	err := VerifyCurrentPublishedPackageSet(filepath.Join("..", ".."))
-	if err == nil || !strings.Contains(err.Error(), "admission/v4/form-package-publication-set.json") {
-		t.Fatalf("unpublished successor error = %v", err)
+	set, err := CurrentPublishedPackageSet(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set.Generation != "portable-v1" ||
+		set.PublicationStatus != "published-immutable" ||
+		set.AdmissionStatus != "external-required" ||
+		len(set.Entries) != 34 {
+		t.Fatalf("unexpected current published package set: %#v", set)
 	}
 }
 
