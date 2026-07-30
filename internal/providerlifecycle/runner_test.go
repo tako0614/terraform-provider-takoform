@@ -397,10 +397,11 @@ func TestLoadCLIMatrixPinsOneCanonicalProviderAddress(t *testing.T) {
 	}
 	for _, required := range []string{
 		"one provider source and state identity",
-		"not Registry-installable",
+		"pins the published provider",
+		"retained authenticated Registry",
 		"through CLI",
 		"development overrides",
-		"After publication",
+		"release-descriptor metadata",
 	} {
 		if !strings.Contains(string(readme), required) {
 			t.Fatalf("provider distribution guidance lacks %q", required)

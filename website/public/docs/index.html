@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
       name="description"
-      content="Takoform provider documentation hub: current candidate status, getting started, 34 Form resources, and the read-only Interface data source."
+      content="Takoform provider documentation: Registry-verified v1.0.1, 34 published Form Packages, 10 admitted portable-standard Forms, and the read-only Interface data source."
     >
     <title>Documentation / ドキュメント — Takoform</title>
     <link rel="stylesheet" href="/styles.css">
@@ -47,14 +47,23 @@
             </div>
           </div>
 
-          <div class="status-col pending">
-            <h3>Candidate status / 現在の状態</h3>
+          <div class="status-col done">
+            <h3>Published status / 公開状況</h3>
             <ul>
-              <li>Provider <code>v1.0.1</code> is candidate-only.</li>
-              <li>It is not installable from the Registry yet.</li>
+              <li>Provider <code>v1.0.1</code> is published and Registry-verified.</li>
+              <li>All 34 Form Packages are published and immutable.</li>
+              <li>Exactly 10 are admitted <code>portable-standard</code>.</li>
+              <li>The remaining 24 are published but not admitted.</li>
               <li>The API remains explicitly <code>v1alpha1</code>.</li>
-              <li>All 34 Forms are structural candidates, not admitted standards.</li>
             </ul>
+            <p class="fineprint">
+              Admitted 10: <code>EdgeWorker</code>,
+              <code>ContainerService</code>, <code>StatefulEntity</code>,
+              <code>Schedule</code>, <code>ObjectBucket</code>,
+              <code>KeyValueStore</code>, <code>RelationalDatabase</code>,
+              <code>Queue</code>, <code>VectorIndex</code>, and
+              <code>ModelEndpoint</code>.
+            </p>
           </div>
         </div>
       </section>
@@ -109,16 +118,16 @@
 
       <section class="section alt" id="getting-started">
         <div class="container">
-          <h2>Candidate configuration / 候補版の設定</h2>
+          <h2>Published configuration / 公開版の設定</h2>
           <p class="section-lede">
-            This is valid for the intended provider <code>v1.0.1</code>
-            contract, but <code>tofu init</code> and <code>terraform init</code>
-            cannot install that version from the Registry until it is published
-            and read back successfully.
+            <code>tofu init</code> and <code>terraform init</code> install this
+            exact <code>v1.0.1</code> release from the canonical Registry. Its
+            authenticated readback is retained with the release evidence.
             <br>
             <span lang="ja">
-              これはprovider <code>v1.0.1</code>候補の正しい設定です。ただし公開と
-              readbackが完了するまでRegistryからはinstallできません。
+              <code>tofu init</code> と <code>terraform init</code> は、この
+              <code>v1.0.1</code> を canonical Registry から install します。
+              認証済み readback も release evidence として保持されています。
             </span>
           </p>
           <figure class="code-card wide">
@@ -147,12 +156,12 @@ resource "takoform_object_bucket" "assets" {
 
           <div class="grow-card">
             <div>
-              <h3>Validate from source today / 現在はsourceから検証</h3>
+              <h3>Verify source independently / sourceを独立検証</h3>
               <p>
                 Clone the repository and run <code>bun run check</code> with
                 the documented Go, OpenTofu, and Terraform toolchains. That
-                proves the local candidate lifecycle; it is not Registry
-                installation evidence.
+                proves the local source lifecycle. The separate authenticated
+                readback proves Registry installation.
               </p>
             </div>
             <a
@@ -177,7 +186,7 @@ resource "takoform_object_bucket" "assets" {
               <p>
                 Required as HCL or <code>TAKOFORM_ENDPOINT</code>. Discovery
                 must advertise the versioned <code>v1alpha1</code> endpoint and
-                exact candidate Form availability.
+                exact Form availability.
               </p>
             </article>
             <article class="card">
@@ -284,27 +293,35 @@ resource "takoform_object_bucket" "assets" {
 
       <section class="section" id="evidence">
         <div class="container">
-          <h2>What “candidate” means / candidateの意味</h2>
+          <h2>Evidence and remaining limits / 証跡と残る境界</h2>
           <div class="status-grid">
             <div class="status-col done">
-              <h3>Proven locally / ローカルで確認済み</h3>
+              <h3>Published evidence / 公開済み証跡</h3>
               <ul>
-                <li>One catalog generates provider schemas and Form definitions.</li>
-                <li>Positive and negative package fixtures verify offline.</li>
-                <li>OpenTofu and Terraform lifecycle matrices run locally.</li>
-                <li>Reference docs and examples cover every current resource.</li>
+                <li>Provider <code>v1.0.1</code> is signed and Registry-verified with both CLIs.</li>
+                <li>All 34 current Form Package identities are signed and immutable.</li>
+                <li><code>forms/admissions/v1.0.6</code> admits exactly 10 as <code>portable-standard</code>.</li>
+                <li>The closure binds the all-34 provider report and selected-ten Takosumi host report.</li>
               </ul>
             </div>
             <div class="status-col pending">
-              <h3>Still external / 外部証拠が必要</h3>
+              <h3>Still bounded / 引き続き限定されること</h3>
               <ul>
-                <li>Provider <code>v1.0.1</code> publication and Registry readback.</li>
-                <li>Signed current Form Package publication evidence.</li>
-                <li>Conforming-host lifecycle and Interface materialization reports.</li>
-                <li>Signed admission closure for any portable standard claim.</li>
+                <li>The API remains <code>forms.takoform.com/v1alpha1</code>.</li>
+                <li>The other 24 published packages are not admitted.</li>
+                <li>A host report proves only that exact host and Form set.</li>
+                <li>Concrete backends, credentials, policy, and migration stay with the host/operator.</li>
               </ul>
             </div>
           </div>
+          <p class="fineprint">
+            <code>release/version.json</code> retains
+            <code>publicationStatus: candidate-only</code> as descriptor
+            metadata, not live availability state. The signed release and
+            Registry readback establish provider publication; the protected
+            admission tag and retained closure separately establish Standard
+            Form admission.
+          </p>
         </div>
       </section>
     </main>

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
       name="description"
-      content="Guide to the Takoform portable Service Form specification and its current v1alpha1 candidate status."
+      content="Guide to the Takoform portable Service Form specification, its v1alpha1 API boundary, 34 published packages, and exact 10-Form admission."
     >
     <title>Specification / 仕様 — Takoform</title>
     <link rel="stylesheet" href="/styles.css">
@@ -56,7 +56,8 @@
             <ul>
               <li>The API group is <code>forms.takoform.com/v1alpha1</code>.</li>
               <li>Breaking protocol changes remain possible.</li>
-              <li>The 34 current Forms are structural candidates.</li>
+              <li>All 34 current Form Packages are published and immutable.</li>
+              <li>Exactly 10 are admitted under <code>forms/admissions/v1.0.6</code>.</li>
               <li>Provider <code>v1.0.1</code> does not make the API stable.</li>
             </ul>
           </div>
@@ -167,10 +168,10 @@
             </article>
             <article class="card">
               <span class="step">PROVIDER</span>
-              <h3><code>v1.0.1</code> candidate</h3>
+              <h3><code>v1.0.1</code> published</h3>
               <p>
-                Intended first provider compatibility line; currently
-                unpublished and not Registry-installable.
+                The supported provider compatibility line, signed and verified
+                by direct Terraform and OpenTofu Registry installation.
               </p>
             </article>
           </div>
@@ -182,21 +183,23 @@
           <h2>Evidence boundary / 証拠の境界</h2>
           <div class="status-grid">
             <div class="status-col done">
-              <h3>Implemented in source</h3>
+              <h3>Implemented and published</h3>
               <ul>
                 <li>Normative schemas and canonical I-JSON handling.</li>
                 <li>Closed local Form Package verifier and fixture corpus.</li>
                 <li>Generated 34-Form inventory and typed provider surface.</li>
-                <li>In-process host and Terraform/OpenTofu lifecycle checks.</li>
+                <li>Provider <code>v1.0.1</code> Registry readback with both CLIs.</li>
+                <li>All 34 signed immutable Form Package releases.</li>
+                <li>Protected exact-10 <code>portable-standard</code> admission evidence.</li>
               </ul>
             </div>
             <div class="status-col pending">
-              <h3>Required before stronger claims</h3>
+              <h3>Limits on stronger claims</h3>
               <ul>
-                <li>Signed publication of the current package bytes.</li>
-                <li>Provider Registry installation and readback evidence.</li>
-                <li>Signed lifecycle reports from conforming hosts.</li>
-                <li>Signed admission evidence for any <code>portable-standard</code> Form.</li>
+                <li>The API is still <code>forms.takoform.com/v1alpha1</code>.</li>
+                <li>The remaining 24 published packages are not admitted.</li>
+                <li>The retained Takosumi report proves only the selected 10 on that host.</li>
+                <li>Other hosts must publish their own exact support and lifecycle evidence.</li>
               </ul>
             </div>
           </div>
@@ -220,7 +223,7 @@
         </ul>
         <div class="footer-ids">
           <code>forms.takoform.com/v1alpha1</code>
-          <code>provider v1.0.1 candidate</code>
+          <code>provider v1.0.1 published</code>
         </div>
       </div>
     </footer>
