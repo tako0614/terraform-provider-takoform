@@ -28,10 +28,14 @@ const requestId = "01234567-89ab-4cde-8fab-0123456789ab";
 const temporaryDirectories = [];
 let previousGH;
 let previousGitHub;
+let previousGHEnterprise;
+let previousGitHubEnterprise;
 
 beforeEach(() => {
   previousGH = process.env.GH_TOKEN;
   previousGitHub = process.env.GITHUB_TOKEN;
+  previousGHEnterprise = process.env.GH_ENTERPRISE_TOKEN;
+  previousGitHubEnterprise = process.env.GITHUB_ENTERPRISE_TOKEN;
   process.env.GH_TOKEN = "operator-only-test-token";
   process.env.GITHUB_TOKEN = "ambient-token-must-be-scrubbed";
 });
@@ -41,6 +45,16 @@ afterEach(() => {
   else process.env.GH_TOKEN = previousGH;
   if (previousGitHub === undefined) delete process.env.GITHUB_TOKEN;
   else process.env.GITHUB_TOKEN = previousGitHub;
+  if (previousGHEnterprise === undefined) {
+    delete process.env.GH_ENTERPRISE_TOKEN;
+  } else {
+    process.env.GH_ENTERPRISE_TOKEN = previousGHEnterprise;
+  }
+  if (previousGitHubEnterprise === undefined) {
+    delete process.env.GITHUB_ENTERPRISE_TOKEN;
+  } else {
+    process.env.GITHUB_ENTERPRISE_TOKEN = previousGitHubEnterprise;
+  }
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -557,6 +571,18 @@ describe("release surface contract and strict parsing", () => {
 });
 
 describe("workflow dispatch authority and correlation", () => {
+  test("scopes upload authority to the absolute uploads host without argv exposure", () => {
+    process.env.GH_ENTERPRISE_TOKEN = "ambient-enterprise-token";
+    process.env.GITHUB_ENTERPRISE_TOKEN = "ambient-enterprise-token";
+    const environment = releaseDeployTestHooks.githubUploadEnvironment();
+    expect(environment.GH_TOKEN).toBeUndefined();
+    expect(environment.GITHUB_TOKEN).toBeUndefined();
+    expect(environment.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
+    expect(environment.GH_ENTERPRISE_TOKEN).toBe(
+      "operator-only-test-token",
+    );
+  });
+
   test("scrubs authority from non-gh children and binds one UUID run", () => {
     const calls = [];
     let dispatched = false;
@@ -2097,6 +2123,20 @@ describe("local immutable GitHub Release publication", () => {
           args.some((argument) => argument.includes("/assets?name=")),
       ),
     ).toHaveLength(2);
+    for (const upload of calls.filter(
+      (args) =>
+        args.includes("POST") &&
+        args.some((argument) => argument.includes("/assets?name=")),
+    )) {
+      expect(upload).not.toContain("--hostname");
+      expect(
+        upload.some((argument) =>
+          argument.startsWith(
+            "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets?name=",
+          ),
+        ),
+      ).toBe(true);
+    }
     expect(
       calls.some(
         (args) =>
@@ -2293,7 +2333,7 @@ describe("local immutable GitHub Release publication", () => {
         args.includes("POST") &&
         args.some((argument) =>
           argument.startsWith(
-            "repos/tako0614/terraform-provider-takoform/releases/7/assets?name=",
+            "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets?name=",
           ),
         )
       ) {
@@ -2353,13 +2393,12 @@ describe("local immutable GitHub Release publication", () => {
     const uploads = calls.filter((args) =>
       args.some((argument) =>
         argument.startsWith(
-          "repos/tako0614/terraform-provider-takoform/releases/7/assets?name=",
+          "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets?name=",
         ),
       ),
     );
     expect(uploads).toHaveLength(1);
-    expect(uploads[0]).toContain("--hostname");
-    expect(uploads[0]).toContain("uploads.github.com");
+    expect(uploads[0]).not.toContain("--hostname");
     expect(uploads[0]).toContain(fixture.path);
     expect(
       calls.some(

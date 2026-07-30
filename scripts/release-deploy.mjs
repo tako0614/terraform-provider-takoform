@@ -450,6 +450,14 @@ function subprocessEnvironment(executable) {
   return environment;
 }
 
+function githubUploadEnvironment() {
+  const environment = environmentWithoutGitHubAuthority();
+  delete environment.GH_ENTERPRISE_TOKEN;
+  delete environment.GITHUB_ENTERPRISE_TOKEN;
+  environment.GH_ENTERPRISE_TOKEN = process.env.GH_TOKEN;
+  return environment;
+}
+
 function gitPushEnvironment() {
   const environment = environmentWithoutGitHubAuthority();
   delete environment.GIT_CONFIG_COUNT;
@@ -1803,16 +1811,14 @@ function resumeDraftReleaseLocally(
       const uploaded = JSON.parse(
         command(context, "gh", [
           "api",
-          "--hostname",
-          "uploads.github.com",
           "--method",
           "POST",
-          `repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
+          `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
           "--header",
           "Content-Type: application/octet-stream",
           "--input",
           asset.path,
-        ]),
+        ], { env: githubUploadEnvironment() }),
       );
       if (
         !Number.isSafeInteger(uploaded.id) ||
@@ -1995,16 +2001,14 @@ function publishReleaseLocally(
       const uploaded = JSON.parse(
         command(context, "gh", [
           "api",
-          "--hostname",
-          "uploads.github.com",
           "--method",
           "POST",
-          `repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
+          `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets?name=${encodeURIComponent(asset.name)}`,
           "--header",
           "Content-Type: application/octet-stream",
           "--input",
           asset.path,
-        ]),
+        ], { env: githubUploadEnvironment() }),
       );
       if (
         !Number.isSafeInteger(uploaded.id) ||
@@ -4558,6 +4562,7 @@ export const releaseDeployTestHooks = Object.freeze({
   dispatchWorkflow,
   expectedFormTagObject,
   formVerifyAll,
+  githubUploadEnvironment,
   ownerGateAndFence,
   observeTagFailureState,
   parseCanonicalCandidateMetadata,
