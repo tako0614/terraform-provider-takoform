@@ -24,6 +24,8 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 - `runtime_version` (String, optional) — Optional runtime version requested for the artifact.
 - `request_timeout_seconds` (Number, optional) — Optional per-request timeout preference in seconds. Between 1 and 3600.
 - `concurrency` (Number, optional) — Optional concurrent-request preference. At least 1.
+- `assets_path` (String, optional) — Optional directory inside the artifact served as static assets.
+- `assets_not_found_handling` (String, optional) — Open capability token describing how the host answers an asset miss.
 - `configuration` (Map of String, optional) — Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.
 - `connections` (List of Object, optional) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.
 - `space` (String, optional, forces replacement) — Overrides the provider default.

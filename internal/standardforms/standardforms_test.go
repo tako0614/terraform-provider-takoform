@@ -102,7 +102,10 @@ func TestCurrentAdmissionCandidateSetIsExactMixedVersionSuccessorGeneration(t *t
 		versions[entry.FormRef.DefinitionVersion] = true
 		kinds[entry.Kind] = true
 	}
-	if !versions["2.0.0"] || !versions["3.0.0"] || len(versions) != 2 {
+	// The selection deliberately spans major lines: a Form only moves when its
+	// own contract does, so a shared generation number would be a fiction.
+	if !versions["2.0.0"] || !versions["3.0.0"] || !versions["4.0.0"] ||
+		len(versions) != 3 {
 		t.Fatalf("current admission set lost mixed versions: %#v", versions)
 	}
 	if !kinds["EdgeWorker"] || kinds["HttpService"] {

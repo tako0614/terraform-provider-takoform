@@ -1,0 +1,12 @@
+{
+  "databaseName": "app",
+  "engine": "postgres",
+  "engineVersion": "16",
+  "highAvailability": false,
+  "name": "relational-database",
+  "schemaFormat": "takosumi.resource-migrations",
+  "schemaSha256": "not-a-sha256",
+  "schemaUrl": "https://artifacts.portable-conformance.invalid/relational-schema.json",
+  "sizeClass": "db.small",
+  "storageGib": 20
+}

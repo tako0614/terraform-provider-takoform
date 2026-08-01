@@ -1,0 +1,10 @@
+{
+  "maxConcurrency": 0,
+  "name": "model-endpoint",
+  "source": {
+    "artifactMediaType": "application/vnd.safetensors",
+    "artifactSha256": "fd52f6d3dfaa989615128f2049893584cc6f71a4ae5536b86681ae33ae2c072b",
+    "artifactUrl": "https://artifacts.portable-conformance.invalid/embedding-small.safetensors"
+  },
+  "task": "embedding"
+}
