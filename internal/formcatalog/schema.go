@@ -28,29 +28,39 @@ const (
 	// PatternCron intentionally defines a small interoperable subset rather
 	// than pretending every host agrees on extensions such as names, lists,
 	// ranges, or steps.
-	PatternCron                   = `^(?:[0-9]|[1-5][0-9]) (?:[0-9]|1[0-9]|2[0-3]) (?:\*|[1-9]|[12][0-9]|3[01]) (?:\*|[1-9]|1[0-2]) (?:\*|[0-6])$`
-	PatternHostname               = `^` + patternHostnameBody + `$`
-	PatternPath                   = `^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$`
-	PatternIPv4Address            = `^` + patternIPv4Body + `$`
-	PatternIPv6Address            = `^` + patternIPv6Body + `$`
-	PatternCIDR                   = `^(?:` + patternIPv4Body + `/(?:[0-9]|[12][0-9]|3[0-2])|` + patternIPv6Body + `/(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))$`
-	PatternDNSRelativeName        = `^(?:@|(?:\*\.)?[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)$`
-	PatternOCIDigest              = `^[^@\s]+@sha256:[A-Fa-f0-9]{64}$`
-	PatternMailbox                = `^[^@\s]+@[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
-	PatternMailboxLocalPart       = `^[A-Za-z0-9][A-Za-z0-9.!#$%&'*+/=?^_{|}~-]{0,63}$`
-	PatternHTTPSURL               = `^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\s?#]*)?(?:\?[^\s#]*)?(?:#[^\s]*)?$`
-	PatternCredentialFreeHTTPSURL = `^https://` + patternHostnameBody + `(?::[0-9]{1,5})?(?:/[^` + patternURLWhitespaceBody + `?#]*)?$`
-	PatternMediaType              = `^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$`
-	PatternRecordData             = `^\S(.*\S)?$`
-	PatternRelativePath           = `^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$`
-	PatternDNSMX                  = `^` + patternUint16Body + ` ` + patternHostnameBody + `$`
-	PatternDNSSRV                 = `^` + patternUint16Body + ` ` + patternUint16Body + ` ` + patternUint16Body + ` ` + patternHostnameBody + `$`
-	PatternDNSCAA                 = `^` + patternUint8Body + ` [A-Za-z0-9]+ \S(?:.*\S)?$`
-	PatternName                   = `^[a-z][a-z0-9-]{0,62}$`
-	PatternResourceRef            = `^[A-Z][A-Za-z0-9]{0,63}/[a-z][a-z0-9-]{0,62}$`
+	PatternCron             = `^(?:[0-9]|[1-5][0-9]) (?:[0-9]|1[0-9]|2[0-3]) (?:\*|[1-9]|[12][0-9]|3[01]) (?:\*|[1-9]|1[0-2]) (?:\*|[0-6])$`
+	PatternHostname         = `^` + patternHostnameBody + `$`
+	PatternPath             = `^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$`
+	PatternIPv4Address      = `^` + patternIPv4Body + `$`
+	PatternIPv6Address      = `^` + patternIPv6Body + `$`
+	PatternCIDR             = `^(?:` + patternIPv4Body + `/(?:[0-9]|[12][0-9]|3[0-2])|` + patternIPv6Body + `/(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))$`
+	PatternDNSRelativeName  = `^(?:@|(?:\*\.)?[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)$`
+	PatternOCIDigest        = `^[^@\s]+@sha256:[A-Fa-f0-9]{64}$`
+	PatternSHA256           = `^(sha256:)?[A-Fa-f0-9]{64}$`
+	PatternMailbox          = `^[^@\s]+@[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
+	PatternMailboxLocalPart = `^[A-Za-z0-9][A-Za-z0-9.!#$%&'*+/=?^_{|}~-]{0,63}$`
+	PatternHTTPSURL         = `^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\s?#]*)?(?:\?[^\s#]*)?(?:#[^\s]*)?$`
+	// Published to Forms verbatim, so it is written in the dialect Form schemas
+	// are evaluated in: ECMAScript, whose `\s` already covers Unicode
+	// whitespace. Go's `\s` is ASCII-only, so goCredentialFreeHTTPSURL below
+	// spells the same rule out for the Go validators. The two must mean the
+	// same thing; only this one is ever published.
+	PatternCredentialFreeHTTPSURL = `^https://` + patternHostnameBody + `(?::[0-9]{1,5})?(?:/[^\s?#]*)?$`
+	// GoCredentialFreeHTTPSURLPattern is PatternCredentialFreeHTTPSURL evaluated in
+	// Go. It is never published: emitting it would change the bytes of every
+	// Form carrying an artifact source without changing what any of them mean.
+	GoCredentialFreeHTTPSURLPattern = `^https://` + patternHostnameBody + `(?::[0-9]{1,5})?(?:/[^` + patternURLWhitespaceBody + `?#]*)?$`
+	PatternMediaType                = `^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$`
+	PatternRecordData               = `^\S(.*\S)?$`
+	PatternRelativePath             = `^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$`
+	PatternDNSMX                    = `^` + patternUint16Body + ` ` + patternHostnameBody + `$`
+	PatternDNSSRV                   = `^` + patternUint16Body + ` ` + patternUint16Body + ` ` + patternUint16Body + ` ` + patternHostnameBody + `$`
+	PatternDNSCAA                   = `^` + patternUint8Body + ` [A-Za-z0-9]+ \S(?:.*\S)?$`
+	PatternName                     = `^[a-z][a-z0-9-]{0,62}$`
+	PatternResourceRef              = `^[A-Z][A-Za-z0-9]{0,63}/[a-z][a-z0-9-]{0,62}$`
 )
 
-var credentialFreeHTTPSURLPattern = regexp.MustCompile(PatternCredentialFreeHTTPSURL)
+var credentialFreeHTTPSURLPattern = regexp.MustCompile(GoCredentialFreeHTTPSURLPattern)
 
 // ValidCredentialFreeHTTPSURL is the shared runtime validator for portable,
 // nonsensitive HTTPS coordinates. PatternCredentialFreeHTTPSURL is the same
@@ -110,6 +120,8 @@ func (g Grammar) Pattern() (string, bool) {
 		return PatternRecordData, true
 	case GrammarRelativePath:
 		return PatternRelativePath, true
+	case GrammarSHA256:
+		return PatternSHA256, true
 	default:
 		return "", false
 	}
@@ -152,6 +164,8 @@ func (g Grammar) Message(field string) string {
 		return field + " must not be blank"
 	case GrammarRelativePath:
 		return field + " must be a non-escaping relative artifact path"
+	case GrammarSHA256:
+		return field + " must be a sha256 digest"
 	default:
 		return field + " is invalid"
 	}
@@ -796,6 +810,8 @@ func invalidStringValue(f Field) (any, bool) {
 		return " ", true
 	case GrammarRelativePath:
 		return "../escape", true
+	case GrammarSHA256:
+		return "not-a-sha256", true
 	default:
 		return nil, false
 	}
