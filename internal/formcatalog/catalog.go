@@ -54,6 +54,9 @@ const (
 	GrammarCredentialFreeHTTPSURL Grammar = "credential-free-https-url"
 	GrammarRecordData             Grammar = "record-data" // DNS record value
 	GrammarRelativePath           Grammar = "relative-path"
+	// GrammarSHA256 is a bare or sha256-prefixed 64-hex digest. It binds a
+	// fetched URL to exact immutable bytes the same way an artifact source does.
+	GrammarSHA256 Grammar = "sha256"
 )
 
 // ConnectionMode says whether a Form declares connections to other Resources.
@@ -158,7 +161,7 @@ func i64(value int64) *int64 { return &value }
 var Kinds = []Kind{
 	// ---------------------------------------------------------------- compute
 	{
-		Kind: "EdgeWorker", DefinitionVersion: "3.0.0", Slug: "edge-worker", ResourceType: "takoform_edge_worker",
+		Kind: "EdgeWorker", DefinitionVersion: "4.0.0", Slug: "edge-worker", ResourceType: "takoform_edge_worker",
 		Domain: "compute", Title: "Edge Worker",
 		Description: "Portable edge/event-driven application served from a prebuilt immutable artifact.",
 		Artifact:    true, Connections: ConnectionsOptional,
@@ -181,6 +184,19 @@ var Kinds = []Kind{
 				Doc: "Optional per-request timeout preference in seconds.", Example: 30},
 			{HCL: "concurrency", Wire: "concurrency", Type: TypeInt, Min: i64(1),
 				Doc: "Optional concurrent-request preference.", Example: 100, CounterExample: 0},
+			// Static assets travel inside the same pinned artifact as the code,
+			// addressed the way `entrypoint` addresses the module. A separate
+			// URL would need its own digest and could drift from the code it
+			// was built with; one artifact cannot.
+			{HCL: "assets_path", Wire: "assetsPath", Type: TypeString, Grammar: GrammarRelativePath,
+				Doc:     "Optional directory inside the artifact served as static assets.",
+				Example: "assets", AltExample: "public",
+				CounterExample: "../assets"},
+			{HCL: "assets_not_found_handling", Wire: "assetsNotFoundHandling", Type: TypeString,
+				Grammar: GrammarToken,
+				Doc:     "Open capability token describing how the host answers an asset miss.",
+				Example: "single_page_application", AltExample: "none",
+				CounterExample: "not a token"},
 			{HCL: "configuration", Wire: "configuration", Type: TypeStringMap,
 				Doc:     "Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.",
 				Example: map[string]any{"LOG_LEVEL": "info"}, AltExample: map[string]any{"LOG_LEVEL": "debug"}},
@@ -217,7 +233,7 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "http.request", Description: "Portable HTTP request surface exposed by a container service.", Operations: []string{"request"}}},
 	},
 	{
-		Kind: "ComputeInstance", DefinitionVersion: "2.0.0", Slug: "compute-instance", ResourceType: "takoform_compute_instance",
+		Kind: "ComputeInstance", DefinitionVersion: "3.0.0", Slug: "compute-instance", ResourceType: "takoform_compute_instance",
 		Domain: "compute", Title: "Compute Instance",
 		Description: "Portable long-running machine instance built from digest-bound boot-image bytes.",
 		Artifact:    true, Connections: ConnectionsOptional,
@@ -240,7 +256,7 @@ var Kinds = []Kind{
 		},
 	},
 	{
-		Kind: "StaticSite", DefinitionVersion: "2.0.0", Slug: "static-site", ResourceType: "takoform_static_site",
+		Kind: "StaticSite", DefinitionVersion: "3.0.0", Slug: "static-site", ResourceType: "takoform_static_site",
 		Domain: "compute", Title: "Static Site",
 		Description: "Portable static asset site served from a prebuilt immutable artifact.",
 		Artifact:    true,
@@ -263,7 +279,7 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "http.request", Description: "Portable HTTP request surface exposed by a static site.", Operations: []string{"request"}}},
 	},
 	{
-		Kind: "Workflow", DefinitionVersion: "2.0.0", Slug: "workflow", ResourceType: "takoform_workflow",
+		Kind: "Workflow", DefinitionVersion: "3.0.0", Slug: "workflow", ResourceType: "takoform_workflow",
 		Domain: "compute", Title: "Workflow",
 		Description: "Portable durable workflow definition and instance-state lifecycle.",
 		Artifact:    true, Connections: ConnectionsOptional,
@@ -286,7 +302,7 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "workflow.invoke", Description: "Portable durable workflow invocation operations.", Operations: []string{"cancel", "invoke", "status"}}},
 	},
 	{
-		Kind: "StatefulEntity", DefinitionVersion: "3.0.0", Slug: "stateful-entity", ResourceType: "takoform_stateful_entity",
+		Kind: "StatefulEntity", DefinitionVersion: "4.0.0", Slug: "stateful-entity", ResourceType: "takoform_stateful_entity",
 		Domain: "compute", Title: "Stateful Entity",
 		Description: "Portable namespace of addressable persistent entities implemented by digest-bound application bytes.",
 		Artifact:    true, Connections: ConnectionsOptional,
@@ -396,7 +412,7 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "cache.store", Description: "Portable cache operations.", Operations: []string{"delete", "get", "put"}}},
 	},
 	{
-		Kind: "RelationalDatabase", DefinitionVersion: "2.0.0", Slug: "relational-database", ResourceType: "takoform_relational_database",
+		Kind: "RelationalDatabase", DefinitionVersion: "3.0.0", Slug: "relational-database", ResourceType: "takoform_relational_database",
 		Domain: "data", Title: "Relational Database",
 		Description: "Portable relational database addressed through an open engine capability token.",
 		Fields: []Field{
@@ -414,6 +430,25 @@ var Kinds = []Kind{
 				Example: "app", AltExample: "app_v2"},
 			{HCL: "high_availability", Wire: "highAvailability", Type: TypeBool,
 				Doc: "Whether the host should keep a standby able to take over.", Example: false},
+			// A database that declares a schema is converged to it during apply.
+			// The bundle is one immutable document carrying its migrations in
+			// order: naming a package registry here would put that registry in
+			// the portable contract, so a host unable to reach it could not
+			// apply a schema its own plan called applicable.
+			{HCL: "schema_url", Wire: "schemaUrl", Type: TypeString, Grammar: GrammarCredentialFreeHTTPSURL,
+				Doc:            "Optional immutable migration bundle the host applies in order.",
+				Example:        "https://artifacts.portable-conformance.invalid/relational-schema.json",
+				AltExample:     "https://artifacts.portable-conformance.invalid/relational-schema-2.json",
+				CounterExample: "https://schema.invalid/bundle.json?download=1"},
+			{HCL: "schema_sha256", Wire: "schemaSha256", Type: TypeString, Grammar: GrammarSHA256,
+				Doc:            "Digest binding schema_url to exact immutable bytes.",
+				Example:        "1d2181e213a086ae9e025d235ff5e267c43ec60cf4fc2f966977a21f2a95ef7b",
+				AltExample:     "3b3f36501936a84ed19b9bef37e5581c3e04948733b947ebaa002f196e66817c",
+				CounterExample: "not-a-sha256"},
+			{HCL: "schema_format", Wire: "schemaFormat", Type: TypeString, Grammar: GrammarToken,
+				Doc:     "Open capability token naming how the bundle is interpreted.",
+				Example: "takosumi.resource-migrations", AltExample: "sql.ordered",
+				CounterExample: "not a token"},
 		},
 		Interfaces: []Interface{{
 			Name: "sql.query", Description: "Portable SQL query and transaction operations.",
@@ -515,7 +550,7 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "analytics.query", Description: "Portable analytics dataset operations.", Operations: []string{"append", "query"}}},
 	},
 	{
-		Kind: "ModelEndpoint", DefinitionVersion: "3.0.0", Slug: "model-endpoint", ResourceType: "takoform_model_endpoint",
+		Kind: "ModelEndpoint", DefinitionVersion: "4.0.0", Slug: "model-endpoint", ResourceType: "takoform_model_endpoint",
 		Domain: "analytics", Title: "Model Endpoint",
 		Description: "Portable inference endpoint serving digest-bound model bytes for one declared task.",
 		Artifact:    true,

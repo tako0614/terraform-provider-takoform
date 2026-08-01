@@ -36,6 +36,7 @@ const (
 	PatternCIDR                   = `^(?:` + patternIPv4Body + `/(?:[0-9]|[12][0-9]|3[0-2])|` + patternIPv6Body + `/(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))$`
 	PatternDNSRelativeName        = `^(?:@|(?:\*\.)?[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)$`
 	PatternOCIDigest              = `^[^@\s]+@sha256:[A-Fa-f0-9]{64}$`
+	PatternSHA256                 = `^(sha256:)?[A-Fa-f0-9]{64}$`
 	PatternMailbox                = `^[^@\s]+@[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
 	PatternMailboxLocalPart       = `^[A-Za-z0-9][A-Za-z0-9.!#$%&'*+/=?^_{|}~-]{0,63}$`
 	PatternHTTPSURL               = `^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\s?#]*)?(?:\?[^\s#]*)?(?:#[^\s]*)?$`
@@ -110,6 +111,8 @@ func (g Grammar) Pattern() (string, bool) {
 		return PatternRecordData, true
 	case GrammarRelativePath:
 		return PatternRelativePath, true
+	case GrammarSHA256:
+		return PatternSHA256, true
 	default:
 		return "", false
 	}
@@ -152,6 +155,8 @@ func (g Grammar) Message(field string) string {
 		return field + " must not be blank"
 	case GrammarRelativePath:
 		return field + " must be a non-escaping relative artifact path"
+	case GrammarSHA256:
+		return field + " must be a sha256 digest"
 	default:
 		return field + " is invalid"
 	}
@@ -796,6 +801,8 @@ func invalidStringValue(f Field) (any, bool) {
 		return " ", true
 	case GrammarRelativePath:
 		return "../escape", true
+	case GrammarSHA256:
+		return "not-a-sha256", true
 	default:
 		return nil, false
 	}

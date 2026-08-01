@@ -307,9 +307,9 @@ func TestExecutableAndModelFormsCarryTheirOwnDigestBoundBytes(t *testing.T) {
 	t.Parallel()
 
 	expectedVersions := map[string]string{
-		"ComputeInstance": "2.0.0",
-		"ModelEndpoint":   "3.0.0",
-		"StatefulEntity":  "3.0.0",
+		"ComputeInstance": "3.0.0",
+		"ModelEndpoint":   "4.0.0",
+		"StatefulEntity":  "4.0.0",
 	}
 	for kindName, version := range expectedVersions {
 		kind, ok := ByKind(kindName)

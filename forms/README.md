@@ -9,12 +9,12 @@ price, or an implementation: those stay with the host that realizes the Form.
 
 | Kind | Resource | Version | Portable intent |
 | --- | --- | --- | --- |
-| `EdgeWorker` | `takoform_edge_worker` | `3.0.0` | Portable edge/event-driven application served from a prebuilt immutable artifact. |
+| `EdgeWorker` | `takoform_edge_worker` | `4.0.0` | Portable edge/event-driven application served from a prebuilt immutable artifact. |
 | `ContainerService` | `takoform_container_service` | `3.0.0` | Portable OCI container service pinned to an immutable image digest. |
-| `ComputeInstance` | `takoform_compute_instance` | `2.0.0` | Portable long-running machine instance built from digest-bound boot-image bytes. |
-| `StaticSite` | `takoform_static_site` | `2.0.0` | Portable static asset site served from a prebuilt immutable artifact. |
-| `Workflow` | `takoform_workflow` | `2.0.0` | Portable durable workflow definition and instance-state lifecycle. |
-| `StatefulEntity` | `takoform_stateful_entity` | `3.0.0` | Portable namespace of addressable persistent entities implemented by digest-bound application bytes. |
+| `ComputeInstance` | `takoform_compute_instance` | `3.0.0` | Portable long-running machine instance built from digest-bound boot-image bytes. |
+| `StaticSite` | `takoform_static_site` | `3.0.0` | Portable static asset site served from a prebuilt immutable artifact. |
+| `Workflow` | `takoform_workflow` | `3.0.0` | Portable durable workflow definition and instance-state lifecycle. |
+| `StatefulEntity` | `takoform_stateful_entity` | `4.0.0` | Portable namespace of addressable persistent entities implemented by digest-bound application bytes. |
 | `Schedule` | `takoform_schedule` | `3.0.0` | Portable cron lifecycle that invokes exactly one connected Resource. |
 
 ## Data and storage
@@ -25,7 +25,7 @@ price, or an implementation: those stay with the host that realizes the Form.
 | `ObjectLifecycleRule` | `takoform_object_lifecycle_rule` | `1.0.0` | One portable expiration or storage-transition action applied to a connected object store. |
 | `KeyValueStore` | `takoform_key_value_store` | `2.0.0` | Portable key/value state with an optional consistency preference. |
 | `CacheCluster` | `takoform_cache_cluster` | `1.0.0` | Portable in-memory cache sized by an open capability token. |
-| `RelationalDatabase` | `takoform_relational_database` | `2.0.0` | Portable relational database addressed through an open engine capability token. |
+| `RelationalDatabase` | `takoform_relational_database` | `3.0.0` | Portable relational database addressed through an open engine capability token. |
 | `IndexedStore` | `takoform_indexed_store` | `1.0.0` | Portable bounded key/value item store with declared queryable attributes and no query language. |
 | `Queue` | `takoform_queue` | `3.0.0` | Portable asynchronous delivery with at-least-once semantics. |
 | `StreamTopic` | `takoform_stream_topic` | `1.0.0` | Portable published event stream that many independent consumers can read. |
@@ -37,7 +37,7 @@ price, or an implementation: those stay with the host that realizes the Form.
 | Kind | Resource | Version | Portable intent |
 | --- | --- | --- | --- |
 | `AnalyticsDataset` | `takoform_analytics_dataset` | `1.0.0` | Portable append-oriented dataset queried for analysis rather than transactions. |
-| `ModelEndpoint` | `takoform_model_endpoint` | `3.0.0` | Portable inference endpoint serving digest-bound model bytes for one declared task. |
+| `ModelEndpoint` | `takoform_model_endpoint` | `4.0.0` | Portable inference endpoint serving digest-bound model bytes for one declared task. |
 
 ## Network and delivery
 

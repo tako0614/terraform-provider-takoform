@@ -13,16 +13,18 @@ provider "takoform" {
 }
 
 resource "takoform_edge_worker" "example" {
-  name                    = "edge-worker"
-  artifact_media_type     = "application/vnd.takoform.edge-worker+tar"
-  artifact_sha256         = "0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37"
-  artifact_url            = "https://artifacts.portable-conformance.invalid/edge-worker.tar"
-  entrypoint              = "worker.mjs"
-  runtime                 = "javascript"
-  runtime_version         = "2026.1"
-  request_timeout_seconds = 30
-  concurrency             = 100
-  configuration           = { "LOG_LEVEL" = "info" }
+  name                      = "edge-worker"
+  artifact_media_type       = "application/vnd.takoform.edge-worker+tar"
+  artifact_sha256           = "0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37"
+  artifact_url              = "https://artifacts.portable-conformance.invalid/edge-worker.tar"
+  entrypoint                = "worker.mjs"
+  runtime                   = "javascript"
+  runtime_version           = "2026.1"
+  request_timeout_seconds   = 30
+  concurrency               = 100
+  assets_path               = "assets"
+  assets_not_found_handling = "single_page_application"
+  configuration             = { "LOG_LEVEL" = "info" }
 
   connections = [
     {

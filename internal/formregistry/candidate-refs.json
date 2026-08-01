@@ -23,9 +23,9 @@
   "ComputeInstance": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ComputeInstance",
-    "definitionVersion": "2.0.0",
-    "schemaDigest": "sha256:4f4db41f33030c58cf45c7ed37817f8d3d83e91798a06db55d9b974c7e272961",
-    "packageDigest": "sha256:05de5b786fb728ea54b7589df17b4be6510f6f3ef5d56fee4b3d9dbf366ef5a1"
+    "definitionVersion": "3.0.0",
+    "schemaDigest": "sha256:23b400f90121e9cd76bc22f626561c06a82c197426098ada3adc1cec69a5dfa9",
+    "packageDigest": "sha256:a5917aabd3168730bf005133173227444e9357558747b85cb83e28bc8e027331"
   },
   "ContainerRegistry": {
     "apiVersion": "forms.takoform.com/v1alpha1",
@@ -58,9 +58,9 @@
   "EdgeWorker": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "EdgeWorker",
-    "definitionVersion": "3.0.0",
-    "schemaDigest": "sha256:c7fb07db10c937fd6ab119b192552ac239cbcad45dcc12bccd7993decffd2781",
-    "packageDigest": "sha256:f03ede50c6b04459e669ed7aaef3e63397b127882a6b4b19dad45ea2da232381"
+    "definitionVersion": "4.0.0",
+    "schemaDigest": "sha256:83988e904386ca5260d04e9503c9e03f1a6db82a33c6b77889c539e2c918c251",
+    "packageDigest": "sha256:2aa6311988d40e8eb1e7568411be3733ebc7a15b0df25791d2a6ee81823fa525"
   },
   "EmailSender": {
     "apiVersion": "forms.takoform.com/v1alpha1",
@@ -128,9 +128,9 @@
   "ModelEndpoint": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "ModelEndpoint",
-    "definitionVersion": "3.0.0",
-    "schemaDigest": "sha256:54296d5db4554a68e749caa8b037a9e85aa0fa9742ccf9136b0d5eca018e4d45",
-    "packageDigest": "sha256:fe343f6e9ded5b29bed6a7a9fb096ddd810c65cb13f217116d4756693ae45e7a"
+    "definitionVersion": "4.0.0",
+    "schemaDigest": "sha256:3b3166a5a24fbfa1bcb88601faf73eb7ae48f77a8c009284848360dcba7fe178",
+    "packageDigest": "sha256:5900bee732cf36a1c2bc8e0b2074c6bc02df4fd8efa30c9077e270433d4cca81"
   },
   "ObjectBucket": {
     "apiVersion": "forms.takoform.com/v1alpha1",
@@ -170,9 +170,9 @@
   "RelationalDatabase": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "RelationalDatabase",
-    "definitionVersion": "2.0.0",
-    "schemaDigest": "sha256:3898f8ee507bcebd9e03e80fbc1931b67b477299b1ebe2ff395facb7acf018de",
-    "packageDigest": "sha256:dc131e4858ddedbb84d553fdf7808c55fc898a37f15d84839e414fe3ca57c910"
+    "definitionVersion": "3.0.0",
+    "schemaDigest": "sha256:e4c7aedb5962e6b719d7afe7a8f002ceb00ae4a1c74ebfc1eff712e257bf4044",
+    "packageDigest": "sha256:599e60e4f3a5b735c58f8ff5029f72b5a25445be6f317816590eca12b44e5a31"
   },
   "Schedule": {
     "apiVersion": "forms.takoform.com/v1alpha1",
@@ -191,16 +191,16 @@
   "StatefulEntity": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "StatefulEntity",
-    "definitionVersion": "3.0.0",
-    "schemaDigest": "sha256:9155d15fcb61ab201dd184bfd825fae0e7883c4b52fda709079f3703aa4d3196",
-    "packageDigest": "sha256:25e892ed3d185c7485c49f832cbb342a6e71925ed9a795d266e4e7369c958cc1"
+    "definitionVersion": "4.0.0",
+    "schemaDigest": "sha256:87a5097d0366f6d930123d07c9808ce027d5e5a2975a79199ea8bcc18b1eb1c3",
+    "packageDigest": "sha256:cba8c3a0d2ed0ea13861003e7ae83ccfa52ad48580d3485a9f8c8855c7fb5fad"
   },
   "StaticSite": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "StaticSite",
-    "definitionVersion": "2.0.0",
-    "schemaDigest": "sha256:240106d926a628b8d3105b46ac95f95682ca580750e44c23d36c1cef6b5f57d0",
-    "packageDigest": "sha256:6241fea53dbedc944ea02118fcfd06d355bf15d42a838b4781148a438b5fad28"
+    "definitionVersion": "3.0.0",
+    "schemaDigest": "sha256:4b6fbae5dc44cd9a13f7234707ac6290e71057eb04661b2bf96fd1bac2254b00",
+    "packageDigest": "sha256:21437032e54dedacb44b9eddf0775c241bbc04e696bbee7c332810344e3de257"
   },
   "StreamTopic": {
     "apiVersion": "forms.takoform.com/v1alpha1",
@@ -233,8 +233,8 @@
   "Workflow": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "Workflow",
-    "definitionVersion": "2.0.0",
-    "schemaDigest": "sha256:1da7292e141278e9987feb07ccb4b5b9e8454fe7c6ab11c4877fef9069d774ea",
-    "packageDigest": "sha256:1ba28cccf7d714345acb2262b5de339e8d6a585b1befb72a7d07bb7bb305cfec"
+    "definitionVersion": "3.0.0",
+    "schemaDigest": "sha256:2a50be5dd0e0e5a320146af8ab690801851a36c73030e9fbec8c0c92e8a0adc5",
+    "packageDigest": "sha256:8a87389425d2b7756b658b705128882a858f613cb28816a01f82b25036c257f3"
   }
 }

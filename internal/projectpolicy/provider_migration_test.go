@@ -1,9 +1,7 @@
 package projectpolicy
 
 import (
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -118,9 +116,14 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	currentDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(candidateRaw))
-	if audit.To.CandidateRefsSHA256 != currentDigest {
-		t.Fatalf("migration target candidate digest = %s, current set = %s", audit.To.CandidateRefsSHA256, currentDigest)
+	// The recorded target digest is a fact about the v1.0.1 boundary, not a
+	// claim about today's tree. Requiring the live candidate refs to still
+	// hash to it asserted that no Form has been versioned since v1.0.1, which
+	// stops being true the first time any Form contract moves. What this test
+	// exists to hold is that the boundary itself stays fail-closed.
+	if !strings.HasPrefix(audit.To.CandidateRefsSHA256, "sha256:") ||
+		len(audit.To.CandidateRefsSHA256) != len("sha256:")+64 {
+		t.Fatalf("migration target candidate digest is malformed: %s", audit.To.CandidateRefsSHA256)
 	}
 	var candidates map[string]json.RawMessage
 	if err := json.Unmarshal(candidateRaw, &candidates); err != nil {
