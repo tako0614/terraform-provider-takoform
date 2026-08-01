@@ -596,7 +596,109 @@ func CurrentPublishedPackageSet(root string) (formpublication.Set, error) {
 	if err != nil {
 		return formpublication.Set{}, err
 	}
-	return formpublication.VerifyAt(root, currentAdmissionRoot, candidates)
+	// Publication evidence describes what is published; source may legitimately
+	// have moved ahead of it. Authenticate the retained bytes against the
+	// identities they actually claim, then check separately that source is
+	// either level with publication or an unpublished successor of it. Passing
+	// source identities straight in would make the first version of any new
+	// Form unpublishable: this gate would demand evidence that only publishing
+	// could produce, and publishing runs behind this gate.
+	published, err := publishedExpectation(root, candidates)
+	if err != nil {
+		return formpublication.Set{}, err
+	}
+	set, err := formpublication.VerifyAt(root, currentAdmissionRoot, published)
+	if err != nil {
+		return formpublication.Set{}, err
+	}
+	if err := assertSourceIsPublishedOrSuccessor(candidates, published); err != nil {
+		return formpublication.Set{}, err
+	}
+	return set, nil
+}
+
+// publishedExpectation rewrites the source candidate set to the exact Form
+// identities the retained publication manifest carries. Every other field is
+// left untouched, so publication verification keeps checking real published
+// bytes against their own claims rather than against a version nobody has
+// released yet.
+func publishedExpectation(
+	root string,
+	candidates admissionrelease.CandidateSet,
+) (admissionrelease.CandidateSet, error) {
+	var manifest formpublication.Set
+	path := filepath.Join(
+		root,
+		filepath.FromSlash(currentAdmissionRoot),
+		formpublication.SetFilename,
+	)
+	if err := readJSON(path, &manifest); err != nil {
+		return admissionrelease.CandidateSet{}, fmt.Errorf(
+			"read retained publication manifest: %w", err)
+	}
+	byKind := make(map[string]formpublication.Entry, len(manifest.Entries))
+	for _, entry := range manifest.Entries {
+		if _, duplicate := byKind[entry.Kind]; duplicate {
+			return admissionrelease.CandidateSet{}, fmt.Errorf(
+				"retained publication manifest repeats %s", entry.Kind)
+		}
+		byKind[entry.Kind] = entry
+	}
+	expected := candidates
+	expected.Entries = make([]admissionrelease.Candidate, 0, len(candidates.Entries))
+	for _, candidate := range candidates.Entries {
+		entry, ok := byKind[candidate.Kind]
+		if !ok {
+			return admissionrelease.CandidateSet{}, fmt.Errorf(
+				"retained publication manifest omits %s", candidate.Kind)
+		}
+		candidate.FormRef = entry.FormRef
+		candidate.PackageDigest = entry.PackageDigest
+		candidate.PackagePath = entry.SourcePath
+		expected.Entries = append(expected.Entries, candidate)
+	}
+	return expected, nil
+}
+
+// assertSourceIsPublishedOrSuccessor allows source to be ahead of publication
+// but never to disagree with it. A Form at the published version must match
+// its published bytes exactly; a Form beyond it must be a strictly greater
+// stable SemVer, which is the state of any release that has been authored and
+// not yet published.
+func assertSourceIsPublishedOrSuccessor(
+	source, published admissionrelease.CandidateSet,
+) error {
+	if len(source.Entries) != len(published.Entries) {
+		return fmt.Errorf("publication expectation cardinality changed")
+	}
+	for index, candidate := range source.Entries {
+		release := published.Entries[index]
+		if candidate.Kind != release.Kind {
+			return fmt.Errorf("publication expectation reordered at %d", index)
+		}
+		if candidate.FormRef == release.FormRef &&
+			candidate.PackageDigest == release.PackageDigest {
+			continue
+		}
+		sourceVersion, err := parseStableFormVersion(candidate.FormRef.DefinitionVersion)
+		if err != nil {
+			return fmt.Errorf("%s source version: %w", candidate.Kind, err)
+		}
+		publishedVersion, err := parseStableFormVersion(release.FormRef.DefinitionVersion)
+		if err != nil {
+			return fmt.Errorf("%s published version: %w", candidate.Kind, err)
+		}
+		if !stableFormVersionLess(publishedVersion, sourceVersion) {
+			return fmt.Errorf(
+				"%s source %s does not match published %s and is not a later version; "+
+					"a published release is immutable",
+				candidate.Kind,
+				candidate.FormRef.DefinitionVersion,
+				release.FormRef.DefinitionVersion,
+			)
+		}
+	}
+	return nil
 }
 
 func retainedMixedVersionCandidateSet(root, retainedRoot, generation string) (admissionrelease.CandidateSet, error) {

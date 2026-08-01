@@ -194,6 +194,17 @@ func parseStableFormVersion(value string) (stableFormVersion, error) {
 	return stableFormVersion{Raw: value, Major: parts[0], Minor: parts[1], Patch: parts[2]}, nil
 }
 
+// stableFormVersionLess orders two stable Form versions.
+func stableFormVersionLess(a, b stableFormVersion) bool {
+	if a.Major != b.Major {
+		return a.Major < b.Major
+	}
+	if a.Minor != b.Minor {
+		return a.Minor < b.Minor
+	}
+	return a.Patch < b.Patch
+}
+
 func verifyFormSemVerSequence(releases []formSchemaRelease) error {
 	ordered := append([]formSchemaRelease(nil), releases...)
 	sort.Slice(ordered, func(left, right int) bool {
