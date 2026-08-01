@@ -660,8 +660,13 @@ function emit(context, result) {
 }
 
 function runOwnerCheck(context) {
-  progress(context, "bun run check");
-  command(context, "bun", ["run", "check"], {
+  // Publication proves bytes; admission proves a conforming host signed for
+  // them. They are separate phases, and the admission closure can only be
+  // green after publication has already happened. Gating publication on it
+  // would make the first release of any new Form version unreachable, so the
+  // owner gate stops at publication authority and admission keeps its own gate.
+  progress(context, "bun run check:release-owner-gate");
+  command(context, "bun", ["run", "check:release-owner-gate"], {
     echo: true,
     label: "owner gate",
   });

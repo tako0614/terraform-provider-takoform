@@ -971,7 +971,7 @@ describe("serial Form Package batch publication", () => {
       if (executable === "cosign" && args[0] === "version") {
         return "GitVersion:    v3.0.6\n";
       }
-      if (executable === "bun" && args.join(" ") === "run check") {
+      if (executable === "bun" && args.join(" ") === "run check:release-owner-gate") {
         return "";
       }
       if (executable === "git") {
@@ -1066,7 +1066,7 @@ describe("serial Form Package batch publication", () => {
       calls.filter(
         (call) =>
           call.executable === "bun" &&
-          call.args.join(" ") === "run check",
+          call.args.join(" ") === "run check:release-owner-gate",
       ),
     ).toHaveLength(1);
     expect(result.releases.map((release) => release.tag)).toEqual(
@@ -1168,7 +1168,7 @@ describe("serial Form Package batch publication", () => {
         if (executable === "cosign" && args[0] === "version") {
           return "GitVersion:    v3.0.6\n";
         }
-        if (executable === "bun" && args.join(" ") === "run check") {
+        if (executable === "bun" && args.join(" ") === "run check:release-owner-gate") {
           return "";
         }
         if (executable === "git") {
@@ -1272,7 +1272,7 @@ describe("serial Form Package batch publication", () => {
         calls.filter(
           (call) =>
             call.executable === "bun" &&
-            call.args.join(" ") === "run check",
+            call.args.join(" ") === "run check:release-owner-gate",
         ),
       ).toHaveLength(2);
     }
@@ -1954,7 +1954,7 @@ test("tag-only recovery completes the exact candidate Release without any tag mu
       (call) =>
         call.executable === "bun" &&
         call.args[0] === "run" &&
-        call.args[1] === "check",
+        call.args[1] === "check:release-owner-gate",
     ),
   ).toHaveLength(2);
   expect(
