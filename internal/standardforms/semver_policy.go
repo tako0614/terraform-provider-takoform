@@ -84,7 +84,10 @@ func verifyCandidateFormSemVer(root, definitionPath string) error {
 		releases = append(releases, release)
 	}
 	releases = append(releases, candidate)
-	return verifyFormSemVerSequence(releases)
+	if err := verifyFormSemVerSequence(releases); err != nil {
+		return err
+	}
+	return verifyCandidateBumpIsMinimal(history, candidate)
 }
 
 func loadFormSchemaHistories(root string) (map[string][]formSchemaRelease, error) {
@@ -257,6 +260,55 @@ func verifyFormSemVerSequence(releases []formSchemaRelease) error {
 				)
 			}
 		}
+	}
+	return nil
+}
+
+// verifyCandidateBumpIsMinimal rejects a candidate bump larger than its change
+// requires.
+//
+// The rest of this policy only proves a version is not too *low*. Nothing
+// stopped one being too high, and the version is hand-written in the catalog,
+// so an additive change could quietly take a major and burn a version line
+// nobody needed. A Form's major line is what a host pins, so spending one
+// costs every consumer a migration for no reason.
+//
+// This runs on candidates only. Published history is immutable and already
+// contains bumps that were larger than they needed to be; re-judging them
+// would block every future release to punish a version nobody can change.
+func verifyCandidateBumpIsMinimal(history []formSchemaRelease, candidate formSchemaRelease) error {
+	var previous *formSchemaRelease
+	for index := range history {
+		release := history[index]
+		if !stableFormVersionLess(release.Version, candidate.Version) {
+			continue
+		}
+		if previous == nil || stableFormVersionLess(previous.Version, release.Version) {
+			previous = &history[index]
+		}
+	}
+	{
+		current := candidate
+		if previous == nil || current.Version.Major == previous.Version.Major {
+			return nil
+		}
+		// A major line opened for a genuinely narrowing change is correct. One
+		// opened for a change that every earlier document still satisfies is
+		// not: that is a minor.
+		proof := schemaAcceptanceProof{
+			oldRoot: previous.DesiredSchema,
+			newRoot: current.DesiredSchema,
+		}
+		if err := proof.prove(
+			previous.DesiredSchema, current.DesiredSchema, "$", 0, map[string]bool{},
+		); err != nil {
+			return nil
+		}
+		return fmt.Errorf(
+			"%s %s opens a major line after %s, but every desired document valid "+
+				"under %s is still accepted, so this change is a minor release",
+			current.Kind, current.Version.Raw, previous.Version.Raw, previous.Version.Raw,
+		)
 	}
 	return nil
 }
