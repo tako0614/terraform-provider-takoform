@@ -173,16 +173,16 @@
       "kind": "RelationalDatabase",
       "slug": "relational-database",
       "releaseId": "k-kjswyylunfxw4ylmirqxiylcmfzwk",
-      "version": "3.0.0",
-      "tag": "forms/k-kjswyylunfxw4ylmirqxiylcmfzwk/v3.0.0",
-      "sourcePath": "forms/releases/k-kjswyylunfxw4ylmirqxiylcmfzwk/3.0.0",
+      "version": "2.0.0",
+      "tag": "forms/k-kjswyylunfxw4ylmirqxiylcmfzwk/v2.0.0",
+      "sourcePath": "forms/releases/k-kjswyylunfxw4ylmirqxiylcmfzwk/2.0.0",
       "formRef": {
         "apiVersion": "forms.takoform.com/v1alpha1",
         "kind": "RelationalDatabase",
-        "definitionVersion": "3.0.0",
-        "schemaDigest": "sha256:12d5355c91531b5134dca148f6b1b57957c5a952200b274dbfbdf7b7d0698976"
+        "definitionVersion": "2.0.0",
+        "schemaDigest": "sha256:3898f8ee507bcebd9e03e80fbc1931b67b477299b1ebe2ff395facb7acf018de"
       },
-      "packageDigest": "sha256:7fe413e6b438b24ecd824640d09bd76f6e15da07f1e1ea1efb51db121ebc8e50"
+      "packageDigest": "sha256:dc131e4858ddedbb84d553fdf7808c55fc898a37f15d84839e414fe3ca57c910"
     },
     {
       "kind": "IndexedStore",
