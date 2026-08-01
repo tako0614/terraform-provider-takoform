@@ -54,9 +54,6 @@ const (
 	GrammarCredentialFreeHTTPSURL Grammar = "credential-free-https-url"
 	GrammarRecordData             Grammar = "record-data" // DNS record value
 	GrammarRelativePath           Grammar = "relative-path"
-	// GrammarSHA256 is a bare or sha256-prefixed 64-hex digest. It binds a
-	// fetched URL to exact immutable bytes the same way an artifact source does.
-	GrammarSHA256 Grammar = "sha256"
 )
 
 // ConnectionMode says whether a Form declares connections to other Resources.
@@ -399,7 +396,7 @@ var Kinds = []Kind{
 		Interfaces: []Interface{{Name: "cache.store", Description: "Portable cache operations.", Operations: []string{"delete", "get", "put"}}},
 	},
 	{
-		Kind: "RelationalDatabase", DefinitionVersion: "3.0.0", Slug: "relational-database", ResourceType: "takoform_relational_database",
+		Kind: "RelationalDatabase", DefinitionVersion: "2.0.0", Slug: "relational-database", ResourceType: "takoform_relational_database",
 		Domain: "data", Title: "Relational Database",
 		Description: "Portable relational database addressed through an open engine capability token.",
 		Fields: []Field{
@@ -417,25 +414,6 @@ var Kinds = []Kind{
 				Example: "app", AltExample: "app_v2"},
 			{HCL: "high_availability", Wire: "highAvailability", Type: TypeBool,
 				Doc: "Whether the host should keep a standby able to take over.", Example: false},
-			// A database that declares a schema is converged to it during apply.
-			// The bundle is one immutable document carrying its migrations in
-			// order: naming a package registry here would put that registry in
-			// the portable contract, so a host unable to reach it could not
-			// apply a schema its own plan called applicable.
-			{HCL: "schema_url", Wire: "schemaUrl", Type: TypeString, Grammar: GrammarCredentialFreeHTTPSURL,
-				Doc:            "Optional immutable migration bundle the host applies in order. Userinfo, query, and fragment are forbidden because this value persists in nonsensitive state.",
-				Example:        "https://artifacts.portable-conformance.invalid/relational-schema.json",
-				AltExample:     "https://artifacts.portable-conformance.invalid/relational-schema-2.json",
-				CounterExample: "https://schema.invalid/bundle.json?download=1"},
-			{HCL: "schema_sha256", Wire: "schemaSha256", Type: TypeString, Grammar: GrammarSHA256,
-				Doc:            "Digest binding schema_url to exact immutable bytes.",
-				Example:        "1d2181e213a086ae9e025d235ff5e267c43ec60cf4fc2f966977a21f2a95ef7b",
-				AltExample:     "3b3f36501936a84ed19b9bef37e5581c3e04948733b947ebaa002f196e66817c",
-				CounterExample: "not-a-sha256"},
-			{HCL: "schema_format", Wire: "schemaFormat", Type: TypeString, Grammar: GrammarToken,
-				Doc:     "Open capability token naming how the bundle is interpreted.",
-				Example: "takosumi.resource-migrations", AltExample: "sql.ordered",
-				CounterExample: "not a token"},
 		},
 		Interfaces: []Interface{{
 			Name: "sql.query", Description: "Portable SQL query and transaction operations.",

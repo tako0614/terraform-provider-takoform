@@ -1,7 +1,7 @@
 {
   "apiVersion": "forms.takoform.com/v1alpha1",
   "kind": "RelationalDatabase",
-  "definitionVersion": "3.0.0",
+  "definitionVersion": "2.0.0",
   "title": "Relational Database",
   "description": "Portable relational database addressed through an open engine capability token.",
   "status": "standard",
@@ -28,19 +28,6 @@
         "maxLength": 63,
         "minLength": 1,
         "pattern": "^[a-z][a-z0-9-]{0,62}$",
-        "type": "string"
-      },
-      "schemaFormat": {
-        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
-        "type": "string"
-      },
-      "schemaSha256": {
-        "pattern": "^(sha256:)?[A-Fa-f0-9]{64}$",
-        "type": "string"
-      },
-      "schemaUrl": {
-        "format": "uri",
-        "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\\s?#]*)?$",
         "type": "string"
       },
       "sizeClass": {
@@ -262,24 +249,6 @@
       "name": "reject-database_name",
       "stage": "desired",
       "inputPath": "fixtures/negative-database_name.json",
-      "expectedFailure": "schema_validation_failed"
-    },
-    {
-      "name": "reject-schema_url",
-      "stage": "desired",
-      "inputPath": "fixtures/negative-schema_url.json",
-      "expectedFailure": "schema_validation_failed"
-    },
-    {
-      "name": "reject-schema_sha256",
-      "stage": "desired",
-      "inputPath": "fixtures/negative-schema_sha256.json",
-      "expectedFailure": "schema_validation_failed"
-    },
-    {
-      "name": "reject-schema_format",
-      "stage": "desired",
-      "inputPath": "fixtures/negative-schema_format.json",
       "expectedFailure": "schema_validation_failed"
     },
     {

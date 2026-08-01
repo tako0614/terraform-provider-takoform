@@ -25,7 +25,7 @@ price, or an implementation: those stay with the host that realizes the Form.
 | `ObjectLifecycleRule` | `takoform_object_lifecycle_rule` | `1.0.0` | One portable expiration or storage-transition action applied to a connected object store. |
 | `KeyValueStore` | `takoform_key_value_store` | `2.0.0` | Portable key/value state with an optional consistency preference. |
 | `CacheCluster` | `takoform_cache_cluster` | `1.0.0` | Portable in-memory cache sized by an open capability token. |
-| `RelationalDatabase` | `takoform_relational_database` | `3.0.0` | Portable relational database addressed through an open engine capability token. |
+| `RelationalDatabase` | `takoform_relational_database` | `2.0.0` | Portable relational database addressed through an open engine capability token. |
 | `IndexedStore` | `takoform_indexed_store` | `1.0.0` | Portable bounded key/value item store with declared queryable attributes and no query language. |
 | `Queue` | `takoform_queue` | `3.0.0` | Portable asynchronous delivery with at-least-once semantics. |
 | `StreamTopic` | `takoform_stream_topic` | `1.0.0` | Portable published event stream that many independent consumers can read. |

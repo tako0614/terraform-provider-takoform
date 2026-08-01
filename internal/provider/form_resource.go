@@ -289,7 +289,7 @@ func artifactSourceAttributes() map[string]schema.Attribute {
 		"artifact_url": schema.StringAttribute{
 			Required:    true,
 			Description: "Absolute credential-free HTTPS URL from which any conforming host can fetch the prebuilt artifact; userinfo, query, and fragment are forbidden because this value persists in nonsensitive state.",
-			Validators:  []validator.String{StringMatches(formcatalog.GoCredentialFreeHTTPSURLPattern, "artifact_url must be an absolute credential-free https URL without userinfo, query, or fragment")},
+			Validators:  []validator.String{StringMatches(formcatalog.PatternCredentialFreeHTTPSURL, "artifact_url must be an absolute credential-free https URL without userinfo, query, or fragment")},
 		},
 		"artifact_sha256": schema.StringAttribute{
 			Required:    true,

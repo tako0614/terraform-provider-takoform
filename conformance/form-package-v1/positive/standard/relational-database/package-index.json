@@ -1,56 +1,56 @@
 {
   "apiVersion": "packages.forms.takoform.com/v1alpha1",
   "kind": "FormPackage",
-  "packageVersion": "3.0.0",
+  "packageVersion": "2.0.0",
   "formRef": {
     "apiVersion": "forms.takoform.com/v1alpha1",
     "kind": "RelationalDatabase",
-    "definitionVersion": "3.0.0",
-    "schemaDigest": "sha256:12d5355c91531b5134dca148f6b1b57957c5a952200b274dbfbdf7b7d0698976"
+    "definitionVersion": "2.0.0",
+    "schemaDigest": "sha256:3898f8ee507bcebd9e03e80fbc1931b67b477299b1ebe2ff395facb7acf018de"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 7401,
-      "digest": "sha256:1f9c46c1ad8db7a6eda4c547466b04a285435b5b960a3569e63846d563fa2806"
+      "size": 6380,
+      "digest": "sha256:cb79cd40d8e5bb5b68f6a9cd4307f0924c93aaf88607808607bd6e8774a68e5a"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 410,
-      "digest": "sha256:9dc7a441bdf14c76ad6611adf57f2f1a79bfc24f2ce4cb51055365f0dd6ab755"
+      "size": 186,
+      "digest": "sha256:a2ac940e076380f9168e42caac98dea5ab84b92a39d71c5c00855bc50cbb7ee3"
     },
     {
       "path": "fixtures/negative-database_name.json",
       "mediaType": "application/json",
-      "size": 418,
-      "digest": "sha256:1b64f834d62bceaa5fcebe2bb7a786d777bca548e66f74552202d5d49e0cfb3a"
+      "size": 194,
+      "digest": "sha256:28b0af235cd968c4bd9bf8fad9caffea891025400a9f4a82e7d9c15f199413e9"
     },
     {
       "path": "fixtures/negative-engine.json",
       "mediaType": "application/json",
-      "size": 413,
-      "digest": "sha256:47f0a84e0336a999175c5262c01d9f6641279b6e5a57924baa7c20abe6849820"
+      "size": 189,
+      "digest": "sha256:e858183562db1ab227010b9ec66e939c4cd21dd230d3d7324c3ca0bbce1862d1"
     },
     {
       "path": "fixtures/negative-engine_version.json",
       "mediaType": "application/json",
-      "size": 421,
-      "digest": "sha256:e2aa01ac196328a68d8151a28b51f2823ae1d185fc9eb50969f45a9f6b406149"
+      "size": 197,
+      "digest": "sha256:ace87db278373085eae65b3e74e3ad17116ce2d5c28a1dad85e1182c50de31c3"
     },
     {
       "path": "fixtures/negative-missing-engine.json",
       "mediaType": "application/json",
-      "size": 386,
-      "digest": "sha256:d573ac528f26dd047c261b0280272c178113d0d385471fb32a5549f5e6d393c3"
+      "size": 162,
+      "digest": "sha256:bd00e6af473bc61d7daac35424ab598a7a2a40c124a166b40d448bd92bf19a49"
     },
     {
       "path": "fixtures/negative-missing-name.json",
       "mediaType": "application/json",
-      "size": 377,
-      "digest": "sha256:aaa15f14e92fddd974544c5023aa3be47d55d0b705f1cd6e2a13565154188d8f"
+      "size": 153,
+      "digest": "sha256:df5b745d02f46eb0533c667d2d223e4709d61203752b6d4f9db04063660f91c9"
     },
     {
       "path": "fixtures/negative-observed-foreign-kind-id.json",
@@ -59,34 +59,16 @@
       "digest": "sha256:92f0adf6e3afefccc4476c2a2433b93cf8c63da31fca7ab7182a63cbebc44802"
     },
     {
-      "path": "fixtures/negative-schema_format.json",
-      "mediaType": "application/json",
-      "size": 393,
-      "digest": "sha256:812633fc430c8af5b1af76516fa587a640b32d0eb9b9b3e66277f8a0f54db067"
-    },
-    {
-      "path": "fixtures/negative-schema_sha256.json",
-      "mediaType": "application/json",
-      "size": 358,
-      "digest": "sha256:d4cdc17086721cacc1189f6a4493281707dd8dedc38a7a3db84f5cc477122a66"
-    },
-    {
-      "path": "fixtures/negative-schema_url.json",
-      "mediaType": "application/json",
-      "size": 386,
-      "digest": "sha256:8fd3aa3741a005e4c6dbce70dd6f59e801fbcc0fbaf40a3b2d1c4957966820b8"
-    },
-    {
       "path": "fixtures/negative-size_class.json",
       "mediaType": "application/json",
-      "size": 413,
-      "digest": "sha256:294363688b7cef3d6ce001b3ac6cbfb31f36be527aa71603d2571269f72514cd"
+      "size": 189,
+      "digest": "sha256:60aee37c630f53815b5eec7563d9756bd1451fcfc482d0d3736ba5e715ace407"
     },
     {
       "path": "fixtures/negative-storage_gib.json",
       "mediaType": "application/json",
-      "size": 409,
-      "digest": "sha256:b2bf6e043fb1c8809763d091c564d8cf9dd1ee7fccecafd61803b9e5266bbdc0"
+      "size": 185,
+      "digest": "sha256:765c6e503b810f39134f5668f1ed5e7fd9b872686cc15c60c68d32a7da5c0cf0"
     },
     {
       "path": "fixtures/observed.json",
