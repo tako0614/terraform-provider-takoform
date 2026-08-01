@@ -287,30 +287,26 @@ func verifyCandidateBumpIsMinimal(history []formSchemaRelease, candidate formSch
 			previous = &history[index]
 		}
 	}
-	{
-		current := candidate
-		if previous == nil || current.Version.Major == previous.Version.Major {
-			return nil
-		}
-		// A major line opened for a genuinely narrowing change is correct. One
-		// opened for a change that every earlier document still satisfies is
-		// not: that is a minor.
-		proof := schemaAcceptanceProof{
-			oldRoot: previous.DesiredSchema,
-			newRoot: current.DesiredSchema,
-		}
-		if err := proof.prove(
-			previous.DesiredSchema, current.DesiredSchema, "$", 0, map[string]bool{},
-		); err != nil {
-			return nil
-		}
-		return fmt.Errorf(
-			"%s %s opens a major line after %s, but every desired document valid "+
-				"under %s is still accepted, so this change is a minor release",
-			current.Kind, current.Version.Raw, previous.Version.Raw, previous.Version.Raw,
-		)
+	if previous == nil || candidate.Version.Major == previous.Version.Major {
+		return nil
 	}
-	return nil
+	// A major line opened for a genuinely narrowing change is correct. One
+	// opened for a change that every earlier document still satisfies is not:
+	// that is a minor.
+	proof := schemaAcceptanceProof{
+		oldRoot: previous.DesiredSchema,
+		newRoot: candidate.DesiredSchema,
+	}
+	if err := proof.prove(
+		previous.DesiredSchema, candidate.DesiredSchema, "$", 0, map[string]bool{},
+	); err != nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"%s %s opens a major line after %s, but every desired document valid "+
+			"under %s is still accepted, so this change is a minor release",
+		candidate.Kind, candidate.Version.Raw, previous.Version.Raw, previous.Version.Raw,
+	)
 }
 
 type schemaAcceptanceProof struct {
