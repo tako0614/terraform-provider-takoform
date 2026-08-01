@@ -71,6 +71,14 @@ func TestCommittedPublishedReleaseSourcesCoverCurrentPlanAndHistory(t *testing.T
 			pending++
 			continue
 		}
+		if source.AdmissionGeneration == "" {
+			// Tagged and byte-verified against the plan by
+			// verifyLocalPublishedFormTags, but not yet snapshotted into an
+			// admission generation. That is the state between publishing a
+			// release and retaining it, and it is not drift.
+			pending++
+			continue
+		}
 		if source.AdmissionGeneration != "v4" ||
 			source.Tag != release.Tag ||
 			source.FormRef != release.FormRef ||
