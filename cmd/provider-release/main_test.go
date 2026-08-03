@@ -30,8 +30,8 @@ func TestReleaseDescriptorPinsPublicIdentityAndSigner(t *testing.T) {
 	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
 		t.Fatalf("CLI/FQN matrix: %v", err)
 	}
-	if desc.Version != "1.0.2" {
-		t.Fatalf("current provider candidate must be 1.0.2, got %q", desc.Version)
+	if desc.Version != "1.0.3" {
+		t.Fatalf("current provider candidate must be 1.0.3, got %q", desc.Version)
 	}
 	if err := validateVersioningPolicy(desc.Versioning); err != nil {
 		t.Fatalf("versioning policy: %v", err)

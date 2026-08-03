@@ -8,6 +8,45 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
+func TestRelationalDatabaseSchemaFieldsAreOptionalAndTyped(t *testing.T) {
+	t.Parallel()
+
+	kind, ok := ByKind("RelationalDatabase")
+	if !ok {
+		t.Fatal("RelationalDatabase is not declared")
+	}
+	want := map[string]struct {
+		wire    string
+		grammar Grammar
+	}{
+		"schema_url":    {wire: "schemaUrl", grammar: GrammarCredentialFreeHTTPSURL},
+		"schema_sha256": {wire: "schemaSha256", grammar: GrammarSHA256},
+		"schema_format": {wire: "schemaFormat", grammar: GrammarToken},
+	}
+	for _, field := range kind.Fields {
+		expected, tracked := want[field.HCL]
+		if !tracked {
+			continue
+		}
+		if field.Required {
+			t.Errorf("%s must remain optional", field.HCL)
+		}
+		if field.Type != TypeString {
+			t.Errorf("%s type = %q, want %q", field.HCL, field.Type, TypeString)
+		}
+		if field.Wire != expected.wire {
+			t.Errorf("%s wire = %q, want %q", field.HCL, field.Wire, expected.wire)
+		}
+		if field.Grammar != expected.grammar {
+			t.Errorf("%s grammar = %q, want %q", field.HCL, field.Grammar, expected.grammar)
+		}
+		delete(want, field.HCL)
+	}
+	for field := range want {
+		t.Errorf("RelationalDatabase is missing %s", field)
+	}
+}
+
 func TestArtifactFormsRequirePortableDigestBoundHTTPSBytes(t *testing.T) {
 	t.Parallel()
 

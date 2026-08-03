@@ -16,7 +16,8 @@ means replacing them.
 
 `release/version.json` retains `publicationStatus: candidate-only` as
 release-descriptor metadata from the candidate that minted `v1.0.2`. It is not
-live availability state. The signed release and authenticated canonical
+live availability state; it currently records candidate `v1.0.3`. The signed
+release and authenticated canonical
 Registry readback establish that `v1.0.2` is published.
 
 ## Provider release trust

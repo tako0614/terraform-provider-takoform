@@ -40,8 +40,10 @@ is `registry.terraform.io/tako0614/takoform`.
 `release/version.json` retains `publicationStatus: candidate-only` as
 release-descriptor metadata, not live availability state. It does not override
 the signed provider release and canonical Registry readback that establish
-provider publication. The protected admission tag and offline-authenticated
-retained closure separately establish Standard Form admission.
+provider publication. The descriptor currently records candidate `v1.0.3`,
+while the latest published provider remains `v1.0.2`. The protected admission
+tag and offline-authenticated retained closure separately establish Standard
+Form admission.
 
 See [versioning](../spec/versioning.md), the
 [generated Form inventory](../forms/README.md), and
@@ -68,15 +70,16 @@ composition, if a host offers it, is outside portable Resource desired state.
 
 ## Configuration
 
-The following configuration pins the exact published `v1.0.2` release in the
-provider's `v1` compatibility line.
+The following configuration pins the current candidate descriptor `v1.0.3` in
+the provider's `v1` compatibility line. The latest published provider remains
+`v1.0.2`.
 
 ```hcl
 terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.2"
+      version = "= 1.0.3"
     }
   }
 }
@@ -99,7 +102,7 @@ To verify the source and portable conformance corpus independently:
 ```console
 git clone https://github.com/tako0614/terraform-provider-takoform.git
 cd terraform-provider-takoform
-git checkout --detach v1.0.2
+git checkout --detach v1.0.3
 bun run check
 ```
 

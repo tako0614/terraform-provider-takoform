@@ -106,7 +106,7 @@
   <span class="k">required_providers</span> {
     takoform = {
       <span class="a">source</span>  = <span class="s">"registry.terraform.io/tako0614/takoform"</span>
-      <span class="a">version</span> = <span class="s">"= 1.0.2"</span>
+      <span class="a">version</span> = <span class="s">"= 1.0.3"</span>
     }
   }
 }
@@ -445,6 +445,7 @@
       and the current <code>ga-core-v2</code> closure does not inherit those
       proofs. In the source descriptor,
       <code>publicationStatus: candidate-only</code> is candidate metadata;
+      the descriptor currently records candidate <code>v1.0.3</code>, while
       signed release and readback evidence establish the live status of
       <code>v1.0.2</code>.
     </p>
@@ -542,7 +543,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
   <span class="k">required_providers</span> {
     takoform = {
       <span class="a">source</span>  = <span class="s">"registry.terraform.io/tako0614/takoform"</span>
-      <span class="a">version</span> = <span class="s">"= 1.0.2"</span>
+      <span class="a">version</span> = <span class="s">"= 1.0.3"</span>
     }
   }
 }
@@ -800,7 +801,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
         </ul>
       </div>
     </div>
-    <p class="fineprint">作り直す前に公開した過去の世代は、消さずに retire しています。リリースの immutable bytes・署名・admission の証跡はそのまま残り、いまもオフラインで検証できます。書き換えも署名し直しもしませんし、現在の <code>ga-core-v2</code> closure がその証跡を引き継ぐこともありません。source descriptor の <code>publicationStatus: candidate-only</code> は candidate metadata であり、<code>v1.0.2</code> の live status は署名付き release と readback evidence が確定します。</p>
+    <p class="fineprint">作り直す前に公開した過去の世代は、消さずに retire しています。リリースの immutable bytes・署名・admission の証跡はそのまま残り、いまもオフラインで検証できます。書き換えも署名し直しもしませんし、現在の <code>ga-core-v2</code> closure がその証跡を引き継ぐこともありません。source descriptor の <code>publicationStatus: candidate-only</code> は candidate metadata であり、descriptor は candidate <code>v1.0.3</code> を記録します。<code>v1.0.2</code> の live status は署名付き release と readback evidence が確定します。</p>
   </div>
 </section>
 
