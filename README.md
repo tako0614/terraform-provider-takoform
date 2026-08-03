@@ -43,8 +43,9 @@ unversioned lane to downgrade into.
 
 `release/version.json` intentionally retains
 `publicationStatus: candidate-only` as release-descriptor metadata from the
-candidate that minted `v1.0.2`. That field is not live availability state. The
-signed release and canonical Registry readback establish provider publication.
+candidate that minted `v1.0.2`. The descriptor now records candidate `v1.0.3`;
+that metadata is not live availability state. The signed release and canonical
+Registry readback establish provider publication.
 The protected admission tag and offline-authenticated retained closure
 separately establish Standard Form admission.
 

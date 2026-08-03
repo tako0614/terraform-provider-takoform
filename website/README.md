@@ -154,7 +154,8 @@ remaining 24 are published but not admitted. The API nevertheless remains
 `forms.takoform.com/v1alpha1`.
 
 `release/version.json` keeps `publicationStatus: candidate-only` as descriptor
-metadata and must not be presented as live availability state. Any later
+metadata and currently records candidate `v1.0.3`; it must not be presented as
+live availability state. Any later
 publication, admission, or revocation claim still requires the corresponding
 retained evidence. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),

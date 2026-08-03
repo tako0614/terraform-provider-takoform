@@ -22,12 +22,20 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-Provider `v1.0.2` is the current published `v1` release. Its signed GitHub
-Release and authenticated Terraform/OpenTofu installation readback from the
-canonical Registry are retained evidence. `release/version.json` continues to
-say `publicationStatus: candidate-only` because it is the descriptor metadata
-for the candidate that minted this immutable release, not a live availability
-field.
+Provider `v1.0.3` is the current release candidate. Provider `v1.0.2` remains
+the current published `v1` release until the signed GitHub Release and
+authenticated Terraform/OpenTofu Registry readback for `v1.0.3` complete.
+`release/version.json` says `publicationStatus: candidate-only` because it is
+candidate metadata, not a live availability field.
+
+## Provider v1.0.3 RelationalDatabase schema inputs
+
+Provider `v1.0.3` exposes the existing optional `schema_url`,
+`schema_sha256`, and `schema_format` fields of the immutable
+`RelationalDatabase@3.0.0` Form as typed HCL attributes. It does not mint or
+replace a Form identity. Hosts remain responsible for fetching the exact
+digest-bound schema bundle and converging it before reporting the Resource
+Ready.
 
 ## Provider v1.0.2 Interface URL addition
 
@@ -283,7 +291,7 @@ descriptor tag and current protected-main commit:
 
 ```console
 bun run deploy -- takoform-provider-release prepare \
-  --tag v1.0.2 \
+  --tag v1.0.3 \
   --expected-commit <40-character-protected-main-commit>
 ```
 
@@ -303,7 +311,7 @@ exact signed-tag run through the same owner entrypoint:
 
 ```console
 bun run deploy -- takoform-provider-release tag \
-  --tag v1.0.2 \
+  --tag v1.0.3 \
   --expected-commit <same-40-character-commit> \
   --run-id <signed-tag-workflow-run-id> \
   --run-attempt <signed-tag-workflow-attempt>
@@ -340,7 +348,7 @@ After that second run succeeds, publish only its exact run/attempt:
 
 ```console
 bun run deploy -- takoform-provider-release publish \
-  --tag v1.0.2 \
+  --tag v1.0.3 \
   --expected-commit <same-40-character-commit> \
   --run-id <provider-release-candidate-run-id> \
   --run-attempt <provider-release-candidate-run-attempt>
@@ -363,7 +371,7 @@ intentionally unusable. Complete only that exact partial identity with:
 
 ```console
 bun run deploy -- takoform-provider-release recover-tag-only \
-  --tag v1.0.2 \
+  --tag v1.0.3 \
   --expected-release-commit <signed-tag-peeled-release-commit-E> \
   --expected-tag-object <exact-annotated-signed-tag-object> \
   --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
@@ -377,7 +385,7 @@ documentation. It requires current protected `main` to equal `F`; the exact
 local and remote annotated tag object must still peel to `E` and verify with
 the pinned provider key; the GitHub Release and Registry version must still be
 absent; and the successful candidate run must have exact head `E`, branch
-`v1.0.2`, run, attempt, checksums, 15 assets, GPG signatures, and provenance.
+`v1.0.3`, run, attempt, checksums, 15 assets, GPG signatures, and provenance.
 The owner gate and the same recovery fence run immediately before draft
 creation and again immediately before publication. Recovery never moves,
 deletes, or recreates the tag.
@@ -387,7 +395,7 @@ identity:
 
 ```console
 bun run deploy -- takoform-provider-release recover-draft \
-  --tag v1.0.2 \
+  --tag v1.0.3 \
   --expected-release-commit <signed-tag-peeled-release-commit-E> \
   --expected-tag-object <exact-annotated-signed-tag-object> \
   --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
@@ -425,11 +433,11 @@ provider bytes as having been built from `F`.
 
 ```console
 bun run deploy -- takoform-provider-release readback \
-  --tag v1.0.2 \
+  --tag v1.0.3 \
   --expected-commit <current-reviewed-protected-main-source-commit>
 
 bun run deploy -- takoform-provider-release verify \
-  --tag v1.0.2 \
+  --tag v1.0.3 \
   --expected-commit <same-current-reviewed-protected-main-source-commit> \
   --run-id <registry-readback-workflow-run-id> \
   --run-attempt <registry-readback-workflow-attempt>

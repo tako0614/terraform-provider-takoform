@@ -136,7 +136,7 @@
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.2"
+      version = "= 1.0.3"
     }
   }
 }
@@ -317,7 +317,8 @@ resource "takoform_object_bucket" "assets" {
           <p class="fineprint">
             <code>release/version.json</code> retains
             <code>publicationStatus: candidate-only</code> as descriptor
-            metadata, not live availability state. The signed release and
+            metadata and records candidate <code>v1.0.3</code>, not live
+            availability state. The signed release and
             Registry readback establish provider publication; the protected
             admission tag and retained closure separately establish Standard
             Form admission.
