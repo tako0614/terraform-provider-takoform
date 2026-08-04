@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/admissioncheckpoint"
+	"github.com/tako0614/terraform-provider-takoform/internal/formpublication"
 )
 
 type publishedReleaseSource struct {
@@ -129,10 +131,80 @@ func discoverPublishedReleaseSources(root string) (map[string]publishedReleaseSo
 	if err := verifyRetainedPublishedPackageSets(root, generations, byManifest); err != nil {
 		return nil, err
 	}
+	if err := mergeHistoricalCheckpointPublications(root, published); err != nil {
+		return nil, err
+	}
 	if err := verifyLocalPublishedFormTags(root, published); err != nil {
 		return nil, err
 	}
 	return published, nil
+}
+
+func mergeHistoricalCheckpointPublications(
+	root string,
+	published map[string]publishedReleaseSource,
+) error {
+	ledgerPath := filepath.Join(root, filepath.FromSlash(admissioncheckpoint.CurrentIdentityLedgerPath))
+	if _, err := os.Lstat(ledgerPath); err != nil {
+		if os.IsNotExist(err) {
+			// Minimal package fixtures predate the admission identity ledger.
+			return nil
+		}
+		return fmt.Errorf("inspect admission identity ledger: %w", err)
+	}
+	_, ledger, err := admissioncheckpoint.LoadCurrent(root)
+	if err != nil {
+		return fmt.Errorf("load admission checkpoint identities: %w", err)
+	}
+	for _, identity := range ledger.Entries {
+		if identity.Status != "assigned-historical" {
+			continue
+		}
+		sets, err := formpublication.VerifyHistoricalCheckpoint(
+			root,
+			formpublication.HistoricalCheckpoint{
+				Tag: identity.Tag, TagObject: identity.TagObject, Commit: identity.Commit,
+			},
+		)
+		if err != nil {
+			return err
+		}
+		for _, set := range sets {
+			for _, entry := range set.Entries {
+				source := publishedReleaseSource{
+					AdmissionGeneration: "historical:" + identity.Version,
+					ReleaseID:           entry.ReleaseID,
+					Version:             entry.Version,
+					Tag:                 entry.Tag,
+					FormRef:             entry.FormRef,
+					PackageDigest:       entry.PackageDigest,
+					SourcePath:          entry.SourcePath,
+				}
+				key := publishedReleaseKey(source.ReleaseID, source.Version)
+				previous, duplicate := published[key]
+				if duplicate {
+					if !samePublishedReleaseIdentity(previous, source) {
+						return fmt.Errorf(
+							"historical admission checkpoint %s conflicts with retained Form %s@%s",
+							identity.Tag, source.FormRef.Kind, source.Version,
+						)
+					}
+					continue
+				}
+				published[key] = source
+			}
+		}
+	}
+	return nil
+}
+
+func samePublishedReleaseIdentity(left, right publishedReleaseSource) bool {
+	return left.ReleaseID == right.ReleaseID &&
+		left.Version == right.Version &&
+		left.Tag == right.Tag &&
+		left.FormRef == right.FormRef &&
+		left.PackageDigest == right.PackageDigest &&
+		left.SourcePath == right.SourcePath
 }
 
 func verifyRetainedReleaseSource(root, generation, releaseID, version string) (publishedReleaseSource, error) {
