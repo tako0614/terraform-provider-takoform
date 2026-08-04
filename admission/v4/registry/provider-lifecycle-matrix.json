@@ -2,9 +2,9 @@
   "format": "takoform.provider-cli-fqn-matrix@v3",
   "classification": "supported-cli-fqn-candidate-matrix",
   "publicationReady": false,
-  "releaseDescriptorSha256": "sha256:5d260767c17df699d9b1081932cffe1451439e54f2dbb02fc1171c0dc3524ab0",
-  "candidateSetSha256": "sha256:24e88f7076c14e0eb3bb44776b52ceaa5a37c204f97cec0d0d5260af79b0aedb",
-  "providerSchemaSha256": "sha256:8a7940667c906265e189705b6ffd1e92b6f0240ab85d38a4e4feea0998381023",
+  "releaseDescriptorSha256": "sha256:6ecadb65485f3098381e84292125ef9722ccf433d7f97c0d65cb4269e928ee90",
+  "candidateSetSha256": "sha256:48e530c3054c0d6e6909df8aee87b830e3d4bdbc0c559d43b2c3c3c94e218cb7",
+  "providerSchemaSha256": "sha256:5950927139fc85e9cea8d46889c04ecfccaefcf6d04726e29f3127651c78ac5a",
   "installationSource": "direct-registry-install",
   "reports": [
     {
@@ -15,18 +15,18 @@
       "runnerSubject": "takoform.provider-binary-cli-runner@v1",
       "protocol": "Terraform provider protocol v6 + versioned Form host HTTP",
       "installationSource": "direct-registry-install",
-      "candidateSetSha256": "sha256:24e88f7076c14e0eb3bb44776b52ceaa5a37c204f97cec0d0d5260af79b0aedb",
-      "providerSchemaSha256": "sha256:8a7940667c906265e189705b6ffd1e92b6f0240ab85d38a4e4feea0998381023",
+      "candidateSetSha256": "sha256:48e530c3054c0d6e6909df8aee87b830e3d4bdbc0c559d43b2c3c3c94e218cb7",
+      "providerSchemaSha256": "sha256:5950927139fc85e9cea8d46889c04ecfccaefcf6d04726e29f3127651c78ac5a",
       "providerBinary": {
-        "version": "1.0.1",
-        "sha256": "sha256:bd8db2278e34e03f8a78648ed8355e434ac9c87ef78f4129960cb6a89ef0ad45"
+        "version": "1.0.3",
+        "sha256": "sha256:0adff29046a41114006fefb3bcce345ba2f06230ae41e44ee9671f70bad8042d"
       },
       "cli": {
         "product": "OpenTofu",
-        "version": "1.12.1",
+        "version": "1.12.3",
         "providerAddress": "registry.terraform.io/tako0614/takoform",
         "executableName": "tofu",
-        "executableSha256": "sha256:b6cb308bd699c8b53882319986f339eeaa44f925a68f12d5b0a14e6caceedf23"
+        "executableSha256": "sha256:d5e3276d613fdc070178ad6b0eb545f79a05e9aeae51f3c20024d21362fe25c6"
       },
       "resources": [
         {
@@ -841,11 +841,11 @@
       "runnerSubject": "takoform.provider-binary-cli-runner@v1",
       "protocol": "Terraform provider protocol v6 + versioned Form host HTTP",
       "installationSource": "direct-registry-install",
-      "candidateSetSha256": "sha256:24e88f7076c14e0eb3bb44776b52ceaa5a37c204f97cec0d0d5260af79b0aedb",
-      "providerSchemaSha256": "sha256:8a7940667c906265e189705b6ffd1e92b6f0240ab85d38a4e4feea0998381023",
+      "candidateSetSha256": "sha256:48e530c3054c0d6e6909df8aee87b830e3d4bdbc0c559d43b2c3c3c94e218cb7",
+      "providerSchemaSha256": "sha256:5950927139fc85e9cea8d46889c04ecfccaefcf6d04726e29f3127651c78ac5a",
       "providerBinary": {
-        "version": "1.0.1",
-        "sha256": "sha256:bd8db2278e34e03f8a78648ed8355e434ac9c87ef78f4129960cb6a89ef0ad45"
+        "version": "1.0.3",
+        "sha256": "sha256:0adff29046a41114006fefb3bcce345ba2f06230ae41e44ee9671f70bad8042d"
       },
       "cli": {
         "product": "Terraform",
