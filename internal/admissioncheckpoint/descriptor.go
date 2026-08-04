@@ -168,6 +168,10 @@ func (ledger IdentityLedger) Validate(root string, descriptor Descriptor) error 
 			},
 		},
 		{
+			Version: "1.0.6", Tag: "forms/admissions/v1.0.6", Status: "assigned-historical",
+			TagObject: "b34b13a6e2fd3acbcbd73935e3e353f5d05b5c31", Commit: "1e438d61ed77f1ccfd3e000250f7dcf0c578c1af",
+		},
+		{
 			Version: descriptor.Version, Tag: descriptor.Tag, Status: "assigned-current",
 			DescriptorPath: CurrentDescriptorPath,
 		},

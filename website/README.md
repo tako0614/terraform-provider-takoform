@@ -149,7 +149,7 @@ operator and are never committed here.
 The site must claim nothing beyond signed, committed evidence in this
 repository. The current public truth is: provider `v1.0.2` is published and
 Registry-verified; all 34 current Form Packages are published and immutable;
-`forms/admissions/v1.0.6` admits exactly 10 as `portable-standard`; and the
+`forms/admissions/v1.0.7` admits exactly 10 as `portable-standard`; and the
 remaining 24 are published but not admitted. The API nevertheless remains
 `forms.takoform.com/v1alpha1`.
 

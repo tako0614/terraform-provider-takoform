@@ -268,7 +268,7 @@ The admission tag is intentionally unsigned and has no GitHub Release:
 authenticity comes from the separately Sigstore-signed retained evidence, while
 the protected ref provides its immutable source identity. Version `1.0.5` is
 permanently reserved and abandoned because v3 candidates already used it; the
-current assignment is `1.0.6` / `forms/admissions/v1.0.6`. Never reuse, replace,
+current assignment is `1.0.7` / `forms/admissions/v1.0.7`. Never reuse, replace,
 or move either identity.
 
 The tagged closure commit may later be an ancestor of `main`, but its complete
