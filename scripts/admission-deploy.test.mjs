@@ -55,7 +55,9 @@ describe("admission deploy surface", () => {
       "authority",
       "published-identity",
     ]);
-    expect(ADMISSION_SURFACE.requiresScripts).toContain("check");
+    expect(ADMISSION_SURFACE.requiresScripts).toEqual([
+      "check:release-owner-gate",
+    ]);
     expect(ADMISSION_SURFACE.requiresTools).toEqual(["git", "bun", "go", "gh"]);
     expect(ADMISSION_SURFACE.requiresEnv).toEqual(["GH_TOKEN"]);
     expect(Object.keys(ADMISSION_SURFACE.obligations).sort()).toEqual(
@@ -257,6 +259,14 @@ describe("admission deploy execution", () => {
     });
     expect(prepared.status).toBe("READY");
     expect(fake.state.local).toBeNull();
+    expect(
+      fake.state.calls.some(
+        ([command, args]) =>
+          command === "bun" &&
+          JSON.stringify(args) ===
+            JSON.stringify(["run", "check:release-owner-gate"]),
+      ),
+    ).toBe(true);
 
     const published = await runAdmissionSurface({
       surface: ADMISSION_SURFACE.surface,

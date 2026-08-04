@@ -96,7 +96,7 @@ export const ADMISSION_SURFACE = Object.freeze({
     "internal/admissioncheckpoint",
     "internal/admissionrelease",
   ],
-  requiresScripts: ["check"],
+  requiresScripts: ["check:release-owner-gate"],
   requiresTools: ["git", "bun", "go", "gh"],
   requiresEnv: ["GH_TOKEN"],
   triggers: ["authority", "published-identity"],
@@ -840,7 +840,7 @@ function sameTagProtection(left, right) {
 }
 
 function runOwnerGate(context) {
-  runCommand(context, "bun", ["run", "check"]);
+  runCommand(context, "bun", ["run", "check:release-owner-gate"]);
 }
 
 function requirePreMutationSourceFence(context, expectedCommit) {
