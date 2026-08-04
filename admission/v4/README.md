@@ -79,8 +79,8 @@ GitHub Release is created.
 Version `1.0.5` is permanently `reserved-abandoned`: retained v3 candidate
 paths and its signed Actions candidate already used that checkpoint identity,
 even though no remote admission tag was minted. It must never be reused.
-The next assignable checkpoint is the descriptor-pinned `1.0.6` /
-`forms/admissions/v1.0.6`; `admission/admission-identities.json` records only
+The current assigned checkpoint is the descriptor-pinned `1.0.7` /
+`forms/admissions/v1.0.7`; `admission/admission-identities.json` records only
 assignment state and is not proof of live publication.
 
 The closure commit may later become an ancestor of `main`. This is safe only

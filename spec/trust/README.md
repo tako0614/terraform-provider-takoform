@@ -109,7 +109,7 @@ revocation consumption remain host/operator work.
 The generated all-34 source inventory remains `structural-candidate`; that
 local classification and definition `status: standard` do not admit a Form.
 The exact 10 package identities authenticated by the retained v4 closure and
-protected `forms/admissions/v1.0.6` tag are `portable-standard`. The other 24
+protected `forms/admissions/v1.0.7` tag are `portable-standard`. The other 24
 are published but not admitted. The retained Takosumi host closure proves only
 those exact 10 on that host. Source definition status, package publication, or
 a different host report cannot inherit that classification. The legacy
@@ -123,7 +123,7 @@ produced signed host reports, all-34 provider reports, one canonical Registry
 readback, and 10 admission-evidence subjects. Reviewed source retains those
 exact candidates, package-release readbacks, and the resulting admission set.
 The closure gate authenticates them offline and resolves the exact provider,
-package, and `forms/admissions/v1.0.6` tags. It publishes no aggregate archive
+package, and `forms/admissions/v1.0.7` tags. It publishes no aggregate archive
 or GitHub Release and performs no controller promotion. Provider GPG
 authority, independent package publisher identity, and host, provider,
 Registry-readback, and admission-evidence identities remain distinct.

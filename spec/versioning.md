@@ -39,7 +39,7 @@ surface. It does not graduate the portable API group, admit a Form as
 Provider `v1.0.2` is published and verified by authenticated direct Registry
 installation with Terraform and OpenTofu. All 34 current Form Packages are
 published as immutable identities. The protected
-`forms/admissions/v1.0.6` closure admits exactly 10 as `portable-standard`; the
+`forms/admissions/v1.0.7` closure admits exactly 10 as `portable-standard`; the
 remaining 24 are published but not admitted. Package publication grants no
 admission by itself. Neither those publication facts nor the admission
 graduates

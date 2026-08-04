@@ -72,6 +72,13 @@ const PINNED_IDENTITIES = Object.freeze([
   {
     version: "1.0.6",
     tag: "forms/admissions/v1.0.6",
+    status: "assigned-historical",
+    tagObject: "b34b13a6e2fd3acbcbd73935e3e353f5d05b5c31",
+    commit: "1e438d61ed77f1ccfd3e000250f7dcf0c578c1af",
+  },
+  {
+    version: "1.0.7",
+    tag: "forms/admissions/v1.0.7",
     status: "assigned-current",
     descriptorPath: DESCRIPTOR_PATH,
   },
@@ -95,7 +102,7 @@ export const ADMISSION_SURFACE = Object.freeze({
   triggers: ["authority", "published-identity"],
   obligations: {
     provenance:
-      "requires a clean non-shallow protected main checkout equal to a fresh canonical origin/main read, runs the complete owner check plus the current source-retained admission-material check, uses GH_TOKEN only for read-only gh API calls that prove exact active admission-tag rulesets, derives v1.0.6 and its tag only from the reviewed descriptor, and binds the exact commit, tree, descriptor digest, assignment-ledger digest, and retained-set digest into the annotated tag message",
+      "requires a clean non-shallow protected main checkout equal to a fresh canonical origin/main read, runs the complete owner check plus the current source-retained admission-material check, uses GH_TOKEN only for read-only gh API calls that prove exact active admission-tag rulesets, derives v1.0.7 and its tag only from the reviewed descriptor, and binds the exact commit, tree, descriptor digest, assignment-ledger digest, and retained-set digest into the annotated tag message",
     "post-conditions":
       "immediately re-reads the same exact active admission-tag ruleset protection, reads the authoritative remote annotated tag object and peeled commit, requires its exact retained-source message, and runs the exact current-admission-closure-check over the Sigstore-authenticated source-retained evidence and immutable provider/package refs",
     reversal:

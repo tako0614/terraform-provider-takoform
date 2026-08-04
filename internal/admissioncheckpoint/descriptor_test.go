@@ -9,8 +9,8 @@ import (
 
 const validDescriptor = `{
   "format": "takoform.standard-admission-checkpoint@v1",
-  "version": "1.0.6",
-  "tag": "forms/admissions/v1.0.6",
+  "version": "1.0.7",
+  "tag": "forms/admissions/v1.0.7",
   "generation": "ga-core-v2",
   "retainedRoot": "admission/v4"
 }
@@ -60,6 +60,13 @@ const validIdentityLedger = `{
     {
       "version": "1.0.6",
       "tag": "forms/admissions/v1.0.6",
+      "status": "assigned-historical",
+      "tagObject": "b34b13a6e2fd3acbcbd73935e3e353f5d05b5c31",
+      "commit": "1e438d61ed77f1ccfd3e000250f7dcf0c578c1af"
+    },
+    {
+      "version": "1.0.7",
+      "tag": "forms/admissions/v1.0.7",
       "status": "assigned-current",
       "descriptorPath": "admission/v4/version.json"
     }
@@ -75,31 +82,35 @@ func TestLoadCurrentDescriptorPinsVersionTagAndGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if descriptor.Version != "1.0.6" ||
-		descriptor.Tag != "forms/admissions/v1.0.6" ||
+	if descriptor.Version != "1.0.7" ||
+		descriptor.Tag != "forms/admissions/v1.0.7" ||
 		descriptor.Generation != "ga-core-v2" ||
 		descriptor.RetainedRoot != "admission/v4" {
 		t.Fatalf("unexpected descriptor: %#v", descriptor)
 	}
-	if len(ledger.Entries) != 6 ||
+	if len(ledger.Entries) != 7 ||
 		ledger.Entries[4].Status != "reserved-abandoned" ||
-		ledger.Entries[5].Status != "assigned-current" {
+		ledger.Entries[5].Status != "assigned-historical" ||
+		ledger.Entries[6].Status != "assigned-current" {
 		t.Fatalf("unexpected identity ledger: %#v", ledger)
 	}
 }
 
-func TestRepositoryCurrentDescriptorReservesAbandonedV105AndAssignsV106(t *testing.T) {
+func TestRepositoryCurrentDescriptorReservesAbandonedV105AndAssignsV107(t *testing.T) {
 	t.Parallel()
 	root := filepath.Clean(filepath.Join("..", ".."))
 	descriptor, ledger, err := LoadCurrent(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if descriptor.Version != "1.0.6" || descriptor.Tag != "forms/admissions/v1.0.6" {
-		t.Fatalf("current identity = %s / %s, want exact v1.0.6", descriptor.Version, descriptor.Tag)
+	if descriptor.Version != "1.0.7" || descriptor.Tag != "forms/admissions/v1.0.7" {
+		t.Fatalf("current identity = %s / %s, want exact v1.0.7", descriptor.Version, descriptor.Tag)
 	}
 	if ledger.Entries[4].Version != "1.0.5" || ledger.Entries[4].Status != "reserved-abandoned" {
 		t.Fatalf("v1.0.5 is not permanently reserved: %#v", ledger.Entries[4])
+	}
+	if ledger.Entries[5].Version != "1.0.6" || ledger.Entries[5].Status != "assigned-historical" {
+		t.Fatalf("v1.0.6 is not historical: %#v", ledger.Entries[5])
 	}
 }
 
@@ -110,13 +121,13 @@ func TestLoadCurrentDescriptorRejectsDrift(t *testing.T) {
 			return strings.Replace(raw, `"retainedRoot": "admission/v4"`, `"retainedRoot": "admission/v4", "status": "published"`, 1)
 		},
 		"prerelease": func(raw string) string {
-			return strings.ReplaceAll(raw, "1.0.6", "1.0.6-rc.1")
+			return strings.ReplaceAll(raw, "1.0.7", "1.0.7-rc.1")
 		},
 		"leading zero": func(raw string) string {
-			return strings.ReplaceAll(raw, "1.0.6", "1.0.06")
+			return strings.ReplaceAll(raw, "1.0.7", "1.0.07")
 		},
 		"tag mismatch": func(raw string) string {
-			return strings.Replace(raw, `"tag": "forms/admissions/v1.0.6"`, `"tag": "forms/admissions/v1.0.7"`, 1)
+			return strings.Replace(raw, `"tag": "forms/admissions/v1.0.7"`, `"tag": "forms/admissions/v1.0.6"`, 1)
 		},
 		"generation mismatch": func(raw string) string {
 			return strings.Replace(raw, `"generation": "ga-core-v2"`, `"generation": "ga-core-v1"`, 1)
@@ -125,7 +136,7 @@ func TestLoadCurrentDescriptorRejectsDrift(t *testing.T) {
 			return strings.Replace(raw, `"retainedRoot": "admission/v4"`, `"retainedRoot": "admission/v3"`, 1)
 		},
 		"duplicate field": func(raw string) string {
-			return strings.Replace(raw, `"version": "1.0.6",`, `"version": "1.0.6", "version": "1.0.7",`, 1)
+			return strings.Replace(raw, `"version": "1.0.7",`, `"version": "1.0.7", "version": "1.0.6",`, 1)
 		},
 	} {
 		name, mutate := name, mutate
@@ -153,7 +164,7 @@ func TestLoadCurrentDescriptorRejectsIdentityLedgerDrift(t *testing.T) {
 			return strings.Replace(raw, `"commit": "57aba7f374bb0d45274044e1dacbea52d16f3f6b"`, `"commit": "ffffffffffffffffffffffffffffffffffffffff"`, 1)
 		},
 		"current descriptor mismatch": func(raw string) string {
-			return strings.Replace(raw, `"version": "1.0.6"`, `"version": "1.0.7"`, 1)
+			return strings.Replace(raw, `"version": "1.0.7"`, `"version": "1.0.6"`, 1)
 		},
 		"missing abandoned evidence path": func(raw string) string {
 			return strings.Replace(raw, `"admission/v3/candidates/registry-readback-1.0.5-bd0b3184aaad"`, `"admission/v3/candidates/missing"`, 1)
