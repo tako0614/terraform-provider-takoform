@@ -103,6 +103,7 @@ export async function inspectSchemaPublicationIdentities(
           detail: `HTTP ${response.status}`,
           id,
           kind: "http-error",
+          status: response.status,
         };
       }
 
@@ -145,11 +146,39 @@ function observationDetail(observation) {
 
 export function enforceSchemaPublicationNoOverwrite(
   observations,
-  { initialOriginMintAcknowledged = false } = {},
+  {
+    initialOriginMintAcknowledged = false,
+    publishedIdentityIds = [],
+  } = {},
 ) {
   if (observations.length === 0) {
     throw new Error("no normative schema identities were inspected");
   }
+
+  if (
+    !Array.isArray(publishedIdentityIds) ||
+    publishedIdentityIds.some((id) => typeof id !== "string" || id === "") ||
+    new Set(publishedIdentityIds).size !== publishedIdentityIds.length
+  ) {
+    throw new Error("published schema identity ids are invalid");
+  }
+  const observationsById = new Map();
+  for (const observation of observations) {
+    if (
+      typeof observation?.id !== "string" ||
+      observationsById.has(observation.id)
+    ) {
+      throw new Error("schema publication observations are invalid");
+    }
+    observationsById.set(observation.id, observation);
+  }
+  const published = publishedIdentityIds.map((id) => {
+    const observation = observationsById.get(id);
+    if (!observation) {
+      throw new Error(`deployed source ledger identity ${id} was not inspected`);
+    }
+    return observation;
+  });
 
   if (observations.every(({ kind }) => kind === "match")) {
     if (initialOriginMintAcknowledged) {
@@ -172,6 +201,36 @@ export function enforceSchemaPublicationNoOverwrite(
     return {
       count: observations.length,
       mode: "INITIAL_ORIGIN_MINT_ACKNOWLEDGED",
+    };
+  }
+
+  if (
+    initialOriginMintAcknowledged &&
+    published.length > 0 &&
+    observations.some(({ kind }) => kind === "match")
+  ) {
+    throw new Error(
+      `${INITIAL_SCHEMA_ORIGIN_MINT_ACK} is accepted only when every schema URL fails with ENOTFOUND; remove it for an existing origin`,
+    );
+  }
+
+  const publishedExact = published.every(({ kind }) => kind === "match");
+  const publishedIds = new Set(publishedIdentityIds);
+  const candidateOnly = observations.filter(({ id }) => !publishedIds.has(id));
+  const absentCandidateOnly = candidateOnly.filter(
+    ({ kind, status }) => kind === "http-error" && status === 404,
+  );
+  if (
+    published.length > 0 &&
+    publishedExact &&
+    absentCandidateOnly.length > 0 &&
+    absentCandidateOnly.length === candidateOnly.length
+  ) {
+    return {
+      count: observations.length,
+      existingCount: published.length,
+      mode: "APPEND_ONLY_IDENTITIES_MINT",
+      newCount: absentCandidateOnly.length,
     };
   }
 

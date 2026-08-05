@@ -153,6 +153,88 @@ describe("published schema identity no-overwrite guard", () => {
     ).toThrow("partially existing origin");
   });
 
+  test("allows 404 only for identities absent from the deployed source ledger", async () => {
+    const schemas = [schema("published"), schema("new")];
+    const observations = await inspectSchemaPublicationIdentities(schemas, {
+      fetchImpl: async (url) =>
+        url.endsWith("/published.json")
+          ? new Response("published\n", { status: 200 })
+          : new Response("not found", { status: 404 }),
+      lookupImpl: dnsPresent,
+    });
+
+    expect(
+      enforceSchemaPublicationNoOverwrite(observations, {
+        publishedIdentityIds: [schemas[0].id],
+      }),
+    ).toEqual({
+      count: 2,
+      existingCount: 1,
+      mode: "APPEND_ONLY_IDENTITIES_MINT",
+      newCount: 1,
+    });
+  });
+
+  test("rejects 404 for an identity retained by the deployed source ledger", async () => {
+    const schemas = [schema("published"), schema("new")];
+    const observations = await inspectSchemaPublicationIdentities(schemas, {
+      fetchImpl: async () => new Response("not found", { status: 404 }),
+      lookupImpl: dnsPresent,
+    });
+
+    expect(() =>
+      enforceSchemaPublicationNoOverwrite(observations, {
+        publishedIdentityIds: [schemas[0].id],
+      }),
+    ).toThrow("published schema identity precondition failed");
+  });
+
+  test("rejects a mixed exact and absent candidate-only identity set", async () => {
+    const schemas = [schema("published"), schema("new-one"), schema("new-two")];
+    const observations = await inspectSchemaPublicationIdentities(schemas, {
+      fetchImpl: async (url) => {
+        if (url.endsWith("/new-two.json")) {
+          return new Response("not found", { status: 404 });
+        }
+        const name = new URL(url).pathname.split("/").at(-1).replace(".json", "");
+        return new Response(`${name}\n`, { status: 200 });
+      },
+      lookupImpl: dnsPresent,
+    });
+
+    expect(() =>
+      enforceSchemaPublicationNoOverwrite(observations, {
+        publishedIdentityIds: [schemas[0].id],
+      }),
+    ).toThrow("published schema identity precondition failed");
+  });
+
+  test.each([
+    {
+      label: "a non-404 response",
+      response: new Response("unavailable", { status: 503 }),
+    },
+    {
+      label: "different bytes",
+      response: new Response("different\n", { status: 200 }),
+    },
+  ])("rejects $label for a candidate-only identity", async ({ response }) => {
+    const schemas = [schema("published"), schema("new")];
+    const observations = await inspectSchemaPublicationIdentities(schemas, {
+      fetchImpl: async (url) =>
+        url.endsWith("/published.json")
+          ? new Response("published\n", { status: 200 })
+          : response,
+      lookupImpl: dnsPresent,
+    });
+
+    expect(() =>
+      enforceSchemaPublicationNoOverwrite(observations, {
+        publishedIdentityIds: [schemas[0].id],
+      }),
+    ).toThrow("published schema identity precondition failed");
+  });
+
   test("rejects a stale acknowledgement once the origin exists", async () => {
     const observations = await inspectSchemaPublicationIdentities(
       [schema("one")],
