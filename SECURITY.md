@@ -1,7 +1,7 @@
 # Security Policy
 
-Takoform is an **Experimental project**. Provider `v1.0.3` is the published
-Legacy client; provider `v2.0.0` is an unpublished source candidate. The 34
+Takoform is an **Experimental project**. Provider `v2.0.0` is the published
+current client; provider `v1.0.3` is the published Legacy client. The 34
 published Form Package identities are immutable **Legacy** evidence, not a
 current central approval or admission set.
 
@@ -13,16 +13,16 @@ Include the affected provider version, a minimal reproduction with all secrets r
 
 ## Supported versions
 
-The current `main` branch receives security fixes while provider `v2.0.0` is
-prepared as the current-epoch client. Published provider `v1.0.3` remains the
+The current `main` branch and provider `v2.0.0` receive security fixes as the
+current-epoch line. Published provider `v1.0.3` remains the
 security-maintained Legacy line for retained state and explicit migration.
 Historical release bytes remain available for verification and migration;
 support never means replacing them.
 
-`release/version.json` describes the unpublished `v2.0.0` source candidate;
-it is not live availability state. The signed immutable release, pinned tag
-identity, and canonical Registry listing establish that `v1.0.3` is the last
-published provider.
+`release/version.json` keeps `publicationStatus: candidate-only` as source
+descriptor metadata; it is not live availability state. The signed immutable
+release, pinned tag identity, and canonical Registry listing establish that
+`v2.0.0` is the current published provider.
 
 ## Provider release trust
 

@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Documentation — Takoform</title>
-  <meta name="description" content="Choose between the unpublished Takoform v2 source candidate and published v1 Legacy recovery, then use the exact task-based references.">
+  <meta name="description" content="Choose between the published Takoform v2 current provider and published v1 Legacy recovery, then use the exact task-based references.">
   <meta name="theme-color" content="#0e0a0a">
   <link rel="canonical" href="https://takoform.com/docs/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Documentation — Takoform">
-  <meta property="og:description" content="Choose between the unpublished Takoform v2 source candidate and published v1 Legacy recovery, then use the exact task-based references.">
+  <meta property="og:description" content="Choose between the published Takoform v2 current provider and published v1 Legacy recovery, then use the exact task-based references.">
   <meta property="og:url" content="https://takoform.com/docs/">
   <link rel="icon" href="/tako.png">
   <link rel="stylesheet" href="/styles.css">
@@ -32,7 +32,7 @@
         <div class="container">
           <p class="project-line">Documentation · Experimental</p>
           <h1>Choose the lane before the command.</h1>
-          <p class="lede">One provider address has a published Legacy v1 line and an unpublished current v2 source line. Use only the lane that matches your job.</p>
+          <p class="lede">One provider address has a published current v2 line and a published Legacy v1 line. Use only the lane that matches your job.</p>
         </div>
       </section>
       <div class="container doc-layout">
@@ -45,9 +45,9 @@
         </aside>
         <article class="doc-prose">
           <section id="current-source">
-            <h2>Evaluate the current v2 source</h2>
-            <p>Provider v2.0.0 is not published in the Registry. The pin below identifies the source candidate; ordinary <code>init</code> cannot install it.</p>
-            <figure class="code-card"><figcaption>Not a Registry installation command</figcaption><pre><code>terraform {
+            <h2>Use the current v2 provider</h2>
+            <p>Provider v2.0.0 is published in the Registry. Terraform and OpenTofu can install the exact pin below.</p>
+            <figure class="code-card"><figcaption>Exact Registry pin</figcaption><pre><code>terraform {
   required_providers {
     takoform = {
       source  = &quot;registry.terraform.io/tako0614/takoform&quot;
@@ -137,8 +137,8 @@ go run ./cmd/provider-lifecycle-conformance matrix   --opentofu tofu --terraform
       <p class="truth-note">
         Takoform is an <strong>Experimental specification project</strong>. Current FormRefs use
         <code>forms.takoform.com/v1alpha2</code> and current package envelopes use
-        <code>packages.forms.takoform.com/v1alpha3</code>. Provider <code>v2.0.0</code> is an unpublished
-        source candidate. Published provider <code>v1.0.3</code> and the
+        <code>packages.forms.takoform.com/v1alpha3</code>. Provider <code>v2.0.0</code> is the published
+        current Registry client. Provider <code>v1.0.3</code> and the
         34 published Form Package identities from
         <code>forms.takoform.com/v1alpha1</code> are immutable <strong>Legacy</strong> evidence. There is no
         current central approval or admission.
@@ -171,7 +171,7 @@ go run ./cmd/provider-lifecycle-conformance matrix   --opentofu tofu --terraform
         <div class="container">
           <p class="project-line">Documentation · Experimental</p>
           <h1>commandより先に、利用経路を選ぶ。</h1>
-          <p class="lede">同じprovider addressに、公開済みLegacy v1と未公開current v2があります。自分の目的に合う方だけを使ってください。</p>
+          <p class="lede">同じprovider addressに、公開済みcurrent v2と公開済みLegacy v1があります。自分の目的に合う方だけを使ってください。</p>
         </div>
       </section>
       <div class="container doc-layout">
@@ -184,9 +184,9 @@ go run ./cmd/provider-lifecycle-conformance matrix   --opentofu tofu --terraform
         </aside>
         <article class="doc-prose">
           <section id="current-source-ja">
-            <h2>現行v2 sourceを評価する</h2>
-            <p>provider v2.0.0はRegistryに公開されていません。次のpinはsource identityの検証用であり、通常の<code>init</code>ではinstallできません。</p>
-            <figure class="code-card"><figcaption>install commandではありません</figcaption><pre><code>terraform {
+            <h2>現行v2を利用する</h2>
+            <p>provider v2.0.0はRegistry公開済みです。次のexact pinをTerraformまたはOpenTofuでinstallできます。</p>
+            <figure class="code-card"><figcaption>exact Registry pin</figcaption><pre><code>terraform {
   required_providers {
     takoform = {
       source  = &quot;registry.terraform.io/tako0614/takoform&quot;
@@ -277,7 +277,7 @@ go run ./cmd/provider-lifecycle-conformance matrix   --opentofu tofu --terraform
         Takoformは<strong>Experimental specification project</strong>です。現行FormRefは
         <code>forms.takoform.com/v1alpha2</code>、現行Package envelopeは
         <code>packages.forms.takoform.com/v1alpha3</code>です。provider <code>v2.0.0</code>は
-        未公開source candidateです。公開済みprovider <code>v1.0.3</code>と
+        Registry公開済みの現行clientです。provider <code>v1.0.3</code>と
         <code>forms.takoform.com/v1alpha1</code>の34件の公開済みForm Package identityは
         immutableな<strong>Legacy</strong>証跡です。現在の中央承認・admissionはありません。
       </p>

@@ -34,7 +34,20 @@ function fixture() {
     },
     providerIdentities: {
       format: "takoform.provider-release-identities@v1",
-      entries: [{ status: "assigned", tag: "v1.0.1", version: "1.0.1" }],
+      entries: [
+        { status: "assigned", tag: "v1.0.1", version: "1.0.1" },
+        { commit: "a".repeat(40), status: "assigned", tag: "v2.0.0", version: "2.0.0" },
+      ],
+    },
+    providerReadback: {
+      version: "2.0.0",
+      tag: "v2.0.0",
+      commit: "a".repeat(40),
+      providerAddress: "registry.terraform.io/tako0614/takoform",
+      publicationReady: true,
+      certificateIdentity: "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/provider-registry-readback.yml@refs/heads/main",
+      products: ["OpenTofu", "Terraform"],
+      providerBinaryDigest: `sha256:${"c".repeat(64)}`,
     },
   };
 }
@@ -43,6 +56,8 @@ describe("publication truth", () => {
   test("keeps publication independent from maturity and admission", () => {
     const truth = derivePublicationTruth(fixture());
     expect(truth.publishedCount).toBe(1);
+    expect(truth.providerVersion).toBe("2.0.0");
+    expect(truth.legacyProviderVersion).toBe("1.0.1");
     expect(truth).not.toHaveProperty("admittedCount");
     expect(truth).not.toHaveProperty("admissionTag");
   });
