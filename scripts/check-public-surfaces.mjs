@@ -574,11 +574,6 @@ function checkImmutableProviderTagDocs(source, truth) {
       ),
     },
     {
-      label: "publication-pending wording",
-      pattern:
-        /\buntil\s+(?:the\s+)?(?:provider\s+)?publication\b|\bpublication[^.]{0,120}\b(?:pending|does not exist|do not exist|not yet)\b/i,
-    },
-    {
       label: "shallow immutable-tag verification checkout",
       pattern: /^git clone[^\n]*(?:--depth|--shallow)/m,
     },
@@ -588,12 +583,6 @@ function checkImmutableProviderTagDocs(source, truth) {
       fail(`docs/index.md: immutable provider tag docs contain ${rule.label}`);
     }
   }
-  if (hasNotInstallableWording(source)) {
-    fail(
-      "docs/index.md: immutable provider tag docs contain temporary not-installable wording",
-    );
-  }
-
   const required = [
     {
       label: "timeless immutable-document availability boundary",
@@ -639,19 +628,19 @@ function checkPublishedProviderExamples(truth) {
   if (docsBlocks.length === 0) {
     fail("docs/index.md: missing provider source example");
   }
-  for (const [index, block] of docsBlocks.entries()) {
-    if (!hasExactProviderPin(block, truth.providerVersion)) {
-      fail(
-        `docs/index.md: provider example ${index + 1} must contain version ` +
-          `= "= ${truth.providerVersion}"`,
-      );
-    }
+  if (!docsBlocks.some((block) => hasExactProviderPin(block, truth.providerVersion))) {
+    fail(`docs/index.md: missing Legacy provider v${truth.providerVersion} pin`);
+  }
+  if (!docsBlocks.some((block) => hasExactProviderPin(block, truth.candidateProviderVersion))) {
+    fail(`docs/index.md: missing current source-candidate provider v${truth.candidateProviderVersion} pin`);
   }
   checkImmutableProviderTagDocs(docsSource, truth);
 
   const htmlFiles = walkFiles(publicRoot, (filePath) =>
     filePath.endsWith(".html"),
   );
+  let sawPublished = false;
+  let sawCandidate = false;
   for (const filePath of htmlFiles) {
     const source = read(filePath);
     const blocks = providerCodeBlocksFromHtml(source);
@@ -659,17 +648,20 @@ function checkPublishedProviderExamples(truth) {
       continue;
     }
     for (const [index, block] of blocks.entries()) {
-      if (!hasExactProviderPin(block, truth.providerVersion)) {
+      const published = hasExactProviderPin(block, truth.providerVersion);
+      const candidate = hasExactProviderPin(block, truth.candidateProviderVersion);
+      sawPublished ||= published;
+      sawCandidate ||= candidate;
+      if (!published && !candidate) {
         fail(
           `${relative(filePath)}: provider example ${index + 1} must contain ` +
-            `version = "= ${truth.providerVersion}"`,
+            `a Legacy v${truth.providerVersion} or current candidate v${truth.candidateProviderVersion} exact pin`,
         );
       }
     }
-    const visibleText = visibleHtmlText(source);
-    if (hasNotInstallableWording(visibleText)) {
-      fail(`${relative(filePath)}: contains stale not-installable wording`);
-    }
+  }
+  if (!sawPublished || !sawCandidate) {
+    fail("website/public: provider examples must distinguish published Legacy v1 from current source-candidate v2");
   }
 }
 
@@ -700,8 +692,9 @@ function checkRetainedPublicationTruthCopy(truth) {
     const text = textByFile.get(filePath) ?? "";
     for (const [label, value] of [
       ["provider version", truth.providerVersion],
-      ["admission identity", truth.admissionTag],
-      ["portable-standard status", "portable-standard"],
+      ["candidate provider version", truth.candidateProviderVersion],
+      ["project status", "Experimental"],
+      ["published identity classification", "Legacy"],
     ]) {
       if (!text.includes(value)) {
         fail(`${relative(filePath)}: missing evidence-derived ${label} ${value}`);
@@ -712,21 +705,21 @@ function checkRetainedPublicationTruthCopy(truth) {
     } catch (error) {
       fail(error.message);
     }
-    if (!/\bRegistry\b/.test(text)) {
-      fail(`${relative(filePath)}: missing canonical Registry evidence boundary`);
-    }
   }
 
   const apiTruthFiles = truthFiles.filter(
     (filePath) => filePath !== path.join(repositoryRoot, "SECURITY.md"),
   );
   for (const filePath of apiTruthFiles) {
-    if (
-      !(textByFile.get(filePath) ?? "").includes(
-        "forms.takoform.com/v1alpha1",
-      )
-    ) {
+    const text = textByFile.get(filePath) ?? "";
+    if (!text.includes("forms.takoform.com/v1alpha1")) {
       fail(`${relative(filePath)}: missing v1alpha1 API boundary`);
+    }
+    if (!text.includes("forms.takoform.com/v1alpha2")) {
+      fail(`${relative(filePath)}: missing current v1alpha2 Form boundary`);
+    }
+    if (!text.includes("packages.forms.takoform.com/v1alpha3")) {
+      fail(`${relative(filePath)}: missing current v1alpha3 package boundary`);
     }
   }
 
@@ -769,19 +762,6 @@ function checkRetainedPublicationTruthCopy(truth) {
     }
   }
 
-  for (const filePath of [
-    path.join(repositoryRoot, "README.md"),
-    path.join(repositoryRoot, "docs", "index.md"),
-    path.join(publicRoot, "docs", "index.html"),
-  ]) {
-    const text = textByFile.get(filePath) ?? "";
-    for (const kind of truth.admittedKinds) {
-      if (!text.includes(kind)) {
-        fail(`${relative(filePath)}: missing admitted Form ${kind}`);
-      }
-    }
-  }
-
   const websiteReadme =
     textByFile.get(path.join(repositoryRoot, "website", "README.md")) ?? "";
   for (const required of [
@@ -791,6 +771,96 @@ function checkRetainedPublicationTruthCopy(truth) {
   ]) {
     if (!required.test(websiteReadme)) {
       fail("website/README.md: missing static-hosting-only Cloudflare boundary");
+    }
+  }
+}
+
+function checkCurrentEpochDocumentation(currentSet) {
+  const legacyHostWire = "forms.takoform.com/v1alpha1";
+  const currentHostWire = "forms.takoform.com/v1alpha2";
+  const currentForm = currentSet.formApiVersion;
+  const currentPackage = currentSet.packageApiVersion;
+  const documents = [
+    {
+      file: path.join(repositoryRoot, "spec", "README.md"),
+      required: [
+        legacyHostWire,
+        currentHostWire,
+        currentPackage,
+        "/.well-known/takoform/v1alpha2",
+        "protocol compatibility identity",
+      ],
+    },
+    {
+      file: path.join(repositoryRoot, "spec", "form-definition", "README.md"),
+      required: [
+        currentForm,
+        "form-definition-v1alpha2.schema.json",
+        "form-ref-v1alpha2.schema.json",
+        "retained v1alpha1 Legacy profiles",
+      ],
+    },
+    {
+      file: path.join(repositoryRoot, "spec", "form-package", "README.md"),
+      required: [
+        currentForm,
+        currentPackage,
+        "package-index-v1alpha2.schema.json",
+        "cannot carry a current v1alpha2 Form",
+      ],
+    },
+    {
+      file: path.join(repositoryRoot, "spec", "versioning.md"),
+      required: [
+        legacyHostWire,
+        currentHostWire,
+        currentPackage,
+        "/.well-known/takoform/v1alpha2",
+        "Form epoch",
+      ],
+    },
+    {
+      file: path.join(repositoryRoot, "release", "README.md"),
+      required: [
+        legacyHostWire,
+        currentHostWire,
+        currentPackage,
+        "outer Host API wire",
+      ],
+    },
+    {
+      file: path.join(repositoryRoot, "proposals", "README.md"),
+      required: ["v1alpha2 `0.x` Form", "v1alpha3 package"],
+    },
+  ];
+
+  for (const { file, required } of documents) {
+    const source = read(file);
+    const normalized = source.replace(/\s+/gu, " ");
+    for (const text of required) {
+      if (!normalized.includes(text.replace(/\s+/gu, " "))) {
+        fail(`${relative(file)}: missing current epoch boundary ${JSON.stringify(text)}`);
+      }
+    }
+  }
+
+  const staleClaims = [
+    [
+      path.join(repositoryRoot, "spec", "README.md"),
+      "The project identity is `forms.takoform.com/v1alpha1`",
+    ],
+    [
+      path.join(repositoryRoot, "spec", "form-package", "README.md"),
+      "The current index has the fixed identity\n`packages.forms.takoform.com/v1alpha2`",
+    ],
+    [
+      path.join(repositoryRoot, "spec", "versioning.md"),
+      "Current `packages.forms.takoform.com/v1alpha2` packages",
+    ],
+  ];
+  for (const [file, stale] of staleClaims) {
+    if (read(file).includes(stale)) {
+      fail(`${relative(file)}: retains stale current-epoch claim ${JSON.stringify(stale)}`);
     }
   }
 }
@@ -942,20 +1012,17 @@ if (standardSet.admissionStatus !== "external-required") {
   );
 }
 
-const packages = Array.isArray(standardSet.packages)
+const legacyPackages = Array.isArray(standardSet.packages)
   ? standardSet.packages
   : [];
-if (packages.length === 0) {
+if (legacyPackages.length === 0) {
   fail(
     "forms/standard-package-set.json: packages must not be empty",
   );
 }
 
-const forms = packages.map((entry, index) => {
-  const pathValue = typeof entry.path === "string" ? entry.path : "";
-  const slug = path.posix.basename(pathValue);
+const legacyKinds = legacyPackages.map((entry, index) => {
   const kind = entry.formRef?.kind;
-  const version = entry.formRef?.definitionVersion;
   if (entry.admissionStatus !== "external-required") {
     fail(
       `forms/standard-package-set.json: packages[${index}].admissionStatus must be external-required`,
@@ -966,9 +1033,62 @@ const forms = packages.map((entry, index) => {
       `forms/standard-package-set.json: packages[${index}] kind/formRef.kind must match`,
     );
   }
+  return typeof kind === "string" ? kind : "";
+});
+
+const currentSetPath = path.join(
+  repositoryRoot,
+  "forms",
+  "candidates",
+  "v1alpha2",
+  "candidate-set.json",
+);
+const currentSet = readJson(currentSetPath);
+if (
+  currentSet.format !== "takoform.current-form-candidates@v2" ||
+  currentSet.formApiVersion !== "forms.takoform.com/v1alpha2" ||
+  currentSet.packageApiVersion !== "packages.forms.takoform.com/v1alpha3" ||
+  currentSet.authoringSource !== "internal/currentformcatalog" ||
+  currentSet.authoringPolicy !== "independent-semantic-contract" ||
+  currentSet.publicationStatus !== "unpublished" ||
+  currentSet.lifecycleAuthority !== "forms/lifecycle.json" ||
+  Object.hasOwn(currentSet, "classification") ||
+  Object.hasOwn(currentSet, "targetLifecycleState") ||
+  Object.hasOwn(currentSet, "publicationReady")
+) {
+  fail("forms/candidates/v1alpha2/candidate-set.json: invalid current candidate boundary");
+}
+const currentEntries = Array.isArray(currentSet.forms) ? currentSet.forms : [];
+if (currentEntries.length !== 9) {
+  fail(`forms/candidates/v1alpha2/candidate-set.json: forms must contain exactly 9 independently authored candidates`);
+}
+
+const forms = currentEntries.map((entry, index) => {
+  const pathValue = typeof entry.path === "string" ? entry.path : "";
+  const slug = path.posix.basename(pathValue);
+  const kind = entry.formRef?.kind;
+  const version = entry.formRef?.definitionVersion;
+  if (
+    entry.formRef?.apiVersion !== "forms.takoform.com/v1alpha2" ||
+    version !== "0.1.0"
+  ) {
+    fail(
+      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] must be current v1alpha2 definition 0.1.0`,
+    );
+  }
+  if (typeof kind !== "string" || kind === "" || entry.kind !== kind) {
+    fail(
+      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] kind/formRef.kind must match`,
+    );
+  }
+	if (typeof entry.proposalId !== "string" || entry.proposalId === "") {
+	  fail(
+		`forms/candidates/v1alpha2/candidate-set.json: forms[${index}] has no Proposal identity`,
+	  );
+	}
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
     fail(
-      `forms/standard-package-set.json: packages[${index}] has invalid Form slug ${JSON.stringify(slug)}`,
+      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] has invalid Form slug ${JSON.stringify(slug)}`,
     );
   }
   if (
@@ -976,7 +1096,7 @@ const forms = packages.map((entry, index) => {
     !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)
   ) {
     fail(
-      `forms/standard-package-set.json: packages[${index}] has invalid definitionVersion ${JSON.stringify(version)}`,
+      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] has invalid definitionVersion ${JSON.stringify(version)}`,
     );
   }
   return {
@@ -987,12 +1107,12 @@ const forms = packages.map((entry, index) => {
   };
 });
 compareExact(
-  "forms/standard-package-set.json Form slugs",
+  "current v1alpha2 Form slugs",
   forms.map(({ slug }) => slug),
   new Set(forms.map(({ slug }) => slug)),
 );
 compareExact(
-  "forms/standard-package-set.json Form kinds",
+  "current v1alpha2 Form kinds",
   forms.map(({ kind }) => kind),
   new Set(forms.map(({ kind }) => kind)),
 );
@@ -1025,7 +1145,7 @@ if (publicationTruth !== null) {
   compareExact(
     "published Form Package kinds",
     publicationTruth.publishedKinds,
-    forms.map(({ kind }) => kind),
+    legacyKinds,
   );
 }
 
@@ -1129,6 +1249,7 @@ checkDocsPageLinks(formDocNames);
 checkStaleWebsiteContent();
 checkPublishedProviderExamples(publicationTruth);
 checkRetainedPublicationTruthCopy(publicationTruth);
+checkCurrentEpochDocumentation(currentSet);
 checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
 checkPublicSchemas();
@@ -1144,8 +1265,8 @@ if (failures.length > 0) {
 } else {
   console.log(
     `Public surfaces OK: provider v${publicationTruth.providerVersion}, ` +
-      `${publicationTruth.publishedCount} published Form Packages, ` +
-      `${publicationTruth.admittedCount} admitted Forms, interface data ` +
+      `${publicationTruth.publishedCount} published Legacy Form Packages, ` +
+      `no current central admission, interface data ` +
       "source, docs, examples, website links, and normative schema URLs " +
       "are consistent.",
   );

@@ -1,232 +1,231 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta
-      name="description"
-      content="Guide to the Takoform portable Service Form specification, its v1alpha1 API boundary, 34 published packages, and exact 10-Form admission."
-    >
-    <title>Specification / 仕様 — Takoform</title>
-    <link rel="stylesheet" href="/styles.css">
-  </head>
-  <body>
+<html lang="en" data-lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Specification map — Takoform</title>
+  <meta name="description" content="Takoform specification epochs, exact identity stack, authority boundaries, normative schemas, and prior-art policy.">
+  <meta name="theme-color" content="#0e0a0a">
+  <link rel="canonical" href="https://takoform.com/spec/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Specification map — Takoform">
+  <meta property="og:description" content="Takoform specification epochs, exact identity stack, authority boundaries, normative schemas, and prior-art policy.">
+  <meta property="og:url" content="https://takoform.com/spec/">
+  <link rel="icon" href="/tako.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="page-reference page-spec">
+  <div class="l10n" lang="en">
     <header class="site-header">
-      <div class="container nav">
-        <a class="brand" href="/">Takoform</a>
-        <nav class="nav-links" aria-label="Specification navigation">
-          <a href="/docs/">Documentation</a>
-          <a href="#components">Components</a>
-          <a href="#status">Status</a>
-          <a
-            class="btn btn-ghost"
-            href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec"
-          >Source</a>
-        </nav>
-      </div>
+      <nav class="container nav" aria-label="Primary">
+        <a class="brand" href="/" aria-label="Takoform home">Takoform</a>
+        <div class="nav-links">
+          <a href="/">Overview</a>
+          <a href="/docs/">Docs</a>
+          <a aria-current="page" href="/spec/">Spec</a>
+          <button class="lang-switch" type="button" data-set-lang="ja" aria-label="日本語">日本語</button>
+        </div>
+      </nav>
     </header>
-
     <main>
-      <section class="hero">
-        <div class="container hero-grid">
-          <div>
-            <p class="eyebrow"><span class="dot"></span>portable specification</p>
-            <h1>Specification<br><span lang="ja">仕様</span></h1>
-            <p class="lede">
-              A map of Takoform's four public contracts: exact Form/Package
-              data, desired Resource lifecycle, read-only Interface projection,
-              and trust/version/release identity.
-              <br>
-              <span lang="ja">
-                exact Form/Package、Resource lifecycle、read-only Interface、
-                trust/version/releaseという4つの公開contractへの入口です。
-              </span>
-            </p>
-            <div class="cta-row">
-              <a
-                class="btn btn-primary"
-                href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/README.md"
-              >Canonical specification</a>
-              <a class="btn btn-ghost" href="/docs/">Provider docs</a>
-            </div>
-          </div>
+      <section class="doc-hero compact">
+        <div class="container">
+          <p class="project-line">Specification map · Experimental</p>
+          <h1>Four layers. Four different jobs.</h1>
+          <p class="lede">The same kind name is a different contract when its epoch, definition version, or digest changes. Compatibility is never inferred from the name.</p>
+        </div>
+      </section>
+      <div class="container doc-layout">
+        <aside class="doc-index" aria-label="On this page">
+          <a href="#identity">Identity stack</a>
+          <a href="#contracts">Contract map</a>
+          <a href="#authority">Authority</a>
+          <a href="#schemas">Schemas</a>
+          <a href="#prior-art">Prior art</a>
+        </aside>
+        <article class="doc-prose">
+          <section id="identity">
+            <h2>Identity stack</h2>
+            <div class="spec-table"><div><span>Provider distribution</span><code>v1.0.3 published · v2.0.0 source candidate</code><p>Client distribution; independent from Form maturity.</p></div><div><span>Current Host wire</span><code>forms.takoform.com/v1alpha2</code><p>Provider-v2 contract reached through versioned discovery.</p></div><div><span>Legacy Host wire</span><code>forms.takoform.com/v1alpha1</code><p>Frozen provider-v1 lane behind unversioned discovery.</p></div><div><span>Exact current FormRef</span><code>forms.takoform.com/v1alpha2</code><p>Identity joined with kind, 0.1.0, and schema digest.</p></div><div><span>Current package envelope</span><code>packages.forms.takoform.com/v1alpha3</code><p>Carries the exact FormRef and data-only fixtures.</p></div></div>
+          </section>
 
-          <div class="status-col pending">
-            <h3>Not GA / GAではありません</h3>
-            <ul>
-              <li>The API group is <code>forms.takoform.com/v1alpha1</code>.</li>
-              <li>Breaking protocol changes remain possible.</li>
-              <li>All 34 current Form Packages are published and immutable.</li>
-              <li>Exactly 10 are admitted under <code>forms/admissions/v1.0.7</code>.</li>
-              <li>Provider <code>v1.0.2</code> does not make the API stable.</li>
-              <li>The source descriptor records candidate <code>v1.0.3</code>; publication evidence remains bound to the signed release.</li>
+          <section id="contracts">
+            <h2>Public contract map</h2>
+            <ul class="reference-list">
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/portability-boundary.md">Portable Form boundary</a><span>Separates Form, host profile, adapter, operator, and Service Offering ownership.</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/form-definition/README.md">FormRef / Form Definition</a><span>Portable desired, observed, and output schemas.</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/form-package/README.md">Form Package</a><span>Immutable bundle of one exact definition and data-only fixtures.</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/host-api/README.md">Host API</a><span>Discovery, preview/apply, observe, refresh, and delete.</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/interface-declaration/README.md">Interface projection</a><span>Read-only Form-derived descriptors; never credentials or grants.</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/conformance.md">Conformance</a><span>What each check proves—and what it does not.</span></li>
             </ul>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <section class="section" id="model">
-        <div class="container">
-          <h2>Four contracts, separate authorities</h2>
-          <p class="section-lede">
-            The specification fixes portable identities and lifecycle
-            semantics. It does not prescribe a Cloud, backend, scheduler,
-            credential system, price, or operator policy.
-          </p>
-          <div class="cards three">
-            <article class="card">
-              <span class="step">AUTHOR</span>
-              <h3>Form and package</h3>
-              <p>
-                A Form Definition describes desired state. A data-only Form
-                Package binds exact canonical bytes and evidence to that
-                versioned identity.
-              </p>
-            </article>
-            <article class="card">
-              <span class="step">HOST</span>
-              <h3>Admission and realization</h3>
-              <p>
-                A host advertises exact availability, admits packages, realizes
-                Resources, selects concrete backends, and owns authorization.
-              </p>
-            </article>
-            <article class="card">
-              <span class="step">CLIENT</span>
-              <h3>Provider lifecycle</h3>
-              <p>
-                The typed provider discovers the host and drives preview,
-                apply, read, observe, refresh, import, and delete operations.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section alt" id="components">
-        <div class="container">
-          <h2>Four public contracts / 4つの公開contract</h2>
-          <p class="section-lede">
-            This page is navigation, not a second specification. The linked
-            Markdown and JSON files in the repository are canonical.
-          </p>
-          <ul class="spec-list">
-            <li>
-              <a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/form-definition/README.md"><code>Form Definition</code></a>
-              <span>Exact FormRef and desired/observed/output data, packaged as one immutable data-only <a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/form-package/README.md">Form Package</a>.</span>
-            </li>
-            <li>
-              <a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/host-api/README.md"><code>spec/host-api/</code></a>
-              <span>Desired Resource discovery, preview/apply, lifecycle, fencing, and portable errors.</span>
-            </li>
-            <li>
-              <a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/interface-declaration/README.md"><code>spec/interface-declaration/</code></a>
-              <span>Open Form-derived descriptors and their read-only host projection; <a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/data-indexed/README.md"><code>data.indexed@1</code></a> is the current minimal four-operation descriptor.</span>
-            </li>
-            <li>
-              <a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/trust/README.md"><code>spec/trust/</code></a>
-              <span>Publisher evidence, revocation, and independent <a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/versioning.md">API/Form/Package/provider version identities</a>.</span>
-            </li>
-          </ul>
-          <p class="section-lede">
-            Schemas, conformance classes, generated inventory, and decisions
-            support these four contracts; they are evidence and rationale, not
-            additional product interfaces. Start from
-            <a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/README.md"><code>spec/README.md</code></a>.
-          </p>
-        </div>
-      </section>
-
-      <section class="section" id="versions">
-        <div class="container">
-          <h2>Independent version streams / 独立したversion</h2>
-          <p class="section-lede">
-            Similar-looking version numbers do not imply shared stability or a
-            synchronized release.
-          </p>
-          <div class="cards four">
-            <article class="card">
-              <span class="step">API GROUP</span>
-              <h3><code>v1alpha1</code></h3>
-              <p>
-                Protocol envelope, discovery, and lifecycle semantics. Still
-                allowed to change incompatibly.
-              </p>
-            </article>
-            <article class="card">
-              <span class="step">FORM</span>
-              <h3>Per-Form SemVer</h3>
-              <p>
-                Each desired schema has its own exact FormRef and schema digest.
-              </p>
-            </article>
-            <article class="card">
-              <span class="step">PACKAGE</span>
-              <h3>Package SemVer</h3>
-              <p>
-                Immutable data-only bytes and evidence for one exact definition.
-              </p>
-            </article>
-            <article class="card">
-              <span class="step">PROVIDER</span>
-              <h3><code>v1.0.2</code> published</h3>
-              <p>
-                The supported provider compatibility line, signed and verified
-                by direct Terraform and OpenTofu Registry installation.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section alt" id="status">
-        <div class="container">
-          <h2>Evidence boundary / 証拠の境界</h2>
-          <div class="status-grid">
-            <div class="status-col done">
-              <h3>Implemented and published</h3>
-              <ul>
-                <li>Normative schemas and canonical I-JSON handling.</li>
-                <li>Closed local Form Package verifier and fixture corpus.</li>
-                <li>Generated 34-Form inventory and typed provider surface.</li>
-                <li>Provider <code>v1.0.2</code> Registry readback with both CLIs.</li>
-                <li>All 34 signed immutable Form Package releases.</li>
-                <li>Protected exact-10 <code>portable-standard</code> admission evidence.</li>
-              </ul>
+          <section id="authority">
+            <h2>Separate maturity from availability</h2>
+            <div class="authority-grid">
+              <div><strong>Takoform</strong><p>Proposal, Experimental, Stable, and Legacy; authority for schemas and portable contracts.</p></div>
+              <div><strong>Host profile</strong><p>Exact Form Support and runtime, engine, and other capability support.</p></div>
+              <div><strong>Adapter / operator</strong><p>External compatibility, activation, targets, placement, scaling, credentials, and operations.</p></div>
+              <div><strong>Cloud operator</strong><p>Managed availability, capacity, billing, quota, and SLA.</p></div>
             </div>
-            <div class="status-col pending">
-              <h3>Limits on stronger claims</h3>
-              <ul>
-                <li>The API is still <code>forms.takoform.com/v1alpha1</code>.</li>
-                <li>The remaining 24 published packages are not admitted.</li>
-                <li>The retained Takosumi report proves only the selected 10 on that host.</li>
-                <li>Other hosts must publish their own exact support and lifecycle evidence.</li>
-              </ul>
-            </div>
-          </div>
-          <p class="fineprint">
-            Graduation from <code>v1alpha1</code> has additional multi-host,
-            stability, Interface materialization, deprecation, and revocation
-            requirements. Read the
-            <a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/versioning.md">canonical versioning policy</a>.
-          </p>
-        </div>
-      </section>
-    </main>
+          </section>
 
-    <footer class="site-footer">
-      <div class="container footer-grid">
-        <div class="footer-brand">Takoform</div>
-        <ul class="footer-links">
-          <li><a href="/">Home</a></li>
-          <li><a href="/docs/">Documentation</a></li>
-          <li><a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec">Specification source</a></li>
-        </ul>
-        <div class="footer-ids">
-          <code>forms.takoform.com/v1alpha1</code>
-          <code>provider v1.0.2 published</code>
-        </div>
+          <section id="schemas">
+            <h2>Normative schemas</h2>
+            <ul class="reference-list">
+              <li><a href="/schemas/v1alpha2/form-ref.schema.json"><code>v1alpha2/form-ref</code></a><span>Exact current Form identity.</span></li>
+              <li><a href="/schemas/v1alpha2/form-definition.schema.json"><code>v1alpha2/form-definition</code></a><span>Current definition document.</span></li>
+              <li><a href="/schemas/v1alpha3/package-index.schema.json"><code>v1alpha3/package-index</code></a><span>Current package envelope.</span></li>
+              <li><a href="/schemas/v1alpha1/host-api-wire.schema.json"><code>v1alpha1/host-api-wire</code></a><span>Outer lifecycle wire contract.</span></li>
+            </ul>
+          </section>
+
+          <section id="prior-art">
+            <h2>Do not assume novelty</h2>
+            <p>Every new Form starts with OCCI, CIMI, TOSCA, Kubernetes, Crossplane, and provider-native prior art. Takoform does not claim to be an industry standard without independent implementations and adoption.</p>
+            <p><a class="text-link" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/decisions/0006-v1alpha2-restarts-form-lines.md">Read the v1alpha2 epoch decision</a></p>
+
+      <p class="truth-note">
+        Takoform is an <strong>Experimental specification project</strong>. Current FormRefs use
+        <code>forms.takoform.com/v1alpha2</code> and current package envelopes use
+        <code>packages.forms.takoform.com/v1alpha3</code>. Provider <code>v2.0.0</code> is an unpublished
+        source candidate. Published provider <code>v1.0.3</code> and the
+        34 published Form Package identities from
+        <code>forms.takoform.com/v1alpha1</code> are immutable <strong>Legacy</strong> evidence. There is no
+        current central approval or admission.
+      </p>
+          </section>
+        </article>
       </div>
-    </footer>
-  </body>
+    </main>
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <span class="footer-brand">Takoform</span>
+        <span>Experimental portable resource contracts</span>
+        <a href="https://github.com/tako0614/terraform-provider-takoform">GitHub</a>
+      </div>
+    </footer></div>
+  <div class="l10n" lang="ja" hidden>
+    <header class="site-header">
+      <nav class="container nav" aria-label="主要">
+        <a class="brand" href="/" aria-label="Takoform home">Takoform</a>
+        <div class="nav-links">
+          <a href="/">概要</a>
+          <a href="/docs/">Docs</a>
+          <a aria-current="page" href="/spec/">Spec</a>
+          <button class="lang-switch" type="button" data-set-lang="en" aria-label="English">English</button>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <section class="doc-hero compact">
+        <div class="container">
+          <p class="project-line">Specification map · Experimental</p>
+          <h1>4つのlayerに、4つの責務。</h1>
+          <p class="lede">同じkind名でもepoch、definition version、digestが違えば別contractです。互換性は名前から推測しません。</p>
+        </div>
+      </section>
+      <div class="container doc-layout">
+        <aside class="doc-index" aria-label="このページ">
+          <a href="#identity-ja">Identity stack</a>
+          <a href="#contracts-ja">Contract map</a>
+          <a href="#authority-ja">Authority</a>
+          <a href="#schemas-ja">Schemas</a>
+          <a href="#prior-art-ja">Prior art</a>
+        </aside>
+        <article class="doc-prose">
+          <section id="identity-ja">
+            <h2>identity stack</h2>
+            <div class="spec-table"><div><span>Provider distribution</span><code>v1.0.3 published · v2.0.0 source candidate</code><p>client配布。Form maturityとは独立。</p></div><div><span>Current Host wire</span><code>forms.takoform.com/v1alpha2</code><p>versioned discoveryから到達するprovider v2 contract。</p></div><div><span>Legacy Host wire</span><code>forms.takoform.com/v1alpha1</code><p>非versioned discoveryに凍結したprovider v1互換lane。</p></div><div><span>Exact current FormRef</span><code>forms.takoform.com/v1alpha2</code><p>kind、0.1.0、schema digestと一体のidentity。</p></div><div><span>Current package envelope</span><code>packages.forms.takoform.com/v1alpha3</code><p>exact FormRefとdata-only fixtureを運ぶ。</p></div></div>
+          </section>
+
+          <section id="contracts-ja">
+            <h2>公開contract map</h2>
+            <ul class="reference-list">
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/portability-boundary.md">Portable Form boundary</a><span>Form、host profile、adapter、operator、Service Offeringの責務を分離。</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/form-definition/README.md">FormRef / Form Definition</a><span>portable desired、observed、output schema。</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/form-package/README.md">Form Package</a><span>exact definitionとdata-only fixtureのimmutable bundle。</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/host-api/README.md">Host API</a><span>discovery、preview/apply、observe、refresh、delete。</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/interface-declaration/README.md">Interface projection</a><span>Form由来のread-only descriptor。credentialやgrantではない。</span></li>
+              <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/conformance.md">Conformance</a><span>各checkが証明する範囲と、証明しない範囲。</span></li>
+            </ul>
+          </section>
+
+          <section id="authority-ja">
+            <h2>maturityとavailabilityを分離する</h2>
+            <div class="authority-grid">
+              <div><strong>Takoform</strong><p>Proposal、Experimental、Stable、Legacy。schemaとportable contractのauthority。</p></div>
+              <div><strong>Host profile</strong><p>exact Form Supportとruntime・engineなどのcapability support。</p></div>
+              <div><strong>Adapter / operator</strong><p>外部互換、activation、target、placement、scaling、credential、operation。</p></div>
+              <div><strong>Cloud operator</strong><p>managed availability、capacity、billing、quota、SLA。</p></div>
+            </div>
+          </section>
+
+          <section id="schemas-ja">
+            <h2>Normative schemas</h2>
+            <ul class="reference-list">
+              <li><a href="/schemas/v1alpha2/form-ref.schema.json"><code>v1alpha2/form-ref</code></a><span>Exact current Form identity.</span></li>
+              <li><a href="/schemas/v1alpha2/form-definition.schema.json"><code>v1alpha2/form-definition</code></a><span>Current definition document.</span></li>
+              <li><a href="/schemas/v1alpha3/package-index.schema.json"><code>v1alpha3/package-index</code></a><span>Current package envelope.</span></li>
+              <li><a href="/schemas/v1alpha1/host-api-wire.schema.json"><code>v1alpha1/host-api-wire</code></a><span>Outer lifecycle wire contract.</span></li>
+            </ul>
+          </section>
+
+          <section id="prior-art-ja">
+            <h2>新規性を仮定しない</h2>
+            <p>新しいFormはOCCI、CIMI、TOSCA、Kubernetes、Crossplane、provider-native resourceを先に調査します。Takoformは独立実装やadoptionがない限りindustry standardを名乗りません。</p>
+            <p><a class="text-link" href="https://github.com/tako0614/terraform-provider-takoform/blob/main/spec/decisions/0006-v1alpha2-restarts-form-lines.md">v1alpha2 epoch decisionを読む</a></p>
+
+      <p class="truth-note">
+        Takoformは<strong>Experimental specification project</strong>です。現行FormRefは
+        <code>forms.takoform.com/v1alpha2</code>、現行Package envelopeは
+        <code>packages.forms.takoform.com/v1alpha3</code>です。provider <code>v2.0.0</code>は
+        未公開source candidateです。公開済みprovider <code>v1.0.3</code>と
+        <code>forms.takoform.com/v1alpha1</code>の34件の公開済みForm Package identityは
+        immutableな<strong>Legacy</strong>証跡です。現在の中央承認・admissionはありません。
+      </p>
+          </section>
+        </article>
+      </div>
+    </main>
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <span class="footer-brand">Takoform</span>
+        <span>Experimentalなportable resource contract</span>
+        <a href="https://github.com/tako0614/terraform-provider-takoform">GitHub</a>
+      </div>
+    </footer></div>
+  <script>
+  (() => {
+    const choose = (requested) => {
+      const lang = requested === "ja" ? "ja" : "en";
+      document.documentElement.lang = lang;
+      document.documentElement.dataset.lang = lang;
+      document.querySelectorAll(".l10n").forEach((node) => {
+        node.hidden = node.lang !== lang;
+      });
+      if (location.hash.length > 1) {
+        let current = location.hash.slice(1);
+        try { current = decodeURIComponent(current); } catch {}
+        const base = current.endsWith("-ja") ? current.slice(0, -3) : current;
+        const translated = lang === "ja" ? base + "-ja" : base;
+        if (document.getElementById(translated)) {
+          history.replaceState(null, "", "#" + encodeURIComponent(translated));
+        }
+      }
+      try { localStorage.setItem("takoform-lang", lang); } catch {}
+    };
+    let stored = "";
+    try { stored = localStorage.getItem("takoform-lang") || ""; } catch {}
+    choose(stored || (navigator.language.startsWith("ja") ? "ja" : "en"));
+    document.addEventListener("click", (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest("[data-set-lang]")
+        : null;
+      if (button) choose(button.dataset.setLang);
+    });
+  })();
+  </script>
+</body>
 </html>

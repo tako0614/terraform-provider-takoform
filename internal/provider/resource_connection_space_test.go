@@ -9,15 +9,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 )
 
 func TestProviderConnectionInheritsTheSourceResourceSpace(t *testing.T) {
 	t.Parallel()
 
-	kind, ok := formcatalog.ByKind("HttpRoute")
+	kind, ok := currentformcatalog.ByKind("EdgeWorker")
 	if !ok {
-		t.Fatal("HttpRoute is not declared")
+		t.Fatal("EdgeWorker is not declared")
 	}
 	attribute := resourceConnectionAttribute(kind)
 	description := strings.ToLower(attribute.Description)

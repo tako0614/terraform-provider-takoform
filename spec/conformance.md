@@ -27,7 +27,7 @@ Every schema this specification declares normative is listed in
 Takoform defines four independent roles. An implementation claims one or more
 of them, and a claim is only ever about the class it names: a conforming host
 does not become a conforming publisher by hosting Forms, and a conforming
-provider does not admit anything.
+provider does not promote Form maturity.
 
 ### Form Package (data)
 
@@ -54,14 +54,14 @@ source Space fails apply as `resource_not_found` / HTTP 404 before mutation,
 even if the same identity exists in another Space or preview previously
 returned a plan.
 
-Host admission evidence MUST execute every `desired`-stage negative fixture
-from the exact package bytes. It does not claim `observed`-stage coverage:
+Host Support evidence MUST execute every `desired`-stage negative fixture from
+the exact package bytes. It does not claim `observed`-stage coverage:
 portable HTTP has no operation that injects a fabricated observation into an
 otherwise conforming host.
 
-A Form admitted as standard MUST declare at least one `desired`-stage negative
-fixture. Host and provider admission evidence therefore both have a non-empty
-negative-fixture set to execute.
+Every Experimental or Stable Form MUST declare at least one `desired`-stage
+negative fixture. Host Support and provider compatibility evidence therefore
+both have a non-empty negative-fixture set to execute.
 
 A host **MAY** additionally implement the optional read-only interface
 declaration surface ([`interface-declaration/`](interface-declaration/)). A host
@@ -77,11 +77,11 @@ A **conforming provider** MUST send only declared desired state, MUST carry the
 exact five-field installed Form identity on every mutation, and MUST NOT place
 a credential, price, target, or backend selection in its state.
 
-Provider admission evidence MUST execute every `desired`-stage negative and
-every `observed`-stage negative, rejecting the latter before host-produced
-status enters provider state. Standard admission currently defines no runner
-semantics for `output`-stage negatives, so their presence fails admission
-closed instead of being counted as executed evidence.
+Provider compatibility evidence MUST execute every `desired`-stage negative
+and every `observed`-stage negative, rejecting the latter before host-produced
+status enters provider state. When the runner defines no semantics for a
+fixture stage, its presence fails the compatibility claim closed instead of
+being counted as executed evidence.
 
 ### Form publisher (distribution)
 
@@ -97,6 +97,7 @@ black-box runner can detect the lifecycle failures in its pinned matrix over
 HTTP; it proves only the disposable reference host used by that test.
 
 Neither result is, or may be presented as, evidence of publication, external
-host admission, production activation, revocation enforcement, or
-interoperability with a particular host. Those require signed evidence from
-the party that actually performed the external operation.
+Host Support, production activation, Form maturity, revocation enforcement, or
+interoperability with a particular host. Those require evidence from the party
+that actually performed the external operation. The maturity requirements are
+owned by [`project-lifecycle.md`](project-lifecycle.md).

@@ -9,13 +9,19 @@ wins.
 
 | Schema | Contract |
 | --- | --- |
-| [`form-ref.schema.json`](form-ref.schema.json) | the exact four-field immutable Form reference |
-| [`form-definition.schema.json`](form-definition.schema.json) | the data-only Form Definition |
+| [`form-ref.schema.json`](form-ref.schema.json) | the frozen v1alpha1 four-field immutable Form reference |
+| [`form-ref-v1alpha2.schema.json`](form-ref-v1alpha2.schema.json) | the current v1alpha2 four-field immutable Form reference |
+| [`form-definition.schema.json`](form-definition.schema.json) | the frozen v1alpha1 data-only Form Definition |
+| [`form-definition-v1alpha2.schema.json`](form-definition-v1alpha2.schema.json) | the current v1alpha2 data-only Form Definition |
 | [`package-index.schema.json`](package-index.schema.json) | the closed Form Package inventory and its identity |
+| [`package-index-v1alpha2.schema.json`](package-index-v1alpha2.schema.json) | the retained content-addressed package profile for v1alpha1 FormRefs |
+| [`package-index-v1alpha3.schema.json`](package-index-v1alpha3.schema.json) | the current content-addressed package profile for v1alpha2 FormRefs |
 | [`form-package-revocation.schema.json`](form-package-revocation.schema.json) | one append-only revocation statement |
 | [`form-package-revocation-checkpoint.schema.json`](form-package-revocation-checkpoint.schema.json) | the cumulative, hash-chained revocation checkpoint |
-| [`host-discovery.schema.json`](host-discovery.schema.json) | the versioned host discovery document |
-| [`host-api-wire.schema.json`](host-api-wire.schema.json) | the fixed Resource, lifecycle response, Interface projection, and error envelopes |
+| [`host-discovery.schema.json`](host-discovery.schema.json) | the frozen provider-v1 host discovery document |
+| [`host-api-wire.schema.json`](host-api-wire.schema.json) | the frozen provider-v1 Resource and Interface wire envelopes |
+| [`host-discovery-v1alpha2.schema.json`](host-discovery-v1alpha2.schema.json) | the current provider-v2 host discovery document |
+| [`host-api-wire-v1alpha2.schema.json`](host-api-wire-v1alpha2.schema.json) | the current Resource, lifecycle response, Interface projection, and error envelopes |
 
 The Form Package verifier embeds its own copies of the package schemas so it
 has no filesystem dependency at runtime. The host discovery implementation

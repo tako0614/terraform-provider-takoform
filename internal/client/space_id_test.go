@@ -74,7 +74,7 @@ func TestSpaceIDIsPreservedExactlyInResourceAndInterfaceQueries(t *testing.T) {
 	var formsSpace, interfacesSpace string
 	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/apis/forms.takoform.com/v1alpha1/forms":
+		case "/apis/forms.takoform.com/v1alpha2/forms":
 			formsSpace = r.URL.Query().Get("space")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"forms": []any{map[string]any{
@@ -87,7 +87,7 @@ func TestSpaceIDIsPreservedExactlyInResourceAndInterfaceQueries(t *testing.T) {
 					"operations":           []string{"read"},
 				}},
 			})
-		case "/apis/forms.takoform.com/v1alpha1/interfaces":
+		case "/apis/forms.takoform.com/v1alpha2/interfaces":
 			interfacesSpace = r.URL.Query().Get("space")
 			_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": []any{}})
 		default:

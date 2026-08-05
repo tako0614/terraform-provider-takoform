@@ -21,7 +21,7 @@ type publishedReleaseSource struct {
 	ManifestPath        string
 	ManifestDigest      string
 	ReleaseID           string
-	Version             string
+	ArtifactID          string
 	Tag                 string
 	FormRef             formpackage.FormRef
 	PackageDigest       string
@@ -116,11 +116,11 @@ func discoverPublishedReleaseSources(root string) (map[string]publishedReleaseSo
 				if err != nil {
 					return nil, err
 				}
-				key := publishedReleaseKey(source.ReleaseID, source.Version)
+				key := publishedReleaseKey(source.ReleaseID, source.ArtifactID)
 				if previous, duplicate := published[key]; duplicate {
 					return nil, fmt.Errorf(
 						"published Form identity %s@%s is retained by both admission/%s and admission/%s",
-						source.FormRef.Kind, source.Version, previous.AdmissionGeneration, source.AdmissionGeneration,
+						source.FormRef.Kind, source.ArtifactID, previous.AdmissionGeneration, source.AdmissionGeneration,
 					)
 				}
 				published[key] = source
@@ -144,7 +144,7 @@ func mergeHistoricalCheckpointPublications(
 	root string,
 	published map[string]publishedReleaseSource,
 ) error {
-	ledgerPath := filepath.Join(root, filepath.FromSlash(admissioncheckpoint.CurrentIdentityLedgerPath))
+	ledgerPath := filepath.Join(root, filepath.FromSlash(admissioncheckpoint.IdentityLedgerPath))
 	if _, err := os.Lstat(ledgerPath); err != nil {
 		if os.IsNotExist(err) {
 			// Minimal package fixtures predate the admission identity ledger.
@@ -152,9 +152,9 @@ func mergeHistoricalCheckpointPublications(
 		}
 		return fmt.Errorf("inspect admission identity ledger: %w", err)
 	}
-	_, ledger, err := admissioncheckpoint.LoadCurrent(root)
+	ledger, err := admissioncheckpoint.LoadHistory(root)
 	if err != nil {
-		return fmt.Errorf("load admission checkpoint identities: %w", err)
+		return fmt.Errorf("load historical admission identities: %w", err)
 	}
 	for _, identity := range ledger.Entries {
 		if identity.Status != "assigned-historical" {
@@ -174,19 +174,19 @@ func mergeHistoricalCheckpointPublications(
 				source := publishedReleaseSource{
 					AdmissionGeneration: "historical:" + identity.Version,
 					ReleaseID:           entry.ReleaseID,
-					Version:             entry.Version,
+					ArtifactID:          entry.Version,
 					Tag:                 entry.Tag,
 					FormRef:             entry.FormRef,
 					PackageDigest:       entry.PackageDigest,
 					SourcePath:          entry.SourcePath,
 				}
-				key := publishedReleaseKey(source.ReleaseID, source.Version)
+				key := publishedReleaseKey(source.ReleaseID, source.ArtifactID)
 				previous, duplicate := published[key]
 				if duplicate {
 					if !samePublishedReleaseIdentity(previous, source) {
 						return fmt.Errorf(
 							"historical admission checkpoint %s conflicts with retained Form %s@%s",
-							identity.Tag, source.FormRef.Kind, source.Version,
+							identity.Tag, source.FormRef.Kind, source.ArtifactID,
 						)
 					}
 					continue
@@ -200,7 +200,7 @@ func mergeHistoricalCheckpointPublications(
 
 func samePublishedReleaseIdentity(left, right publishedReleaseSource) bool {
 	return left.ReleaseID == right.ReleaseID &&
-		left.Version == right.Version &&
+		left.ArtifactID == right.ArtifactID &&
 		left.Tag == right.Tag &&
 		left.FormRef == right.FormRef &&
 		left.PackageDigest == right.PackageDigest &&
@@ -313,7 +313,7 @@ func verifyRetainedReleaseSource(root, generation, releaseID, version string) (p
 		ManifestPath:        relativeManifest,
 		ManifestDigest:      formpackage.DigestBytes(manifestRaw),
 		ReleaseID:           releaseID,
-		Version:             version,
+		ArtifactID:          version,
 		Tag:                 manifest.Tag,
 		FormRef:             manifest.FormRef,
 		PackageDigest:       manifest.PackageDigest,
@@ -359,7 +359,7 @@ func verifyRetainedPublishedPackageSets(root string, generations []os.DirEntry, 
 					generation.Name(), index, entry.PackageReleaseManifestPath,
 				)
 			}
-			key := publishedReleaseKey(source.ReleaseID, source.Version)
+			key := publishedReleaseKey(source.ReleaseID, source.ArtifactID)
 			if _, duplicate := seen[key]; duplicate {
 				return fmt.Errorf("admission/%s published package set duplicates %s", generation.Name(), source.Tag)
 			}
@@ -386,18 +386,18 @@ func verifyLocalPublishedFormTags(root string, published map[string]publishedRel
 		}
 		return fmt.Errorf("inspect repository metadata: %w", err)
 	}
-	command := exec.Command("git", "-C", root, "tag", "--list", "forms/k-*/v*")
+	command := exec.Command("git", "-C", root, "tag", "--list", "forms/k-*/*")
 	raw, err := command.Output()
 	if err != nil {
 		return fmt.Errorf("enumerate published Form tags: %w", err)
 	}
 	tags := strings.Fields(string(raw))
 	sort.Strings(tags)
-	var plannedByTag map[string]PlannedFormRelease
+	var lifecycleByTag map[string]CurrentFormReleaseIdentity
 	for _, tag := range tags {
-		parts := strings.Split(tag, "/")
-		if len(parts) != 3 || parts[0] != "forms" || !strings.HasPrefix(parts[1], "k-") || !strings.HasPrefix(parts[2], "v") {
-			return fmt.Errorf("published Form tag %q has invalid identity", tag)
+		locator, err := formpackage.ParsePublicationTag(tag)
+		if err != nil {
+			return fmt.Errorf("published Form tag identity: %w", err)
 		}
 		command := exec.Command("git", "-C", root, "cat-file", "-t", tag)
 		objectType, err := command.Output()
@@ -407,22 +407,21 @@ func verifyLocalPublishedFormTags(root string, published map[string]publishedRel
 		if strings.TrimSpace(string(objectType)) != "tag" {
 			return fmt.Errorf("published Form tag %s must be an annotated tag", tag)
 		}
-		version := strings.TrimPrefix(parts[2], "v")
-		key := publishedReleaseKey(parts[1], version)
+		key := publishedReleaseKey(locator.ReleaseID, locator.ArtifactID)
 		source, ok := published[key]
 		unretained := !ok
 		if !ok {
-			if plannedByTag == nil {
+			if lifecycleByTag == nil {
 				var err error
-				plannedByTag, err = verifiedCurrentReleasePlanByTag(root)
+				lifecycleByTag, err = verifiedCurrentLifecycleReleaseByTag(root)
 				if err != nil {
-					return fmt.Errorf("published Form tag %s is unretained and the current release plan is invalid: %w", tag, err)
+					return fmt.Errorf("published Form tag %s is unretained and the current lifecycle authority is invalid: %w", tag, err)
 				}
 			}
-			planned, exists := plannedByTag[tag]
+			planned, exists := lifecycleByTag[tag]
 			if !exists {
 				return fmt.Errorf(
-					"published Form tag %s has no retained admission release manifest and is not in the current release plan",
+					"published Form tag %s has no retained Legacy release manifest and is not in the current lifecycle authority",
 					tag,
 				)
 			}
@@ -430,17 +429,17 @@ func verifyLocalPublishedFormTags(root string, published map[string]publishedRel
 				filepath.Join(root, filepath.FromSlash(planned.SourcePath)),
 			)
 			if err != nil {
-				return fmt.Errorf("planned release source for unretained Form tag %s: %w", tag, err)
+				return fmt.Errorf("lifecycle release source for unretained Form tag %s: %w", tag, err)
 			}
-			if planned.ReleaseID != parts[1] ||
-				planned.Version != version ||
+			if planned.ReleaseID != locator.ReleaseID ||
+				planned.ArtifactID != locator.ArtifactID ||
 				report.FormRef != planned.FormRef ||
 				report.PackageDigest != planned.PackageDigest {
-				return fmt.Errorf("unretained Form tag %s drifts from the current release plan identity", tag)
+				return fmt.Errorf("unretained Form tag %s drifts from the current lifecycle identity", tag)
 			}
 			source = publishedReleaseSource{
 				ReleaseID:     planned.ReleaseID,
-				Version:       planned.Version,
+				ArtifactID:    planned.ArtifactID,
 				Tag:           planned.Tag,
 				FormRef:       planned.FormRef,
 				PackageDigest: planned.PackageDigest,
@@ -467,18 +466,19 @@ func verifyLocalPublishedFormTags(root string, published map[string]publishedRel
 	return nil
 }
 
-func verifiedCurrentReleasePlanByTag(root string) (map[string]PlannedFormRelease, error) {
-	if err := VerifyReleasePlan(root); err != nil {
+func verifiedCurrentLifecycleReleaseByTag(root string) (map[string]CurrentFormReleaseIdentity, error) {
+	authority, err := readProjectLifecycleAuthority(root)
+	if err != nil {
 		return nil, err
 	}
-	var plan ReleasePlan
-	if err := readJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), &plan); err != nil {
+	identities, err := currentLifecycleReleaseIdentities(root, authority)
+	if err != nil {
 		return nil, err
 	}
-	byTag := make(map[string]PlannedFormRelease, len(plan.Releases))
-	for _, release := range plan.Releases {
+	byTag := make(map[string]CurrentFormReleaseIdentity, len(identities))
+	for _, release := range identities {
 		if _, duplicate := byTag[release.Tag]; duplicate {
-			return nil, fmt.Errorf("release plan reuses tag %s", release.Tag)
+			return nil, fmt.Errorf("current lifecycle authority reuses tag %s", release.Tag)
 		}
 		byTag[release.Tag] = release
 	}
@@ -488,7 +488,15 @@ func verifiedCurrentReleasePlanByTag(root string) (map[string]PlannedFormRelease
 func verifyNoPublishedReleaseOverwrite(root, stagingRoot string, entries []InventoryEntry, published map[string]publishedReleaseSource) error {
 	for _, entry := range entries {
 		releaseID := releaseIDForKind(entry.Kind)
-		source, exists := published[publishedReleaseKey(releaseID, entry.FormRef.DefinitionVersion)]
+		legacyKey := publishedReleaseKey(releaseID, entry.FormRef.DefinitionVersion)
+		currentKey := publishedReleaseKey(releaseID, strings.Replace(entry.PackageDigest, ":", "-", 1))
+		source, exists := published[currentKey]
+		if legacy, legacyExists := published[legacyKey]; legacyExists {
+			if exists && !samePublishedReleaseIdentity(source, legacy) {
+				return fmt.Errorf("Form %s has conflicting Legacy and content-addressed publication identities", entry.Kind)
+			}
+			source, exists = legacy, true
+		}
 		if !exists {
 			continue
 		}

@@ -21,6 +21,8 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
 )
@@ -141,8 +143,8 @@ type resourceCase struct {
 var resourceCases = declaredResourceCases()
 
 func declaredResourceCases() []resourceCase {
-	cases := make([]resourceCase, 0, len(formcatalog.Kinds))
-	for _, kind := range formcatalog.Kinds {
+	cases := make([]resourceCase, 0, len(currentformcatalog.Kinds))
+	for _, kind := range currentformcatalog.Kinds {
 		name := kind.FixtureName()
 		address := kind.ResourceType + "." + strings.ReplaceAll(name, "-", "_")
 		cases = append(cases, resourceCase{kind.Kind, kind.ResourceType, address, name})
@@ -352,20 +354,24 @@ func run(ctx context.Context, repoRoot, cliPath, installationSource, providerBin
 }
 
 func Validate(report Report) error {
-	return validateReport(report, LocalDevOverride)
+	return validateReportAgainst(report, LocalDevOverride, resourceCases, currentformcatalog.Kinds, candidateSetSHA256())
 }
 
 // ValidateRegistry verifies a report that was produced only after the CLI
 // performed a direct Registry install of the pinned provider version.
 func ValidateRegistry(report Report) error {
-	return validateReport(report, DirectRegistryInstall)
+	return validateReportAgainst(report, DirectRegistryInstall, resourceCases, currentformcatalog.Kinds, candidateSetSHA256())
 }
 
 func validateReport(report Report, installationSource string) error {
+	return validateReportAgainst(report, installationSource, resourceCases, currentformcatalog.Kinds, candidateSetSHA256())
+}
+
+func validateReportAgainst(report Report, installationSource string, cases []resourceCase, kinds []formcatalog.Kind, candidateDigest string) error {
 	if report.Format != ReportFormat || report.Classification != "generic-lifecycle-candidate" || report.PublicationReady ||
-		report.BindingStatus != "exact-structural-candidate-set" || report.RunnerSubject != RunnerSubject || len(report.Resources) != len(resourceCases) ||
+		report.BindingStatus != "exact-structural-candidate-set" || report.RunnerSubject != RunnerSubject || len(report.Resources) != len(cases) ||
 		report.Protocol != providerProtocol || report.InstallationSource != installationSource ||
-		report.CandidateSetSHA256 != candidateSetSHA256() || !validDigest(report.ProviderSchemaSHA256) ||
+		report.CandidateSetSHA256 != candidateDigest || !validDigest(report.ProviderSchemaSHA256) ||
 		report.ProviderBinary.Version == "" || !validDigest(report.ProviderBinary.SHA256) ||
 		report.CLI.Product == "" || report.CLI.Version == "" || report.CLI.ExecutableName == "" || !validDigest(report.CLI.ExecutableSHA256) {
 		return errors.New("provider lifecycle candidate report identity is invalid")
@@ -374,8 +380,8 @@ func validateReport(report Report, installationSource string) error {
 	if err != nil || report.CLI.ProviderAddress != expectedAddress {
 		return errors.New("provider lifecycle candidate used an unsupported CLI/FQN identity")
 	}
-	expectedResources := make(map[string]string, len(resourceCases))
-	for _, item := range resourceCases {
+	expectedResources := make(map[string]string, len(cases))
+	for _, item := range cases {
 		expectedResources[item.Kind] = item.ResourceType
 	}
 	seenResources := make(map[string]struct{}, len(report.Resources))
@@ -415,7 +421,7 @@ func validateReport(report Report, installationSource string) error {
 		if _, known := expectedNegative[evidence.Name]; !known || strings.TrimSpace(evidence.Fixture) == "" || !evidence.Passed {
 			return errors.New("provider lifecycle negative fixture is incomplete")
 		}
-		if _, declared := formcatalog.ByKind(evidence.Kind); !declared {
+		if _, declared := expectedResources[evidence.Kind]; !declared {
 			return fmt.Errorf("provider lifecycle negative fixture names undeclared kind %q", evidence.Kind)
 		}
 		if _, duplicate := seenNegative[evidence.Name]; duplicate {
@@ -427,14 +433,15 @@ func validateReport(report Report, installationSource string) error {
 	if len(negativeKinds) != len(expectedNegative) {
 		return errors.New("provider lifecycle substitution negatives did not cover two distinct Forms")
 	}
-	if len(report.ImmutableReplace) != len(resourceCases)+len(declaredImmutableFieldPointers()) {
+	immutablePointers := immutableFieldPointers(kinds)
+	if len(report.ImmutableReplace) != len(cases)+len(immutablePointers) {
 		return errors.New("provider lifecycle immutable replacement evidence is incomplete")
 	}
-	expectedImmutable := make(map[string]struct{}, len(resourceCases)+len(declaredImmutableFieldPointers()))
-	for _, item := range resourceCases {
+	expectedImmutable := make(map[string]struct{}, len(cases)+len(immutablePointers))
+	for _, item := range cases {
 		expectedImmutable[item.Kind+"/name"] = struct{}{}
 	}
-	for _, pointer := range declaredImmutableFieldPointers() {
+	for _, pointer := range immutablePointers {
 		expectedImmutable[pointer] = struct{}{}
 	}
 	seenImmutable := make(map[string]struct{}, len(report.ImmutableReplace))
@@ -602,10 +609,20 @@ func ValidateRegistryMatrix(matrix MatrixReport, requirements []CLIRequirement) 
 	return validateMatrix(matrix, requirements, DirectRegistryInstall)
 }
 
+// ValidateLegacyRegistryMatrix verifies the immutable provider-v1 closure
+// without reinterpreting it as the provider-v2 current candidate set.
+func ValidateLegacyRegistryMatrix(matrix MatrixReport, requirements []CLIRequirement) error {
+	return validateMatrixAgainst(matrix, requirements, DirectRegistryInstall, legacyResourceCases(), formcatalog.Kinds, legacyCandidateSetSHA256())
+}
+
 func validateMatrix(matrix MatrixReport, requirements []CLIRequirement, installationSource string) error {
+	return validateMatrixAgainst(matrix, requirements, installationSource, resourceCases, currentformcatalog.Kinds, candidateSetSHA256())
+}
+
+func validateMatrixAgainst(matrix MatrixReport, requirements []CLIRequirement, installationSource string, cases []resourceCase, kinds []formcatalog.Kind, candidateDigest string) error {
 	if matrix.Format != MatrixReportFormat || matrix.Classification != "supported-cli-fqn-candidate-matrix" || matrix.PublicationReady ||
 		matrix.InstallationSource != installationSource ||
-		!validDigest(matrix.ReleaseDescriptorSHA256) || matrix.CandidateSetSHA256 != candidateSetSHA256() ||
+		!validDigest(matrix.ReleaseDescriptorSHA256) || matrix.CandidateSetSHA256 != candidateDigest ||
 		!validDigest(matrix.ProviderSchemaSHA256) || len(matrix.Reports) != len(requirements) || len(requirements) != 2 {
 		return errors.New("provider CLI/FQN matrix identity is invalid")
 	}
@@ -617,7 +634,7 @@ func validateMatrix(matrix MatrixReport, requirements []CLIRequirement, installa
 	seen := map[string]bool{}
 	for index := range matrix.Reports {
 		report := matrix.Reports[index]
-		if err := validateReport(report, installationSource); err != nil {
+		if err := validateReportAgainst(report, installationSource, cases, kinds, candidateDigest); err != nil {
 			return err
 		}
 		requirement, ok := requirementByProduct[report.CLI.Product]
@@ -657,7 +674,7 @@ func verifyNoMaterializedInterfaces(ctx context.Context, formClient *client.Clie
 		return fmt.Errorf("listed %d declarations without a Ready exposing Resource", len(listed))
 	}
 	var selector client.InterfaceSelector
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		descriptors := kind.InterfaceDescriptors()
 		if len(descriptors) == 0 {
 			continue
@@ -686,7 +703,7 @@ func verifyReadyMaterializedInterfaces(ctx context.Context, formClient *client.C
 	readinessName := ""
 	readinessDeclarationCount := 0
 	for _, item := range resourceCases {
-		kind, ok := formcatalog.ByKind(item.Kind)
+		kind, ok := currentformcatalog.ByKind(item.Kind)
 		if !ok {
 			return fmt.Errorf("resource case names undeclared Form %s", item.Kind)
 		}
@@ -936,7 +953,7 @@ func verifyDriftState(raw []byte, providerAddress string) error {
 
 func candidateForms() map[string]client.InstalledFormReference {
 	out := map[string]client.InstalledFormReference{}
-	for kind, ref := range formregistry.All() {
+	for kind, ref := range currentformregistry.All() {
 		out[kind] = client.InstalledFormReference{
 			FormRef:       client.FormRef{APIVersion: ref.APIVersion, Kind: ref.Kind, DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest},
 			PackageDigest: ref.PackageDigest,
@@ -946,7 +963,10 @@ func candidateForms() map[string]client.InstalledFormReference {
 }
 
 func candidateSetSHA256() string {
-	forms := candidateForms()
+	return installedFormSetSHA256(candidateForms())
+}
+
+func installedFormSetSHA256(forms map[string]client.InstalledFormReference) string {
 	kinds := make([]string, 0, len(forms))
 	for kind := range forms {
 		kinds = append(kinds, kind)
@@ -968,6 +988,31 @@ func candidateSetSHA256() string {
 // reports and authenticated Registry install/readback reports.
 func CandidateSetSHA256() string {
 	return candidateSetSHA256()
+}
+
+// LegacyCandidateSetSHA256 is the retained provider-v1 Form closure identity.
+func LegacyCandidateSetSHA256() string {
+	return legacyCandidateSetSHA256()
+}
+
+func legacyCandidateSetSHA256() string {
+	forms := make(map[string]client.InstalledFormReference, len(formregistry.All()))
+	for kind, ref := range formregistry.All() {
+		forms[kind] = client.InstalledFormReference{
+			FormRef:       client.FormRef{APIVersion: ref.APIVersion, Kind: ref.Kind, DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest},
+			PackageDigest: ref.PackageDigest,
+		}
+	}
+	return installedFormSetSHA256(forms)
+}
+
+func legacyResourceCases() []resourceCase {
+	cases := make([]resourceCase, 0, len(formcatalog.Kinds))
+	for _, kind := range formcatalog.Kinds {
+		name := kind.FixtureName()
+		cases = append(cases, resourceCase{kind.Kind, kind.ResourceType, kind.ResourceType + "." + strings.ReplaceAll(name, "-", "_"), name})
+	}
+	return cases
 }
 
 func fileSHA256(path string) (string, error) {
@@ -1159,7 +1204,7 @@ func exerciseReplacementPlans(workDir, configPath, endpoint, providerAddress, pr
 	for _, item := range resourceCases {
 		evidence = append(evidence, ImmutableReplaceEvidence{Kind: item.Kind, Field: "/name", Passed: true})
 	}
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		for _, field := range kind.Fields {
 			if field.Immutable && field.AltExample != nil {
 				evidence = append(evidence, ImmutableReplaceEvidence{Kind: kind.Kind, Field: "/" + field.Wire, Passed: true})
@@ -1192,7 +1237,7 @@ provider "takoform" {
 		nameSuffix = "-replacement"
 	}
 	for index, item := range resourceCases {
-		kind, ok := formcatalog.ByKind(item.Kind)
+		kind, ok := currentformcatalog.ByKind(item.Kind)
 		if !ok {
 			continue
 		}
@@ -1396,7 +1441,7 @@ func (h *formHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	if r.URL.Path == "/.well-known/takoform" {
+	if r.URL.Path == "/.well-known/takoform/v1alpha2" {
 		origin := "http://" + r.Host
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"api_versions": []string{client.APIVersion},
@@ -1406,11 +1451,11 @@ func (h *formHost) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// declaration read without needing an external host.
 				client.FeatureInterfaceDeclarations: true,
 			},
-			"endpoints": map[string]string{"api": origin + "/apis/forms.takoform.com/v1alpha1"},
+			"endpoints": map[string]string{"api": origin + "/apis/forms.takoform.com/v1alpha2"},
 		})
 		return
 	}
-	const base = "/apis/forms.takoform.com/v1alpha1"
+	const base = "/apis/forms.takoform.com/v1alpha2"
 	if r.URL.Path == base+"/forms" {
 		h.handleForms(w, r)
 		return
@@ -1568,7 +1613,7 @@ func (h *formHost) materializeResourceInterfaces(resource client.Resource) ([]cl
 	if !ok || installed != *resource.Form {
 		return nil, fmt.Errorf("%s/%s exact installed Form drifted", resource.Kind, resource.Metadata.Name)
 	}
-	kind, ok := formcatalog.ByKind(resource.Kind)
+	kind, ok := currentformcatalog.ByKind(resource.Kind)
 	if !ok || kind.Version() != installed.FormRef.DefinitionVersion {
 		return nil, fmt.Errorf("%s/%s has no matching compiled Form descriptor", resource.Kind, resource.Metadata.Name)
 	}
@@ -1965,7 +2010,7 @@ func (h *formHost) readyResource(resource client.Resource, version int) (client.
 		"generation":  version,
 		"portability": "portable",
 	}
-	kind, ok := formcatalog.ByKind(resource.Kind)
+	kind, ok := currentformcatalog.ByKind(resource.Kind)
 	if !ok {
 		return client.Resource{}, fmt.Errorf("unknown Form kind %s", resource.Kind)
 	}
@@ -2068,8 +2113,12 @@ func RepoRoot(start string) (string, error) {
 // declaredImmutableFieldPointers lists every non-name field a Form declares
 // immutable, as Kind+JSON Pointer keys.
 func declaredImmutableFieldPointers() []string {
+	return immutableFieldPointers(currentformcatalog.Kinds)
+}
+
+func immutableFieldPointers(kinds []formcatalog.Kind) []string {
 	var pointers []string
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range kinds {
 		for _, field := range kind.Fields {
 			if field.Immutable && field.AltExample != nil {
 				pointers = append(pointers, kind.Kind+"/"+field.Wire)
@@ -2080,7 +2129,7 @@ func declaredImmutableFieldPointers() []string {
 }
 
 func kindHasReplaceableField(kind string) bool {
-	declared, ok := formcatalog.ByKind(kind)
+	declared, ok := currentformcatalog.ByKind(kind)
 	if !ok {
 		return false
 	}

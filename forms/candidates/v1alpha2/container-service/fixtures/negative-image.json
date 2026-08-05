@@ -1,0 +1,7 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "image": "docker.io/library/nginx@sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "name": "container-service"
+}

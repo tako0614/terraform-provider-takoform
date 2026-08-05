@@ -28,7 +28,7 @@ func run(args []string, stdout io.Writer) error {
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	contractPath := flags.String("contract", "conformance/portable-host-v1", "portable host contract directory")
+	contractPath := flags.String("contract", "conformance/portable-host-v2", "portable host contract directory")
 	endpoint := flags.String("endpoint", "", "disposable conformance endpoint origin")
 	tokenEnv := flags.String("token-env", "", "environment variable containing the bearer token")
 	alternateTokenEnv := flags.String(

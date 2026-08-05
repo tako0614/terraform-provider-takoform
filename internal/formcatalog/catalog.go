@@ -1,5 +1,6 @@
-// Package formcatalog declares every portable Service Form this release
-// carries, as data.
+// Package formcatalog retains every Legacy Service Form carried by provider
+// v1, as data. It is a compatibility catalog, not the current Form lifecycle
+// authority.
 //
 // A Form is described once here — its intent, its typed fields, the runtime
 // interfaces it exposes — and every other surface is derived from that single
@@ -34,21 +35,24 @@ const (
 type Grammar string
 
 const (
-	GrammarNone             Grammar = ""
-	GrammarToken            Grammar = "token"    // open capability token
-	GrammarVersion          Grammar = "version"  // opaque portable version token
-	GrammarClass            Grammar = "class"    // runtime class identifier
-	GrammarTimezone         Grammar = "timezone" // IANA-style zone token
-	GrammarCron             Grammar = "cron"     // five-field cron expression
-	GrammarHostname         Grammar = "hostname" // DNS hostname
-	GrammarDomain           Grammar = "domain"   // DNS domain name
-	GrammarPath             Grammar = "path"     // absolute URL path
-	GrammarCIDR             Grammar = "cidr"     // IPv4/IPv6 address block
-	GrammarDNSRelativeName  Grammar = "dns-relative-name"
-	GrammarOCIDigest        Grammar = "oci-digest" // OCI reference pinned by digest
-	GrammarMailbox          Grammar = "mailbox"    // email address
-	GrammarMailboxLocalPart Grammar = "mailbox-local-part"
-	GrammarHTTPSURL         Grammar = "https-url" // general absolute https URL; query and fragment permitted
+	GrammarNone            Grammar = ""
+	GrammarToken           Grammar = "token"    // open capability token
+	GrammarVersion         Grammar = "version"  // opaque portable version token
+	GrammarClass           Grammar = "class"    // runtime class identifier
+	GrammarTimezone        Grammar = "timezone" // IANA-style zone token
+	GrammarCron            Grammar = "cron"     // five-field cron expression
+	GrammarHostname        Grammar = "hostname" // DNS hostname
+	GrammarDomain          Grammar = "domain"   // DNS domain name
+	GrammarPath            Grammar = "path"     // absolute URL path
+	GrammarCIDR            Grammar = "cidr"     // IPv4/IPv6 address block
+	GrammarDNSRelativeName Grammar = "dns-relative-name"
+	GrammarOCIDigest       Grammar = "oci-digest" // OCI reference pinned by digest
+	// GrammarCanonicalOCIDigest is the v1alpha2 spelling: one lowercase OCI
+	// sha256 representation so equivalent bytes cannot produce state drift.
+	GrammarCanonicalOCIDigest Grammar = "canonical-oci-digest"
+	GrammarMailbox            Grammar = "mailbox" // email address
+	GrammarMailboxLocalPart   Grammar = "mailbox-local-part"
+	GrammarHTTPSURL           Grammar = "https-url" // general absolute https URL; query and fragment permitted
 	// GrammarCredentialFreeHTTPSURL is an absolute HTTPS URL safe to retain
 	// in nonsensitive state. Userinfo, query, and fragment are forbidden.
 	GrammarCredentialFreeHTTPSURL Grammar = "credential-free-https-url"
@@ -57,6 +61,9 @@ const (
 	// GrammarSHA256 is a bare or sha256-prefixed 64-hex digest. It binds a
 	// fetched URL to exact immutable bytes the same way an artifact source does.
 	GrammarSHA256 Grammar = "sha256"
+	// GrammarCanonicalSHA256 is the v1alpha2 spelling: the algorithm-prefixed
+	// lowercase digest used by every other exact Takoform identity.
+	GrammarCanonicalSHA256 Grammar = "canonical-sha256"
 )
 
 // ConnectionMode says whether a Form declares connections to other Resources.
@@ -127,7 +134,11 @@ type ConditionalConstraint struct {
 
 // Kind is one portable Service Form.
 type Kind struct {
-	Kind         string // PascalCase portable kind
+	Kind string // PascalCase portable kind
+	// ProposalID binds a current candidate to the Proposal that reviewed its
+	// portable boundary. Legacy compatibility kinds intentionally leave it
+	// empty because their publication history predates the current lifecycle.
+	ProposalID   string
 	Slug         string // kebab-case package directory
 	ResourceType string // takoform_* Terraform resource type
 	// DefinitionVersion is the SemVer of this Form's definition. A kind whose
@@ -153,6 +164,10 @@ type Kind struct {
 
 	Interfaces  []Interface
 	Constraints []ConditionalConstraint
+	// CoRequiredFields declares optional fields that must be supplied as one
+	// semantic unit. Each entry uses wire names and is projected to Draft
+	// 2020-12 dependentRequired plus negative conformance fixtures.
+	CoRequiredFields [][]string
 }
 
 func i64(value int64) *int64 { return &value }

@@ -1,0 +1,236 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha2",
+  "kind": "Schedule",
+  "definitionVersion": "0.1.0",
+  "title": "Schedule",
+  "description": "Portable cron lifecycle that invokes exactly one connected Resource.",
+  "desiredSchema": {
+    "$defs": {
+      "connection": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "projection": {
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "resource": {
+            "pattern": "^[A-Z][A-Za-z0-9]{0,63}/[a-z][a-z0-9-]{0,62}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "permissions",
+          "projection",
+          "resource"
+        ],
+        "type": "object"
+      },
+      "connections": {
+        "additionalProperties": {
+          "$ref": "#/$defs/connection"
+        },
+        "maxProperties": 1,
+        "minProperties": 1,
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Portable cron lifecycle that invokes exactly one connected Resource.",
+    "properties": {
+      "connections": {
+        "$ref": "#/$defs/connections",
+        "description": "Named references to other Resources and the portable permissions and projection required from each."
+      },
+      "cron": {
+        "description": "Portable five-field cron expression.",
+        "pattern": "^(?:[0-9]|[1-5][0-9]) (?:[0-9]|1[0-9]|2[0-3]) (?:\\*|[1-9]|[12][0-9]|3[01]) (?:\\*|[1-9]|1[0-2]) (?:\\*|[0-6])$",
+        "type": "string"
+      },
+      "name": {
+        "description": "Portable Resource name within this Form kind.",
+        "maxLength": 63,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "timezone": {
+        "default": "UTC",
+        "description": "IANA timezone required by the schedule; support is host-declared.",
+        "pattern": "^[A-Za-z][A-Za-z0-9._:/+-]{0,127}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "connections",
+      "cron",
+      "name"
+    ],
+    "title": "Schedule desired state",
+    "type": "object"
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "driftedFields": {
+        "items": {
+          "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "generation": {
+        "maximum": 9223372036854776000,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "pattern": "^Schedule/[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "imported": {
+        "type": "boolean"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "driftedFields",
+      "generation",
+      "id",
+      "imported",
+      "portability",
+      "ready"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "generation": {
+        "maximum": 9223372036854776000,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "pattern": "^Schedule/[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "kind": {
+        "const": "Schedule",
+        "type": "string"
+      },
+      "name": {
+        "maxLength": 63,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "generation",
+      "id",
+      "kind",
+      "name",
+      "portability"
+    ],
+    "type": "object"
+  },
+  "immutableFields": [
+    "/name"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh",
+    "drift"
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json",
+      "observedPath": "fixtures/observed.json",
+      "outputPath": "fixtures/output.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-missing-name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-name.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-connections",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-connections.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-cron",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-cron.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-cron",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-cron.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-timezone",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-timezone.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-connections-required",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-connections-required.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-connections-cardinality",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-connections-cardinality.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-observed-foreign-kind-id",
+      "stage": "observed",
+      "inputPath": "fixtures/negative-observed-foreign-kind-id.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

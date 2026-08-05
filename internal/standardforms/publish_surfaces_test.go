@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
@@ -13,13 +14,13 @@ func TestPublishedSurfaceManifestCoversCatalogExactly(t *testing.T) {
 	t.Parallel()
 
 	expected := map[string]struct{}{"forms/README.md": {}}
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		expected[filepath.ToSlash(filepath.Join("docs", "resources", docBasename(kind)))] = struct{}{}
 		expected[filepath.ToSlash(filepath.Join("examples", "resources", kind.ResourceType, "resource.tf"))] = struct{}{}
 	}
 	surfaces := renderPublishedSurfaces()
-	if len(surfaces) != 2*len(formcatalog.Kinds)+1 {
-		t.Fatalf("published surface count = %d, want %d", len(surfaces), 2*len(formcatalog.Kinds)+1)
+	if len(surfaces) != 2*len(currentformcatalog.Kinds)+1 {
+		t.Fatalf("published surface count = %d, want %d", len(surfaces), 2*len(currentformcatalog.Kinds)+1)
 	}
 	for _, surface := range surfaces {
 		if _, ok := expected[surface.path]; !ok {
@@ -191,7 +192,7 @@ func TestGenerationRejectsSymlinkedPublishedSurfaceLeaf(t *testing.T) {
 func TestPublishedSurfaceCatalogRejectsUnknownInventoryDomain(t *testing.T) {
 	t.Parallel()
 
-	kind := formcatalog.Kinds[0]
+	kind := currentformcatalog.Kinds[0]
 	kind.Domain = "storag"
 	err := validatePublishedSurfaceCatalog([]formcatalog.Kind{kind})
 	if err == nil || !strings.Contains(err.Error(), `unknown public inventory domain "storag"`) {

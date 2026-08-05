@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
 	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
@@ -99,9 +99,13 @@ type providerReleaseDescriptor struct {
 	} `json:"cliMatrix"`
 }
 
-type standardPackageSetDescriptor struct {
-	Format     string `json:"format"`
-	Generation string `json:"generation"`
+type currentCandidateSetDescriptor struct {
+	Format             string `json:"format"`
+	FormAPIVersion     string `json:"formApiVersion"`
+	PublicationStatus  string `json:"publicationStatus"`
+	LifecycleAuthority string `json:"lifecycleAuthority"`
+	AuthoringSource    string `json:"authoringSource"`
+	AuthoringPolicy    string `json:"authoringPolicy"`
 }
 
 // NamedFixture is one rejectable stage input and the name the Form gave it.
@@ -138,7 +142,7 @@ func Export(repoRoot, outputRoot, sourceCommit string, reports []GeneratedReport
 	if err := Write(repoRoot, filepath.Join(outputRoot, "packages"), reports); err != nil {
 		return DirectoryInventory{}, err
 	}
-	candidateRaw, err := readBoundedRegularFile(filepath.Join(repoRoot, "forms", "standard-package-set.json"), maxPayloadBytes)
+	candidateRaw, err := readBoundedRegularFile(filepath.Join(repoRoot, "forms", "candidates", "v1alpha2", "candidate-set.json"), maxPayloadBytes)
 	if err != nil {
 		return DirectoryInventory{}, fmt.Errorf("read exact standard package set: %w", err)
 	}
@@ -169,7 +173,7 @@ func VerifyDirectory(repoRoot, inputRoot, sourceCommit string) (DirectoryInvento
 	if err != nil {
 		return DirectoryInventory{}, fmt.Errorf("verify exact candidate fixtures: %w", err)
 	}
-	candidateRaw, err := readBoundedRegularFile(filepath.Join(repoRoot, "forms", "standard-package-set.json"), maxPayloadBytes)
+	candidateRaw, err := readBoundedRegularFile(filepath.Join(repoRoot, "forms", "candidates", "v1alpha2", "candidate-set.json"), maxPayloadBytes)
 	if err != nil {
 		return DirectoryInventory{}, fmt.Errorf("read reviewed standard package set: %w", err)
 	}
@@ -259,12 +263,17 @@ func buildDirectoryInventory(repoRoot, sourceCommit string, reports []GeneratedR
 	if err != nil {
 		return DirectoryInventory{}, err
 	}
-	var packageSet standardPackageSetDescriptor
+	var packageSet currentCandidateSetDescriptor
 	if err := json.Unmarshal(candidateRaw, &packageSet); err != nil {
 		return DirectoryInventory{}, fmt.Errorf("decode standard package set identity: %w", err)
 	}
-	if packageSet.Format != "takoform.standard-package-set@v1" || strings.TrimSpace(packageSet.Generation) == "" {
-		return DirectoryInventory{}, fmt.Errorf("standard package set lacks its exact generation identity")
+	if packageSet.Format != "takoform.current-form-candidates@v2" ||
+		packageSet.FormAPIVersion != formpackage.CurrentFormAPIVersion ||
+		packageSet.PublicationStatus != "unpublished" ||
+		packageSet.LifecycleAuthority != "forms/lifecycle.json" ||
+		packageSet.AuthoringSource != "internal/currentformcatalog" ||
+		packageSet.AuthoringPolicy != "independent-semantic-contract" {
+		return DirectoryInventory{}, fmt.Errorf("current candidate set lacks its exact Form epoch identity")
 	}
 	allowed := make(map[string]struct{}, len(subjects))
 	for _, subject := range subjects {
@@ -296,13 +305,13 @@ func buildDirectoryInventory(repoRoot, sourceCommit string, reports []GeneratedR
 			Identity: generated.report.Identity,
 		})
 	}
-	if len(descriptors) != len(standardforms.Specs) {
-		return DirectoryInventory{}, fmt.Errorf("provider-report set has %d reports, want exactly %d", len(descriptors), len(standardforms.Specs))
+	if len(descriptors) != len(currentformcatalog.Kinds) {
+		return DirectoryInventory{}, fmt.Errorf("provider-report set has %d reports, want exactly %d", len(descriptors), len(currentformcatalog.Kinds))
 	}
 	sort.Slice(descriptors, func(i, j int) bool { return descriptors[i].Slug < descriptors[j].Slug })
 	return DirectoryInventory{
 		Format: directoryInventoryFormat, Status: "candidate-only", ProofType: "provider", Subject: subject,
-		Generation:    packageSet.Generation,
+		Generation:    packageSet.FormAPIVersion,
 		RunnerVersion: version,
 		Source:        DirectorySource{Repository: "https://github.com/tako0614/terraform-provider-takoform.git", Commit: sourceCommit},
 		Reports:       descriptors,
@@ -512,8 +521,8 @@ func Generate(ctx context.Context, root, cliPath string) ([]GeneratedReport, err
 // admission tree is deliberately rejected so generation cannot activate or
 // overwrite retained admission evidence.
 func Write(repoRoot, outputRoot string, reports []GeneratedReport) error {
-	if len(reports) != len(standardforms.Specs) {
-		return fmt.Errorf("provider-report set has %d reports, want exactly %d", len(reports), len(standardforms.Specs))
+	if len(reports) != len(currentformcatalog.Kinds) {
+		return fmt.Errorf("provider-report set has %d reports, want exactly %d", len(reports), len(currentformcatalog.Kinds))
 	}
 	fixtures, err := LoadCandidateFixtures(repoRoot)
 	if err != nil {
@@ -636,37 +645,64 @@ func evalPathWithMissingLeaf(value string) (string, error) {
 // claim publication, signature, Registry readback, or admission authority.
 func LoadCandidateFixtures(root string) ([]PublishedFixture, error) {
 	if err := standardforms.Verify(root); err != nil {
-		return nil, fmt.Errorf("verify exact standard Form candidate: %w", err)
+		return nil, fmt.Errorf("verify Takoform current and Legacy boundaries: %w", err)
 	}
-	var inventory standardforms.Inventory
-	raw, err := os.ReadFile(filepath.Join(root, "forms", "standard-package-set.json"))
+	type candidateEntry struct {
+		Kind          string              `json:"kind"`
+		ProposalID    string              `json:"proposalId"`
+		Path          string              `json:"path"`
+		FormRef       formpackage.FormRef `json:"formRef"`
+		PackageDigest string              `json:"packageDigest"`
+	}
+	var inventory struct {
+		Format             string           `json:"format"`
+		FormAPIVersion     string           `json:"formApiVersion"`
+		PackageAPIVersion  string           `json:"packageApiVersion"`
+		PublicationStatus  string           `json:"publicationStatus"`
+		LifecycleAuthority string           `json:"lifecycleAuthority"`
+		AuthoringSource    string           `json:"authoringSource"`
+		AuthoringPolicy    string           `json:"authoringPolicy"`
+		Forms              []candidateEntry `json:"forms"`
+	}
+	raw, err := os.ReadFile(filepath.Join(root, "forms", "candidates", "v1alpha2", "candidate-set.json"))
 	if err != nil {
 		return nil, err
 	}
 	if err := decodeStrictJSON(raw, &inventory); err != nil {
 		return nil, err
 	}
-	if inventory.Format != "takoform.standard-package-set@v1" || inventory.Classification != "structural-candidate" || inventory.PublicationReady || inventory.AdmissionStatus != "external-required" || len(inventory.Packages) != len(standardforms.Specs) {
-		return nil, fmt.Errorf("candidate package set does not retain the exact external-admission boundary")
+	if inventory.Format != "takoform.current-form-candidates@v2" ||
+		inventory.FormAPIVersion != formpackage.CurrentFormAPIVersion ||
+		inventory.PackageAPIVersion != formpackage.CurrentPackageAPIVersion ||
+		inventory.PublicationStatus != "unpublished" ||
+		inventory.LifecycleAuthority != "forms/lifecycle.json" ||
+		inventory.AuthoringSource != "internal/currentformcatalog" ||
+		inventory.AuthoringPolicy != "independent-semantic-contract" ||
+		len(inventory.Forms) != len(currentformcatalog.Kinds) {
+		return nil, fmt.Errorf("current candidate set does not retain the exact unpublished v1alpha2 boundary")
 	}
-	entries := make(map[string]standardforms.InventoryEntry, len(inventory.Packages))
-	for _, entry := range inventory.Packages {
+	entries := make(map[string]candidateEntry, len(inventory.Forms))
+	for _, entry := range inventory.Forms {
 		if _, duplicate := entries[entry.Kind]; duplicate {
 			return nil, fmt.Errorf("candidate package set duplicates %s", entry.Kind)
 		}
 		entries[entry.Kind] = entry
 	}
-	fixtures := make([]PublishedFixture, 0, len(standardforms.Specs))
-	for _, spec := range standardforms.Specs {
+	fixtures := make([]PublishedFixture, 0, len(currentformcatalog.Kinds))
+	for _, spec := range currentformcatalog.Kinds {
 		entry, ok := entries[spec.Kind]
-		if !ok || entry.FormRef.Kind != spec.Kind || entry.AdmissionStatus != "external-required" {
-			return nil, fmt.Errorf("candidate package set omits exact %s identity", spec.Kind)
+		wantPath := filepath.ToSlash(filepath.Join("forms", "candidates", "v1alpha2", spec.Slug))
+		if !ok || entry.ProposalID != spec.ProposalID || entry.FormRef.APIVersion != formpackage.CurrentFormAPIVersion || entry.FormRef.Kind != spec.Kind ||
+			entry.FormRef.DefinitionVersion != "0.1.0" || entry.Path != wantPath {
+			return nil, fmt.Errorf("candidate package set omits exact %s v1alpha2 identity", spec.Kind)
 		}
-		releaseID := "k-" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(spec.Kind)))
-		releaseRoot := filepath.Join(root, "forms", "releases", releaseID, entry.FormRef.DefinitionVersion)
-		fixture, err := loadCandidateFixture(releaseRoot, spec.Slug, entry)
+		candidateRoot := filepath.Join(root, filepath.FromSlash(entry.Path))
+		legacyEntryShape := standardforms.InventoryEntry{
+			Kind: entry.Kind, Path: entry.Path, FormRef: entry.FormRef, PackageDigest: entry.PackageDigest,
+		}
+		fixture, err := loadCandidateFixture(candidateRoot, spec.Slug, legacyEntryShape)
 		if err != nil {
-			return nil, fmt.Errorf("%s candidate release-source fixtures: %w", spec.Kind, err)
+			return nil, fmt.Errorf("%s current candidate fixtures: %w", spec.Kind, err)
 		}
 		fixtures = append(fixtures, fixture)
 	}
@@ -679,7 +715,7 @@ func loadCandidateFixture(root, slug string, entry standardforms.InventoryEntry)
 		return PublishedFixture{}, err
 	}
 	if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
-		return PublishedFixture{}, fmt.Errorf("release source identity differs from the current candidate")
+		return PublishedFixture{}, fmt.Errorf("candidate package identity differs from its exact manifest entry")
 	}
 	indexRaw, err := os.ReadFile(filepath.Join(root, formpackage.PackageIndexFilename))
 	if err != nil {

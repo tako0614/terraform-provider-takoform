@@ -47,7 +47,6 @@ type versioningPolicy struct {
 	PortableAPIVersion     string `json:"portableApiVersion"`
 	FormDefinitionVersions string `json:"formDefinitionVersions"`
 	FormPackageVersions    string `json:"formPackageVersions"`
-	AdmissionGenerations   string `json:"admissionGenerations"`
 }
 
 type descriptor struct {
@@ -1091,10 +1090,9 @@ func validateCLIMatrix(matrix []cliCompatibility) error {
 
 func validateVersioningPolicy(policy versioningPolicy) error {
 	if policy.ProviderCompatibility != "semver-major" ||
-		policy.PortableAPIVersion != "forms.takoform.com/v1alpha1" ||
+		policy.PortableAPIVersion != "forms.takoform.com/v1alpha2" ||
 		policy.FormDefinitionVersions != "independent-immutable-semver" ||
-		policy.FormPackageVersions != "independent-immutable-semver" ||
-		policy.AdmissionGenerations != "independent-non-semver" {
+		policy.FormPackageVersions != "content-addressed-current-retained-legacy-semver" {
 		return errors.New("release descriptor conflates independent version streams")
 	}
 	return nil

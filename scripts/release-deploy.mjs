@@ -47,7 +47,8 @@ const FORM_BATCH_MAX_BYTES = 1024 * 1024;
 const REQUEST_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PROVIDER_TAG = /^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u;
-const FORM_TAG = /^forms\/(k-[a-z2-7]{2,103})\/v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/u;
+const LEGACY_FORM_TAG = /^forms\/(k-[a-z2-7]{2,103})\/v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/u;
+const CURRENT_FORM_TAG = /^forms\/(k-[a-z2-7]{2,103})\/(sha256-[0-9a-f]{64})$/u;
 const REVOCATION_TAG = /^forms\/revocations\/v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/u;
 const FORM_RELEASE_AUTHORITY_PATHS = Object.freeze([
   ".github/workflows/form-package-release.yml",
@@ -72,6 +73,11 @@ const FORM_RELEASE_AUTHORITY_PATHS = Object.freeze([
   "package.json",
   "scripts/release-deploy.mjs",
   "standardform",
+]);
+const FORM_CURRENT_RELEASE_AUTHORITY_PATHS = Object.freeze([
+  "forms/lifecycle.json",
+  "forms/lifecycle.schema.json",
+  "proposals",
 ]);
 const FORM_TAG_ONLY_RECOVERY_STABLE_PATHS = Object.freeze([
   ".github/workflows/form-package-release.yml",
@@ -148,6 +154,9 @@ export const RELEASE_SURFACES = Object.freeze([
     target:
       "github-release:tako0614/terraform-provider-takoform/forms/*",
     covers: [
+      "forms/lifecycle.json",
+      "forms/lifecycle.schema.json",
+      "forms/releases",
       "forms/release-plan.json",
       "forms/revocations",
       ".github/workflows/form-package-release.yml",
@@ -161,7 +170,7 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN, accepts only exact canonical release-plan tags or one exact source-backed revocation tag; ordinary phases accept one Form tag and explicit publish-batch accepts a non-empty unique ordered set, requires a clean non-shallow current protected main, runs the complete owner check before dispatch or mutation, or exactly once for an explicit serial publish-batch whose process-scoped proof is bound to the same clean protected-main commit and tree and revalidated immediately before each tag push, Release draft creation, and final draft publication, checksum-closes every explicit successful same-run candidate, verifies its source/tooling commits and Sigstore identity, and records every exact tag object and asset digest",
+        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN, accepts new Form publication only from the current lifecycle-derived Experimental or Stable release authority and accepts Legacy identities only for exact source-commit recovery or verification; ordinary phases accept one Form tag and explicit publish-batch accepts a non-empty unique ordered set, requires a clean non-shallow current protected main, runs the complete owner check before dispatch or mutation, or exactly once for an explicit serial publish-batch whose process-scoped proof is bound to the same clean protected-main commit and tree and revalidated immediately before each tag push, Release draft creation, and final draft publication, checksum-closes every explicit successful same-run candidate, verifies its source/tooling commits and Sigstore identity, and records every exact tag object and asset digest",
       "post-conditions":
         "after local tag/release publication requires exact remote tag resolution, immutable release id/tag, exact API asset digests, and a fresh seven-file package or six-file revocation download; verify-all delegates all 34 semantic readbacks to the repository's Go verifier and writes one create-only external publication set",
       reversal:
@@ -171,7 +180,7 @@ export const RELEASE_SURFACES = Object.freeze([
       "independent-review":
         "the form-package-release protected Environment reviews and signs the exact candidate; local publication consumes only that named successful run/attempt and independently verifies its checksum and Sigstore closure",
       "no-overwrite":
-        "the plan/tag/source must match exactly, local tag creation is compare-and-swap, remote refs must be absent before creation and exact afterwards, existing releases are refused, and final readback requires immutable exact assets",
+        "the lifecycle-derived current authority, tag, source, FormRef, and package digest must match exactly; the retained Legacy plan can authorize only recovery or verification, local tag creation is compare-and-swap, remote refs must be absent before creation and exact afterwards, existing releases are refused, and final readback requires immutable exact assets",
       halt:
         "prepare and prepare-revocation stop at the exact returned workflow URL as AWAITING_REVIEW; cancel that exact run before approval if anything changes, and publish never infers or selects a latest candidate",
     },
@@ -397,28 +406,34 @@ function runProvider(context, options) {
 function runForm(context, options) {
   switch (options.phase) {
     case "plan":
-      return formPlan(context, readReleasePlan(context.repo));
+      return formPlan(context, readCurrentReleasePlan(context.repo));
     case "prepare":
-      return formPrepare(context, options, readReleasePlan(context.repo));
+      return formPrepare(context, options, readCurrentReleasePlan(context.repo));
     case "publish":
-      return formPublish(context, options, readReleasePlan(context.repo));
+      return formPublish(context, options, readCurrentReleasePlan(context.repo));
     case "publish-batch":
       return formPublishBatch(
         context,
         options,
-        readReleasePlan(context.repo),
+        readCurrentReleasePlan(context.repo),
       );
     case "recover-tag-only":
       return formRecoverTagOnly(
         context,
         options,
-        readReleasePlan(context.repo),
+        formReleaseAuthorityAtSourceCommit(
+          context,
+          options["expected-commit"],
+        ),
       );
     case "recover-draft":
       return formRecoverDraft(
         context,
         options,
-        readReleasePlan(context.repo),
+        formReleaseAuthorityAtSourceCommit(
+          context,
+          options["expected-commit"],
+        ),
       );
     case "verify":
       return formVerify(context, options);
@@ -872,6 +887,7 @@ function assertFormReleaseAuthorityFence(
   const authorityPaths = [
     ...FORM_RELEASE_AUTHORITY_PATHS,
     revocation ? "forms/revocations" : "forms/release-plan.json",
+    ...(!revocation ? FORM_CURRENT_RELEASE_AUTHORITY_PATHS : []),
     ...(!revocation && sourcePath ? [sourcePath] : []),
   ].sort();
   command(
@@ -1120,6 +1136,206 @@ function readReleasePlanAtCommit(context, commit) {
   return validateReleasePlan(plan);
 }
 
+function readCurrentReleasePlan(repo) {
+  const lifecycle = readJSON(
+    join(repo, "forms/lifecycle.json"),
+    "current Form lifecycle authority",
+  );
+  return currentReleasePlanFromLifecycle(lifecycle, (relativePath) =>
+    readJSON(join(repo, ...relativePath.split("/")), relativePath),
+  );
+}
+
+function readCurrentReleasePlanAtCommit(context, commit) {
+  if (!COMMIT.test(commit ?? "")) {
+    throw new Error("current Form release authority commit is invalid");
+  }
+  const readAtCommit = (relativePath, label = relativePath) => {
+    const raw = command(context, "git", ["show", `${commit}:${relativePath}`]);
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      throw new Error(`${label} at source commit is invalid JSON: ${error.message}`);
+    }
+  };
+  return currentReleasePlanFromLifecycle(
+    readAtCommit("forms/lifecycle.json", "current Form lifecycle authority"),
+    readAtCommit,
+  );
+}
+
+function pathExistsAtCommit(context, commit, relativePath) {
+  if (!COMMIT.test(commit ?? "")) {
+    throw new Error("Form release authority commit is invalid");
+  }
+  return attemptCommand(context, "git", [
+    "cat-file",
+    "-e",
+    `${commit}:${relativePath}`,
+  ]).ok;
+}
+
+function currentReleasePlanAtCommitIfPresent(context, commit) {
+  if (!pathExistsAtCommit(context, commit, "forms/lifecycle.json")) {
+    return {
+      format: "takoform.current-form-release-plan@v2",
+      repository: GITHUB_REPOSITORY,
+      releases: [],
+    };
+  }
+  return readCurrentReleasePlanAtCommit(context, commit);
+}
+
+function currentReleasePlanFromLifecycle(lifecycle, readPackageJSON) {
+  requireExactKeys(
+    lifecycle,
+    [
+      "format",
+      "projectStatus",
+      "currentEpoch",
+      "states",
+      "legacy",
+      "currentForms",
+      "proposals",
+    ],
+    "current Form lifecycle authority",
+  );
+  if (
+    lifecycle.format !== "takoform.form-lifecycle@v2" ||
+    lifecycle.projectStatus !== "experimental" ||
+    lifecycle.currentEpoch !== "forms.takoform.com/v1alpha2" ||
+    JSON.stringify(lifecycle.states) !==
+      JSON.stringify(["proposal", "experimental", "stable", "legacy"]) ||
+    !Array.isArray(lifecycle.currentForms)
+  ) {
+    throw new Error("current Form lifecycle authority identity is invalid");
+  }
+  const releases = [];
+  const tags = new Set();
+  for (const [index, record] of lifecycle.currentForms.entries()) {
+    if (record?.state === "legacy") continue;
+    const label = `current Form lifecycle currentForms[${index}]`;
+    requireExactKeys(
+      record,
+      [
+        "proposalId",
+        "state",
+        "owner",
+        "formRef",
+        "packageDigest",
+        "packagePath",
+        "history",
+        "evidence",
+      ],
+      label,
+    );
+    if (record.state !== "experimental" && record.state !== "stable") {
+      throw new Error(`${label} has a non-publishable state`);
+    }
+    requireExactKeys(
+      record.formRef,
+      ["apiVersion", "kind", "definitionVersion", "schemaDigest"],
+      `${label} FormRef`,
+    );
+    if (
+      record.formRef.apiVersion !== "forms.takoform.com/v1alpha2" ||
+      !/^[A-Z][A-Za-z0-9]{0,63}$/u.test(record.formRef.kind ?? "") ||
+      !/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u.test(
+        record.formRef.definitionVersion ?? "",
+      ) ||
+      !SHA256.test(record.formRef.schemaDigest ?? "") ||
+      !SHA256.test(record.packageDigest ?? "") ||
+      typeof record.packagePath !== "string"
+    ) {
+      throw new Error(`${label} exact identity is invalid`);
+    }
+    const releaseId = releaseIdForKind(record.formRef.kind);
+    const packageIndexPath = `${record.packagePath}/package-index.json`;
+    const packageIndex = readPackageJSON(packageIndexPath);
+    requireExactKeys(
+      packageIndex,
+      ["apiVersion", "kind", "formRef", "definitionPath", "files"],
+      `${label} package index`,
+    );
+    const artifactId = record.packageDigest.replace(":", "-");
+    const tag = `forms/${releaseId}/${artifactId}`;
+    const expectedSourcePath = `forms/releases/${releaseId}/${artifactId}`;
+    if (
+      packageIndex.apiVersion !== "packages.forms.takoform.com/v1alpha3" ||
+      packageIndex.kind !== "FormPackage" ||
+      packageIndex.definitionPath !== "definition.json" ||
+      !CURRENT_FORM_TAG.test(tag) ||
+      record.packagePath !== expectedSourcePath ||
+      JSON.stringify(packageIndex.formRef) !== JSON.stringify(record.formRef)
+    ) {
+      throw new Error(`${label} package release identity is invalid`);
+    }
+    if (tags.has(tag)) {
+      throw new Error(`${label} duplicates release tag ${tag}`);
+    }
+    tags.add(tag);
+    releases.push({
+      proposalId: record.proposalId,
+      state: record.state,
+      kind: record.formRef.kind,
+      releaseId,
+      artifactId,
+      tag,
+      sourcePath: record.packagePath,
+      formRef: record.formRef,
+      packageDigest: record.packageDigest,
+    });
+  }
+  releases.sort((left, right) => left.tag.localeCompare(right.tag));
+  return {
+    format: "takoform.current-form-release-plan@v2",
+    repository: GITHUB_REPOSITORY,
+    releases,
+  };
+}
+
+function releaseIdForKind(kind) {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+  let accumulator = 0;
+  let bits = 0;
+  let encoded = "";
+  for (const byte of Buffer.from(kind, "utf8")) {
+    accumulator = (accumulator << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      encoded += alphabet[(accumulator >> bits) & 31];
+    }
+    accumulator = bits === 0 ? 0 : accumulator & ((1 << bits) - 1);
+  }
+  if (bits > 0) encoded += alphabet[(accumulator << (5 - bits)) & 31];
+  return `k-${encoded}`;
+}
+
+function formReleaseAuthorityAtSourceCommit(context, commit) {
+  return combineFormReleasePlans(
+    currentReleasePlanAtCommitIfPresent(context, commit),
+    readReleasePlanAtCommit(context, commit),
+  );
+}
+
+function combineFormReleasePlans(current, historical) {
+  const releases = [...current.releases, ...historical.releases];
+  const tags = new Set();
+  for (const release of releases) {
+    if (tags.has(release.tag)) {
+      throw new Error(`current and Legacy release authorities overlap at ${release.tag}`);
+    }
+    tags.add(release.tag);
+  }
+  return {
+    format: "takoform.combined-form-release-authority@v1",
+    generation: "current-and-legacy-recovery",
+    repository: GITHUB_REPOSITORY,
+    releases,
+  };
+}
+
 function validateReleasePlan(plan) {
   if (
     plan?.format !== "takoform.release-plan@v1" ||
@@ -1132,7 +1348,7 @@ function validateReleasePlan(plan) {
   }
   const tags = new Set();
   for (const entry of plan.releases) {
-    const match = FORM_TAG.exec(entry?.tag ?? "");
+    const match = LEGACY_FORM_TAG.exec(entry?.tag ?? "");
     if (
       !match ||
       entry.releaseId !== match[1] ||
@@ -1152,20 +1368,35 @@ function validateReleasePlan(plan) {
 }
 
 function formReleaseIdentity(tag) {
-  const match = FORM_TAG.exec(tag ?? "");
-  if (!match) {
-    throw new Error(
-      "--tag must match forms/<canonical-release-id>/v<canonical-semver>",
-    );
+  const current = CURRENT_FORM_TAG.exec(tag ?? "");
+  if (current) {
+    return {
+      tag,
+      releaseId: current[1],
+      artifactId: current[2],
+      packageApiVersion: "packages.forms.takoform.com/v1alpha3",
+    };
   }
-  return { tag, releaseId: match[1], version: match[2] };
+  const legacy = LEGACY_FORM_TAG.exec(tag ?? "");
+  if (legacy) {
+    return {
+      tag,
+      releaseId: legacy[1],
+      artifactId: legacy[2],
+      version: legacy[2],
+      packageApiVersion: "packages.forms.takoform.com/v1alpha1",
+    };
+  }
+  throw new Error(
+    "--tag must use a current sha256 locator or a retained Legacy v<semver> locator",
+  );
 }
 
 function plannedRelease(plan, tag) {
   const entry = plan.releases.find((candidate) => candidate.tag === tag);
   if (!entry) {
     throw new Error(
-      `Form Package tag is not one of the exact 34 release-plan entries: ${tag}`,
+      `Form Package tag is not authorized by the selected release authority: ${tag}`,
     );
   }
   return entry;
@@ -3183,10 +3414,10 @@ function publicAssets(root, names) {
   );
 }
 
-function providerReleaseBody(descriptor) {
+export function providerReleaseBody(descriptor) {
   return (
-    "Signed deterministic Takoform provider release. Provider publication does not activate Standard Forms.\n\nBreaking upgrade from v0.2.1: follow the migration guide before using provider v1 with existing state: " +
-    `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v0.2.1-to-v1.0.1.md`
+    "Signed deterministic Takoform provider release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from provider v1: provider v2 uses the forms.takoform.com/v1alpha2 epoch and rejects provider-v1 state instead of rewriting it. Follow the explicit create/import/cutover migration guide: " +
+    `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v1-to-v2.md`
   );
 }
 
@@ -3315,10 +3546,11 @@ function providerPublish(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
   const releaseBody = providerReleaseBody(descriptor);
   if (
-    !releaseBody.includes("Breaking upgrade from v0.2.1") ||
-    !releaseBody.includes("release/migrations/v0.2.1-to-v1.0.1.md")
+    !releaseBody.includes("Breaking upgrade from provider v1") ||
+    !releaseBody.includes("forms.takoform.com/v1alpha2") ||
+    !releaseBody.includes("release/migrations/v1-to-v2.md")
   ) {
-    throw new Error("provider release body omits the exact v1 migration guide");
+    throw new Error("provider release body omits the exact v1-to-v2 migration guide");
   }
   assertCurrentProtectedMain(context, expectedCommit);
   const localObject = localTagOID(context, descriptor.tag);
@@ -4034,7 +4266,15 @@ function verifyRegistryCandidate(
 }
 
 function formAssetNames(entry) {
-  const base = `takoform-form-${entry.releaseId}_${entry.version}`;
+  const artifactId = entry.artifactId ?? entry.version;
+  if (
+    typeof artifactId !== "string" ||
+    (!CURRENT_FORM_TAG.test(`forms/${entry.releaseId}/${artifactId}`) &&
+      !LEGACY_FORM_TAG.test(`forms/${entry.releaseId}/v${artifactId}`))
+  ) {
+    throw new Error("Form Package entry has no canonical artifact identity");
+  }
+  const base = `takoform-form-${entry.releaseId}_${artifactId}`;
   return {
     base,
     index: `${base}_package-index.json`,
@@ -4186,7 +4426,8 @@ function verifyFormSemanticClosure(
   if (
     report.kind !== entry.kind ||
     report.releaseId !== entry.releaseId ||
-    report.version !== entry.version
+    (report.artifactId ?? report.version) !==
+      (entry.artifactId ?? entry.version)
   ) {
     throw new Error("Form Package deep semantic report plan binding mismatch");
   }
@@ -4203,6 +4444,12 @@ function verifyFormPublicAssets(context, root, entry, { metadata } = {}) {
     join(root, "release-manifest.json"),
     "Form Package release manifest",
   );
+  const currentIdentity = entry.artifactId !== undefined;
+  const manifestIdentityMatches = currentIdentity
+    ? manifest.artifactId === entry.artifactId &&
+      !("packageVersion" in manifest)
+    : manifest.packageVersion === entry.version &&
+      !("artifactId" in manifest);
   if (
     manifest.schemaVersion !== 1 ||
     manifest.releaseType !== "form-package" ||
@@ -4211,7 +4458,7 @@ function verifyFormPublicAssets(context, root, entry, { metadata } = {}) {
     !COMMIT.test(manifest.sourceCommit ?? "") ||
     !COMMIT.test(manifest.toolingCommit ?? "") ||
     manifest.workflow !== ".github/workflows/form-package-release.yml" ||
-    manifest.packageVersion !== entry.version ||
+    !manifestIdentityMatches ||
     manifest.releaseId !== entry.releaseId ||
     manifest.packageDigest !== entry.packageDigest ||
     JSON.stringify(manifest.formRef) !== JSON.stringify(entry.formRef) ||
@@ -4627,7 +4874,7 @@ function formPlan(context, plan) {
     kind: "takos.deploy-result@v1",
     surface: FORM_SURFACE,
     phase: "plan",
-    generation: plan.generation,
+    authority: plan.format,
     commit,
     releases: commands.length,
     status: "VERIFIED",
@@ -5320,7 +5567,10 @@ function formVerify(context, options) {
       throw new Error("public Form Package tooling commit is invalid");
     }
     const entry = plannedRelease(
-      readReleasePlanAtCommit(context, releaseManifest.toolingCommit),
+      formReleaseAuthorityAtSourceCommit(
+        context,
+        releaseManifest.sourceCommit,
+      ),
       identity.tag,
     );
     const manifest = verifyFormPublicAssets(context, live.output, entry);
@@ -5764,7 +6014,9 @@ export const releaseDeployTestHooks = Object.freeze({
   command,
   dispatchWorkflow,
   establishFormPublishBatchOwnerGateProof,
+  currentReleasePlanFromLifecycle,
   expectedFormTagObject,
+  formReleaseAuthorityAtSourceCommit,
   formPublishBatch,
   formPublicationMutationFence,
   formVerifyAll,
@@ -5781,6 +6033,7 @@ export const releaseDeployTestHooks = Object.freeze({
   resumeDraftReleaseLocally,
   reconstructCandidateTagObject,
   readFormPublishBatch,
+  releaseIdForKind,
   requireSuccessfulRun,
   validateReleaseReadback,
   validateDraftBeforePublication,

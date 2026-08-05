@@ -1,0 +1,364 @@
+{
+  "format": "takoform.portable-host-conformance@v2",
+  "apiVersion": "forms.takoform.com/v1alpha2",
+  "discoveryPath": "/.well-known/takoform/v1alpha2",
+  "apiPath": "/apis/forms.takoform.com/v1alpha2",
+  "runnerInput": {
+    "space": "conformance-space",
+    "alternateSpace": "conformance-space-alternate",
+    "name": "edge-worker",
+    "identity": {
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha2",
+        "kind": "EdgeWorker",
+        "definitionVersion": "0.1.0",
+        "schemaDigest": "sha256:226d21f90c739cd749fe41525d4fc3ddd848938aa270df1fdf10f273d8d4e0f8"
+      },
+      "packageDigest": "sha256:b8f7c2cae932f9d6e25eb9dc3493862d5b9c0189ad92dfba63e8d24997b6e2a9"
+    },
+    "desired": {
+      "configuration": {"LOG_LEVEL": "info"},
+      "connections": {
+        "data": {
+          "permissions": ["read", "write"],
+          "projection": "keyvalue.binding.v1",
+          "resource": "KeyValueStore/key-value-store"
+        }
+      },
+      "entrypoint": "worker.mjs",
+      "name": "edge-worker",
+      "runtime": "javascript",
+      "runtimeVersion": "2026.1",
+      "source": {
+        "artifactMediaType": "application/vnd.takoform.edge-worker+tar",
+        "artifactSha256": "sha256:0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37",
+        "artifactUrl": "https://artifacts.portable-conformance.invalid/edge-worker.tar"
+      }
+    },
+    "connectionProbe": {
+      "sourceName": "connection-probe",
+      "sourceIdentity": {
+        "formRef": {
+          "apiVersion": "forms.takoform.com/v1alpha2",
+          "kind": "Schedule",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:4d99cf7dcc944a91f796c3b028bfd8a48337b0f91de2b1b84b75d647d171ffc3"
+        },
+        "packageDigest": "sha256:4d11c8740003449e9ba5bcab819d88596ad74edcd4ca8ae9a193c73389e21551"
+      },
+      "desired": {
+        "connections": {
+          "invocation": {
+            "permissions": ["request"],
+            "projection": "schedule.trigger.v1",
+            "resource": "EdgeWorker/connection-target"
+          }
+        },
+        "cron": "0 0 * * *",
+        "name": "connection-probe",
+        "timezone": "UTC"
+      },
+      "targetKind": "EdgeWorker",
+      "targetName": "connection-target"
+    },
+    "negativeFixtures": [
+      {"name":"reject-missing-name","stage":"desired","path":"edge-worker/fixtures/negative-missing-name.json","sha256":"sha256:04acde086a7e2e0f2eade02e36705620a16e60b4a5ee7b19b483d25d2d70c10c"},
+      {"name":"reject-missing-source","stage":"desired","path":"edge-worker/fixtures/negative-missing-source.json","sha256":"sha256:87c607ebf2b041e9e2f8b407ee4d10feb6042385f8bdf3fafba33b37964acb0b"},
+      {"name":"reject-missing-entrypoint","stage":"desired","path":"edge-worker/fixtures/negative-missing-entrypoint.json","sha256":"sha256:b9d6b7ddbe694f77f28e53be36e8a3a1ec20f4b96c076fc9d4d385631696e5d4"},
+      {"name":"reject-missing-runtime","stage":"desired","path":"edge-worker/fixtures/negative-missing-runtime.json","sha256":"sha256:5112ab7858b710209988d6ebf74a3bf264abe654c08d78a5d6e2d9bba728656b"},
+      {"name":"reject-entrypoint","stage":"desired","path":"edge-worker/fixtures/negative-entrypoint.json","sha256":"sha256:b05be3b963c968f8831ef1910bbfb3b1d7d44d849fd951fb6c17fbe41f7326ce"},
+      {"name":"reject-runtime","stage":"desired","path":"edge-worker/fixtures/negative-runtime.json","sha256":"sha256:c73f3cb913393c8ce2b430c0ade3161aeb75e1d6644116f6f7a55baa2d244d26"},
+      {"name":"reject-runtime_version","stage":"desired","path":"edge-worker/fixtures/negative-runtime_version.json","sha256":"sha256:4808e5be69cedf2eb991e1162f82aa05802b3f6f5e453568367c663d4603112d"},
+      {"name":"reject-configuration","stage":"desired","path":"edge-worker/fixtures/negative-configuration.json","sha256":"sha256:4f7d111206b1e1e96c2a12858895ecf97bfc7388af989cdaedc43b35ff6661ad"},
+      {"name":"reject-artifact-url-userinfo","stage":"desired","path":"edge-worker/fixtures/negative-artifact-url-userinfo.json","sha256":"sha256:b75a45cc29bd2c5b923c7e70db31e983bad5c848040244d932aec51547069bdc"},
+      {"name":"reject-artifact-url-query","stage":"desired","path":"edge-worker/fixtures/negative-artifact-url-query.json","sha256":"sha256:5132feb4366eb72f0254284de51168c95957b56d151060dc6c268a1f03445131"},
+      {"name":"reject-artifact-url-fragment","stage":"desired","path":"edge-worker/fixtures/negative-artifact-url-fragment.json","sha256":"sha256:938e1835423f7420ca9470ee5d36e412a36b999d31828bd176c81533fb0a35dd"},
+      {"name":"reject-artifact-source","stage":"desired","path":"edge-worker/fixtures/negative-artifact-source.json","sha256":"sha256:01c0a683cf2d94241235a0f9cb1683ed7a248005c4e8d2812275545ceed34861"}
+    ],
+    "importNativeId": "provider-native-portable-assets"
+  },
+  "resourceVersion": {
+    "encoding": "canonical-decimal-string",
+    "minimum": "1",
+    "maximum": "9223372036854775807",
+    "etag": "exactly-one-strong-quoted-resource-version",
+    "observeRefreshSuccess": "equals-if-match",
+    "staleFence": "resource_version_conflict/412"
+  },
+  "planBinding": {
+    "canonicalization": "RFC8785",
+    "portableInputs": [
+      "specDigest",
+      "resource.apiVersion",
+      "resource.kind",
+      "resource.metadata.name",
+      "resource.metadata.space",
+      "resource.metadata.resourceVersion",
+      "resource.form.formRef.apiVersion",
+      "resource.form.formRef.kind",
+      "resource.form.formRef.definitionVersion",
+      "resource.form.formRef.schemaDigest",
+      "resource.form.packageDigest"
+    ],
+    "hostPlan": "exact-reviewed-plan",
+    "substitutionFailure": "invalid_argument/400-before-mutation",
+    "pureBlackBoxInputs": [
+      "specDigest",
+      "resource.metadata.space",
+      "resource.metadata.resourceVersion"
+    ],
+    "instrumentedAdapter": {
+      "scope": "disposable-conformance-adapter-only; production-forbidden",
+      "requestHeader": "Takoform-Conformance-Probe-Plan-Binding",
+      "resultHeader": "Takoform-Conformance-Probe-Plan-Binding-Result",
+      "inputs": [
+        "resource.apiVersion",
+        "resource.kind",
+        "resource.metadata.name",
+        "resource.form.formRef.apiVersion",
+        "resource.form.formRef.kind",
+        "resource.form.formRef.definitionVersion",
+        "resource.form.formRef.schemaDigest",
+        "resource.form.packageDigest"
+      ],
+      "bindingPath": "same-canonical-plan-binding-function",
+      "rejectedResult": "invalid_argument/400; result=rejected",
+      "acceptedNoMutationResult": "204; result=accepted-no-mutation; no-state-mutation",
+      "unknownValueFailure": "invalid_argument/400",
+      "authorizationOrder": "authenticate-and-authorize-before-probe"
+    }
+  },
+  "idempotency": {
+    "scopeDimensions": [
+      "authenticated-tenant",
+      "authenticated-principal",
+      "space",
+      "idempotency-key"
+    ],
+    "fingerprint": [
+      "method",
+      "request-target",
+      "preconditions",
+      "request-body-bytes"
+    ],
+    "replayAuthorization": "authenticate-and-authorize-current-request-before-cache-lookup",
+    "crossPrincipalRule": "same-key-is-independent",
+    "crossTenantRule": "same-key-is-independent",
+    "crossTenantProbe": "same-principal-different-tenant-shared-disposable-resource",
+    "revokedRule": "current-authentication-or-authorization-error-not-cached-success",
+    "replayDenialCodes": [
+      "unauthenticated",
+      "permission_denied",
+      "policy_denied"
+    ],
+    "deniedReplayRecordRule": "denial-neither-returns-nor-overwrites-cached-success"
+  },
+  "wireJSON": {
+    "encoding": "UTF-8 I-JSON",
+    "rawValidationOrder": "validate-complete-raw-document-before-typed-decode",
+    "unknownRequestFieldFailure": "invalid_argument/400-before-mutation",
+    "duplicateRequestFailure": "invalid_argument/400-before-mutation",
+    "duplicateResponseFailure": "protocol-invalid-before-typed-semantics",
+    "duplicateContractFailure": "verification-failure-before-typed-decode"
+  },
+  "connectionResolution": {
+    "sourceSpace": "resource.metadata.space",
+    "reference": "Kind/name",
+    "crossSpace": "unrepresentable",
+    "missing": "resource_not_found/404-before-mutation"
+  },
+  "preconditions": {
+    "create": "If-None-Match: *; conflict=resource_version_conflict/412",
+    "delete": "If-Match: quoted positive-decimal resourceVersion; stale=resource_version_conflict/412",
+    "import": "If-None-Match: *; conflict=resource_version_conflict/412 or If-Match: quoted positive-decimal resourceVersion; stale=resource_version_conflict/412",
+    "observe": "If-Match: quoted positive-decimal resourceVersion; stale=resource_version_conflict/412",
+    "refresh": "If-Match: quoted positive-decimal resourceVersion; stale=resource_version_conflict/412",
+    "update": "If-Match: quoted positive-decimal resourceVersion; stale=resource_version_conflict/412"
+  },
+  "idempotentOperations": [
+    "apply",
+    "import",
+    "observe",
+    "refresh",
+    "delete"
+  ],
+  "validationErrorCode": "invalid_argument",
+  "stableErrorCodes": [
+    "invalid_argument",
+    "unauthenticated",
+    "permission_denied",
+    "form_unknown",
+    "form_not_installed",
+    "form_unavailable",
+    "form_identity_conflict",
+    "resource_not_found",
+    "resource_version_conflict",
+    "resource_busy",
+    "import_conflict",
+    "policy_denied",
+    "backend_unavailable",
+    "interface_identity_ambiguous",
+    "interface_instance_ambiguous",
+    "internal_error"
+  ],
+  "retryableCodes": [
+    "resource_busy",
+    "backend_unavailable"
+  ],
+  "requiredRunnerChecks": [
+    "discovery",
+    "exact-availability",
+    "exact-form-definition",
+    "preview",
+    "desired-negative-fixtures",
+    "resource-version-bounds",
+    "preview-plan-spec-binding",
+    "preview-plan-resource-identity-binding",
+    "preview-plan-space-binding",
+    "preview-plan-form-ref-binding",
+    "preview-plan-package-digest-binding",
+    "unknown-top-level-request-field-rejected-before-mutation",
+    "unknown-metadata-field-rejected-before-mutation",
+    "unknown-desired-authority-field-rejected-before-mutation",
+    "duplicate-metadata-space-rejected-before-typed-decode",
+    "duplicate-resource-version-rejected-before-typed-decode",
+    "duplicate-spec-rejected-before-typed-decode",
+    "non-utf8-request-rejected-before-typed-decode",
+    "duplicate-error-code-response-rejected-before-typed-decode",
+    "apply-headers-required",
+    "apply",
+    "apply-idempotency",
+    "idempotency-cross-principal-isolated",
+    "idempotency-cross-tenant-isolated",
+    "idempotency-replay-authentication-before-cache",
+    "idempotency-replay-permission-before-cache",
+    "idempotency-replay-policy-before-cache",
+    "resource-cross-space-read-isolated",
+    "idempotency-cross-space-isolated",
+    "resource-cross-space-mutation-isolated",
+    "connection-cross-space-target-not-found",
+    "connection-missing-target-no-source-mutation",
+    "connection-same-space-resolves",
+    "idempotency-key-reuse-rejected",
+    "create-precondition-conflict",
+    "update-headers-required",
+    "update",
+    "update-idempotency",
+    "interface-ready-after-update",
+    "stale-update-rejected",
+    "read",
+    "canonical-resource-parity",
+    "exact-digest-substitution-rejected",
+    "invalid-argument-normalization",
+    "observe",
+    "observe-idempotency",
+    "observe-headers-required",
+    "observe-generation-fence",
+    "refresh",
+    "refresh-idempotency",
+    "refresh-headers-required",
+    "refresh-generation-fence",
+    "stale-delete-rejected",
+    "retryable-code-semantics",
+    "stable-error-http-status-mapping",
+    "interface-required-feature-advertised",
+    "interface-endpoint-same-origin",
+    "interface-space-required",
+    "interface-query-vocabulary-closed",
+    "interface-absent-before-ready",
+    "interface-ready-projection",
+    "portable-interface-routes-reject-writes",
+    "interface-space-isolation",
+    "interface-ready-projection-exactly-matches-form-descriptors",
+    "interface-exact-pair-read",
+    "interface-omitted-version-unique-resolves",
+    "interface-exact-resource-instance-read",
+    "interface-multi-resource-instance-fails-closed",
+    "interface-document-exact-copy",
+    "interface-document-schema-valid",
+    "interface-required-ready-projection-present",
+    "interface-projection-contains-no-authority-fields",
+    "delete-headers-required",
+    "delete",
+    "delete-idempotency",
+    "interface-absent-after-delete",
+    "import-headers-required",
+    "import",
+    "import-idempotency",
+    "interface-ready-after-import",
+    "import-update-headers-required",
+    "import-update-stale-rejected",
+    "import-update",
+    "interface-ready-after-import-update",
+    "post-import-delete-readback"
+  ],
+  "interfaceDeclarations": {
+    "optional": true,
+    "featureFlag": "interface_declarations",
+    "endpointKey": "interfaces",
+    "readOnly": true,
+    "endpointOriginRule": "same-origin-with-api",
+    "materializationSource": "form-declared-descriptors",
+    "spaceQuery": "space",
+    "spaceSelectionRule": "explicit-selector-else-provider-default-required",
+    "listPath": "{api}/interfaces",
+    "getPath": "{api}/interfaces/{name}",
+    "descriptorIdentity": [
+      "name",
+      "version"
+    ],
+    "runtimeIdentity": [
+      "space",
+      "resource.kind",
+      "resource.name",
+      "name",
+      "version"
+    ],
+    "versionQuery": "version",
+    "omittedVersionRule": "only-when-visible-name-is-unique",
+    "resourceKindQuery": "resourceKind",
+    "resourceNameQuery": "resourceName",
+    "omittedResourceRule": "only-when-visible-instance-is-unique",
+    "identityAmbiguousCode": "interface_identity_ambiguous",
+    "instanceAmbiguousCode": "interface_instance_ambiguous",
+    "documentRule": "copy-exact-declared-document",
+    "requiredReadinessRule": "not-ready-unless-materialized-validated-resolved",
+    "checks": [
+      "interface-required-feature-advertised",
+      "interface-endpoint-same-origin",
+      "interface-space-required",
+      "interface-query-vocabulary-closed",
+      "interface-absent-before-ready",
+      "interface-ready-projection",
+      "portable-interface-routes-reject-writes",
+      "interface-space-isolation",
+      "interface-ready-projection-exactly-matches-form-descriptors",
+      "interface-exact-pair-read",
+      "interface-omitted-version-unique-resolves",
+      "interface-exact-resource-instance-read",
+      "interface-multi-resource-instance-fails-closed",
+      "interface-document-exact-copy",
+      "interface-document-schema-valid",
+      "interface-required-ready-projection-present",
+      "interface-projection-contains-no-authority-fields",
+      "interface-absent-after-delete"
+    ]
+  },
+  "forbiddenProviderState": [
+    "credential",
+    "secret",
+    "price",
+    "quote",
+    "billing",
+    "backend",
+    "selected_implementation",
+    "target",
+    "locked"
+  ],
+  "runnerEvidence": {
+    "subject": "takoform.portable-host-conformance-runner@v2",
+    "entrypoint": "cmd/portable-host-conformance",
+    "selfTest": "go run ./cmd/portable-host-conformance self-test",
+    "sha256": "sha256:f69ac161543918d237c4cf70afe18d913d8e70122ecfa855c994a6c7d5e7db2f"
+  }
+}

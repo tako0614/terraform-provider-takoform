@@ -3,8 +3,26 @@ package formpackage
 import "encoding/json"
 
 const (
-	FormAPIVersion           = "forms.takoform.com/v1alpha1"
-	PackageAPIVersion        = "packages.forms.takoform.com/v1alpha1"
+	// LegacyFormAPIVersion identifies the frozen pre-reset Form epoch.
+	LegacyFormAPIVersion = "forms.takoform.com/v1alpha1"
+	// FormAPIVersion is the retained source-compatible name for the v1alpha1
+	// package and provider-v1 verifier surface. New code must select the epoch
+	// explicitly instead of treating this alias as current authority.
+	FormAPIVersion = LegacyFormAPIVersion
+	// CurrentFormAPIVersion identifies the current Form specification epoch.
+	// An epoch does not imply that any Form has reached Experimental maturity.
+	CurrentFormAPIVersion = "forms.takoform.com/v1alpha2"
+	// PackageAPIVersion is the retained v1alpha1 package profile. Its
+	// packageVersion remains part of immutable Legacy bytes and locators.
+	PackageAPIVersion = "packages.forms.takoform.com/v1alpha1"
+	// LegacyContentAddressedPackageAPIVersion is the immutable v1alpha2 package
+	// profile published for v1alpha1 FormRefs. It remains readable but cannot
+	// carry a Form from the current epoch.
+	LegacyContentAddressedPackageAPIVersion = "packages.forms.takoform.com/v1alpha2"
+	// CurrentPackageAPIVersion identifies content-addressed packages for the
+	// current Form epoch. Their publication locator is derived from
+	// packageDigest, never a second SemVer.
+	CurrentPackageAPIVersion = "packages.forms.takoform.com/v1alpha3"
 	PackageKind              = "FormPackage"
 	TrustAPIVersion          = "trust.forms.takoform.com/v1alpha1"
 	RevocationKind           = "FormPackageRevocation"
@@ -23,12 +41,15 @@ type FormRef struct {
 }
 
 type FormDefinition struct {
-	APIVersion            string                `json:"apiVersion"`
-	Kind                  string                `json:"kind"`
-	DefinitionVersion     string                `json:"definitionVersion"`
-	Title                 string                `json:"title"`
-	Description           string                `json:"description,omitempty"`
-	Status                string                `json:"status"`
+	APIVersion        string `json:"apiVersion"`
+	Kind              string `json:"kind"`
+	DefinitionVersion string `json:"definitionVersion"`
+	Title             string `json:"title"`
+	Description       string `json:"description,omitempty"`
+	// Status is retained only for immutable v1alpha1 Definition bytes. The
+	// v1alpha2 schema forbids it because forms/lifecycle.json is the sole
+	// authority for Proposal, Experimental, Stable, and Legacy maturity.
+	Status                string                `json:"status,omitempty"`
 	DesiredSchema         map[string]any        `json:"desiredSchema"`
 	ObservedSchema        map[string]any        `json:"observedSchema"`
 	OutputSchema          map[string]any        `json:"outputSchema,omitempty"`
@@ -101,7 +122,7 @@ type NegativeFixture struct {
 type PackageIndex struct {
 	APIVersion     string        `json:"apiVersion"`
 	Kind           string        `json:"kind"`
-	PackageVersion string        `json:"packageVersion"`
+	PackageVersion string        `json:"packageVersion,omitempty"`
 	FormRef        FormRef       `json:"formRef"`
 	DefinitionPath string        `json:"definitionPath"`
 	Files          []PackageFile `json:"files"`

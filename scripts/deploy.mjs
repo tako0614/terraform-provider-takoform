@@ -54,11 +54,6 @@ import {
   runReleaseSurface,
 } from "./release-deploy.mjs";
 import {
-  ADMISSION_SURFACE,
-  isAdmissionSurface,
-  runAdmissionSurface,
-} from "./admission-deploy.mjs";
-import {
   CLOUDFLARE_ACCOUNT_ENV,
   CLOUDFLARE_ZONE_ENV,
   createPinnedWranglerEnvironment,
@@ -134,7 +129,6 @@ const CONTRACT = {
       },
     },
     ...RELEASE_SURFACES,
-    ADMISSION_SURFACE,
   ],
 };
 
@@ -157,20 +151,6 @@ if (isReleaseSurface(invocation[0])) {
   }
   process.exit(0);
 }
-if (isAdmissionSurface(invocation[0])) {
-  try {
-    await runAdmissionSurface({
-      surface: invocation[0],
-      args: invocation.slice(1),
-      repo,
-    });
-  } catch (error) {
-    process.stderr.write(`deploy blocked: ${error.message}\n`);
-    process.exit(1);
-  }
-  process.exit(0);
-}
-
 const acknowledgedInitialSchemaOriginMint = invocation.includes(
   INITIAL_SCHEMA_ORIGIN_MINT_ACK,
 );

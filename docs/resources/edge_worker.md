@@ -2,12 +2,12 @@
 page_title: "takoform_edge_worker Resource - takoform"
 subcategory: "Service Forms"
 description: |-
-  Portable edge/event-driven application served from a prebuilt immutable artifact.
+  Portable request/event application executed from digest-bound artifact bytes near an ingress boundary.
 ---
 
 # takoform_edge_worker
 
-Portable edge/event-driven application served from a prebuilt immutable artifact.
+Portable request/event application executed from digest-bound artifact bytes near an ingress boundary.
 
 The configured host selects and operates the concrete backend. This resource
 carries desired state only: it never names a target, a credential, a price, or
@@ -19,14 +19,10 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 - `artifact_url` (String, required) — Absolute credential-free HTTPS location any conforming host can fetch; userinfo, query, and fragment are forbidden because this value persists in nonsensitive state.
 - `artifact_sha256` (String, required) — Digest binding the URL to exact immutable bytes.
 - `artifact_media_type` (String, required) — Lowercase type/subtype describing how the bytes are interpreted.
-- `entrypoint` (String, required) — Relative path of the artifact module the edge runtime starts.
-- `runtime` (String, optional) — Open runtime capability token the artifact expects. The configured host decides support.
-- `runtime_version` (String, optional) — Optional runtime version requested for the artifact.
-- `request_timeout_seconds` (Number, optional) — Optional per-request timeout preference in seconds. Between 1 and 3600.
-- `concurrency` (Number, optional) — Optional concurrent-request preference. At least 1.
-- `assets_path` (String, optional) — Optional directory inside the artifact served as static assets.
-- `assets_not_found_handling` (String, optional) — Open capability token describing how the host answers an asset miss.
-- `configuration` (Map of String, optional) — Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.
+- `entrypoint` (String, required) — Relative path of the artifact module started by the selected runtime.
+- `runtime` (String, required) — Open runtime capability token required by the artifact; each host declares support independently.
+- `runtime_version` (String, optional) — Optional runtime compatibility version required by the artifact.
+- `configuration` (Map of String, optional) — Non-secret application configuration. Credentials remain host-owned.
 - `connections` (List of Object, optional) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
@@ -42,7 +38,7 @@ backend placement is never provider state.
 
 ## Declared runtime interfaces
 
-- `http.request@1` — Portable HTTP request surface exposed by an edge application. Operations: `request`.
+- `http.request@1` — Portable HTTP request surface exposed by the application. Operations: `request`.
 
 A declaration says what exists. It carries no credential and grants no
 consumer access; the host creates the record and authorizes its use.

@@ -120,31 +120,6 @@ func (v stringPatternValidator) ValidateString(_ context.Context, req validator.
 	}
 }
 
-type stringOCIDigestReferenceValidator struct{}
-
-// StringOCIDigestReference requires an immutable OCI image digest rather than
-// a mutable tag. The exact rule mirrors the current ContainerService standard.
-func StringOCIDigestReference() validator.String {
-	return stringOCIDigestReferenceValidator{}
-}
-
-func (stringOCIDigestReferenceValidator) Description(_ context.Context) string {
-	return "value must be an OCI image reference pinned by sha256 digest"
-}
-
-func (v stringOCIDigestReferenceValidator) MarkdownDescription(ctx context.Context) string {
-	return v.Description(ctx)
-}
-
-func (stringOCIDigestReferenceValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-	if !validOCIDigestReference(req.ConfigValue.ValueString()) {
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid OCI image reference", "image must be pinned as repository@sha256:<64 hexadecimal characters>")
-	}
-}
-
 type int64AtLeastValidator struct {
 	minimum int64
 }

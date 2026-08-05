@@ -26,8 +26,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
-	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
-	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 // Environment variable fallbacks for provider configuration.
@@ -190,8 +190,8 @@ func newResourceAPIHTTPClient() *http.Client {
 }
 
 func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resource {
-	resources := make([]func() resource.Resource, 0, len(formcatalog.Kinds))
-	for _, kind := range formcatalog.Kinds {
+	resources := make([]func() resource.Resource, 0, len(currentformcatalog.Kinds))
+	for _, kind := range currentformcatalog.Kinds {
 		resources = append(resources, NewFormResource(kind))
 	}
 	return resources
@@ -217,8 +217,8 @@ func configureClient(ctx context.Context, endpoint, token string, httpClient *ht
 	if !disco.SupportsServiceForms() {
 		return nil, fmt.Errorf(
 			"this endpoint does not expose the Takoform Service Form API "+
-				"(features.service_forms is not true at %s/.well-known/takoform)",
-			c.Endpoint(),
+				"(features.service_forms is not true at %s%s)",
+			c.Endpoint(), client.DiscoveryPath,
 		)
 	}
 	if !supportsAPIVersion(disco.APIVersions, client.APIVersion) {
@@ -232,7 +232,7 @@ func configureClient(ctx context.Context, endpoint, token string, httpClient *ht
 }
 
 func providerCandidateForms() map[string]client.InstalledFormReference {
-	refs := formregistry.All()
+	refs := currentformregistry.All()
 	out := make(map[string]client.InstalledFormReference, len(refs))
 	for kind, ref := range refs {
 		out[kind] = client.InstalledFormReference{

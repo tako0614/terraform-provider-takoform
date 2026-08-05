@@ -1,0 +1,6 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "name": "container-service"
+}

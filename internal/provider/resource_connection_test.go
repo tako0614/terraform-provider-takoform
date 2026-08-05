@@ -9,13 +9,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 func TestConnectionSchemaStatesRequestOnlyAuthorityBoundary(t *testing.T) {
 	t.Parallel()
 
-	kind, _ := formcatalog.ByKind("EdgeWorker")
+	kind, _ := currentformcatalog.ByKind("EdgeWorker")
 	description := strings.ToLower(resourceConnectionAttribute(kind).Description)
 	for _, required := range []string{
 		"request", "grants nothing", "host may deny", "bindings", "token issuance",
@@ -33,8 +34,8 @@ func TestConnectionSchemaStatesRequestOnlyAuthorityBoundary(t *testing.T) {
 func TestConnectionProjectionEnforcesCardinalityAndUniqueNames(t *testing.T) {
 	t.Parallel()
 
-	schedule, _ := formcatalog.ByKind("Schedule")
-	loadBalancer, _ := formcatalog.ByKind("LoadBalancer")
+	schedule, _ := currentformcatalog.ByKind("Schedule")
+	edgeWorker, _ := currentformcatalog.ByKind("EdgeWorker")
 	cases := []struct {
 		name      string
 		kind      formcatalog.Kind
@@ -50,7 +51,7 @@ func TestConnectionProjectionEnforcesCardinalityAndUniqueNames(t *testing.T) {
 			connectionValue("first", "Workflow/first"),
 			connectionValue("second", "Workflow/second"),
 		}, wantError: true},
-		{name: "multi backend accepts two", kind: loadBalancer, items: []attr.Value{
+		{name: "optional connections accept two", kind: edgeWorker, items: []attr.Value{
 			connectionValue("first", "ContainerService/first"),
 			connectionValue("second", "ContainerService/second"),
 		}},

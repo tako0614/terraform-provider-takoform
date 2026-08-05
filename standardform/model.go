@@ -1,6 +1,11 @@
-// Package standardform defines and structurally validates externally
-// authenticated evidence for an exact portable Form Package. It grants no
-// placement, credential, execution, or commercial authority.
+// Package standardform retains the parser and model for pre-reset
+// standard-admission/v1alpha1 evidence. It is a Legacy verification surface:
+// historical Definition status and portable-standard classification grant no
+// current Form maturity, approval, Host Support, activation, placement,
+// credential, execution, or commercial authority.
+//
+// Deprecated: new Form work uses forms/lifecycle.json and exact Host Support;
+// it must not create or consume new central standard-admission evidence.
 package standardform
 
 import "github.com/tako0614/terraform-provider-takoform/formpackage"

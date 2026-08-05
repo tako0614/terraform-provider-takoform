@@ -2,12 +2,12 @@
 page_title: "takoform_key_value_store Resource - takoform"
 subcategory: "Service Forms"
 description: |-
-  Portable key/value state with an optional consistency preference.
+  Portable key/value state with declared consistency and expiry semantics.
 ---
 
 # takoform_key_value_store
 
-Portable key/value state with an optional consistency preference.
+Portable key/value state with declared consistency and expiry semantics.
 
 The configured host selects and operates the concrete backend. This resource
 carries desired state only: it never names a target, a credential, a price, or
@@ -16,8 +16,8 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 ## Arguments
 
 - `name` (String, required, forces replacement) — Resource name.
-- `consistency` (String, optional) — Optional consistency preference. One of `eventual`, `strong`.
-- `default_ttl_seconds` (Number, optional) — Optional default entry lifetime in seconds. At least 0.
+- `consistency` (String, optional) — Optional read consistency requirement: eventual permits stale reads; per_key_linearizable requires each key's completed writes and subsequent reads to appear in one real-time order. Omission states no portable consistency guarantee. One of `eventual`, `per_key_linearizable`.
+- `default_ttl_seconds` (Number, optional) — Optional positive default entry lifetime in seconds; omission requests no default expiry requirement. At least 1.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
 ## Read-only attributes

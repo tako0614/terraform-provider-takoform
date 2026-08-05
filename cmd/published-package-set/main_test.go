@@ -610,7 +610,7 @@ func TestDownloadPlanProductionPathInvokesCommonVerifierAndFailsClosed(t *testin
 	if err == nil || !strings.Contains(err.Error(), "verify staged publication set") {
 		t.Fatalf("common publication verification error = %v", err)
 	}
-	if strings.Contains(err.Error(), "load exact current portable candidate set") {
+	if strings.Contains(err.Error(), "load exact Legacy portable-v1 set") {
 		t.Fatalf("production path did not reach the common publication verifier: %v", err)
 	}
 	if _, statErr := os.Lstat(outputRoot); !os.IsNotExist(statErr) {
@@ -679,6 +679,43 @@ func TestDownloadPlanRefusesSymlinkedOutputParentWithoutNetwork(t *testing.T) {
 	}
 }
 
+func TestSelectCurrentPlannedReleaseRequiresOneExactDigestIdentity(t *testing.T) {
+	t.Parallel()
+	releaseID := formpackage.ReleaseIDForKind("Example")
+	packageDigest := "sha256:" + strings.Repeat("a", 64)
+	artifactID := "sha256-" + strings.Repeat("a", 64)
+	tag := "forms/" + releaseID + "/" + artifactID
+	identity := standardforms.CurrentFormReleaseIdentity{
+		ProposalID: "p-example", State: "experimental", Kind: "Example",
+		ReleaseID: releaseID, ArtifactID: artifactID, Tag: tag,
+		SourcePath: "forms/releases/" + releaseID + "/" + artifactID,
+		FormRef: formpackage.FormRef{
+			APIVersion: formpackage.CurrentFormAPIVersion, Kind: "Example",
+			DefinitionVersion: "0.1.0", SchemaDigest: "sha256:" + strings.Repeat("b", 64),
+		},
+		PackageDigest: packageDigest,
+	}
+	plan := standardforms.CurrentFormReleasePlan{
+		Format: "takoform.current-form-release-plan@v2", Repository: repository,
+		Releases: []standardforms.CurrentFormReleaseIdentity{identity},
+	}
+
+	selected, err := selectCurrentPlannedRelease(plan, identity.Kind, identity.Tag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.Kind != identity.Kind || selected.ReleaseID != releaseID ||
+		selected.ArtifactID != artifactID || selected.LegacyVersion != "" ||
+		selected.Tag != tag || selected.SourcePath != identity.SourcePath ||
+		selected.FormRef != identity.FormRef || selected.PackageDigest != packageDigest ||
+		selected.APIVersion != formpackage.CurrentPackageAPIVersion {
+		t.Fatalf("selected current release = %#v", selected)
+	}
+	if _, err := selectCurrentPlannedRelease(plan, identity.Kind, "forms/"+releaseID+"/sha256-"+strings.Repeat("c", 64)); err == nil {
+		t.Fatal("kind with a different digest tag selected a current release")
+	}
+}
+
 func TestVerifyPlanDirectoryAcceptsExactSemanticClosureAndReportsTrustedRootDigest(t *testing.T) {
 	source := newPlanSourceRepository(t)
 	planned := source.plan.Releases[0]
@@ -727,6 +764,33 @@ func TestVerifyPlanDirectoryAcceptsExactSemanticClosureAndReportsTrustedRootDige
 	}
 	if canonical, err := formpackage.Canonicalize(resultRaw); err != nil || !bytes.Equal(resultRaw, canonical) {
 		t.Fatalf("verification result is not canonical JSON: %v", err)
+	}
+}
+
+func TestVerifyPlanDirectoryAcceptsExactCurrentDigestLifecycleClosure(t *testing.T) {
+	source, current := newCurrentPlanSourceRepository(t)
+	planned := exactPlannedFormRelease{
+		Kind: current.Kind, ReleaseID: current.ReleaseID, ArtifactID: current.ArtifactID,
+		Tag: current.Tag, SourcePath: current.SourcePath, FormRef: current.FormRef,
+		PackageDigest: current.PackageDigest, APIVersion: formpackage.CurrentPackageAPIVersion,
+	}
+	assetRoot := writeTestReleaseAssets(t, buildExactReleaseFixture(t, source, planned))
+	trustedRoot := filepath.Join(source.root, filepath.FromSlash(trustedRootSourcePath))
+
+	result, err := verifyPlanDirectory(
+		source.root, assetRoot, current.Kind, current.Tag,
+		source.sourceCommit, source.mainCommit, trustedRoot,
+	)
+	if err != nil {
+		t.Fatalf("verify exact current lifecycle release: %v", err)
+	}
+	if result.Format != planVerificationFormat || result.SemanticStatus != "verified" ||
+		result.CryptographicStatus != "external-required" || result.Kind != current.Kind ||
+		result.ReleaseID != current.ReleaseID || result.ArtifactID != current.ArtifactID ||
+		result.Version != "" || result.Tag != current.Tag ||
+		result.SourceCommit != source.sourceCommit || result.ToolingCommit != source.mainCommit ||
+		len(result.Assets) != expectedAssetCount {
+		t.Fatalf("current lifecycle verification result drifted: %+v", result)
 	}
 }
 
@@ -1097,14 +1161,53 @@ func newCompletePlanSourceRepository(t *testing.T) planSourceFixture {
 			destination,
 		)
 	}
+	for _, relativeRoot := range []string{"proposals"} {
+		destination := filepath.Join(root, filepath.FromSlash(relativeRoot))
+		if err := os.RemoveAll(destination); err != nil {
+			t.Fatal(err)
+		}
+		copyTestTree(t,
+			filepath.Join(workingRoot, filepath.FromSlash(relativeRoot)),
+			destination,
+		)
+	}
+	copyTestFile(t,
+		filepath.Join(workingRoot, "spec", "decisions", "0006-v1alpha2-restarts-form-lines.md"),
+		filepath.Join(root, "spec", "decisions", "0006-v1alpha2-restarts-form-lines.md"),
+	)
 	copyTestFile(t,
 		filepath.Join(workingRoot, "forms", "README.md"),
 		filepath.Join(root, "forms", "README.md"),
 	)
+	for _, relativePath := range []string{
+		"forms/lifecycle.json",
+		"forms/lifecycle.schema.json",
+		"admission/admission-identities.json",
+	} {
+		copyTestFile(t,
+			filepath.Join(workingRoot, filepath.FromSlash(relativePath)),
+			filepath.Join(root, filepath.FromSlash(relativePath)),
+		)
+	}
+	if err := os.Remove(filepath.Join(root, "forms", "admission-candidate-set.json")); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	for _, relativePath := range []string{
+		"forms/releases/k-inxw24dvorsus3ttorqw4y3f/1.0.0",
+		"forms/releases/k-ivsgozkxn5zgwzls/2.0.0",
+		"forms/releases/k-jvxwizlmivxgi4dpnfxhi/2.0.0",
+		"forms/releases/k-k5xxe23gnrxxo/1.0.0",
+		"forms/releases/k-kn2gc5dfmz2wyrlooruxi6i/2.0.0",
+		"forms/releases/k-kn2gc5djmnjws5df/1.0.0",
+	} {
+		if err := os.RemoveAll(filepath.Join(root, filepath.FromSlash(relativePath))); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if strings.TrimSpace(mustTestGit(t, root, "status", "--short")) != "" {
 		mustTestGit(t, root, "config", "user.name", "Takoform test")
 		mustTestGit(t, root, "config", "user.email", "takoform-test@example.invalid")
-		mustTestGit(t, root, "add", "--", "docs/resources", "examples/resources", "forms/README.md")
+		mustTestGit(t, root, "add", "--", "docs/resources", "examples/resources", "forms", "proposals", "spec/decisions/0006-v1alpha2-restarts-form-lines.md", "admission/admission-identities.json")
 		mustTestGit(t, root, "commit", "-q", "-m", "fixture current generated surfaces")
 	}
 	planRaw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(standardforms.ReleasePlanPath)))
@@ -1179,6 +1282,180 @@ func newPlanSourceRepository(t *testing.T) planSourceFixture {
 	}
 	return planSourceFixture{
 		root: root, planRaw: planRaw, plan: plan, sourceCommit: sourceCommit, mainCommit: mainCommit,
+	}
+}
+
+func newCurrentPlanSourceRepository(t *testing.T) (planSourceFixture, standardforms.CurrentFormReleaseIdentity) {
+	t.Helper()
+	originalRoot := testRepositoryRoot(t)
+	root := filepath.Join(t.TempDir(), "source")
+	copyTestFile(t,
+		filepath.Join(originalRoot, "forms", "lifecycle.schema.json"),
+		filepath.Join(root, "forms", "lifecycle.schema.json"),
+	)
+	copyTestFile(t,
+		filepath.Join(originalRoot, filepath.FromSlash(trustedRootSourcePath)),
+		filepath.Join(root, filepath.FromSlash(trustedRootSourcePath)),
+	)
+	for _, relativePath := range []string{
+		"proposals/example.md",
+		"decisions/example-proposal.md",
+		"decisions/example-experimental.md",
+		"evidence/fixtures.md",
+		"evidence/host.md",
+		"evidence/consumer.md",
+		"evidence/known-limitations.md",
+		"evidence/compatibility.md",
+		"evidence/migration.md",
+		"evidence/security-review.md",
+		"evidence/documentation.md",
+		"evidence/publication-plan.md",
+	} {
+		writeCurrentFixtureFile(t, root, relativePath, []byte("reviewed fixture evidence\n"))
+	}
+	report, locator := writeCurrentPackageFixture(t, root)
+	lifecycle := map[string]any{
+		"format":        "takoform.form-lifecycle@v2",
+		"projectStatus": "experimental",
+		"currentEpoch":  formpackage.CurrentFormAPIVersion,
+		"states":        []string{"proposal", "experimental", "stable", "legacy"},
+		"legacy": map[string]any{
+			"apiVersion":               formpackage.LegacyFormAPIVersion,
+			"decision":                 "spec/decisions/0004-takoform-is-an-experimental-specification.md",
+			"epochDecision":            "spec/decisions/0006-v1alpha2-restarts-form-lines.md",
+			"releaseSources":           "forms/releases",
+			"releaseSourceInventory":   map[string]any{"format": "takoform.legacy-release-inventory@v1", "count": 1, "digest": "sha256:" + strings.Repeat("0", 64)},
+			"historicalAdmissionRoots": []string{"admission/v1", "admission/v3", "admission/v4"},
+			"newCreatePolicy":          "host-policy",
+			"retainedCapabilities":     []string{"read", "observe", "delete", "recovery", "migration"},
+		},
+		"proposals": []any{map[string]any{
+			"id": "p-example", "document": "proposals/example.md", "owner": "maintainer:example",
+			"consumer": "consumer:example", "intendedHosts": []string{"host:example"},
+			"workload": "example workload", "portableBoundary": "portable desired state only",
+			"portableFields":   []string{"name"},
+			"hostDecisions":    []string{"placement"},
+			"lifecycleRisks":   map[string]any{"replacement": "reviewed", "dataLoss": "reviewed", "delete": "reviewed", "import": "reviewed", "drift": "reviewed"},
+			"securityBoundary": map[string]any{"credentials": "external", "network": "host-owned", "artifacts": "digest-pinned", "secrets": "excluded"},
+			"priorArt": []any{
+				map[string]any{"name": "OCCI", "applicability": "applicable", "finding": "reviewed"},
+				map[string]any{"name": "CIMI", "applicability": "applicable", "finding": "reviewed"},
+				map[string]any{"name": "TOSCA", "applicability": "not-applicable", "finding": "reviewed"},
+				map[string]any{"name": "Kubernetes/Crossplane", "applicability": "applicable", "finding": "reviewed"},
+				map[string]any{"name": "Terraform/OpenTofu", "applicability": "applicable", "finding": "reviewed"},
+			},
+			"existingAbstractionGap": "existing APIs do not expose this boundary",
+		}},
+		"currentForms": []any{map[string]any{
+			"proposalId": "p-example", "state": "experimental", "owner": "maintainer:example",
+			"formRef": report.FormRef, "packageDigest": report.PackageDigest, "packagePath": locator.SourcePath,
+			"history": []any{
+				map[string]any{"state": "proposal", "decision": "decisions/example-proposal.md"},
+				map[string]any{"state": "experimental", "decision": "decisions/example-experimental.md"},
+			},
+			"evidence": map[string]any{
+				"definition": locator.SourcePath + "/definition.json", "fixtures": "evidence/fixtures.md",
+				"hostImplementations": []any{map[string]any{"subject": "host:example", "maintainer": "maintainer:host", "evidence": "evidence/host.md"}},
+				"realConsumers":       []any{map[string]any{"subject": "consumer:example", "evidence": "evidence/consumer.md"}},
+				"knownLimitations":    "evidence/known-limitations.md", "compatibility": "evidence/compatibility.md",
+				"migration": "evidence/migration.md", "securityReview": "evidence/security-review.md",
+				"documentation": "evidence/documentation.md", "publicationPlan": "evidence/publication-plan.md",
+			},
+		}},
+	}
+	writeCurrentFixtureFile(t, root, "forms/lifecycle.json", append(canonicalTestJSON(t, lifecycle), '\n'))
+	mustTestGit(t, root, "init", "-q", "--initial-branch=main")
+	mustTestGit(t, root, "config", "user.name", "Takoform test")
+	mustTestGit(t, root, "config", "user.email", "takoform-test@example.invalid")
+	mustTestGit(t, root, "add", "--", ".")
+	mustTestGit(t, root, "commit", "-q", "-m", "fixture current release source")
+	sourceCommit := strings.TrimSpace(mustTestGit(t, root, "rev-parse", "HEAD"))
+	writeCurrentFixtureFile(t, root, "protected-main-marker", []byte("main\n"))
+	mustTestGit(t, root, "add", "--", "protected-main-marker")
+	mustTestGit(t, root, "commit", "-q", "-m", "fixture protected main")
+	mainCommit := strings.TrimSpace(mustTestGit(t, root, "rev-parse", "HEAD"))
+	plan, err := standardforms.CurrentReleasePlan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Releases) != 1 {
+		t.Fatalf("current fixture release plan = %#v", plan)
+	}
+	return planSourceFixture{root: root, sourceCommit: sourceCommit, mainCommit: mainCommit}, plan.Releases[0]
+}
+
+func writeCurrentPackageFixture(t *testing.T, root string) (formpackage.VerificationReport, formpackage.PublicationLocator) {
+	t.Helper()
+	desiredRaw := canonicalTestJSON(t, map[string]any{"name": "example"})
+	negativeRaw := canonicalTestJSON(t, map[string]any{})
+	definitionRaw := canonicalTestJSON(t, map[string]any{
+		"apiVersion": formpackage.CurrentFormAPIVersion, "kind": "Example", "definitionVersion": "0.1.0",
+		"title": "Example Experimental Form",
+		"desiredSchema": map[string]any{
+			"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+			"additionalProperties": false, "required": []string{"name"},
+			"properties": map[string]any{"name": map[string]any{"type": "string", "minLength": 1}},
+		},
+		"observedSchema": map[string]any{
+			"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+			"additionalProperties": false, "properties": map[string]any{},
+		},
+		"lifecycleCapabilities": []string{"create", "read", "update", "delete", "import", "observe", "refresh", "drift"},
+		"conformanceFixtures":   []any{map[string]any{"name": "basic", "desiredPath": "fixtures/desired.json"}},
+		"negativeConformanceFixtures": []any{map[string]any{
+			"name": "missing-name", "stage": "desired", "inputPath": "fixtures/negative-missing-name.json",
+			"expectedFailure": "schema_validation_failed",
+		}},
+	})
+	schemaDigest, err := formpackage.DigestCanonicalJSON(definitionRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := []formpackage.PackageFile{
+		{Path: "definition.json", MediaType: formpackage.DefinitionMediaType, Size: int64(len(definitionRaw)), Digest: formpackage.DigestBytes(definitionRaw)},
+		{Path: "fixtures/desired.json", MediaType: "application/json", Size: int64(len(desiredRaw)), Digest: formpackage.DigestBytes(desiredRaw)},
+		{Path: "fixtures/negative-missing-name.json", MediaType: "application/json", Size: int64(len(negativeRaw)), Digest: formpackage.DigestBytes(negativeRaw)},
+	}
+	indexRaw := canonicalTestJSON(t, formpackage.PackageIndex{
+		APIVersion: formpackage.CurrentPackageAPIVersion, Kind: formpackage.PackageKind,
+		FormRef:        formpackage.FormRef{APIVersion: formpackage.CurrentFormAPIVersion, Kind: "Example", DefinitionVersion: "0.1.0", SchemaDigest: schemaDigest},
+		DefinitionPath: "definition.json", Files: files,
+	})
+	staging := filepath.Join(root, "package-staging")
+	writeCurrentFixtureFile(t, staging, "definition.json", definitionRaw)
+	writeCurrentFixtureFile(t, staging, "fixtures/desired.json", desiredRaw)
+	writeCurrentFixtureFile(t, staging, "fixtures/negative-missing-name.json", negativeRaw)
+	writeCurrentFixtureFile(t, staging, formpackage.PackageIndexFilename, indexRaw)
+	report, err := formpackage.VerifyDirectory(staging)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, err := formpackage.ValidatePackageIndex(indexRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	locator, err := formpackage.PublicationLocatorFor(index, report.PackageDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(root, filepath.FromSlash(locator.SourcePath))
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(staging, destination); err != nil {
+		t.Fatal(err)
+	}
+	return report, locator
+}
+
+func writeCurrentFixtureFile(t *testing.T, root, relativePath string, raw []byte) {
+	t.Helper()
+	destination := filepath.Join(root, filepath.FromSlash(relativePath))
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(destination, raw, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1289,6 +1566,20 @@ func buildPlanReleaseFixture(
 	planned standardforms.PlannedFormRelease,
 ) map[string][]byte {
 	t.Helper()
+	return buildExactReleaseFixture(t, source, exactPlannedFormRelease{
+		Kind: planned.Kind, Slug: planned.Slug, ReleaseID: planned.ReleaseID,
+		ArtifactID: planned.Version, LegacyVersion: planned.Version, Tag: planned.Tag,
+		SourcePath: planned.SourcePath, FormRef: planned.FormRef,
+		PackageDigest: planned.PackageDigest, APIVersion: formpackage.PackageAPIVersion,
+	})
+}
+
+func buildExactReleaseFixture(
+	t *testing.T,
+	source planSourceFixture,
+	planned exactPlannedFormRelease,
+) map[string][]byte {
+	t.Helper()
 	packageRoot := filepath.Join(source.root, filepath.FromSlash(planned.SourcePath))
 	report, err := formpackage.VerifyDirectory(packageRoot)
 	if err != nil {
@@ -1306,7 +1597,7 @@ func buildPlanReleaseFixture(
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := "takoform-form-" + planned.ReleaseID + "_" + planned.Version
+	base := "takoform-form-" + planned.ReleaseID + "_" + planned.ArtifactID
 	indexName := base + "_package-index.json"
 	archiveName := base + ".tar.gz"
 	bundleName := base + "_package-index.sigstore.json"
@@ -1317,7 +1608,7 @@ func buildPlanReleaseFixture(
 		SchemaVersion: 1, ReleaseType: "form-package", Tag: planned.Tag,
 		SourceRepository: "github.com/" + repository, SourceCommit: source.sourceCommit,
 		ToolingCommit: source.mainCommit, Workflow: currentPackageWorkflow,
-		PackageVersion: planned.Version, ReleaseID: planned.ReleaseID,
+		ReleaseID:     planned.ReleaseID,
 		PackageDigest: report.PackageDigest, FormRef: report.FormRef,
 		Canonicalization: "RFC8785", SignedSubject: indexName,
 		SignatureBundle: bundleName, SignatureMediaType: "application/vnd.dev.sigstore.bundle.v0.3+json",
@@ -1327,9 +1618,19 @@ func buildPlanReleaseFixture(
 		},
 		PublicationReady: true, PublicationBlockers: []string{},
 	}
+	if planned.APIVersion == formpackage.PackageAPIVersion {
+		manifest.PackageVersion = planned.LegacyVersion
+		manifest.PublisherPolicy.TagPattern = legacyPackageTagScope
+	} else {
+		manifest.ArtifactID = planned.ArtifactID
+	}
+	indexMediaType := "application/vnd.takoform.package-index.v2+json"
+	if planned.APIVersion == formpackage.PackageAPIVersion {
+		indexMediaType = "application/vnd.takoform.package-index.v1+json"
+	}
 	sbomRaw := buildTestPackageSBOM(t, packageRoot, indexRaw, index, manifest)
 	indexAsset := releaseAsset{
-		Name: indexName, MediaType: "application/vnd.takoform.package-index.v1+json",
+		Name: indexName, MediaType: indexMediaType,
 		Size: int64(len(indexRaw)), Digest: formpackage.DigestBytes(indexRaw),
 	}
 	archiveAsset := releaseAsset{
@@ -1345,7 +1646,7 @@ func buildPlanReleaseFixture(
 		raw       []byte
 	}{
 		archiveName:    {mediaType: "application/gzip", raw: archiveRaw},
-		indexName:      {mediaType: "application/vnd.takoform.package-index.v1+json", raw: indexRaw},
+		indexName:      {mediaType: indexMediaType, raw: indexRaw},
 		bundleName:     {mediaType: "application/vnd.dev.sigstore.bundle.v0.3+json", raw: bundleRaw},
 		provenanceName: {mediaType: "application/vnd.in-toto+json", raw: provenanceRaw},
 		sbomName:       {mediaType: "application/spdx+json", raw: sbomRaw},
@@ -1509,13 +1810,17 @@ func buildTestPackageSBOM(
 			SPDXElementID: "SPDXRef-Package", RelationshipType: "CONTAINS", RelatedSPDXElement: file.SPDXID,
 		})
 	}
+	artifactIdentity := manifest.PackageVersion
+	if artifactIdentity == "" {
+		artifactIdentity = manifest.ArtifactID
+	}
 	return canonicalTestJSON(t, packageSBOM{
 		SPDXVersion: "SPDX-2.3", DataLicense: "CC0-1.0", SPDXID: "SPDXRef-DOCUMENT",
-		Name:              "Takoform Form Package " + manifest.FormRef.Kind + " " + manifest.PackageVersion,
+		Name:              "Takoform Form Package " + manifest.FormRef.Kind + " " + artifactIdentity,
 		DocumentNamespace: "https://forms.takoform.com/spdx/package/" + strings.TrimPrefix(manifest.PackageDigest, "sha256:"),
 		CreationInfo:      spdxCreationInfo{Creators: []string{"Tool: takoform-form-package-release"}, Created: "2026-07-29T08:00:00Z"},
 		Packages: []spdxPackage{{
-			Name: manifest.FormRef.Kind, SPDXID: "SPDXRef-Package", VersionInfo: manifest.PackageVersion,
+			Name: manifest.FormRef.Kind, SPDXID: "SPDXRef-Package", VersionInfo: artifactIdentity,
 			DownloadLocation: "NOASSERTION", FilesAnalyzed: true,
 			PackageVerificationCode: spdxPackageVerificationCode{Value: code},
 			LicenseConcluded:        "NOASSERTION", LicenseDeclared: "NOASSERTION", CopyrightText: "NOASSERTION",

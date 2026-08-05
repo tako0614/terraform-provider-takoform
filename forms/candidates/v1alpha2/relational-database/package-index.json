@@ -1,0 +1,109 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha3",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha2",
+    "kind": "RelationalDatabase",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:75e4f1fc7cd894df2ffaebc0655a48d9378150fe8700d3460ec2ecc70e6a26a7"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 8482,
+      "digest": "sha256:7b51b62703634b6fe9b0b3b41b789fd403acef747ccc17393930ff10e50e3062"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 324,
+      "digest": "sha256:3af32b7fdd075b3c9cd7f9fe9f5f9d39c75608ff05c0b35db772c21b1add88a5"
+    },
+    {
+      "path": "fixtures/negative-co-required-missing-schema_format.json",
+      "mediaType": "application/json",
+      "size": 291,
+      "digest": "sha256:aacee1bb13b620a6b4c7b7942e7d7c743209bfbf6c8a74e2720dcad490b5c66f"
+    },
+    {
+      "path": "fixtures/negative-co-required-missing-schema_sha256.json",
+      "mediaType": "application/json",
+      "size": 231,
+      "digest": "sha256:6d76ca60ee8605cb350e2f000a74afea347ccf2cdb7f0240c636630da5c98a82"
+    },
+    {
+      "path": "fixtures/negative-co-required-missing-schema_url.json",
+      "mediaType": "application/json",
+      "size": 236,
+      "digest": "sha256:0804fa421b7f8f54d8e9f855bd0deb8c8d7e016a213ea606ac88b15ab9cd2d73"
+    },
+    {
+      "path": "fixtures/negative-database_name.json",
+      "mediaType": "application/json",
+      "size": 332,
+      "digest": "sha256:e3126633dc0233d876ecb790085891e69561114f2ff32b48e2f51195fae3a32d"
+    },
+    {
+      "path": "fixtures/negative-engine.json",
+      "mediaType": "application/json",
+      "size": 327,
+      "digest": "sha256:7ce2d2988d84af9f2e29c78774f3f78bb66768078aa2f2872519235cdb1da1b1"
+    },
+    {
+      "path": "fixtures/negative-engine_version.json",
+      "mediaType": "application/json",
+      "size": 335,
+      "digest": "sha256:cd3965abb6d27805db1414c65a74d967bc85b937fee5d7701f0cd5720b54a6ab"
+    },
+    {
+      "path": "fixtures/negative-missing-engine.json",
+      "mediaType": "application/json",
+      "size": 300,
+      "digest": "sha256:917e9202f73001f16245ff8f82c1ce898507fdcd27d63d9490b2dd865ef35b67"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 291,
+      "digest": "sha256:bbb1708c781b161d32d5b66fb64908565d16a37666ff716243b4e7a54c44309c"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 152,
+      "digest": "sha256:92f0adf6e3afefccc4476c2a2433b93cf8c63da31fca7ab7182a63cbebc44802"
+    },
+    {
+      "path": "fixtures/negative-schema_format.json",
+      "mediaType": "application/json",
+      "size": 324,
+      "digest": "sha256:32f1f19ff77ef760b59ecce9d7e1a72399a72c099924c723650696cd09a67569"
+    },
+    {
+      "path": "fixtures/negative-schema_sha256.json",
+      "mediaType": "application/json",
+      "size": 324,
+      "digest": "sha256:340b9581df3657fe67d85d551c46849debf3dff4abd81bf89e7e2c51dccddf43"
+    },
+    {
+      "path": "fixtures/negative-schema_url.json",
+      "mediaType": "application/json",
+      "size": 300,
+      "digest": "sha256:326222de133e37349814ae1ec82936109c12984eaf08ec6e24eb54745ef8233d"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 161,
+      "digest": "sha256:9f6993c08a64e7b3540e0b2c64f4d058e36e9d2735fb430a6497c608231d3fe4"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 190,
+      "digest": "sha256:586a1ec32b41fd2ea286e5d4ed1716e53f33684d4676faadd82bf4d6eac4cdcd"
+    }
+  ]
+}

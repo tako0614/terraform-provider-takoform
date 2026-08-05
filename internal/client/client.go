@@ -27,10 +27,12 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-// API constants for the frozen wire contract.
+// API constants for the current provider-v2 wire contract. Provider v1 keeps
+// the frozen v1alpha1 discovery and API paths in its own release line.
 const (
-	// APIVersion is the Resource object apiVersion this provider speaks.
-	APIVersion = formpackage.FormAPIVersion
+	APIVersion    = formpackage.CurrentFormAPIVersion
+	DiscoveryPath = "/.well-known/takoform/v1alpha2"
+	APIRootPath   = "/apis/forms.takoform.com/v1alpha2"
 
 	defaultUserAgent     = "terraform-provider-takoform"
 	maxResponseBodyBytes = 8 * 1024 * 1024
@@ -40,7 +42,7 @@ const (
 // HTTP 404. Callers map this exact condition to "remove from state".
 var ErrNotFound = errors.New("takoform: resource not found")
 
-// Discovery is the parsed body of GET /.well-known/takoform.
+// Discovery is the parsed body of the current versioned well-known endpoint.
 //
 // Features is intentionally a map so the provider stays capability-driven
 // (it inspects named capabilities) rather than edition-driven (it never
@@ -289,13 +291,13 @@ func NewWithOptions(endpoint, token string, httpClient *http.Client, options Opt
 // Endpoint returns the normalized endpoint origin.
 func (c *Client) Endpoint() string { return c.endpoint }
 
-// Discover performs GET {endpoint}/.well-known/takoform and caches the result.
+// Discover performs GET {endpoint}{DiscoveryPath} and caches the result.
 func (c *Client) Discover(ctx context.Context) (Discovery, error) {
 	var disco Discovery
 	if _, err := c.configuredOrigin(); err != nil {
 		return Discovery{}, err
 	}
-	if err := c.doJSON(ctx, http.MethodGet, c.endpoint+"/.well-known/takoform", nil, &disco); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, c.endpoint+DiscoveryPath, nil, &disco); err != nil {
 		return Discovery{}, err
 	}
 	c.Discovery = disco
@@ -312,8 +314,8 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 	if !disco.SupportsServiceForms() {
 		return errors.New("takoform: discovery does not advertise features.service_forms")
 	}
-	if !containsString(disco.APIVersions, APIVersion) {
-		return fmt.Errorf("takoform: discovery does not advertise API version %s", APIVersion)
+	if len(disco.APIVersions) != 1 || disco.APIVersions[0] != APIVersion {
+		return fmt.Errorf("takoform: versioned discovery must advertise only API version %s", APIVersion)
 	}
 	if strings.TrimSpace(disco.Endpoints.API) == "" {
 		return errors.New("takoform: discovery must advertise an absolute same-origin endpoints.api")
@@ -324,14 +326,14 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 		}
 	}
 
-	apiBase, err := c.validAdvertisedEndpoint(disco.Endpoints.API)
+	apiBase, err := c.validAdvertisedEndpoint(disco.Endpoints.API, APIRootPath)
 	if err != nil {
 		return fmt.Errorf("takoform: invalid discovery API endpoint: %w", err)
 	}
 	c.apiBase = strings.TrimRight(apiBase, "/")
 	c.formsURL = c.apiBase + "/forms"
 	if disco.Endpoints.Forms != "" {
-		formsURL, err := c.validAdvertisedEndpoint(disco.Endpoints.Forms)
+		formsURL, err := c.validAdvertisedEndpoint(disco.Endpoints.Forms, APIRootPath+"/forms")
 		if err != nil {
 			return fmt.Errorf("takoform: invalid discovery forms endpoint: %w", err)
 		}
@@ -347,7 +349,7 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 	if disco.HasFeature(FeatureInterfaceDeclarations) {
 		c.interfacesURL = c.apiBase + "/interfaces"
 		if disco.Endpoints.Interfaces != "" {
-			interfacesURL, err := c.validAdvertisedEndpoint(disco.Endpoints.Interfaces)
+			interfacesURL, err := c.validAdvertisedEndpoint(disco.Endpoints.Interfaces, APIRootPath+"/interfaces")
 			if err != nil {
 				return fmt.Errorf("takoform: invalid discovery interfaces endpoint: %w", err)
 			}
@@ -357,7 +359,7 @@ func (c *Client) negotiateEndpoints(disco Discovery) error {
 	return nil
 }
 
-func (c *Client) validAdvertisedEndpoint(raw string) (string, error) {
+func (c *Client) validAdvertisedEndpoint(raw, expectedPath string) (string, error) {
 	advertised, err := url.Parse(raw)
 	if err != nil || !advertised.IsAbs() || advertised.Host == "" || (advertised.Scheme != "http" && advertised.Scheme != "https") {
 		return "", fmt.Errorf("endpoint must be an absolute URL")
@@ -371,6 +373,9 @@ func (c *Client) validAdvertisedEndpoint(raw string) (string, error) {
 	}
 	if advertised.User != nil || advertised.Fragment != "" || advertised.RawQuery != "" {
 		return "", errors.New("endpoint must not contain userinfo, query, or fragment")
+	}
+	if advertised.EscapedPath() != expectedPath {
+		return "", fmt.Errorf("endpoint path must be %s", expectedPath)
 	}
 	return advertised.String(), nil
 }
@@ -515,6 +520,49 @@ type FormAvailability struct {
 	AvailableToPrincipal bool                   `json:"availableToPrincipal"`
 	Operations           []string               `json:"operations"`
 	Deprecated           bool                   `json:"deprecated"`
+}
+
+// FormDefinitionResponse is the principal-readable desired-state contract for
+// one exact current FormRef. It carries no lifecycle, host implementation, or
+// commercial authority.
+type FormDefinitionResponse struct {
+	Identity      InstalledFormReference `json:"identity"`
+	DisplayName   string                 `json:"displayName,omitempty"`
+	Description   string                 `json:"description,omitempty"`
+	DesiredSchema map[string]any         `json:"desiredSchema"`
+}
+
+// GetFormDefinition reads the exact current desired-state schema selected by
+// the complete FormRef query. A substituted response identity fails closed.
+func (c *Client) GetFormDefinition(
+	ctx context.Context,
+	space string,
+	form InstalledFormReference,
+) (FormDefinitionResponse, error) {
+	if err := validateInstalledFormReference(form.FormRef.Kind, form); err != nil {
+		return FormDefinitionResponse{}, err
+	}
+	if err := ValidateSpaceID(space); err != nil {
+		return FormDefinitionResponse{}, fmt.Errorf("takoform: exact Form Definition has invalid SpaceID: %w", err)
+	}
+	query := exactResourceQuery(space, form)
+	endpoint := fmt.Sprintf(
+		"%s/form-definitions/%s?%s",
+		c.apiBase,
+		url.PathEscape(form.FormRef.Kind),
+		query.Encode(),
+	)
+	var response FormDefinitionResponse
+	if err := c.doJSON(ctx, http.MethodGet, endpoint, nil, &response); err != nil {
+		return FormDefinitionResponse{}, err
+	}
+	if !sameForm(&form, &response.Identity) {
+		return FormDefinitionResponse{}, errors.New("takoform: host substituted the requested exact Form Definition identity")
+	}
+	if response.DesiredSchema == nil {
+		return FormDefinitionResponse{}, errors.New("takoform: host omitted the exact Form Definition desiredSchema")
+	}
+	return response, nil
 }
 
 func (c *Client) EnsureFormAvailable(ctx context.Context, space string, form InstalledFormReference, operation string) error {
@@ -1071,7 +1119,7 @@ func validateResourceIdentity(kind string, resource *Resource) error {
 	if resource == nil || resource.Form == nil {
 		return errors.New("takoform: versioned Resource requires an exact FormRef")
 	}
-	if resource.APIVersion != APIVersion || resource.Kind != kind || resource.Form.FormRef.APIVersion != APIVersion || resource.Form.FormRef.Kind != kind {
+	if resource.APIVersion != APIVersion || resource.Kind != kind || resource.Form.FormRef.Kind != kind {
 		return errors.New("takoform: Resource and exact FormRef identities do not match")
 	}
 	if err := ValidateResourceName(resource.Metadata.Name); err != nil {

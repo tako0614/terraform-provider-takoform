@@ -6,14 +6,14 @@ func TestEdgeWorkerIsPortableExecutionIntentRatherThanHTTPInterfaceName(t *testi
 	t.Parallel()
 	edge, ok := ByKind("EdgeWorker")
 	if !ok {
-		t.Fatal("active portable catalog omits EdgeWorker")
+		t.Fatal("Legacy compatibility catalog omits EdgeWorker")
 	}
 	if edge.Version() != "4.0.0" || edge.Slug != "edge-worker" ||
 		edge.ResourceType != "takoform_edge_worker" {
-		t.Fatalf("unexpected active EdgeWorker identity: %#v", edge)
+		t.Fatalf("unexpected Legacy EdgeWorker identity: %#v", edge)
 	}
 	if _, ok := ByKind("HttpService"); ok {
-		t.Fatal("over-broad HttpService remains active")
+		t.Fatal("over-broad HttpService remains in the compatibility catalog")
 	}
 	desired := edge.CanonicalDesired()
 	for _, providerSpecific := range []string{"compatibilityDate", "compatibilityFlags"} {

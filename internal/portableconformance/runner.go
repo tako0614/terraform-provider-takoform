@@ -334,6 +334,23 @@ func (r *endpointRunner) run() error {
 		}
 	}
 	r.complete("exact-availability")
+	if r.contract.Format == "takoform.portable-host-conformance@v2" {
+		definition, err := formClient.GetFormDefinition(
+			r.ctx,
+			r.contract.RunnerInput.Space,
+			exact,
+		)
+		if err != nil {
+			return fmt.Errorf("exact Form Definition: %w", err)
+		}
+		if !sameCanonicalRunnerJSON(
+			definition.DesiredSchema,
+			r.contract.RunnerInput.Definition.DesiredSchema,
+		) {
+			return errors.New("exact Form Definition response substituted retained definition data")
+		}
+		r.complete("exact-form-definition")
+	}
 
 	if !discovery.HasFeature(client.FeatureInterfaceDeclarations) {
 		return errors.New("selected runner Form has a required Interface but the conformance endpoint does not advertise interface_declarations")
@@ -435,7 +452,7 @@ func (r *endpointRunner) run() error {
 
 	altered := resource
 	altered.Spec = cloneMap(resource.Spec)
-	altered.Spec["storageClass"] = "archive"
+	altered.Spec["runtimeVersion"] = "2026.2"
 	if err := r.expectPurePlanSubstitutionRejected(
 		"spec",
 		"portable-plan-substitution",
@@ -459,7 +476,7 @@ func (r *endpointRunner) run() error {
 			name:  "api-version",
 			input: "resource.apiVersion",
 			mutate: func(candidate *client.Resource) {
-				candidate.APIVersion = "forms.takoform.com/v1alpha2"
+				candidate.APIVersion = "forms.takoform.com/v1alpha1"
 			},
 		},
 		{
@@ -518,7 +535,7 @@ func (r *endpointRunner) run() error {
 			name:  "api-version",
 			input: "resource.form.formRef.apiVersion",
 			mutate: func(ref *client.FormRef) {
-				ref.APIVersion = "forms.takoform.com/v1alpha2"
+				ref.APIVersion = "forms.takoform.com/v1alpha1"
 			},
 		},
 		{
@@ -732,7 +749,7 @@ func (r *endpointRunner) run() error {
 	}
 	reusedKeyRequest := createRequest
 	reusedKeyRequest.Spec = cloneMap(createRequest.Spec)
-	reusedKeyRequest.Spec["storageClass"] = "archive"
+	reusedKeyRequest.Spec["runtimeVersion"] = "2026.2"
 	reusedKey, err := r.request(http.MethodPut, r.resourceURL(), createHeaders, reusedKeyRequest)
 	if err != nil {
 		return err
@@ -775,7 +792,7 @@ func (r *endpointRunner) run() error {
 	update := resource
 	update.Metadata.ResourceVersion = "1"
 	update.Spec = cloneMap(resource.Spec)
-	update.Spec["storageClass"] = "infrequent_access"
+	update.Spec["runtimeVersion"] = "2026.3"
 	updatePreview, err := formClient.PreviewResource(r.ctx, &update)
 	if err != nil {
 		return fmt.Errorf("update preview: %w", err)
@@ -1111,7 +1128,7 @@ func (r *endpointRunner) run() error {
 	importUpdateResource := resource
 	importUpdateResource.Metadata.ResourceVersion = "1"
 	importUpdateResource.Spec = cloneMap(resource.Spec)
-	importUpdateResource.Spec["storageClass"] = "archive"
+	importUpdateResource.Spec["runtimeVersion"] = "2026.2"
 	importUpdateBody := importRequest{
 		Resource: importUpdateResource,
 		NativeID: r.contract.RunnerInput.ImportNativeID,
@@ -1240,7 +1257,7 @@ func (r *endpointRunner) verifyReadyInterface(formClient *client.Client, exact c
 		return fmt.Errorf("Interface list for Ready Resource: %w", err)
 	}
 	if len(listed) != 1 {
-		return fmt.Errorf("Interface readiness: got %d declarations for one Ready ObjectBucket", len(listed))
+		return fmt.Errorf("Interface readiness: got %d declarations for one Ready Resource", len(listed))
 	}
 	got := listed[0]
 	descriptor, err := r.runnerInterfaceDescriptor()
@@ -1696,7 +1713,7 @@ func (r *endpointRunner) verifyResourceSpaceIsolation(
 	alternate.Metadata.Space = alternateSpace
 	alternate.Metadata.ResourceVersion = ""
 	alternate.Status = nil
-	alternate.Spec["storageClass"] = "archive"
+	alternate.Spec["runtimeVersion"] = "2026.2"
 	previewResponse, err := r.request(
 		http.MethodPost,
 		r.apiBase+"/resources/preview",
@@ -2482,7 +2499,7 @@ func (r *endpointRunner) verifyDuplicateResourceVersionRejected(base client.Reso
 
 	update := cloneRunnerResource(resource)
 	update.Metadata.ResourceVersion = created.Metadata.ResourceVersion
-	update.Spec["storageClass"] = "archive"
+	update.Spec["runtimeVersion"] = "2026.2"
 	previewResponse, err := r.request(
 		http.MethodPost,
 		r.apiBase+"/resources/preview",

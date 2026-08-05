@@ -21,6 +21,7 @@ import {
   RELEASE_SURFACES,
   parseReleaseSurfaceArgs,
   parseStrictChecksums,
+  providerReleaseBody,
   releaseDeployTestHooks,
   runReleaseSurface,
 } from "./release-deploy.mjs";
@@ -84,6 +85,215 @@ function memoryIO() {
   };
 }
 
+test("provider v2 release body names the exact fail-closed migration boundary", () => {
+  const body = providerReleaseBody({ tag: "v2.0.0" });
+  expect(body).toContain("Breaking upgrade from provider v1");
+  expect(body).toContain("forms.takoform.com/v1alpha2");
+  expect(body).toContain("release/migrations/v1-to-v2.md");
+  expect(body).not.toContain("v0.2.1-to-v1.0.1");
+});
+
+describe("current Form release authority", () => {
+  test("uses the same lowercase unpadded base32 release identity as Takoform", () => {
+    expect(releaseDeployTestHooks.releaseIdForKind("ObjectBucket")).toBe(
+      "k-j5rguzldorbhky3lmv2a",
+    );
+    expect(releaseDeployTestHooks.releaseIdForKind("Example")).toBe(
+      "k-iv4gc3lqnrsq",
+    );
+  });
+
+  test("derives only current Experimental or Stable package releases", () => {
+    const formRef = {
+      apiVersion: "forms.takoform.com/v1alpha2",
+      kind: "Example",
+      definitionVersion: "0.1.0",
+      schemaDigest: `sha256:${"1".repeat(64)}`,
+    };
+    const lifecycle = {
+      format: "takoform.form-lifecycle@v2",
+      projectStatus: "experimental",
+      currentEpoch: "forms.takoform.com/v1alpha2",
+      states: ["proposal", "experimental", "stable", "legacy"],
+      legacy: {},
+      proposals: [],
+      currentForms: [
+        {
+          proposalId: "p-example",
+          state: "experimental",
+          owner: "maintainer:example",
+          formRef,
+          packageDigest: `sha256:${"2".repeat(64)}`,
+          packagePath: `forms/releases/k-iv4gc3lqnrsq/sha256-${"2".repeat(64)}`,
+          history: [],
+          evidence: {},
+        },
+      ],
+    };
+    const plan = releaseDeployTestHooks.currentReleasePlanFromLifecycle(
+      lifecycle,
+      () => ({
+        apiVersion: "packages.forms.takoform.com/v1alpha3",
+        kind: "FormPackage",
+        formRef,
+        definitionPath: "definition.json",
+        files: [],
+      }),
+    );
+    expect(plan).toEqual({
+      format: "takoform.current-form-release-plan@v2",
+      repository: "tako0614/terraform-provider-takoform",
+      releases: [
+        {
+          proposalId: "p-example",
+          state: "experimental",
+          kind: "Example",
+          releaseId: "k-iv4gc3lqnrsq",
+          artifactId: `sha256-${"2".repeat(64)}`,
+          tag: `forms/k-iv4gc3lqnrsq/sha256-${"2".repeat(64)}`,
+          sourcePath: `forms/releases/k-iv4gc3lqnrsq/sha256-${"2".repeat(64)}`,
+          formRef,
+          packageDigest: `sha256:${"2".repeat(64)}`,
+        },
+      ],
+    });
+
+    const legacyFormLifecycle = structuredClone(lifecycle);
+    legacyFormLifecycle.currentForms[0].formRef.apiVersion =
+      "forms.takoform.com/v1alpha1";
+    expect(() =>
+      releaseDeployTestHooks.currentReleasePlanFromLifecycle(
+        legacyFormLifecycle,
+        () => ({
+          apiVersion: "packages.forms.takoform.com/v1alpha3",
+          kind: "FormPackage",
+          formRef: legacyFormLifecycle.currentForms[0].formRef,
+          definitionPath: "definition.json",
+          files: [],
+        }),
+      ),
+    ).toThrow("current Form lifecycle currentForms[0] exact identity is invalid");
+
+    expect(() =>
+      releaseDeployTestHooks.currentReleasePlanFromLifecycle(
+        lifecycle,
+        () => ({
+          apiVersion: "packages.forms.takoform.com/v1alpha2",
+          kind: "FormPackage",
+          formRef,
+          definitionPath: "definition.json",
+          files: [],
+        }),
+      ),
+    ).toThrow("current Form lifecycle currentForms[0] package release identity is invalid");
+  });
+
+  test("reconstructs recovery authority from the immutable source commit", () => {
+    const fixtureRoot = temporaryDirectory("current-source-authority");
+    const current = experimentalReleaseEntryFixture();
+    writeCurrentReleaseAuthorityFixture(fixtureRoot, current);
+    const historical = JSON.parse(
+      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
+    );
+    const fake = (executable, args) => {
+      if (executable !== "git") {
+        throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+      }
+      if (
+        args[0] === "cat-file" &&
+        args[1] === "-e" &&
+        args[2] === `${commit}:forms/lifecycle.json`
+      ) {
+        return "";
+      }
+      if (args[0] === "show" && args[1] === `${commit}:forms/lifecycle.json`) {
+        return readFileSync(join(fixtureRoot, "forms/lifecycle.json"), "utf8");
+      }
+      if (
+        args[0] === "show" &&
+        args[1] === `${commit}:${current.sourcePath}/package-index.json`
+      ) {
+        return readFileSync(
+          join(fixtureRoot, ...current.sourcePath.split("/"), "package-index.json"),
+          "utf8",
+        );
+      }
+      if (
+        args[0] === "show" &&
+        args[1] === `${commit}:forms/release-plan.json`
+      ) {
+        return JSON.stringify(historical);
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+    const authority = releaseDeployTestHooks.formReleaseAuthorityAtSourceCommit(
+      context(fake),
+      commit,
+    );
+    expect(authority.releases).toHaveLength(historical.releases.length + 1);
+    expect(authority.releases.some((entry) => entry.tag === current.tag)).toBe(true);
+    expect(
+      authority.releases.some((entry) => entry.tag === historical.releases[0].tag),
+    ).toBe(true);
+  });
+
+  test("uses Legacy authority only when lifecycle did not exist at the source commit", () => {
+    const historical = JSON.parse(
+      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
+    );
+    const fake = (executable, args) => {
+      if (
+        executable === "git" &&
+        args[0] === "cat-file" &&
+        args[1] === "-e" &&
+        args[2] === `${commit}:forms/lifecycle.json`
+      ) {
+        throw commandFailure("missing lifecycle", 128);
+      }
+      if (
+        executable === "git" &&
+        args[0] === "show" &&
+        args[1] === `${commit}:forms/release-plan.json`
+      ) {
+        return JSON.stringify(historical);
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+    const authority = releaseDeployTestHooks.formReleaseAuthorityAtSourceCommit(
+      context(fake),
+      commit,
+    );
+    expect(authority.releases).toEqual(historical.releases);
+  });
+
+  test("does not fall back to Legacy when a present lifecycle authority is invalid", () => {
+    const fake = (executable, args) => {
+      if (
+        executable === "git" &&
+        args[0] === "cat-file" &&
+        args[1] === "-e" &&
+        args[2] === `${commit}:forms/lifecycle.json`
+      ) {
+        return "";
+      }
+      if (
+        executable === "git" &&
+        args[0] === "show" &&
+        args[1] === `${commit}:forms/lifecycle.json`
+      ) {
+        return "{}";
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+    expect(() =>
+      releaseDeployTestHooks.formReleaseAuthorityAtSourceCommit(
+        context(fake),
+        commit,
+      ),
+    ).toThrow("current Form lifecycle authority fields differ");
+  });
+});
+
 function context(execFile, overrides = {}) {
   const io = memoryIO();
   return {
@@ -145,6 +355,67 @@ function writeChecksumFixture(root, names, destination = "SHA256SUMS") {
   writeFileSync(join(root, destination), `${lines.join("\n")}\n`);
 }
 
+function experimentalReleaseEntryFixture() {
+  const formRef = {
+    apiVersion: "forms.takoform.com/v1alpha2",
+    kind: "Example",
+    definitionVersion: "0.1.0",
+    schemaDigest: `sha256:${"1".repeat(64)}`,
+  };
+  const releaseId = releaseDeployTestHooks.releaseIdForKind(formRef.kind);
+  const packageDigest = sha256(Buffer.from('{"fixture":"package-index"}\n'));
+  const artifactId = packageDigest.replace(":", "-");
+  return {
+    proposalId: "p-example",
+    state: "experimental",
+    kind: formRef.kind,
+    releaseId,
+    artifactId,
+    tag: `forms/${releaseId}/${artifactId}`,
+    sourcePath: `forms/releases/${releaseId}/${artifactId}`,
+    formRef,
+    packageDigest,
+  };
+}
+
+function writeCurrentReleaseAuthorityFixture(repo, entry) {
+  const packageRoot = join(repo, ...entry.sourcePath.split("/"));
+  mkdirSync(packageRoot, { recursive: true });
+  writeFileSync(
+    join(packageRoot, "package-index.json"),
+    JSON.stringify({
+      apiVersion: "packages.forms.takoform.com/v1alpha3",
+      kind: "FormPackage",
+      formRef: entry.formRef,
+      definitionPath: "definition.json",
+      files: [],
+    }),
+  );
+  writeFileSync(
+    join(repo, "forms", "lifecycle.json"),
+    JSON.stringify({
+      format: "takoform.form-lifecycle@v2",
+      projectStatus: "experimental",
+      currentEpoch: "forms.takoform.com/v1alpha2",
+      states: ["proposal", "experimental", "stable", "legacy"],
+      legacy: {},
+      proposals: [],
+      currentForms: [
+        {
+          proposalId: entry.proposalId,
+          state: entry.state,
+          owner: "maintainer:example",
+          formRef: entry.formRef,
+          packageDigest: entry.packageDigest,
+          packagePath: entry.sourcePath,
+          history: [],
+          evidence: {},
+        },
+      ],
+    }),
+  );
+}
+
 function tagObjectFixture({
   tag,
   sourceCommit,
@@ -182,7 +453,7 @@ function writeDeepFailureCandidate(
   const revocation = type === "revocation";
   const version = revocation
     ? /^forms\/revocations\/v(.+)$/u.exec(tag)[1]
-    : entry.version;
+    : (entry.artifactId ?? entry.version);
   const releaseId = revocation ? null : entry.releaseId;
   const base = revocation
     ? `takoform-form-revocation_${version}`
@@ -233,7 +504,9 @@ function writeDeepFailureCandidate(
     workflow: revocation
       ? ".github/workflows/form-package-revocation.yml"
       : ".github/workflows/form-package-release.yml",
-    packageVersion: version,
+    ...(revocation || entry.version !== undefined
+      ? { packageVersion: version }
+      : { artifactId: version }),
     ...(revocation
       ? {}
       : {
@@ -1508,15 +1781,19 @@ test("top-level deep semantic rejection cannot push a tag, mutate a Release, or 
     const plan = JSON.parse(
       readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
     );
-    const entry = plan.releases[0];
-    entry.packageDigest = sha256(
-      Buffer.from('{"fixture":"package-index"}\n'),
-    );
+    const entry =
+      scenario.type === "form"
+        ? experimentalReleaseEntryFixture()
+        : plan.releases[0];
+    entry.packageDigest = sha256(Buffer.from('{"fixture":"package-index"}\n'));
     mkdirSync(join(repo, "forms"), { recursive: true });
     writeFileSync(
       join(repo, "forms", "release-plan.json"),
       JSON.stringify(plan),
     );
+    if (scenario.type === "form") {
+      writeCurrentReleaseAuthorityFixture(repo, entry);
+    }
     const tag =
       scenario.type === "form"
         ? entry.tag
@@ -1617,7 +1894,7 @@ test("top-level deep semantic rejection cannot push a tag, mutate a Release, or 
                 cryptographicStatus: "external-required",
                 kind: entry.kind,
                 releaseId: entry.releaseId,
-                version: entry.version,
+                artifactId: entry.artifactId,
                 tag,
                 sourceCommit: commit,
                 toolingCommit: commit,
@@ -1759,8 +2036,21 @@ test("tag-only recovery completes the exact candidate Release without any tag mu
       ) {
         return "tag\n";
       }
+      if (
+        args[0] === "cat-file" &&
+        args[1] === "-e" &&
+        args[2] === `${commit}:forms/lifecycle.json`
+      ) {
+        throw new Error("historical source has no lifecycle authority");
+      }
       if (args[0] === "cat-file" || args[0] === "merge-base" || args[0] === "diff") {
         return "";
+      }
+      if (
+        args[0] === "show" &&
+        args[1] === `${commit}:forms/release-plan.json`
+      ) {
+        return JSON.stringify(plan);
       }
       if (
         args[0] === "show" &&
@@ -2032,6 +2322,13 @@ test("top-level public verify cannot emit VERIFIED after deep semantic rejection
           args.join(" ") === "rev-parse refs/remotes/origin/main"
         ) {
           return `${commit}\n`;
+        }
+        if (
+          args[0] === "cat-file" &&
+          args[1] === "-e" &&
+          args[2] === `${commit}:forms/lifecycle.json`
+        ) {
+          throw new Error("historical source has no lifecycle authority");
         }
         if (args[0] === "cat-file" || args[0] === "merge-base") return "";
         if (args[0] === "ls-remote") {

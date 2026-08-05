@@ -71,8 +71,79 @@ func TestReleaseIDIsInjectiveReversibleAndFilesystemSafe(t *testing.T) {
 		}
 	}
 	maximum := mustReleaseID(t, "A"+strings.Repeat("a", 63))
-	if len(maximum) != 105 || !packageTagPattern.MatchString("forms/"+maximum+"/v1.0.0") {
+	if _, err := formpackage.ParsePublicationTag("forms/" + maximum + "/v1.0.0"); len(maximum) != 105 || err != nil {
 		t.Fatalf("64-character Kind release id is not accepted: len=%d id=%q", len(maximum), maximum)
+	}
+}
+
+func TestBuildCurrentPackageUsesDigestArtifactIdentity(t *testing.T) {
+	repo := makeTestRepo(t)
+	packageDir := filepath.Join(repo, "package")
+	copyTree(t, filepath.Join(repositoryRoot(t), "conformance", "form-package-v1", "positive", "example-store"), packageDir)
+	indexPath := filepath.Join(packageDir, formpackage.PackageIndexFilename)
+	var index map[string]any
+	readJSON(t, indexPath, &index)
+	index["apiVersion"] = formpackage.CurrentPackageAPIVersion
+	delete(index, "packageVersion")
+	definitionPath := filepath.Join(packageDir, "definition.json")
+	var definition map[string]any
+	readJSON(t, definitionPath, &definition)
+	definition["apiVersion"] = formpackage.CurrentFormAPIVersion
+	delete(definition, "status")
+	definitionRaw, err := json.Marshal(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(definitionPath, definitionRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	formRef := index["formRef"].(map[string]any)
+	formRef["apiVersion"] = formpackage.CurrentFormAPIVersion
+	schemaDigest, err := formpackage.DigestCanonicalJSON(definitionRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	formRef["schemaDigest"] = schemaDigest
+	for _, rawFile := range index["files"].([]any) {
+		file := rawFile.(map[string]any)
+		if file["path"] == "definition.json" {
+			file["size"] = len(definitionRaw)
+			file["digest"] = formpackage.DigestBytes(definitionRaw)
+		}
+	}
+	raw, err := json.Marshal(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(indexPath, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report, err := formpackage.VerifyDirectory(packageDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitCommitAll(t, repo, "current package")
+	releaseID := mustReleaseID(t, "ExampleStore")
+	artifactID := strings.Replace(report.PackageDigest, ":", "-", 1)
+	tag := "forms/" + releaseID + "/" + artifactID
+	output := filepath.Join(t.TempDir(), "release")
+	if err := run([]string{
+		"build-package", "--repo", repo, "--tag", tag,
+		"--package-dir", packageDir, "--output", output, "--tooling-commit", testToolingCommit, "--allow-untagged-candidate",
+	}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	var manifest releaseManifest
+	readJSON(t, filepath.Join(output, "release-manifest.json"), &manifest)
+	if manifest.ArtifactID != artifactID || manifest.PackageVersion != "" ||
+		manifest.PublisherPolicy.TagPattern != "refs/tags/forms/k-*/sha256-*" {
+		t.Fatalf("current package manifest has a split identity: %+v", manifest)
+	}
+	base := "takoform-form-" + releaseID + "_" + artifactID
+	for _, name := range []string{base + ".tar.gz", base + "_package-index.json", base + "_sbom.spdx.json"} {
+		if _, err := os.Stat(filepath.Join(output, name)); err != nil {
+			t.Fatalf("current digest-addressed asset %q is missing: %v", name, err)
+		}
 	}
 }
 

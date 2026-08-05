@@ -14,6 +14,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
@@ -27,7 +28,7 @@ func TestFormHostPreviewBindsReviewToCanonicalRequestedSpec(t *testing.T) {
 	if _, err := formClient.Discover(ctx); err != nil {
 		t.Fatal(err)
 	}
-	kind, ok := formcatalog.ByKind("ObjectBucket")
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
 	if !ok {
 		t.Fatal("ObjectBucket declaration is missing")
 	}
@@ -63,7 +64,7 @@ func TestFormHostProjectsExactFormDescriptorsOnlyForReadyResourceLifecycle(t *te
 		t.Fatal(err)
 	}
 
-	kind, ok := formcatalog.ByKind("ObjectBucket")
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
 	if !ok {
 		t.Fatal("ObjectBucket declaration is missing")
 	}
@@ -150,7 +151,7 @@ func TestFormHostProjectsEveryCurrentDescriptorThroughReadyLifecycle(t *testing.
 	forms := candidateForms()
 	created := make(map[string]*client.Resource, len(resourceCases))
 	for _, item := range resourceCases {
-		kind, ok := formcatalog.ByKind(item.Kind)
+		kind, ok := currentformcatalog.ByKind(item.Kind)
 		if !ok {
 			t.Fatalf("resource case names undeclared Form %s", item.Kind)
 		}
@@ -315,7 +316,7 @@ func TestStandardFixtureCasesRequireExactExecutedFormIdentity(t *testing.T) {
 func TestStandardFixtureDiagnosticsCoverEveryRequiredDesiredOmission(t *testing.T) {
 	t.Parallel()
 
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		kind := kind
 		t.Run(kind.Kind, func(t *testing.T) {
 			t.Parallel()
@@ -340,7 +341,7 @@ func TestStandardFixtureDiagnosticsCoverCredentialFreeArtifactURLs(t *testing.T)
 	t.Parallel()
 
 	wantDetail := formcatalog.GrammarCredentialFreeHTTPSURL.Message("artifact_url")
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		if !kind.Artifact {
 			continue
 		}
@@ -398,7 +399,7 @@ func TestLoadCLIMatrixPinsOneCanonicalProviderAddress(t *testing.T) {
 	for _, required := range []string{
 		"one provider source and state identity",
 		"pins the published provider",
-		"retained authenticated Registry",
+		"canonical Terraform Registry listing",
 		"through CLI",
 		"development overrides",
 		"release-descriptor metadata",

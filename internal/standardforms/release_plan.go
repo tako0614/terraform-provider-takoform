@@ -9,21 +9,20 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-// ReleasePlanPath records how each declared Form is released.
+// ReleasePlanPath records the immutable pre-reset publication plan.
 const ReleasePlanPath = "forms/release-plan.json"
 
 const releasePlanFormat = "takoform.release-plan@v1"
 
 var semverPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[-+][0-9A-Za-z.-]+)?$`)
 
-// ReleasePlan is the exact, derived list of per-Form releases this source can
-// produce.
+// ReleasePlan is the exact, derived list of pre-reset per-Form releases.
 //
 // Forms carry independent versions, so there is no single set version to
 // release them under: each Form is released on its own tag, from its own
 // reviewed release source, and is published or not published independently of
-// every other Form. The owner-local deploy entrypoint consumes this plan; it
-// exists so nobody has to hand-derive a release identifier or guess a version.
+// every other Form. All entries are now published Legacy evidence. This type
+// remains only to verify the retained plan and must not drive a new release.
 type ReleasePlan struct {
 	Format     string               `json:"format"`
 	Generation string               `json:"generation"`
@@ -42,14 +41,6 @@ type PlannedFormRelease struct {
 	SourcePath    string              `json:"sourcePath"`
 	FormRef       formpackage.FormRef `json:"formRef"`
 	PackageDigest string              `json:"packageDigest"`
-}
-
-func generateReleasePlan(root string, entries []InventoryEntry) error {
-	plan, err := buildReleasePlan(root, entries)
-	if err != nil {
-		return err
-	}
-	return writeJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), plan)
 }
 
 func buildReleasePlan(root string, entries []InventoryEntry) (ReleasePlan, error) {
@@ -76,20 +67,18 @@ func buildReleasePlan(root string, entries []InventoryEntry) (ReleasePlan, error
 	}
 	return ReleasePlan{
 		Format: releasePlanFormat, Generation: portableGeneration, Repository: publishRepository,
-		Note: "Each Form is released on its own tag from its own reviewed source. " +
-			"A release proves published bytes only; admission stays external.",
+		Note:     "Historical pre-reset plan. Every listed tag is published immutable Legacy evidence and authorizes no new release.",
 		Releases: releases,
 	}, nil
 }
 
 const publishRepository = "tako0614/terraform-provider-takoform"
 
-// VerifyReleasePlan proves the committed plan still describes exactly the
-// declared Forms and their reviewed release sources.
+// VerifyReleasePlan proves the committed historical plan still describes
+// exactly the Legacy Forms and their retained release sources.
 //
-// It grants nothing. A planned release is a tag that could be created, not a
-// release that exists, and creating one publishes bytes without admitting a
-// Form.
+// It grants nothing and authorizes no release. Every tag in the plan is
+// already published and immutable.
 func VerifyReleasePlan(root string) error {
 	var committed ReleasePlan
 	if err := readJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), &committed); err != nil {
@@ -136,7 +125,7 @@ func RetiredReleaseTags() []string {
 	return tags
 }
 
-// RenderReleasePlan prints owner-local prepare invocations for the exact plan.
+// RenderReleasePlan renders the non-actionable historical publication inventory.
 func RenderReleasePlan(root string) (string, error) {
 	if err := VerifyReleasePlan(root); err != nil {
 		return "", err
@@ -150,19 +139,21 @@ func RenderReleasePlan(root string) (string, error) {
 
 func renderReleasePlan(plan ReleasePlan) string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "%s: %d Form releases, each independent\n\n", plan.Generation, len(plan.Releases))
+	noun := "releases"
+	if len(plan.Releases) == 1 {
+		noun = "release"
+	}
+	fmt.Fprintf(&builder, "%s: %d published Legacy Form %s\n\n", plan.Generation, len(plan.Releases), noun)
+	builder.WriteString("This is an immutable historical publication plan. Every listed tag is already\n" +
+		"published. Do not prepare, publish, move, delete, or reuse these tags.\n\n")
 	for _, release := range plan.Releases {
 		fmt.Fprintf(
 			&builder,
-			"%-28s %s\n  source %s\n  digest %s\n  prepare bun run deploy -- takoform-form-package-release prepare --tag %s --expected-commit <current-protected-main-commit>\n",
-			release.Kind, release.Tag, release.SourcePath, release.PackageDigest, release.Tag,
+			"%-28s %s\n  source %s\n  digest %s\n",
+			release.Kind, release.Tag, release.SourcePath, release.PackageDigest,
 		)
 	}
-	builder.WriteString("\nRun each prepare while its planned tag and Release are absent. After its\n" +
-		"reviewed candidate run completes, publish through the same owner entrypoint:\n" +
-		"  bun run deploy -- takoform-form-package-release publish --tag <same-planned-tag> --expected-commit <same-40-character-reviewed-commit> --run-id <candidate-run-id> --run-attempt <candidate-run-attempt>\n" +
-		"Publish verifies the candidate, then create-only materializes the tag and\n" +
-		"immutable Release. Publication proves bytes only; admission still requires\n" +
-		"a conforming host's signed lifecycle report.\n")
+	builder.WriteString("\nPublication proves these exact historical bytes. It grants no current Form\n" +
+		"maturity, Host Support, activation, placement, or commercial authority.\n")
 	return builder.String()
 }

@@ -1,10 +1,10 @@
-// Package hostpolicy reads the reviewed set of conforming hosts whose signed
-// lifecycle reports this repository accepts as admission input.
+// Package hostpolicy reads the retained Legacy allowlist used only to
+// authenticate historical host-report evidence.
 //
 // Takoform is a portable contract. It therefore never hard-codes one host's
 // repository, workflow, or subject as the definition of a valid proof: an
-// accepted publisher is data in admission/v1/conforming-hosts.json, and any
-// host that can produce the same signed evidence may be added by review.
+// accepted publisher was data in admission/v1/conforming-hosts.json. This
+// package does not authorize a current central admission process.
 package hostpolicy
 
 import (
@@ -25,8 +25,8 @@ const PolicyPath = "admission/v1/conforming-hosts.json"
 const policyFormat = "takoform.conforming-host-policy@v1"
 
 // pinsPath is the reviewed trust manifest that records this allowlist's exact
-// bytes. Widening who may sign admission input is a change tamper-evidence has
-// to cover, so the allowlist is read through its pin rather than beside it.
+// bytes. Historical verification reads the allowlist through its pin rather
+// than trusting an adjacent mutable file.
 const pinsPath = "admission/v1/trust/offline-sigstore-pins.json"
 
 var (
@@ -65,9 +65,9 @@ func Load(root string) (Policy, error) {
 	return LoadAt(root, "admission/v1")
 }
 
-// LoadAt reads one explicit retained admission generation. This keeps the
-// historical v1 policy immutable while allowing a current generation to pin a
-// different manifest format without changing who owns the portable contract.
+// LoadAt reads one explicit retained admission generation. Every supported
+// root is historical and immutable; it grants no present host or lifecycle
+// authority.
 func LoadAt(root, retainedRoot string) (Policy, error) {
 	if retainedRoot == "" || path.Clean(retainedRoot) != retainedRoot ||
 		strings.HasPrefix(retainedRoot, "../") || strings.Contains(retainedRoot, `\`) {

@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	portableAPI = "forms.takoform.com/v1alpha1"
-	providerFQN = "registry.terraform.io/tako0614/takoform"
+	hostAPI        = "forms.takoform.com/v1alpha2"
+	currentFormAPI = "forms.takoform.com/v1alpha2"
+	providerFQN    = "registry.terraform.io/tako0614/takoform"
 )
 
 type hostContract struct {
@@ -55,13 +56,37 @@ type releaseLock struct {
 	} `json:"versioning"`
 }
 
-type packageInventory struct {
+type legacyPackageInventory struct {
 	Packages []struct {
 		Kind          string              `json:"kind"`
 		Path          string              `json:"path"`
 		FormRef       formpackage.FormRef `json:"formRef"`
 		PackageDigest string              `json:"packageDigest"`
 	} `json:"packages"`
+}
+
+type currentCandidateInventory struct {
+	Format             string `json:"format"`
+	FormAPIVersion     string `json:"formApiVersion"`
+	PackageAPIVersion  string `json:"packageApiVersion"`
+	PublicationStatus  string `json:"publicationStatus"`
+	LifecycleAuthority string `json:"lifecycleAuthority"`
+	AuthoringSource    string `json:"authoringSource"`
+	AuthoringPolicy    string `json:"authoringPolicy"`
+	Forms              []struct {
+		Kind          string              `json:"kind"`
+		ProposalID    string              `json:"proposalId"`
+		Path          string              `json:"path"`
+		FormRef       formpackage.FormRef `json:"formRef"`
+		PackageDigest string              `json:"packageDigest"`
+	} `json:"forms"`
+}
+
+type proposalLifecycleBoundary struct {
+	CurrentForms []any `json:"currentForms"`
+	Proposals    []struct {
+		ID string `json:"id"`
+	} `json:"proposals"`
 }
 
 // This is the cross-document gate. Individual schema, package, provider, and
@@ -78,30 +103,81 @@ func TestNormativeIdentitiesAgree(t *testing.T) {
 		} `json:"provider"`
 	}](t, "trust", "profile.json")
 	conformance := readConformance(t)
-	inventory := readFile[packageInventory](t, "..", "forms", "standard-package-set.json")
+	legacyInventory := readFile[legacyPackageInventory](t, "..", "forms", "standard-package-set.json")
+	currentInventory := readFile[currentCandidateInventory](
+		t,
+		"..",
+		"forms",
+		"candidates",
+		"v1alpha2",
+		"candidate-set.json",
+	)
+	lifecycle := readFile[proposalLifecycleBoundary](t, "..", "forms", "lifecycle.json")
 
-	identities := map[string]string{
-		"host API":             host.APIGroup,
-		"host conformance":     conformance.APIVersion,
-		"host runner FormRef":  conformance.RunnerInput.Identity.FormRef.APIVersion,
-		"release API lock":     release.Versioning.PortableAPI,
-		"FormRef schema":       formRefSchemaAPI(t),
+	hostIdentities := map[string]string{
+		"host API":            host.APIGroup,
+		"host conformance":    conformance.APIVersion,
+		"host runner FormRef": conformance.RunnerInput.Identity.FormRef.APIVersion,
+	}
+	for source, got := range hostIdentities {
+		if got != hostAPI {
+			t.Errorf("%s = %q, want %q", source, got, hostAPI)
+		}
+	}
+	currentIdentities := map[string]string{
+		"release API lock": release.Versioning.PortableAPI,
+		"FormRef schema":   formRefSchemaAPI(t),
+	}
+	for source, got := range currentIdentities {
+		if got != currentFormAPI {
+			t.Errorf("%s = %q, want %q", source, got, currentFormAPI)
+		}
+	}
+	if currentInventory.FormAPIVersion != formpackage.CurrentFormAPIVersion {
+		t.Errorf("current candidate Form API = %q, want %q", currentInventory.FormAPIVersion, formpackage.CurrentFormAPIVersion)
+	}
+	if currentInventory.PackageAPIVersion != formpackage.CurrentPackageAPIVersion {
+		t.Errorf("current candidate package API = %q, want %q", currentInventory.PackageAPIVersion, formpackage.CurrentPackageAPIVersion)
+	}
+	if currentInventory.AuthoringSource != "internal/currentformcatalog" ||
+		currentInventory.AuthoringPolicy != "independent-semantic-contract" {
+		t.Errorf("current candidates are not bound to the independent current catalog: source=%q policy=%q", currentInventory.AuthoringSource, currentInventory.AuthoringPolicy)
+	}
+	if currentInventory.Format != "takoform.current-form-candidates@v2" ||
+		currentInventory.PublicationStatus != "unpublished" ||
+		currentInventory.LifecycleAuthority != "forms/lifecycle.json" {
+		t.Errorf("current candidate inventory claims lifecycle authority or publication: format=%q publication=%q authority=%q", currentInventory.Format, currentInventory.PublicationStatus, currentInventory.LifecycleAuthority)
+	}
+	if len(currentInventory.Forms) != 9 {
+		t.Errorf("current candidate inventory has %d Forms, want 9", len(currentInventory.Forms))
+	}
+	proposalIDs := make(map[string]struct{}, len(lifecycle.Proposals))
+	for _, proposal := range lifecycle.Proposals {
+		proposalIDs[proposal.ID] = struct{}{}
+	}
+	if len(lifecycle.CurrentForms) != 0 {
+		t.Errorf("source candidates must not be called Experimental while lifecycle currentForms is non-empty without an admission transition")
+	}
+	for _, entry := range currentInventory.Forms {
+		_, hasProposal := proposalIDs[entry.ProposalID]
+		if entry.Kind == "" || entry.Path == "" || !hasProposal || entry.FormRef.Kind != entry.Kind ||
+			entry.FormRef.APIVersion != currentFormAPI || entry.FormRef.DefinitionVersion != "0.1.0" {
+			t.Errorf("current candidate identity is not an exact v1alpha2 0.1.0 Form: %#v", entry)
+		}
+	}
+	distributionIdentities := map[string]string{
 		"release provider FQN": release.ProviderAddress,
 		"trust provider FQN":   trust.Provider.Distribution.Registry,
 	}
-	for source, got := range identities {
-		want := portableAPI
-		if strings.Contains(source, "provider FQN") {
-			want = providerFQN
-		}
-		if got != want {
-			t.Errorf("%s = %q, want %q", source, got, want)
+	for source, got := range distributionIdentities {
+		if got != providerFQN {
+			t.Errorf("%s = %q, want %q", source, got, providerFQN)
 		}
 	}
 	if host.DiscoveryPath != conformance.DiscoveryPath {
 		t.Errorf("discovery path disagrees: host=%q conformance=%q", host.DiscoveryPath, conformance.DiscoveryPath)
 	}
-	if release.Version != "1.0.3" || release.Tag != "v"+release.Version || release.PublicationStatus != "candidate-only" {
+	if release.Version != "2.0.0" || release.Tag != "v"+release.Version || release.PublicationStatus != "candidate-only" {
 		t.Errorf("provider candidate lock disagrees: version=%q tag=%q status=%q", release.Version, release.Tag, release.PublicationStatus)
 	}
 	products := map[string]bool{}
@@ -116,10 +192,12 @@ func TestNormativeIdentitiesAgree(t *testing.T) {
 	}
 
 	var runnerMatch bool
-	for _, entry := range inventory.Packages {
-		if entry.FormRef.APIVersion != portableAPI {
+	for _, entry := range legacyInventory.Packages {
+		if entry.FormRef.APIVersion != formpackage.LegacyFormAPIVersion {
 			t.Errorf("%s FormRef API = %q", entry.Kind, entry.FormRef.APIVersion)
 		}
+	}
+	for _, entry := range currentInventory.Forms {
 		if entry.Kind != conformance.RunnerInput.Identity.FormRef.Kind {
 			continue
 		}
@@ -131,7 +209,7 @@ func TestNormativeIdentitiesAgree(t *testing.T) {
 			entry.PackageDigest == conformance.RunnerInput.Identity.PackageDigest
 	}
 	if !runnerMatch {
-		t.Error("portable-host runner does not pin one exact current Form/package identity")
+		t.Error("portable-host v2 runner does not pin one exact current Form/package identity")
 	}
 }
 
@@ -215,9 +293,9 @@ func TestHostAndConformanceContractsAgree(t *testing.T) {
 	}
 }
 
-func TestCurrentFormCapabilitySemanticsAreExact(t *testing.T) {
+func TestLegacyIndexedStoreCapabilitySemanticsAreExact(t *testing.T) {
 	t.Parallel()
-	inventory := readFile[packageInventory](t, "..", "forms", "standard-package-set.json")
+	inventory := readFile[legacyPackageInventory](t, "..", "forms", "standard-package-set.json")
 	var indexed *formpackage.FormDefinition
 	for _, entry := range inventory.Packages {
 		definition := readFile[formpackage.FormDefinition](
@@ -235,7 +313,7 @@ func TestCurrentFormCapabilitySemanticsAreExact(t *testing.T) {
 		}
 	}
 	if indexed == nil {
-		t.Fatal("current Form inventory omits IndexedStore")
+		t.Fatal("Legacy Form inventory omits IndexedStore")
 	}
 	if len(indexed.Interfaces) != 1 {
 		t.Fatalf("IndexedStore Interfaces = %d, want only data.indexed@1", len(indexed.Interfaces))
@@ -263,7 +341,7 @@ func TestCurrentFormCapabilitySemanticsAreExact(t *testing.T) {
 		descriptor.ResourceURIInput != "" ||
 		!reflect.DeepEqual(descriptor.Document, wantDocument) ||
 		!reflect.DeepEqual(descriptor.Inputs, wantInputs) {
-		t.Fatalf("data.indexed@1 exceeds its current operation/input descriptor: %#v", descriptor)
+		t.Fatalf("data.indexed@1 exceeds its retained operation/input descriptor: %#v", descriptor)
 	}
 	properties, ok := descriptor.DocumentSchema["properties"].(map[string]any)
 	if !ok || len(properties) != 1 || properties["operations"] == nil {
@@ -289,22 +367,25 @@ func TestCurrentFormCapabilitySemanticsAreExact(t *testing.T) {
 		}
 	}
 
-	schema := readFile[struct {
-		Properties struct {
-			Positive struct {
-				MaxItems int `json:"maxItems"`
-			} `json:"conformanceFixtures"`
-			Negative struct {
-				MaxItems int `json:"maxItems"`
-			} `json:"negativeConformanceFixtures"`
-		} `json:"properties"`
-	}](t, "schemas", "form-definition.schema.json")
-	if schema.Properties.Positive.MaxItems != 32 || schema.Properties.Negative.MaxItems != 32 {
-		t.Errorf(
-			"fixture class maxima must independently remain positive=32 and negative=32: positive=%d negative=%d",
-			schema.Properties.Positive.MaxItems,
-			schema.Properties.Negative.MaxItems,
-		)
+	for _, schemaName := range []string{"form-definition.schema.json", "form-definition-v1alpha2.schema.json"} {
+		schema := readFile[struct {
+			Properties struct {
+				Positive struct {
+					MaxItems int `json:"maxItems"`
+				} `json:"conformanceFixtures"`
+				Negative struct {
+					MaxItems int `json:"maxItems"`
+				} `json:"negativeConformanceFixtures"`
+			} `json:"properties"`
+		}](t, "schemas", schemaName)
+		if schema.Properties.Positive.MaxItems != 32 || schema.Properties.Negative.MaxItems != 32 {
+			t.Errorf(
+				"%s fixture class maxima must independently remain positive=32 and negative=32: positive=%d negative=%d",
+				schemaName,
+				schema.Properties.Positive.MaxItems,
+				schema.Properties.Negative.MaxItems,
+			)
+		}
 	}
 }
 
@@ -333,9 +414,9 @@ func TestPortableNormativeSurfacesStayBackendNeutral(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inventory := readFile[packageInventory](t, "..", "forms", "standard-package-set.json")
+	inventory := readFile[legacyPackageInventory](t, "..", "forms", "standard-package-set.json")
 	paths = append(paths,
-		filepath.Join("..", "conformance", "portable-host-v1", "contract.json"),
+		filepath.Join("..", "conformance", "portable-host-v2", "contract.json"),
 		filepath.Join("..", "forms", "standard-package-set.json"),
 	)
 	for _, entry := range inventory.Packages {
@@ -346,6 +427,18 @@ func TestPortableNormativeSurfacesStayBackendNeutral(t *testing.T) {
 		} {
 			paths = append(paths, filepath.Join(root, filepath.FromSlash(name)))
 		}
+	}
+	currentRoot := filepath.Join("..", "forms", "candidates", "v1alpha2")
+	if err := filepath.WalkDir(currentRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !entry.IsDir() && filepath.Ext(path) == ".json" {
+			paths = append(paths, path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 	sort.Strings(paths)
 	for _, path := range paths {
@@ -373,13 +466,13 @@ func formRefSchemaAPI(t *testing.T) string {
 				Const string `json:"const"`
 			} `json:"apiVersion"`
 		} `json:"properties"`
-	}](t, "schemas", "form-ref.schema.json")
+	}](t, "schemas", "form-ref-v1alpha2.schema.json")
 	return schema.Properties.APIVersion.Const
 }
 
 func readConformance(t *testing.T) portableconformance.Contract {
 	t.Helper()
-	contract, err := portableconformance.Verify(filepath.Join("..", "conformance", "portable-host-v1"))
+	contract, err := portableconformance.Verify(filepath.Join("..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}

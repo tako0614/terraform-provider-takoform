@@ -1,27 +1,67 @@
-# Form Package release boundary
+# Form Package publication, Legacy retention, and revocation
 
-The repository has two keyless, data-only release lanes. They do not share the
-Terraform provider's GPG key, `v*` tag namespace, or `provider-release`
-Environment.
+Form Package publication is independent of the Terraform provider's GPG key,
+`v*` tag namespace, and `provider-release` Environment. The current lane is
+driven only by Experimental or Stable records in `forms/lifecycle.json` and
+uses content-addressed package identities. The pre-reset 34-entry plan is a
+closed immutable **Legacy** inventory and cannot authorize a new release.
 
-## Releasing the rebuilt Form set
+The responsibilities are:
 
-Forms carry independent versions, so there is no single set version to release
-them under. Each Form is released on its own tag, from its own reviewed release
-source, and is published or not published independently of every other Form.
+- publish a lifecycle-authorized current package without inventing a second
+  SemVer clock;
+- verify and retain the 34 exact historical publication identities;
+- publish an append-only security revocation when an exact Legacy package
+  requires it;
+- preserve read, observe, delete, recovery, and migration for Legacy users;
+- introduce every new Form through Proposal and Experimental lifecycle
+  evidence without reusing the closed `portable-v1` release plan.
 
-[`forms/release-plan.json`](../forms/release-plan.json) is the derived list of
-all 34 releases, regenerated with the packages and verified by
-`standard-form-conformance verify`. Print the owner-entrypoint invocations with:
+## Current content-addressed publication lane
+
+`bun run deploy -- takoform-form-package-release plan` derives only publishable
+Experimental and Stable identities from `forms/lifecycle.json`. With the
+current empty lifecycle it prints no commands. For an authorized current Form,
+the prepare, publish, and verify phases use the exact derived tag:
 
 ```console
-bun run deploy -- takoform-form-package-release plan
+bun run deploy -- takoform-form-package-release prepare \
+  --tag forms/<release-id>/sha256-<64-lowercase-hex> \
+  --expected-commit <40-character-reviewed-commit>
+
+bun run deploy -- takoform-form-package-release publish \
+  --tag forms/<release-id>/sha256-<same-64-lowercase-hex> \
+  --expected-commit <same-40-character-reviewed-commit> \
+  --run-id <candidate-workflow-run-id> \
+  --run-attempt <candidate-workflow-run-attempt>
+
+bun run deploy -- takoform-form-package-release verify \
+  --tag forms/<release-id>/sha256-<same-64-lowercase-hex> \
+  --expected-commit <same-40-character-reviewed-commit>
 ```
 
-Run each printed invocation separately. The entrypoint accepts only an exact
-tag from the canonical 34-entry plan, runs the owner gate, proves the local
-checkout is the current canonical protected `main`, refuses an existing tag or
-release, and dispatches the protected candidate workflow:
+The artifact ID is the verified `packageDigest` with `:` replaced by `-`.
+Source path, tag, asset base, release manifest, and deep verification all use
+that same value. `FormRef.definitionVersion` remains the Form contract SemVer;
+provider versions remain independent.
+
+## Closed Legacy publication lane
+
+The 34 Legacy Forms carried independent versions and were published on separate
+tags from separate reviewed sources. This remains an important identity rule,
+but it is a historical fact rather than an open release queue.
+
+[`forms/release-plan.json`](../forms/release-plan.json) is the immutable source
+plan bound by the historical publication ledger. It must not be regenerated,
+passed to the current `plan`/`prepare`/`publish` phases, or used to create tags.
+Only the explicit `verify-all` retention path consumes it.
+
+The following prepare/publish/recovery commands describe how the historical
+lane worked. They are retained for forensic and recovery review only. Every
+canonical tag is already published, so the create-only entrypoint must refuse
+them; operators must not treat these examples as current instructions.
+
+Historical prepare phase:
 
 ```console
 bun run deploy -- takoform-form-package-release prepare \
@@ -29,9 +69,9 @@ bun run deploy -- takoform-form-package-release prepare \
   --expected-commit <40-character-reviewed-commit>
 ```
 
-Each prepare call stops after recording one exact workflow run and waits for
-its required reviewer. It does not interpret a dispatch as publication. After
-that run completes, consume only its explicit run and attempt:
+The prepare phase stopped after recording one exact workflow run and required a
+reviewer. The historical publish phase then consumed only that explicit run and
+attempt:
 
 ```console
 bun run deploy -- takoform-form-package-release publish \
@@ -41,9 +81,8 @@ bun run deploy -- takoform-form-package-release publish \
   --run-attempt <candidate-workflow-run-attempt>
 ```
 
-The publish phase verifies the candidate before creating its tag or Release,
-then performs exact immutable readback. Re-run the public semantic verifier for
-that tag with:
+The publish phase verified the candidate before creating its tag or Release,
+then performed exact immutable readback. The historical verifier invocation was:
 
 ```console
 bun run deploy -- takoform-form-package-release verify \
@@ -51,8 +90,8 @@ bun run deploy -- takoform-form-package-release verify \
   --expected-commit <40-character-reviewed-commit>
 ```
 
-When several independently reviewed candidates are ready at the same protected
-`main` commit, an operator may publish them serially in one process:
+The historical batch mode serialized several independently reviewed candidates
+from one protected `main` commit:
 
 ```console
 bun run deploy -- takoform-form-package-release publish-batch \
@@ -64,7 +103,14 @@ be a regular non-symbolic-link file no larger than 1 MiB, and every object must
 contain exactly four string fields:
 
 ```json
-[{"expectedCommit":"0123456789abcdef0123456789abcdef01234567","runAttempt":"1","runId":"123456789","tag":"forms/k-ivsgozkxn5zgwzls/v3.0.0"}]
+[
+  {
+    "expectedCommit": "0123456789abcdef0123456789abcdef01234567",
+    "runAttempt": "1",
+    "runId": "123456789",
+    "tag": "forms/k-ivsgozkxn5zgwzls/v3.0.0"
+  }
+]
 ```
 
 Every tag must be one canonical release-plan identity, and tags and exact
@@ -77,17 +123,13 @@ fetches protected `origin/main`, requires the same clean HEAD and tree, and
 re-runs the selected Form's release-authority path fence. GitHub writers are
 never parallel.
 
-A batch is not atomic across independent public identities. It stops at the
-first failure and reports the already completed tags plus the failed tag. Do
-not retry the original input after any possible mutation. Inspect the named tag
-and Release authoritatively, then create a new input containing only identities
-proven absent; use the explicit recovery phases for a retained partial identity.
+A batch was not atomic across independent public identities. It stopped at the
+first failure and reported completed tags plus the failed tag. Historical
+recovery required authoritative inspection and a new input containing only
+identities proven absent.
 
-`publish` is create-only and is never a retry mechanism after a tag-side
-partial failure. If authoritative readback proves the one narrow state in
-which the reviewed annotated tag exists locally and remotely at its exact
-candidate object, peels to the exact source commit, and no draft or public
-GitHub Release exists, complete that same identity forward with:
+`publish` was create-only and was never a retry mechanism after a tag-side
+partial failure. The narrow tag-only recovery invocation was:
 
 ```console
 bun run deploy -- takoform-form-package-release recover-tag-only \
@@ -99,19 +141,12 @@ bun run deploy -- takoform-form-package-release recover-tag-only \
   --run-attempt <original-candidate-workflow-run-attempt>
 ```
 
-This phase re-downloads and re-verifies the original run/attempt with the
-current reviewed verifier. It requires source/tooling/recovery ancestry and
-proves that the release plan, selected source directory, Form candidate build
-workflow, trusted root, package builder, and package semantic inputs did not
-change after the reviewed candidate. It runs the complete owner gate before
-draft creation and again before publication. It never pushes, creates, moves,
-or deletes a tag and refuses an absent, lightweight, unreadable, wrong-object,
-wrong-commit, or locally divergent tag. Any existing draft or public Release
-also stops this phase for manual authoritative inspection; it is not resumed
-or replaced automatically.
+This phase re-downloaded and re-verified the original run/attempt, required
+source/tooling/recovery ancestry, and proved the release inputs had not changed.
+It never pushed, created, moved, or deleted a tag and failed closed on any
+identity ambiguity.
 
-If `recover-tag-only` itself stops after GitHub has created one exact retained
-draft, resume only that explicitly named draft with:
+The corresponding exact-draft recovery invocation was:
 
 ```console
 bun run deploy -- takoform-form-package-release recover-draft \
@@ -124,43 +159,35 @@ bun run deploy -- takoform-form-package-release recover-draft \
   --run-attempt <original-candidate-workflow-run-attempt>
 ```
 
-`recover-draft` repeats the original candidate, tag, protected-main, stable
-recovery-path, and owner-gate proofs. It accepts only one exact draft identity
+`recover-draft` repeated the original candidate, tag, protected-main, stable
+recovery-path, and owner-gate proofs. It accepted only one exact draft identity
 with the original tag, name, body, upload endpoint, and candidate asset subset.
-Every existing asset must have a unique positive GitHub ID and the exact name,
-state, size, and digest from the same candidate. The phase uploads only missing
-assets, re-reads the complete draft, repeats the owner and tag fences, publishes
-that same Release ID, and performs immutable download readback. It never creates
-or deletes a Release and never creates, moves, or deletes a tag. An extra,
-duplicate, unknown, drifted, public, or competing identity stops recovery.
+Every existing asset had to carry a unique positive GitHub ID and the exact
+candidate name, state, size, and digest. Any extra, duplicate, unknown, drifted,
+public, or competing identity stopped recovery.
 
-Repeat prepare/publish/verify for all 34 plan entries. Once every independent
-release exists, retain one deterministic, create-only publication record
-outside the repository:
+After all 34 independent releases existed, the historical lane produced one
+deterministic publication record outside the repository:
 
 ```console
 bun run deploy -- takoform-form-package-release verify-all \
   --output-root /absolute/new/directory/outside/takoform
 ```
 
-The output contains the exact seven downloaded assets for every plan entry and
-`form-package-publication-set.json`, in release-plan order, binding every public
-Release identity and digest. It is source-retainable evidence; generating it
-does not modify this repository. Admission remains a separate decision:
-`ga-core-v2` selects exactly ten of those independently published packages,
-while publication of the other 24 does not admit them.
-
-Publishing proves published bytes and their publisher identity. It admits
-nothing: a Form becomes a portable standard only with a conforming host's
-signed lifecycle report, Registry installation readback, and signed admission
-evidence, none of which this repository can synthesize.
+The retained `form-package-publication-set.json` binds every public Release
+identity and digest in plan order. It proves exact historical bytes and their
+publisher identity only. The later `ga-core-v2` ten-Form classification is an
+immutable Legacy assertion, not a current admission decision. Today, Form
+lifecycle comes only from `forms/lifecycle.json`; Host Support and activation
+are independent host decisions.
 
 ## Package source and tag
 
-A release source is one already-valid closed package directory:
+A current release source is one already-valid closed v1alpha3 package carrying
+an exact v1alpha2 FormRef:
 
 ```text
-forms/releases/<release-id>/<packageVersion>/
+forms/releases/<release-id>/sha256-<64-lowercase-hex>/
   package-index.json
   <exact payload closure listed by the index>
 ```
@@ -168,9 +195,12 @@ forms/releases/<release-id>/<packageVersion>/
 The release ID is `k-` plus the lowercase, unpadded base32 encoding of the
 exact ASCII FormRef Kind bytes. It is reversible, filesystem-safe, and does not
 collapse case-distinct Kinds. The tag is
-`forms/<release-id>/v<packageVersion>`. The builder requires exact SemVer
-equality, decodes the release ID back to the exact FormRef Kind, verifies the
-complete package, and requires the tag to point at a clean `HEAD`. Local tests may use
+`forms/<release-id>/sha256-<64-lowercase-hex>`. The builder derives that
+artifact ID from the verified canonical index digest, decodes the release ID
+back to the exact FormRef Kind, verifies the complete package, and requires the
+tag to point at a clean `HEAD`. Published Legacy v1alpha1 packages retain their
+original `<packageVersion>` directory and `v<packageVersion>` tag; neither may
+be reused or renamed. Local tests may use
 the explicit `--allow-untagged-candidate` switch; its manifest remains
 `publicationReady=false`.
 
@@ -185,7 +215,7 @@ The release contains:
 - a deterministic `.tar.gz` transport whose root index has those same bytes
   and whose payload bytes match the index closure;
 - an RFC 8785 canonical SPDX 2.3 data-artifact SBOM that binds the exact
-  FormRef, package digest, package version, index/payload SHA-256 closure, and
+  FormRef, package digest, artifact identity, index/payload SHA-256 closure, and
   SPDX package verification code; the document `DESCRIBES` the package and
   that package has one deterministic `CONTAINS` relationship for the index
   and every payload file;
@@ -244,13 +274,13 @@ proof. Air-gapped verification additionally requires a retained,
 operator-managed Sigstore trusted root from the Public Good Instance; the
 distribution endpoint is never a trust root.
 
-Standard-admission readback parses the SBOM and provenance as strict I-JSON,
-rejects non-canonical or duplicate-key bytes and unknown/omitted fields, and
-recomputes their bindings from the signed package index and retained release
-manifest. Asset filenames, media types, and checksums alone are not semantic
-release evidence. Form Package release tests additionally validate generated
-SBOMs offline against the repository-pinned official SPDX 2.3 JSON Schema from
-the SPDX `v2.3` tag.
+Historical publication readback parses the SBOM and provenance as strict
+I-JSON, rejects non-canonical or duplicate-key bytes and unknown/omitted
+fields, and recomputes their bindings from the signed package index and
+retained release manifest. Asset filenames, media types, and checksums alone
+are not semantic release evidence. Form Package release tests additionally
+validate generated SBOMs offline against the repository-pinned official SPDX
+2.3 JSON Schema from the SPDX `v2.3` tag.
 
 ## Append-only security revocation
 
@@ -304,7 +334,8 @@ forks fail closed.
 
 The source tree and repository settings are both part of the trust boundary:
 
-- active tag rulesets target `refs/tags/forms/*/v*`, restrict creation, and
+- the current tag ruleset targets `refs/tags/forms/*/sha256-*`; the retained
+  Legacy rule targets `refs/tags/forms/*/v*`. Both restrict creation and
   prevent deletion and non-fast-forward updates;
 - `form-package-release` has required reviewers and only permits signing a
   candidate from the `main` branch;
@@ -320,10 +351,10 @@ set and its production package-publisher trust inputs offline. The retained
 `1.0.0` history is not rewritten and is not the selected input to that current
 check.
 
-All 34 current plan entries have signed immutable releases. The protected
-`forms/admissions/v1.0.7` tag identifies the retained standard-admission set
-and admits exactly 10 as `portable-standard`. Publication alone grants no
-admission; the other 24 are published but not admitted. The retained Takosumi
-host report proves the selected 10 on that exact host, not universal support.
-Other hosts' fetch/install and lifecycle evidence, plus live revocation proof,
-remain separate consumer/operator work.
+The historical `portable-v1` ledger retains 34 signed immutable releases. The
+last admission identity actually published was `forms/admissions/v1.0.7`; its
+old experiment asserted a ten-Form `portable-standard` subset.
+These fields and tags are Legacy evidence only. Current
+Form maturity comes from `forms/lifecycle.json`, while every host independently
+owns package installation, executable support, activation, principal audience,
+and any Offering.

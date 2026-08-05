@@ -459,7 +459,7 @@ func writeRegistryFixture(t *testing.T, root string, versionRaw []byte, releaseC
 			BindingStatus: "exact-structural-candidate-set", RunnerSubject: providerlifecycle.RunnerSubject,
 			Protocol:           "Terraform provider protocol v6 + versioned Form host HTTP",
 			InstallationSource: providerlifecycle.DirectRegistryInstall,
-			CandidateSetSHA256: providerlifecycle.CandidateSetSHA256(), ProviderSchemaSHA256: digest,
+			CandidateSetSHA256: providerlifecycle.LegacyCandidateSetSHA256(), ProviderSchemaSHA256: digest,
 			ProviderBinary: providerBinary,
 			CLI:            providerlifecycle.CLIIdentity{Product: requirement.Product, Version: requirement.Version, ProviderAddress: requirement.ProviderAddress, ExecutableName: requirement.Product, ExecutableSHA256: digest},
 			Resources:      resources,
@@ -477,7 +477,7 @@ func writeRegistryFixture(t *testing.T, root string, versionRaw []byte, releaseC
 	}
 	matrix := providerlifecycle.MatrixReport{
 		Format: providerlifecycle.MatrixReportFormat, Classification: "supported-cli-fqn-candidate-matrix", PublicationReady: false,
-		ReleaseDescriptorSHA256: descriptorDigest, CandidateSetSHA256: providerlifecycle.CandidateSetSHA256(), ProviderSchemaSHA256: digest,
+		ReleaseDescriptorSHA256: descriptorDigest, CandidateSetSHA256: providerlifecycle.LegacyCandidateSetSHA256(), ProviderSchemaSHA256: digest,
 		InstallationSource: providerlifecycle.DirectRegistryInstall, Reports: reports,
 	}
 	matrixRaw, err := json.Marshal(matrix)

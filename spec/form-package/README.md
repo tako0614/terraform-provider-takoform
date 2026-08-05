@@ -1,25 +1,29 @@
-# Data-only Form Package v1alpha1
+# Data-only Form Package
 
 A Form Package is a closed local directory with a root `package-index.json` and
 exactly the payload files listed by that index. Requirement keywords are used
-as described in [`../conformance.md`](../conformance.md). The normative Draft 2020-12
-index schema is
-[`../../formpackage/schemas/package-index.schema.json`](../../formpackage/schemas/package-index.schema.json).
+as described in [`../conformance.md`](../conformance.md). The normative Draft
+2020-12 index schemas are the current
+[`v1alpha3`](../../formpackage/schemas/package-index-v1alpha3.schema.json) and
+retained Legacy
+[`v1alpha2`](../../formpackage/schemas/package-index-v1alpha2.schema.json) and
+[`v1alpha1`](../../formpackage/schemas/package-index.schema.json) profiles.
+The v1alpha2 envelope is immutable and content-addressed, but it refers to a
+v1alpha1 FormRef; it cannot carry a current v1alpha2 Form.
 
 One package MUST contain exactly one Form Definition and therefore exactly one
 FormRef. There is no `packageId` and no multi-form `definitions` collection in
 this contract. A compatibility set, catalog, or host migration map is an
 external data object that points to multiple exact `(FormRef, packageDigest)`
-pairs; it is not a wider Form Package. For example, publishing the current
-provider candidate set requires one independent package per Form, each with a
-valid SemVer `packageVersion`, rather than one package carrying every
-definition or a non-SemVer collection version.
+pairs; it is not a wider Form Package. Each Form is distributed independently;
+one package never carries a catalog-wide version or multiple definitions.
 
 ## Index and identity
 
-The index has the fixed identity
-`packages.forms.takoform.com/v1alpha1` / `FormPackage`, a SemVer
-`packageVersion`, an exact `FormRef`, one `definitionPath`, and a
+The current index has the fixed identity
+`packages.forms.takoform.com/v1alpha3` / `FormPackage`, an exact
+`forms.takoform.com/v1alpha2` `FormRef`, one
+`definitionPath`, and a
 lexicographically sorted `files` array. Every file entry records a canonical
 relative slash path, an allowlisted data media type, its byte length, and a
 lowercase `sha256:` digest over the exact payload bytes.
@@ -31,6 +35,14 @@ to either identity.
 
 `packageDigest` is the verifier result used by an external catalog or mapping;
 it is not a self-referential field inside `package-index.json`.
+
+The content-addressed v1alpha2 and v1alpha3 profiles deliberately have no
+`packageVersion`. Their publication locators use the full Package Digest as
+`sha256-<hex>` while
+`FormRef.definitionVersion` remains the only Form compatibility SemVer. The
+v1alpha2 profile remains accepted only for exact Legacy v1alpha1 FormRefs. The
+v1alpha1 profile and its required `packageVersion` likewise remain accepted
+only for exact Legacy read, verification, recovery, and migration.
 
 ## Local verifier
 
@@ -110,14 +122,19 @@ go run ./cmd/form-package conformance
 ## Release boundary
 
 The repository-owned release tooling and protected workflows are documented in
-[`../../release/form-packages.md`](../../release/form-packages.md). A package
-source under `forms/releases/<release-id>/<packageVersion>/` is re-verified,
+[`../../release/form-packages.md`](../../release/form-packages.md). A current
+package source under
+`forms/releases/<release-id>/sha256-<package-digest-hex>/` is re-verified,
 canonicalized, deterministically archived, described by SPDX 2.3 and SLSA v1
 evidence, and signed through a keyless Sigstore v0.3 bundle whose identity is
 bound to the exact repository and protected-main workflow. The reversible
 release ID is `k-` plus lowercase unpadded base32 of the exact FormRef Kind;
-the dispatcher separately verifies the exact `forms/<release-id>/v<semver>`
-source tag and approved commit before signing.
+the dispatcher separately verifies the exact
+`forms/<release-id>/sha256-<package-digest-hex>` source tag and approved commit
+before signing. Legacy v1alpha1 locators retain their existing
+`<packageVersion>` directory and `v<packageVersion>` tag unchanged. Legacy
+content-addressed v1alpha2 packages and current v1alpha3 packages use their
+full digest locator, but only v1alpha3 may carry a current v1alpha2 FormRef.
 The canonical index bytes—not archive metadata—remain the signed semantic
 subject.
 

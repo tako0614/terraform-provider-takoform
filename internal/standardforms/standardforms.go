@@ -1,15 +1,12 @@
 package standardforms
 
 import (
-	"crypto/sha256"
 	"encoding/base32"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
@@ -30,9 +27,10 @@ type Spec struct {
 	Immutable   []string
 }
 
-// Specs is the active portable Form set, derived from the one declaration in
-// internal/formcatalog. Nothing here restates a Form: adding a kind to the
-// catalogue adds it to the packages, the inventory, and the provider at once.
+// Specs is the retained provider-v1 Legacy compatibility set derived from
+// internal/formcatalog. It is not the project's current Form lifecycle
+// inventory; forms/lifecycle.json currently declares nine Proposals and no
+// Experimental-or-later current Forms.
 var Specs = activeSpecs()
 
 func activeSpecs() []Spec {
@@ -56,9 +54,8 @@ const retiredPackageVersion = "1.0.1"
 const portableGeneration = "portable-v1"
 
 const (
-	currentAdmissionGeneration = "ga-core-v2"
-	currentAdmissionRoot       = "admission/v4"
-	retainedGaCoreV1Root       = "admission/v3"
+	legacyGaCoreV2Root   = "admission/v4"
+	retainedGaCoreV1Root = "admission/v3"
 )
 
 // RetiredKinds is the exact published set whose immutable bytes and admission
@@ -109,269 +106,22 @@ type InventoryEntry struct {
 }
 
 func Generate(root string) error {
-	published, err := discoverPublishedReleaseSources(root)
-	if err != nil {
-		return fmt.Errorf("published release source preflight: %w", err)
-	}
-	if err := VerifyFormSemVerHistory(root); err != nil {
-		return fmt.Errorf("existing Form SemVer history: %w", err)
-	}
-	stagingRoot, err := os.MkdirTemp("", "takoform-standard-forms-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(stagingRoot)
-
-	entries := make([]InventoryEntry, 0, len(Specs))
-	for _, spec := range Specs {
-		entry, err := generatePackage(stagingRoot, spec)
-		if err != nil {
-			return err
-		}
-		entries = append(entries, entry)
-	}
-	// Prove every generated desiredSchema against the retained history before
-	// replacing any release-source directory.
-	for _, entry := range entries {
-		definitionPath := filepath.Join(stagingRoot, filepath.FromSlash(entry.Path), "definition.json")
-		if err := verifyCandidateFormSemVer(root, definitionPath); err != nil {
-			return fmt.Errorf("%s candidate Form SemVer: %w", entry.Kind, err)
-		}
-	}
-	if err := verifyNoPublishedReleaseOverwrite(root, stagingRoot, entries, published); err != nil {
-		return err
-	}
-
-	// All immutable-source and candidate checks above are read-only against the
-	// repository. Only after the whole candidate set passes may generation
-	// replace tracked candidate surfaces.
-	if err := pruneRetiredPackages(root); err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if err := syncGeneratedPackage(root, stagingRoot, entry); err != nil {
-			return err
-		}
-	}
-	for _, entry := range entries {
-		if err := syncCandidateReleaseSource(root, entry, published); err != nil {
-			return err
-		}
-	}
-	inventory := Inventory{
-		Format: "takoform.standard-package-set@v1", Classification: "structural-candidate",
-		Generation: portableGeneration, LocalConformance: "structural-only",
-		PublicationReady: false, AdmissionStatus: "external-required",
-		ExternalRequired:    append([]string(nil), externalRequirements...),
-		ConformanceManifest: "conformance/form-package-v1/manifest.json", Packages: entries,
-	}
-	if err := writeJSON(filepath.Join(root, "forms", "standard-package-set.json"), inventory); err != nil {
-		return err
-	}
-	refs := make(map[string]formregistry.Ref, len(entries))
-	for _, entry := range entries {
-		refs[entry.Kind] = formregistry.Ref{
-			APIVersion: entry.FormRef.APIVersion, Kind: entry.FormRef.Kind,
-			DefinitionVersion: entry.FormRef.DefinitionVersion,
-			SchemaDigest:      entry.FormRef.SchemaDigest, PackageDigest: entry.PackageDigest,
-		}
-	}
-	if err := writeJSON(filepath.Join(root, "internal", "formregistry", "candidate-refs.json"), refs); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(filepath.Join(root, "conformance", "standard-form-admission-v1")); err != nil {
-		return err
-	}
-	if err := updateConformanceManifest(root, entries); err != nil {
-		return err
-	}
-	if err := updatePortableHostContract(root, entries); err != nil {
-		return err
-	}
-	if err := generateRetiredInventory(root); err != nil {
-		return err
-	}
-	if err := generateReleasePlan(root, entries); err != nil {
-		return err
-	}
-	if err := refreshCurrentAdmissionCandidateIdentities(root, entries); err != nil {
-		return err
-	}
-	return generatePublishedSurfaces(root)
-}
-
-// refreshCurrentAdmissionCandidateIdentities preserves the reviewed ten-kind
-// selection and order while rebinding it to the exact current package bytes.
-// This is source preparation only: it neither publishes nor admits a Form.
-func refreshCurrentAdmissionCandidateIdentities(root string, entries []InventoryEntry) error {
-	path := filepath.Join(root, "forms", "admission-candidate-set.json")
-	var inventory currentAdmissionCandidateInventory
-	if err := readJSON(path, &inventory); err != nil {
-		return err
-	}
-	if inventory.Format != "takoform.admission-candidate-set@v1" ||
-		inventory.Generation != currentAdmissionGeneration ||
-		inventory.AdmissionStatus != "external-required" ||
-		len(inventory.Packages) != 10 {
-		return fmt.Errorf("current admission selection is not the reviewed ten-kind generation")
-	}
-	current := make(map[string]InventoryEntry, len(entries))
-	for _, entry := range entries {
-		current[entry.Kind] = entry
-	}
-	seen := make(map[string]struct{}, len(inventory.Packages))
-	for index := range inventory.Packages {
-		selected := &inventory.Packages[index]
-		entry, ok := current[selected.Kind]
-		kind, declared := formcatalog.ByKind(selected.Kind)
-		if !ok || !declared || selected.Slug != kind.Slug {
-			return fmt.Errorf("current admission selection contains unknown or drifted kind %s", selected.Kind)
-		}
-		if _, duplicate := seen[selected.Kind]; duplicate {
-			return fmt.Errorf("current admission selection duplicates kind %s", selected.Kind)
-		}
-		seen[selected.Kind] = struct{}{}
-		releaseID := releaseIDForKind(selected.Kind)
-		selected.ReleaseID = releaseID
-		selected.Version = entry.FormRef.DefinitionVersion
-		selected.Tag = "forms/" + releaseID + "/v" + selected.Version
-		selected.SourcePath = filepath.ToSlash(filepath.Join("forms", "releases", releaseID, selected.Version))
-		selected.FormRef = entry.FormRef
-		selected.PackageDigest = entry.PackageDigest
-	}
-	return writeJSON(path, inventory)
-}
-
-func syncGeneratedPackage(root, stagingRoot string, entry InventoryEntry) error {
-	source := filepath.Join(stagingRoot, filepath.FromSlash(entry.Path))
-	destination := filepath.Join(root, filepath.FromSlash(entry.Path))
-	if err := os.RemoveAll(destination); err != nil {
-		return err
-	}
-	if err := os.CopyFS(destination, os.DirFS(source)); err != nil {
-		return fmt.Errorf("sync %s generated package: %w", entry.Kind, err)
-	}
-	return nil
-}
-
-func syncCandidateReleaseSource(root string, entry InventoryEntry, published map[string]publishedReleaseSource) error {
-	releaseID := releaseIDForKind(entry.Kind)
-	if _, immutable := published[publishedReleaseKey(releaseID, entry.FormRef.DefinitionVersion)]; immutable {
-		// The staged candidate was proven byte-exact above. Do not rewrite even
-		// equivalent bytes of an identity that already has a published tag.
-		return nil
-	}
-	source := filepath.Join(root, filepath.FromSlash(entry.Path))
-	destination := filepath.Join(root, "forms", "releases", releaseID, entry.FormRef.DefinitionVersion)
-	if err := os.RemoveAll(destination); err != nil {
-		return err
-	}
-	if err := os.CopyFS(destination, os.DirFS(source)); err != nil {
-		return fmt.Errorf("sync %s candidate release source: %w", entry.Kind, err)
-	}
-	return nil
-}
-
-func generatePackage(root string, spec Spec) (InventoryEntry, error) {
-	kind, ok := formcatalog.ByKind(spec.Kind)
-	if !ok {
-		return InventoryEntry{}, fmt.Errorf("no declared Form for %s", spec.Kind)
-	}
-	desired := kind.CanonicalDesired()
-	negatives, err := kind.NegativeCases()
-	if err != nil {
-		return InventoryEntry{}, err
-	}
-	negativeFixtures := make([]formpackage.NegativeFixture, 0, len(negatives)+1)
-	negativeFiles := make(map[string]any, len(negatives)+1)
-	for _, negative := range negatives {
-		path := "fixtures/negative-" + negative.Name + ".json"
-		negativeFiles[path] = negative.Desired
-		negativeFixtures = append(negativeFixtures, formpackage.NegativeFixture{
-			Name: "reject-" + negative.Name, Stage: "desired",
-			InputPath: path, ExpectedFailure: "schema_validation_failed",
-		})
-	}
-	const observedNegativePath = "fixtures/negative-observed-foreign-kind-id.json"
-	negativeFiles[observedNegativePath] = kind.ForeignKindObserved()
-	negativeFixtures = append(negativeFixtures, formpackage.NegativeFixture{
-		Name: "reject-observed-foreign-kind-id", Stage: "observed",
-		InputPath: observedNegativePath, ExpectedFailure: "schema_validation_failed",
-	})
-	definition := formpackage.FormDefinition{
-		APIVersion: formpackage.FormAPIVersion, Kind: spec.Kind, DefinitionVersion: spec.Version,
-		Title: spec.Title, Description: spec.Description, Status: "standard",
-		DesiredSchema: kind.DesiredSchema(), ObservedSchema: kind.ObservedSchema(), OutputSchema: kind.OutputSchema(),
-		ImmutableFields:       append([]string(nil), spec.Immutable...),
-		LifecycleCapabilities: []string{"create", "read", "update", "delete", "import", "observe", "refresh", "drift"},
-		Interfaces:            kind.InterfaceDescriptors(),
-		ConformanceFixtures: []formpackage.ConformanceFixture{{
-			Name: "canonical", DesiredPath: "fixtures/desired.json", ObservedPath: "fixtures/observed.json", OutputPath: "fixtures/output.json",
-		}},
-		NegativeFixtures: negativeFixtures,
-	}
-	packageRoot := filepath.Join(root, "conformance", "form-package-v1", "positive", "standard", spec.Slug)
-	if err := os.RemoveAll(packageRoot); err != nil {
-		return InventoryEntry{}, err
-	}
-	files := map[string]any{
-		"definition.json": definition, "fixtures/desired.json": desired,
-		"fixtures/observed.json": kind.CanonicalObserved(), "fixtures/output.json": kind.CanonicalOutput(),
-	}
-	for path, value := range negativeFiles {
-		files[path] = value
-	}
-	for relative, value := range files {
-		if err := writeJSON(filepath.Join(packageRoot, filepath.FromSlash(relative)), value); err != nil {
-			return InventoryEntry{}, err
-		}
-	}
-	definitionRaw, err := os.ReadFile(filepath.Join(packageRoot, "definition.json"))
-	if err != nil {
-		return InventoryEntry{}, err
-	}
-	schemaDigest, err := formpackage.DigestCanonicalJSON(definitionRaw)
-	if err != nil {
-		return InventoryEntry{}, err
-	}
-	ref := formpackage.FormRef{APIVersion: formpackage.FormAPIVersion, Kind: spec.Kind, DefinitionVersion: spec.Version, SchemaDigest: schemaDigest}
-	paths := make([]string, 0, len(files))
-	for relative := range files {
-		paths = append(paths, relative)
-	}
-	sort.Strings(paths)
-	packageFiles := make([]formpackage.PackageFile, 0, len(paths))
-	for _, relative := range paths {
-		raw, err := os.ReadFile(filepath.Join(packageRoot, filepath.FromSlash(relative)))
-		if err != nil {
-			return InventoryEntry{}, err
-		}
-		mediaType := "application/json"
-		if relative == "definition.json" {
-			mediaType = formpackage.DefinitionMediaType
-		}
-		packageFiles = append(packageFiles, formpackage.PackageFile{Path: relative, MediaType: mediaType, Size: int64(len(raw)), Digest: formpackage.DigestBytes(raw)})
-	}
-	index := formpackage.PackageIndex{APIVersion: formpackage.PackageAPIVersion, Kind: formpackage.PackageKind, PackageVersion: spec.Version, FormRef: ref, DefinitionPath: "definition.json", Files: packageFiles}
-	if err := writeJSON(filepath.Join(packageRoot, formpackage.PackageIndexFilename), index); err != nil {
-		return InventoryEntry{}, err
-	}
-	report, err := formpackage.VerifyDirectory(packageRoot)
-	if err != nil {
-		return InventoryEntry{}, fmt.Errorf("verify generated %s: %w", spec.Kind, err)
-	}
-	if err := provider.VerifyStandardFormStructure(spec.Kind, desired); err != nil {
-		return InventoryEntry{}, err
-	}
-	return InventoryEntry{
-		Kind: spec.Kind, Path: filepath.ToSlash(filepath.Join("conformance", "form-package-v1", "positive", "standard", spec.Slug)),
-		AdmissionStatus: "external-required", ConformanceCase: "standard-" + spec.Slug + "-package", FormRef: report.FormRef, PackageDigest: report.PackageDigest,
-	}, nil
+	return fmt.Errorf(
+		"legacy catalog generation is retired; forms/lifecycle.json declares Proposal-derived current candidates separately, so verify retained compatibility surfaces instead",
+	)
 }
 
 func Verify(root string) error {
-	if err := VerifyPublishedReleaseSources(root); err != nil {
+	authority, err := readProjectLifecycleAuthority(root)
+	if err != nil {
+		return err
+	}
+	published, err := discoverPublishedReleaseSources(root)
+	if err != nil {
 		return fmt.Errorf("published release sources: %w", err)
+	}
+	if err := verifyLegacyReleaseInventory(root, authority, published); err != nil {
+		return err
 	}
 	if err := VerifyFormSemVerHistory(root); err != nil {
 		return fmt.Errorf("Form SemVer history: %w", err)
@@ -451,7 +201,7 @@ func verifyReleaseSource(fixtureRoot, releaseRoot string, entry InventoryEntry) 
 		return err
 	}
 	if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
-		return fmt.Errorf("identity differs from the exact structural candidate")
+		return fmt.Errorf("identity differs from the exact Legacy compatibility identity")
 	}
 	fixtureIndexRaw, err := os.ReadFile(filepath.Join(fixtureRoot, formpackage.PackageIndexFilename))
 	if err != nil {
@@ -484,10 +234,10 @@ func verifyReleaseSource(fixtureRoot, releaseRoot string, entry InventoryEntry) 
 	return nil
 }
 
-// VerifyCandidatePublication is the Phase 1 provider publication gate. It
-// proves that the provider still embeds only the reviewed structural candidate
-// set and that the release descriptor explicitly remains candidate-only. It
-// does not read, create, or upgrade standard-admission evidence.
+// VerifyCandidatePublication is the provider compatibility publication gate.
+// It proves that the provider still embeds only the reviewed Legacy set and
+// that the immutable release descriptor retains its candidate-only metadata.
+// It cannot change Form lifecycle, Host Support, or activation.
 func VerifyCandidatePublication(root string) error {
 	if err := Verify(root); err != nil {
 		return err
@@ -504,60 +254,32 @@ func VerifyCandidatePublication(root string) error {
 	}
 	if descriptor.SchemaVersion != 1 || descriptor.Version == "" || descriptor.Tag != "v"+descriptor.Version ||
 		descriptor.ProviderAddress != "registry.terraform.io/tako0614/takoform" || descriptor.PublicationStatus != "candidate-only" {
-		return fmt.Errorf("Phase 1 provider publication requires the exact candidate-only release descriptor")
+		return fmt.Errorf("provider publication requires the exact retained candidate-only release descriptor")
 	}
 	return nil
 }
 
-// VerifyAdmissionClosure is the fail-closed Phase 2 candidate-closure gate.
-// Structural candidates are verified first, then the exact retained
-// standard-admission reports and distribution readbacks must close over the
-// compiled set, pass offline authentication, and resolve their exact Git refs.
-// Passing this check neither publishes an artifact nor mutates a host; the
-// source-retained closure itself is the admission evidence. There is no later
-// set-wide release or controller promotion step.
-func VerifyAdmissionClosure(root string) error {
+// VerifyLegacyAdmissionEvidence authenticates retained Git identities and
+// exact set bytes without interpreting any historical admission field as
+// current Form maturity. Historical semantic claims are not rerun under a
+// different current provider/catalog policy.
+func VerifyLegacyAdmissionEvidence(root string) error {
 	if err := Verify(root); err != nil {
 		return err
 	}
-	candidates, err := AdmissionCandidateSet(root)
-	if err != nil {
-		return err
+	if err := verifyHistoricalAdmissionAssignments(root); err != nil {
+		return fmt.Errorf("legacy admission identity history: %w", err)
 	}
-	return admissionrelease.VerifyAdmissionSet(root, candidates)
-}
-
-// VerifyCurrentAdmissionClosure verifies only the current Takoform FormRef
-// lane. It does not describe or gate unrelated Cloud services that have no
-// Takoform definition.
-func VerifyCurrentAdmissionClosure(root string) error {
-	if err := Verify(root); err != nil {
-		return err
+	if err := VerifyRetainedGaCoreV1PublishedPackageSet(root); err != nil {
+		return fmt.Errorf("legacy admission/v3 publication checkpoint: %w", err)
 	}
-	candidates, err := CurrentAdmissionCandidateSet(root)
-	if err != nil {
-		return err
-	}
-	return admissionrelease.VerifyAdmissionSetAt(root, currentAdmissionRoot, candidates)
-}
-
-// VerifyCurrentAdmissionMaterial authenticates the exact source-retained v4
-// closure before the create-only checkpoint tag is minted.
-func VerifyCurrentAdmissionMaterial(root string) error {
-	if err := Verify(root); err != nil {
-		return err
-	}
-	candidates, err := CurrentAdmissionCandidateSet(root)
-	if err != nil {
-		return err
-	}
-	return admissionrelease.VerifyAdmissionMaterialAt(root, currentAdmissionRoot, candidates)
+	return nil
 }
 
 // VerifyPublishedPackageSet verifies the retained, immutable distribution
-// readback for the complete structural candidate set. Passing this gate proves
-// package publication and its package-index publisher identity only. It does
-// not upgrade any Form to portable-standard.
+// readback for the complete Legacy compatibility set. Passing this gate proves
+// package publication and package-index publisher identity only. It changes no
+// lifecycle or host authority.
 func VerifyPublishedPackageSet(root string) error {
 	candidates, err := publishedPackageCandidateSet(root)
 	if err != nil {
@@ -578,21 +300,18 @@ func VerifyRetainedGaCoreV1PublishedPackageSet(root string) error {
 	return admissionrelease.VerifyPublishedPackageSetAt(root, retainedGaCoreV1Root, candidates)
 }
 
-// VerifyCurrentPublishedPackageSet verifies the immutable per-Form releases
-// for the complete current portable catalog. This is a post-publication
-// evidence gate, not part of the portable source check or the smaller
-// admission selection.
-func VerifyCurrentPublishedPackageSet(root string) error {
-	_, err := CurrentPublishedPackageSet(root)
+// VerifyLegacyPublishedPackageSet verifies the immutable per-Form releases in
+// the pre-reset portable-v1 catalog. Publication remains a historical fact;
+// it does not grant current Form maturity.
+func VerifyLegacyPublishedPackageSet(root string) error {
+	_, err := LegacyPublishedPackageSet(root)
 	return err
 }
 
-// CurrentPublishedPackageSet authenticates and returns the exact retained
-// all-Form publication manifest. Callers may project a reviewed admission
-// subset from this value, but must not introduce a second publication
-// authority for that subset.
-func CurrentPublishedPackageSet(root string) (formpublication.Set, error) {
-	candidates, err := CurrentPortableCandidateSet(root)
+// LegacyPublishedPackageSet authenticates and returns the exact retained
+// all-Form publication manifest from the pre-reset portable-v1 line.
+func LegacyPublishedPackageSet(root string) (formpublication.Set, error) {
+	candidates, err := LegacyPortableCandidateSet(root)
 	if err != nil {
 		return formpublication.Set{}, err
 	}
@@ -607,7 +326,7 @@ func CurrentPublishedPackageSet(root string) (formpublication.Set, error) {
 	if err != nil {
 		return formpublication.Set{}, err
 	}
-	set, err := formpublication.VerifyAt(root, currentAdmissionRoot, published)
+	set, err := formpublication.VerifyAt(root, legacyGaCoreV2Root, published)
 	if err != nil {
 		return formpublication.Set{}, err
 	}
@@ -629,7 +348,7 @@ func publishedExpectation(
 	var manifest formpublication.Set
 	path := filepath.Join(
 		root,
-		filepath.FromSlash(currentAdmissionRoot),
+		filepath.FromSlash(legacyGaCoreV2Root),
 		formpublication.SetFilename,
 	)
 	if err := readJSON(path, &manifest); err != nil {
@@ -821,31 +540,12 @@ func AdmissionCandidateSet(root string) (admissionrelease.CandidateSet, error) {
 	}, nil
 }
 
-type currentAdmissionCandidateInventory struct {
-	Format          string                             `json:"format"`
-	Generation      string                             `json:"generation"`
-	AdmissionStatus string                             `json:"admissionStatus"`
-	Packages        []currentAdmissionCandidatePackage `json:"packages"`
-}
-
-type currentAdmissionCandidatePackage struct {
-	Kind          string              `json:"kind"`
-	Slug          string              `json:"slug"`
-	ReleaseID     string              `json:"releaseId"`
-	Version       string              `json:"version"`
-	Tag           string              `json:"tag"`
-	SourcePath    string              `json:"sourcePath"`
-	FormRef       formpackage.FormRef `json:"formRef"`
-	PackageDigest string              `json:"packageDigest"`
-}
-
-// CurrentPortableCandidateSet returns the complete current portable-v1
-// catalog as exact local release-source identities. Provider conformance must
-// close over this full set before a smaller admission generation selects any
-// subset from it.
-func CurrentPortableCandidateSet(root string) (admissionrelease.CandidateSet, error) {
+// LegacyPortableCandidateSet returns the complete pre-reset portable-v1
+// catalog as exact local release-source identities. It is retained for
+// provider compatibility and historical evidence, not current maturity.
+func LegacyPortableCandidateSet(root string) (admissionrelease.CandidateSet, error) {
 	if err := Verify(root); err != nil {
-		return admissionrelease.CandidateSet{}, fmt.Errorf("verify current portable catalog: %w", err)
+		return admissionrelease.CandidateSet{}, fmt.Errorf("verify Legacy portable-v1 catalog: %w", err)
 	}
 	var inventory Inventory
 	if err := readJSON(filepath.Join(root, "forms", "standard-package-set.json"), &inventory); err != nil {
@@ -854,7 +554,7 @@ func CurrentPortableCandidateSet(root string) (admissionrelease.CandidateSet, er
 	if inventory.Format != "takoform.standard-package-set@v1" ||
 		inventory.Generation != "portable-v1" ||
 		len(inventory.Packages) != len(Specs) || len(inventory.Packages) != 34 {
-		return admissionrelease.CandidateSet{}, fmt.Errorf("current portable catalog identity is invalid")
+		return admissionrelease.CandidateSet{}, fmt.Errorf("Legacy portable-v1 catalog identity is invalid")
 	}
 	specByKind := make(map[string]Spec, len(Specs))
 	for _, spec := range Specs {
@@ -869,19 +569,19 @@ func CurrentPortableCandidateSet(root string) (admissionrelease.CandidateSet, er
 			entry.FormRef.Kind != entry.Kind ||
 			!formpackage.ValidDigest(entry.FormRef.SchemaDigest) ||
 			!formpackage.ValidDigest(entry.PackageDigest) {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("current portable packages[%d] has invalid exact identity", index)
+			return admissionrelease.CandidateSet{}, fmt.Errorf("Legacy portable-v1 packages[%d] has invalid exact identity", index)
 		}
 		if _, duplicate := seen[entry.Kind]; duplicate {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("current portable packages[%d] duplicates kind %s", index, entry.Kind)
+			return admissionrelease.CandidateSet{}, fmt.Errorf("Legacy portable-v1 packages[%d] duplicates kind %s", index, entry.Kind)
 		}
 		seen[entry.Kind] = struct{}{}
 		packagePath := filepath.ToSlash(filepath.Join("forms", "releases", releaseIDForKind(entry.Kind), entry.FormRef.DefinitionVersion))
 		report, err := formpackage.VerifyDirectory(filepath.Join(root, filepath.FromSlash(packagePath)))
 		if err != nil {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("%s current portable release source: %w", entry.Kind, err)
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s Legacy portable-v1 release source: %w", entry.Kind, err)
 		}
 		if report.FormRef != entry.FormRef || report.PackageDigest != entry.PackageDigest {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("%s current portable release-source identity drift", entry.Kind)
+			return admissionrelease.CandidateSet{}, fmt.Errorf("%s Legacy portable-v1 release-source identity drift", entry.Kind)
 		}
 		candidates = append(candidates, admissionrelease.Candidate{
 			Kind: entry.Kind, Slug: spec.Slug, PackagePath: packagePath,
@@ -891,176 +591,13 @@ func CurrentPortableCandidateSet(root string) (admissionrelease.CandidateSet, er
 	return admissionrelease.CandidateSet{Generation: inventory.Generation, Entries: candidates}, nil
 }
 
-// CurrentAdmissionCandidateSet returns the exact mixed-version package
-// identities selected for the generation-aware v4 admission lane. Publication
-// and admission evidence remain separate: this function verifies only the
-// reviewed inventory and its local data-only package bytes.
+// CurrentAdmissionCandidateSet is retained only as a fail-closed compatibility
+// seam for the removed internal v4 material builder. New central admission
+// generations are forbidden by the lifecycle authority.
+//
+// Deprecated: there is no current central admission candidate set.
 func CurrentAdmissionCandidateSet(root string) (admissionrelease.CandidateSet, error) {
-	var inventory currentAdmissionCandidateInventory
-	if err := readJSON(filepath.Join(root, "forms", "admission-candidate-set.json"), &inventory); err != nil {
-		return admissionrelease.CandidateSet{}, err
-	}
-	var standard Inventory
-	if err := readJSON(filepath.Join(root, "forms", "standard-package-set.json"), &standard); err != nil {
-		return admissionrelease.CandidateSet{}, fmt.Errorf("read current standard package set: %w", err)
-	}
-	if inventory.Format != "takoform.admission-candidate-set@v1" ||
-		inventory.Generation != currentAdmissionGeneration ||
-		inventory.AdmissionStatus != "external-required" ||
-		len(inventory.Packages) != 10 {
-		return admissionrelease.CandidateSet{}, fmt.Errorf("current admission inventory identity is invalid")
-	}
-	if standard.Format != "takoform.standard-package-set@v1" ||
-		standard.Generation != "portable-v1" ||
-		len(standard.Packages) != 34 {
-		return admissionrelease.CandidateSet{}, fmt.Errorf("current standard package set identity is invalid")
-	}
-	standardByKind := make(map[string]InventoryEntry, len(standard.Packages))
-	for index, item := range standard.Packages {
-		if _, duplicate := standardByKind[item.Kind]; duplicate {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("current standard packages[%d] duplicates kind %s", index, item.Kind)
-		}
-		standardByKind[item.Kind] = item
-	}
-	seenKinds := make(map[string]struct{}, len(inventory.Packages))
-	seenSlugs := make(map[string]struct{}, len(inventory.Packages))
-	candidates := make([]admissionrelease.Candidate, 0, len(inventory.Packages))
-	for index, item := range inventory.Packages {
-		if _, duplicate := seenKinds[item.Kind]; duplicate {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("current admission packages[%d] duplicates kind %s", index, item.Kind)
-		}
-		seenKinds[item.Kind] = struct{}{}
-		if _, duplicate := seenSlugs[item.Slug]; duplicate {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("current admission packages[%d] duplicates slug %s", index, item.Slug)
-		}
-		seenSlugs[item.Slug] = struct{}{}
-		releaseID := releaseIDForKind(item.Kind)
-		wantTag := "forms/" + releaseID + "/v" + item.Version
-		wantPath := filepath.ToSlash(filepath.Join("forms", "releases", releaseID, item.Version))
-		if item.Kind == "" || item.Slug == "" || item.ReleaseID != releaseID ||
-			item.Version == "" || item.Version != item.FormRef.DefinitionVersion ||
-			item.Tag != wantTag || item.SourcePath != wantPath ||
-			item.FormRef.APIVersion != formpackage.FormAPIVersion ||
-			item.FormRef.Kind != item.Kind || !formpackage.ValidDigest(item.FormRef.SchemaDigest) ||
-			!formpackage.ValidDigest(item.PackageDigest) {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("current admission packages[%d] has invalid exact identity", index)
-		}
-		standardItem, ok := standardByKind[item.Kind]
-		if !ok || filepath.Base(standardItem.Path) != item.Slug ||
-			standardItem.FormRef != item.FormRef ||
-			standardItem.PackageDigest != item.PackageDigest {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("current admission packages[%d] is not an exact member of portable-v1", index)
-		}
-		report, err := formpackage.VerifyDirectory(filepath.Join(root, filepath.FromSlash(item.SourcePath)))
-		if err != nil {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("%s current admission package: %w", item.Kind, err)
-		}
-		if report.FormRef != item.FormRef || report.PackageDigest != item.PackageDigest {
-			return admissionrelease.CandidateSet{}, fmt.Errorf("%s current admission package bytes drift from inventory", item.Kind)
-		}
-		candidates = append(candidates, admissionrelease.Candidate{
-			Kind: item.Kind, Slug: item.Slug, PackagePath: item.SourcePath,
-			FormRef: item.FormRef, PackageDigest: item.PackageDigest,
-		})
-	}
-	return admissionrelease.CandidateSet{Generation: inventory.Generation, Entries: candidates}, nil
-}
-
-func updateConformanceManifest(root string, entries []InventoryEntry, successors ...InventoryEntry) error {
-	path := filepath.Join(root, "conformance", "form-package-v1", "manifest.json")
-	var manifest struct {
-		SchemaVersion int `json:"schemaVersion"`
-		Positive      []struct {
-			Name string `json:"name"`
-			Path string `json:"path"`
-			Kind string `json:"kind"`
-		} `json:"positive"`
-		Negative []map[string]any `json:"negative"`
-	}
-	if err := readJSON(path, &manifest); err != nil {
-		return err
-	}
-	kept := manifest.Positive[:0]
-	for _, item := range manifest.Positive {
-		if !strings.HasPrefix(item.Name, "standard-") {
-			kept = append(kept, item)
-		}
-	}
-	manifest.Positive = kept
-	for _, entry := range entries {
-		manifest.Positive = append(manifest.Positive, struct {
-			Name string `json:"name"`
-			Path string `json:"path"`
-			Kind string `json:"kind"`
-		}{Name: entry.ConformanceCase, Path: strings.TrimPrefix(entry.Path, "conformance/form-package-v1/"), Kind: entry.Kind})
-	}
-	for _, entry := range successors {
-		manifest.Positive = append(manifest.Positive, struct {
-			Name string `json:"name"`
-			Path string `json:"path"`
-			Kind string `json:"kind"`
-		}{Name: entry.ConformanceCase, Path: strings.TrimPrefix(entry.Path, "conformance/form-package-v1/"), Kind: entry.Kind})
-	}
-	return writeJSON(path, manifest)
-}
-
-func updatePortableHostContract(root string, entries []InventoryEntry) error {
-	var bucket *InventoryEntry
-	for index := range entries {
-		if entries[index].Kind == "ObjectBucket" {
-			bucket = &entries[index]
-			break
-		}
-	}
-	if bucket == nil {
-		return fmt.Errorf("standard ObjectBucket missing")
-	}
-	contractPath := filepath.Join(root, "conformance", "portable-host-v1", "contract.json")
-	var contract portableconformance.Contract
-	if err := readJSON(contractPath, &contract); err != nil {
-		return err
-	}
-	contract.RunnerInput.Identity = portableconformance.InstalledFormReference{
-		FormRef: portableconformance.FormRef{
-			APIVersion: bucket.FormRef.APIVersion, Kind: bucket.FormRef.Kind,
-			DefinitionVersion: bucket.FormRef.DefinitionVersion, SchemaDigest: bucket.FormRef.SchemaDigest,
-		},
-		PackageDigest: bucket.PackageDigest,
-	}
-	desired, err := portableHostDesired(root, *bucket)
-	if err != nil {
-		return err
-	}
-	name, ok := desired["name"].(string)
-	if !ok || name == "" {
-		return fmt.Errorf("standard ObjectBucket canonical desired fixture has no name")
-	}
-	contract.RunnerInput.Name = name
-	contract.RunnerInput.Desired = desired
-	negativeFixtures, err := portableHostDesiredNegativeFixtures(root, *bucket)
-	if err != nil {
-		return err
-	}
-	contract.RunnerInput.NegativeFixtures = negativeFixtures
-	runnerDigest, err := portableconformance.RunnerEvidenceDigest(contract)
-	if err != nil {
-		return err
-	}
-	contract.RunnerEvidence.SHA256 = runnerDigest
-	if err := writeJSON(contractPath, contract); err != nil {
-		return err
-	}
-	raw, err := os.ReadFile(contractPath)
-	if err != nil {
-		return err
-	}
-	digest := sha256.Sum256(raw)
-	manifest := struct {
-		Format   string `json:"format"`
-		Contract string `json:"contract"`
-		SHA256   string `json:"sha256"`
-	}{Format: "takoform.portable-host-conformance-manifest@v1", Contract: "contract.json", SHA256: hex.EncodeToString(digest[:])}
-	return writeJSON(filepath.Join(root, "conformance", "portable-host-v1", "manifest.json"), manifest)
+	return admissionrelease.CandidateSet{}, fmt.Errorf("central admission generation was retired; use host-owned activation policy and retained Legacy evidence")
 }
 
 func verifyPortableHostContract(root string, entries []InventoryEntry) error {
@@ -1086,7 +623,7 @@ func verifyPortableHostContract(root string, entries []InventoryEntry) error {
 		PackageDigest: bucket.PackageDigest,
 	}
 	if contract.RunnerInput.Identity != wantIdentity {
-		return fmt.Errorf("portable host contract ObjectBucket identity differs from the structural candidate")
+		return fmt.Errorf("portable host contract ObjectBucket identity differs from the Legacy compatibility identity")
 	}
 	wantDesired, err := portableHostDesired(root, *bucket)
 	if err != nil {
@@ -1177,28 +714,4 @@ func writeJSON(path string, value any) error {
 		return err
 	}
 	return os.WriteFile(path, append(raw, '\n'), 0o644)
-}
-
-func pruneRetiredPackages(root string) error {
-	standardRoot := filepath.Join(root, "conformance", "form-package-v1", "positive", "standard")
-	entries, err := os.ReadDir(standardRoot)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	declared := make(map[string]struct{}, len(Specs))
-	for _, spec := range Specs {
-		declared[spec.Slug] = struct{}{}
-	}
-	for _, entry := range entries {
-		if _, keep := declared[entry.Name()]; keep {
-			continue
-		}
-		if err := os.RemoveAll(filepath.Join(standardRoot, entry.Name())); err != nil {
-			return err
-		}
-	}
-	return nil
 }

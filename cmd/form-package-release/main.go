@@ -47,7 +47,6 @@ const (
 )
 
 var (
-	packageTagPattern    = regexp.MustCompile(`^forms/(k-[a-z2-7]{2,103})/v(` + semverPattern + `)$`)
 	revocationTagPattern = regexp.MustCompile(`^forms/revocations/v(` + semverPattern + `)$`)
 	revocationPath       = regexp.MustCompile(`^forms/revocations(?:/checkpoints)?/[0-9A-Za-z.+-]+\.json$`)
 	kindPattern          = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
@@ -73,6 +72,7 @@ type releaseManifest struct {
 	ToolingCommit       string                  `json:"toolingCommit"`
 	Workflow            string                  `json:"workflow"`
 	PackageVersion      string                  `json:"packageVersion,omitempty"`
+	ArtifactID          string                  `json:"artifactId,omitempty"`
 	ReleaseID           string                  `json:"releaseId,omitempty"`
 	PackageDigest       string                  `json:"packageDigest"`
 	FormRef             formpackage.FormRef     `json:"formRef"`
@@ -169,7 +169,7 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	flags := flag.NewFlagSet("build-package", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	repo := flags.String("repo", ".", "repository root")
-	tag := flags.String("tag", "", "exact forms/<release-id>/v<semver> tag")
+	tag := flags.String("tag", "", "exact current digest or retained Legacy Form Package tag")
 	packageDir := flags.String("package-dir", "", "candidate-only package source override")
 	outputDir := flags.String("output", "", "new output directory")
 	toolingCommit := flags.String("tooling-commit", "", "exact protected-main release-tooling commit")
@@ -178,12 +178,12 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || *tag == "" || *outputDir == "" || !commitPattern.MatchString(*toolingCommit) {
 		return usageError()
 	}
-	matches := packageTagPattern.FindStringSubmatch(*tag)
-	if matches == nil {
-		return fmt.Errorf("package tag must match forms/k-<lowercase-base32-kind>/v<semver>")
+	requestedLocator, err := formpackage.ParsePublicationTag(*tag)
+	if err != nil {
+		return err
 	}
-	releaseID, version := matches[1], matches[2]
-	tagKind, err := kindFromReleaseID(releaseID)
+	releaseID := requestedLocator.ReleaseID
+	tagKind, err := formpackage.KindFromReleaseID(releaseID)
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 		return fmt.Errorf("--package-dir is allowed only with --allow-untagged-candidate")
 	}
 	if *packageDir == "" {
-		*packageDir = filepath.Join(*repo, "forms", "releases", releaseID, version)
+		*packageDir = filepath.Join(*repo, filepath.FromSlash(requestedLocator.SourcePath))
 	}
 	evidence, err := inspectSource(*repo, *tag, *allowUntagged, *allowDirty)
 	if err != nil {
@@ -209,8 +209,12 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if index.PackageVersion != version {
-		return fmt.Errorf("tag version %q does not match packageVersion %q", version, index.PackageVersion)
+	verifiedLocator, err := formpackage.PublicationLocatorFor(index, report.PackageDigest)
+	if err != nil {
+		return err
+	}
+	if verifiedLocator.Tag != requestedLocator.Tag || verifiedLocator.ReleaseID != requestedLocator.ReleaseID || verifiedLocator.ArtifactID != requestedLocator.ArtifactID {
+		return fmt.Errorf("tag %q does not match verified package publication locator %q", requestedLocator.Tag, verifiedLocator.Tag)
 	}
 	if tagKind != index.FormRef.Kind {
 		return fmt.Errorf("tag release id %q decodes to kind %q, not FormRef kind %q", releaseID, tagKind, index.FormRef.Kind)
@@ -219,18 +223,27 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	base := "takoform-form-" + releaseID + "_" + version
+	base := "takoform-form-" + releaseID + "_" + verifiedLocator.ArtifactID
 	workflow := packageWorkflow
-	policy := publisherPolicy(workflow, "refs/tags/forms/k-*/v*", *toolingCommit)
+	policyTagPattern := "refs/tags/forms/k-*/sha256-*"
+	if verifiedLocator.APIVersion == formpackage.PackageAPIVersion {
+		policyTagPattern = "refs/tags/forms/k-*/v*"
+	}
+	policy := publisherPolicy(workflow, policyTagPattern, *toolingCommit)
 	manifest := releaseManifest{
 		SchemaVersion: 1, ReleaseType: "form-package", Tag: *tag,
 		SourceRepository: sourceRepository, SourceCommit: evidence.commit, ToolingCommit: *toolingCommit,
-		Workflow: workflow, PackageVersion: version, ReleaseID: releaseID,
+		Workflow: workflow, ReleaseID: releaseID,
 		PackageDigest: report.PackageDigest, FormRef: report.FormRef,
 		Canonicalization: canonicalization, SignedSubject: base + "_package-index.json",
 		SignatureBundle: base + "_package-index.sigstore.json", SignatureMediaType: bundleMediaType,
 		PublisherPolicy:  policy,
 		PublicationReady: false, PublicationBlockers: evidence.blockers,
+	}
+	if verifiedLocator.APIVersion == formpackage.PackageAPIVersion {
+		manifest.PackageVersion = verifiedLocator.ArtifactID
+	} else {
+		manifest.ArtifactID = verifiedLocator.ArtifactID
 	}
 	if err := createOutput(*outputDir); err != nil {
 		return err
@@ -242,8 +255,12 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	if err := writePackageArchive(filepath.Join(*outputDir, archiveName), *packageDir, canonicalIndex, index.Files); err != nil {
 		return err
 	}
+	indexMediaType := "application/vnd.takoform.package-index.v2+json"
+	if verifiedLocator.APIVersion == formpackage.PackageAPIVersion {
+		indexMediaType = "application/vnd.takoform.package-index.v1+json"
+	}
 	assets, err := describeAssets(*outputDir, []namedMedia{
-		{name: manifest.SignedSubject, mediaType: "application/vnd.takoform.package-index.v1+json"},
+		{name: manifest.SignedSubject, mediaType: indexMediaType},
 		{name: archiveName, mediaType: "application/gzip"},
 	})
 	if err != nil {
@@ -1382,13 +1399,17 @@ func createPackageSBOM(index formpackage.PackageIndex, report formpackage.Verifi
 			"spdxElementId": "SPDXRef-Package", "relationshipType": "CONTAINS", "relatedSpdxElement": fileID,
 		})
 	}
+	artifactIdentity := index.PackageVersion
+	if artifactIdentity == "" {
+		artifactIdentity = strings.Replace(report.PackageDigest, ":", "-", 1)
+	}
 	return map[string]any{
 		"spdxVersion": "SPDX-2.3", "dataLicense": "CC0-1.0", "SPDXID": "SPDXRef-DOCUMENT",
-		"name":              "Takoform Form Package " + index.FormRef.Kind + " " + index.PackageVersion,
+		"name":              "Takoform Form Package " + index.FormRef.Kind + " " + artifactIdentity,
 		"documentNamespace": "https://forms.takoform.com/spdx/package/" + strings.TrimPrefix(report.PackageDigest, "sha256:"),
 		"creationInfo":      map[string]any{"creators": []string{"Tool: takoform-form-package-release"}, "created": created.Format(time.RFC3339)},
 		"packages": []map[string]any{{
-			"name": index.FormRef.Kind, "SPDXID": "SPDXRef-Package", "versionInfo": index.PackageVersion,
+			"name": index.FormRef.Kind, "SPDXID": "SPDXRef-Package", "versionInfo": artifactIdentity,
 			"downloadLocation": "NOASSERTION", "filesAnalyzed": true,
 			"packageVerificationCode": map[string]string{"packageVerificationCodeValue": hex.EncodeToString(verificationCode[:])},
 			"licenseConcluded":        "NOASSERTION", "licenseDeclared": "NOASSERTION", "copyrightText": "NOASSERTION",

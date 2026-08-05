@@ -1,4 +1,4 @@
-# Portable Form host API v1alpha1
+# Portable Form host API v1alpha2
 
 The provider uses a versioned, provider-neutral HTTP boundary. A host owns
 placement and execution; this protocol owns exact Form identity, portable
@@ -13,23 +13,36 @@ precondition, idempotency, and the stable error taxonomy. The reference client
 is driven against it by `go test ./internal/client`, so this document describes
 behaviour that actually happens rather than behaviour that was intended.
 
+The published v1alpha1 wire remains immutable in
+[`operations-v1alpha1.json`](operations-v1alpha1.json),
+[`../schemas/host-api-wire.schema.json`](../schemas/host-api-wire.schema.json),
+and [`../schemas/host-discovery.schema.json`](../schemas/host-discovery.schema.json).
+Provider v1 uses `/.well-known/takoform` and `/apis/forms.takoform.com/v1alpha1`.
+Provider v2 uses only the current endpoints below; the two epochs are never
+negotiated through one ambiguous `endpoints.api` value.
+
 ## Discovery and endpoint selection
 
-A conforming host MUST answer `GET /.well-known/takoform` with:
+A conforming host MUST answer `GET /.well-known/takoform/v1alpha2` with:
 
-- `api_versions` containing `forms.takoform.com/v1alpha1`;
+- `api_versions` equal to the one-element list
+  `["forms.takoform.com/v1alpha2"]`;
 - `features.service_forms = true`;
 - `features.exact_form_ref`, `features.optimistic_concurrency`, and
   `features.idempotent_lifecycle` all set to true;
-- an absolute same-origin `endpoints.api` URL;
-- an absolute same-origin `endpoints.forms` URL, or `{endpoints.api}/forms`.
+- an absolute same-origin `endpoints.api` URL whose path is exactly
+  `/apis/forms.takoform.com/v1alpha2`;
+- an absolute same-origin `endpoints.forms` URL whose path is exactly
+  `/apis/forms.takoform.com/v1alpha2/forms`, or its omission;
+- when present, an absolute same-origin `endpoints.interfaces` URL whose path
+  is exactly `/apis/forms.takoform.com/v1alpha2/interfaces`.
 
 A provider MUST send bearer credentials only to same-origin advertised URLs
-and MUST use `endpoints.api` exactly as advertised. A provider MUST reject a
-discovery document that omits the versioned endpoint: there is no unversioned
-lane to downgrade into.
+and MUST use the exact current paths above. A provider MUST reject a discovery
+document that adds another API version or points any endpoint at the frozen
+Legacy lane: there is no negotiation or unversioned downgrade in provider v2.
 
-[`../schemas/host-discovery.schema.json`](../schemas/host-discovery.schema.json)
+[`../schemas/host-discovery-v1alpha2.schema.json`](../schemas/host-discovery-v1alpha2.schema.json)
 closes the discovery object and enforces the absolute HTTP(S) shape of `api`,
 `forms`, and `interfaces`. JSON Schema cannot compare URL origins. After schema
 validation, an implementation MUST parse and normalize every advertised URL
@@ -53,8 +66,13 @@ kind, name, and exact Form in another Space is an independent Resource: reads
 MUST NOT return the first Space's state, and lifecycle mutations or deletions
 MUST NOT change it.
 
-The provider release's exact standard references are pinned by
+Provider v2's exact v1alpha2 source-candidate references are pinned by
+[`forms/candidates/v1alpha2/candidate-set.json`](../../forms/candidates/v1alpha2/candidate-set.json).
+Provider v1's exact v1alpha1 compatibility references remain pinned by the
+historical
 [`forms/standard-package-set.json`](../../forms/standard-package-set.json).
+Neither manifest grants Form maturity. A host independently reports support
+and availability for each exact reference.
 
 ## Space identity
 
@@ -72,7 +90,7 @@ A valid `SpaceID`:
 - contains no `/`.
 
 The normative code-point sets are encoded explicitly in
-[`../schemas/host-api-wire.schema.json`](../schemas/host-api-wire.schema.json)
+[`../schemas/host-api-wire-v1alpha2.schema.json`](../schemas/host-api-wire-v1alpha2.schema.json)
 under `$defs.spaceId`. Embedded non-control whitespace is data and is valid.
 Every participant MUST preserve the exact decoded value: no trimming, Unicode
 normalization, or case folding is allowed. URL percent-encoding MAY represent
@@ -86,7 +104,7 @@ identifier. Import uses either `NAME` with a configured default or
 
 ## Versioned wire envelopes
 
-[`../schemas/host-api-wire.schema.json`](../schemas/host-api-wire.schema.json)
+[`../schemas/host-api-wire-v1alpha2.schema.json`](../schemas/host-api-wire-v1alpha2.schema.json)
 is the normative machine-readable wire schema. Every operation in
 [`operations.json`](operations.json) points to the exact request and response
 schema fragment it uses.
@@ -133,9 +151,11 @@ preview or apply fields.
 
 ## Resource lifecycle
 
-The API base is `/apis/forms.takoform.com/v1alpha1` on the reference host:
+The API base is `/apis/forms.takoform.com/v1alpha2` on the reference host:
 
 - `GET /forms` discovers exact availability;
+- `GET /form-definitions/{kind}` returns the principal-readable desired schema
+  for one complete exact FormRef query without changing its identity;
 - `POST /resources/preview` returns `review.planDigest`;
 - `PUT /resources/{kind}/{name}` applies that reviewed plan;
 - `GET /resources/{kind}/{name}` reads canonical portable state with exact
@@ -355,7 +375,7 @@ identity, or manager authority.
 
 ## Cross-repo conformance
 
-[`conformance/portable-host-v1/contract.json`](../../conformance/portable-host-v1/contract.json)
+[`conformance/portable-host-v2/contract.json`](../../conformance/portable-host-v2/contract.json)
 is the digest-pinned input for any neutral black-box host runner. The contract
 names a provider-independent runner subject and pins a digest over that subject,
 runner input, mutation preconditions, idempotent operations, and required check
@@ -370,6 +390,9 @@ be implemented on production endpoints. The report
 separates pure black-box plan inputs from fields exercised through the
 instrumented adapter; the latter is evidence that the adapter invoked the same
 canonical binding function, not wire-only causal evidence.
-`go run ./cmd/standard-form-conformance verify` checks that contract against
-the exact release-owned identity it names. Neither local self-test output nor
-an unsigned endpoint run is an admitted host report.
+`go run ./cmd/standard-form-conformance verify` checks that retained v1alpha1
+contract against the exact Legacy release-owned identity it names. It is not
+host evidence for a v1alpha2 candidate. Local self-test output and an
+unsigned endpoint run are conformance observations only. A host publishes
+support for an exact FormRef and decides activation separately; no report can
+promote Form maturity or create central approval.

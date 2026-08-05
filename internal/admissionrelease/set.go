@@ -1,6 +1,7 @@
-// Package admissionrelease verifies retained, externally authenticated
-// standard-admission release evidence. It does not publish evidence, contact a
-// registry, or grant host, placement, credential, or commercial authority.
+// Package admissionrelease verifies retained, externally authenticated Legacy
+// admission artifacts as historical evidence. It does not reinterpret their
+// semantic claims or grant current lifecycle, host, placement, credential, or
+// commercial authority.
 package admissionrelease
 
 import (
@@ -13,9 +14,8 @@ const (
 	setFormatV3 = "takoform.standard-admission-set@v3"
 )
 
-// CandidateSet is the exact structural Form set compiled into the provider.
-// Admission evidence must close over this set without adding, dropping, or
-// replacing a candidate identity.
+// CandidateSet is the legacy-named exact Form set consumed by historical
+// verification and publication helpers. It is not the current lifecycle set.
 type CandidateSet struct {
 	Generation        string
 	DefinitionVersion string
@@ -32,9 +32,9 @@ type Candidate struct {
 	PackageDigest string
 }
 
-// Set is the retained standard-admission set manifest. The manifest only
-// binds artifacts together; its portable-standard claims are not trusted
-// until every retained subject and its release provenance are authenticated.
+// Set is a retained Standard-admission manifest. Current code treats its
+// portable-standard fields as immutable historical assertions, never as
+// present Form maturity or approval.
 type Set struct {
 	Format                   string                 `json:"format"`
 	Generation               string                 `json:"generation,omitempty"`

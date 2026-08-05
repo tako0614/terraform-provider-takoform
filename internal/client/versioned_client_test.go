@@ -52,16 +52,16 @@ func TestVersionedClientUsesDiscoveryExactIdentityAndMutationFences(t *testing.T
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/.well-known/takoform":
+		case r.Method == http.MethodGet && r.URL.Path == "/.well-known/takoform/v1alpha2":
 			writeVersionedDiscovery(t, w, server.URL)
-		case r.Method == http.MethodGet && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/forms":
+		case r.Method == http.MethodGet && r.URL.Path == "/apis/forms.takoform.com/v1alpha2/forms":
 			assertExactQuery(t, r, exactObjectBucketFixture)
 			_ = json.NewEncoder(w).Encode(map[string]any{"forms": []FormAvailability{{
 				Identity: exactObjectBucketFixture, DefinitionKnown: true, Installed: true,
 				Executable: true, Activated: true, AvailableToPrincipal: true,
 				Operations: []string{"create", "read", "update", "delete", "import", "refresh"},
 			}}})
-		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/preview":
+		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha2/resources/preview":
 			var desired Resource
 			if err := json.NewDecoder(r.Body).Decode(&desired); err != nil {
 				t.Fatal(err)
@@ -76,7 +76,7 @@ func TestVersionedClientUsesDiscoveryExactIdentityAndMutationFences(t *testing.T
 			_ = json.NewEncoder(w).Encode(PreviewResourceResult{
 				Resource: desired, Review: PreviewReview{PlanDigest: planDigest, SpecDigest: specDigest},
 			})
-		case r.Method == http.MethodPut && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets":
+		case r.Method == http.MethodPut && r.URL.Path == "/apis/forms.takoform.com/v1alpha2/resources/ObjectBucket/assets":
 			var apply applyResourceBody
 			if err := json.NewDecoder(r.Body).Decode(&apply); err != nil {
 				t.Fatal(err)
@@ -86,7 +86,7 @@ func TestVersionedClientUsesDiscoveryExactIdentityAndMutationFences(t *testing.T
 			}
 			w.Header().Set("ETag", `"1"`)
 			_ = json.NewEncoder(w).Encode(resource)
-		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets/import":
+		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha2/resources/ObjectBucket/assets/import":
 			var imported importResourceBody
 			if err := json.NewDecoder(r.Body).Decode(&imported); err != nil {
 				t.Fatal(err)
@@ -96,19 +96,19 @@ func TestVersionedClientUsesDiscoveryExactIdentityAndMutationFences(t *testing.T
 			}
 			w.Header().Set("ETag", `"1"`)
 			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
-		case r.Method == http.MethodGet && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets":
+		case r.Method == http.MethodGet && r.URL.Path == "/apis/forms.takoform.com/v1alpha2/resources/ObjectBucket/assets":
 			assertExactQuery(t, r, exactObjectBucketFixture)
 			w.Header().Set("ETag", `"1"`)
 			_ = json.NewEncoder(w).Encode(resource)
-		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets/observe":
+		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha2/resources/ObjectBucket/assets/observe":
 			assertExactQuery(t, r, exactObjectBucketFixture)
 			w.Header().Set("ETag", `"1"`)
 			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
-		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets/refresh":
+		case r.Method == http.MethodPost && r.URL.Path == "/apis/forms.takoform.com/v1alpha2/resources/ObjectBucket/assets/refresh":
 			assertExactQuery(t, r, exactObjectBucketFixture)
 			w.Header().Set("ETag", `"1"`)
 			_ = json.NewEncoder(w).Encode(map[string]any{"resource": resource})
-		case r.Method == http.MethodDelete && r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/ObjectBucket/assets":
+		case r.Method == http.MethodDelete && r.URL.Path == "/apis/forms.takoform.com/v1alpha2/resources/ObjectBucket/assets":
 			assertExactQuery(t, r, exactObjectBucketFixture)
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -189,7 +189,7 @@ func TestVersionedClientRetriesOnlyStableRetryableErrors(t *testing.T) {
 	}))
 	defer server.Close()
 	client := NewWithOptions(server.URL, "", server.Client(), Options{RetryAttempts: 2})
-	client.apiBase = server.URL + "/apis/forms.takoform.com/v1alpha1"
+	client.apiBase = server.URL + "/apis/forms.takoform.com/v1alpha2"
 	fence := MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture}
 	if err := client.DeleteResource(context.Background(), testObjectBucketKind, "assets", "prod", fence); err != nil {
 		t.Fatal(err)
@@ -226,7 +226,7 @@ func TestDeleteResourceRejectsNonEmptyHTTPNoContentBody(t *testing.T) {
 		}, nil
 	})}
 	client := New("https://forms.example.test", "", httpClient)
-	client.apiBase = "https://forms.example.test/apis/forms.takoform.com/v1alpha1"
+	client.apiBase = "https://forms.example.test/apis/forms.takoform.com/v1alpha2"
 	fence := MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture}
 
 	err := client.DeleteResource(
@@ -468,7 +468,7 @@ func TestDiscoveryRejectsCrossOriginEndpointsBeforeSendingBearer(t *testing.T) {
 	}))
 	defer evil.Close()
 	host := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/takoform" {
+		if r.URL.Path != "/.well-known/takoform/v1alpha2" {
 			http.NotFound(w, r)
 			return
 		}
@@ -478,7 +478,7 @@ func TestDiscoveryRejectsCrossOriginEndpointsBeforeSendingBearer(t *testing.T) {
 				"service_forms": true, "exact_form_ref": true,
 				"optimistic_concurrency": true, "idempotent_lifecycle": true,
 			},
-			"endpoints": map[string]string{"api": evil.URL + "/apis/forms.takoform.com/v1alpha1"},
+			"endpoints": map[string]string{"api": evil.URL + "/apis/forms.takoform.com/v1alpha2"},
 		})
 	}))
 	defer host.Close()
@@ -825,15 +825,15 @@ func TestVersionedLifecycleRejectsResponseNameAndSpaceSubstitution(t *testing.T)
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					switch {
-					case r.URL.Path == "/.well-known/takoform":
+					case r.URL.Path == "/.well-known/takoform/v1alpha2":
 						writeVersionedDiscovery(t, w, server.URL)
-					case r.URL.Path == "/apis/forms.takoform.com/v1alpha1/forms":
+					case r.URL.Path == "/apis/forms.takoform.com/v1alpha2/forms":
 						_ = json.NewEncoder(w).Encode(map[string]any{"forms": []FormAvailability{{
 							Identity: exactObjectBucketFixture, DefinitionKnown: true, Installed: true,
 							Executable: true, Activated: true, AvailableToPrincipal: true,
 							Operations: []string{"create", "import"},
 						}}})
-					case r.URL.Path == "/apis/forms.takoform.com/v1alpha1/resources/preview":
+					case r.URL.Path == "/apis/forms.takoform.com/v1alpha2/resources/preview":
 						var desired Resource
 						if err := json.NewDecoder(r.Body).Decode(&desired); err != nil {
 							t.Fatal(err)
@@ -891,8 +891,8 @@ func writeVersionedDiscovery(t *testing.T, w http.ResponseWriter, origin string)
 		"api_versions": []string{APIVersion},
 		"features":     map[string]bool{"service_forms": true, "exact_form_ref": true, "optimistic_concurrency": true, "idempotent_lifecycle": true},
 		"endpoints": map[string]string{
-			"api":   origin + "/apis/forms.takoform.com/v1alpha1",
-			"forms": origin + "/apis/forms.takoform.com/v1alpha1/forms",
+			"api":   origin + "/apis/forms.takoform.com/v1alpha2",
+			"forms": origin + "/apis/forms.takoform.com/v1alpha2/forms",
 		},
 	})
 }

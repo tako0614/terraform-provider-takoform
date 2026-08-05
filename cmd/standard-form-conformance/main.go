@@ -8,20 +8,27 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 || (os.Args[1] != "generate" && os.Args[1] != "verify" && os.Args[1] != "materializability-check" && os.Args[1] != "release-plan" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "published-package-check" && os.Args[1] != "retained-ga-core-v1-published-package-check" && os.Args[1] != "current-published-package-check" && os.Args[1] != "admission-closure-check" && os.Args[1] != "current-admission-material-check" && os.Args[1] != "current-admission-closure-check") {
-		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance generate|verify|release-plan|materializability-check|candidate-publication-check|published-package-check|retained-ga-core-v1-published-package-check|current-published-package-check|admission-closure-check|current-admission-material-check|current-admission-closure-check")
+	if len(os.Args) != 2 || (os.Args[1] != "verify" && os.Args[1] != "generate-current-surfaces" && os.Args[1] != "materializability-check" && os.Args[1] != "release-plan" && os.Args[1] != "current-release-plan" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "published-package-check" && os.Args[1] != "retained-ga-core-v1-published-package-check" && os.Args[1] != "legacy-published-package-check" && os.Args[1] != "legacy-admission-evidence-check") {
+		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance verify|generate-current-surfaces|release-plan|current-release-plan|materializability-check|candidate-publication-check|published-package-check|retained-ga-core-v1-published-package-check|legacy-published-package-check|legacy-admission-evidence-check")
 		os.Exit(2)
 	}
 	var err error
-	if os.Args[1] == "generate" {
-		err = standardforms.Generate(".")
-	} else if os.Args[1] == "verify" {
+	if os.Args[1] == "verify" {
 		err = standardforms.Verify(".")
+	} else if os.Args[1] == "generate-current-surfaces" {
+		err = standardforms.GenerateCurrentPublishedSurfaces(".")
 	} else if os.Args[1] == "release-plan" {
 		var rendered string
 		rendered, err = standardforms.RenderReleasePlan(".")
 		if err == nil {
 			fmt.Print(rendered)
+		}
+	} else if os.Args[1] == "current-release-plan" {
+		var rendered string
+		rendered, err = standardforms.RenderCurrentReleasePlan(".")
+		if err == nil {
+			fmt.Print(rendered)
+			return
 		}
 	} else if os.Args[1] == "materializability-check" {
 		err = standardforms.VerifyMaterializableCandidate(".")
@@ -31,14 +38,10 @@ func main() {
 		err = standardforms.VerifyPublishedPackageSet(".")
 	} else if os.Args[1] == "retained-ga-core-v1-published-package-check" {
 		err = standardforms.VerifyRetainedGaCoreV1PublishedPackageSet(".")
-	} else if os.Args[1] == "current-published-package-check" {
-		err = standardforms.VerifyCurrentPublishedPackageSet(".")
-	} else if os.Args[1] == "admission-closure-check" {
-		err = standardforms.VerifyAdmissionClosure(".")
-	} else if os.Args[1] == "current-admission-material-check" {
-		err = standardforms.VerifyCurrentAdmissionMaterial(".")
+	} else if os.Args[1] == "legacy-published-package-check" {
+		err = standardforms.VerifyLegacyPublishedPackageSet(".")
 	} else {
-		err = standardforms.VerifyCurrentAdmissionClosure(".")
+		err = standardforms.VerifyLegacyAdmissionEvidence(".")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "standard-form-conformance:", err)

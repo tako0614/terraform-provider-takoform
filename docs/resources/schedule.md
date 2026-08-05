@@ -17,7 +17,7 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 
 - `name` (String, required, forces replacement) — Resource name.
 - `cron` (String, required) — Portable five-field cron expression.
-- `timezone` (String, optional) — Open timezone token. Non-UTC requires explicit support from the configured host. Defaults to `UTC`.
+- `timezone` (String, optional) — IANA timezone required by the schedule; support is host-declared. Defaults to `UTC`.
 - `connections` (List of Object, exactly one) — One declared Resource reference with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 

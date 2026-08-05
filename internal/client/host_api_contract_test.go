@@ -55,10 +55,10 @@ func TestClientSpeaksThePublishedHostContract(t *testing.T) {
 	if err := json.Unmarshal(raw, &contract); err != nil {
 		t.Fatal(err)
 	}
-	if contract.Format != "takoform.host-api@v1alpha1" || contract.APIGroup != APIVersion {
+	if contract.Format != "takoform.host-api@v1alpha2" || contract.APIGroup != APIVersion {
 		t.Fatalf("contract identity drift: %s %s", contract.Format, contract.APIGroup)
 	}
-	if contract.DiscoveryPath != "/.well-known/takoform" {
+	if contract.DiscoveryPath != DiscoveryPath {
 		t.Fatalf("discovery path drift: %s", contract.DiscoveryPath)
 	}
 
@@ -92,7 +92,7 @@ func TestClientSpeaksThePublishedHostContract(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("ETag", `"1"`)
 		switch {
-		case r.URL.Path == "/.well-known/takoform":
+		case r.URL.Path == DiscoveryPath:
 			writeVersionedDiscovery(t, w, server.URL)
 		case route == "/forms":
 			_ = json.NewEncoder(w).Encode(map[string]any{"forms": []FormAvailability{{
@@ -100,6 +100,13 @@ func TestClientSpeaksThePublishedHostContract(t *testing.T) {
 				Activated: true, AvailableToPrincipal: true,
 				Operations: []string{"create", "read", "update", "delete", "import", "observe", "refresh"},
 			}}})
+		case route == "/form-definitions/"+testObjectBucketKind:
+			_ = json.NewEncoder(w).Encode(FormDefinitionResponse{
+				Identity:      exactObjectBucketFixture,
+				DisplayName:   "Object bucket",
+				Description:   "Stores opaque objects.",
+				DesiredSchema: map[string]any{"type": "object"},
+			})
 		case route == "/resources/preview":
 			var desired Resource
 			_ = json.NewDecoder(r.Body).Decode(&desired)
@@ -136,6 +143,9 @@ func TestClientSpeaksThePublishedHostContract(t *testing.T) {
 	}
 	fence := MutationFence{ResourceVersion: "1", Form: exactObjectBucketFixture}
 	if _, err := client.PutResource(ctx, testObjectBucketKind, "assets", desired); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.GetFormDefinition(ctx, "prod", exactObjectBucketFixture); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.ImportResource(ctx, testObjectBucketKind, "assets", "native", desired); err != nil {

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
@@ -18,7 +19,7 @@ import (
 // are: a Form is declared once. A hand-written example is a second, slowly
 // diverging description of the same contract.
 func generatePublishedSurfaces(root string) error {
-	if err := validatePublishedSurfaceCatalog(formcatalog.Kinds); err != nil {
+	if err := validatePublishedSurfaceCatalog(currentformcatalog.Kinds); err != nil {
 		return err
 	}
 	for _, relativeParent := range []string{"docs", "examples", "forms"} {
@@ -73,8 +74,8 @@ var formInventoryDomains = []formInventoryDomain{
 // these exact bytes, so the read-only owner gate cannot silently bless
 // hand-written drift.
 func renderPublishedSurfaces() []publishedSurface {
-	surfaces := make([]publishedSurface, 0, len(formcatalog.Kinds)*2+1)
-	for _, kind := range formcatalog.Kinds {
+	surfaces := make([]publishedSurface, 0, len(currentformcatalog.Kinds)*2+1)
+	for _, kind := range currentformcatalog.Kinds {
 		surfaces = append(surfaces,
 			publishedSurface{
 				path:    filepath.ToSlash(filepath.Join("docs", "resources", docBasename(kind))),
@@ -100,7 +101,7 @@ func renderPublishedSurfaces() []publishedSurface {
 // missing, edited, replaced by a non-regular file, or joined by an undeclared
 // file. It never writes the worktree.
 func VerifyPublishedSurfaces(root string) error {
-	if err := validatePublishedSurfaceCatalog(formcatalog.Kinds); err != nil {
+	if err := validatePublishedSurfaceCatalog(currentformcatalog.Kinds); err != nil {
 		return err
 	}
 	for _, relativeRoot := range []string{"docs/resources", "examples/resources", "forms"} {
@@ -204,8 +205,8 @@ func prepareGeneratedDirectoryPath(root, relative string) error {
 }
 
 func verifyPublishedSurfaceInventory(root string, surfaces []publishedSurface) error {
-	expectedDocs := make(map[string]struct{}, len(formcatalog.Kinds))
-	expectedExamples := make(map[string]struct{}, len(formcatalog.Kinds)*2)
+	expectedDocs := make(map[string]struct{}, len(currentformcatalog.Kinds))
+	expectedExamples := make(map[string]struct{}, len(currentformcatalog.Kinds)*2)
 	for _, surface := range surfaces {
 		switch {
 		case strings.HasPrefix(surface.path, "docs/resources/"):
@@ -259,7 +260,7 @@ func exampleHCL(kind formcatalog.Kind) string {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.3"
+      version = "= 2.0.0"
     }
   }
 }
@@ -476,8 +477,8 @@ func docConstraint(field formcatalog.Field) string {
 }
 
 func declaredResourceTypes() map[string]struct{} {
-	expected := make(map[string]struct{}, len(formcatalog.Kinds))
-	for _, kind := range formcatalog.Kinds {
+	expected := make(map[string]struct{}, len(currentformcatalog.Kinds))
+	for _, kind := range currentformcatalog.Kinds {
 		expected[kind.ResourceType] = struct{}{}
 	}
 	return expected
@@ -564,20 +565,34 @@ func generateRetiredInventory(root string) error {
 // from.
 func formInventoryDoc() string {
 	var builder strings.Builder
-	builder.WriteString(`# Portable Form inventory
+	builder.WriteString(`# Current v1alpha2 Form candidates
 
-This is the current provider-v1 portable Service Form inventory, generated
-from the one declaration in ` + "`internal/formcatalog`" + `. Every Form describes what
-a caller wants. None of them names a target, a credential, a placement, a
-price, or an implementation: those stay with the host that realizes the Form.
+This is the provider-v2 source candidate inventory for the nine Form-backed
+Resources currently operated by Takosumi Cloud. Every entry is a local
+Proposal-derived publication candidate under ` + "`forms.takoform.com/v1alpha2`" + `,
+awaiting an explicit lifecycle transition before Experimental; none is published, Experimental, Stable,
+centrally approved, or guaranteed commercially available.
+Each contract describes what a caller wants without
+naming a target, credential, placement, price, or implementation. A host may
+publish support and activate an exact FormRef under its own policy.
+
+The frozen v1alpha1 inventory remains verifiable through
+` + "[`standard-package-set.json`](standard-package-set.json)" + ` and immutable
+release sources, but it is not rendered as the current provider catalog.
 
 `)
 	for _, domain := range formInventoryDomains {
-		fmt.Fprintf(&builder, "## %s\n\n| Kind | Resource | Version | Portable intent |\n| --- | --- | --- | --- |\n", domain.title)
-		for _, kind := range formcatalog.Kinds {
-			if kind.Domain != domain.name {
-				continue
+		var kinds []formcatalog.Kind
+		for _, kind := range currentformcatalog.Kinds {
+			if kind.Domain == domain.name {
+				kinds = append(kinds, kind)
 			}
+		}
+		if len(kinds) == 0 {
+			continue
+		}
+		fmt.Fprintf(&builder, "## %s\n\n| Kind | Resource | Version | Portable intent |\n| --- | --- | --- | --- |\n", domain.title)
+		for _, kind := range kinds {
 			fmt.Fprintf(&builder, "| `%s` | `%s` | `%s` | %s |\n", kind.Kind, kind.ResourceType, kind.Version(), kind.Description)
 		}
 		builder.WriteString("\n")
@@ -593,7 +608,7 @@ lifecycle.
 | Kind | Interface |
 | --- | --- |
 `)
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		for _, declared := range kind.Interfaces {
 			fmt.Fprintf(&builder, "| `%s` | `%s@1` (%s) |\n", kind.Kind, declared.Name, strings.Join(declared.Operations, ", "))
 		}
@@ -608,23 +623,29 @@ fields; the protocol lifecycle proves both.
 | Kind | Immutable |
 | --- | --- |
 `)
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		fmt.Fprintf(&builder, "| `%s` | `%s` |\n", kind.Kind, strings.Join(kind.ImmutableFields(), "`, `"))
 	}
 	builder.WriteString(`
 ## Status
 
-This inventory is ` + "`structural-candidate`" + `: the packages verify locally, the
-provider derives the same schema from the same declaration, and the protocol
-lifecycle runs against an in-process host. None of that admits a Form. Signed
-release bytes, a conforming host's signed lifecycle report, Registry
-installation and readback, and signed admission evidence are external
-requirements, tracked in [` + "`standard-package-set.json`" + `](standard-package-set.json).
+Every entry in this inventory is an unpublished ` + "`0.1.0`" + ` candidate.
+Takosumi Cloud implementation is workload and first-host evidence only; it
+does not turn a Proposal into a portable standard or authorize publication.
 
-The previously published generation is retired, not erased: its immutable bytes
-and admission evidence stay verifiable through
-[` + "`retired-package-set.json`" + `](retired-package-set.json). Those releases are never
-rewritten, re-signed, or reshaped.
+The earlier ten-package generation is also retired, not erased. Its immutable
+bytes and admission evidence stay verifiable through
+[` + "`retired-package-set.json`" + `](retired-package-set.json). Neither retained
+set may be rewritten, re-signed, promoted, or used to derive a current approved
+subset. Current lifecycle truth comes only from
+[` + "`lifecycle.json`" + `](lifecycle.json); Host Support and activation remain
+separate host-owned facts.
 `)
 	return builder.String()
+}
+
+// GenerateCurrentPublishedSurfaces writes only provider-v2 current docs and
+// examples. Legacy package/release verification remains read-only elsewhere.
+func GenerateCurrentPublishedSurfaces(root string) error {
+	return generatePublishedSurfaces(root)
 }

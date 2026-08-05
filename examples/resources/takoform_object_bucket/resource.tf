@@ -2,7 +2,7 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.3"
+      version = "= 2.0.0"
     }
   }
 }
@@ -13,10 +13,8 @@ provider "takoform" {
 }
 
 resource "takoform_object_bucket" "example" {
-  name             = "object-bucket"
-  storage_class    = "standard"
-  versioning       = true
-  access_protocols = ["s3_api"]
+  name       = "object-bucket"
+  versioning = true
 }
 
 output "object_bucket_outputs" {

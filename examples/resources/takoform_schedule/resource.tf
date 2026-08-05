@@ -2,7 +2,7 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.3"
+      version = "= 2.0.0"
     }
   }
 }
@@ -20,8 +20,8 @@ resource "takoform_schedule" "example" {
   connections = [
     {
       name        = "invocation"
-      resource    = "Workflow/workflow"
-      permissions = ["invoke"]
+      resource    = "EdgeWorker/edge-worker"
+      permissions = ["request"]
       projection  = "schedule.trigger.v1"
     },
   ]

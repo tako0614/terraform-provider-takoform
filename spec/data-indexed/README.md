@@ -1,10 +1,11 @@
 # `data.indexed@1`
 
-`data.indexed@1` is the required runtime Interface declared by the current
-`IndexedStore` Form. Requirement keywords are used as described in
+`data.indexed@1` is the retained runtime Interface descriptor declared by the
+v1alpha1 Legacy `IndexedStore` Form. No current v1alpha2 candidate declares
+it. Requirement keywords are used as described in
 [`../conformance.md`](../conformance.md).
 
-## Current normative descriptor
+## Retained descriptor
 
 The exact Interface identity is the open pair `data.indexed` / `1`. Its
 portable document contains only these operation capability tokens:
@@ -38,9 +39,9 @@ endpoint, request/response schema digest, `resourceUriInput`, credential,
 binding, token, target, backend, or commercial value.
 
 The canonical machine-readable descriptor is the `interfaces` entry in the
-current
+retained Legacy
 [`IndexedStore` Form Definition](../../conformance/form-package-v1/positive/standard/indexed-store/definition.json).
-The generated definition and the shared Form catalogue are checked together
+The immutable definition and retained Legacy catalogue are checked together
 by `go run ./cmd/standard-form-conformance verify`.
 
 ## Host boundary

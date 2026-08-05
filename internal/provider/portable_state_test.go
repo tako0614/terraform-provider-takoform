@@ -7,13 +7,14 @@ import (
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 func TestPortableStateProjectionValidatesEveryCurrentForm(t *testing.T) {
 	t.Parallel()
 
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		kind := kind
 		t.Run(kind.Kind, func(t *testing.T) {
 			t.Parallel()
@@ -49,7 +50,7 @@ func TestPortableStateProjectionValidatesEveryCurrentForm(t *testing.T) {
 func TestPortableStateProjectionDerivesDriftOnlyFromValidatedObservedDocument(t *testing.T) {
 	t.Parallel()
 
-	kind, _ := formcatalog.ByKind("ObjectBucket")
+	kind, _ := currentformcatalog.ByKind("ObjectBucket")
 	resource := canonicalPortableResource(kind, 3)
 	resource.Status.Observed["driftedFields"] = []any{"/storageClass"}
 	projection, err := validatePortableStateProjection(
@@ -69,7 +70,7 @@ func TestPortableStateProjectionDerivesDriftOnlyFromValidatedObservedDocument(t 
 func TestPortableStateProjectionRejectsHostAuthorityAndIdentitySubstitution(t *testing.T) {
 	t.Parallel()
 
-	kind, _ := formcatalog.ByKind("ObjectBucket")
+	kind, _ := currentformcatalog.ByKind("ObjectBucket")
 	tests := []struct {
 		name   string
 		mutate func(*client.Resource)
@@ -113,7 +114,7 @@ func TestPortableStateProjectionRejectsHostAuthorityAndIdentitySubstitution(t *t
 		{
 			name: "valid desired substitution",
 			mutate: func(resource *client.Resource) {
-				resource.Spec["storageClass"] = "archive"
+				resource.Spec["versioning"] = false
 			},
 			want: "not canonically exact",
 		},
@@ -218,7 +219,7 @@ func TestPortableStateProjectionRejectsHostAuthorityAndIdentitySubstitution(t *t
 func TestPortableStateProjectionRejectsInvalidCurrentDesiredState(t *testing.T) {
 	t.Parallel()
 
-	kind, _ := formcatalog.ByKind("ObjectBucket")
+	kind, _ := currentformcatalog.ByKind("ObjectBucket")
 	currentSpec := kind.CanonicalDesired()
 	currentSpec["selectedTarget"] = "private-target"
 	resource := canonicalPortableResource(kind, 7)
@@ -247,7 +248,7 @@ func TestProviderOwnedResourceIDUsesOnlyPortableKindAndName(t *testing.T) {
 func TestPortableStateProjectionPreservesMaximumGenerationExactly(t *testing.T) {
 	t.Parallel()
 
-	kind, _ := formcatalog.ByKind("ObjectBucket")
+	kind, _ := currentformcatalog.ByKind("ObjectBucket")
 	resource := canonicalPortableResource(kind, formcatalog.MaxPortableGeneration)
 	resource.Status.Observed["generation"] = json.Number("9223372036854775807")
 	resource.Status.Output["generation"] = json.Number("9223372036854775807")

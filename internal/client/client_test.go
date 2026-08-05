@@ -254,8 +254,8 @@ func discoveryBody(serviceForms bool, origin string) string {
 			"oidc":                   true,
 		},
 		"endpoints": map[string]string{
-			"api":         origin + "/apis/forms.takoform.com/v1alpha1",
-			"forms":       origin + "/apis/forms.takoform.com/v1alpha1/forms",
+			"api":         origin + "/apis/forms.takoform.com/v1alpha2",
+			"forms":       origin + "/apis/forms.takoform.com/v1alpha2/forms",
 			"oidc_issuer": "https://issuer.example.test/takoform",
 		},
 	}
@@ -266,7 +266,7 @@ func discoveryBody(serviceForms bool, origin string) string {
 func TestDiscover_Success(t *testing.T) {
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/takoform" {
+		if r.URL.Path != "/.well-known/takoform/v1alpha2" {
 			t.Errorf("unexpected discovery path %q", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -327,10 +327,32 @@ func TestDiscoverRequiresVersionedEndpoint(t *testing.T) {
 	}
 }
 
+func TestDiscoverRejectsMixedEpochsAndLegacyAPIBase(t *testing.T) {
+	t.Parallel()
+
+	for name, body := range map[string]string{
+		"mixed versions":  `{"api_versions":["` + APIVersion + `","forms.takoform.com/v1alpha1"],"features":{"service_forms":true,"exact_form_ref":true,"optimistic_concurrency":true,"idempotent_lifecycle":true},"endpoints":{"api":"ORIGIN` + APIRootPath + `"}}`,
+		"legacy API base": `{"api_versions":["` + APIVersion + `"],"features":{"service_forms":true,"exact_form_ref":true,"optimistic_concurrency":true,"idempotent_lifecycle":true},"endpoints":{"api":"ORIGIN/apis/forms.takoform.com/v1alpha1"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = io.WriteString(w, strings.ReplaceAll(body, "ORIGIN", server.URL))
+			}))
+			defer server.Close()
+
+			_, err := New(server.URL, "", server.Client()).Discover(context.Background())
+			if err == nil {
+				t.Fatal("ambiguous current discovery unexpectedly passed")
+			}
+		})
+	}
+}
+
 func TestErrorEnvelope(t *testing.T) {
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/.well-known/takoform" {
+		if r.URL.Path == "/.well-known/takoform/v1alpha2" {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(w, discoveryBody(true, srv.URL))
 			return
@@ -390,34 +412,34 @@ func TestAdvertisedEndpointsCompareEffectiveOrigins(t *testing.T) {
 		{
 			name:       "implicit and explicit HTTPS default port",
 			configured: "https://forms.example.test",
-			advertised: "https://forms.example.test:443/apis/forms.takoform.com/v1alpha1",
+			advertised: "https://forms.example.test:443/apis/forms.takoform.com/v1alpha2",
 		},
 		{
 			name:       "explicit and implicit HTTPS default port",
 			configured: "https://forms.example.test:443",
-			advertised: "https://forms.example.test/apis/forms.takoform.com/v1alpha1",
+			advertised: "https://forms.example.test/apis/forms.takoform.com/v1alpha2",
 		},
 		{
 			name:       "implicit and explicit loopback HTTP default port",
 			configured: "http://localhost",
-			advertised: "http://localhost:80/apis/forms.takoform.com/v1alpha1",
+			advertised: "http://localhost:80/apis/forms.takoform.com/v1alpha2",
 		},
 		{
 			name:       "changed port",
 			configured: "https://forms.example.test",
-			advertised: "https://forms.example.test:444/apis/forms.takoform.com/v1alpha1",
+			advertised: "https://forms.example.test:444/apis/forms.takoform.com/v1alpha2",
 			wantError:  true,
 		},
 		{
 			name:       "changed host",
 			configured: "https://forms.example.test",
-			advertised: "https://other.example.test/apis/forms.takoform.com/v1alpha1",
+			advertised: "https://other.example.test/apis/forms.takoform.com/v1alpha2",
 			wantError:  true,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := New(test.configured, "", nil)
-			_, err := c.validAdvertisedEndpoint(test.advertised)
+			_, err := c.validAdvertisedEndpoint(test.advertised, APIRootPath)
 			if (err != nil) != test.wantError {
 				t.Fatalf("validAdvertisedEndpoint() error = %v, wantError = %v", err, test.wantError)
 			}
@@ -432,7 +454,7 @@ func TestDiscoveryValidatesOptionalOIDCIssuer(t *testing.T) {
 			"service_forms": true, "exact_form_ref": true,
 			"optimistic_concurrency": true, "idempotent_lifecycle": true,
 		},
-		Endpoints: Endpoints{API: "https://forms.example.test/apis/forms.takoform.com/v1alpha1"},
+		Endpoints: Endpoints{API: "https://forms.example.test/apis/forms.takoform.com/v1alpha2"},
 	}
 	for _, test := range []struct {
 		name      string

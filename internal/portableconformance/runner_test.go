@@ -11,7 +11,7 @@ import (
 )
 
 func TestReferenceHostBlackBoxRunnerExecutesEveryRequiredCheck(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestReferenceHostBlackBoxRunnerExecutesEveryRequiredCheck(t *testing.T) {
 }
 
 func TestBlackBoxRunnerRejectsHostWithoutPlanSpecBinding(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestBlackBoxRunnerRejectsHostWithoutPlanSpecBinding(t *testing.T) {
 }
 
 func TestBlackBoxRunnerRejectsHostWithoutMutationReplay(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestBlackBoxRunnerRejectsHostWithoutMutationReplay(t *testing.T) {
 }
 
 func TestBlackBoxRunnerRejectsObservedDocumentOutsideExactFormSchema(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestBlackBoxRunnerRejectsObservedDocumentOutsideExactFormSchema(t *testing.
 }
 
 func TestBlackBoxRunnerRejectsMismatchedPortabilityEvidence(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestBlackBoxRunnerRejectsMismatchedPortabilityEvidence(t *testing.T) {
 }
 
 func TestBlackBoxRunnerAcceptsOptionalInterfaceFormOmission(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestBlackBoxRunnerAcceptsOptionalInterfaceFormOmission(t *testing.T) {
 }
 
 func TestBlackBoxRunnerRejectsInventedInterfaceResourceURI(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestBlackBoxRunnerRejectsUnprovenInterfaceSemantics(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+			contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 			if err != nil {
 				t.Fatal(err)
 			}

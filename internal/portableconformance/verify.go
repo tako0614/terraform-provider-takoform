@@ -15,7 +15,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
 )
 
-const APIVersion = formpackage.FormAPIVersion
+const APIVersion = formpackage.CurrentFormAPIVersion
 
 type FormRef struct {
 	APIVersion        string `json:"apiVersion"`
@@ -197,7 +197,9 @@ func Verify(root string) (Contract, error) {
 	if err := decodeStrict(filepath.Join(root, "manifest.json"), &index); err != nil {
 		return Contract{}, err
 	}
-	if index.Format != "takoform.portable-host-conformance-manifest@v1" || index.Contract != "contract.json" {
+	if (index.Format != "takoform.portable-host-conformance-manifest@v1" &&
+		index.Format != "takoform.portable-host-conformance-manifest@v2") ||
+		index.Contract != "contract.json" {
 		return Contract{}, errors.New("portable host conformance manifest identity is invalid")
 	}
 	contractPath := filepath.Join(root, index.Contract)
@@ -223,9 +225,20 @@ func Verify(root string) (Contract, error) {
 }
 
 func validate(contract Contract) error {
-	if contract.Format != "takoform.portable-host-conformance@v1" || contract.APIVersion != APIVersion ||
-		contract.DiscoveryPath != "/.well-known/takoform" || contract.APIPath != "/apis/forms.takoform.com/v1alpha1" ||
-		contract.RunnerEvidence.Subject != "takoform.portable-host-conformance-runner@v1" ||
+	identityValid := false
+	switch contract.Format {
+	case "takoform.portable-host-conformance@v1":
+		identityValid = contract.APIVersion == formpackage.LegacyFormAPIVersion &&
+			contract.DiscoveryPath == "/.well-known/takoform" &&
+			contract.APIPath == "/apis/"+formpackage.LegacyFormAPIVersion &&
+			contract.RunnerEvidence.Subject == "takoform.portable-host-conformance-runner@v1"
+	case "takoform.portable-host-conformance@v2":
+		identityValid = contract.APIVersion == APIVersion &&
+			contract.DiscoveryPath == client.DiscoveryPath &&
+			contract.APIPath == "/apis/"+client.APIVersion &&
+			contract.RunnerEvidence.Subject == "takoform.portable-host-conformance-runner@v2"
+	}
+	if !identityValid ||
 		contract.RunnerEvidence.Entrypoint != "cmd/portable-host-conformance" ||
 		contract.RunnerEvidence.SelfTest != "go run ./cmd/portable-host-conformance self-test" {
 		return errors.New("portable host contract identity is invalid")
@@ -459,6 +472,12 @@ func validate(contract Contract) error {
 		"import-headers-required", "import", "import-idempotency", "interface-ready-after-import",
 		"import-update-headers-required", "import-update-stale-rejected", "import-update", "interface-ready-after-import-update", "post-import-delete-readback",
 	}
+	if contract.Format == "takoform.portable-host-conformance@v2" {
+		wantChecks = append(
+			append([]string{}, wantChecks[:2]...),
+			append([]string{"exact-form-definition"}, wantChecks[2:]...)...,
+		)
+	}
 	if !reflect.DeepEqual(contract.RequiredRunnerChecks, wantChecks) {
 		return errors.New("portable host required runner checks drifted")
 	}
@@ -514,7 +533,11 @@ func validate(contract Contract) error {
 		return fmt.Errorf("portable host neutral runner evidence: %w", err)
 	}
 	if contract.RunnerEvidence.SHA256 != runnerDigest {
-		return errors.New("portable host neutral runner evidence digest drifted")
+		return fmt.Errorf(
+			"portable host neutral runner evidence digest drifted: have %s, want %s",
+			contract.RunnerEvidence.SHA256,
+			runnerDigest,
+		)
 	}
 	wantForbidden := []string{
 		"credential", "secret", "price", "quote", "billing", "backend", "selected_implementation", "target", "locked",

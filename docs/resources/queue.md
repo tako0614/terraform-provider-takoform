@@ -2,12 +2,12 @@
 page_title: "takoform_queue Resource - takoform"
 subcategory: "Service Forms"
 description: |-
-  Portable asynchronous delivery with at-least-once semantics.
+  Portable asynchronous at-least-once message delivery.
 ---
 
 # takoform_queue
 
-Portable asynchronous delivery with at-least-once semantics.
+Portable asynchronous at-least-once message delivery.
 
 The configured host selects and operates the concrete backend. This resource
 carries desired state only: it never names a target, a credential, a price, or
@@ -16,13 +16,8 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 ## Arguments
 
 - `name` (String, required, forces replacement) — Resource name.
-- `max_retries` (Number, optional) — Optional delivery retry preference. At least 0.
-- `max_batch_size` (Number, optional) — Optional consumer batch size preference. At least 1.
-- `visibility_timeout_seconds` (Number, optional) — Optional time a received message stays invisible to other consumers. At least 0.
-- `message_retention_seconds` (Number, optional) — Optional time an unacknowledged message is retained, in seconds. At least 1.
-- `max_message_bytes` (Number, optional) — Optional largest accepted message size in bytes. At least 1.
-- `delivery_delay_seconds` (Number, optional) — Optional delay before a sent message becomes receivable. At least 0.
-- `ordering` (String, optional) — Whether the host must preserve send order. One of `best_effort`, `strict`.
+- `message_retention_seconds` (Number, optional) — Optional minimum retention for an unacknowledged message, in seconds. At least 1.
+- `ordering` (String, optional) — Delivery ordering requirement: best_effort gives no relative-order guarantee; strict follows host acceptance order within this queue, apart from duplicate redelivery allowed by at-least-once delivery. One of `best_effort`, `strict`.
 - `connections` (List of Object, optional) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 

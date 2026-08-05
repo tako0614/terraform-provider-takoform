@@ -21,10 +21,13 @@ var forbiddenEvidenceKeys = map[string]struct{}{
 	"command": {}, "script": {}, "executable": {}, "binary": {}, "code": {},
 }
 
-// ValidateEvidenceStructure validates provider-neutral admission evidence against an
-// already data-only-verified package. A caller must separately authenticate
+// ValidateEvidenceStructure verifies retained Legacy admission evidence against
+// an already data-only-verified package. A caller must separately authenticate
 // the package-adjacent evidence and both runner reports; this parser never
-// synthesizes or upgrades structural checks into passed lifecycle proof.
+// synthesizes or upgrades historical structural checks into current maturity,
+// approval, Host Support, or activation.
+//
+// Deprecated: retained historical verification only.
 func ValidateEvidenceStructure(path string, report formpackage.VerificationReport, definition formpackage.FormDefinition) (AdmissionEvidence, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -33,9 +36,12 @@ func ValidateEvidenceStructure(path string, report formpackage.VerificationRepor
 	return ValidateEvidenceBytes(raw, report, definition)
 }
 
-// ValidateEvidenceBytes validates exact RFC 8785 admission-evidence bytes.
+// ValidateEvidenceBytes validates exact retained RFC 8785 admission-evidence bytes.
 // It is the in-memory counterpart of ValidateEvidenceStructure for deterministic
-// evidence builders; it never signs, retains, publishes, or admits the subject.
+// historical verification fixtures; it never signs, retains, publishes, admits,
+// or changes the current maturity of the subject.
+//
+// Deprecated: retained historical verification only.
 func ValidateEvidenceBytes(raw []byte, report formpackage.VerificationReport, definition formpackage.FormDefinition) (AdmissionEvidence, error) {
 	canonical, err := formpackage.Canonicalize(raw)
 	if err != nil {

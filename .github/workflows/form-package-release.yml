@@ -9,7 +9,7 @@ on:
         required: true
         type: string
       tag:
-        description: Exact planned forms/k-<base32-kind>/v<semver> tag to prepare
+        description: Exact lifecycle-authorized forms/k-<base32-kind>/sha256-<digest> tag to prepare
         required: true
         type: string
       expected_commit:
@@ -63,8 +63,8 @@ jobs:
             echo "Candidate preparation must use the protected main workflow identity" >&2
             exit 1
           fi
-          if [[ ! "$RELEASE_TAG" =~ ^forms/k-[a-z2-7]{2,103}/v[0-9][0-9A-Za-z.+-]*$ ]]; then
-            echo "Form Package candidates require an exact base32 release-id tag" >&2
+          if [[ ! "$RELEASE_TAG" =~ ^forms/k-[a-z2-7]{2,103}/sha256-[0-9a-f]{64}$ ]]; then
+            echo "Current Form Package candidates require an exact digest-addressed tag" >&2
             exit 1
           fi
           if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
@@ -109,7 +109,7 @@ jobs:
       - name: Install pinned Cosign v3
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2, Cosign v3.0.6
 
-      - name: Validate the canonical plan and create an ephemeral tag object
+      - name: Validate current lifecycle release authority and create an ephemeral tag object
         id: tag_object
         shell: bash
         env:
@@ -129,13 +129,13 @@ jobs:
           go build -o "$trusted_conformance" ./cmd/standard-form-conformance
           (
             cd release-source
-            "$trusted_conformance" release-plan > "$RUNNER_TEMP/form-package-release-plan.txt"
+            "$trusted_conformance" current-release-plan > "$RUNNER_TEMP/current-form-release-plan.json"
           )
           jq -e --arg tag "$RELEASE_TAG" '
-            .format == "takoform.release-plan@v1"
+            .format == "takoform.current-form-release-plan@v2"
             and .repository == "tako0614/terraform-provider-takoform"
             and ([.releases[] | select(.tag == $tag)] | length == 1)
-          ' release-source/forms/release-plan.json > /dev/null
+          ' "$RUNNER_TEMP/current-form-release-plan.json" > /dev/null
 
           tag_object="$RUNNER_TEMP/form-package-tag-object"
           tagger_epoch="$(git -C release-source show -s --format=%ct "$EXPECTED_COMMIT")"
@@ -224,7 +224,6 @@ jobs:
           cosign_version="$(cosign version 2>&1)"
           grep -F "$EXPECTED_COSIGN_VERSION" <<<"$cosign_version"
           go test ./formpackage ./cmd/form-package-release
-          go run ./cmd/standard-form-conformance materializability-check
 
           candidate="$RUNNER_TEMP/form-package-release-candidate"
           output="$candidate/assets"

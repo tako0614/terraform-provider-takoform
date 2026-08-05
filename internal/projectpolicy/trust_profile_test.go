@@ -65,19 +65,21 @@ type trustProfile struct {
 			SignedSubject string `json:"signedSubject"`
 		} `json:"signature"`
 		PublisherPolicy struct {
-			OIDCIssuer       string `json:"oidcIssuer"`
-			SourceRepository string `json:"sourceRepository"`
-			Workflow         string `json:"workflow"`
-			WorkflowIdentity string `json:"workflowIdentity"`
-			TagPattern       string `json:"tagPattern"`
+			OIDCIssuer               string `json:"oidcIssuer"`
+			SourceRepository         string `json:"sourceRepository"`
+			Workflow                 string `json:"workflow"`
+			WorkflowIdentity         string `json:"workflowIdentity"`
+			CurrentTagPattern        string `json:"currentTagPattern"`
+			RetainedLegacyTagPattern string `json:"retainedLegacyTagPattern"`
 		} `json:"publisherPolicy"`
 		TagProtection struct {
-			TagPattern             string `json:"tagPattern"`
-			RestrictCreation       bool   `json:"restrictCreation"`
-			RestrictDeletion       bool   `json:"restrictDeletion"`
-			RestrictNonFastForward bool   `json:"restrictNonFastForward"`
-			ReleaseEnvironment     string `json:"releaseEnvironment"`
-			DeploymentRef          string `json:"deploymentRef"`
+			CurrentTagPattern        string `json:"currentTagPattern"`
+			RetainedLegacyTagPattern string `json:"retainedLegacyTagPattern"`
+			RestrictCreation         bool   `json:"restrictCreation"`
+			RestrictDeletion         bool   `json:"restrictDeletion"`
+			RestrictNonFastForward   bool   `json:"restrictNonFastForward"`
+			ReleaseEnvironment       string `json:"releaseEnvironment"`
+			DeploymentRef            string `json:"deploymentRef"`
 		} `json:"tagProtection"`
 		Transparency struct {
 			Authority                         string `json:"authority"`
@@ -155,7 +157,6 @@ type releaseDescriptor struct {
 		PortableAPIVersion     string `json:"portableApiVersion"`
 		FormDefinitionVersions string `json:"formDefinitionVersions"`
 		FormPackageVersions    string `json:"formPackageVersions"`
-		AdmissionGenerations   string `json:"admissionGenerations"`
 	} `json:"versioning"`
 }
 
@@ -166,7 +167,7 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	var release releaseDescriptor
 	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
 
-	if profile.SchemaVersion != 2 || profile.Status != "decision-approved-implementation-in-progress" {
+	if profile.SchemaVersion != 3 || profile.Status != "architecture-decision-accepted-implementation-in-progress" {
 		t.Fatalf("unexpected trust profile identity: version=%d status=%q", profile.SchemaVersion, profile.Status)
 	}
 	if profile.Provider.Status != "implemented-registry-key-registered-first-install-proof-pending" ||
@@ -221,13 +222,12 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		profile.Provider.Distribution.OverwriteExistingVersion {
 		t.Fatalf("provider distribution is mutable or has the wrong registry")
 	}
-	if release.Version != "1.0.3" || release.Tag != "v1.0.3" ||
+	if release.Version != "2.0.0" || release.Tag != "v2.0.0" ||
 		release.Versioning.ProviderCompatibility != "semver-major" ||
-		release.Versioning.PortableAPIVersion != "forms.takoform.com/v1alpha1" ||
+		release.Versioning.PortableAPIVersion != "forms.takoform.com/v1alpha2" ||
 		release.Versioning.FormDefinitionVersions != "independent-immutable-semver" ||
-		release.Versioning.FormPackageVersions != "independent-immutable-semver" ||
-		release.Versioning.AdmissionGenerations != "independent-non-semver" {
-		t.Fatalf("provider v1 version streams are not independently locked: %#v", release.Versioning)
+		release.Versioning.FormPackageVersions != "content-addressed-current-retained-legacy-semver" {
+		t.Fatalf("provider v2 version streams are not independently locked: %#v", release.Versioning)
 	}
 	if profile.RunnerReport.HostFormat != "takoform.standard-runner-report@v1" ||
 		profile.RunnerReport.ProviderFormat != "takoform.standard-provider-runner-report@v2" ||
@@ -237,7 +237,7 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 	}
 
 	packageTrust := profile.FormPackage
-	if packageTrust.Status != "data-contract-verifier-and-keyless-release-lane-implemented-first-release-pending" ||
+	if packageTrust.Status != "current-content-addressed-release-lane-implemented-first-current-release-pending" ||
 		packageTrust.Canonicalization.Format != "RFC8785" ||
 		packageTrust.Canonicalization.Encoding != "UTF-8 I-JSON" ||
 		packageTrust.Identity.Digest != "sha256" ||
@@ -256,10 +256,12 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		packageTrust.PublisherPolicy.SourceRepository != "github.com/tako0614/terraform-provider-takoform" ||
 		packageTrust.PublisherPolicy.Workflow != ".github/workflows/form-package-release.yml" ||
 		packageTrust.PublisherPolicy.WorkflowIdentity != "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main" ||
-		packageTrust.PublisherPolicy.TagPattern != "refs/tags/forms/k-*/v*" {
+		packageTrust.PublisherPolicy.CurrentTagPattern != "refs/tags/forms/k-*/sha256-*" ||
+		packageTrust.PublisherPolicy.RetainedLegacyTagPattern != "refs/tags/forms/k-*/v*" {
 		t.Fatalf("unexpected Form Package publisher policy")
 	}
-	if packageTrust.TagProtection.TagPattern != "refs/tags/forms/*/v*" ||
+	if packageTrust.TagProtection.CurrentTagPattern != "refs/tags/forms/*/sha256-*" ||
+		packageTrust.TagProtection.RetainedLegacyTagPattern != "refs/tags/forms/*/v*" ||
 		!packageTrust.TagProtection.RestrictCreation || !packageTrust.TagProtection.RestrictDeletion ||
 		!packageTrust.TagProtection.RestrictNonFastForward || packageTrust.TagProtection.ReleaseEnvironment != "form-package-release" ||
 		packageTrust.TagProtection.DeploymentRef != "refs/heads/main" {
@@ -275,7 +277,7 @@ func TestD08TrustProfileRemainsFailClosedAndSeparated(t *testing.T) {
 		packageTrust.Provenance.SBOM != "spdx-2.3" {
 		t.Fatalf("Form Package provenance profile is incomplete")
 	}
-	if packageTrust.Distribution.Status != "github-release-workflow-implemented-first-release-pending" ||
+	if packageTrust.Distribution.Status != "github-release-current-workflow-implemented-first-current-release-pending" ||
 		packageTrust.Distribution.InitialSource != "github-release" ||
 		!strings.Contains(packageTrust.Distribution.MirrorPolicy, "exact assets") ||
 		packageTrust.Distribution.CustomerRequestFetch || packageTrust.Distribution.OverwriteExistingVersion ||
@@ -584,7 +586,6 @@ func TestDispatchedReleaseWorkflowsRequireExactRequestCorrelation(t *testing.T) 
 		".github/workflows/form-package-release.yml",
 		".github/workflows/form-package-revocation.yml",
 		".github/workflows/standard-provider-report.yml",
-		".github/workflows/standard-admission-evidence.yml",
 	}
 	const canonicalRequestIDValidation = `[[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`
 	for _, path := range workflows {

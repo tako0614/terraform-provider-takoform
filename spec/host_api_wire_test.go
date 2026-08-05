@@ -14,7 +14,10 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
-const hostAPIWireSchemaID = "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json"
+const (
+	hostAPIWireSchemaID        = "https://forms.takoform.com/schemas/v1alpha1/host-api-wire.schema.json"
+	currentHostAPIWireSchemaID = "https://forms.takoform.com/schemas/v1alpha2/host-api-wire.schema.json"
+)
 
 func TestEveryNormativeSchemaCompiles(t *testing.T) {
 	t.Parallel()
@@ -306,6 +309,47 @@ func TestHostAPIWireSchema(t *testing.T) {
 	}
 }
 
+func TestCurrentHostAPIWireCarriesOnlyCurrentFormRefs(t *testing.T) {
+	t.Parallel()
+
+	currentSchema := compileCurrentHostAPIWire(t, "#/$defs/resourceRequest")
+	current := resourceRequest()
+	current["apiVersion"] = "forms.takoform.com/v1alpha2"
+	current["form"].(map[string]any)["formRef"].(map[string]any)["apiVersion"] =
+		"forms.takoform.com/v1alpha2"
+	assertSchemaValid(t, currentSchema, current)
+	assertSchemaInvalid(t, currentSchema, resourceRequest())
+	assertSchemaInvalid(t, compileHostAPIWire(t, "#/$defs/resourceRequest"), current)
+}
+
+func TestCurrentHostAPIFormDefinitionResponseIsExactAndClosed(t *testing.T) {
+	t.Parallel()
+
+	schema := compileCurrentHostAPIWire(t, "#/$defs/formDefinitionResponse")
+	resource := resourceRequest()
+	resource["apiVersion"] = "forms.takoform.com/v1alpha2"
+	resource["form"].(map[string]any)["formRef"].(map[string]any)["apiVersion"] =
+		"forms.takoform.com/v1alpha2"
+	response := map[string]any{
+		"identity":    resource["form"],
+		"displayName": "Object bucket",
+		"description": "Stores opaque objects.",
+		"desiredSchema": map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+		},
+	}
+	assertSchemaValid(t, schema, response)
+
+	legacy := cloneJSONValue(t, response)
+	legacy["identity"].(map[string]any)["formRef"].(map[string]any)["apiVersion"] =
+		"forms.takoform.com/v1alpha1"
+	assertSchemaInvalid(t, schema, legacy)
+	extra := cloneJSONValue(t, response)
+	extra["hostImplementation"] = "worker"
+	assertSchemaInvalid(t, schema, extra)
+}
+
 func TestHostDiscoverySchemaIsClosed(t *testing.T) {
 	t.Parallel()
 
@@ -367,6 +411,41 @@ func TestHostDiscoverySchemaIsClosed(t *testing.T) {
 	}
 }
 
+func TestCurrentHostDiscoveryRequiresTheCurrentEpoch(t *testing.T) {
+	t.Parallel()
+
+	schema := compileNormativeSchema(
+		t,
+		"schemas/host-discovery-v1alpha2.schema.json",
+		"",
+	)
+	current := map[string]any{
+		"api_versions": []any{"forms.takoform.com/v1alpha2"},
+		"features": map[string]any{
+			"service_forms":          true,
+			"exact_form_ref":         true,
+			"optimistic_concurrency": true,
+			"idempotent_lifecycle":   true,
+		},
+		"endpoints": map[string]any{
+			"api": "https://host.example/apis/forms.takoform.com/v1alpha2",
+		},
+	}
+	assertSchemaValid(t, schema, current)
+	mixed := cloneJSONValue(t, current)
+	mixed["api_versions"] = []any{
+		"forms.takoform.com/v1alpha2",
+		"forms.takoform.com/v1alpha1",
+	}
+	assertSchemaInvalid(t, schema, mixed)
+	legacyAPI := cloneJSONValue(t, current)
+	legacyAPI["endpoints"].(map[string]any)["api"] =
+		"https://host.example/apis/forms.takoform.com/v1alpha1"
+	assertSchemaInvalid(t, schema, legacyAPI)
+	current["api_versions"] = []any{"forms.takoform.com/v1alpha1"}
+	assertSchemaInvalid(t, schema, current)
+}
+
 func TestHostOperationContractUsesWireSchemaAndStableErrors(t *testing.T) {
 	t.Parallel()
 
@@ -406,10 +485,10 @@ func TestHostOperationContractUsesWireSchemaAndStableErrors(t *testing.T) {
 	if err := json.Unmarshal(raw, &contract); err != nil {
 		t.Fatal(err)
 	}
-	if contract.WireSchema != hostAPIWireSchemaID {
-		t.Fatalf("wireSchema = %q, want %q", contract.WireSchema, hostAPIWireSchemaID)
+	if contract.WireSchema != currentHostAPIWireSchemaID {
+		t.Fatalf("wireSchema = %q, want %q", contract.WireSchema, currentHostAPIWireSchemaID)
 	}
-	wantSpaceSchema := hostAPIWireSchemaID + "#/$defs/spaceId"
+	wantSpaceSchema := currentHostAPIWireSchemaID + "#/$defs/spaceId"
 	if !reflect.DeepEqual(
 		contract.QueryParameterSchemas,
 		map[string]string{"space": wantSpaceSchema},
@@ -420,9 +499,9 @@ func TestHostOperationContractUsesWireSchemaAndStableErrors(t *testing.T) {
 			wantSpaceSchema,
 		)
 	}
-	compileHostAPIWire(
+	compileCurrentHostAPIWire(
 		t,
-		strings.TrimPrefix(contract.QueryParameterSchemas["space"], hostAPIWireSchemaID),
+		strings.TrimPrefix(contract.QueryParameterSchemas["space"], currentHostAPIWireSchemaID),
 	)
 	if contract.ResourceVersion.Encoding != "canonical-decimal-string" ||
 		contract.ResourceVersion.Minimum != "1" ||
@@ -430,10 +509,10 @@ func TestHostOperationContractUsesWireSchemaAndStableErrors(t *testing.T) {
 		contract.ResourceVersion.ETag != "exactly-one-strong-quoted-resource-version" {
 		t.Fatalf("resourceVersion contract = %#v", contract.ResourceVersion)
 	}
-	if contract.Error.Schema != hostAPIWireSchemaID+"#/$defs/errorEnvelope" {
+	if contract.Error.Schema != currentHostAPIWireSchemaID+"#/$defs/errorEnvelope" {
 		t.Fatalf("error envelope schema = %q", contract.Error.Schema)
 	}
-	compileHostAPIWire(t, strings.TrimPrefix(contract.Error.Schema, hostAPIWireSchemaID))
+	compileCurrentHostAPIWire(t, strings.TrimPrefix(contract.Error.Schema, currentHostAPIWireSchemaID))
 	for _, operation := range contract.Operations {
 		if operation.Name == "observe" || operation.Name == "refresh" {
 			if operation.SuccessResourceVersion != "equals-if-match" {
@@ -449,11 +528,11 @@ func TestHostOperationContractUsesWireSchemaAndStableErrors(t *testing.T) {
 			if reference == "" {
 				continue
 			}
-			if !strings.HasPrefix(reference, hostAPIWireSchemaID+"#/$defs/") {
+			if !strings.HasPrefix(reference, currentHostAPIWireSchemaID+"#/$defs/") {
 				t.Errorf("%s %s does not select a wire-schema definition: %q", operation.Name, field, reference)
 				continue
 			}
-			compileHostAPIWire(t, strings.TrimPrefix(reference, hostAPIWireSchemaID))
+			compileCurrentHostAPIWire(t, strings.TrimPrefix(reference, currentHostAPIWireSchemaID))
 		}
 		if operation.Name == "delete" {
 			if !reflect.DeepEqual(operation.SuccessStatus, []int{204}) || operation.ResponseSchema != "" {
@@ -533,14 +612,37 @@ func TestHostOperationContractUsesWireSchemaAndStableErrors(t *testing.T) {
 }
 
 func compileHostAPIWire(t *testing.T, fragment string) *jsonschema.Schema {
+	return compileVersionedHostAPIWire(
+		t,
+		"schemas/form-ref.schema.json",
+		"schemas/host-api-wire.schema.json",
+		hostAPIWireSchemaID,
+		fragment,
+	)
+}
+
+func compileCurrentHostAPIWire(t *testing.T, fragment string) *jsonschema.Schema {
+	return compileVersionedHostAPIWire(
+		t,
+		"schemas/form-ref-v1alpha2.schema.json",
+		"schemas/host-api-wire-v1alpha2.schema.json",
+		currentHostAPIWireSchemaID,
+		fragment,
+	)
+}
+
+func compileVersionedHostAPIWire(
+	t *testing.T,
+	formRefPath string,
+	wirePath string,
+	wireID string,
+	fragment string,
+) *jsonschema.Schema {
 	t.Helper()
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
 	compiler.AssertFormat()
-	for _, path := range []string{
-		"schemas/form-ref.schema.json",
-		"schemas/host-api-wire.schema.json",
-	} {
+	for _, path := range []string{formRefPath, wirePath} {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
@@ -554,7 +656,7 @@ func compileHostAPIWire(t *testing.T, fragment string) *jsonschema.Schema {
 			t.Fatalf("register %s: %v", path, err)
 		}
 	}
-	schema, err := compiler.Compile(hostAPIWireSchemaID + fragment)
+	schema, err := compiler.Compile(wireID + fragment)
 	if err != nil {
 		t.Fatalf("compile wire schema %q: %v", fragment, err)
 	}

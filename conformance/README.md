@@ -1,8 +1,12 @@
 # Conformance
 
-The current Phase 0 evidence is executable Go characterization:
+The current v1alpha2 candidate compatibility evidence is executable Go
+characterization:
 
-- `internal/provider/*_test.go` asserts that the resource set is exactly the declared Form set, and covers typed schema behavior, validation, CRUD, import, state refresh, and the absence of plan-time remote mutation;
+- `internal/provider/*_test.go` asserts that provider v2 exposes exactly the
+  nine independently authored current candidates, and covers typed schema
+  behavior, validation, CRUD, import, state refresh, and the absence of
+  plan-time remote mutation;
 - `internal/client/client_test.go` asserts discovery, capability negotiation, preview/apply evidence, error envelopes, observation, and deletion;
 - `examples/resources/` contains one formatted HCL example for every registered resource.
 
@@ -14,16 +18,17 @@ go vet ./...
 tofu fmt -check -recursive examples
 ```
 
-## Actual provider protocol lifecycle candidate
+## Current provider-v2 lifecycle evidence
 
-`cmd/provider-lifecycle-conformance` builds the real provider binary and drives
-every declared typed resource through a Terraform-compatible CLI against an in-process
-versioned Form host. The generic candidate covers create, read plus observe,
+`cmd/provider-lifecycle-conformance` builds the real provider-v2 candidate
+binary and drives every declared v1alpha2 typed resource through a
+Terraform-compatible CLI against
+an in-process versioned Form host. The regression covers create, read plus observe,
 mutable update with state-generation fencing, explicit refresh, native import,
 CLI import, drift mapping from observe evidence, delete, exact
 response-identity rejection, and
 replacement plans for immutable names, SQL engine, and vector dimensions.
-The data-only candidate report binds the CLI product/version, exact canonical
+The data-only compatibility report binds the CLI product/version, exact canonical
 provider FQN, provider schema digest, embedded candidate-set digest,
 release-descriptor provider version/binary digest, CLI executable basename,
 and CLI binary SHA-256 without leaking a host-local path. CI
@@ -41,8 +46,8 @@ go run ./cmd/provider-lifecycle-conformance provider-reports \
   --source-commit "$(git rev-parse HEAD)"
 ```
 
-`provider-reports` first verifies the exact current candidate release-source
-closure. It executes each canonical positive fixture and every declared
+`provider-reports` first verifies the exact generated v1alpha2 candidate
+package set. It executes each canonical positive fixture and every declared
 negative fixture through provider protocol v6. Desired negatives include a
 one-at-a-time omission of `name`, artifact `source`, required `connections`,
 and every Form-specific required field; each must return a provider diagnostic
@@ -51,41 +56,46 @@ lets the host return `OtherKind/<name>` and requires the provider to reject the
 response before it enters state. Both classes are reported as portable
 `invalid_argument`. The external host report binds and executes the exact
 desired-stage subset; the provider report covers that subset plus the
-observed-stage response rejection. Admission rejects output-stage negatives
-until a runner contract exists for them, rather than claiming unexecuted
-coverage.
+observed-stage response rejection. The retained historical report schema does
+not claim output-stage negative coverage until a runner contract exists. These
+reports prove conformance behavior only; they grant no lifecycle state or host
+authority.
 
 The command combines those per-package observations with the independently
 executed full lifecycle checks and writes one strict RFC 8785
 `takoform.standard-provider-runner-report@v2` document per kind. It refuses to
-write under `admission/`, signs nothing, publishes nothing, and does not change
-`external-required` admission status. Its output directory must be new or
-empty. Authentication and admission remain separate protected release
-decisions. Each report subject records the one canonical provider identity,
+write under `admission/`, signs nothing, publishes nothing, and cannot change
+Form lifecycle or host activation. The retained `external-required` field is
+Legacy data, not a pending central gate. Its output directory must be new or
+empty. Each report subject records the one canonical provider identity,
 `provider:registry.terraform.io/tako0614/takoform`, regardless of whether
 OpenTofu or Terraform executes it.
 
-The matrix is intentionally classified `generic-lifecycle-candidate` with
+The matrix retains the machine classification `generic-lifecycle-candidate` with
 `publicationReady: false` and
-`bindingStatus: exact-structural-candidate-set`. It does not publish a
-checked-in passed report or claim standard Form admission. The matrix requires
+`bindingStatus: exact-structural-candidate-set` because changing an old report
+format would falsify historical compatibility. Those labels are not current
+Form lifecycle states. The matrix does not publish a checked-in passed report
+or claim Form maturity. It requires
 Terraform `1.15.8` and OpenTofu `1.12.3` under the same canonical identity,
 `registry.terraform.io/tako0614/takoform`, then requires identical provider
 schema, exact FormRef/package identity, and lifecycle evidence. Immutable
-release/readback plus authenticated signed external admission are still
-required before these structural candidates can become portable standards.
+publication proves distribution only. Hosts separately publish support for an
+exact FormRef and activate it under their own policy; neither action changes
+the Form's project lifecycle state.
 
 ## Schema derivation gate
 
-The provider schema, the Form Definition, and the conformance fixtures are all
-derived from one declaration, so drift between them is a build failure rather
-than something a checked-in fixture corpus has to notice later.
+The provider-v2 schema, v1alpha2 Form Definition, and candidate conformance
+fixtures are all derived from one current catalog declaration, so drift
+between them is a build failure rather than something a checked-in fixture
+corpus has to notice later.
 `go run ./cmd/standard-form-conformance verify` regenerates nothing: it reads
 the committed packages, re-verifies their bytes, and inspects the actual
 provider resource schema for every declared Form, including that each field the
 definition calls immutable really forces replacement.
 
-## Data-only Form Package v1 corpus
+## Retained v1alpha1 Legacy package corpus
 
 [`form-package-v1/`](form-package-v1/) is a separate corpus for the portable
 package layer. It includes one valid closed ExampleStore package. Each package
@@ -94,24 +104,20 @@ desired/observed schemas, and no host authority fields. Tests pin every
 package/schema digest and reject an unknown host extension and one
 kind-specific invalid fixture.
 
-`form-package-v1/positive/standard/` contains the generated package for every
-declared Form. None of them replaces or mutates a published identity: a
-retained kind token starts a new major line instead.
+`form-package-v1/positive/standard/` contains the historical generated package
+for every one of the 34 v1alpha1 Legacy Forms. It is retained to authenticate
+those exact bytes; it is not a source for v1alpha2 candidates and never starts
+a new current version line.
 `go run ./cmd/standard-form-conformance verify` validates package
 bytes and fixtures and inspects the actual provider resource structure. It does
 not run the Terraform protocol lifecycle or a conforming host, and this repository
 intentionally contains no locally synthesized passed admission JSON.
 
-The machine-readable inventory classifies the set `structural-candidate`, marks
-local coverage `structural-only`, and admission `external-required`. Definition
-`status: standard` pins the proposed final bytes; it is not an admission claim.
-The local dual-CLI/FQN provider lifecycle matrix and conforming-host fixture proof
-cover the candidate set, including portable negative wire-code coverage
-(`invalid_argument`). Signatures/provenance, immutable release tags, Registry
-installation/readback, and authenticated signed admission evidence remain
-external requirements. Only
-that authenticated evidence may classify the exact package as
-`portable-standard`.
+The machine-readable inventory's `structural-candidate`, `structural-only`,
+`external-required`, Definition `status: standard`, and
+`portable-standard` values are immutable historical document facts. They are
+not a current queue, rank, maturity state, or missing approval. Current
+v1alpha2 maturity comes only from `forms/lifecycle.json`.
 
 The same corpus contains negative fixtures for duplicate names, invalid Unicode
 scalar sequences, negative zero, credentials, operator fields, target/capacity,
@@ -144,12 +150,13 @@ lifecycle remain host work.
 
 The Form Definition limits apply independently to each fixture class: at most
 32 positive fixtures and at most 32 negative fixtures, not 32 combined. Every
-generated Form stays within the negative limit without combining or dropping
-required-field omission cases.
+retained Legacy Form and every current candidate stays within the negative
+limit without combining or dropping required-field omission cases.
 
-The current manifest result is 36 positive packages (one ExampleStore, one
-interface-declaration package, and one generated package per declared Form) and
-51 negative cases. Passing this corpus proves the local data contract only. It
+The retained Legacy corpus manifest contains 36 positive packages (one
+ExampleStore, one interface-declaration package, and 34 historical generated
+packages) and 51 negative cases. Passing this corpus proves the local Legacy
+data contract only. It
 is not signature,
 publisher, remote-install, host-activation, retention/revocation, lifecycle
 idempotency, or cross-host/kind-standardization evidence. Those require their
@@ -158,10 +165,16 @@ evidence.
 
 ## Portable host evidence
 
-`portable-host-v1/` pins the versioned discovery/API paths, exact ObjectBucket
-FormRef/package identity, concurrency/idempotency rules, stable error taxonomy,
-and required cross-repo black-box runner checks. The provider client consumes
-the same contract in adversarial HTTP tests.
+`portable-host-v1/` is the frozen provider-v1 Legacy corpus. It pins the
+v1alpha1 discovery/API paths and exact Legacy ObjectBucket identity so retained
+publication evidence remains independently verifiable.
+
+`portable-host-v2/` is the current provider-v2 corpus. It pins the separate
+v1alpha2 discovery/API paths, an exact current EdgeWorker candidate and all of
+its desired-negative fixtures, a current Schedule-to-EdgeWorker connection
+probe, concurrency/idempotency rules, stable errors, and required cross-repo
+black-box checks. The current provider client consumes this contract in
+adversarial HTTP tests.
 
 The executable runner is
 `go run ./cmd/portable-host-conformance`. Its `self-test` command starts a

@@ -9,7 +9,7 @@ import (
 func TestArtifactSourceRejectsURLsThatCannotEnterNonsensitiveState(t *testing.T) {
 	t.Parallel()
 
-	const digest = "0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37"
+	const digest = "sha256:0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37"
 	source := func(artifactURL string) artifactSourceValues {
 		return artifactSourceValues{
 			URL:       types.StringValue(artifactURL),

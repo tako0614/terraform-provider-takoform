@@ -25,24 +25,24 @@ import (
 )
 
 const (
-	runnerReportFormatV1              = "takoform.standard-runner-report@v1"
-	providerRunnerReportFormatV2      = "takoform.standard-provider-runner-report@v2"
-	registryReadbackFormat            = "takoform.provider-registry-readback@v1"
-	packageReleaseSchema              = 1
-	packageReleaseType                = "form-package"
-	sourceRepository                  = "github.com/tako0614/terraform-provider-takoform"
-	packageReleaseWorkflow            = ".github/workflows/standard-form-package-set-release.yml"
-	currentPackageReleaseWorkflow     = ".github/workflows/form-package-release.yml"
-	packageIndexMediaType             = "application/vnd.takoform.package-index.v1+json"
-	packagePublisherIssuer            = "https://token.actions.githubusercontent.com"
-	packagePublisherIdentityPrefix    = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-form-package-set-release.yml@refs/tags/standard-forms/v"
-	packagePublisherTagPattern        = "refs/tags/standard-forms/v*"
-	currentPackagePublisherIdentity   = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
-	currentPackagePublisherTagPattern = "refs/tags/forms/k-*/v*"
-	registryProviderAddress           = "registry.terraform.io/tako0614/takoform"
-	maxReportBytes                    = 16 << 20
-	maxReleaseManifestBytes           = 4 << 20
-	maxReleaseAssetBytes              = 64 << 20
+	runnerReportFormatV1                     = "takoform.standard-runner-report@v1"
+	providerRunnerReportFormatV2             = "takoform.standard-provider-runner-report@v2"
+	registryReadbackFormat                   = "takoform.provider-registry-readback@v1"
+	packageReleaseSchema                     = 1
+	packageReleaseType                       = "form-package"
+	sourceRepository                         = "github.com/tako0614/terraform-provider-takoform"
+	packageReleaseWorkflow                   = ".github/workflows/standard-form-package-set-release.yml"
+	currentPackageReleaseWorkflow            = ".github/workflows/form-package-release.yml"
+	packageIndexMediaType                    = "application/vnd.takoform.package-index.v1+json"
+	packagePublisherIssuer                   = "https://token.actions.githubusercontent.com"
+	packagePublisherIdentityPrefix           = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-form-package-set-release.yml@refs/tags/standard-forms/v"
+	packagePublisherTagPattern               = "refs/tags/standard-forms/v*"
+	retainedLegacyPackagePublisherIdentity   = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
+	retainedLegacyPackagePublisherTagPattern = "refs/tags/forms/k-*/v*"
+	registryProviderAddress                  = "registry.terraform.io/tako0614/takoform"
+	maxReportBytes                           = 16 << 20
+	maxReleaseManifestBytes                  = 4 << 20
+	maxReleaseAssetBytes                     = 64 << 20
 )
 
 func packagePublisherIdentity(packageVersion string) string {
@@ -271,9 +271,9 @@ type RegistryInstall struct {
 	ProviderSchemaSHA256 string `json:"providerSchemaSha256"`
 }
 
-// BuildRegistryReadback creates the canonical unsigned readback subject from
-// a direct Registry matrix. Authentication remains a separate Phase 2
-// workflow action; this helper never signs or upgrades admission state.
+// BuildRegistryReadback creates the canonical unsigned provider-distribution
+// readback subject from a direct Registry matrix. This legacy-shaped helper
+// never signs evidence or changes Form lifecycle, Host Support, or activation.
 func BuildRegistryReadback(root, matrixFile, providerReleaseCommit string) (ProviderRegistryReadback, []byte, error) {
 	if !releaseCommitPattern.MatchString(providerReleaseCommit) {
 		return ProviderRegistryReadback{}, nil, fmt.Errorf("provider release commit must be lowercase 40-hex")
@@ -290,7 +290,7 @@ func BuildRegistryReadback(root, matrixFile, providerReleaseCommit string) (Prov
 	if err != nil {
 		return ProviderRegistryReadback{}, nil, err
 	}
-	if err := providerlifecycle.ValidateRegistryMatrix(matrix, requirements); err != nil {
+	if err := providerlifecycle.ValidateLegacyRegistryMatrix(matrix, requirements); err != nil {
 		return ProviderRegistryReadback{}, nil, err
 	}
 	if matrix.ReleaseDescriptorSHA256 != descriptorDigest {
@@ -578,7 +578,7 @@ func verifyPackageReleaseReadback(repositoryRoot, evidenceRoot string, pair matc
 		manifest.ReleaseID != expectedReleaseID || manifest.PackageDigest != entry.PackageDigest || manifest.FormRef != entry.FormRef ||
 		manifest.Canonicalization != "RFC8785" || manifest.SignatureMediaType != sigstoreBundleMediaTypeV03 ||
 		!manifest.PublicationReady || len(manifest.PublicationBlockers) != 0 {
-		return nil, fmt.Errorf("package release manifest does not bind the immutable admitted package")
+		return nil, fmt.Errorf("package release manifest does not bind the immutable historical set entry")
 	}
 	manifestDir := path.Dir(entry.PackageReleaseManifestPath)
 	if entry.PackageIndexPath != path.Join(manifestDir, manifest.SignedSubject) ||
@@ -589,8 +589,8 @@ func verifyPackageReleaseReadback(repositoryRoot, evidenceRoot string, pair matc
 		manifest.PublisherPolicy.Identity == packagePublisherIdentity(packageVersion) &&
 		manifest.PublisherPolicy.TagPattern == packagePublisherTagPattern
 	currentPublisher := manifest.Workflow == currentPackageReleaseWorkflow &&
-		manifest.PublisherPolicy.Identity == currentPackagePublisherIdentity &&
-		manifest.PublisherPolicy.TagPattern == currentPackagePublisherTagPattern
+		manifest.PublisherPolicy.Identity == retainedLegacyPackagePublisherIdentity &&
+		manifest.PublisherPolicy.TagPattern == retainedLegacyPackagePublisherTagPattern
 	wantCurrentPublisher := len(currentGeneration) == 1 && currentGeneration[0]
 	publisherMatches := legacyPublisher
 	if wantCurrentPublisher {
@@ -646,7 +646,7 @@ func verifyPackageReleaseReadback(repositoryRoot, evidenceRoot string, pair matc
 	}
 	canonical, err := formpackage.Canonicalize(indexRaw)
 	if err != nil || !bytes.Equal(indexRaw, canonical) || formpackage.DigestBytes(indexRaw) != entry.PackageDigest {
-		return nil, fmt.Errorf("package release index is not the exact canonical admitted package index")
+		return nil, fmt.Errorf("package release index is not the exact canonical historical package index")
 	}
 	packageRoot := filepath.Join(repositoryRoot, filepath.FromSlash(pair.candidate.PackagePath))
 	localIndex, err := readRetainedRegularFile(filepath.Join(packageRoot, formpackage.PackageIndexFilename), maxEvidenceBytes)
@@ -932,7 +932,7 @@ func verifyRegistryReadback(root, admissionRoot string, set Set) (ProviderRegist
 	if readback.Format != registryReadbackFormat || !readback.PublicationReady || readback.ProviderAddress != registryProviderAddress ||
 		!stableProviderVersion(providerVersion) || readback.ProviderReleaseTag != "v"+providerVersion ||
 		!releaseCommitPattern.MatchString(readback.ProviderReleaseCommit) ||
-		readback.CandidateSetSHA256 != providerlifecycle.CandidateSetSHA256() ||
+		readback.CandidateSetSHA256 != providerlifecycle.LegacyCandidateSetSHA256() ||
 		!formpackage.ValidDigest(readback.ProviderSchemaSHA256) || !formpackage.ValidDigest(readback.LifecycleMatrixDigest) ||
 		len(readback.Installs) != len(requirements) {
 		return ProviderRegistryReadback{}, nil, fmt.Errorf("provider Registry readback identity is invalid")
@@ -951,7 +951,7 @@ func verifyRegistryReadback(root, admissionRoot string, set Set) (ProviderRegist
 	if err := decodeStrictJSON(matrixRaw, &matrix); err != nil {
 		return ProviderRegistryReadback{}, nil, err
 	}
-	if err := providerlifecycle.ValidateRegistryMatrix(matrix, requirements); err != nil {
+	if err := providerlifecycle.ValidateLegacyRegistryMatrix(matrix, requirements); err != nil {
 		return ProviderRegistryReadback{}, nil, err
 	}
 	if matrix.CandidateSetSHA256 != readback.CandidateSetSHA256 ||

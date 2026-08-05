@@ -19,12 +19,11 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 - `artifact_url` (String, required) — Absolute credential-free HTTPS location any conforming host can fetch; userinfo, query, and fragment are forbidden because this value persists in nonsensitive state.
 - `artifact_sha256` (String, required) — Digest binding the URL to exact immutable bytes.
 - `artifact_media_type` (String, required) — Lowercase type/subtype describing how the bytes are interpreted.
-- `entity_class` (String, required) — Runtime class identifier owning entity behaviour inside this namespace.
-- `runtime` (String, required) — Open runtime capability token required by the entity artifact.
-- `runtime_version` (String, optional) — Optional runtime-version capability token requested for the artifact.
-- `persistence` (String, optional) — Open persistence capability token requested for entity state.
-- `migration_tag` (String, optional) — Optional namespace migration tag. It never identifies one entity instance.
-- `configuration` (Map of String, optional) — Non-secret configuration passed to the running service. Secret material is never portable state: a host injects it through its own credential path.
+- `entrypoint` (String, required) — Artifact entrypoint implementing entity behavior.
+- `runtime` (String, required) — Open runtime capability token required by the artifact.
+- `runtime_version` (String, optional) — Optional runtime compatibility version required by the artifact.
+- `persistence` (String, required) — Open persistence capability token required by the workload; transactional means invocations for one entity observe serializable state transitions committed atomically with that invocation.
+- `configuration` (Map of String, optional) — Non-secret application configuration. Credentials remain host-owned.
 - `connections` (List of Object, optional) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
