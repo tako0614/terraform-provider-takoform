@@ -398,10 +398,11 @@ func TestLoadCLIMatrixPinsOneCanonicalProviderAddress(t *testing.T) {
 	}
 	for _, required := range []string{
 		"one provider source and state identity",
-		"pins the published provider",
-		"canonical Terraform Registry listing",
+		"published at the canonical Terraform Registry address",
+		"signed release",
+		"immutable tag identity",
+		"Registry listing",
 		"through CLI",
-		"development overrides",
 		"release-descriptor metadata",
 	} {
 		if !strings.Contains(string(readme), required) {

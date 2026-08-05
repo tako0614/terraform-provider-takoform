@@ -160,9 +160,9 @@ operator and are never committed here.
 ## Content policy
 
 The site must claim nothing beyond signed, committed evidence in this
-repository. The current public truth is: provider `v1.0.3` is the published,
-Registry-verified Legacy client; provider `v2.0.0` is an unpublished source
-candidate; Takoform is an Experimental specification project; and the 34
+repository. The current public truth is: provider `v2.0.0` is the published,
+Registry-verified current client; provider `v1.0.3` is the published Legacy
+client; Takoform is an Experimental specification project; and the 34
 published Form Package identities are immutable Legacy evidence. There is no
 current central Takoform approval or admission. The current
 `forms.takoform.com/v1alpha2` epoch contains exactly nine Takosumi Cloud-backed
@@ -175,7 +175,8 @@ v1alpha1/v1alpha2 package indexes remain immutable Legacy evidence.
 
 `release/version.json` keeps `publicationStatus: candidate-only` as current
 source descriptor metadata for `v2.0.0`; it must not be presented as live
-publication state. The live published provider remains `v1.0.3`. Any later
+publication state. Signed release and Registry evidence establish `v2.0.0` as
+the current published provider. Any later
 publication, lifecycle, Host Support, or revocation claim still requires the corresponding
 retained evidence. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),

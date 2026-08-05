@@ -33,19 +33,18 @@ There is one provider address:
 `registry.terraform.io/tako0614/takoform`. Provider SemVer is independent from
 Form definition versions and the Form API epoch.
 
-Terraform and OpenTofu use one provider source and state identity. The Legacy
-example below pins the published provider from the canonical Terraform Registry listing;
+Terraform and OpenTofu use one provider source and state identity. Both current
+v2 and Legacy v1 are published at the canonical Terraform Registry address;
 installation is verified through CLI rather than inferred from repository
-files. The v2 source candidate is available only through reviewed development overrides
-until a separate release exists. `release/version.json` is release-descriptor metadata,
-not proof that a candidate is live in the Registry.
+files. `release/version.json` is release-descriptor metadata, while the
+signed release, immutable tag identity, and Registry listing establish publication.
 
 - Provider `v1.0.3` is published and Registry-verified. It is the Legacy
   `v1alpha1` client. Existing Legacy state must pin provider v1.
-- Provider `v2.0.0` is the current source candidate for `v1alpha2`. It exposes
-  exactly the nine current candidates and is not published. Its
-  `release/version.json` value `publicationStatus: candidate-only` is current
-  source descriptor metadata; the live published provider remains `v1.0.3`.
+- Provider `v2.0.0` is published and Registry-verified as the current
+  `v1alpha2` client. It exposes exactly the nine current Form candidates. Its
+  `release/version.json` value `publicationStatus: candidate-only` remains
+  source descriptor metadata; it does not describe live Registry state.
 - Provider v2 fails closed on provider-v1 state. Migration is an explicit
   create/import operation, not an automatic state rewrite.
 
@@ -62,8 +61,7 @@ terraform {
 }
 ```
 
-Current source-candidate configuration, usable only with a reviewed local
-provider build/dev override until v2 is separately published:
+Current published-provider configuration:
 
 ```hcl
 terraform {

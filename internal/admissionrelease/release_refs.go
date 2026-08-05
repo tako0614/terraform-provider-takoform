@@ -3,6 +3,7 @@ package admissionrelease
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -35,12 +36,21 @@ type providerReleaseIdentityLedger struct {
 }
 
 type providerReleaseIdentityAssignment struct {
-	Version            string `json:"version"`
-	Tag                string `json:"tag"`
-	Status             string `json:"status"`
-	TagObject          string `json:"tagObject"`
-	Commit             string `json:"commit"`
-	SigningFingerprint string `json:"signingFingerprint"`
+	Version            string                           `json:"version"`
+	Tag                string                           `json:"tag"`
+	Status             string                           `json:"status"`
+	TagObject          string                           `json:"tagObject"`
+	Commit             string                           `json:"commit"`
+	SigningFingerprint string                           `json:"signingFingerprint"`
+	RegistryReadback   *providerRegistryReadbackClosure `json:"registryReadback,omitempty"`
+}
+
+type providerRegistryReadbackClosure struct {
+	Format             string            `json:"format"`
+	WorkflowRunID      string            `json:"workflowRunId"`
+	WorkflowRunAttempt int               `json:"workflowRunAttempt"`
+	SourceCommit       string            `json:"sourceCommit"`
+	Files              map[string]string `json:"files"`
 }
 
 func (gitReleaseRefVerifier) VerifyReleaseRefs(root string, set Set, readback ProviderRegistryReadback) error {
@@ -606,6 +616,11 @@ func reviewedProviderTagObject(root, tag, expectedCommit, expectedFingerprint st
 			!fingerprintOK || fingerprint != assignment.SigningFingerprint {
 			return "", fmt.Errorf("provider release identity ledger contains an invalid assignment")
 		}
+		major, err := strconv.Atoi(strings.Split(assignment.Version, ".")[0])
+		if err != nil || (major >= 2 && assignment.RegistryReadback == nil) ||
+			(assignment.RegistryReadback != nil && validateProviderRegistryReadbackClosure(*assignment.RegistryReadback) != nil) {
+			return "", fmt.Errorf("provider release identity ledger contains an invalid retained Registry readback")
+		}
 		if _, duplicate := seenTags[assignment.Tag]; duplicate {
 			return "", fmt.Errorf("provider release identity ledger duplicates tag %q", assignment.Tag)
 		}
@@ -623,6 +638,35 @@ func reviewedProviderTagObject(root, tag, expectedCommit, expectedFingerprint st
 		return assignment.TagObject, nil
 	}
 	return "", nil
+}
+
+func validateProviderRegistryReadbackClosure(closure providerRegistryReadbackClosure) error {
+	if closure.Format != "takoform.retained-provider-registry-readback@v1" ||
+		closure.WorkflowRunAttempt < 1 || !releaseCommitPattern.MatchString(closure.SourceCommit) {
+		return fmt.Errorf("invalid Registry readback envelope")
+	}
+	if runID, err := strconv.ParseUint(closure.WorkflowRunID, 10, 64); err != nil || runID == 0 {
+		return fmt.Errorf("invalid Registry readback workflow run")
+	}
+	expected := map[string]struct{}{
+		"SHA256SUMS": {}, "provider-lifecycle-matrix.json": {}, "provider-readback.json": {},
+		"provider-readback.sigstore.json": {}, "provider-registry-readback-manifest.json": {},
+		"signed-provider-registry-readback-candidate.json": {},
+	}
+	if len(closure.Files) != len(expected) {
+		return fmt.Errorf("invalid Registry readback file closure")
+	}
+	for name := range expected {
+		encoded, ok := closure.Files[name]
+		if !ok || encoded == "" {
+			return fmt.Errorf("Registry readback omits %s", name)
+		}
+		raw, err := base64.StdEncoding.Strict().DecodeString(encoded)
+		if err != nil || len(raw) == 0 || base64.StdEncoding.EncodeToString(raw) != encoded {
+			return fmt.Errorf("Registry readback %s is not canonical base64", name)
+		}
+	}
+	return nil
 }
 
 func stableProviderVersion(version string) bool {

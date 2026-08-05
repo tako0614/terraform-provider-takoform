@@ -140,8 +140,8 @@ const resources = candidates.forms.map((entry) => {
 
 const github = "https://github.com/tako0614/terraform-provider-takoform";
 const sourceLink = (relativePath) => `${github}/blob/main/${relativePath}`;
-const candidateProvider = publication.candidateProviderVersion;
-const legacyProvider = publication.providerVersion;
+const currentProvider = publication.providerVersion;
+const legacyProvider = publication.legacyProviderVersion;
 const currentFormApi = candidates.formApiVersion;
 const packageApi = candidates.packageApiVersion;
 const legacyFormApi = publication.apiVersion;
@@ -173,8 +173,8 @@ function statusDisclosure(lang) {
       <p class="truth-note">
         Takoformは<strong>Experimental specification project</strong>です。現行FormRefは
         <code>${currentFormApi}</code>、現行Package envelopeは
-        <code>${packageApi}</code>です。provider <code>v${candidateProvider}</code>は
-        未公開source candidateです。公開済みprovider <code>v${legacyProvider}</code>と
+        <code>${packageApi}</code>です。provider <code>v${currentProvider}</code>は
+        Registry公開済みの現行clientです。provider <code>v${legacyProvider}</code>と
         <code>${legacyFormApi}</code>の${publication.publishedCount}件の公開済みForm Package identityは
         immutableな<strong>Legacy</strong>証跡です。現在の中央承認・admissionはありません。
       </p>`;
@@ -183,8 +183,8 @@ function statusDisclosure(lang) {
       <p class="truth-note">
         Takoform is an <strong>Experimental specification project</strong>. Current FormRefs use
         <code>${currentFormApi}</code> and current package envelopes use
-        <code>${packageApi}</code>. Provider <code>v${candidateProvider}</code> is an unpublished
-        source candidate. Published provider <code>v${legacyProvider}</code> and the
+        <code>${packageApi}</code>. Provider <code>v${currentProvider}</code> is the published
+        current Registry client. Provider <code>v${legacyProvider}</code> and the
         ${publication.publishedCount} published Form Package identities from
         <code>${legacyFormApi}</code> are immutable <strong>Legacy</strong> evidence. There is no
         current central approval or admission.
@@ -322,7 +322,7 @@ function overview(lang) {
           </div>
           <dl class="status-ledger" aria-label="${ja ? "現在の状態" : "Current status"}">
             <div><dt>${ja ? "現行Form" : "Current Forms"}</dt><dd>${resources.length} × 0.1.0 source candidates</dd></div>
-            <div><dt>Provider</dt><dd>v${candidateProvider} ${ja ? "未公開候補" : "unpublished candidate"}</dd></div>
+            <div><dt>Provider</dt><dd>v${currentProvider} ${ja ? "Registry公開済み" : "Registry published"}</dd></div>
             <div><dt>Legacy</dt><dd>v${legacyProvider} ${ja ? "公開済み" : "published"}</dd></div>
             <div><dt>Cloud</dt><dd>${ja ? "repo実装あり · live提供はhostの事実" : "repository implementations · live service is host evidence"}</dd></div>
           </dl>
@@ -347,7 +347,7 @@ function overview(lang) {
             <div><span>${ja ? "Legacy Host wire" : "Legacy Host wire"}</span><code>${legacyHostWireApi}</code><p>${ja ? "非versioned discoveryに凍結したprovider v1互換lane。" : "The frozen provider-v1 lane behind unversioned discovery."}</p></div>
             <div><span>Current FormRef</span><code>${currentFormApi}</code><p>${ja ? "nested exact identity。Legacyと衝突しません。" : "The nested exact identity; it cannot collide with Legacy."}</p></div>
             <div><span>Current package</span><code>${packageApi}</code><p>${ja ? "現行FormRefを運ぶdata-only envelope。" : "The data-only envelope carrying the current FormRef."}</p></div>
-            <div><span>Provider</span><code>v${candidateProvider} source candidate</code><p>${ja ? "Form maturityやCloud availabilityとは独立。" : "Independent from Form maturity and Cloud availability."}</p></div>
+            <div><span>Provider</span><code>v${currentProvider} published current client</code><p>${ja ? "Form maturityやCloud availabilityとは独立。" : "Independent from Form maturity and Cloud availability."}</p></div>
           </div>
         </div>
       </section>
@@ -356,7 +356,7 @@ function overview(lang) {
         <div class="container">
           <h2>${ja ? "今やることから選ぶ。" : "Choose by the job you have now."}</h2>
           <div class="path-list">
-            <article><a href="/docs/#current-source">${ja ? "現行仕様を評価する" : "Evaluate the current line"}</a><span>${ja ? "source buildとdev overrideだけ。Registry installはまだ不可。" : "Source build and dev override only; not a Registry install."}</span></article>
+            <article><a href="/docs/#current-source">${ja ? "現行仕様を利用する" : "Use the current line"}</a><span>${ja ? "Registryからv2.0.0をexact pin。" : "Install the exact v2.0.0 pin from the Registry."}</span></article>
             <article><a href="/docs/#legacy">${ja ? "既存stateを保守する" : "Maintain existing state"}</a><span>${ja ? `公開済みprovider v${legacyProvider}を固定。` : `Pin published provider v${legacyProvider}.`}</span></article>
             <article><a href="/docs/#migration">${ja ? "v1から移行する" : "Move from v1"}</a><span>${ja ? "stateを書き換えず、明示的にcreate/importする。" : "Create or import explicitly; never rewrite state."}</span></article>
           </div>
@@ -376,8 +376,8 @@ function docs(lang) {
           <p class="project-line">Documentation · Experimental</p>
           <h1>${ja ? "commandより先に、利用経路を選ぶ。" : "Choose the lane before the command."}</h1>
           <p class="lede">${ja
-            ? "同じprovider addressに、公開済みLegacy v1と未公開current v2があります。自分の目的に合う方だけを使ってください。"
-            : "One provider address has a published Legacy v1 line and an unpublished current v2 source line. Use only the lane that matches your job."}</p>
+            ? "同じprovider addressに、公開済みcurrent v2と公開済みLegacy v1があります。自分の目的に合う方だけを使ってください。"
+            : "One provider address has a published current v2 line and a published Legacy v1 line. Use only the lane that matches your job."}</p>
         </div>
       </section>
       <div class="container doc-layout">
@@ -390,11 +390,11 @@ function docs(lang) {
         </aside>
         <article class="doc-prose">
           <section id="${anchor("current-source")}">
-            <h2>${ja ? "現行v2 sourceを評価する" : "Evaluate the current v2 source"}</h2>
+            <h2>${ja ? "現行v2を利用する" : "Use the current v2 provider"}</h2>
             <p>${ja
-              ? `provider v${candidateProvider}はRegistryに公開されていません。次のpinはsource identityの検証用であり、通常の<code>init</code>ではinstallできません。`
-              : `Provider v${candidateProvider} is not published in the Registry. The pin below identifies the source candidate; ordinary <code>init</code> cannot install it.`}</p>
-            <figure class="code-card"><figcaption>${ja ? "install commandではありません" : "Not a Registry installation command"}</figcaption><pre><code>${providerPin(candidateProvider)}</code></pre></figure>
+              ? `provider v${currentProvider}はRegistry公開済みです。次のexact pinをTerraformまたはOpenTofuでinstallできます。`
+              : `Provider v${currentProvider} is published in the Registry. Terraform and OpenTofu can install the exact pin below.`}</p>
+            <figure class="code-card"><figcaption>${ja ? "exact Registry pin" : "Exact Registry pin"}</figcaption><pre><code>${providerPin(currentProvider)}</code></pre></figure>
             <p>${ja
               ? "repoの完全gateは、release descriptorに固定されたGo toolchainでproviderをbuildし、TerraformとOpenTofuの隔離されたdev overrideを使って9リソースのlifecycleを検証します。"
               : "The repository gate builds the provider with the Go toolchain pinned by the release descriptor, then exercises all nine resources through isolated Terraform and OpenTofu development overrides."}</p>
@@ -448,7 +448,7 @@ function spec(lang) {
   const ja = lang === "ja";
   const anchor = (name) => (ja ? `${name}-ja` : name);
   const rows = [
-    ["Provider distribution", `v${legacyProvider} published · v${candidateProvider} source candidate`, ja ? "client配布。Form maturityとは独立。" : "Client distribution; independent from Form maturity."],
+    ["Provider distribution", `v${currentProvider} current · v${legacyProvider} Legacy`, ja ? "両方Registry公開済み。Form maturityとは独立。" : "Both are Registry-published; independent from Form maturity."],
     ["Current Host wire", currentHostWireApi, ja ? "versioned discoveryから到達するprovider v2 contract。" : "Provider-v2 contract reached through versioned discovery."],
     ["Legacy Host wire", legacyHostWireApi, ja ? "非versioned discoveryに凍結したprovider v1互換lane。" : "Frozen provider-v1 lane behind unversioned discovery."],
     ["Exact current FormRef", currentFormApi, ja ? "kind、0.1.0、schema digestと一体のidentity。" : "Identity joined with kind, 0.1.0, and schema digest."],
@@ -540,7 +540,7 @@ const outputs = new Map([
     path.join(publicRoot, "docs", "index.html"),
     page({
       title: "Documentation — Takoform",
-      description: "Choose between the unpublished Takoform v2 source candidate and published v1 Legacy recovery, then use the exact task-based references.",
+      description: "Choose between the published Takoform v2 current provider and published v1 Legacy recovery, then use the exact task-based references.",
       canonicalPath: "/docs/",
       bodyClass: "page-reference page-docs",
       english: docs("en"),

@@ -629,10 +629,10 @@ function checkPublishedProviderExamples(truth) {
     fail("docs/index.md: missing provider source example");
   }
   if (!docsBlocks.some((block) => hasExactProviderPin(block, truth.providerVersion))) {
-    fail(`docs/index.md: missing Legacy provider v${truth.providerVersion} pin`);
+    fail(`docs/index.md: missing current published provider v${truth.providerVersion} pin`);
   }
-  if (!docsBlocks.some((block) => hasExactProviderPin(block, truth.candidateProviderVersion))) {
-    fail(`docs/index.md: missing current source-candidate provider v${truth.candidateProviderVersion} pin`);
+  if (!docsBlocks.some((block) => hasExactProviderPin(block, truth.legacyProviderVersion))) {
+    fail(`docs/index.md: missing Legacy provider v${truth.legacyProviderVersion} pin`);
   }
   checkImmutableProviderTagDocs(docsSource, truth);
 
@@ -640,7 +640,7 @@ function checkPublishedProviderExamples(truth) {
     filePath.endsWith(".html"),
   );
   let sawPublished = false;
-  let sawCandidate = false;
+  let sawLegacy = false;
   for (const filePath of htmlFiles) {
     const source = read(filePath);
     const blocks = providerCodeBlocksFromHtml(source);
@@ -649,19 +649,19 @@ function checkPublishedProviderExamples(truth) {
     }
     for (const [index, block] of blocks.entries()) {
       const published = hasExactProviderPin(block, truth.providerVersion);
-      const candidate = hasExactProviderPin(block, truth.candidateProviderVersion);
+      const legacy = hasExactProviderPin(block, truth.legacyProviderVersion);
       sawPublished ||= published;
-      sawCandidate ||= candidate;
-      if (!published && !candidate) {
+      sawLegacy ||= legacy;
+      if (!published && !legacy) {
         fail(
           `${relative(filePath)}: provider example ${index + 1} must contain ` +
-            `a Legacy v${truth.providerVersion} or current candidate v${truth.candidateProviderVersion} exact pin`,
+            `a current v${truth.providerVersion} or Legacy v${truth.legacyProviderVersion} exact pin`,
         );
       }
     }
   }
-  if (!sawPublished || !sawCandidate) {
-    fail("website/public: provider examples must distinguish published Legacy v1 from current source-candidate v2");
+  if (!sawPublished || !sawLegacy) {
+    fail("website/public: provider examples must distinguish published current v2 from published Legacy v1");
   }
 }
 
@@ -692,7 +692,7 @@ function checkRetainedPublicationTruthCopy(truth) {
     const text = textByFile.get(filePath) ?? "";
     for (const [label, value] of [
       ["provider version", truth.providerVersion],
-      ["candidate provider version", truth.candidateProviderVersion],
+      ["Legacy provider version", truth.legacyProviderVersion],
       ["project status", "Experimental"],
       ["published identity classification", "Legacy"],
     ]) {

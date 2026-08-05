@@ -81,8 +81,8 @@ is not part of this system.
 
 - The Takoform wordmark, dark aka-red palette, fonts, navigation, footer, focus
   treatment, and status vocabulary.
-- The facts: project `Experimental`; provider `v1.0.3` is published and
-  Registry-verified; provider `v2.0.0` is an unpublished source candidate; 34
+- The facts: project `Experimental`; provider `v2.0.0` is the published,
+  Registry-verified current client; provider `v1.0.3` is published Legacy; 34
   pre-reset Form identities are immutable `Legacy`; no current central
   approval/admission subset exists; provider v1 retains the frozen Host wire
   `forms.takoform.com/v1alpha1`; provider v2 uses the current Host wire and
