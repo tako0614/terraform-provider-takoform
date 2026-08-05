@@ -94,11 +94,15 @@ must not block a site-only correction for an unrelated provider failure.
 
 Every normative schema `$id` in
 [`../release/public-schema-identities.json`](../release/public-schema-identities.json)
-is an immutable published identity.
-Immediately before deployment, the entrypoint fetches every existing URL and
-requires its served bytes to equal the candidate exactly. A changed body,
-redirect, non-200 response, transport error, or partially existing origin
-blocks publication; an existing `$id` is never repaired in place.
+is an immutable published identity. Immediately before every Cloudflare
+mutation, the entrypoint binds the current production version message to its
+ancestor source commit and retained identity ledger. Every identity from that
+deployed ledger must still serve the candidate bytes exactly. An identity that
+exists only in the new candidate may be minted from an exact HTTP 404. A
+changed body, missing deployed identity, redirect, any other HTTP response, or
+transport error blocks publication; an existing `$id` is never repaired in
+place. A release that mints a new identity must be repaired forward because
+the previous Worker version is no longer a schema-safe rollback target.
 
 If the schema origin has never been minted, its first deployment is allowed
 only when every schema URL fails specifically with DNS `ENOTFOUND` and the

@@ -62,6 +62,7 @@ import {
   parseDomainChangeset,
   parseUploadedVersionId,
   parseUploadedVersionResources,
+  parsePublishedVersionSourceCommit,
   parseWebsiteWranglerConfig,
   parseWorkerDomainClosure,
   parseWranglerOAuthToken,
@@ -120,12 +121,12 @@ const CONTRACT = {
       obligations: {
         provenance: `refuses a dirty or shallow worktree, rejects ignored and untracked publication files, requires main HEAD to equal a fresh read of the canonical HTTPS origin/main ref, creates both an isolated git-archive content snapshot and an independent non-local detached Git authority clone of that exact commit, and removes the clone's remote. The source-retained publication/admission authority gate runs only in the frozen clone; the static public-surface gate, credential scan, digest manifest, and Wrangler input run only in the archive. Both roots are hardened and re-hashed before and after validation and again before every writer. Every archive byte is also proved against its Git blob. Wrangler is installed from the exact committed lock and executed through the fixed absolute Node entrypoint, bypassing PATH and its environment shebang. \`bun run ${SITE.gate}\` remains the composite source gate, while the repository-wide \`bun run check\` remains separate handoff evidence because its other Go and OpenTofu checks do not validate these static bytes.`,
         "post-conditions": `requires the exact three-domain Cloudflare control-plane closure, queries every hostname independently, and reads back ${SITE.url}/, the www root, docs, spec, sitemap, static assets, the custom 404 body/status, and every normative schema $id with the exact committed digest`,
-        reversal: `the current version id is read and printed before publishing. A previous version may be restored with \`wrangler versions deploy <previous-id>@100%\` only after proving it still serves every already-minted schema $id byte-for-byte. The initial schema-origin mint has no schema-safe rollback to a version without those identities; repair it forward while preserving the minted bytes.`,
+        reversal: `the current version id is read and printed before publishing. A previous version may be restored with \`wrangler versions deploy <previous-id>@100%\` only after proving it still serves every already-minted schema $id byte-for-byte. An initial origin mint or append-only identity mint has no schema-safe rollback to a version without those identities; repair it forward while preserving the minted bytes.`,
         "failure-handling":
           "records previous, uploaded, and current deployment/version ids; a failed dormant upload never authorizes promotion. An indeterminate initial domain operation emits one id-bound forward-recovery command that uploads or deploys no version, verifies the current version message/static closure and candidate schema bytes through the apex, and either performs the safe absent-domain write or only repeats readback for an exact existing domain.",
-        "pre-mutation-proof": `requires explicit operator-private account and zone ids plus an exclusive-writer acknowledgement, rejects ambient Cloudflare/Wrangler/runtime overrides, binds the local OAuth profile to those ids, proves the active zone and authoritative delegation, reads the current ${SITE.worker} deployment and exact domain changeset, and accepts only all-exact existing schemas or an explicitly acknowledged wholly absent first mint. Every upload, version promotion, and domain write runs through a proof-then-whole-tree/source/deployment fence immediately before its writer.`,
+        "pre-mutation-proof": `requires explicit operator-private account and zone ids plus an exclusive-writer acknowledgement, rejects ambient Cloudflare/Wrangler/runtime overrides, binds the local OAuth profile to those ids, proves the active zone and authoritative delegation, binds the current ${SITE.worker} version message to an ancestor source commit and its retained schema ledger, and reads the exact domain changeset. Every upload, version promotion, and domain write reruns the schema proof and then the whole-tree/source/deployment fence immediately before its writer.`,
         "independent-review": "the TASK-0009 release-surface review independently checked the website, custom-domain, DNS, append-only schema identity, rollback, and live-readback boundary; the operator retains that review with the deploy result before the first origin mint",
-        "no-overwrite": `requires the candidate ${PUBLIC_SCHEMA_IDENTITY_LEDGER} to retain every identity and digest recorded by every reachable historical ledger revision, then immediately before any Cloudflare mutation fetches every retained schema $id with cache bypass and requires its served bytes to equal the candidate exactly. A removed historical identity, differing body, HTTP response other than 200, non-DNS transport failure, redirect, or partially existing origin blocks publication. Only when every URL fails specifically with ENOTFOUND may an operator mint the origin by passing ${INITIAL_SCHEMA_ORIGIN_MINT_ACK}; the acknowledgement is rejected once any URL exists and never bypasses a mismatch.`,
+        "no-overwrite": `requires the candidate ${PUBLIC_SCHEMA_IDENTITY_LEDGER} to retain every identity and digest recorded by every reachable historical ledger revision. Identities retained by the current deployed source ledger must already serve the exact candidate bytes. A candidate-only identity may be minted only from an exact HTTP 404; a differing body, missing deployed identity, other HTTP response, non-DNS transport failure, redirect, or ambiguous partial origin blocks publication. Only when every URL fails specifically with ENOTFOUND may an operator mint the origin by passing ${INITIAL_SCHEMA_ORIGIN_MINT_ACK}; the acknowledgement is rejected once any URL exists and never bypasses a mismatch.`,
       },
     },
     ...RELEASE_SURFACES,
@@ -483,6 +484,27 @@ const authorityGitRaw = (...args) =>
     },
   );
 const authorityGit = (...args) => authorityGitRaw(...args).trim();
+const ledgerObjectAt = (revision) => {
+  const listing = authorityGitRaw(
+    "ls-tree",
+    "-z",
+    "--full-tree",
+    revision,
+    "--",
+    PUBLIC_SCHEMA_IDENTITY_LEDGER,
+  );
+  if (listing === "") return null;
+  const match = new RegExp(
+    `^100644 blob ([0-9a-f]{40})\\t${PUBLIC_SCHEMA_IDENTITY_LEDGER.replaceAll(".", "\\.")}\\u0000$`,
+    "u",
+  ).exec(listing);
+  if (!match) {
+    throw new Error(
+      `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@${revision} is not one exact regular Git blob`,
+    );
+  }
+  return match[1];
+};
 const authorityGateHome = resolve(publicationRepo, "..", "authority-gate-home");
 const snapshotGateHome = resolve(publicationRepo, "..", "snapshot-gate-home");
 mkdirSync(authorityGateHome, { mode: 0o700 });
@@ -576,27 +598,6 @@ try {
 
 let schemaIdentities;
 try {
-  const ledgerObjectAt = (revision) => {
-    const listing = authorityGitRaw(
-      "ls-tree",
-      "-z",
-      "--full-tree",
-      revision,
-      "--",
-      PUBLIC_SCHEMA_IDENTITY_LEDGER,
-    );
-    if (listing === "") return null;
-    const match = new RegExp(
-      `^100644 blob ([0-9a-f]{40})\\t${PUBLIC_SCHEMA_IDENTITY_LEDGER.replaceAll(".", "\\.")}\\u0000$`,
-      "u",
-    ).exec(listing);
-    if (!match) {
-      throw new Error(
-        `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@${revision} is not one exact regular Git blob`,
-      );
-    }
-    return match[1];
-  };
   if (ledgerObjectAt(commit) === null) {
     throw new Error(
       `${PUBLIC_SCHEMA_IDENTITY_LEDGER} is absent from captured commit ${commit}`,
@@ -825,25 +826,81 @@ process.stdout.write(
   `previous deployment ${previous.deploymentId} version ${previous.versionId}\n`,
 );
 
+let deployedSchemaIdentities;
+let deployedSourceCommit;
+try {
+  const deployedVersion = parsePublishedVersionSourceCommit(
+    runWrangler(
+      [
+        "versions",
+        "view",
+        previous.versionId,
+        "--name",
+        SITE.worker,
+        "--config",
+        SITE.config,
+        "--json",
+      ],
+      { cwd: publicationRepo, environment: wranglerEnvironment },
+    ),
+    {
+      compatibilityDate: COMPATIBILITY_DATE,
+      versionId: previous.versionId,
+    },
+  );
+  deployedSourceCommit = deployedVersion.sourceCommit;
+  authorityGit("merge-base", "--is-ancestor", deployedSourceCommit, commit);
+  const deployedLedgerObject = ledgerObjectAt(deployedSourceCommit);
+  if (deployedLedgerObject === null) {
+    throw new Error(
+      `${PUBLIC_SCHEMA_IDENTITY_LEDGER} is absent from deployed source ${deployedSourceCommit}`,
+    );
+  }
+  deployedSchemaIdentities = parsePublicSchemaIdentityLedger(
+    authorityGitRaw("cat-file", "blob", deployedLedgerObject),
+    `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@deployed:${deployedSourceCommit}`,
+  );
+  enforceAppendOnlyPublicSchemaIdentities(schemaIdentities, [
+    {
+      identities: deployedSchemaIdentities,
+      label: `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@deployed:${deployedSourceCommit}`,
+    },
+  ]);
+} catch (error) {
+  die(
+    `cannot bind the current production version to its retained schema authority: ${error.message}`,
+  );
+}
+process.stdout.write(
+  `deployed source ${deployedSourceCommit} retains ${deployedSchemaIdentities.length} published schema identities\n`,
+);
+
 // published-identity / no-overwrite: compare production to the exact candidate
 // immediately before mutation. The only exception is a wholly DNS-absent
 // origin, and that first mint requires a narrowly named operator
 // acknowledgement. A mismatch can never be acknowledged away.
 let schemaPublicationPrecondition;
 let schemaPublicationObservations;
-try {
-  schemaPublicationObservations = await inspectSchemaPublicationIdentities(
+const readSchemaPublicationObservations = () =>
+  inspectSchemaPublicationIdentities(
     publicSchemas.map((schema) => ({
       candidateBytes: readFileSync(schema.publicPath),
       id: schema.id,
     })),
   );
-  schemaPublicationPrecondition = enforceSchemaPublicationNoOverwrite(
+const enforceCurrentSchemaPublicationPrecondition = (observations) =>
+  enforceSchemaPublicationNoOverwrite(observations, {
+    initialOriginMintAcknowledged: acknowledgedInitialSchemaOriginMint,
+    publishedIdentityIds: deployedSchemaIdentities.map(({ id }) => id),
+  });
+const inspectSchemaPublicationPrecondition = async () =>
+  enforceCurrentSchemaPublicationPrecondition(
+    await readSchemaPublicationObservations(),
+  );
+try {
+  schemaPublicationObservations = await readSchemaPublicationObservations();
+  schemaPublicationPrecondition = enforceCurrentSchemaPublicationPrecondition(
     schemaPublicationObservations,
-    {
-      initialOriginMintAcknowledged:
-        acknowledgedInitialSchemaOriginMint,
-    },
   );
 } catch (error) {
   const recoveryCanPoll =
@@ -868,7 +925,8 @@ try {
   };
 }
 process.stdout.write(
-  `schema identity precondition ${schemaPublicationPrecondition.mode} (${schemaPublicationPrecondition.count} exact identities)\n`,
+  `schema identity precondition ${schemaPublicationPrecondition.mode} (${schemaPublicationPrecondition.count} candidate identities` +
+    `${schemaPublicationPrecondition.newCount === undefined ? "" : `, ${schemaPublicationPrecondition.newCount} new`})\n`,
 );
 
 const domainOrigins = HOSTNAMES.map((hostname) => ({
@@ -1087,6 +1145,7 @@ if (recoveringInitialDomain) {
     await runFencedMutation({
       fence: () => assertSourceAndDeploymentFence(previous),
       remoteProof: async () => {
+        await inspectSchemaPublicationPrecondition();
         try {
           await readDomainPrecondition("INITIAL");
         } catch (initialError) {
@@ -1133,7 +1192,9 @@ process.stdout.write(
 try {
   const uploadOutput = await runFencedMutation({
     fence: () => assertSourceAndDeploymentFence(previous),
-    remoteProof: async () => {},
+    remoteProof: async () => {
+      await inspectSchemaPublicationPrecondition();
+    },
     writer: () =>
       runWrangler(
         [
@@ -1186,7 +1247,10 @@ try {
   process.stdout.write(
     await runFencedMutation({
       fence: () => assertSourceAndDeploymentFence(previous),
-      remoteProof: () => readDomainPrecondition(),
+      remoteProof: async () => {
+        await inspectSchemaPublicationPrecondition();
+        await readDomainPrecondition();
+      },
       writer: () =>
         runWrangler(
           [
@@ -1262,7 +1326,10 @@ if (initialDomainMint) {
     await proveCandidateSchemasOnApex();
     await runFencedMutation({
       fence: () => assertSourceAndDeploymentFence(currentDeployment),
-      remoteProof: () => readDomainPrecondition(),
+      remoteProof: async () => {
+        await inspectSchemaPublicationPrecondition();
+        await readDomainPrecondition();
+      },
       writer: () =>
         cloudflareRequest(
           cloudflareToken,

@@ -6,6 +6,7 @@ import {
   parseDomainChangeset,
   parseUploadedVersionId,
   parseUploadedVersionResources,
+  parsePublishedVersionSourceCommit,
   parseWebsiteWranglerConfig,
   parseWorkerDomainClosure,
   parseWranglerOAuthToken,
@@ -418,6 +419,24 @@ describe("staged Worker version", () => {
         versionId,
       }),
     ).toEqual({ versionId });
+    expect(
+      parsePublishedVersionSourceCommit(
+        JSON.stringify({
+          ...value,
+          annotations: {
+            ...value.annotations,
+            "workers/message": `takoform.com ${"a".repeat(40)}`,
+          },
+        }),
+        { compatibilityDate, versionId },
+      ),
+    ).toEqual({ sourceCommit: "a".repeat(40), versionId });
+    expect(() =>
+      parsePublishedVersionSourceCommit(JSON.stringify(value), {
+        compatibilityDate,
+        versionId,
+      }),
+    ).toThrow("one exact source commit");
     expect(() =>
       parseUploadedVersionResources(
         JSON.stringify({

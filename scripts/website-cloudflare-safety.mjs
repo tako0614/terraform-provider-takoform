@@ -449,16 +449,12 @@ export function parseUploadedVersionId(raw) {
   return matches[0][1];
 }
 
-export function parseUploadedVersionResources(
-  raw,
-  { compatibilityDate, expectedMessage, versionId },
-) {
+function parseStaticOnlyVersion(raw, { compatibilityDate, versionId }) {
   const version = parseJson(raw, "uploaded Worker version");
   const runtime = version.resources?.script_runtime;
   if (
     version.id !== versionId ||
     version.annotations?.["workers/triggered_by"] !== "version_upload" ||
-    version.annotations?.["workers/message"] !== expectedMessage ||
     runtime?.compatibility_date !== compatibilityDate ||
     runtime?.assets?.html_handling !== "auto-trailing-slash" ||
     runtime?.assets?.not_found_handling !== "404-page" ||
@@ -471,7 +467,42 @@ export function parseUploadedVersionResources(
       "uploaded Worker version does not have the exact static-only runtime closure",
     );
   }
+  return version;
+}
+
+export function parseUploadedVersionResources(
+  raw,
+  { compatibilityDate, expectedMessage, versionId },
+) {
+  const version = parseStaticOnlyVersion(raw, {
+    compatibilityDate,
+    versionId,
+  });
+  if (version.annotations?.["workers/message"] !== expectedMessage) {
+    throw new Error(
+      "uploaded Worker version does not have the exact static-only runtime closure",
+    );
+  }
   return { versionId };
+}
+
+export function parsePublishedVersionSourceCommit(
+  raw,
+  { compatibilityDate, versionId },
+) {
+  const version = parseStaticOnlyVersion(raw, {
+    compatibilityDate,
+    versionId,
+  });
+  const match = /^takoform\.com ([0-9a-f]{40})$/u.exec(
+    version.annotations?.["workers/message"] ?? "",
+  );
+  if (!match) {
+    throw new Error(
+      "published Worker version does not identify one exact source commit",
+    );
+  }
+  return { sourceCommit: match[1], versionId };
 }
 
 export function safeDomainWriteBody({
