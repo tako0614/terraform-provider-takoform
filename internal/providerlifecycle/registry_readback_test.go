@@ -45,7 +45,8 @@ func TestBuildRegistryReadbackAcceptsCurrentProviderEpoch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !readback.PublicationReady || readback.ProviderVersion != providerVersion || len(readback.Installs) != 2 || len(canonical) == 0 {
+	if !readback.PublicationReady || readback.ProviderVersion != providerVersion ||
+		readback.LifecycleMatrixPath != "provider-lifecycle-matrix.json" || len(readback.Installs) != 2 || len(canonical) == 0 {
 		t.Fatalf("unexpected current Registry readback: %#v", readback)
 	}
 }

@@ -90,7 +90,7 @@ func BuildRegistryReadback(root, matrixFile, providerReleaseCommit string) (Regi
 		Format: registryReadbackFormat, PublicationReady: true, ProviderAddress: CanonicalProviderAddress,
 		ProviderVersion: providerVersion, ProviderReleaseTag: "v" + providerVersion, ProviderReleaseCommit: providerReleaseCommit,
 		CandidateSetSHA256: matrix.CandidateSetSHA256, ProviderSchemaSHA256: matrix.ProviderSchemaSHA256,
-		LifecycleMatrixPath: "registry/provider-lifecycle-matrix.json", LifecycleMatrixDigest: formpackage.DigestBytes(matrixRaw),
+		LifecycleMatrixPath: "provider-lifecycle-matrix.json", LifecycleMatrixDigest: formpackage.DigestBytes(matrixRaw),
 		Installs: installs,
 	}
 	raw, err := json.Marshal(readback)
