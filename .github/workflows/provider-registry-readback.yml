@@ -96,7 +96,7 @@ jobs:
           mkdir "${output}"
           go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
             --opentofu tofu --terraform terraform > "${output}/provider-lifecycle-matrix.json"
-          go run ./cmd/admission-readback registry \
+          go run ./cmd/provider-registry-readback \
             --matrix "${output}/provider-lifecycle-matrix.json" \
             --provider-release-commit "${PROVIDER_RELEASE_COMMIT}" \
             --output "${output}/provider-readback.json"
