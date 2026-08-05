@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strings"
 )
 
 // Portable string grammars. Every pattern is RE2-safe so the same expression
@@ -36,7 +37,9 @@ const (
 	PatternCIDR                   = `^(?:` + patternIPv4Body + `/(?:[0-9]|[12][0-9]|3[0-2])|` + patternIPv6Body + `/(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))$`
 	PatternDNSRelativeName        = `^(?:@|(?:\*\.)?[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)$`
 	PatternOCIDigest              = `^[^@\s]+@sha256:[A-Fa-f0-9]{64}$`
+	PatternCanonicalOCIDigest     = `^[^@\s]+@sha256:[0-9a-f]{64}$`
 	PatternSHA256                 = `^(sha256:)?[A-Fa-f0-9]{64}$`
+	PatternCanonicalSHA256        = `^sha256:[0-9a-f]{64}$`
 	PatternMailbox                = `^[^@\s]+@[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
 	PatternMailboxLocalPart       = `^[A-Za-z0-9][A-Za-z0-9.!#$%&'*+/=?^_{|}~-]{0,63}$`
 	PatternHTTPSURL               = `^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\s?#]*)?(?:\?[^\s#]*)?(?:#[^\s]*)?$`
@@ -99,6 +102,8 @@ func (g Grammar) Pattern() (string, bool) {
 		return PatternDNSRelativeName, true
 	case GrammarOCIDigest:
 		return PatternOCIDigest, true
+	case GrammarCanonicalOCIDigest:
+		return PatternCanonicalOCIDigest, true
 	case GrammarMailbox:
 		return PatternMailbox, true
 	case GrammarMailboxLocalPart:
@@ -113,6 +118,8 @@ func (g Grammar) Pattern() (string, bool) {
 		return PatternRelativePath, true
 	case GrammarSHA256:
 		return PatternSHA256, true
+	case GrammarCanonicalSHA256:
+		return PatternCanonicalSHA256, true
 	default:
 		return "", false
 	}
@@ -143,6 +150,8 @@ func (g Grammar) Message(field string) string {
 		return field + " must be a relative DNS name or @"
 	case GrammarOCIDigest:
 		return field + " must be an OCI reference pinned by sha256 digest"
+	case GrammarCanonicalOCIDigest:
+		return field + " must be an OCI reference pinned by a lowercase sha256 digest"
 	case GrammarMailbox:
 		return field + " must be an email address"
 	case GrammarMailboxLocalPart:
@@ -157,6 +166,8 @@ func (g Grammar) Message(field string) string {
 		return field + " must be a non-escaping relative artifact path"
 	case GrammarSHA256:
 		return field + " must be a sha256 digest"
+	case GrammarCanonicalSHA256:
+		return field + " must be a canonical sha256:<64 lowercase hexadecimal characters> digest"
 	default:
 		return field + " is invalid"
 	}
@@ -174,7 +185,7 @@ func (k Kind) DesiredSchema() map[string]any {
 	defs := map[string]any{}
 
 	if k.Artifact {
-		for key, value := range artifactDefinitions() {
+		for key, value := range artifactDefinitions(k.ProposalID != "") {
 			defs[key] = value
 		}
 		properties["source"] = map[string]any{"$ref": "#/$defs/artifactSource"}
@@ -190,7 +201,11 @@ func (k Kind) DesiredSchema() map[string]any {
 		}
 	}
 	for _, field := range k.Fields {
-		properties[field.Wire] = field.jsonSchema()
+		fieldSchema := field.jsonSchema()
+		if k.ProposalID != "" {
+			fieldSchema["description"] = field.Doc
+		}
+		properties[field.Wire] = fieldSchema
 		if field.Required {
 			required = append(required, field.Wire)
 		}
@@ -201,6 +216,17 @@ func (k Kind) DesiredSchema() map[string]any {
 		"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
 		"additionalProperties": false, "required": required, "properties": properties,
 	}
+	if k.ProposalID != "" {
+		properties["name"].(map[string]any)["description"] = "Portable Resource name within this Form kind."
+		if k.Artifact {
+			properties["source"].(map[string]any)["description"] = "Credential-free, digest-bound immutable artifact source."
+		}
+		if k.Connections != ConnectionsAbsent {
+			properties["connections"].(map[string]any)["description"] = "Named references to other Resources and the portable permissions and projection required from each."
+		}
+		schema["title"] = k.Title + " desired state"
+		schema["description"] = k.Description
+	}
 	if len(defs) > 0 {
 		schema["$defs"] = defs
 	}
@@ -210,6 +236,21 @@ func (k Kind) DesiredSchema() map[string]any {
 			constraints = append(constraints, constraint.jsonSchema(properties, required))
 		}
 		schema["allOf"] = constraints
+	}
+	if len(k.CoRequiredFields) > 0 {
+		dependentRequired := map[string]any{}
+		for _, group := range k.CoRequiredFields {
+			for _, field := range group {
+				peers := make([]any, 0, len(group)-1)
+				for _, peer := range group {
+					if peer != field {
+						peers = append(peers, peer)
+					}
+				}
+				dependentRequired[field] = peers
+			}
+		}
+		schema["dependentRequired"] = dependentRequired
 	}
 	return schema
 }
@@ -512,6 +553,29 @@ func (k Kind) NegativeCases() ([]NegativeCase, error) {
 		}
 		cases = append(cases, NegativeCase{Name: constraint.Name, Desired: desired})
 	}
+	for groupIndex, group := range k.CoRequiredFields {
+		if len(group) < 2 {
+			return nil, fmt.Errorf("%s declares co-required field group %d with fewer than two fields", k.Kind, groupIndex)
+		}
+		known := make(map[string]string, len(k.Fields))
+		for _, field := range k.Fields {
+			known[field.Wire] = field.HCL
+		}
+		seen := make(map[string]struct{}, len(group))
+		for _, field := range group {
+			fixtureField, ok := known[field]
+			if !ok {
+				return nil, fmt.Errorf("%s co-required field group %d references unknown field %s", k.Kind, groupIndex, field)
+			}
+			if _, duplicate := seen[field]; duplicate {
+				return nil, fmt.Errorf("%s co-required field group %d repeats field %s", k.Kind, groupIndex, field)
+			}
+			seen[field] = struct{}{}
+			desired := cloneValue(k.CanonicalDesired()).(map[string]any)
+			delete(desired, field)
+			cases = append(cases, NegativeCase{Name: "co-required-missing-" + fixtureField, Desired: desired})
+		}
+	}
 	if len(cases) == 0 {
 		return nil, fmt.Errorf("%s declares no counter-example field", k.Kind)
 	}
@@ -683,7 +747,11 @@ func connectionDefinitions(kind Kind) map[string]any {
 	}
 }
 
-func artifactDefinitions() map[string]any {
+func artifactDefinitions(canonicalDigest bool) map[string]any {
+	digestPattern := PatternSHA256
+	if canonicalDigest {
+		digestPattern = PatternCanonicalSHA256
+	}
 	return map[string]any{
 		"artifactSource": map[string]any{
 			"type": "object", "additionalProperties": false,
@@ -694,7 +762,7 @@ func artifactDefinitions() map[string]any {
 				"artifactMediaType": map[string]any{"type": "string", "pattern": PatternMediaType},
 			},
 		},
-		"sha256": map[string]any{"type": "string", "pattern": `^(sha256:)?[A-Fa-f0-9]{64}$`},
+		"sha256": map[string]any{"type": "string", "pattern": digestPattern},
 	}
 }
 
@@ -789,6 +857,8 @@ func invalidStringValue(f Field) (any, bool) {
 		return "not/a/name", true
 	case GrammarOCIDigest:
 		return "registry.invalid/image:latest", true
+	case GrammarCanonicalOCIDigest:
+		return "registry.invalid/image@sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true
 	case GrammarMailbox:
 		return "no-at-sign", true
 	case GrammarMailboxLocalPart:
@@ -803,6 +873,8 @@ func invalidStringValue(f Field) (any, bool) {
 		return "../escape", true
 	case GrammarSHA256:
 		return "not-a-sha256", true
+	case GrammarCanonicalSHA256:
+		return "sha256:" + strings.Repeat("A", 64), true
 	default:
 		return nil, false
 	}

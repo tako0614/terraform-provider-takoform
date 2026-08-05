@@ -18,14 +18,20 @@ import (
 func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 	implementations := map[string]string{
 		"form-ref.schema.json":                           filepath.Join("..", "formpackage", "schemas", "form-ref.schema.json"),
+		"form-ref-v1alpha2.schema.json":                  filepath.Join("..", "formpackage", "schemas", "form-ref-v1alpha2.schema.json"),
 		"form-definition.schema.json":                    filepath.Join("..", "formpackage", "schemas", "form-definition.schema.json"),
+		"form-definition-v1alpha2.schema.json":           filepath.Join("..", "formpackage", "schemas", "form-definition-v1alpha2.schema.json"),
 		"package-index.schema.json":                      filepath.Join("..", "formpackage", "schemas", "package-index.schema.json"),
+		"package-index-v1alpha2.schema.json":             filepath.Join("..", "formpackage", "schemas", "package-index-v1alpha2.schema.json"),
+		"package-index-v1alpha3.schema.json":             filepath.Join("..", "formpackage", "schemas", "package-index-v1alpha3.schema.json"),
 		"form-package-revocation.schema.json":            filepath.Join("..", "formpackage", "schemas", "form-package-revocation.schema.json"),
 		"form-package-revocation-checkpoint.schema.json": filepath.Join("..", "formpackage", "schemas", "form-package-revocation-checkpoint.schema.json"),
 		"host-discovery.schema.json":                     filepath.Join("..", "schemas", "host-discovery.schema.json"),
 	}
 	normativeOnly := map[string]bool{
-		"host-api-wire.schema.json": true,
+		"host-api-wire.schema.json":           true,
+		"host-api-wire-v1alpha2.schema.json":  true,
+		"host-discovery-v1alpha2.schema.json": true,
 	}
 	entries, err := os.ReadDir("schemas")
 	if err != nil {

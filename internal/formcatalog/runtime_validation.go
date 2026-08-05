@@ -43,7 +43,19 @@ func validateRuntimeDocument(document, kind string, schemaValue, value map[strin
 	if value == nil {
 		return fmt.Errorf("%s document is missing", document)
 	}
-	key := document + ":" + kind
+	normalizedSchema, err := normalizeRuntimeJSON(schemaValue)
+	if err != nil {
+		return fmt.Errorf("normalize %s schema: %w", document, err)
+	}
+	schemaRaw, err := json.Marshal(normalizedSchema)
+	if err != nil {
+		return fmt.Errorf("encode normalized %s schema: %w", document, err)
+	}
+	schemaDigest, err := formpackage.DigestCanonicalJSON(schemaRaw)
+	if err != nil {
+		return fmt.Errorf("digest normalized %s schema: %w", document, err)
+	}
+	key := document + ":" + kind + ":" + schemaDigest
 	cached, ok := runtimeSchemaCache.Load(key)
 	if !ok {
 		compiled := compiledRuntimeSchema{}
@@ -51,10 +63,7 @@ func validateRuntimeDocument(document, kind string, schemaValue, value map[strin
 		compiler.DefaultDraft(jsonschema.Draft2020)
 		compiler.AssertFormat()
 		schemaID := "https://forms.takoform.invalid/runtime/" + document + "/" + kind + ".schema.json"
-		normalizedSchema, err := normalizeRuntimeJSON(schemaValue)
-		if err != nil {
-			compiled.err = fmt.Errorf("normalize %s schema: %w", document, err)
-		} else if err := compiler.AddResource(schemaID, normalizedSchema); err != nil {
+		if err := compiler.AddResource(schemaID, normalizedSchema); err != nil {
 			compiled.err = fmt.Errorf("register %s schema: %w", document, err)
 		} else {
 			compiled.schema, compiled.err = compiler.Compile(schemaID)

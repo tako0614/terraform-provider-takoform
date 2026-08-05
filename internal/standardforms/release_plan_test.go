@@ -65,7 +65,7 @@ func TestPlannedReleasesNeverCollideWithPublishedTags(t *testing.T) {
 	}
 }
 
-func TestRenderReleasePlanUsesOwnerLocalPrepareThenPublish(t *testing.T) {
+func TestRenderReleasePlanIsHistoricalAndNonActionableAfterReset(t *testing.T) {
 	t.Parallel()
 	plan := ReleasePlan{
 		Generation: "portable-v1",
@@ -78,25 +78,27 @@ func TestRenderReleasePlanUsesOwnerLocalPrepareThenPublish(t *testing.T) {
 			PackageDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		}},
 	}
-	const expected = `portable-v1: 1 Form releases, each independent
+	const expected = `portable-v1: 1 published Legacy Form release
+
+This is an immutable historical publication plan. Every listed tag is already
+published. Do not prepare, publish, move, delete, or reuse these tags.
 
 ObjectBucket                 forms/k-j5rguzldorbhky3lmv2a/v1.0.0
   source forms/releases/k-j5rguzldorbhky3lmv2a/1.0.0
   digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-  prepare bun run deploy -- takoform-form-package-release prepare --tag forms/k-j5rguzldorbhky3lmv2a/v1.0.0 --expected-commit <current-protected-main-commit>
 
-Run each prepare while its planned tag and Release are absent. After its
-reviewed candidate run completes, publish through the same owner entrypoint:
-  bun run deploy -- takoform-form-package-release publish --tag <same-planned-tag> --expected-commit <same-40-character-reviewed-commit> --run-id <candidate-run-id> --run-attempt <candidate-run-attempt>
-Publish verifies the candidate, then create-only materializes the tag and
-immutable Release. Publication proves bytes only; admission still requires
-a conforming host's signed lifecycle report.
+Publication proves these exact historical bytes. It grants no current Form
+maturity, Host Support, activation, placement, or commercial authority.
 `
 	rendered := renderReleasePlan(plan)
 	if rendered != expected {
 		t.Fatalf("release-plan owner flow drifted\n--- got ---\n%s--- want ---\n%s", rendered, expected)
 	}
 	for _, forbidden := range []string{
+		"bun run deploy",
+		"prepare --tag",
+		"publish --tag",
+		"admission still requires",
 		"workflow_dispatch",
 		"gh workflow",
 		"Dispatch the Release Form Package",

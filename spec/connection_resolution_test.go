@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
-	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 )
 
 type connectionResolutionContract struct {
@@ -38,7 +38,7 @@ func TestConnectionResolutionContractsPinSourceResourceSpace(t *testing.T) {
 		t,
 		"..",
 		"conformance",
-		"portable-host-v1",
+		"portable-host-v2",
 		"contract.json",
 	)
 	want := connectionResolutionContract{
@@ -71,20 +71,20 @@ func TestConnectionProbePinsARealRequiredConnectionForm(t *testing.T) {
 		t,
 		"..",
 		"conformance",
-		"portable-host-v1",
+		"portable-host-v2",
 		"contract.json",
 	)
 	probe := contract.RunnerInput.ConnectionProbe
 	if probe.SourceName == "" || probe.TargetKind == "" || probe.TargetName == "" {
 		t.Fatalf("Connection probe has incomplete identity: %#v", probe)
 	}
-	if probe.SourceIdentity.FormRef.Kind != "ObjectLifecycleRule" {
+	if probe.SourceIdentity.FormRef.Kind != "Schedule" {
 		t.Fatalf("Connection probe source Form = %#v", probe.SourceIdentity.FormRef)
 	}
 
-	inventory := readFile[packageInventory](t, "..", "forms", "standard-package-set.json")
+	inventory := readFile[currentCandidateInventory](t, "..", "forms", "candidates", "v1alpha2", "candidate-set.json")
 	var identityMatches bool
-	for _, entry := range inventory.Packages {
+	for _, entry := range inventory.Forms {
 		if entry.Kind != probe.SourceIdentity.FormRef.Kind {
 			continue
 		}
@@ -92,7 +92,7 @@ func TestConnectionProbePinsARealRequiredConnectionForm(t *testing.T) {
 			entry.PackageDigest == probe.SourceIdentity.PackageDigest
 	}
 	if !identityMatches {
-		t.Fatalf("Connection probe does not pin the current ObjectLifecycleRule package: %#v", probe.SourceIdentity)
+		t.Fatalf("portable-host v2 Connection probe does not pin the exact current Schedule package: %#v", probe.SourceIdentity)
 	}
 
 	if probe.Desired["name"] != probe.SourceName {
@@ -102,9 +102,9 @@ func TestConnectionProbePinsARealRequiredConnectionForm(t *testing.T) {
 	if !ok || len(connections) != 1 {
 		t.Fatalf("Connection probe desired connections = %#v", probe.Desired["connections"])
 	}
-	store, ok := connections["store"].(map[string]any)
+	store, ok := connections["invocation"].(map[string]any)
 	if !ok {
-		t.Fatalf("Connection probe store = %#v", connections["store"])
+		t.Fatalf("Connection probe invocation = %#v", connections["invocation"])
 	}
 	wantTarget := fmt.Sprintf("%s/%s", probe.TargetKind, probe.TargetName)
 	if store["resource"] != wantTarget {
@@ -114,7 +114,7 @@ func TestConnectionProbePinsARealRequiredConnectionForm(t *testing.T) {
 		t.Fatalf("Connection probe unexpectedly carries a Space selector: %#v", store)
 	}
 
-	kind, ok := formcatalog.ByKind(probe.SourceIdentity.FormRef.Kind)
+	kind, ok := currentformcatalog.ByKind(probe.SourceIdentity.FormRef.Kind)
 	if !ok {
 		t.Fatalf("Connection probe Form %q is not implemented by the provider", probe.SourceIdentity.FormRef.Kind)
 	}

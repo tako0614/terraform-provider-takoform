@@ -21,7 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
-	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 )
 
 func TestProviderSpaceAttributesUseTheDedicatedSpaceIDContract(t *testing.T) {
@@ -38,7 +38,7 @@ func TestProviderSpaceAttributesUseTheDedicatedSpaceIDContract(t *testing.T) {
 		t.Fatalf("provider space = %T", providerResponse.Schema.Attributes["space"])
 	}
 
-	kind, ok := formcatalog.ByKind("ObjectBucket")
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
 	if !ok {
 		t.Fatal("ObjectBucket Form is unavailable")
 	}
@@ -219,7 +219,7 @@ func TestResourceStatePreservesSpaceIDExactly(t *testing.T) {
 
 	const space = "Prod North"
 	ctx := context.Background()
-	declared, ok := formcatalog.ByKind("ObjectBucket")
+	declared, ok := currentformcatalog.ByKind("ObjectBucket")
 	if !ok {
 		t.Fatal("ObjectBucket Form is unavailable")
 	}

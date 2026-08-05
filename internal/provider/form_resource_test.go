@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
@@ -25,14 +26,14 @@ import (
 // host's desired state. If it does not, every field looks unset and the next
 // plan proposes to rewrite a resource that is already correct.
 func TestImportThenReadPopulatesEveryDeclaredField(t *testing.T) {
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		kind := kind
 		t.Run(kind.Kind, func(t *testing.T) {
 			desired := kind.CanonicalDesired()
 			form := providerCandidateForms()[kind.Kind]
 			var srv *httptest.Server
 			srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/.well-known/takoform" {
+				if r.URL.Path == "/.well-known/takoform/v1alpha2" {
 					writeProviderDiscovery(t, w, srv.URL)
 					return
 				}
@@ -131,21 +132,21 @@ func TestImportThenReadPopulatesEveryDeclaredField(t *testing.T) {
 // visible in state, so the next plan can show the drift instead of hiding it
 // behind the drift_status flag.
 func TestReadAdoptsOutOfBandChange(t *testing.T) {
-	kind, ok := formcatalog.ByKind("ObjectBucket")
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
 	if !ok {
 		t.Fatal("ObjectBucket is not declared")
 	}
 	form := providerCandidateForms()[kind.Kind]
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/.well-known/takoform" {
+		if r.URL.Path == "/.well-known/takoform/v1alpha2" {
 			writeProviderDiscovery(t, w, srv.URL)
 			return
 		}
 		res := client.Resource{
 			APIVersion: client.APIVersion, Kind: kind.Kind, Form: ptrForm(form),
 			Metadata: client.Metadata{Name: "assets", Space: "prod", ResourceVersion: "1"},
-			Spec:     map[string]any{"name": "assets", "storageClass": "archive"},
+			Spec:     map[string]any{"name": "assets", "versioning": false},
 			Status:   providerPortableStatus(kind.Kind, "assets", 1),
 		}
 		w.Header().Set("ETag", `"1"`)
@@ -166,11 +167,14 @@ func TestReadAdoptsOutOfBandChange(t *testing.T) {
 	state := tfsdk.State{Schema: schemaResponse.Schema, Raw: tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil)}
 	for name, value := range map[string]types.String{
 		"name": types.StringValue("assets"), "space": types.StringValue("prod"),
-		"storage_class": types.StringValue("standard"), "resource_version": types.StringValue("1"),
+		"resource_version": types.StringValue("1"),
 	} {
 		if diags := state.SetAttribute(ctx, path.Root(name), value); diags.HasError() {
 			t.Fatalf("seed %s: %v", name, diags)
 		}
+	}
+	if diags := state.SetAttribute(ctx, path.Root("versioning"), types.BoolValue(true)); diags.HasError() {
+		t.Fatalf("seed versioning: %v", diags)
 	}
 	if diags := setFormIdentityState(ctx, &state, form); diags.HasError() {
 		t.Fatalf("seed exact Form identity: %v", diags)
@@ -181,15 +185,15 @@ func TestReadAdoptsOutOfBandChange(t *testing.T) {
 	if readResponse.Diagnostics.HasError() {
 		t.Fatalf("read: %v", readResponse.Diagnostics)
 	}
-	var storageClass types.String
-	readResponse.State.GetAttribute(ctx, path.Root("storage_class"), &storageClass)
-	if storageClass.ValueString() != "archive" {
-		t.Fatalf("storage_class = %q, want the host-observed archive", storageClass.ValueString())
+	var versioning types.Bool
+	readResponse.State.GetAttribute(ctx, path.Root("versioning"), &versioning)
+	if versioning.ValueBool() {
+		t.Fatal("versioning remained true, want the host-observed false")
 	}
 }
 
 func TestSetStateRejectsInvalidPortableStatusBeforeAnyStateWrite(t *testing.T) {
-	kind, ok := formcatalog.ByKind("ObjectBucket")
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
 	if !ok {
 		t.Fatal("ObjectBucket is not declared")
 	}
@@ -222,7 +226,7 @@ func TestSetStateRejectsInvalidPortableStatusBeforeAnyStateWrite(t *testing.T) {
 }
 
 func TestSetStateRejectsHostDesiredSpecBeforeAnyStateWrite(t *testing.T) {
-	kind, ok := formcatalog.ByKind("ObjectBucket")
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
 	if !ok {
 		t.Fatal("ObjectBucket is not declared")
 	}
@@ -244,7 +248,7 @@ func TestSetStateRejectsHostDesiredSpecBeforeAnyStateWrite(t *testing.T) {
 		{
 			name: "valid but substituted value",
 			mutate: func(hostResource *client.Resource) {
-				hostResource.Spec["storageClass"] = "archive"
+				hostResource.Spec["versioning"] = false
 			},
 		},
 		{
@@ -283,7 +287,7 @@ func TestSetStateRejectsHostDesiredSpecBeforeAnyStateWrite(t *testing.T) {
 }
 
 func TestReadFailsClosedBeforeHostWhenStateHasNoExactFormIdentity(t *testing.T) {
-	kind, ok := formcatalog.ByKind("ObjectBucket")
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
 	if !ok {
 		t.Fatal("ObjectBucket is not declared")
 	}
@@ -291,7 +295,7 @@ func TestReadFailsClosedBeforeHostWhenStateHasNoExactFormIdentity(t *testing.T) 
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if r.URL.Path == "/.well-known/takoform" {
+		if r.URL.Path == "/.well-known/takoform/v1alpha2" {
 			writeProviderDiscovery(t, w, srv.URL)
 			return
 		}
@@ -308,11 +312,14 @@ func TestReadFailsClosedBeforeHostWhenStateHasNoExactFormIdentity(t *testing.T) 
 	state := tfsdk.State{Schema: schemaResponse.Schema, Raw: tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil)}
 	for name, value := range map[string]types.String{
 		"name": types.StringValue("legacy"), "space": types.StringValue("prod"),
-		"storage_class": types.StringValue("standard"), "resource_version": types.StringValue("7"),
+		"resource_version": types.StringValue("7"),
 	} {
 		if diags := state.SetAttribute(ctx, path.Root(name), value); diags.HasError() {
 			t.Fatalf("seed %s: %v", name, diags)
 		}
+	}
+	if diags := state.SetAttribute(ctx, path.Root("versioning"), types.BoolValue(true)); diags.HasError() {
+		t.Fatalf("seed versioning: %v", diags)
 	}
 
 	readResponse := frameworkresource.ReadResponse{State: state}
@@ -329,7 +336,7 @@ func TestReadFailsClosedBeforeHostWhenStateHasNoExactFormIdentity(t *testing.T) 
 }
 
 func TestReadFailsClosedBeforeHostWhenStateFormIdentityChanged(t *testing.T) {
-	kind, ok := formcatalog.ByKind("ObjectBucket")
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
 	if !ok {
 		t.Fatal("ObjectBucket is not declared")
 	}
@@ -337,7 +344,7 @@ func TestReadFailsClosedBeforeHostWhenStateFormIdentityChanged(t *testing.T) {
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if r.URL.Path == "/.well-known/takoform" {
+		if r.URL.Path == "/.well-known/takoform/v1alpha2" {
 			writeProviderDiscovery(t, w, srv.URL)
 			return
 		}
@@ -354,11 +361,14 @@ func TestReadFailsClosedBeforeHostWhenStateFormIdentityChanged(t *testing.T) {
 	state := tfsdk.State{Schema: schemaResponse.Schema, Raw: tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil)}
 	for name, value := range map[string]types.String{
 		"name": types.StringValue("changed"), "space": types.StringValue("prod"),
-		"storage_class": types.StringValue("standard"), "resource_version": types.StringValue("7"),
+		"resource_version": types.StringValue("7"),
 	} {
 		if diags := state.SetAttribute(ctx, path.Root(name), value); diags.HasError() {
 			t.Fatalf("seed %s: %v", name, diags)
 		}
+	}
+	if diags := state.SetAttribute(ctx, path.Root("versioning"), types.BoolValue(true)); diags.HasError() {
+		t.Fatalf("seed versioning: %v", diags)
 	}
 	previous := providerCandidateForms()[kind.Kind]
 	previous.FormRef.SchemaDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

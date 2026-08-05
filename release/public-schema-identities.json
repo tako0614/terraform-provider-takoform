@@ -42,6 +42,42 @@
       "sha256": "sha256:fd005571d10722d17155334fe88a1e4a64cd875beeb824efde3a0920c33aeaea",
       "source": "spec/schemas/package-index.schema.json",
       "public": "website/public/schemas/v1alpha1/package-index.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha2/form-definition.schema.json",
+      "sha256": "sha256:2a9701fd3dd454d3b2ece1c2fc9b6976abf86d07275319b8cbda4f069da481d3",
+      "source": "spec/schemas/form-definition-v1alpha2.schema.json",
+      "public": "website/public/schemas/v1alpha2/form-definition.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha2/form-ref.schema.json",
+      "sha256": "sha256:836961a2fdb3e0cf5de3c3576289a8e8ca8d176053d5bb3da7fe2d9b33476f9f",
+      "source": "spec/schemas/form-ref-v1alpha2.schema.json",
+      "public": "website/public/schemas/v1alpha2/form-ref.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha2/host-api-wire.schema.json",
+      "sha256": "sha256:c80565d59508b5d0d6516f60138cf977bcdecc206f375f083563c4c4265f9b36",
+      "source": "spec/schemas/host-api-wire-v1alpha2.schema.json",
+      "public": "website/public/schemas/v1alpha2/host-api-wire.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha2/host-discovery.schema.json",
+      "sha256": "sha256:f17da294850f1df0b7f6307353ebc50dfeaf13cd7bb74b37cbf6c5172aa248a3",
+      "source": "spec/schemas/host-discovery-v1alpha2.schema.json",
+      "public": "website/public/schemas/v1alpha2/host-discovery.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha2/package-index.schema.json",
+      "sha256": "sha256:6f819c6f04f3ea9daab8460bc43c7307f6994052cffe39a3cc0ac8372d38c9e1",
+      "source": "spec/schemas/package-index-v1alpha2.schema.json",
+      "public": "website/public/schemas/v1alpha2/package-index.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha3/package-index.schema.json",
+      "sha256": "sha256:04c85b0b7c48f489d0ac21615420a77f39f74c48831d848b2f9840211d73b5ed",
+      "source": "spec/schemas/package-index-v1alpha3.schema.json",
+      "public": "website/public/schemas/v1alpha3/package-index.schema.json"
     }
   ]
 }

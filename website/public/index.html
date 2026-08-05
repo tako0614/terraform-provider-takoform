@@ -1,851 +1,285 @@
 <!doctype html>
 <html lang="en" data-lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Takoform — Vendor-neutral resources for Terraform &amp; OpenTofu</title>
-<meta name="description" content="Takoform provides a Registry-verified Terraform/OpenTofu provider and 34 immutable Service Form Packages. Exactly 10 are admitted portable-standard; the API remains v1alpha1.">
-<meta property="og:title" content="Takoform — Vendor-neutral resources for Terraform &amp; OpenTofu">
-<meta property="og:description" content="A host-neutral desired-state contract with provider v1.0.2, 34 published Form Packages, and 10 admitted portable-standard Forms.">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Takoform">
-<meta property="og:url" content="https://takoform.com/">
-<meta property="og:image" content="https://takoform.com/tako.png">
-<meta name="twitter:card" content="summary">
-<meta property="og:locale" content="en_US">
-<meta property="og:locale:alternate" content="ja_JP">
-<link rel="canonical" href="https://takoform.com/">
-<link rel="icon" type="image/png" href="/tako.png">
-<link rel="apple-touch-icon" href="/tako.png">
-<link rel="stylesheet" href="/styles.css">
-<script>
-(function () {
-  var TITLES = {
-    en: "Takoform — Vendor-neutral resources for Terraform & OpenTofu",
-    ja: "Takoform — ベンダー名を書かない Terraform / OpenTofu リソース"
-  };
-  var DESCRIPTIONS = {
-    en: "Takoform provides a Registry-verified Terraform/OpenTofu provider and 34 immutable Service Form Packages. Exactly 10 are admitted portable-standard; the API remains v1alpha1.",
-    ja: "Takoform は Registry 検証済みの Terraform/OpenTofu プロバイダと、公開済みの immutable な Service Form Package 34 件を提供します。そのうち正確な 10 件が portable-standard として admission 済みで、API は v1alpha1 のままです。"
-  };
-  function apply(lang) {
-    document.documentElement.setAttribute("data-lang", lang);
-    document.documentElement.lang = lang;
-    document.title = TITLES[lang];
-    var desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute("content", DESCRIPTIONS[lang]);
-  }
-  window.setLang = function (lang) {
-    try { localStorage.setItem("takoform-lang", lang); } catch (e) {}
-    apply(lang);
-  };
-  var saved = null;
-  try { saved = localStorage.getItem("takoform-lang"); } catch (e) {}
-  var lang = saved === "ja" || saved === "en"
-    ? saved
-    : ((navigator.language || "").toLowerCase().indexOf("ja") === 0 ? "ja" : "en");
-  apply(lang);
-})();
-</script>
-<noscript><style>.lang-switch, .footer-lang { display: none; }</style></noscript>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Takoform — portable contracts with explicit limits</title>
+  <meta name="description" content="Takoform is an Experimental resource-contract project with nine current v1alpha2 candidates and an explicit Legacy recovery lane.">
+  <meta name="theme-color" content="#0e0a0a">
+  <link rel="canonical" href="https://takoform.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Takoform — portable contracts with explicit limits">
+  <meta property="og:description" content="Takoform is an Experimental resource-contract project with nine current v1alpha2 candidates and an explicit Legacy recovery lane.">
+  <meta property="og:url" content="https://takoform.com/">
+  <link rel="icon" href="/tako.png">
+  <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
+<body class="page-overview">
+  <div class="l10n" lang="en">
+    <header class="site-header">
+      <nav class="container nav" aria-label="Primary">
+        <a class="brand" href="/" aria-label="Takoform home">Takoform</a>
+        <div class="nav-links">
+          <a aria-current="page" href="/">Overview</a>
+          <a href="/docs/">Docs</a>
+          <a href="/spec/">Spec</a>
+          <button class="lang-switch" type="button" data-set-lang="ja" aria-label="日本語">日本語</button>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <section class="hero">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <p class="project-line">Experimental · forms.takoform.com/v1alpha2</p>
+            <h1>Define the boundary before the promise.</h1>
+            <p class="lede">Takoform grows small, host-neutral desired-state contracts. Takosumi Cloud implementations provide design feedback; they do not declare standardization or live availability.</p>
+            <div class="cta-row">
+              <a class="btn btn-primary" href="/docs/">Choose a usage lane</a>
+              <a class="text-link" href="/spec/">Inspect the contract</a>
+            </div>
+          </div>
+          <dl class="status-ledger" aria-label="Current status">
+            <div><dt>Current Forms</dt><dd>9 × 0.1.0 source candidates</dd></div>
+            <div><dt>Provider</dt><dd>v2.0.0 unpublished candidate</dd></div>
+            <div><dt>Legacy</dt><dd>v1.0.3 published</dd></div>
+            <div><dt>Cloud</dt><dd>repository implementations · live service is host evidence</dd></div>
+          </dl>
+        </div>
+      </section>
 
-<!-- ==================== English ==================== -->
-<div class="l10n" lang="en">
+      <section class="section section-current">
+        <div class="container section-head">
+		  <h2>Nine candidates. One honest baseline.</h2>
+		  <p>All nine definitions are Proposal-derived, unpublished 0.1.0 candidates. Each needs an explicit lifecycle transition before it can become Experimental. Previous admission and popularity grant no rank; implementation, prior art, and consumer evidence drive each Form independently. VerifiedDomain and AIGateway are Cloud services, not Forms.</p>
+        </div>
+        <div class="container resource-grid">
+        <article class="resource">
+          <code>takoform_edge_worker</code>
+          <span>Portable request/event application executed from digest-bound artifact bytes near an ingress boundary.</span>
+        </article>
+        <article class="resource">
+          <code>takoform_relational_database</code>
+          <span>Portable relational database identified by an open engine capability token.</span>
+        </article>
+        <article class="resource">
+          <code>takoform_object_bucket</code>
+          <span>Portable object storage namespace.</span>
+        </article>
+        <article class="resource">
+          <code>takoform_key_value_store</code>
+          <span>Portable key/value state with declared consistency and expiry semantics.</span>
+        </article>
+        <article class="resource">
+          <code>takoform_queue</code>
+          <span>Portable asynchronous at-least-once message delivery.</span>
+        </article>
+        <article class="resource">
+          <code>takoform_schedule</code>
+          <span>Portable cron lifecycle that invokes exactly one connected Resource.</span>
+        </article>
+        <article class="resource">
+          <code>takoform_container_service</code>
+          <span>Portable service executed from an immutable OCI image digest.</span>
+        </article>
+        <article class="resource">
+          <code>takoform_stateful_entity</code>
+          <span>Portable namespace of addressable persistent entities implemented by digest-bound application bytes.</span>
+        </article>
+        <article class="resource">
+          <code>takoform_vector_index</code>
+          <span>Portable vector index with dimensions fixed for the index lifecycle.</span>
+        </article></div>
+      </section>
 
-<header class="site-header">
-  <nav class="container nav">
-    <a class="brand" href="/">
-      <span class="brand-name">Takoform</span>
-    </a>
-    <div class="nav-links">
-      <a href="#why">Why</a>
-      <a href="#how">How it works</a>
-      <a href="#resources">Resources</a>
-      <a href="/docs/">Docs</a>
-      <a href="/spec/">Spec</a>
-      <a href="#status">Status</a>
-      <a class="btn btn-ghost" href="https://github.com/tako0614/terraform-provider-takoform">GitHub</a>
-      <button type="button" class="lang-switch" lang="ja" onclick="setLang('ja')">日本語</button>
-    </div>
-  </nav>
-</header>
+      <section class="section section-contract">
+        <div class="container">
+          <h2>A version is not one number.</h2>
+          <div class="identity-stack">
+            <div><span>Current Host wire</span><code>forms.takoform.com/v1alpha2</code><p>The provider-v2 wire contract reached through versioned discovery.</p></div>
+            <div><span>Legacy Host wire</span><code>forms.takoform.com/v1alpha1</code><p>The frozen provider-v1 lane behind unversioned discovery.</p></div>
+            <div><span>Current FormRef</span><code>forms.takoform.com/v1alpha2</code><p>The nested exact identity; it cannot collide with Legacy.</p></div>
+            <div><span>Current package</span><code>packages.forms.takoform.com/v1alpha3</code><p>The data-only envelope carrying the current FormRef.</p></div>
+            <div><span>Provider</span><code>v2.0.0 source candidate</code><p>Independent from Form maturity and Cloud availability.</p></div>
+          </div>
+        </div>
+      </section>
 
-<main>
+      <section class="section section-paths">
+        <div class="container">
+          <h2>Choose by the job you have now.</h2>
+          <div class="path-list">
+            <article><a href="/docs/#current-source">Evaluate the current line</a><span>Source build and dev override only; not a Registry install.</span></article>
+            <article><a href="/docs/#legacy">Maintain existing state</a><span>Pin published provider v1.0.3.</span></article>
+            <article><a href="/docs/#migration">Move from v1</a><span>Create or import explicitly; never rewrite state.</span></article>
+          </div>
 
-<section class="hero">
-  <div class="container hero-grid">
-    <div class="hero-copy">
-      <p class="eyebrow"><span class="dot"></span> provider v1.0.2 · Registry verified</p>
-      <h1>Take the vendor out of your Terraform code.</h1>
-      <p class="lede">
-        Takoform is an open-source specification and a Terraform/OpenTofu provider.
-        You describe what you need — a bucket, a queue, a database — and a
-        conforming host can select and operate a backend for that exact portable
-        contract. Support, replacement, and migration still depend on the host
-        and an explicit operator plan.
+      <p class="truth-note">
+        Takoform is an <strong>Experimental specification project</strong>. Current FormRefs use
+        <code>forms.takoform.com/v1alpha2</code> and current package envelopes use
+        <code>packages.forms.takoform.com/v1alpha3</code>. Provider <code>v2.0.0</code> is an unpublished
+        source candidate. Published provider <code>v1.0.3</code> and the
+        34 published Form Package identities from
+        <code>forms.takoform.com/v1alpha1</code> are immutable <strong>Legacy</strong> evidence. There is no
+        current central approval or admission.
       </p>
-      <div class="cta-row">
-        <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform">View on GitHub</a>
-        <a class="btn btn-ghost" href="/docs/">Read the documentation</a>
-        <a class="btn btn-ghost" href="/spec/">Read the specification</a>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <span class="footer-brand">Takoform</span>
+        <span>Experimental portable resource contracts</span>
+        <a href="https://github.com/tako0614/terraform-provider-takoform">GitHub</a>
       </div>
-      <ul class="badges">
-        <li>MIT license</li>
-        <li>34 published immutable Form Packages</li>
-        <li>Exactly 10 admitted <code>portable-standard</code></li>
-        <li>One read-only <code>data "takoform_interface"</code> projection</li>
-        <li>Definitions are data, not code</li>
-      </ul>
-    </div>
-    <div class="hero-code">
-      <figure class="code-card">
-        <figcaption><span class="traffic"></span>main.tf</figcaption>
-<pre><code><span class="k">terraform</span> {
-  <span class="k">required_providers</span> {
-    takoform = {
-      <span class="a">source</span>  = <span class="s">"registry.terraform.io/tako0614/takoform"</span>
-      <span class="a">version</span> = <span class="s">"= 1.0.3"</span>
-    }
-  }
-}
+    </footer></div>
+  <div class="l10n" lang="ja" hidden>
+    <header class="site-header">
+      <nav class="container nav" aria-label="主要">
+        <a class="brand" href="/" aria-label="Takoform home">Takoform</a>
+        <div class="nav-links">
+          <a aria-current="page" href="/">概要</a>
+          <a href="/docs/">Docs</a>
+          <a href="/spec/">Spec</a>
+          <button class="lang-switch" type="button" data-set-lang="en" aria-label="English">English</button>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <section class="hero">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <p class="project-line">Experimental · forms.takoform.com/v1alpha2</p>
+            <h1>約束より先に、境界を定義する。</h1>
+            <p class="lede">Takoformは、host-neutralなdesired-state contractを小さく育てる仕様とtoolingです。Takosumi Cloudの実装は設計feedbackであり、標準化やlive availabilityの宣言ではありません。</p>
+            <div class="cta-row">
+              <a class="btn btn-primary" href="/docs/">利用経路を選ぶ</a>
+              <a class="text-link" href="/spec/">仕様境界を確認</a>
+            </div>
+          </div>
+          <dl class="status-ledger" aria-label="現在の状態">
+            <div><dt>現行Form</dt><dd>9 × 0.1.0 source candidates</dd></div>
+            <div><dt>Provider</dt><dd>v2.0.0 未公開候補</dd></div>
+            <div><dt>Legacy</dt><dd>v1.0.3 公開済み</dd></div>
+            <div><dt>Cloud</dt><dd>repo実装あり · live提供はhostの事実</dd></div>
+          </dl>
+        </div>
+      </section>
 
-<span class="c"># Published on the canonical Registry; keep the exact pin.</span>
-<span class="k">provider</span> <span class="s">"takoform"</span> {
-  <span class="a">endpoint</span> = <span class="s">"https://forms.example.com"</span>
-  <span class="a">space</span>    = <span class="s">"prod"</span>
-}
+      <section class="section section-current">
+        <div class="container section-head">
+		  <h2>9候補を、平等な出発点にする。</h2>
+		  <p>9種類はすべてProposalから生成した未公開の0.1.0候補で、明示的なlifecycle transitionを経るまでExperimentalではありません。過去のadmissionや人気度で格付けせず、実装・prior art・consumer evidenceから個別に育てます。VerifiedDomainとAIGatewayはCloud serviceでありFormではありません。</p>
+        </div>
+        <div class="container resource-grid">
+        <article class="resource">
+          <code>takoform_edge_worker</code>
+          <span>edge request と event の runtime</span>
+        </article>
+        <article class="resource">
+          <code>takoform_relational_database</code>
+          <span>relational data service</span>
+        </article>
+        <article class="resource">
+          <code>takoform_object_bucket</code>
+          <span>object storage</span>
+        </article>
+        <article class="resource">
+          <code>takoform_key_value_store</code>
+          <span>key/value state</span>
+        </article>
+        <article class="resource">
+          <code>takoform_queue</code>
+          <span>非同期message delivery</span>
+        </article>
+        <article class="resource">
+          <code>takoform_schedule</code>
+          <span>接続先Resourceを1件invokeするcron lifecycle</span>
+        </article>
+        <article class="resource">
+          <code>takoform_container_service</code>
+          <span>digest固定container service</span>
+        </article>
+        <article class="resource">
+          <code>takoform_stateful_entity</code>
+          <span>addressable persistent entity</span>
+        </article>
+        <article class="resource">
+          <code>takoform_vector_index</code>
+          <span>vector similarity index</span>
+        </article></div>
+      </section>
 
-<span class="k">resource</span> <span class="s">"takoform_object_bucket"</span> <span class="s">"assets"</span> {
-  <span class="a">name</span>             = <span class="s">"assets"</span>
-  <span class="a">storage_class</span>    = <span class="s">"standard"</span>
-  <span class="a">versioning</span>       = <span class="s">true</span>
-  <span class="a">access_protocols</span> = [<span class="s">"s3_api"</span>]
-}</code></pre>
-      </figure>
-    </div>
-  </div>
-</section>
+      <section class="section section-contract">
+        <div class="container">
+          <h2>versionは一つの数字ではない。</h2>
+          <div class="identity-stack">
+            <div><span>現行Host wire</span><code>forms.takoform.com/v1alpha2</code><p>versioned discoveryから到達するprovider v2のwire contract。</p></div>
+            <div><span>Legacy Host wire</span><code>forms.takoform.com/v1alpha1</code><p>非versioned discoveryに凍結したprovider v1互換lane。</p></div>
+            <div><span>Current FormRef</span><code>forms.takoform.com/v1alpha2</code><p>nested exact identity。Legacyと衝突しません。</p></div>
+            <div><span>Current package</span><code>packages.forms.takoform.com/v1alpha3</code><p>現行FormRefを運ぶdata-only envelope。</p></div>
+            <div><span>Provider</span><code>v2.0.0 source candidate</code><p>Form maturityやCloud availabilityとは独立。</p></div>
+          </div>
+        </div>
+      </section>
 
-<section id="why" class="section">
-  <div class="container">
-    <h2>Why</h2>
-    <p class="section-lede">
-      Terraform code usually names a vendor. Writing <code>aws_s3_bucket</code>
-      ties the module and its state to AWS, and moving to another cloud means
-      rewriting. Takoform resources name only what you need, so the choice of
-      backend stays on the host side. Portability is a contract boundary, not
-      proof that every host supports every Form or can migrate an existing resource.
-    </p>
-    <div class="compare">
-      <div class="compare-row bad">
-        <code>aws_s3_bucket</code>
-        <span>Works on AWS only. Moving elsewhere means rewriting the module and migrating state by hand.</span>
+      <section class="section section-paths">
+        <div class="container">
+          <h2>今やることから選ぶ。</h2>
+          <div class="path-list">
+            <article><a href="/docs/#current-source">現行仕様を評価する</a><span>source buildとdev overrideだけ。Registry installはまだ不可。</span></article>
+            <article><a href="/docs/#legacy">既存stateを保守する</a><span>公開済みprovider v1.0.3を固定。</span></article>
+            <article><a href="/docs/#migration">v1から移行する</a><span>stateを書き換えず、明示的にcreate/importする。</span></article>
+          </div>
+
+      <p class="truth-note">
+        Takoformは<strong>Experimental specification project</strong>です。現行FormRefは
+        <code>forms.takoform.com/v1alpha2</code>、現行Package envelopeは
+        <code>packages.forms.takoform.com/v1alpha3</code>です。provider <code>v2.0.0</code>は
+        未公開source candidateです。公開済みprovider <code>v1.0.3</code>と
+        <code>forms.takoform.com/v1alpha1</code>の34件の公開済みForm Package identityは
+        immutableな<strong>Legacy</strong>証跡です。現在の中央承認・admissionはありません。
+      </p>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <span class="footer-brand">Takoform</span>
+        <span>Experimentalなportable resource contract</span>
+        <a href="https://github.com/tako0614/terraform-provider-takoform">GitHub</a>
       </div>
-      <div class="compare-row good">
-        <code>takoform_object_bucket</code>
-        <span>Uses one portable Form contract. A host must prove support for the exact Form, and any migration remains explicit operator work.</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="how" class="section alt">
-  <div class="container">
-    <h2>How it works</h2>
-    <p class="section-lede">
-      The provider delivers typed desired state to a host and observes the result.
-      A conforming host implements the Takoform API, validates the exact Form
-      identity, and owns creating, changing, and deleting the backend. The
-      selected-ten admission retains a signed Takosumi host report; every other
-      host must still prove its own exact support.
-    </p>
-    <div class="cards three">
-      <article class="card">
-        <span class="step">01</span>
-        <h3>Write</h3>
-        <p>
-          Describe what you need with typed <code>takoform_*</code> resources.
-          The resource type does not name a backend vendor.
-        </p>
-      </article>
-      <article class="card">
-        <span class="step">02</span>
-        <h3>Apply</h3>
-        <p>
-          On apply, the provider sends the configuration to the host over HTTP.
-          Nothing is changed during plan.
-        </p>
-      </article>
-      <article class="card">
-        <span class="step">03</span>
-        <h3>The host runs it</h3>
-        <p>
-          The host chooses the backend, holds the credentials, and makes the
-          changes. The provider synthesizes the portable <code>Kind/name</code>
-          ID itself and writes drift, portability, and public outputs only
-          after both host documents satisfy the exact closed Form schemas.
-          An undeclared key, backend target, or credential rejects the whole
-          state projection.
-        </p>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section id="resources" class="section">
-  <div class="container">
-    <h2>The published Form resources</h2>
-    <p class="section-lede">
-      All 34 portable Form Packages across compute, data, analytics, networking,
-      and operations are published and immutable. Exactly 10 are admitted as
-      <code>portable-standard</code> under
-      <code>forms/admissions/v1.0.7</code>; the other 24 are published but not
-      admitted. Each describes what you want, never who runs it.
-    </p>
-      <h3 class="resource-domain">Compute and application</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_edge_worker</code><span>Edge/event-driven application served from a prebuilt immutable artifact</span></div>
-        <div class="resource"><code>takoform_container_service</code><span>OCI container service pinned to an immutable image digest</span></div>
-        <div class="resource"><code>takoform_compute_instance</code><span>Long-running machine instance built from digest-bound boot-image bytes</span></div>
-        <div class="resource"><code>takoform_static_site</code><span>Static asset site served from a prebuilt immutable artifact</span></div>
-        <div class="resource"><code>takoform_workflow</code><span>Durable workflow definition and instance-state lifecycle</span></div>
-        <div class="resource"><code>takoform_stateful_entity</code><span>Namespace of addressable persistent entities implemented by digest-bound application bytes</span></div>
-        <div class="resource"><code>takoform_schedule</code><span>Cron lifecycle that invokes exactly one connected Resource</span></div>
-      </div>
-      <h3 class="resource-domain">Data and storage</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_object_bucket</code><span>Object storage with a portable default storage class</span></div>
-        <div class="resource"><code>takoform_object_lifecycle_rule</code><span>One expiration or storage-transition action applied to a connected object store</span></div>
-        <div class="resource"><code>takoform_key_value_store</code><span>Key/value state with an optional consistency preference</span></div>
-        <div class="resource"><code>takoform_cache_cluster</code><span>In-memory cache sized by an open capability token</span></div>
-        <div class="resource"><code>takoform_relational_database</code><span>Relational database addressed through an open engine capability token</span></div>
-        <div class="resource"><code>takoform_indexed_store</code><span>Bounded key/value item store with declared queryable attributes and no query language</span></div>
-        <div class="resource"><code>takoform_queue</code><span>Asynchronous delivery with at-least-once semantics</span></div>
-        <div class="resource"><code>takoform_stream_topic</code><span>Published event stream that many independent consumers can read</span></div>
-        <div class="resource"><code>takoform_search_index</code><span>Full-text index over a declared set of document fields</span></div>
-        <div class="resource"><code>takoform_vector_index</code><span>Vector index with dimensions fixed for the index lifecycle</span></div>
-      </div>
-      <h3 class="resource-domain">Analytics and inference</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_analytics_dataset</code><span>Append-oriented dataset queried for analysis rather than transactions</span></div>
-        <div class="resource"><code>takoform_model_endpoint</code><span>Inference endpoint serving digest-bound model bytes for one declared task</span></div>
-      </div>
-      <h3 class="resource-domain">Network and delivery</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_dns_zone</code><span>Authoritative DNS zone for one domain</span></div>
-        <div class="resource"><code>takoform_dns_record</code><span>DNS record published into one connected zone</span></div>
-        <div class="resource"><code>takoform_tls_certificate</code><span>Managed TLS certificate for a fixed set of domains. Key material stays with the host</span></div>
-        <div class="resource"><code>takoform_http_route</code><span>Hostname and path binding that sends HTTP traffic to one connected Resource</span></div>
-        <div class="resource"><code>takoform_load_balancer</code><span>Listener that distributes connections across connected backends</span></div>
-        <div class="resource"><code>takoform_private_network</code><span>Private address space that other Resources can attach to</span></div>
-      </div>
-      <h3 class="resource-domain">Operations and integration</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_container_registry</code><span>OCI artifact registry namespace</span></div>
-        <div class="resource"><code>takoform_log_sink</code><span>Destination that retains structured application logs</span></div>
-        <div class="resource"><code>takoform_metric_sink</code><span>Destination that retains numeric time series</span></div>
-        <div class="resource"><code>takoform_email_sender</code><span>Outbound mail identity for one verified domain</span></div>
-        <div class="resource"><code>takoform_webhook_endpoint</code><span>Inbound HTTP endpoint that forwards received requests to one connected Resource</span></div>
-        <div class="resource"><code>takoform_identity_client</code><span>OIDC relying-party registration. Issued client material stays with the host</span></div>
-        <div class="resource"><code>takoform_feature_flag</code><span>Named runtime switch expressed as one complete enabled percentage</span></div>
-        <div class="resource"><code>takoform_rate_limit_policy</code><span>Request budget applied to one connected Resource</span></div>
-        <div class="resource"><code>takoform_backup_policy</code><span>Scheduled copy and retention rule for one connected Resource</span></div>
-      </div>
-    <div class="grow-card">
-      <div class="grow-copy">
-        <h3>More are coming</h3>
-        <p>
-          This published set is a starting point, not the limit. The specification
-          can define additional service kinds in the same data-only format. A new
-          Form still needs its own specification, tests, publication, host evidence,
-          and admission. If something you need is missing, propose it on GitHub.
-        </p>
-      </div>
-      <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform/issues">Propose a resource</a>
-    </div>
-    <p class="fineprint">
-      The provider deliberately has no settings for backends, credentials, prices,
-      or billing. Those belong to the host.
-    </p>
-  </div>
-</section>
-
-<section id="configuration" class="section">
-  <div class="container">
-    <h2>Configuring a service</h2>
-    <p class="section-lede">
-      Portable does not have to mean bare. The application resources take a
-      <code>configuration</code> map, so a service can actually be configured
-      from the same code that describes it. The rest of the set carries the
-      settings that checking these definitions against real cloud provider
-      contracts showed were missing.
-    </p>
-    <figure class="code-card wide">
-      <figcaption><span class="traffic"></span>main.tf</figcaption>
-<pre><code><span class="k">resource</span> <span class="s">"takoform_container_service"</span> <span class="s">"api"</span> {
-  <span class="a">name</span>              = <span class="s">"api"</span>
-  <span class="a">image</span>             = <span class="s">"registry.example.com/api@sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317"</span>
-  <span class="a">ports</span>             = [<span class="s">8080</span>]
-  <span class="a">replicas</span>          = <span class="s">3</span>
-  <span class="a">health_check_path</span> = <span class="s">"/healthz"</span>
-
-  <span class="c"># Non-secret only. The host injects credentials on its own path.</span>
-  <span class="a">configuration</span> = {
-    <span class="a">LOG_LEVEL</span> = <span class="s">"info"</span>
-  }
-}
-
-<span class="k">resource</span> <span class="s">"takoform_relational_database"</span> <span class="s">"primary"</span> {
-  <span class="a">name</span>              = <span class="s">"primary"</span>
-  <span class="a">engine</span>            = <span class="s">"postgres"</span>
-  <span class="a">engine_version</span>    = <span class="s">"17"</span>
-  <span class="a">size_class</span>        = <span class="s">"db.small"</span>
-  <span class="a">database_name</span>     = <span class="s">"app"</span>
-  <span class="a">high_availability</span> = <span class="s">true</span>
-}</code></pre>
-    </figure>
-    <div class="compare">
-      <div class="compare-row good">
-        <code>configuration</code>
-        <span>Non-secret values the running service reads. The desired values remain in code and state, but only a host that supports the exact Form and fields can realize them.</span>
-      </div>
-      <div class="compare-row bad">
-        <code>DATABASE_PASSWORD</code>
-        <span>Not portable configuration. Map keys are held to the same data-only field policy as declared fields, so a credential cannot be smuggled in as configuration. Secret material is never portable state: a host injects it through its own credential path.</span>
-      </div>
-    </div>
-    <p class="fineprint">
-      <code>takoform_edge_worker</code>, <code>takoform_container_service</code>,
-      <code>takoform_compute_instance</code>, <code>takoform_workflow</code>, and
-      <code>takoform_stateful_entity</code> take a configuration map. Elsewhere the
-      added settings are ordinary typed arguments: size class, initial database name,
-      and a standby for a relational database; replica count and a health check path
-      for a container service; internal-only listeners and an idle timeout for a load
-      balancer; retention, message size, delivery delay, and ordering for a queue,
-      which can now also name a connection for messages it could not deliver.
-    </p>
-  </div>
-</section>
-
-<section id="principles" class="section alt">
-  <div class="container">
-    <h2>Design principles</h2>
-    <div class="cards four">
-      <article class="card">
-        <h3>Definitions are data</h3>
-        <p>
-          Resource definitions and their test fixtures are plain JSON. They
-          contain no executable code, and the verifier rejects anything that does.
-        </p>
-      </article>
-      <article class="card">
-        <h3>Verify, then trust</h3>
-        <p>
-          Published releases are signed and pinned by digest. All 34 current
-          packages have immutable releases; only the exact 10 bound by the
-          admission evidence may be called <code>portable-standard</code>.
-        </p>
-      </article>
-      <article class="card">
-        <h3>The host operates</h3>
-        <p>
-          Backend choice, credentials, and operations belong to the host. The
-          provider only submits what you asked for.
-        </p>
-      </article>
-      <article class="card">
-        <h3>Both lifecycles tested</h3>
-        <p>
-          Terraform and OpenTofu are tested separately against an in-process
-          test host. This is portable test coverage, not live-host proof.
-        </p>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section id="spec" class="section">
-  <div class="container">
-    <h2>The specification</h2>
-    <p class="section-lede">
-      Everything the provider and a host agree on is written down as data-only
-      documents. Start with the public <a href="/docs/">provider documentation</a>
-      or browse the <a href="/spec/">specification</a>.
-    </p>
-    <ul class="spec-list">
-      <li>
-        <a href="/docs/"><code>/docs/</code></a>
-        <span>Provider configuration, 34 Form resource references, examples, and the read-only <code>data "takoform_interface"</code> projection.</span>
-      </li>
-      <li>
-        <a href="/spec/"><code>/spec/</code></a>
-        <span>The public host, Form, package, interface, trust, conformance, and versioning contracts.</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/host-api"><code>spec/host-api</code></a>
-        <span>How the provider talks to a host: discovery, preview, apply, observe, delete.</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/form-definition"><code>spec/form-definition</code></a>
-        <span>How a service type is defined as data, and how definitions are identified. It also sets what a configuration map key is allowed to be.</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/form-package"><code>spec/form-package</code></a>
-        <span>How definitions are packaged, distributed, and verified.</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/interface-declaration"><code>spec/interface-declaration</code></a>
-        <span>How a service declares what it exposes at runtime. The host still owns the record and who may use it.</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/trust"><code>spec/trust</code></a>
-        <span>How releases are signed, and what gets rejected.</span>
-      </li>
-    </ul>
-  </div>
-</section>
-
-<section id="status" class="section alt">
-  <div class="container">
-    <h2>Current status</h2>
-    <p class="section-lede">
-      The published identities and the limits that remain, as of the latest
-      retained evidence.
-    </p>
-    <div class="status-grid">
-      <div class="status-col done">
-        <h3>Working today</h3>
-        <ul>
-          <li>The schemas and an offline package verifier</li>
-          <li>Published provider <code>v1.0.2</code>, installed and read back from the canonical Registry with Terraform and OpenTofu</li>
-          <li>34 statically typed Form resources with create, update, delete, import, and drift detection against an in-process test host</li>
-          <li>One read-only <code>data "takoform_interface"</code> projection; Form definitions declare interfaces, while the host owns their records, bindings, authorization, and lifecycle</li>
-          <li>Non-secret <code>configuration</code> on the application resources</li>
-          <li>Lifecycle tests on both Terraform and OpenTofu, run against an in-process test host</li>
-          <li>All 34 current Form Packages as signed, immutable releases</li>
-          <li><code>forms/admissions/v1.0.7</code>, admitting exactly 10 packages as <code>portable-standard</code></li>
-        </ul>
-      </div>
-      <div class="status-col pending">
-        <h3>Limits that remain</h3>
-        <ul>
-          <li>The API is still <code>forms.takoform.com/v1alpha1</code>; provider SemVer does not make it stable</li>
-          <li>The other 24 published Form Packages are not admitted as <code>portable-standard</code></li>
-          <li>The retained Takosumi host report covers the exact admitted 10; it is not universal proof for every host</li>
-          <li>Backend availability, placement, credentials, support, and migration remain host/operator responsibilities</li>
-        </ul>
-      </div>
-    </div>
-    <p class="fineprint">
-      The historical generation published before the rebuild is retired, not
-      erased. Its releases keep their immutable bytes, signatures, and admission
-      evidence, and still verify offline. Nothing there is rewritten or re-signed,
-      and the current <code>ga-core-v2</code> closure does not inherit those
-      proofs. In the source descriptor,
-      <code>publicationStatus: candidate-only</code> is candidate metadata;
-      the descriptor currently records candidate <code>v1.0.3</code>, while
-      signed release and readback evidence establish the live status of
-      <code>v1.0.2</code>.
-    </p>
-  </div>
-</section>
-
-<section class="section">
-  <div class="container">
-    <h2>Run it locally</h2>
-    <figure class="code-card wide">
-      <figcaption><span class="traffic"></span>shell</figcaption>
-<pre><code><span class="c"># clone and run the complete repository gate</span>
-git clone https://github.com/tako0614/terraform-provider-takoform
-cd terraform-provider-takoform
-
-bun run check
-
-<span class="c"># run the source conformance verifier directly</span>
-go run ./cmd/standard-form-conformance verify</code></pre>
-    </figure>
-  </div>
-</section>
-
-</main>
-
-<footer class="site-footer">
-  <div class="container footer-grid">
-    <div class="footer-brand">
-      <span>Takoform</span>
-    </div>
-    <ul class="footer-links">
-      <li><a href="https://github.com/tako0614/terraform-provider-takoform">Source</a></li>
-      <li><a href="/docs/">Documentation</a></li>
-      <li><a href="/spec/">Specification</a></li>
-      <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/SECURITY.md">Security policy</a></li>
-      <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/LICENSE">MIT License</a></li>
-      <li><button type="button" class="footer-lang" lang="ja" onclick="setLang('ja')">日本語</button></li>
-    </ul>
-    <p class="footer-ids">
-      <code>github.com/tako0614/terraform-provider-takoform</code>
-      <code>registry.terraform.io/tako0614/takoform</code>
-      <code>forms.takoform.com/v1alpha1</code>
-    </p>
-  </div>
-</footer>
-
-</div>
-
-<!-- ==================== 日本語 ==================== -->
-<div class="l10n" lang="ja">
-
-<header class="site-header">
-  <nav class="container nav">
-    <a class="brand" href="/">
-      <span class="brand-name">Takoform</span>
-    </a>
-    <div class="nav-links">
-      <a href="#why-ja">なぜ</a>
-      <a href="#how-ja">しくみ</a>
-      <a href="#resources-ja">リソース</a>
-      <a href="/docs/">ドキュメント</a>
-      <a href="/spec/">仕様</a>
-      <a href="#status-ja">現状</a>
-      <a class="btn btn-ghost" href="https://github.com/tako0614/terraform-provider-takoform">GitHub</a>
-      <button type="button" class="lang-switch" lang="en" onclick="setLang('en')">English</button>
-    </div>
-  </nav>
-</header>
-
-<main>
-
-<section class="hero">
-  <div class="container hero-grid">
-    <div class="hero-copy">
-      <p class="eyebrow"><span class="dot"></span> provider v1.0.2 · Registry 検証済み</p>
-      <h1>Terraform のコードから、<br>ベンダー名をなくす。</h1>
-      <p class="lede">Takoform は、サービスをベンダー中立に書くためのオープンな仕様と、その Terraform/OpenTofu プロバイダです。コードに書くのはバケット・キュー・データベースといった必要なものだけ。対応ホストは、その正確なポータブル契約に対してバックエンドを選び、運用できます。ただし、対応状況・置換・移行はホストと明示的な運用計画に依存します。</p>
-      <div class="cta-row">
-        <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform">GitHub で見る</a>
-        <a class="btn btn-ghost" href="/docs/">ドキュメントを読む</a>
-        <a class="btn btn-ghost" href="/spec/">仕様を読む</a>
-      </div>
-      <ul class="badges">
-        <li>MIT ライセンス</li>
-        <li>公開済みの immutable な Form Package 34 件</li>
-        <li>正確な 10 件を <code>portable-standard</code> として admission</li>
-        <li>読み取り専用の <code>data "takoform_interface"</code> projection 1 種類</li>
-        <li>定義はデータのみで、コードを含みません</li>
-      </ul>
-    </div>
-    <div class="hero-code">
-      <figure class="code-card">
-        <figcaption><span class="traffic"></span>main.tf</figcaption>
-<pre><code><span class="k">terraform</span> {
-  <span class="k">required_providers</span> {
-    takoform = {
-      <span class="a">source</span>  = <span class="s">"registry.terraform.io/tako0614/takoform"</span>
-      <span class="a">version</span> = <span class="s">"= 1.0.3"</span>
-    }
-  }
-}
-
-<span class="c"># canonical Registry で公開済み。正確な version を pin する。</span>
-<span class="k">provider</span> <span class="s">"takoform"</span> {
-  <span class="a">endpoint</span> = <span class="s">"https://forms.example.com"</span>
-  <span class="a">space</span>    = <span class="s">"prod"</span>
-}
-
-<span class="k">resource</span> <span class="s">"takoform_object_bucket"</span> <span class="s">"assets"</span> {
-  <span class="a">name</span>             = <span class="s">"assets"</span>
-  <span class="a">storage_class</span>    = <span class="s">"standard"</span>
-  <span class="a">versioning</span>       = <span class="s">true</span>
-  <span class="a">access_protocols</span> = [<span class="s">"s3_api"</span>]
-}</code></pre>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<section id="why-ja" class="section">
-  <div class="container">
-    <h2>なぜ作ったか</h2>
-    <p class="section-lede">Terraform のコードには、ふつうベンダー名が入ります。<code>aws_s3_bucket</code> と書いた時点でそのモジュールと state は AWS 専用になり、別のクラウドへ移すには書き直すしかありません。Takoform のリソース型は必要なものをベンダー中立に表します。ただし、ポータビリティは契約の境界であり、すべてのホストがすべての Form を実装する証明でも、既存リソースをそのまま移行できる保証でもありません。</p>
-    <div class="compare">
-      <div class="compare-row bad">
-        <code>aws_s3_bucket</code>
-        <span>AWS でしか使えません。移行にはモジュールの書き直しと state の移し替えが必要です。</span>
-      </div>
-      <div class="compare-row good">
-        <code>takoform_object_bucket</code>
-        <span>1 つのポータブルな Form 契約を使います。ホストはその正確な Form への対応を証明する必要があり、移行は運用者が明示的に行います。</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="how-ja" class="section alt">
-  <div class="container">
-    <h2>しくみ</h2>
-    <p class="section-lede">プロバイダは、型付き desired state をホストへ届け、結果を観測します。対応ホストは Takoform API を実装し、正確な Form identity を検証したうえで、バックエンドを作る・変える・消す責任を持ちます。選択された 10 Form の admission には署名付き Takosumi host report が保持されていますが、ほかのホストはそれぞれ正確な対応を証明する必要があります。</p>
-    <div class="cards three">
-      <article class="card">
-        <span class="step">01</span>
-        <h3>書く</h3>
-        <p>型の決まった <code>takoform_*</code> リソースで、必要なものを書きます。リソース型はバックエンドのベンダー名を持ちません。</p>
-      </article>
-      <article class="card">
-        <span class="step">02</span>
-        <h3>送る</h3>
-        <p>apply すると、プロバイダは書かれた内容を HTTP でホストに送ります。plan の段階では何も変更しません。</p>
-      </article>
-      <article class="card">
-        <span class="step">03</span>
-        <h3>ホストが動かす</h3>
-        <p>バックエンドの選択、認証情報の管理、実際の変更はホストの仕事です。プロバイダは portable な <code>Kind/name</code> ID を自分で合成し、ホストの observed / output が正確な Form の閉じた schema を満たした場合だけ drift・portability・公開出力を state に書きます。未宣言のキー、バックエンド target、認証情報が一つでも入れば state への反映全体を拒否します。</p>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section id="resources-ja" class="section">
-  <div class="container">
-    <h2>公開済みの Form リソース</h2>
-    <p class="section-lede">計算・データ・分析・ネットワーク・運用にまたがる Form Package 34 件はすべて公開済みで immutable です。<code>forms/admissions/v1.0.7</code> で正確な 10 件を <code>portable-standard</code> として admission し、残り 24 件は公開済みですが admission されていません。どれも「何が欲しいか」だけを書き、「誰が動かすか」は書きません。</p>
-      <h3 class="resource-domain">計算とアプリケーション</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_edge_worker</code><span>エッジ／イベント駆動アプリケーション</span></div>
-        <div class="resource"><code>takoform_container_service</code><span>コンテナサービス</span></div>
-        <div class="resource"><code>takoform_compute_instance</code><span>digest で固定した起動イメージを使う長時間稼働マシン</span></div>
-        <div class="resource"><code>takoform_static_site</code><span>静的サイト</span></div>
-        <div class="resource"><code>takoform_workflow</code><span>長時間実行ワークフロー</span></div>
-        <div class="resource"><code>takoform_stateful_entity</code><span>digest で固定したアプリケーションが実装する、アドレス可能で永続的な entity namespace</span></div>
-        <div class="resource"><code>takoform_schedule</code><span>スケジュール実行</span></div>
-      </div>
-      <h3 class="resource-domain">データとストレージ</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_object_bucket</code><span>オブジェクトストレージ</span></div>
-        <div class="resource"><code>takoform_object_lifecycle_rule</code><span>接続先 object store に適用する、期限切れまたは storage transition の単一アクション</span></div>
-        <div class="resource"><code>takoform_key_value_store</code><span>Key/Value ストレージ</span></div>
-        <div class="resource"><code>takoform_cache_cluster</code><span>インメモリキャッシュ</span></div>
-        <div class="resource"><code>takoform_relational_database</code><span>リレーショナルデータベース</span></div>
-        <div class="resource"><code>takoform_indexed_store</code><span>キー指定データストア</span></div>
-        <div class="resource"><code>takoform_queue</code><span>メッセージキュー</span></div>
-        <div class="resource"><code>takoform_stream_topic</code><span>イベントストリーム</span></div>
-        <div class="resource"><code>takoform_search_index</code><span>全文検索インデックス</span></div>
-        <div class="resource"><code>takoform_vector_index</code><span>ベクトルインデックス</span></div>
-      </div>
-      <h3 class="resource-domain">分析と推論</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_analytics_dataset</code><span>分析用データセット</span></div>
-        <div class="resource"><code>takoform_model_endpoint</code><span>digest で固定した model bytes を 1 つの task に提供する推論エンドポイント</span></div>
-      </div>
-      <h3 class="resource-domain">ネットワークと配信</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_dns_zone</code><span>DNS ゾーン</span></div>
-        <div class="resource"><code>takoform_dns_record</code><span>DNS レコード</span></div>
-        <div class="resource"><code>takoform_tls_certificate</code><span>TLS 証明書</span></div>
-        <div class="resource"><code>takoform_http_route</code><span>HTTP ルート</span></div>
-        <div class="resource"><code>takoform_load_balancer</code><span>ロードバランサー</span></div>
-        <div class="resource"><code>takoform_private_network</code><span>プライベートネットワーク</span></div>
-      </div>
-      <h3 class="resource-domain">運用と連携</h3>
-      <div class="resource-grid">
-        <div class="resource"><code>takoform_container_registry</code><span>コンテナレジストリ</span></div>
-        <div class="resource"><code>takoform_log_sink</code><span>ログ保存先</span></div>
-        <div class="resource"><code>takoform_metric_sink</code><span>メトリクス保存先</span></div>
-        <div class="resource"><code>takoform_email_sender</code><span>メール送信</span></div>
-        <div class="resource"><code>takoform_webhook_endpoint</code><span>Webhook 受信口</span></div>
-        <div class="resource"><code>takoform_identity_client</code><span>OIDC クライアント</span></div>
-        <div class="resource"><code>takoform_feature_flag</code><span>完全な enabled percentage 1 つで表す、名前付き runtime switch</span></div>
-        <div class="resource"><code>takoform_rate_limit_policy</code><span>レート制限</span></div>
-        <div class="resource"><code>takoform_backup_policy</code><span>バックアップ</span></div>
-      </div>
-    <div class="grow-card">
-      <div class="grow-copy">
-        <h3>ここで終わりではありません</h3>
-        <p>この公開済みセットが上限ではありません。仕様は、別のサービス種別も同じデータ形式で定義できます。ただし、新しい Form ごとに仕様・テスト・公開・ホスト証跡・admission が必要です。足りないものがあれば GitHub で提案してください。</p>
-      </div>
-      <a class="btn btn-primary" href="https://github.com/tako0614/terraform-provider-takoform/issues">リソースを提案する</a>
-    </div>
-    <p class="fineprint">このプロバイダには、バックエンドの指定・認証情報・価格・課金の設定はあえてありません。それらはホスト側で管理します。</p>
-  </div>
-</section>
-
-<section id="configuration-ja" class="section">
-  <div class="container">
-    <h2>サービスを設定する</h2>
-    <p class="section-lede">ベンダー中立でも、何も設定できないわけではありません。アプリケーション系のリソースには <code>configuration</code> マップがあり、サービスの設定を同じコードの中に書けます。それ以外のリソースにも、実際のクラウドの契約と突き合わせて足りないとわかった項目を入れてあります。</p>
-    <figure class="code-card wide">
-      <figcaption><span class="traffic"></span>main.tf</figcaption>
-<pre><code><span class="k">resource</span> <span class="s">"takoform_container_service"</span> <span class="s">"api"</span> {
-  <span class="a">name</span>              = <span class="s">"api"</span>
-  <span class="a">image</span>             = <span class="s">"registry.example.com/api@sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317"</span>
-  <span class="a">ports</span>             = [<span class="s">8080</span>]
-  <span class="a">replicas</span>          = <span class="s">3</span>
-  <span class="a">health_check_path</span> = <span class="s">"/healthz"</span>
-
-  <span class="c"># シークレットでない値だけ。認証情報はホストが自前の経路で注入する。</span>
-  <span class="a">configuration</span> = {
-    <span class="a">LOG_LEVEL</span> = <span class="s">"info"</span>
-  }
-}
-
-<span class="k">resource</span> <span class="s">"takoform_relational_database"</span> <span class="s">"primary"</span> {
-  <span class="a">name</span>              = <span class="s">"primary"</span>
-  <span class="a">engine</span>            = <span class="s">"postgres"</span>
-  <span class="a">engine_version</span>    = <span class="s">"17"</span>
-  <span class="a">size_class</span>        = <span class="s">"db.small"</span>
-  <span class="a">database_name</span>     = <span class="s">"app"</span>
-  <span class="a">high_availability</span> = <span class="s">true</span>
-}</code></pre>
-    </figure>
-    <div class="compare">
-      <div class="compare-row good">
-        <code>configuration</code>
-        <span>動いているサービスが読む、シークレットでない値です。desired value はコードと state に残りますが、正確な Form とフィールドに対応するホストだけが実現できます。</span>
-      </div>
-      <div class="compare-row bad">
-        <code>DATABASE_PASSWORD</code>
-        <span>これは configuration には書けません。マップのキーにも、通常のフィールドと同じデータのみのポリシーがかかります。認証情報を設定に紛れ込ませることはできません。シークレットは state に載せるものではなく、ホストが自前の経路で注入します。</span>
-      </div>
-    </div>
-    <p class="fineprint">configuration マップを持つのは <code>takoform_edge_worker</code> / <code>takoform_container_service</code> / <code>takoform_compute_instance</code> / <code>takoform_workflow</code> / <code>takoform_stateful_entity</code> です。ほかに増えたのは普通の型付き引数で、リレーショナルデータベースのサイズクラス・初期データベース名・スタンバイ、コンテナサービスのレプリカ数とヘルスチェックパス、ロードバランサーの内部限定リスナーとアイドルタイムアウト、キューの保持期間・最大メッセージサイズ・配信遅延・順序保証があります。キューは、配信できなかったメッセージの送り先を connections で指せるようにもなりました。</p>
-  </div>
-</section>
-
-<section id="principles-ja" class="section alt">
-  <div class="container">
-    <h2>設計方針</h2>
-    <div class="cards four">
-      <article class="card">
-        <h3>定義はデータだけ</h3>
-        <p>リソースの定義もテストデータも、ただの JSON です。実行コードは含められず、含まれていれば検証で弾かれます。</p>
-      </article>
-      <article class="card">
-        <h3>検証してから信頼する</h3>
-        <p>公開済みリリースには署名が付き、内容は digest で固定されます。現在の Form Package 34 件はすべて immutable に公開済みで、admission 証跡に束ねた正確な 10 件だけを <code>portable-standard</code> と呼びます。</p>
-      </article>
-      <article class="card">
-        <h3>運用はホストに任せる</h3>
-        <p>バックエンドの選択も、認証情報も、実際の操作もホストの担当です。プロバイダは頼まれた内容を送るだけです。</p>
-      </article>
-      <article class="card">
-        <h3>両方でテストする</h3>
-        <p>Terraform と OpenTofu を同じものとは見なさず、プロセス内のテスト用ホストに対して別々にテストしています。これは portable test の網羅であり、実ホストの証明ではありません。</p>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section id="spec-ja" class="section">
-  <div class="container">
-    <h2>仕様</h2>
-    <p class="section-lede">プロバイダとホストの間の取り決めは、すべてデータだけのドキュメントに書いてあります。まず公開版の <a href="/docs/">プロバイダドキュメント</a>を読むか、<a href="/spec/">仕様</a>を参照できます。</p>
-    <ul class="spec-list">
-      <li>
-        <a href="/docs/"><code>/docs/</code></a>
-        <span>プロバイダ設定、34 Form のリソースリファレンス、例、読み取り専用の <code>data "takoform_interface"</code> projection。</span>
-      </li>
-      <li>
-        <a href="/spec/"><code>/spec/</code></a>
-        <span>host、Form、package、interface、trust、conformance、versioning の公開契約。</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/host-api"><code>spec/host-api</code></a>
-        <span>ホストの見つけ方と、preview / apply / observe / delete のやりとり。</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/form-definition"><code>spec/form-definition</code></a>
-        <span>サービスの種類をデータとして定義する方法と、その識別のしかた。設定マップのキーに何を認めないかも、ここで決めています。</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/form-package"><code>spec/form-package</code></a>
-        <span>定義をパッケージにして配布・検証する方法。</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/interface-declaration"><code>spec/interface-declaration</code></a>
-        <span>サービスが実行時に何を提供するかの宣言。その記録と利用の許可はホストが持ちます。</span>
-      </li>
-      <li>
-        <a href="https://github.com/tako0614/terraform-provider-takoform/tree/main/spec/trust"><code>spec/trust</code></a>
-        <span>リリースへの署名と、何を受け入れて何を拒否するか。</span>
-      </li>
-    </ul>
-  </div>
-</section>
-
-<section id="status-ja" class="section alt">
-  <div class="container">
-    <h2>いまの状態</h2>
-    <p class="section-lede">できていることと、まだできていないことをそのまま書いています。</p>
-    <div class="status-grid">
-      <div class="status-col done">
-        <h3>できていること</h3>
-        <ul>
-          <li>スキーマ一式と、オフラインで動くパッケージ検証ツール</li>
-          <li>canonical Registry から Terraform / OpenTofu の両方で install と readback を確認した provider <code>v1.0.2</code></li>
-          <li>プロセス内のテスト用ホストに対して、作成・更新・削除・import・drift 検出まで対応した型付き Form 34 種類</li>
-          <li>読み取り専用の <code>data "takoform_interface"</code> projection 1 種類。Form 定義が interface を宣言し、record・binding・認可・lifecycle はホストが所有します</li>
-          <li>アプリケーション系リソースの、シークレットを含まない <code>configuration</code></li>
-          <li>Terraform / OpenTofu それぞれでのライフサイクルテスト。相手はプロセス内のテスト用ホストです</li>
-          <li>現在の Form Package 34 件すべての署名付き immutable release</li>
-          <li><code>forms/admissions/v1.0.7</code> による、正確な 10 件の <code>portable-standard</code> admission</li>
-        </ul>
-      </div>
-      <div class="status-col pending">
-        <h3>残っている境界</h3>
-        <ul>
-          <li>API は <code>forms.takoform.com/v1alpha1</code> のままです。provider SemVer は API を stable にしません</li>
-          <li>残り 24 件の公開済み Form Package は <code>portable-standard</code> として admission されていません</li>
-          <li>保持された Takosumi host report が証明するのは正確な 10 件だけで、すべての host に共通する証明ではありません</li>
-          <li>バックエンドの availability・placement・credential・support・migration は host / operator の責務です</li>
-        </ul>
-      </div>
-    </div>
-    <p class="fineprint">作り直す前に公開した過去の世代は、消さずに retire しています。リリースの immutable bytes・署名・admission の証跡はそのまま残り、いまもオフラインで検証できます。書き換えも署名し直しもしませんし、現在の <code>ga-core-v2</code> closure がその証跡を引き継ぐこともありません。source descriptor の <code>publicationStatus: candidate-only</code> は candidate metadata であり、descriptor は candidate <code>v1.0.3</code> を記録します。<code>v1.0.2</code> の live status は署名付き release と readback evidence が確定します。</p>
-  </div>
-</section>
-
-<section class="section">
-  <div class="container">
-    <h2>手元で動かす</h2>
-    <figure class="code-card wide">
-      <figcaption><span class="traffic"></span>shell</figcaption>
-<pre><code><span class="c"># clone してリポジトリ全体の gate を実行する</span>
-git clone https://github.com/tako0614/terraform-provider-takoform
-cd terraform-provider-takoform
-
-bun run check
-
-<span class="c"># source conformance verifier を直接実行する</span>
-go run ./cmd/standard-form-conformance verify</code></pre>
-    </figure>
-  </div>
-</section>
-
-</main>
-
-<footer class="site-footer">
-  <div class="container footer-grid">
-    <div class="footer-brand">
-      <span>Takoform</span>
-    </div>
-    <ul class="footer-links">
-      <li><a href="https://github.com/tako0614/terraform-provider-takoform">ソースコード</a></li>
-      <li><a href="/docs/">ドキュメント</a></li>
-      <li><a href="/spec/">仕様</a></li>
-      <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/SECURITY.md">セキュリティポリシー</a></li>
-      <li><a href="https://github.com/tako0614/terraform-provider-takoform/blob/main/LICENSE">MIT ライセンス</a></li>
-      <li><button type="button" class="footer-lang" lang="en" onclick="setLang('en')">English</button></li>
-    </ul>
-    <p class="footer-ids">
-      <code>github.com/tako0614/terraform-provider-takoform</code>
-      <code>registry.terraform.io/tako0614/takoform</code>
-      <code>forms.takoform.com/v1alpha1</code>
-    </p>
-  </div>
-</footer>
-
-</div>
-
+    </footer></div>
+  <script>
+  (() => {
+    const choose = (requested) => {
+      const lang = requested === "ja" ? "ja" : "en";
+      document.documentElement.lang = lang;
+      document.documentElement.dataset.lang = lang;
+      document.querySelectorAll(".l10n").forEach((node) => {
+        node.hidden = node.lang !== lang;
+      });
+      if (location.hash.length > 1) {
+        let current = location.hash.slice(1);
+        try { current = decodeURIComponent(current); } catch {}
+        const base = current.endsWith("-ja") ? current.slice(0, -3) : current;
+        const translated = lang === "ja" ? base + "-ja" : base;
+        if (document.getElementById(translated)) {
+          history.replaceState(null, "", "#" + encodeURIComponent(translated));
+        }
+      }
+      try { localStorage.setItem("takoform-lang", lang); } catch {}
+    };
+    let stored = "";
+    try { stored = localStorage.getItem("takoform-lang") || ""; } catch {}
+    choose(stored || (navigator.language.startsWith("ja") ? "ja" : "en"));
+    document.addEventListener("click", (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest("[data-set-lang]")
+        : null;
+      if (button) choose(button.dataset.setLang);
+    });
+  })();
+  </script>
 </body>
 </html>

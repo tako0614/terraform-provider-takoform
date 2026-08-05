@@ -24,12 +24,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 )
 
 func discoveryHandler(t *testing.T, serviceForms bool) http.HandlerFunc {
 	t.Helper()
-	return versionedDiscoveryHandler(t, "forms.takoform.com/v1alpha1", serviceForms)
+	return versionedDiscoveryHandler(t, client.APIVersion, serviceForms)
 }
 
 // versionedDiscoveryHandler serves the only discovery document a conforming
@@ -38,7 +39,7 @@ func discoveryHandler(t *testing.T, serviceForms bool) http.HandlerFunc {
 func versionedDiscoveryHandler(t *testing.T, discoveryVersion string, serviceForms bool) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/takoform" {
+		if r.URL.Path != "/.well-known/takoform/v1alpha2" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 			http.NotFound(w, r)
 			return
@@ -53,8 +54,8 @@ func versionedDiscoveryHandler(t *testing.T, discoveryVersion string, serviceFor
 				"idempotent_lifecycle":   true,
 			},
 			"endpoints": map[string]string{
-				"api":   origin + "/apis/forms.takoform.com/v1alpha1",
-				"forms": origin + "/apis/forms.takoform.com/v1alpha1/forms",
+				"api":   origin + "/apis/forms.takoform.com/v1alpha2",
+				"forms": origin + "/apis/forms.takoform.com/v1alpha2/forms",
 			},
 		}
 		raw, _ := json.Marshal(body)
@@ -245,10 +246,10 @@ func TestProtocolRejectsVersionZeroFormStateWithoutRunningAnUpgrader(t *testing.
 		t.Fatal("provider fabricated upgraded v0.2.1 state")
 	}
 	for _, diagnostic := range response.Diagnostics {
-		if diagnostic.Summary == "Provider v1 requires explicit Form migration" &&
+		if diagnostic.Summary == "Provider v2 requires explicit Form migration" &&
 			strings.Contains(diagnostic.Detail, "State was not modified and no Resource lifecycle request was made") &&
-			strings.Contains(diagnostic.Detail, "Pin the exact provider version that wrote this state") &&
-			strings.Contains(diagnostic.Detail, "do not refresh v0.1.x state through v0.2.1") {
+			strings.Contains(diagnostic.Detail, "Pin the exact historical provider") &&
+			strings.Contains(diagnostic.Detail, "create/import") {
 			return
 		}
 	}
@@ -260,13 +261,13 @@ func TestConfigureClientUsesOnlyTheAdvertisedVersionedEndpoint(t *testing.T) {
 	unversionedRequests := 0
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/.well-known/takoform":
+		case "/.well-known/takoform/v1alpha2":
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"api_versions": []string{"forms.takoform.com/v1alpha1"},
+				"api_versions": []string{client.APIVersion},
 				"features":     map[string]bool{"service_forms": true, "exact_form_ref": true, "optimistic_concurrency": true, "idempotent_lifecycle": true},
 				"endpoints": map[string]string{
-					"api":   server.URL + "/apis/forms.takoform.com/v1alpha1",
-					"forms": server.URL + "/apis/forms.takoform.com/v1alpha1/forms",
+					"api":   server.URL + "/apis/forms.takoform.com/v1alpha2",
+					"forms": server.URL + "/apis/forms.takoform.com/v1alpha2/forms",
 				},
 			})
 		default:
@@ -289,7 +290,7 @@ func TestConfigureClientUsesOnlyTheAdvertisedVersionedEndpoint(t *testing.T) {
 // fails closed instead of downgrading to an unversioned Resource API.
 func TestConfigureClientRejectsHostsWithoutAVersionedEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/takoform" {
+		if r.URL.Path != "/.well-known/takoform/v1alpha2" {
 			http.NotFound(w, r)
 			return
 		}
@@ -470,8 +471,8 @@ func TestPublishedHCLUsesFullyQualifiedProviderAddress(t *testing.T) {
 }
 
 func currentProviderResourceTypeNames() []string {
-	names := make([]string, 0, len(formcatalog.Kinds))
-	for _, kind := range formcatalog.Kinds {
+	names := make([]string, 0, len(currentformcatalog.Kinds))
+	for _, kind := range currentformcatalog.Kinds {
 		names = append(names, kind.ResourceType)
 	}
 	sort.Strings(names)
@@ -528,7 +529,7 @@ func TestConfigureClient_RejectsUnsupportedDiscoveryVersion(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected configuration to fail on unsupported discovery api version")
 	}
-	if !strings.Contains(err.Error(), "does not advertise API version") {
+	if !strings.Contains(err.Error(), "must advertise only API version") {
 		t.Fatalf("expected api version diagnostic, got: %v", err)
 	}
 }

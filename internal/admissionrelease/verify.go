@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
-	"github.com/tako0614/terraform-provider-takoform/internal/admissioncheckpoint"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
 
@@ -86,19 +85,6 @@ func verifyAdmissionSetAt(root, retainedRoot string, candidates CandidateSet, ve
 	if err != nil {
 		return fmt.Errorf("verify %s: %w", manifestPath, err)
 	}
-	if candidates.Generation == "ga-core-v2" {
-		descriptor, _, err := admissioncheckpoint.LoadCurrent(root)
-		if err != nil {
-			return fmt.Errorf("verify current admission checkpoint descriptor: %w", err)
-		}
-		if retainedRoot != descriptor.RetainedRoot {
-			return fmt.Errorf("current admission retained root %q does not match descriptor %q", retainedRoot, descriptor.RetainedRoot)
-		}
-		if err := descriptor.ValidateSetProjection(set.Generation, set.AdmissionReleaseTag); err != nil {
-			return fmt.Errorf("verify current admission checkpoint projection: %w", err)
-		}
-	}
-
 	subjects := make([]RetainedSubject, 0, expectedRetainedSubjectCount(set))
 	selectedKinds := make(map[string]struct{}, len(ordered))
 	for _, pair := range ordered {

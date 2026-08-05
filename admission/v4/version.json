@@ -1,7 +1,0 @@
-{
-  "format": "takoform.standard-admission-checkpoint@v1",
-  "version": "1.0.7",
-  "tag": "forms/admissions/v1.0.7",
-  "generation": "ga-core-v2",
-  "retainedRoot": "admission/v4"
-}

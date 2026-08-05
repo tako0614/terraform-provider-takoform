@@ -76,3 +76,20 @@ func TestRuntimeDesiredRejectsAuthorityInsideTypedMap(t *testing.T) {
 		t.Fatal("desired document accepted a credential inside a typed map")
 	}
 }
+
+func TestRuntimeSchemaCacheSeparatesDifferentContractsWithTheSameKind(t *testing.T) {
+	legacy := Kind{
+		Kind: "CacheCollisionExample", Slug: "cache-collision-example",
+		Fields: []Field{{HCL: "legacy_only", Wire: "legacyOnly", Type: TypeBool, Example: true}},
+	}
+	current := Kind{Kind: legacy.Kind, Slug: legacy.Slug}
+
+	if err := legacy.ValidateDesired(legacy.CanonicalDesired()); err != nil {
+		t.Fatalf("prime Legacy contract: %v", err)
+	}
+	desired := current.CanonicalDesired()
+	desired["legacyOnly"] = true
+	if err := current.ValidateDesired(desired); err == nil {
+		t.Fatal("current contract reused a different schema cached for the same kind")
+	}
+}

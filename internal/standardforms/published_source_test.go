@@ -26,7 +26,7 @@ func hasRetainedPredecessor(
 		if source.ReleaseID != release.ReleaseID {
 			continue
 		}
-		existing, err := parseStableFormVersion(source.Version)
+		existing, err := parseStableFormVersion(source.ArtifactID)
 		if err != nil {
 			continue
 		}
@@ -226,12 +226,16 @@ func TestPlannedUnretainedFormTagJoinsNoOverwriteMap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var plan ReleasePlan
-	if err := readJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), &plan); err != nil {
+	authority, err := readProjectLifecycleAuthority(root)
+	if err != nil {
 		t.Fatal(err)
 	}
-	planned := plan.Releases[0]
-	source, ok := published[publishedReleaseKey(planned.ReleaseID, planned.Version)]
+	identities, err := currentLifecycleReleaseIdentities(root, authority)
+	if err != nil || len(identities) != 1 {
+		t.Fatalf("current lifecycle identities = %#v, err=%v", identities, err)
+	}
+	planned := identities[0]
+	source, ok := published[publishedReleaseKey(planned.ReleaseID, planned.ArtifactID)]
 	if !ok || source.Tag != tag || source.AdmissionGeneration != "" {
 		t.Fatalf("planned transitional source missing from no-overwrite map: %#v", source)
 	}
@@ -267,7 +271,7 @@ func TestUnretainedFormTagMustBelongToCurrentReleasePlan(t *testing.T) {
 	runTestGit(t, root, "-c", "user.name=Takoform Test", "-c", "user.email=test@takoform.invalid", "tag", "-a", "-m", "unknown source", unknownTag)
 
 	err := verifyLocalPublishedFormTags(root, map[string]publishedReleaseSource{})
-	if err == nil || !strings.Contains(err.Error(), "not in the current release plan") {
+	if err == nil || !strings.Contains(err.Error(), "not in the current lifecycle authority") {
 		t.Fatalf("unplanned Form tag error = %v", err)
 	}
 }
@@ -276,17 +280,19 @@ func TestUnretainedFormTagRejectsPlannedIdentityDrift(t *testing.T) {
 	t.Parallel()
 
 	root, tag, _ := createPlannedUnretainedTagFixture(t)
-	var plan ReleasePlan
-	if err := readJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), &plan); err != nil {
+	path := filepath.Join(root, filepath.FromSlash(projectLifecyclePath))
+	var lifecycle map[string]any
+	if err := readJSON(path, &lifecycle); err != nil {
 		t.Fatal(err)
 	}
-	plan.Releases[0].PackageDigest = "sha256:" + strings.Repeat("0", 64)
-	if err := writeJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), plan); err != nil {
+	currentForms := lifecycle["currentForms"].([]any)
+	currentForms[0].(map[string]any)["packageDigest"] = "sha256:" + strings.Repeat("0", 64)
+	if err := writeJSON(path, lifecycle); err != nil {
 		t.Fatal(err)
 	}
 
 	err := verifyLocalPublishedFormTags(root, map[string]publishedReleaseSource{})
-	if err == nil || !strings.Contains(err.Error(), "current release plan") {
+	if err == nil || !strings.Contains(err.Error(), "current lifecycle authority") {
 		t.Fatalf("planned identity drift for %s error = %v", tag, err)
 	}
 }
@@ -324,13 +330,13 @@ func TestUnretainedFormTagRejectsSourceFileClosureDrift(t *testing.T) {
 
 	err := verifyLocalPublishedFormTags(root, map[string]publishedReleaseSource{})
 	if err == nil ||
-		!strings.Contains(err.Error(), "current release plan") ||
+		!strings.Contains(err.Error(), "current lifecycle authority") ||
 		!strings.Contains(err.Error(), "file closure mismatch") {
 		t.Fatalf("planned source file-closure drift for %s error = %v", tag, err)
 	}
 }
 
-func TestGenerateRejectsTamperedPublishedSourceBeforeRepositoryMutation(t *testing.T) {
+func TestGenerateIsRetiredBeforeRepositoryMutation(t *testing.T) {
 	t.Parallel()
 
 	repositoryRoot := filepath.Join("..", "..")
@@ -357,8 +363,8 @@ func TestGenerateRejectsTamperedPublishedSourceBeforeRepositoryMutation(t *testi
 	}
 
 	err = Generate(root)
-	if err == nil || !strings.Contains(err.Error(), "published release source") {
-		t.Fatalf("tampered published source error = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "generation is retired") {
+		t.Fatalf("retired generation error = %v", err)
 	}
 	after, readErr := os.ReadFile(sentinelPath)
 	if readErr != nil {
@@ -372,46 +378,26 @@ func TestGenerateRejectsTamperedPublishedSourceBeforeRepositoryMutation(t *testi
 func createPlannedUnretainedTagFixture(t *testing.T) (root, tag, sourcePath string) {
 	t.Helper()
 
-	repositoryRoot := filepath.Join("..", "..")
 	root = t.TempDir()
-	kind := "EdgeWorker"
-	version := "3.0.0"
 	if err := os.MkdirAll(filepath.Join(root, "admission"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	releaseID := releaseIDForKind(kind)
-	sourcePath = filepath.ToSlash(filepath.Join("forms", "releases", releaseID, version))
-	sourceRoot := filepath.Join(root, filepath.FromSlash(sourcePath))
-	if err := os.CopyFS(
-		sourceRoot,
-		os.DirFS(filepath.Join(repositoryRoot, filepath.FromSlash(sourcePath))),
-	); err != nil {
-		t.Fatal(err)
-	}
-	report, err := formpackage.VerifyDirectory(sourceRoot)
+	writeExperimentalLifecycleFixture(t, root, true)
+	authority, err := readProjectLifecycleAuthority(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry := InventoryEntry{
-		Kind: kind, Path: "fixtures/edge-worker",
-		FormRef: report.FormRef, PackageDigest: report.PackageDigest,
+	identities, err := currentLifecycleReleaseIdentities(root, authority)
+	if err != nil || len(identities) != 1 {
+		t.Fatalf("current lifecycle identities = %#v, err=%v", identities, err)
 	}
-	inventory := Inventory{Packages: []InventoryEntry{entry}}
-	if err := writeJSON(filepath.Join(root, "forms", "standard-package-set.json"), inventory); err != nil {
-		t.Fatal(err)
-	}
-	plan, err := buildReleasePlan(root, inventory.Packages)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := writeJSON(filepath.Join(root, filepath.FromSlash(ReleasePlanPath)), plan); err != nil {
-		t.Fatal(err)
-	}
+	identity := identities[0]
+	sourcePath = identity.SourcePath
 
 	runTestGit(t, root, "init", "-q")
-	runTestGit(t, root, "add", "forms")
+	runTestGit(t, root, "add", ".")
 	runTestGit(t, root, "-c", "user.name=Takoform Test", "-c", "user.email=test@takoform.invalid", "commit", "-qm", "planned source")
-	tag = plan.Releases[0].Tag
+	tag = identity.Tag
 	runTestGit(t, root, "-c", "user.name=Takoform Test", "-c", "user.email=test@takoform.invalid", "tag", "-a", "-m", "planned source", tag)
 	return root, tag, sourcePath
 }

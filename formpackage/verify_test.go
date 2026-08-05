@@ -15,7 +15,9 @@ func TestEmbeddedSchemasAreDraft202012AndClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if schemas.formRef == nil || schemas.definition == nil || schemas.index == nil {
+	if schemas.legacyFormRef == nil || schemas.currentFormRef == nil ||
+		schemas.legacyDefinition == nil || schemas.currentDefinition == nil ||
+		schemas.indexV1Alpha1 == nil || schemas.indexV1Alpha2 == nil || schemas.indexV1Alpha3 == nil {
 		t.Fatal("not all embedded schemas compiled")
 	}
 }
@@ -983,6 +985,111 @@ func makeValidPackage(t *testing.T, mutateDefinition func(map[string]any)) strin
 	}
 	writeFixtureFile(t, filepath.Join(root, PackageIndexFilename), canonicalMarshal(t, index), 0o644)
 	return root
+}
+
+func TestVerifyDirectoryAcceptsContentAddressedV1Alpha2Index(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, nil)
+	mutateIndex(t, root, func(index map[string]any) {
+		index["apiVersion"] = LegacyContentAddressedPackageAPIVersion
+		delete(index, "packageVersion")
+	})
+
+	report, err := VerifyDirectory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexRaw, err := os.ReadFile(filepath.Join(root, PackageIndexFilename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.PackageDigest != mustDigestCanonical(t, indexRaw) {
+		t.Fatalf("package digest = %q", report.PackageDigest)
+	}
+}
+
+func TestVerifyDirectoryAcceptsCurrentV1Alpha3IndexAndV1Alpha2Form(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, nil)
+	promotePackageToCurrentEpoch(t, root)
+	if _, err := VerifyDirectory(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestV1Alpha2PackageIndexRejectsPackageVersion(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, nil)
+	mutateIndex(t, root, func(index map[string]any) {
+		index["apiVersion"] = LegacyContentAddressedPackageAPIVersion
+	})
+
+	_, err := VerifyDirectory(root)
+	if err == nil || !strings.Contains(err.Error(), "packageVersion") {
+		t.Fatalf("v1alpha2 packageVersion error = %v", err)
+	}
+}
+
+func promotePackageToCurrentEpoch(t *testing.T, root string) {
+	t.Helper()
+	definitionPath := filepath.Join(root, "definition.json")
+	raw, err := os.ReadFile(definitionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var definition map[string]any
+	if err := json.Unmarshal(raw, &definition); err != nil {
+		t.Fatal(err)
+	}
+	definition["apiVersion"] = CurrentFormAPIVersion
+	delete(definition, "status")
+	raw = canonicalMarshal(t, definition)
+	writeFixtureFile(t, definitionPath, raw, 0o644)
+	mutateIndex(t, root, func(index map[string]any) {
+		index["apiVersion"] = CurrentPackageAPIVersion
+		delete(index, "packageVersion")
+		ref := index["formRef"].(map[string]any)
+		ref["apiVersion"] = CurrentFormAPIVersion
+		ref["schemaDigest"] = mustDigestCanonical(t, raw)
+		for _, value := range index["files"].([]any) {
+			file := value.(map[string]any)
+			if file["path"] == "definition.json" {
+				file["size"] = len(raw)
+				file["digest"] = DigestBytes(raw)
+			}
+		}
+	})
+}
+
+func TestCurrentFormDefinitionRejectsLegacyDocumentStatus(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, nil)
+	promotePackageToCurrentEpoch(t, root)
+	raw, err := os.ReadFile(filepath.Join(root, "definition.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var definition map[string]any
+	if err := json.Unmarshal(raw, &definition); err != nil {
+		t.Fatal(err)
+	}
+	definition["status"] = "compatibility-candidate"
+	if _, err := ValidateDefinition(canonicalMarshal(t, definition)); err == nil || !strings.Contains(err.Error(), "status") {
+		t.Fatalf("v1alpha2 legacy status error = %v", err)
+	}
+}
+
+func TestV1Alpha1PackageIndexStillRequiresPackageVersion(t *testing.T) {
+	t.Parallel()
+	root := makeValidPackage(t, nil)
+	mutateIndex(t, root, func(index map[string]any) {
+		delete(index, "packageVersion")
+	})
+
+	_, err := VerifyDirectory(root)
+	if err == nil || !strings.Contains(err.Error(), "packageVersion") {
+		t.Fatalf("v1alpha1 packageVersion error = %v", err)
+	}
 }
 
 func fileEntry(path, mediaType string, raw []byte) map[string]any {

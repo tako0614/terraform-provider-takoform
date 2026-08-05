@@ -1,9 +1,16 @@
-# Form Definition v1alpha1
+# Form Definition profiles
 
 A Form Definition is a deterministic, data-only description of one portable
 service shape. Requirement keywords are used as described in
-[`../conformance.md`](../conformance.md). Its normative Draft 2020-12 schema is
-[`../../formpackage/schemas/form-definition.schema.json`](../../formpackage/schemas/form-definition.schema.json).
+[`../conformance.md`](../conformance.md). The current
+`forms.takoform.com/v1alpha2` Draft 2020-12 schemas are
+[`form-definition-v1alpha2.schema.json`](../../formpackage/schemas/form-definition-v1alpha2.schema.json)
+and
+[`form-ref-v1alpha2.schema.json`](../../formpackage/schemas/form-ref-v1alpha2.schema.json).
+The unversioned filenames
+[`form-definition.schema.json`](../../formpackage/schemas/form-definition.schema.json)
+and [`form-ref.schema.json`](../../formpackage/schemas/form-ref.schema.json)
+are retained v1alpha1 Legacy profiles, not aliases for current.
 
 ## Exact FormRef
 
@@ -12,15 +19,13 @@ extensions:
 
 ```json
 {
-  "apiVersion": "forms.takoform.com/v1alpha1",
+  "apiVersion": "forms.takoform.com/v1alpha2",
   "kind": "ExampleStore",
-  "definitionVersion": "1.0.0",
+  "definitionVersion": "0.1.0",
   "schemaDigest": "sha256:<64 lowercase hexadecimal characters>"
 }
 ```
 
-The normative schema is
-[`../../formpackage/schemas/form-ref.schema.json`](../../formpackage/schemas/form-ref.schema.json).
 `kind` MUST be a PascalCase portable kind, `definitionVersion` MUST be SemVer,
 and `schemaDigest` MUST be SHA-256 over the definition's RFC 8785 canonical
 bytes. The definition MUST repeat the first three identity fields, and a
@@ -31,8 +36,7 @@ verifier MUST reject any mismatch.
 A definition contains:
 
 - the three non-digest identity fields;
-- a title, optional description, and explicit `compatibility-candidate`,
-  `standard`, or `deprecated` status;
+- a title and optional description;
 - inline Draft 2020-12 desired and observed schemas, plus an optional output schema;
 - optional immutable JSON Pointer fields;
 - an explicit subset of `create`, `read`, `update`, `delete`, `import`,
@@ -47,11 +51,22 @@ A definition contains:
   and negative schema fixtures in the same package, with independent maxima of
   32 positive fixtures and 32 negative fixtures.
 
-Negative fixtures name their validation stage. Standard admission executes
-`desired` negatives in both host and provider roles and `observed` negatives
-in the provider role before state projection. `output` remains a valid
-package-structure validation stage, but standard admission fails closed on it
-until a portable runner contract defines how a role executes that case.
+The current v1alpha2 structure deliberately has no maturity or deprecation
+field. Proposal, Experimental, Stable, and Legacy state is owned only by the
+external lifecycle record defined in
+[`../project-lifecycle.md`](../project-lifecycle.md). This keeps one mutable
+authority for a fact that can change while immutable Definition bytes cannot.
+
+Published v1alpha1 Definitions retain their historical document-local
+`compatibility-candidate`, `standard`, or `deprecated` field. A verifier MUST
+preserve those bytes, but current tooling MUST NOT infer maturity from them or
+copy the field into v1alpha2.
+
+Negative fixtures name their validation stage. Host Support evidence executes
+`desired` negatives in the host role; provider compatibility evidence executes
+`desired` and `observed` negatives before state projection. `output` remains a
+valid package-structure validation stage, but a conformance claim fails closed
+on it until a portable runner contract defines how its role executes that case.
 
 The published Form Definition JSON Schema is a normative structural minimum.
 The semantic verifier rules below are also normative: document-local reference
@@ -117,7 +132,7 @@ proof and the compiler aligned on one resolution base and one dialect.
 
 ## Digest-bound artifact sources
 
-An artifact-backed standard Form declares one required `source` object with
+An artifact-backed Form declares one required `source` object with
 `artifactUrl`, `artifactSha256`, and `artifactMediaType`. `artifactUrl` enters
 nonsensitive portable desired state and Terraform/OpenTofu state, so it MUST
 use the credential-free HTTPS grammar: an absolute `https` URL with a dotted
@@ -186,11 +201,10 @@ such as `authorization`, `oauthClient`, `sessionCookie`, `apiKeyValue`,
 `privateKeyPem`, `invoice`, `paymentMethod`, `currency`, `taxCode`,
 `serviceOfferingId`, `managerIdentifier`, and `region` do not.
 
-Every declared Form has an independent exact `standard` definition candidate
-and local structural fixtures. Their package-set
-classification remains `structural-candidate`; `status: standard` pins proposed
-final definition bytes and is not admission. Every package is an exact
-one-definition package, never one multi-definition package. Portable
-host/provider admission evidence is externally supplied and is not synthesized
-by the package generator; only authenticated evidence may classify an exact
-package `portable-standard`.
+Every package is an exact one-definition package, never one multi-definition
+package. The current generated catalog and package set predate decision
+[`0004`](../decisions/0004-takoform-is-an-experimental-specification.md): their
+`status: standard`, `structural-candidate`, and `portable-standard` values are
+retained Legacy document facts, not a current maturity hierarchy. Host Support
+and provider compatibility evidence are supplied by their owning
+implementations and are not synthesized by the package generator.

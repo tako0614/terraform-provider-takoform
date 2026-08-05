@@ -30,8 +30,8 @@ func TestReleaseDescriptorPinsPublicIdentityAndSigner(t *testing.T) {
 	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
 		t.Fatalf("CLI/FQN matrix: %v", err)
 	}
-	if desc.Version != "1.0.3" {
-		t.Fatalf("current provider candidate must be 1.0.3, got %q", desc.Version)
+	if desc.Version != "2.0.0" {
+		t.Fatalf("current provider candidate must be 2.0.0, got %q", desc.Version)
 	}
 	if err := validateVersioningPolicy(desc.Versioning); err != nil {
 		t.Fatalf("versioning policy: %v", err)
@@ -877,10 +877,9 @@ func testDescriptor() descriptor {
 		PublicationStatus:  "candidate-only",
 		Versioning: versioningPolicy{
 			ProviderCompatibility:  "semver-major",
-			PortableAPIVersion:     "forms.takoform.com/v1alpha1",
+			PortableAPIVersion:     "forms.takoform.com/v1alpha2",
 			FormDefinitionVersions: "independent-immutable-semver",
-			FormPackageVersions:    "independent-immutable-semver",
-			AdmissionGenerations:   "independent-non-semver",
+			FormPackageVersions:    "content-addressed-current-retained-legacy-semver",
 		},
 	}
 }

@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 2,
-  "status": "decision-approved-implementation-in-progress",
+  "schemaVersion": 3,
+  "status": "architecture-decision-accepted-implementation-in-progress",
   "provider": {
     "status": "implemented-registry-key-registered-first-install-proof-pending",
     "artifactDigest": "sha256",
@@ -69,7 +69,7 @@
     }
   },
   "formPackage": {
-    "status": "data-contract-verifier-and-keyless-release-lane-implemented-first-release-pending",
+    "status": "current-content-addressed-release-lane-implemented-first-current-release-pending",
     "canonicalization": {
       "format": "RFC8785",
       "encoding": "UTF-8 I-JSON",
@@ -95,10 +95,12 @@
       "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
       "workflow": ".github/workflows/form-package-release.yml",
       "workflowIdentity": "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main",
-      "tagPattern": "refs/tags/forms/k-*/v*"
+      "currentTagPattern": "refs/tags/forms/k-*/sha256-*",
+      "retainedLegacyTagPattern": "refs/tags/forms/k-*/v*"
     },
     "tagProtection": {
-      "tagPattern": "refs/tags/forms/*/v*",
+      "currentTagPattern": "refs/tags/forms/*/sha256-*",
+      "retainedLegacyTagPattern": "refs/tags/forms/*/v*",
       "restrictCreation": true,
       "restrictDeletion": true,
       "restrictNonFastForward": true,
@@ -116,7 +118,7 @@
       "sbom": "spdx-2.3"
     },
     "distribution": {
-      "status": "github-release-workflow-implemented-first-release-pending",
+      "status": "github-release-current-workflow-implemented-first-current-release-pending",
       "initialSource": "github-release",
       "mirrorPolicy": "copy exact assets only after bundle and digest verification",
       "customerRequestFetch": false,

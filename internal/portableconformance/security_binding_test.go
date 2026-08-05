@@ -14,7 +14,7 @@ import (
 )
 
 func TestBlackBoxRunnerIndependentlyProbesEveryPlanBindingDimension(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestBlackBoxRunnerIndependentlyProbesEveryPlanBindingDimension(t *testing.T
 }
 
 func TestRunnerRejectsOrdinaryValidationAsInstrumentedPlanEvidence(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestRunnerRejectsOrdinaryValidationAsInstrumentedPlanEvidence(t *testing.T)
 }
 
 func TestReferencePlanBindingInstrumentationIsClosedAuthenticatedAndNonMutating(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func pointerToIdentity(identity client.InstalledFormReference) *client.Installed
 }
 
 func TestBlackBoxRunnerRejectsReplaySharedAcrossPrincipals(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestBlackBoxRunnerRejectsReplaySharedAcrossPrincipals(t *testing.T) {
 }
 
 func TestBlackBoxRunnerRejectsReplaySharedAcrossTenants(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestBlackBoxRunnerRejectsReplaySharedAcrossTenants(t *testing.T) {
 }
 
 func TestBlackBoxRunnerRejectsReplayWithoutCurrentAuthorization(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestBlackBoxRunnerRejectsReplayWithoutCurrentAuthorization(t *testing.T) {
 }
 
 func TestBlackBoxRunnerRejectsReplaySharedAcrossSpaces(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestBlackBoxRunnerRejectsReplaySharedAcrossSpaces(t *testing.T) {
 }
 
 func TestBlackBoxRunnerRejectsResourceStorageSharedAcrossSpaces(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +318,7 @@ func TestBlackBoxRunnerRejectsResourceStorageSharedAcrossSpaces(t *testing.T) {
 }
 
 func TestBlackBoxRunnerRejectsConnectionResolutionOutsideSourceSpace(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +339,7 @@ func TestBlackBoxRunnerRejectsConnectionResolutionOutsideSourceSpace(t *testing.
 }
 
 func TestEndpointRunnerRequiresThreeDistinctAuthorityCredentials(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}

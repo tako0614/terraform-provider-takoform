@@ -6,6 +6,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 // artifactSourceValues is the shared typed-provider projection of the immutable
@@ -69,7 +71,7 @@ func (v artifactSourceValues) toSpec(owner string) (map[string]any, diag.Diagnos
 		diags.AddAttributeError(
 			path.Root("artifact_sha256"),
 			"Invalid "+owner+" artifact digest",
-			"artifact_sha256 must be a 64-character SHA-256 hex digest, optionally prefixed with sha256:.",
+			formcatalog.GrammarCanonicalSHA256.Message("artifact_sha256"),
 		)
 		return nil, diags
 	}

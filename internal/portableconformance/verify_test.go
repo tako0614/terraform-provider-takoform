@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/formregistry"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
 func TestPublishedHostAPIKeepsInterfaceProjectionReadOnly(t *testing.T) {
@@ -73,7 +73,7 @@ func TestPublishedHostAPIUsesPortableStableErrorTaxonomy(t *testing.T) {
 	if err := json.Unmarshal(raw, &published); err != nil {
 		t.Fatal(err)
 	}
-	portable, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	portable, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestPublishedResourceVersionContractMatchesPortableConformance(t *testing.T
 	if err := json.Unmarshal(raw, &published); err != nil {
 		t.Fatal(err)
 	}
-	portable, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	portable, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,12 +108,12 @@ func TestPublishedResourceVersionContractMatchesPortableConformance(t *testing.T
 	}
 }
 
-func TestPortableHostContractMatchesReleaseOwnedObjectBucket(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+func TestPortableHostContractMatchesCurrentEdgeWorkerCandidate(t *testing.T) {
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	release, err := formregistry.ForKind("ObjectBucket")
+	release, err := currentformregistry.ForKind("EdgeWorker")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,11 +124,11 @@ func TestPortableHostContractMatchesReleaseOwnedObjectBucket(t *testing.T) {
 		t.Fatalf("cross-repo runner FormRef %#v differs from provider release %#v", identity, release)
 	}
 	var canonicalDesired map[string]any
-	if err := decodeStrict(filepath.Join("..", "..", "conformance", "form-package-v1", "positive", "standard", "object-bucket", "fixtures", "desired.json"), &canonicalDesired); err != nil {
+	if err := decodeStrict(filepath.Join("..", "..", "forms", "candidates", "v1alpha2", "edge-worker", "fixtures", "desired.json"), &canonicalDesired); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(contract.RunnerInput.Desired, canonicalDesired) {
-		t.Fatalf("portable runner desired %#v differs from ObjectBucket canonical fixture %#v", contract.RunnerInput.Desired, canonicalDesired)
+		t.Fatalf("portable runner desired %#v differs from EdgeWorker canonical fixture %#v", contract.RunnerInput.Desired, canonicalDesired)
 	}
 	if contract.RunnerInput.Name != canonicalDesired["name"] {
 		t.Fatalf("portable runner name %q differs from canonical desired.name %#v", contract.RunnerInput.Name, canonicalDesired["name"])
@@ -136,7 +136,7 @@ func TestPortableHostContractMatchesReleaseOwnedObjectBucket(t *testing.T) {
 }
 
 func TestPortableHostContractRejectsRunnerNameDrift(t *testing.T) {
-	path := filepath.Join("..", "..", "conformance", "portable-host-v1", "contract.json")
+	path := filepath.Join("..", "..", "conformance", "portable-host-v2", "contract.json")
 	var contract Contract
 	if err := decodeStrict(path, &contract); err != nil {
 		t.Fatal(err)
@@ -153,7 +153,7 @@ func TestPortableHostContractRejectsRunnerNameDrift(t *testing.T) {
 }
 
 func TestPortableHostContractRequiresDistinctResourceSpaces(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestPortableHostContractRequiresDistinctResourceSpaces(t *testing.T) {
 }
 
 func TestPortableHostContractRejectsNonCanonicalInstalledFormReference(t *testing.T) {
-	path := filepath.Join("..", "..", "conformance", "portable-host-v1", "contract.json")
+	path := filepath.Join("..", "..", "conformance", "portable-host-v2", "contract.json")
 	var base Contract
 	if err := decodeStrict(path, &base); err != nil {
 		t.Fatal(err)
@@ -208,7 +208,7 @@ func TestPortableHostContractRejectsNonCanonicalInstalledFormReference(t *testin
 }
 
 func TestPortableHostContractRejectsUnknownFormRefField(t *testing.T) {
-	path := filepath.Join("..", "..", "conformance", "portable-host-v1", "contract.json")
+	path := filepath.Join("..", "..", "conformance", "portable-host-v2", "contract.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -231,15 +231,15 @@ func TestPortableHostContractRejectsUnknownFormRefField(t *testing.T) {
 }
 
 func TestPortableHostContractRejectsDuplicateFormRefField(t *testing.T) {
-	path := filepath.Join("..", "..", "conformance", "portable-host-v1", "contract.json")
+	path := filepath.Join("..", "..", "conformance", "portable-host-v2", "contract.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	duplicate := strings.Replace(
 		string(raw),
-		`"kind": "ObjectBucket",`,
-		`"kind": "objectBucket", "kind": "ObjectBucket",`,
+		`"kind": "EdgeWorker",`,
+		`"kind": "edgeWorker", "kind": "EdgeWorker",`,
 		1,
 	)
 	if duplicate == string(raw) {
@@ -264,12 +264,12 @@ func TestPortableHostContractRejectsLegacyCompatibilityPath(t *testing.T) {
 }
 
 func TestPortableHostContractRejectsDuplicateMembersBeforeTypedDecode(t *testing.T) {
-	path := filepath.Join("..", "..", "conformance", "portable-host-v1", "contract.json")
+	path := filepath.Join("..", "..", "conformance", "portable-host-v2", "contract.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	const format = `"format": "takoform.portable-host-conformance@v1"`
+	const format = `"format": "takoform.portable-host-conformance@v2"`
 	duplicate := []byte(format + `,` + format)
 	raw = bytes.Replace(raw, []byte(format), duplicate, 1)
 	if bytes.Count(raw, []byte(format)) != 2 {
@@ -282,12 +282,12 @@ func TestPortableHostContractRejectsDuplicateMembersBeforeTypedDecode(t *testing
 }
 
 func TestPortableHostContractRejectsInvalidUTF8BeforeTypedDecode(t *testing.T) {
-	path := filepath.Join("..", "..", "conformance", "portable-host-v1", "contract.json")
+	path := filepath.Join("..", "..", "conformance", "portable-host-v2", "contract.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	marker := []byte("takoform.portable-host-conformance@v1")
+	marker := []byte("takoform.portable-host-conformance@v2")
 	index := bytes.Index(raw, marker)
 	if index < 0 {
 		t.Fatal("test format marker is absent")
@@ -300,7 +300,7 @@ func TestPortableHostContractRejectsInvalidUTF8BeforeTypedDecode(t *testing.T) {
 }
 
 func TestNeutralRunnerEvidenceDigestCoversSubjectAndInputs(t *testing.T) {
-	path := filepath.Join("..", "..", "conformance", "portable-host-v1", "contract.json")
+	path := filepath.Join("..", "..", "conformance", "portable-host-v2", "contract.json")
 	var contract Contract
 	if err := decodeStrict(path, &contract); err != nil {
 		t.Fatal(err)

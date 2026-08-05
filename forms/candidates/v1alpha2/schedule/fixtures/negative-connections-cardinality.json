@@ -1,0 +1,21 @@
+{
+  "connections": {
+    "invocation": {
+      "permissions": [
+        "request"
+      ],
+      "projection": "schedule.trigger.v1",
+      "resource": "EdgeWorker/edge-worker"
+    },
+    "overflow1": {
+      "permissions": [
+        "request"
+      ],
+      "projection": "schedule.trigger.v1",
+      "resource": "EdgeWorker/edge-worker"
+    }
+  },
+  "cron": "0 0 * * *",
+  "name": "schedule",
+  "timezone": "UTC"
+}

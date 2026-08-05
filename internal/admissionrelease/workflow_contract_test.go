@@ -37,7 +37,9 @@ func TestRepositoryDoesNotExposeSetWideAdmissionReleaseSurface(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
 	for _, retired := range []string{
 		".github/workflows/standard-admission-release.yml",
+		".github/workflows/standard-admission-evidence.yml",
 		".github/workflows/standard-form-package-set-release.yml",
+		"cmd/standard-admission-material/main.go",
 		"cmd/form-package-release/standard_set.go",
 	} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(retired))); err == nil {
@@ -49,7 +51,6 @@ func TestRepositoryDoesNotExposeSetWideAdmissionReleaseSurface(t *testing.T) {
 	for _, required := range []string{
 		"forms/release-plan.json",
 		".github/workflows/form-package-release.yml",
-		".github/workflows/standard-admission-evidence.yml",
 	} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(required))); err != nil {
 			t.Fatalf("the independent publication/evidence surface %s is missing: %v", required, err)
@@ -73,23 +74,4 @@ func TestRepositoryDoesNotExposeSetWideAdmissionReleaseSurface(t *testing.T) {
 		}
 	}
 
-	evidenceWorkflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "standard-admission-evidence.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	workflow := string(evidenceWorkflow)
-	if !strings.Contains(workflow, "Upload the closed signed candidate without publishing") ||
-		!strings.Contains(workflow, "release, tag, registry, contents write, or production mutation: none") ||
-		!strings.Contains(workflow, "run-name: ${{ inputs.request_id }}") ||
-		!strings.Contains(workflow, `test "$(find "${HOST_CANDIDATE_PATH}" -type f | wc -l)" -eq 26`) ||
-		!strings.Contains(workflow, `cosign verify-blob "${HOST_CANDIDATE_PATH}/portable-host-runner-report.json"`) ||
-		!strings.Contains(workflow, `cosign verify-blob "${HOST_CANDIDATE_PATH}/SHA256SUMS"`) ||
-		!strings.Contains(workflow, `--bundle "${HOST_CANDIDATE_PATH}/SHA256SUMS.sigstore.json"`) {
-		t.Fatal("standard-admission-evidence workflow does not declare its evidence-only boundary")
-	}
-	for _, forbidden := range []string{"contents: write", "gh release create", "git push", "GITHUB_RUN_DISPLAY_TITLE"} {
-		if strings.Contains(workflow, forbidden) {
-			t.Errorf("standard-admission-evidence workflow contains publication authority %q", forbidden)
-		}
-	}
 }

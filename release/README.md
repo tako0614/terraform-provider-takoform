@@ -22,11 +22,10 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-Provider `v1.0.3` is the current release candidate. Provider `v1.0.2` remains
-the current published `v1` release until the signed GitHub Release and
-authenticated Terraform/OpenTofu Registry readback for `v1.0.3` complete.
-`release/version.json` says `publicationStatus: candidate-only` because it is
-candidate metadata, not a live availability field.
+Provider `v1.0.3` is the current published `v1` release. Its signed tag,
+immutable GitHub Release, and canonical Terraform Registry listing exist.
+`release/version.json` retains `publicationStatus: candidate-only` because it
+is tag-time build metadata, not a live availability field.
 
 ## Provider v1.0.3 RelationalDatabase schema inputs
 
@@ -89,10 +88,19 @@ and per-resource cutover procedure is
 the machine-readable
 [`migration audit`](migrations/v0.2.1-to-v1.0.1.json).
 
-This is the first stable provider compatibility line, not a claim that the
-portable specification has graduated from
-`forms.takoform.com/v1alpha1`. Provider, Form definition, Form Package, and
-admission versions remain independent. Published `EdgeWorker@1.0.0` and
+This is the first stable provider compatibility line, not a claim that any Form
+epoch graduated. The `forms.takoform.com/v1alpha1` Form epoch is now frozen
+Legacy; post-reset Forms use `forms.takoform.com/v1alpha2` inside
+`packages.forms.takoform.com/v1alpha3` after an individual lifecycle transition.
+The current nine are still unpublished candidates. The outer Host API wire independently
+uses `forms.takoform.com/v1alpha2` behind `/.well-known/takoform/v1alpha2` for
+provider v2. The frozen provider-v1 lane retains
+`forms.takoform.com/v1alpha1` behind `/.well-known/takoform`; one discovery
+document never advertises both epochs. Provider and Form Definition versions
+remain independent; current Form Package artifacts are content-addressed while
+retained Legacy package locators preserve their published identities.
+Admission generations are a separate historical evidence stream. Published
+`EdgeWorker@1.0.0` and
 `EdgeWorker@1.0.1` identities cannot be reset, so the provider-neutral
 definition uses the independent `EdgeWorker@3.0.0` identity. The intermediate
 `2.0.0` release source remains unmodified; tightening its artifact URL grammar
@@ -133,7 +141,7 @@ Providers `v0.1.1`, `v0.1.2`, and the then-corrective `v0.1.3` describe
 historical pre-v1 layouts only. `v0.1.1` included SPDX evidence in
 `SHA256SUMS`; `v0.1.2` omitted the required Registry manifest; and `v0.1.3`
 corrected that historical checksum closure without replacing a published byte.
-None of those layouts defines the current provider `v1.0.2` release. The v1
+None of those layouts defines the current provider `v1.0.3` release. The v1
 release is governed by the 15-asset provenance closure above and MUST NOT
 overwrite or inherit the identity of any historical version.
 
@@ -151,14 +159,12 @@ identity, `registry.terraform.io/tako0614/takoform`. Both must expose the same
 schema and complete lifecycle evidence for the exact embedded structural
 candidate set.
 
-Provider publication is Phase 1 only. The `v*` workflow runs
+Provider publication is an independent distribution action. The `v*` workflow runs
 `candidate-publication-check`, which requires `publicationStatus:
 candidate-only` and the unchanged structural inventory. Publishing that exact
-binary, checksums, SBOM, provenance, and signatures does not mutate
-`admissionStatus`, create admission evidence, install a Form Package, or grant
-host activation authority. This separation is required because a genuine
-Public Registry readback cannot exist until the immutable provider version is
-already public.
+binary, checksums, SBOM, provenance, and signatures does not change any Form's
+lifecycle state, install a Form Package, establish Host Support, or grant host
+activation authority. Provider SemVer has no admission-generation coupling.
 
 The normal `matrix` command intentionally uses a locally built provider binary
 through `dev_overrides`; it is a pre-publication regression gate and is not
@@ -194,95 +200,40 @@ schema, and lifecycle.
 The matrix mode pins the exact descriptor version in generated configuration,
 runs `init` with only `direct {}`, locates and hashes the downloaded provider
 binary, and repeats the complete lifecycle. Its report carries
-`installationSource: direct-registry-install`; the admission validator rejects
+`installationSource: direct-registry-install`; the historical readback validator rejects
 otherwise-valid matrices carrying `local-dev-override`. The matrix is still
 not self-authenticating: it becomes usable only when an externally signed,
 canonical `takoform.provider-registry-readback@v1` document binds its digest,
 installed binary/schema digests, CLI/FQN identities, provider tag, and source
 commit.
 
-Current Phase 2 has no set-wide release or promotion lane. The protected
-`provider-registry-readback.yml` workflow executes both direct Registry
-installs and keyless-signs only the canonical readback with its own publisher
-identity. `standard-provider-report.yml` independently signs all 34
-`portable-v1` provider reports using
-`takoform.standard-provider-runner-report@v2`, including the exact installed
-provider binary digest. A conforming host signs the exact ten
-`ga-core-v2` host reports plus the exact portable runner report, then signs the
-candidate's exact `SHA256SUMS` envelope. That envelope closes over the manifest,
-request/run/source-bound signed candidate, portable report and bundle, and all
-ten report/bundle pairs; the checksum signature bundle is the only excluded
-self-referential file. Takoform requires this signed-candidate v4 26-file
-closure, rejects the legacy runner subject, and semantically verifies every
-portable runner result field against its exact retained contract.
-The admission material retains and
-offline-authenticates the complete 34-report provider candidate, including the
-24 reports outside the selected ten. Finally, `standard-admission-evidence.yml` verifies
-those retained candidates, builds the generation-aware v4 set twice, and signs
-only the ten admission-evidence subjects. It does not create a tag, release,
-registry entry, or production mutation.
+## Historical admission evidence
 
-The portable source gate authenticates historical `ga-core-v1` publication
-with `retained-ga-core-v1-published-package-check`.
-`current-published-package-check` and `current-admission-closure-check` are
-post-publication v4 gates and remain fail-closed until all retained subjects
-and exact Git refs verify offline. The removed
-`standard-admission-release.yml`,
-`standard-form-package-set-release.yml`, `form-package-release` set-wide
-subcommands and `--coordinated-standard-set` flag, controller promotion input,
-release archive, and `release-check` path described a set-wide artifact
-promotion that is not part of current Takoform.
+Takoform no longer has a central candidate set, admission assembly workflow,
+admission publisher, or set-wide promotion lane. The provider Registry
+readback and the all-34 provider reports remain useful compatibility evidence,
+but they do not vote on Form maturity and are not inputs to a current central
+approval process.
 
-The admission checkpoint semver is independent from each exact Form definition
-and Form Package semver. It identifies one immutable source-retained closure;
-it does not republish package bytes or create another distributable artifact.
+Published admission identities are a closed historical namespace. Versions
+`1.0.1`, `1.0.2`, `1.0.3`, `1.0.4`, `1.0.6`, and `1.0.7` are pinned by exact annotated
+tag object, commit, retained tree, and set digest in
+[`../admission/admission-identities.json`](../admission/admission-identities.json).
+Version `1.0.5` is permanently `reserved-abandoned`. No new admission checkpoint
+is assigned.
 
-After the signed admission evidence has been retained and independently
-reviewed in source, the only checkpoint publication sequence is the owner
-entrypoint below. It requires local `gh` and a non-empty operator `GH_TOKEN`;
-that token is exposed only to read-only `gh api` ruleset calls and is scrubbed
-from every `git`, `bun`, and `go` subprocess.
+The history-only gates are:
 
 ```console
-bun run deploy -- takoform-admission-release prepare \
-  --expected-commit <exact-reviewed-closure-commit>
-bun run deploy -- takoform-admission-release publish \
-  --expected-commit <same-exact-reviewed-closure-commit>
-bun run deploy -- takoform-admission-release verify \
-  --expected-commit <same-exact-reviewed-closure-commit>
+go run ./cmd/standard-form-conformance legacy-published-package-check
+go run ./cmd/standard-form-conformance legacy-admission-evidence-check
 ```
 
-All three phases require two exact active GitHub rulesets whose sole include is
-`refs/tags/forms/admissions/v*`: a creation-only rule restricted to explicit
-always-bypass actors available to the operator, and a distinct no-bypass rule
-blocking update, deletion, and non-fast-forward changes. `prepare` is the
-non-mutating owner gate. `publish` fingerprints the exact rulesets immediately
-before the only push, creates the descriptor-pinned annotated tag only after an
-independent review and remote-absence proof, and requires the identical
-protection immediately afterward. A failed post-push protection proof is an
-indeterminate publication result and is never retried. `verify` performs the
-live-protection, authoritative tag-object, peeled-commit, v4-tree, and
-offline-closure readback.
-
-The admission tag is intentionally unsigned and has no GitHub Release:
-authenticity comes from the separately Sigstore-signed retained evidence, while
-the protected ref provides its immutable source identity. Version `1.0.5` is
-permanently reserved and abandoned because v3 candidates already used it; the
-current assignment is `1.0.7` / `forms/admissions/v1.0.7`. Never reuse, replace,
-or move either identity.
-
-The tagged closure commit may later be an ancestor of `main`, but its complete
-`admission/v4` tree must stay byte-identical to the current v4 tree. Unrelated
-website state may move forward. A changed v4 closure is repaired forward under
-a newly assigned checkpoint version.
-
-`admission-closure-check` also resolves the admission tag, provider tag, and
-every package tag from fetched local Git refs and requires their exact retained
-commits. The provider tag—not the admission tag—must be annotated and signed by
-the pinned provider GPG fingerprint; import only
-`release/keys/provider-signing-key.asc` before an offline local check. A
-40-character string without the corresponding immutable ref is never release
-evidence.
+They prove the immutable Legacy publication inventory and historical Git
+identity ledger. They do not rerun old `portable-standard` assertions as
+current conformance, support, availability, or activation claims. Provider
+versions remain independent of Form versions and of these retired historical
+identities.
 
 The provider build tool never signs, uploads, creates a GitHub Release, or
 publishes to a Registry/mirror. The only operator entrypoint is the repository

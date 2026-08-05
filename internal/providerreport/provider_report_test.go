@@ -13,7 +13,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/admissionrelease"
-	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
 	"github.com/tako0614/terraform-provider-takoform/internal/standardforms"
 )
@@ -61,11 +61,11 @@ func TestLoadCandidateFixturesUsesExactCurrentReleaseSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(fixtures) != len(formcatalog.Kinds) {
-		t.Fatalf("fixture count = %d, want %d", len(fixtures), len(formcatalog.Kinds))
+	if len(fixtures) != len(currentformcatalog.Kinds) {
+		t.Fatalf("fixture count = %d, want %d", len(fixtures), len(currentformcatalog.Kinds))
 	}
 	for _, fixture := range fixtures {
-		declared, ok := formcatalog.ByKind(fixture.Kind)
+		declared, ok := currentformcatalog.ByKind(fixture.Kind)
 		if !ok {
 			t.Fatalf("undeclared candidate kind %s", fixture.Kind)
 		}
@@ -90,8 +90,8 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != len(formcatalog.Kinds) {
-		t.Fatalf("report count = %d, want %d", len(reports), len(formcatalog.Kinds))
+	if len(reports) != len(currentformcatalog.Kinds) {
+		t.Fatalf("report count = %d, want %d", len(reports), len(currentformcatalog.Kinds))
 	}
 	candidates, err := LoadCandidateFixtures(root)
 	if err != nil {
@@ -112,7 +112,7 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 		if generated.digest != formpackage.DigestBytes(generated.canonical) {
 			t.Fatalf("invalid canonical digest for %s", generated.kind)
 		}
-		declared, ok := formcatalog.ByKind(generated.kind)
+		declared, ok := currentformcatalog.ByKind(generated.kind)
 		if !ok {
 			t.Fatalf("report names undeclared kind %s", generated.kind)
 		}
@@ -158,7 +158,7 @@ func TestGenerateRunsActualProviderProtocolAndWritesCanonicalPerKindReports(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if inventory.Format != directoryInventoryFormat || inventory.Status != "candidate-only" || inventory.ProofType != "provider" || inventory.Source.Commit != sourceCommit || inventory.Source.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || inventory.Generation == "" || inventory.RunnerVersion != providerReleaseVersion(t, root) || len(inventory.Reports) != len(formcatalog.Kinds) {
+	if inventory.Format != directoryInventoryFormat || inventory.Status != "candidate-only" || inventory.ProofType != "provider" || inventory.Source.Commit != sourceCommit || inventory.Source.Repository != "https://github.com/tako0614/terraform-provider-takoform.git" || inventory.Generation == "" || inventory.RunnerVersion != providerReleaseVersion(t, root) || len(inventory.Reports) != len(currentformcatalog.Kinds) {
 		t.Fatalf("invalid exported provider-report manifest: %#v", inventory)
 	}
 	verified, err := VerifyDirectory(root, exportRoot, sourceCommit)
@@ -281,52 +281,6 @@ func TestStandardProviderReportWorkflowSeparatesExecutionAndSigningAuthority(t *
 	for _, forbidden := range []string{"unsignedArtifact:", "sigstoreBundlePath", "sigstoreBundleDigest"} {
 		if strings.Contains(workflow, forbidden) {
 			t.Fatalf("workflow reintroduced non-canonical signed handoff field %q", forbidden)
-		}
-	}
-}
-
-func TestStandardAdmissionEvidenceSelectsOneExactProviderReportAttempt(t *testing.T) {
-	t.Parallel()
-	root, err := providerlifecycle.RepoRoot(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "standard-admission-evidence.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	workflow := string(raw)
-	bindingsRaw, err := os.ReadFile(filepath.Join(root, "scripts", "admission-evidence-bindings.mjs"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	bindings := string(bindingsRaw)
-	for _, required := range []string{
-		"run-name: ${{ inputs.request_id }}",
-		"EVIDENCE_BINDINGS: ${{ inputs.evidence_bindings }}",
-		`[[ "${PROVIDER_REQUEST_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`,
-		`test "${PROVIDER_HEAD_SHA}" = "${PROVIDER_SOURCE_COMMIT}"`,
-		`'.requestId' "${PROVIDER_CANDIDATE_PATH}/signed-provider-report-candidate.json"`,
-		`'.workflowRunId' "${PROVIDER_CANDIDATE_PATH}/signed-provider-report-candidate.json"`,
-		`'.workflowRunAttempt | tostring' "${PROVIDER_CANDIDATE_PATH}/signed-provider-report-candidate.json"`,
-		`'.headSha' "${PROVIDER_CANDIDATE_PATH}/signed-provider-report-candidate.json"`,
-		`--provider-request-id "${PROVIDER_REQUEST_ID}"`,
-		`--provider-run-id "${PROVIDER_RUN_ID}"`,
-		`--provider-run-attempt "${PROVIDER_RUN_ATTEMPT}"`,
-		`--provider-head-sha "${PROVIDER_HEAD_SHA}"`,
-	} {
-		if !strings.Contains(workflow, required) {
-			t.Errorf("standard admission provider selection omits %q", required)
-		}
-	}
-	for field, environment := range map[string]string{
-		"provider_request_id":  "PROVIDER_REQUEST_ID",
-		"provider_run_id":      "PROVIDER_RUN_ID",
-		"provider_run_attempt": "PROVIDER_RUN_ATTEMPT",
-		"provider_head_sha":    "PROVIDER_HEAD_SHA",
-	} {
-		if !strings.Contains(bindings, field+":") || !strings.Contains(bindings, `environment: "`+environment+`"`) {
-			t.Errorf("canonical admission binding omits %s -> %s", field, environment)
 		}
 	}
 }

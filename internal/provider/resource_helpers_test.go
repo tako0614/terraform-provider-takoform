@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
-	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 )
 
 func TestVersionedTypedReadsGetFenceThenObserveAndMapDrift(t *testing.T) {
@@ -32,7 +32,7 @@ func TestVersionedTypedReadsGetFenceThenObserveAndMapDrift(t *testing.T) {
 				requests = append(requests, r.Method+" "+r.URL.Path)
 				w.Header().Set("Content-Type", "application/json")
 				switch {
-				case r.Method == http.MethodGet && r.URL.Path == "/.well-known/takoform":
+				case r.Method == http.MethodGet && r.URL.Path == "/.well-known/takoform/v1alpha2":
 					writeProviderDiscovery(t, w, server.URL)
 				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/resources/"+kind+"/fixture"):
 					assertProviderExactQuery(t, r, form)
@@ -82,7 +82,7 @@ func TestVersionedTypedReadsStopOnExactGet404(t *testing.T) {
 			requests := 0
 			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests++
-				if r.URL.Path == "/.well-known/takoform" {
+				if r.URL.Path == "/.well-known/takoform/v1alpha2" {
 					writeProviderDiscovery(t, w, server.URL)
 					return
 				}
@@ -115,7 +115,7 @@ func TestVersionedTypedReadsRejectObserveAtAnotherGeneration(t *testing.T) {
 			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				switch {
-				case r.URL.Path == "/.well-known/takoform":
+				case r.URL.Path == "/.well-known/takoform/v1alpha2":
 					writeProviderDiscovery(t, w, server.URL)
 				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/resources/"+kind+"/fixture"):
 					w.Header().Set("ETag", `"7"`)
@@ -149,7 +149,11 @@ func TestVersionedTypedReadsRejectObserveAtAnotherGeneration(t *testing.T) {
 // typedResourceKinds exercises the read path against every declared Form, so
 // a new catalogue entry is covered the moment it exists.
 func typedResourceKinds() []string {
-	return formcatalog.KindTokens()
+	kinds := make([]string, 0, len(currentformcatalog.Kinds))
+	for _, kind := range currentformcatalog.Kinds {
+		kinds = append(kinds, kind.Kind)
+	}
+	return kinds
 }
 
 func providerObservedResource(kind string, form client.InstalledFormReference, version string) client.Resource {
@@ -158,7 +162,7 @@ func providerObservedResource(kind string, form client.InstalledFormReference, v
 		panic("provider test has invalid resourceVersion " + version)
 	}
 	status := providerPortableStatus(kind, "fixture", generation)
-	declared, ok := formcatalog.ByKind(kind)
+	declared, ok := currentformcatalog.ByKind(kind)
 	if !ok {
 		panic("provider test has no Form declaration for " + kind)
 	}
@@ -173,7 +177,7 @@ func providerObservedResource(kind string, form client.InstalledFormReference, v
 }
 
 func providerPortableStatus(kindName, name string, generation int64) *client.Status {
-	kind, ok := formcatalog.ByKind(kindName)
+	kind, ok := currentformcatalog.ByKind(kindName)
 	if !ok {
 		panic("provider test has no Form declaration for " + kindName)
 	}
@@ -189,7 +193,7 @@ func providerPortableStatus(kindName, name string, generation int64) *client.Sta
 
 func assertTypedDriftState(t *testing.T, kind string, observed *client.Resource, want string) {
 	t.Helper()
-	declared, ok := formcatalog.ByKind(kind)
+	declared, ok := currentformcatalog.ByKind(kind)
 	if !ok {
 		t.Fatalf("no declared Form for %s", kind)
 	}
@@ -228,7 +232,7 @@ func writeProviderDiscovery(t *testing.T, w http.ResponseWriter, origin string) 
 			"optimistic_concurrency": true, "idempotent_lifecycle": true,
 		},
 		"endpoints": map[string]string{
-			"api": origin + "/apis/forms.takoform.com/v1alpha1",
+			"api": origin + "/apis/forms.takoform.com/v1alpha2",
 		},
 	})
 }

@@ -31,8 +31,8 @@ import (
 //
 // One implementation serves every kind because a Form is data: its typed
 // fields, grammars, defaults, and replacement rules all come from the
-// declaration in internal/formcatalog. A new Form is a new catalogue entry,
-// never a new copy of this lifecycle.
+// declaration selected by internal/currentformcatalog. A new Form is a new
+// catalogue entry, never a new copy of this lifecycle.
 type formResource struct {
 	kind formcatalog.Kind
 	data *providerData
@@ -76,18 +76,15 @@ func (r *formResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 }
 
 // UpgradeState deliberately rejects version-zero state without transforming
-// it. Version-zero state has no exact Form identity, so the provider cannot
-// prove which pre-v1 release or exact FormRef created it. The diagnostic-only
-// handler keeps Resource lifecycle code from querying a guessed identity.
+// it. Version-zero state has no exact Form identity, so provider v2 cannot
+// prove which historical release or exact FormRef created it.
 func (r *formResource) UpgradeState(_ context.Context) map[int64]resource.StateUpgrader {
 	return map[int64]resource.StateUpgrader{
 		0: {
 			StateUpgrader: func(_ context.Context, _ resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
 				resp.Diagnostics.AddError(
-					"Provider v1 requires explicit Form migration",
-					"Schema-version-zero state cannot be transformed in place because it does not record the exact Form identity or provider version that created it. "+
-						"State was not modified and no Resource lifecycle request was made. Pin the exact provider version that wrote this state. "+
-						"If that version is v0.2.1, follow release/migrations/v0.2.1-to-v1.0.1.md; do not refresh v0.1.x state through v0.2.1.",
+					"Provider v2 requires explicit Form migration",
+					"Schema-version-zero state cannot be transformed in place because it does not record an exact Form identity. State was not modified and no Resource lifecycle request was made. Pin the exact historical provider, or create/import the Resource explicitly into a v1alpha2 Form managed by provider v2.",
 				)
 			},
 		},
@@ -293,8 +290,8 @@ func artifactSourceAttributes() map[string]schema.Attribute {
 		},
 		"artifact_sha256": schema.StringAttribute{
 			Required:    true,
-			Description: "Expected SHA-256 digest binding artifact_url to exact immutable bytes.",
-			Validators:  []validator.String{StringMatches(`^(sha256:)?[A-Fa-f0-9]{64}$`, "artifact_sha256 must be a 64-character SHA-256 hex digest, optionally prefixed with sha256:")},
+			Description: "Canonical sha256-prefixed lowercase digest binding artifact_url to exact immutable bytes.",
+			Validators:  []validator.String{StringMatches(formcatalog.PatternCanonicalSHA256, formcatalog.GrammarCanonicalSHA256.Message("artifact_sha256"))},
 		},
 		"artifact_media_type": schema.StringAttribute{
 			Required:    true,
@@ -554,10 +551,7 @@ func (r *formResource) assertStateFormIdentity(values formValues, diags *diag.Di
 	if !ok {
 		diags.AddError(
 			"State has no exact Form identity",
-			"This state predates the provider v1 Form-identity fence. Do not refresh it with provider v1: "+
-				"pin the exact provider version that wrote the state and perform an explicit migration. "+
-				"If that version is v0.2.1, follow release/migrations/v0.2.1-to-v1.0.1.md; do not refresh v0.1.x state through v0.2.1. "+
-				"Provider v1 intentionally has no automatic state upgrader because pre-v1 state cannot prove its exact FormRef.",
+			"Provider v2 will not guess a Form identity for older state. Pin the exact provider version that wrote the state and perform an explicit create/import migration. Provider v1 remains the Legacy v1alpha1 client.",
 		)
 		return false
 	}
@@ -566,7 +560,7 @@ func (r *formResource) assertStateFormIdentity(values formValues, diags *diag.Di
 			"State Form identity does not match this provider",
 			fmt.Sprintf(
 				"State is bound to %s; this provider is bound to %s. "+
-					"Pin the provider that created the state and perform an explicit resource migration; "+
+					"Pin provider v1 for v1alpha1 state or perform an explicit create/import migration; "+
 					"the provider will not query a different exact FormRef and interpret a 404 as deletion.",
 				formatFormIdentity(got), formatFormIdentity(want),
 			),

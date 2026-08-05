@@ -1,13 +1,19 @@
 # Takoform portable specification
 
-This directory is the portable specification surface for the standalone
-Takoform project. It records both the provider characterization boundary and
-the implemented data-only Form Package core.
+This directory is the portable specification surface for Takoform, an
+**Experimental specification and tooling project**. Takoform defines a small
+desired-state boundary between infrastructure-as-code clients and resource
+hosts; it is not currently an industry standard, certification authority, or
+guarantee of backend portability.
 
 Requirement keywords, conformance classes, and what a passing check does and
 does not prove are defined in [`conformance.md`](conformance.md). How the API
-group, Form definitions, packages, and the provider are versioned — and what
-`v1alpha1` must satisfy to graduate — is in [`versioning.md`](versioning.md).
+group, Forms, packages, and the provider are versioned is in
+[`versioning.md`](versioning.md). Current project positioning and the
+Proposal → Experimental → Stable → Legacy lifecycle are defined in
+[`project-lifecycle.md`](project-lifecycle.md). The exact boundary between
+portable workload semantics and host/profile/operator concerns is
+[`portability-boundary.md`](portability-boundary.md).
 
 ## Product contract map
 
@@ -27,10 +33,11 @@ Takoform has four public contract interfaces:
    projection. Focused contracts such as
    [`data.indexed@1`](data-indexed/) only define the descriptor data the current
    Form actually declares.
-4. **Trust, version, and release identity.**
+4. **Trust, lifecycle, version, and release identity.**
    [`trust/`](trust/) defines immutable publisher evidence and revocation;
-   [`versioning.md`](versioning.md) keeps provider, API, Form, Package, and
-   admission versions independent.
+   [`project-lifecycle.md`](project-lifecycle.md) separates Form maturity from
+   Host Support and availability; [`versioning.md`](versioning.md) keeps
+   provider, API, Form, and package compatibility independent.
    [`release/`](../release/README.md) binds artifacts to those exact identities
    without changing the three contracts above.
 
@@ -43,29 +50,55 @@ product interfaces. The generated current inventory is
 and the local evidence map is
 [`../conformance/README.md`](../conformance/README.md).
 
-## Status
+## Current status
 
 The FormRef, Form Definition, package-index, revocation, and cumulative
 revocation-checkpoint schemas, the RFC 8785/I-JSON library, the closed local
 verifier, the positive/negative corpus, the protected keyless Sigstore release
 lane, and the signed append-only checkpoint delivery lane are implemented.
 
-The portable Form set was rebuilt as intent-shaped kinds declared once in
-`internal/formcatalog`; [`../forms/README.md`](../forms/README.md) is the
-generated inventory. That set is `structural-candidate`: packages verify
-locally, the provider derives the same schema from the same declaration, and
-the protocol lifecycle runs against an in-process host. None of that admits a
-Form. Signed release bytes, a conforming host's signed lifecycle report,
-Registry installation and readback, and signed admission evidence are external
-requirements.
+The current Form epoch is `forms.takoform.com/v1alpha2`.
+[`../forms/README.md`](../forms/README.md) is generated from its exact nine
+Proposal-derived, unpublished `0.1.0` source candidates targeting Experimental
+admission. Current packages use
+`packages.forms.takoform.com/v1alpha3`; provider v2 carries that line only as
+an unpublished source candidate. A repository implementation or local passing
+gate is not Form publication, Host Support, activation, or live Cloud
+availability.
 
-The previously published generation is retired, not erased. Its immutable
-`1.0.1` releases and admission evidence stay verifiable offline through
+Decision [`0004`](decisions/0004-takoform-is-an-experimental-specification.md)
+made the previously published `forms.takoform.com/v1alpha1` line Legacy after
+it was labelled `standard` without sufficient independent implementation and
+operational evidence. Decision
+[`0006`](decisions/0006-v1alpha2-restarts-form-lines.md) restarts selected kinds
+in the distinct v1alpha2 epoch through mutable Proposals and Experimental
+`0.x` Forms. Decision
+[`0007`](decisions/0007-current-forms-exclude-substrate-operation.md) requires
+those candidates to be independently authored and excludes substrate
+operation from portable desired state. Historical `standard` and
+`portable-standard` fields remain
+readable in immutable documents; they do not define a current approved subset.
+The lifecycle projection and Legacy verification tooling are implemented and
+fail closed against
+[`../forms/lifecycle.json`](../forms/lifecycle.json). Generated compatibility
+inventory pages classify every retained entry as Legacy and MUST NOT
+reinterpret historical package or admission fields as current project status.
+
+Published generations are retained, not erased. Their immutable releases and
+admission evidence stay verifiable offline through
 [`../forms/retired-package-set.json`](../forms/retired-package-set.json), and
-this build refuses to reissue their proofs rather than restamp them with a new
-provider identity.
+the current retained release sets. This build refuses to overwrite or restamp
+their proofs with a new provider or maturity identity.
 
-The project identity is `forms.takoform.com/v1alpha1`; the Terraform provider identity is `registry.terraform.io/tako0614/takoform`.
+The frozen Legacy Host API wire remains `forms.takoform.com/v1alpha1`. The
+current Host API wire and exact FormRef group are both
+`forms.takoform.com/v1alpha2`, reached through a separate versioned discovery
+path `/.well-known/takoform/v1alpha2` so Legacy clients cannot select the
+current API accidentally. The Host API group is a protocol compatibility
+identity even when it currently has the same token as the nested Form epoch.
+The current package envelope is `packages.forms.takoform.com/v1alpha3`. The Terraform provider identity is
+`registry.terraform.io/tako0614/takoform`; its SemVer is independent from all
+three API identities.
 
 ## Normative consistency audit
 
@@ -85,4 +118,5 @@ runner. Instead, it joins their machine-readable inputs and fails when:
 The complete repository gate, `bun run check`, runs this audit together with
 the deeper package-byte, provider-schema, generated-surface, and lifecycle
 verifiers. Passing it remains local evidence only; it does not prove Registry
-publication, host admission, or production interoperability.
+publication, Host Support, Form maturity, production activation, or
+interoperability.

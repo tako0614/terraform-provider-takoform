@@ -1,16 +1,16 @@
-# Current portable admission material
+# Historical admission v3 material
 
-`admission/v3` is the retained, generation-aware admission lane for the exact
-`ga-core-v1` ten-Form subset of the current `portable-v1` catalog.
+`admission/v3` retains the pre-reset `ga-core-v1` experiment: package evidence
+for a 34-Form catalog and host evidence for the exact ten-Form subset it once
+called `portable-standard`. Its absent/present candidates and signed reports
+are immutable historical facts, not a current queue or approval hierarchy.
 
-The package releases are independent immutable per-Form releases. Provider
-reports close over all 34 current Forms before this lane selects the exact ten
-admission identities. The final v3 set retains and offline-authenticates that
-full 34-report provider closure rather than discarding the 24 unselected
-proofs. Host reports close over those ten identities. Registry
-readback separately proves both Terraform and OpenTofu can install the same
-canonical provider source.
+The directory is kept so the historical tag ledger, package signatures,
+provider reports, registry readback, and host-report identities remain
+auditable. The old `standard-form-host-report.yml` producer is retired in
+Takosumi. A missing candidate stays missing; no current workflow should fill
+the gap or reinterpret it under today's lifecycle.
 
-This directory is fail-closed while signed provider, host, Registry, and
-admission-evidence candidates are absent. Local structure, package publication,
-or an unsigned report never grants portable-standard admission.
+Current Forms use `forms/lifecycle.json`. Current hosts independently report
+exact package installation, executable support, operator activation, and
+principal availability. Historical admission evidence grants none of those.

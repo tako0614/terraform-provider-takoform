@@ -563,32 +563,6 @@ func TestPinnedProviderTagVerificationIgnoresAmbientGPGPrograms(t *testing.T) {
 	}
 }
 
-func TestCurrentAdmissionTagMessageBindsExactRetainedSource(t *testing.T) {
-	t.Parallel()
-	message := currentAdmissionTagMessage(
-		"1.0.7",
-		"ga-core-v2",
-		"0123456789abcdef0123456789abcdef01234567",
-		"89abcdef0123456789abcdef0123456789abcdef",
-		"sha256:"+strings.Repeat("a", 64),
-		"sha256:"+strings.Repeat("c", 64),
-		"sha256:"+strings.Repeat("b", 64),
-	)
-	for _, required := range []string{
-		"Activate Standard Form admission v1.0.7\n",
-		"generation ga-core-v2\n",
-		"commit 0123456789abcdef0123456789abcdef01234567\n",
-		"tree 89abcdef0123456789abcdef0123456789abcdef\n",
-		"version-descriptor sha256:" + strings.Repeat("a", 64) + "\n",
-		"identity-ledger sha256:" + strings.Repeat("c", 64) + "\n",
-		"standard-admission-set sha256:" + strings.Repeat("b", 64) + "\n",
-	} {
-		if !strings.Contains(message, required) {
-			t.Errorf("message omits %q", required)
-		}
-	}
-}
-
 func runTestGit(t *testing.T, root string, arguments ...string) string {
 	t.Helper()
 	command := exec.Command("git", append([]string{"-C", root}, arguments...)...)

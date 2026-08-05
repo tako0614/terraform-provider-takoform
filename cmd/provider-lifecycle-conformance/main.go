@@ -145,7 +145,7 @@ func runProviderReports(args []string) {
 	if _, err := providerreport.Export(root, outputDir, sourceCommit, reports); err != nil {
 		fail(err)
 	}
-	fmt.Printf("generated %d unsigned RFC 8785 provider reports from exact current candidate release-source fixtures via %s (%s)\n", len(reports), reports[0].Subject(), providerreport.ProtocolDescription())
+	fmt.Printf("generated %d unsigned RFC 8785 provider reports from exact Legacy compatibility release-source fixtures via %s (%s)\n", len(reports), reports[0].Subject(), providerreport.ProtocolDescription())
 	for _, value := range providerreport.SortedReportDigests(reports) {
 		fmt.Println(value)
 	}
@@ -215,7 +215,7 @@ func runMatrix(command string, args []string) {
 	if registry {
 		mode = "direct Registry install/readback"
 	}
-	fmt.Printf("verified non-publishable supported CLI/FQN candidate matrix (%s): %d CLIs, %d exact typed resources\n", mode, len(report.Reports), len(report.Reports[0].Resources))
+	fmt.Printf("verified Legacy compatibility CLI/FQN matrix (%s): %d CLIs, %d exact typed resources\n", mode, len(report.Reports), len(report.Reports[0].Resources))
 }
 
 func parseMatrixArgs(command string, args []string) (string, string, string, error) {

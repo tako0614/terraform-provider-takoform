@@ -13,20 +13,20 @@ import (
 )
 
 const (
-	publishedPackageSetFormatV1 = "takoform.published-package-set@v1"
-	publishedPackageSetFormatV2 = "takoform.published-package-set@v2"
-	publishedPackageTrustPath   = "trust/published-package-trust.json"
-	publishedPackageTrustFmtV1  = "takoform.published-package-trust@v1"
-	publishedPackageTrustFmtV2  = "takoform.published-package-trust@v2"
-	publishedRepository         = "tako0614/terraform-provider-takoform"
-	registryPublisherIssuer     = "https://token.actions.githubusercontent.com"
-	registryPublisherIdentityV1 = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-admission-release.yml@refs/heads/main"
-	currentPackagePublisherID   = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
+	publishedPackageSetFormatV1      = "takoform.published-package-set@v1"
+	publishedPackageSetFormatV2      = "takoform.published-package-set@v2"
+	publishedPackageTrustPath        = "trust/published-package-trust.json"
+	publishedPackageTrustFmtV1       = "takoform.published-package-trust@v1"
+	publishedPackageTrustFmtV2       = "takoform.published-package-trust@v2"
+	publishedRepository              = "tako0614/terraform-provider-takoform"
+	registryPublisherIssuer          = "https://token.actions.githubusercontent.com"
+	registryPublisherIdentityV1      = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/standard-admission-release.yml@refs/heads/main"
+	retainedLegacyPackagePublisherID = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
 )
 
-// PublishedPackageSet is a source-reviewed immutable Form Package release
-// closure. It proves only distribution publication; portable-standard
-// admission remains governed by standard-admission-set.json.
+// PublishedPackageSet is a source-reviewed immutable Legacy Form Package
+// release closure. It proves distribution publication only. AdmissionStatus is
+// retained historical data and grants no current maturity or host authority.
 type PublishedPackageSet struct {
 	Format                     string                   `json:"format"`
 	Repository                 string                   `json:"repository"`
@@ -358,7 +358,7 @@ func loadPublishedPackageTrust(admissionRoot string, ref PublishedPackageTrustRe
 	if err := decodeStrictJSON(policyRaw, &policy); err != nil {
 		return PublishedPackageTrust{}, nil, err
 	}
-	wantPackageIdentity := currentPackagePublisherID
+	wantPackageIdentity := retainedLegacyPackagePublisherID
 	if set.Generation == "" {
 		wantPackageIdentity = packagePublisherIdentity(set.PackageVersion)
 	}

@@ -1,8 +1,7 @@
-// Package formregistry embeds the exact data-only Form identities proposed by
-// this provider build. The embedded set remains a structural candidate until
-// an external host/provider admission process authenticates it; a host still
-// decides whether an exact package is installed, admitted, executable, and
-// available to the calling principal.
+// Package formregistry embeds the exact data-only Legacy Form identities
+// supported by this provider build. The host independently decides whether an
+// exact package is installed, supported, activated, executable, and visible to
+// the calling principal. None of those decisions changes Form maturity.
 package formregistry
 
 import (
@@ -22,8 +21,8 @@ type Ref struct {
 	PackageDigest     string `json:"packageDigest"`
 }
 
-// candidate-refs.json is generated from forms/standard-package-set.json by
-// `go run ./cmd/standard-form-conformance generate`.
+// candidate-refs.json is the retained pre-reset projection of
+// forms/standard-package-set.json. The old generator is retired.
 //
 //go:embed candidate-refs.json
 var candidateRefsJSON []byte
@@ -71,8 +70,8 @@ func mustDecodeSuccessorRefs(raw []byte) map[string]map[string]Ref {
 	return refs
 }
 
-// ForKind returns the exact structural-candidate Form identity compiled into
-// this provider build. Availability and admission remain host-owned checks.
+// ForKind returns the exact Legacy compatibility Form identity compiled into
+// this provider build. Support, activation, and availability are host-owned.
 func ForKind(kind string) (Ref, error) {
 	ref, ok := candidateRefs[kind]
 	if !ok {

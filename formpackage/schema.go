@@ -14,18 +14,22 @@ import (
 )
 
 const (
-	formRefSchemaID              = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
-	formDefinitionSchemaID       = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
-	packageIndexSchemaID         = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
-	revocationSchemaID           = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
-	revocationCheckpointSchemaID = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json"
-	portableMapKeyPattern        = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
-	portableMapPolicyKey         = "x-takoform-fieldPolicy"
-	portableMapPolicyValue       = "portable-data-only-v1"
-	maxSchemaProofDepth          = 64
-	maxSchemaProofOps            = 4096
-	maxSchemaValidationWork      = 16384
-	maxConformanceFixtures       = 32
+	legacyFormRefSchemaID         = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
+	currentFormRefSchemaID        = "https://forms.takoform.com/schemas/v1alpha2/form-ref.schema.json"
+	legacyFormDefinitionSchemaID  = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
+	currentFormDefinitionSchemaID = "https://forms.takoform.com/schemas/v1alpha2/form-definition.schema.json"
+	packageIndexV1Alpha1SchemaID  = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
+	packageIndexV1Alpha2SchemaID  = "https://forms.takoform.com/schemas/v1alpha2/package-index.schema.json"
+	packageIndexV1Alpha3SchemaID  = "https://forms.takoform.com/schemas/v1alpha3/package-index.schema.json"
+	revocationSchemaID            = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
+	revocationCheckpointSchemaID  = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json"
+	portableMapKeyPattern         = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
+	portableMapPolicyKey          = "x-takoform-fieldPolicy"
+	portableMapPolicyValue        = "portable-data-only-v1"
+	maxSchemaProofDepth           = 64
+	maxSchemaProofOps             = 4096
+	maxSchemaValidationWork       = 16384
+	maxConformanceFixtures        = 32
 )
 
 //go:embed schemas/*.schema.json
@@ -38,9 +42,13 @@ func (closedSchemaLoader) Load(resourceURL string) (any, error) {
 }
 
 type compiledSchemas struct {
-	formRef              *jsonschema.Schema
-	definition           *jsonschema.Schema
-	index                *jsonschema.Schema
+	legacyFormRef        *jsonschema.Schema
+	currentFormRef       *jsonschema.Schema
+	legacyDefinition     *jsonschema.Schema
+	currentDefinition    *jsonschema.Schema
+	indexV1Alpha1        *jsonschema.Schema
+	indexV1Alpha2        *jsonschema.Schema
+	indexV1Alpha3        *jsonschema.Schema
 	revocation           *jsonschema.Schema
 	revocationCheckpoint *jsonschema.Schema
 }
@@ -57,7 +65,7 @@ func loadSchemas() (compiledSchemas, error) {
 		compiler.DefaultDraft(jsonschema.Draft2020)
 		compiler.AssertFormat()
 		compiler.UseLoader(closedSchemaLoader{})
-		files := []string{"form-ref.schema.json", "form-definition.schema.json", "package-index.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
+		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
 		entries, err := schemaFiles.ReadDir("schemas")
 		if err != nil {
 			schemasErr = fmt.Errorf("read embedded schema closure: %w", err)
@@ -111,19 +119,39 @@ func loadSchemas() (compiledSchemas, error) {
 				return
 			}
 		}
-		schemasValue.formRef, schemasErr = compiler.Compile(formRefSchemaID)
+		schemasValue.legacyFormRef, schemasErr = compiler.Compile(legacyFormRefSchemaID)
 		if schemasErr != nil {
-			schemasErr = fmt.Errorf("compile FormRef schema: %w", schemasErr)
+			schemasErr = fmt.Errorf("compile legacy FormRef schema: %w", schemasErr)
 			return
 		}
-		schemasValue.definition, schemasErr = compiler.Compile(formDefinitionSchemaID)
+		schemasValue.currentFormRef, schemasErr = compiler.Compile(currentFormRefSchemaID)
 		if schemasErr != nil {
-			schemasErr = fmt.Errorf("compile Form Definition schema: %w", schemasErr)
+			schemasErr = fmt.Errorf("compile current FormRef schema: %w", schemasErr)
 			return
 		}
-		schemasValue.index, schemasErr = compiler.Compile(packageIndexSchemaID)
+		schemasValue.legacyDefinition, schemasErr = compiler.Compile(legacyFormDefinitionSchemaID)
 		if schemasErr != nil {
-			schemasErr = fmt.Errorf("compile package-index schema: %w", schemasErr)
+			schemasErr = fmt.Errorf("compile legacy Form Definition schema: %w", schemasErr)
+			return
+		}
+		schemasValue.currentDefinition, schemasErr = compiler.Compile(currentFormDefinitionSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile current Form Definition schema: %w", schemasErr)
+			return
+		}
+		schemasValue.indexV1Alpha1, schemasErr = compiler.Compile(packageIndexV1Alpha1SchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile v1alpha1 package-index schema: %w", schemasErr)
+			return
+		}
+		schemasValue.indexV1Alpha2, schemasErr = compiler.Compile(packageIndexV1Alpha2SchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile v1alpha2 package-index schema: %w", schemasErr)
+			return
+		}
+		schemasValue.indexV1Alpha3, schemasErr = compiler.Compile(packageIndexV1Alpha3SchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile v1alpha3 package-index schema: %w", schemasErr)
 			return
 		}
 		schemasValue.revocation, schemasErr = compiler.Compile(revocationSchemaID)
@@ -144,8 +172,23 @@ func validateFormRef(raw []byte) (FormRef, error) {
 	if err != nil {
 		return FormRef{}, err
 	}
+	var envelope struct {
+		APIVersion string `json:"apiVersion"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return FormRef{}, fmt.Errorf("FormRef: %w", err)
+	}
+	var schema *jsonschema.Schema
+	switch envelope.APIVersion {
+	case LegacyFormAPIVersion:
+		schema = schemas.legacyFormRef
+	case CurrentFormAPIVersion:
+		schema = schemas.currentFormRef
+	default:
+		return FormRef{}, fmt.Errorf("FormRef: unsupported apiVersion %q", envelope.APIVersion)
+	}
 	var ref FormRef
-	if err := validateDocument(raw, schemas.formRef, &ref); err != nil {
+	if err := validateDocument(raw, schema, &ref); err != nil {
 		return FormRef{}, fmt.Errorf("FormRef: %w", err)
 	}
 	return ref, nil
@@ -168,9 +211,24 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 	if err != nil {
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
+	var envelope struct {
+		APIVersion string `json:"apiVersion"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition: %w", err)
+	}
+	var schema *jsonschema.Schema
+	switch envelope.APIVersion {
+	case LegacyFormAPIVersion:
+		schema = schemas.legacyDefinition
+	case CurrentFormAPIVersion:
+		schema = schemas.currentDefinition
+	default:
+		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition: unsupported apiVersion %q", envelope.APIVersion)
+	}
 	var definition FormDefinition
 	var value any
-	if err := validateDocumentWithValue(raw, schemas.definition, &definition, &value); err != nil {
+	if err := validateDocumentWithValue(raw, schema, &definition, &value); err != nil {
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition: %w", err)
 	}
 	if err := rejectForbiddenContent(value, "$"); err != nil {
@@ -240,9 +298,29 @@ func validateIndex(raw []byte) (PackageIndex, any, error) {
 	if err != nil {
 		return PackageIndex{}, nil, err
 	}
+	if _, err := Canonicalize(raw); err != nil {
+		return PackageIndex{}, nil, err
+	}
+	var envelope struct {
+		APIVersion string `json:"apiVersion"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return PackageIndex{}, nil, fmt.Errorf("package index: %w", err)
+	}
+	var schema *jsonschema.Schema
+	switch envelope.APIVersion {
+	case PackageAPIVersion:
+		schema = schemas.indexV1Alpha1
+	case LegacyContentAddressedPackageAPIVersion:
+		schema = schemas.indexV1Alpha2
+	case CurrentPackageAPIVersion:
+		schema = schemas.indexV1Alpha3
+	default:
+		return PackageIndex{}, nil, fmt.Errorf("package index: unsupported apiVersion %q", envelope.APIVersion)
+	}
 	var index PackageIndex
 	var value any
-	if err := validateDocumentWithValue(raw, schemas.index, &index, &value); err != nil {
+	if err := validateDocumentWithValue(raw, schema, &index, &value); err != nil {
 		return PackageIndex{}, nil, fmt.Errorf("package index: %w", err)
 	}
 	return index, value, nil

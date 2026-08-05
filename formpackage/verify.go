@@ -67,7 +67,7 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 	if len(index.Files) > maxPackageFiles {
 		return VerificationReport{}, fmt.Errorf("package lists %d files; maximum is %d", len(index.Files), maxPackageFiles)
 	}
-	if index.APIVersion != PackageAPIVersion || index.Kind != PackageKind {
+	if (index.APIVersion != PackageAPIVersion && index.APIVersion != LegacyContentAddressedPackageAPIVersion && index.APIVersion != CurrentPackageAPIVersion) || index.Kind != PackageKind {
 		return VerificationReport{}, fmt.Errorf("unsupported package identity %s/%s", index.APIVersion, index.Kind)
 	}
 

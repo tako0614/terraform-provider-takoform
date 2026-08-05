@@ -44,6 +44,14 @@ func TestPortableGrammarsBindWhatTheyClaim(t *testing.T) {
 		},
 		GrammarToken:   {[]string{"postgres", "a.b-c:d"}, []string{"1bad", "not a token", ""}},
 		GrammarVersion: {[]string{"1", "1.2.3", "v2-beta"}, []string{"", "version 2", "/v2"}},
+		GrammarCanonicalSHA256: {
+			[]string{"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+			[]string{"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "sha256:0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"},
+		},
+		GrammarCanonicalOCIDigest: {
+			[]string{"registry.invalid/app@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+			[]string{"registry.invalid/app:latest", "registry.invalid/app@sha256:0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"},
+		},
 	}
 	for grammar, spec := range cases {
 		pattern, ok := grammar.Pattern()

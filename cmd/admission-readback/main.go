@@ -1,6 +1,7 @@
-// Command admission-readback renders deterministic unsigned Phase 2 readback
-// subjects. It never signs evidence, publishes a release, or changes Form
-// admission status.
+// Command admission-readback retains the legacy-named deterministic provider
+// Registry readback renderer. Its output proves provider distribution only and
+// grants no Form maturity or host activation authority. It never signs
+// evidence, publishes a release, or changes any Form lifecycle state.
 package main
 
 import (

@@ -2,12 +2,12 @@
 page_title: "takoform_object_bucket Resource - takoform"
 subcategory: "Service Forms"
 description: |-
-  Portable object storage with a portable default storage class.
+  Portable object storage namespace.
 ---
 
 # takoform_object_bucket
 
-Portable object storage with a portable default storage class.
+Portable object storage namespace.
 
 The configured host selects and operates the concrete backend. This resource
 carries desired state only: it never names a target, a credential, a price, or
@@ -16,9 +16,7 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 ## Arguments
 
 - `name` (String, required, forces replacement) — Resource name.
-- `storage_class` (String, optional) — Portable default storage class for newly written objects. One of `standard`, `infrequent_access`, `archive`. Defaults to `standard`.
-- `versioning` (Bool, optional) — Whether the bucket should retain non-current object versions.
-- `access_protocols` (Set of String, optional) — Optional access-protocol capability tokens requested from the host.
+- `versioning` (Bool, optional) — When present, requires retention of non-current object versions when true and disables creation of new non-current versions when false; omission states no portable version-retention requirement.
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
 ## Read-only attributes

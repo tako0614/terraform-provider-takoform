@@ -17,7 +17,7 @@ func interfaceHost(t *testing.T, advertise bool, handler http.HandlerFunc) *http
 	t.Helper()
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/.well-known/takoform" {
+		if r.URL.Path == "/.well-known/takoform/v1alpha2" {
 			features := map[string]bool{
 				"service_forms": true, "exact_form_ref": true,
 				"optimistic_concurrency": true, "idempotent_lifecycle": true,
@@ -29,8 +29,8 @@ func interfaceHost(t *testing.T, advertise bool, handler http.HandlerFunc) *http
 				"api_versions": []string{APIVersion},
 				"features":     features,
 				"endpoints": map[string]string{
-					"api":   server.URL + "/apis/forms.takoform.com/v1alpha1",
-					"forms": server.URL + "/apis/forms.takoform.com/v1alpha1/forms",
+					"api":   server.URL + "/apis/forms.takoform.com/v1alpha2",
+					"forms": server.URL + "/apis/forms.takoform.com/v1alpha2/forms",
 				},
 			})
 			return
@@ -70,7 +70,7 @@ func TestAbsentInterfaceFeatureIsNotAConfigurationError(t *testing.T) {
 func TestGetInterfaceUsesExactRuntimeIdentity(t *testing.T) {
 	var gotSpace, gotVersion, gotResourceKind, gotResourceName, authorization string
 	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/apis/forms.takoform.com/v1alpha1/interfaces/mcp.server" {
+		if r.URL.Path != "/apis/forms.takoform.com/v1alpha2/interfaces/mcp.server" {
 			t.Fatalf("path = %q", r.URL.Path)
 		}
 		gotSpace = r.URL.Query().Get("space")
@@ -117,7 +117,7 @@ func TestGetInterfaceWithoutVersionRequiresUniqueVisibleName(t *testing.T) {
 	versions := []string{"2", "1"}
 	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/apis/forms.takoform.com/v1alpha1/interfaces":
+		case "/apis/forms.takoform.com/v1alpha2/interfaces":
 			items := make([]map[string]any, 0, len(versions))
 			for _, version := range versions {
 				items = append(items, map[string]any{
@@ -127,7 +127,7 @@ func TestGetInterfaceWithoutVersionRequiresUniqueVisibleName(t *testing.T) {
 				})
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": items})
-		case "/apis/forms.takoform.com/v1alpha1/interfaces/mcp.server":
+		case "/apis/forms.takoform.com/v1alpha2/interfaces/mcp.server":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"name": "mcp.server", "version": r.URL.Query().Get("version"),
 				"resource": map[string]any{"kind": r.URL.Query().Get("resourceKind"), "name": r.URL.Query().Get("resourceName")},
@@ -423,12 +423,12 @@ func TestInterfaceListHTTP200RequiresTheInterfacesArray(t *testing.T) {
 func TestGetInterfaceRequiresResourceSelectorWhenMultipleInstancesExposeThePair(t *testing.T) {
 	server := interfaceHost(t, true, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/apis/forms.takoform.com/v1alpha1/interfaces":
+		case "/apis/forms.takoform.com/v1alpha2/interfaces":
 			_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": []map[string]any{
 				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "EdgeWorker", "name": "api-a"}, "document": map[string]any{}, "values": map[string]any{}},
 				{"name": "mcp.server", "version": "1", "resource": map[string]any{"kind": "EdgeWorker", "name": "api-b"}, "document": map[string]any{}, "values": map[string]any{}},
 			}})
-		case "/apis/forms.takoform.com/v1alpha1/interfaces/mcp.server":
+		case "/apis/forms.takoform.com/v1alpha2/interfaces/mcp.server":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"name": "mcp.server", "version": "1",
 				"resource": map[string]any{"kind": r.URL.Query().Get("resourceKind"), "name": r.URL.Query().Get("resourceName")},
@@ -559,7 +559,7 @@ func TestAdvertisedInterfacesEndpointMustBeSameOrigin(t *testing.T) {
 				"idempotent_lifecycle": true, FeatureInterfaceDeclarations: true,
 			},
 			"endpoints": map[string]string{
-				"api": server.URL + "/apis/forms.takoform.com/v1alpha1", "interfaces": "https://attacker.test/interfaces",
+				"api": server.URL + "/apis/forms.takoform.com/v1alpha2", "interfaces": "https://attacker.test/interfaces",
 			},
 		})
 	}))

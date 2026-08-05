@@ -1,0 +1,67 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha3",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha2",
+    "kind": "ContainerService",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:ecef25ff1d48e5a9d5d8f0368834477c8d85984b4b3b9bb874c5f0cddd28a8ca"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 6953,
+      "digest": "sha256:4f78cd985ca8ec965ede2bde700a9fb1a19430210b90f5f91c462fe0d9b31147"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 194,
+      "digest": "sha256:0111e18cbfdc30de52799c67709d460bd37e8247870b2614a1fcec01047fb419"
+    },
+    {
+      "path": "fixtures/negative-configuration.json",
+      "mediaType": "application/json",
+      "size": 199,
+      "digest": "sha256:3600be8e6b4384508f27b6d55dff9a6e72521e6585287300900685f56ce61015"
+    },
+    {
+      "path": "fixtures/negative-image.json",
+      "mediaType": "application/json",
+      "size": 194,
+      "digest": "sha256:d7951897d4d4643393ccf74b1016e8945fb231cd26327e9b6c92cdb5152ddbc7"
+    },
+    {
+      "path": "fixtures/negative-missing-image.json",
+      "mediaType": "application/json",
+      "size": 84,
+      "digest": "sha256:b852418adb441968ba77dba105d407e2a1344f5e992be9383a1fb5d89bb8afe4"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 163,
+      "digest": "sha256:500833a3bd64bf37dae06b442b444bcd66e9e90211b3aacdf58dbad2468b64b3"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 150,
+      "digest": "sha256:0f0e31657e1c6d613f421533c651402ce2f290e97de1bf7977aecb89423bcd59"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 157,
+      "digest": "sha256:8ce6ad6cfcd6b32174380f3e02b1fa817e36a51d0079168cc8a8447b422e49ff"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 158,
+      "digest": "sha256:f5f085ca17b42846e8e37c6e8f8a9f105a3f2815c8b27f450864362527a7b6a0"
+    }
+  ]
+}

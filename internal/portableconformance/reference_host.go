@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,8 +23,6 @@ const (
 	referenceAlternateToken       = "reference-alternate-token"
 	referenceAlternateTenantToken = "reference-alternate-tenant-token"
 )
-
-var referenceCapabilityToken = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,127}$`)
 
 // referenceHost is a deliberately small, deterministic implementation used to
 // prove the runner itself. It is not a reusable host and its reports are never
@@ -142,6 +139,12 @@ func (h *referenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 		h.handleForms(w, request)
 		return
 	}
+	if h.contract.Format == "takoform.portable-host-conformance@v2" &&
+		strings.HasPrefix(request.URL.Path, h.contract.APIPath+"/form-definitions/") &&
+		request.Method == http.MethodGet {
+		h.handleFormDefinition(w, request)
+		return
+	}
 	if request.URL.Path == h.contract.APIPath+"/interfaces" ||
 		strings.HasPrefix(request.URL.Path, h.contract.APIPath+"/interfaces/") {
 		h.handleInterfaces(w, request)
@@ -200,6 +203,26 @@ func (h *referenceHost) handleForms(w http.ResponseWriter, request *http.Request
 			DefinitionKnown: true, Installed: true, Executable: true, Activated: true, AvailableToPrincipal: true,
 			Operations: []string{"create", "read", "update", "delete", "import", "observe", "refresh"},
 		}},
+	})
+}
+
+func (h *referenceHost) handleFormDefinition(w http.ResponseWriter, request *http.Request) {
+	identity, ok := h.referenceIdentityForExactQuery(request.URL.Query())
+	pathKind, err := url.PathUnescape(strings.TrimPrefix(
+		request.URL.Path,
+		h.contract.APIPath+"/form-definitions/",
+	))
+	if err != nil || !ok || pathKind != identity.FormRef.Kind ||
+		identity.FormRef.Kind != h.contract.RunnerInput.Identity.FormRef.Kind {
+		writeReferenceError(w, http.StatusNotFound, "form_unknown", false, "exact Form Definition is unknown")
+		return
+	}
+	definition := h.contract.RunnerInput.Definition
+	writeReferenceJSON(w, http.StatusOK, "", client.FormDefinitionResponse{
+		Identity:      identity,
+		DisplayName:   definition.Title,
+		Description:   definition.Description,
+		DesiredSchema: cloneMap(definition.DesiredSchema),
 	})
 }
 
@@ -704,7 +727,14 @@ func (h *referenceHost) validateRequestedResource(resource client.Resource) erro
 		return fmt.Errorf("request Resource must not contain status")
 	}
 	if resource.Kind == h.contract.RunnerInput.Identity.FormRef.Kind {
-		return validateObjectBucketDesired(resource.Spec, resource.Metadata.Name)
+		if resource.Spec == nil || resource.Spec["name"] != resource.Metadata.Name {
+			return fmt.Errorf("desired name differs")
+		}
+		return validateRunnerSchema(
+			h.contract.RunnerInput.Definition.DesiredSchema,
+			resource.Spec,
+			"desired",
+		)
 	}
 	probe := h.contract.RunnerInput.ConnectionProbe
 	exactDesired := sameReferenceCanonicalJSON(resource.Spec, probe.Desired)
@@ -725,44 +755,6 @@ func sameReferenceCanonicalJSON(left, right any) bool {
 	leftDigest, leftErr := digestJSON(left)
 	rightDigest, rightErr := digestJSON(right)
 	return leftErr == nil && rightErr == nil && leftDigest == rightDigest
-}
-
-func validateObjectBucketDesired(spec map[string]any, name string) error {
-	if spec == nil || spec["name"] != name {
-		return fmt.Errorf("desired name differs")
-	}
-	allowed := map[string]bool{"name": true, "storageClass": true, "versioning": true, "accessProtocols": true}
-	for key := range spec {
-		if !allowed[key] {
-			return fmt.Errorf("undeclared desired key %q", key)
-		}
-	}
-	if value, ok := spec["storageClass"]; ok {
-		token, ok := value.(string)
-		if !ok || (token != "standard" && token != "infrequent_access" && token != "archive") {
-			return fmt.Errorf("invalid storageClass")
-		}
-	}
-	if value, ok := spec["versioning"]; ok {
-		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("versioning is not boolean")
-		}
-	}
-	if value, ok := spec["accessProtocols"]; ok {
-		items, ok := value.([]any)
-		if !ok {
-			return fmt.Errorf("accessProtocols is not an array")
-		}
-		seen := map[string]bool{}
-		for _, item := range items {
-			token, ok := item.(string)
-			if !ok || !referenceCapabilityToken.MatchString(token) || seen[token] {
-				return fmt.Errorf("invalid accessProtocols")
-			}
-			seen[token] = true
-		}
-	}
-	return nil
 }
 
 func (h *referenceHost) readyResource(request client.Resource, generation int, imported bool) client.Resource {
@@ -818,12 +810,16 @@ func (h *referenceHost) visibleInterfaces(space string) []client.DeclaredInterfa
 		resources = append(resources, &ready)
 	}
 	declarations := make([]client.DeclaredInterface, 0, len(resources))
+	if len(h.contract.RunnerInput.Definition.Interfaces) == 0 {
+		return declarations
+	}
+	descriptor := h.contract.RunnerInput.Definition.Interfaces[0]
 	for _, resource := range resources {
 		form := toClientIdentity(h.contract.RunnerInput.Identity)
 		declaration := client.DeclaredInterface{
-			Name: "object.storage", Version: "1",
+			Name: descriptor.Name, Version: descriptor.Version,
 			Resource: client.InterfaceResourceRef{Kind: resource.Kind, Name: resource.Metadata.Name},
-			Document: map[string]any{"operations": []any{"delete", "get", "list", "put"}},
+			Document: cloneMap(descriptor.Document),
 			Values: map[string]any{
 				"resource": resource.Kind + "/" + resource.Metadata.Name,
 				"name":     resource.Metadata.Name,

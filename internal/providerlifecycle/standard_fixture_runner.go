@@ -12,7 +12,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 	"github.com/tako0614/terraform-provider-takoform/standardform"
 )
@@ -220,11 +222,19 @@ func RunStandardFixtures(ctx context.Context, repoRoot, cliPath string, cases []
 // The negative case therefore always tests a constraint the Form states,
 // rather than a separately maintained list that can drift away from it.
 func standardNegativeDiagnostic(kind, fixtureName string, desired map[string]any) (string, string, bool) {
-	declared, ok := formcatalog.ByKind(kind)
+	declared, ok := currentformcatalog.ByKind(kind)
 	if !ok {
 		return "", "", false
 	}
 	attribute := strings.TrimPrefix(fixtureName, "reject-")
+	if missing, ok := strings.CutPrefix(attribute, "co-required-missing-"); ok {
+		for _, field := range declared.Fields {
+			if field.HCL == missing {
+				return field.Wire, "required", true
+			}
+		}
+		return "", "", false
+	}
 	if missing, ok := strings.CutPrefix(attribute, "missing-"); ok {
 		switch missing {
 		case "name":
@@ -255,7 +265,7 @@ func standardNegativeDiagnostic(kind, fixtureName string, desired map[string]any
 	switch attribute {
 	case "artifact-source":
 		if declared.Artifact {
-			return "artifact_sha256", "64-character SHA-256", true
+			return "artifact_sha256", formcatalog.GrammarCanonicalSHA256.Message("artifact_sha256"), true
 		}
 	case "artifact-url-userinfo", "artifact-url-query", "artifact-url-fragment":
 		if declared.Artifact {
@@ -357,7 +367,7 @@ func validateAndOrderStandardFixtureCases(cases []StandardFixtureCase) ([]Standa
 			return nil, fmt.Errorf("standard fixture set duplicates %s", fixture.Kind)
 		}
 		if _, ok := resourceCaseForKind(fixture.Kind); !ok || strings.TrimSpace(fixture.PositiveName) == "" || len(fixture.Negatives) == 0 || fixture.Positive == nil ||
-			fixture.Identity.FormRef.APIVersion != client.APIVersion || fixture.Identity.FormRef.Kind != fixture.Kind || strings.TrimSpace(fixture.Identity.FormRef.DefinitionVersion) == "" ||
+			fixture.Identity.FormRef.APIVersion != formpackage.CurrentFormAPIVersion || fixture.Identity.FormRef.Kind != fixture.Kind || strings.TrimSpace(fixture.Identity.FormRef.DefinitionVersion) == "" ||
 			!validDigest(fixture.Identity.FormRef.SchemaDigest) || !validDigest(fixture.Identity.PackageDigest) {
 			return nil, fmt.Errorf("standard fixture set contains an incomplete or unknown %q case", fixture.Kind)
 		}

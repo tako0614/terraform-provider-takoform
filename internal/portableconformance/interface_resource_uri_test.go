@@ -44,7 +44,7 @@ func (transport interfaceResourceURITransport) RoundTrip(request *http.Request) 
 }
 
 func TestBlackBoxRunnerRejectsNonCredentialFreeInterfaceResourceURI(t *testing.T) {
-	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v1"))
+	contract, err := Verify(filepath.Join("..", "..", "conformance", "portable-host-v2"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -56,7 +56,8 @@ const (
 	currentPackageWorkflow = ".github/workflows/form-package-release.yml"
 	currentPackageIssuer   = "https://token.actions.githubusercontent.com"
 	currentPackageIdentity = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main"
-	currentPackageTagScope = "refs/tags/forms/k-*/v*"
+	legacyPackageTagScope  = "refs/tags/forms/k-*/v*"
+	currentPackageTagScope = "refs/tags/forms/k-*/sha256-*"
 )
 
 var (
@@ -87,7 +88,8 @@ type releaseManifest struct {
 	SourceCommit        string                 `json:"sourceCommit"`
 	ToolingCommit       string                 `json:"toolingCommit"`
 	Workflow            string                 `json:"workflow"`
-	PackageVersion      string                 `json:"packageVersion"`
+	PackageVersion      string                 `json:"packageVersion,omitempty"`
+	ArtifactID          string                 `json:"artifactId,omitempty"`
 	ReleaseID           string                 `json:"releaseId"`
 	PackageDigest       string                 `json:"packageDigest"`
 	FormRef             formpackage.FormRef    `json:"formRef"`
@@ -269,12 +271,26 @@ type planDirectoryVerification struct {
 	CryptographicStatus string                   `json:"cryptographicStatus"`
 	Kind                string                   `json:"kind"`
 	ReleaseID           string                   `json:"releaseId"`
-	Version             string                   `json:"version"`
+	Version             string                   `json:"version,omitempty"`
+	ArtifactID          string                   `json:"artifactId,omitempty"`
 	Tag                 string                   `json:"tag"`
 	SourceCommit        string                   `json:"sourceCommit"`
 	ToolingCommit       string                   `json:"toolingCommit"`
 	TrustedRoot         planDirectoryTrustedRoot `json:"trustedRoot"`
 	Assets              []publicationSetAsset    `json:"assets"`
+}
+
+type exactPlannedFormRelease struct {
+	Kind          string
+	Slug          string
+	ReleaseID     string
+	ArtifactID    string
+	LegacyVersion string
+	Tag           string
+	SourcePath    string
+	FormRef       formpackage.FormRef
+	PackageDigest string
+	APIVersion    string
 }
 
 type planDirectoryTrustedRoot struct {
@@ -373,7 +389,7 @@ func main() {
 		assetRoot := flags.String("asset-root", "", "directory containing exactly one planned release's seven assets")
 		sourceRoot := flags.String("source-root", "", "repository root containing the exact current release plan and reviewed package source")
 		kind := flags.String("kind", "", "exact planned Form kind")
-		tag := flags.String("tag", "", "exact planned forms/<release-id>/v<version> tag")
+		tag := flags.String("tag", "", "exact current digest or retained Legacy Form Package tag")
 		sourceCommit := flags.String("source-commit", "", "exact 40-character release source commit")
 		toolingCommit := flags.String("tooling-commit", "", "exact 40-character release tooling commit")
 		trustedRoot := flags.String("trusted-root", "", "reviewed Sigstore trusted-root JSON used by the caller's cryptographic verifier")
@@ -467,9 +483,9 @@ func verifyCurrentPublication(
 	publicationRoot string,
 	trustRoot string,
 ) (formpublication.Set, error) {
-	expected, err := standardforms.CurrentPortableCandidateSet(repositoryRoot)
+	expected, err := standardforms.LegacyPortableCandidateSet(repositoryRoot)
 	if err != nil {
-		return formpublication.Set{}, fmt.Errorf("load exact current portable candidate set: %w", err)
+		return formpublication.Set{}, fmt.Errorf("load exact Legacy portable-v1 set: %w", err)
 	}
 	return formpublication.Verify(repositoryRoot, publicationRoot, trustRoot, expected)
 }
@@ -637,7 +653,7 @@ func downloadPlanWithVerifier(
 			}
 			authorities[manifest.ToolingCommit] = authority
 		}
-		planned, err := selectPlannedRelease(authority.plan, selected.Kind, selected.Tag)
+		planned, err := selectLegacyPlannedRelease(authority.plan, selected.Kind, selected.Tag)
 		if err != nil {
 			return fmt.Errorf("%s: %w", selected.Kind, err)
 		}
@@ -655,7 +671,7 @@ func downloadPlanWithVerifier(
 			FormRef: planned.FormRef, PackageDigest: planned.PackageDigest,
 		}
 		manifest, err = validateDownloadedPackage(
-			candidate, planned.Version, planned.ReleaseID, planned.Tag,
+			candidate, planned.ArtifactID, planned.ReleaseID, planned.Tag,
 			filepath.Join(authority.root, filepath.FromSlash(planned.SourcePath)),
 			release.assets, release.downloaded,
 		)
@@ -663,7 +679,7 @@ func downloadPlanWithVerifier(
 			return fmt.Errorf("%s: %w", selected.Kind, err)
 		}
 		release.manifest = manifest
-		if err := validateCurrentPackagePublisher(manifest); err != nil {
+		if err := validateCurrentPackagePublisher(manifest, planned.APIVersion); err != nil {
 			return fmt.Errorf("%s: %w", selected.Kind, err)
 		}
 		authorityPlanPath, authorityTrustedRootPath := retainedAuthorityPaths(manifest.ToolingCommit)
@@ -681,12 +697,12 @@ func downloadPlanWithVerifier(
 			}
 			seenAssetIDs[assetID] = planned.Kind
 		}
-		releaseDirectory := filepath.Join(outputAbsolute, "releases", planned.ReleaseID, planned.Version)
+		releaseDirectory := filepath.Join(outputAbsolute, "releases", planned.ReleaseID, planned.ArtifactID)
 		if err := writeDownloadedRelease(releaseDirectory, release); err != nil {
 			return fmt.Errorf("%s: retain release assets: %w", planned.Kind, err)
 		}
 		entry := formPackagePublicationEntry{
-			Kind: planned.Kind, ReleaseID: planned.ReleaseID, Version: planned.Version, Tag: planned.Tag,
+			Kind: planned.Kind, ReleaseID: planned.ReleaseID, Version: planned.LegacyVersion, Tag: planned.Tag,
 			SourcePath: planned.SourcePath, FormRef: planned.FormRef, PackageDigest: planned.PackageDigest,
 			TagObjectOID: resolvedTag.ObjectOID, PeeledCommit: resolvedTag.PeeledCommit,
 			SourceCommit: release.manifest.SourceCommit, ToolingCommit: release.manifest.ToolingCommit,
@@ -808,11 +824,15 @@ func validateReleasePlan(plan standardforms.ReleasePlan) error {
 	return nil
 }
 
-func validateCurrentPackagePublisher(manifest releaseManifest) error {
+func validateCurrentPackagePublisher(manifest releaseManifest, apiVersion string) error {
+	wantTagScope := currentPackageTagScope
+	if apiVersion == formpackage.PackageAPIVersion {
+		wantTagScope = legacyPackageTagScope
+	}
 	if manifest.Workflow != currentPackageWorkflow ||
 		manifest.PublisherPolicy.OIDCIssuer != currentPackageIssuer ||
 		manifest.PublisherPolicy.Identity != currentPackageIdentity ||
-		manifest.PublisherPolicy.TagPattern != currentPackageTagScope ||
+		manifest.PublisherPolicy.TagPattern != wantTagScope ||
 		manifest.PublisherPolicy.ToolingCommit != manifest.ToolingCommit {
 		return fmt.Errorf("release manifest publisher is not the protected current Form Package workflow")
 	}
@@ -841,19 +861,50 @@ func verifyPlanDirectory(
 	if err := verifyLocalCommitReachable(ctx, sourceRoot, sourceCommit, toolingCommit); err != nil {
 		return planDirectoryVerification{}, fmt.Errorf("source commit is not reachable from tooling commit: %w", err)
 	}
-
-	authorityRoot, err := materializePlanAuthorityAtCommit(ctx, sourceRoot, toolingCommit)
-	if err != nil {
-		return planDirectoryVerification{}, fmt.Errorf("materialize release authority at tooling commit: %w", err)
-	}
-	defer os.RemoveAll(authorityRoot)
-	plan, _, err := readReleasePlan(authorityRoot)
-	if err != nil {
-		return planDirectoryVerification{}, fmt.Errorf("read release plan at tooling commit: %w", err)
-	}
-	planned, err := selectPlannedRelease(plan, kind, tag)
+	requestedLocator, err := formpackage.ParsePublicationTag(tag)
 	if err != nil {
 		return planDirectoryVerification{}, err
+	}
+	var authorityRoot string
+	var planned exactPlannedFormRelease
+	if requestedLocator.APIVersion == formpackage.CurrentPackageAPIVersion {
+		authorityRoot, err = materializeCurrentAuthorityAtCommit(ctx, sourceRoot, toolingCommit)
+		if err == nil {
+			var plan standardforms.CurrentFormReleasePlan
+			plan, err = standardforms.CurrentReleasePlan(authorityRoot)
+			if err == nil {
+				planned, err = selectCurrentPlannedRelease(plan, kind, tag)
+			}
+		}
+		if err == nil && sourceCommit != toolingCommit {
+			var sourceAuthorityRoot string
+			sourceAuthorityRoot, err = materializeCurrentAuthorityAtCommit(ctx, sourceRoot, sourceCommit)
+			if err == nil {
+				defer os.RemoveAll(sourceAuthorityRoot)
+				var sourcePlan standardforms.CurrentFormReleasePlan
+				sourcePlan, err = standardforms.CurrentReleasePlan(sourceAuthorityRoot)
+				if err == nil {
+					var sourcePlanned exactPlannedFormRelease
+					sourcePlanned, err = selectCurrentPlannedRelease(sourcePlan, kind, tag)
+					if err == nil && sourcePlanned != planned {
+						err = fmt.Errorf("current lifecycle release identity changed between source and tooling commits")
+					}
+				}
+			}
+		}
+	} else {
+		authorityRoot, err = materializePlanAuthorityAtCommit(ctx, sourceRoot, toolingCommit)
+		if err == nil {
+			var plan standardforms.ReleasePlan
+			plan, _, err = readReleasePlan(authorityRoot)
+			if err == nil {
+				planned, err = selectLegacyPlannedRelease(plan, kind, tag)
+			}
+		}
+	}
+	defer os.RemoveAll(authorityRoot)
+	if err != nil {
+		return planDirectoryVerification{}, fmt.Errorf("resolve release authority at tooling commit: %w", err)
 	}
 	if err := verifyPlannedSourceAtCommit(
 		ctx, sourceRoot, sourceCommit, toolingCommit, planned.SourcePath,
@@ -871,7 +922,7 @@ func verifyPlanDirectory(
 		return planDirectoryVerification{}, err
 	}
 	downloaded, liveAssets, assets, err := readExactReleaseAssetDirectory(
-		assetRoot, planned.ReleaseID, planned.Version,
+		assetRoot, planned.ReleaseID, planned.ArtifactID,
 	)
 	if err != nil {
 		return planDirectoryVerification{}, err
@@ -885,14 +936,14 @@ func verifyPlanDirectory(
 			Kind: planned.Kind, Slug: planned.Slug, Path: planned.SourcePath,
 			FormRef: planned.FormRef, PackageDigest: planned.PackageDigest,
 		},
-		planned.Version, planned.ReleaseID, planned.Tag,
+		planned.ArtifactID, planned.ReleaseID, planned.Tag,
 		filepath.Join(authorityRoot, filepath.FromSlash(planned.SourcePath)),
 		liveAssets, downloaded,
 	)
 	if err != nil {
 		return planDirectoryVerification{}, fmt.Errorf("verify exact local release asset closure: %w", err)
 	}
-	if err := validateCurrentPackagePublisher(manifest); err != nil {
+	if err := validateCurrentPackagePublisher(manifest, planned.APIVersion); err != nil {
 		return planDirectoryVerification{}, err
 	}
 	if manifest.SourceCommit != sourceCommit || manifest.ToolingCommit != toolingCommit {
@@ -901,10 +952,15 @@ func verifyPlanDirectory(
 			manifest.SourceCommit, manifest.ToolingCommit, sourceCommit, toolingCommit,
 		)
 	}
+	reportArtifactID := planned.ArtifactID
+	if planned.APIVersion == formpackage.PackageAPIVersion {
+		reportArtifactID = ""
+	}
 	return planDirectoryVerification{
 		Format: planVerificationFormat, SemanticStatus: "verified",
 		CryptographicStatus: "external-required",
-		Kind:                planned.Kind, ReleaseID: planned.ReleaseID, Version: planned.Version, Tag: planned.Tag,
+		Kind:                planned.Kind, ReleaseID: planned.ReleaseID, Version: planned.LegacyVersion,
+		ArtifactID: reportArtifactID, Tag: planned.Tag,
 		SourceCommit: sourceCommit, ToolingCommit: toolingCommit,
 		TrustedRoot: planDirectoryTrustedRoot{Path: trustedRootLogicalPath, SHA256: trustedRootDigest},
 		Assets:      assets,
@@ -923,15 +979,15 @@ func repositoryTrustedRootPath(sourceRoot string) (string, error) {
 	return filepath.Join(sourceAbsolute, filepath.FromSlash(trustedRootSourcePath)), nil
 }
 
-func selectPlannedRelease(
+func selectLegacyPlannedRelease(
 	plan standardforms.ReleasePlan, kind, tag string,
-) (standardforms.PlannedFormRelease, error) {
+) (exactPlannedFormRelease, error) {
 	var planned standardforms.PlannedFormRelease
 	found := false
 	for _, candidate := range plan.Releases {
 		if candidate.Kind == kind || candidate.Tag == tag {
 			if found || candidate.Kind != kind || candidate.Tag != tag {
-				return standardforms.PlannedFormRelease{}, fmt.Errorf(
+				return exactPlannedFormRelease{}, fmt.Errorf(
 					"kind %q and tag %q do not select one exact release-plan entry", kind, tag,
 				)
 			}
@@ -940,11 +996,44 @@ func selectPlannedRelease(
 		}
 	}
 	if !found {
-		return standardforms.PlannedFormRelease{}, fmt.Errorf(
+		return exactPlannedFormRelease{}, fmt.Errorf(
 			"kind %q and tag %q are absent from the tooling-commit release plan", kind, tag,
 		)
 	}
-	return planned, nil
+	return exactPlannedFormRelease{
+		Kind: planned.Kind, Slug: planned.Slug, ReleaseID: planned.ReleaseID,
+		ArtifactID: planned.Version, LegacyVersion: planned.Version, Tag: planned.Tag,
+		SourcePath: planned.SourcePath, FormRef: planned.FormRef, PackageDigest: planned.PackageDigest,
+		APIVersion: formpackage.PackageAPIVersion,
+	}, nil
+}
+
+func selectCurrentPlannedRelease(
+	plan standardforms.CurrentFormReleasePlan, kind, tag string,
+) (exactPlannedFormRelease, error) {
+	var planned standardforms.CurrentFormReleaseIdentity
+	found := false
+	for _, candidate := range plan.Releases {
+		if candidate.Kind == kind || candidate.Tag == tag {
+			if found || candidate.Kind != kind || candidate.Tag != tag {
+				return exactPlannedFormRelease{}, fmt.Errorf(
+					"kind %q and tag %q do not select one exact current lifecycle release", kind, tag,
+				)
+			}
+			planned = candidate
+			found = true
+		}
+	}
+	if !found {
+		return exactPlannedFormRelease{}, fmt.Errorf(
+			"kind %q and tag %q are absent from the tooling-commit current lifecycle", kind, tag,
+		)
+	}
+	return exactPlannedFormRelease{
+		Kind: planned.Kind, ReleaseID: planned.ReleaseID, ArtifactID: planned.ArtifactID,
+		Tag: planned.Tag, SourcePath: planned.SourcePath, FormRef: planned.FormRef,
+		PackageDigest: planned.PackageDigest, APIVersion: formpackage.CurrentPackageAPIVersion,
+	}, nil
 }
 
 func readReleasePlan(sourceRoot string) (standardforms.ReleasePlan, []byte, error) {
@@ -1069,6 +1158,86 @@ func materializePlanAuthorityAtCommit(
 		if !present {
 			return cleanup(fmt.Errorf("tooling commit omits release authority %q", sourcePath))
 		}
+	}
+	return root, nil
+}
+
+// materializeCurrentAuthorityAtCommit reconstructs the exact reviewed tree
+// needed by the lifecycle validator. Lifecycle evidence paths are deliberately
+// open-ended, so selecting a hand-maintained subset would weaken the authority
+// check. Only ordinary non-executable blobs are accepted and the snapshot is
+// closed by a hard total-size bound.
+func materializeCurrentAuthorityAtCommit(
+	ctx context.Context,
+	sourceRoot, toolingCommit string,
+) (string, error) {
+	listing, err := gitOutput(ctx, sourceRoot, "ls-tree", "-rz", "--full-tree", toolingCommit)
+	if err != nil {
+		return "", err
+	}
+	root, err := os.MkdirTemp("", "takoform-current-authority-")
+	if err != nil {
+		return "", err
+	}
+	cleanup := func(materializeErr error) (string, error) {
+		if removeErr := os.RemoveAll(root); removeErr != nil {
+			return "", errors.Join(materializeErr, removeErr)
+		}
+		return "", materializeErr
+	}
+	seen := make(map[string]struct{})
+	totalBytes := int64(0)
+	hasLifecycle := false
+	hasSchema := false
+	for _, record := range bytes.Split(listing, []byte{0}) {
+		if len(record) == 0 {
+			continue
+		}
+		metadata, pathRaw, ok := bytes.Cut(record, []byte{'\t'})
+		if !ok {
+			return cleanup(fmt.Errorf("malformed current-authority Git tree entry"))
+		}
+		fields := strings.Fields(string(metadata))
+		sourcePath := string(pathRaw)
+		if path.Clean(sourcePath) != sourcePath || strings.HasPrefix(sourcePath, "../") ||
+			len(fields) != 3 || fields[0] != "100644" || fields[1] != "blob" ||
+			!gitObjectPattern.MatchString(fields[2]) {
+			return cleanup(fmt.Errorf(
+				"current authority %q must be an exact ordinary non-executable Git blob", sourcePath,
+			))
+		}
+		if _, duplicate := seen[sourcePath]; duplicate {
+			return cleanup(fmt.Errorf("current authority Git tree duplicates %q", sourcePath))
+		}
+		seen[sourcePath] = struct{}{}
+		hasLifecycle = hasLifecycle || sourcePath == "forms/lifecycle.json"
+		hasSchema = hasSchema || sourcePath == "forms/lifecycle.schema.json"
+		raw, err := gitOutput(ctx, sourceRoot, "show", toolingCommit+":"+sourcePath)
+		if err != nil {
+			return cleanup(fmt.Errorf("read current authority %q: %w", sourcePath, err))
+		}
+		if int64(len(raw)) > maxPlanAssetBytes-totalBytes {
+			return cleanup(fmt.Errorf("current authority snapshot exceeds %d bytes", maxPlanAssetBytes))
+		}
+		totalBytes += int64(len(raw))
+		destination := filepath.Join(root, filepath.FromSlash(sourcePath))
+		if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
+			return cleanup(err)
+		}
+		handle, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return cleanup(err)
+		}
+		if _, err := handle.Write(raw); err != nil {
+			_ = handle.Close()
+			return cleanup(err)
+		}
+		if err := handle.Close(); err != nil {
+			return cleanup(err)
+		}
+	}
+	if !hasLifecycle || !hasSchema {
+		return cleanup(fmt.Errorf("tooling commit omits current lifecycle authority or schema"))
 	}
 	return root, nil
 }
@@ -1734,7 +1903,7 @@ func canonicalAssetNames(releaseID, packageVersion string) map[string]struct{} {
 
 func validateDownloadedPackage(
 	candidate candidatePackage,
-	packageVersion, releaseID, tag string,
+	artifactID, releaseID, tag string,
 	packageRoot string,
 	liveAssets map[string]githubReleaseAsset,
 	downloaded map[string][]byte,
@@ -1747,10 +1916,20 @@ func validateDownloadedPackage(
 	if err != nil {
 		return releaseManifest{}, err
 	}
-	base := "takoform-form-" + releaseID + "_" + packageVersion
+	locator, err := formpackage.ParsePublicationTag(tag)
+	if err != nil || locator.ReleaseID != releaseID || locator.ArtifactID != artifactID {
+		return releaseManifest{}, fmt.Errorf("release tag does not bind the requested package artifact")
+	}
+	manifestIdentityMatches := manifest.ArtifactID == artifactID && manifest.PackageVersion == ""
+	indexMediaType := "application/vnd.takoform.package-index.v2+json"
+	if locator.APIVersion == formpackage.PackageAPIVersion {
+		manifestIdentityMatches = manifest.PackageVersion == artifactID && manifest.ArtifactID == ""
+		indexMediaType = "application/vnd.takoform.package-index.v1+json"
+	}
+	base := "takoform-form-" + releaseID + "_" + artifactID
 	if manifest.SchemaVersion != 1 || manifest.ReleaseType != "form-package" || manifest.Tag != tag ||
 		manifest.SourceRepository != "github.com/"+repository || !commitPattern.MatchString(manifest.SourceCommit) ||
-		!commitPattern.MatchString(manifest.ToolingCommit) || manifest.Workflow == "" || manifest.PackageVersion != packageVersion ||
+		!commitPattern.MatchString(manifest.ToolingCommit) || manifest.Workflow == "" || !manifestIdentityMatches ||
 		manifest.ReleaseID != releaseID || manifest.FormRef != candidate.FormRef || manifest.PackageDigest != candidate.PackageDigest ||
 		manifest.Canonicalization != "RFC8785" || manifest.SignedSubject != base+"_package-index.json" ||
 		manifest.SignatureBundle != base+"_package-index.sigstore.json" ||
@@ -1764,7 +1943,7 @@ func validateDownloadedPackage(
 	}
 	wantMediaTypes := map[string]string{
 		base + ".tar.gz":                      "application/gzip",
-		base + "_package-index.json":          "application/vnd.takoform.package-index.v1+json",
+		base + "_package-index.json":          indexMediaType,
 		base + "_package-index.sigstore.json": "application/vnd.dev.sigstore.bundle.v0.3+json",
 		base + "_provenance.intoto.json":      "application/vnd.in-toto+json",
 		base + "_sbom.spdx.json":              "application/spdx+json",
@@ -1802,7 +1981,7 @@ func validateDownloadedPackage(
 	if err := validateChecksums(downloaded["SHA256SUMS"], manifestRaw, manifestAssets); err != nil {
 		return releaseManifest{}, err
 	}
-	indexRaw, index, err := validateDownloadedPackageIndex(packageRoot, candidate, packageVersion, manifest, downloaded)
+	indexRaw, index, err := validateDownloadedPackageIndex(packageRoot, candidate, artifactID, manifest, downloaded)
 	if err != nil {
 		return releaseManifest{}, err
 	}
@@ -1872,7 +2051,7 @@ func validateChecksums(raw, manifestRaw []byte, manifestAssets map[string]releas
 func validateDownloadedPackageIndex(
 	packageRoot string,
 	candidate candidatePackage,
-	packageVersion string,
+	artifactID string,
 	manifest releaseManifest,
 	downloaded map[string][]byte,
 ) ([]byte, formpackage.PackageIndex, error) {
@@ -1891,7 +2070,11 @@ func validateDownloadedPackageIndex(
 	if err != nil {
 		return nil, formpackage.PackageIndex{}, fmt.Errorf("validate signed package index: %w", err)
 	}
-	if index.FormRef != candidate.FormRef || index.PackageVersion != packageVersion ||
+	locator, err := formpackage.PublicationLocatorFor(index, candidate.PackageDigest)
+	if err != nil {
+		return nil, formpackage.PackageIndex{}, fmt.Errorf("derive signed package publication locator: %w", err)
+	}
+	if index.FormRef != candidate.FormRef || locator.ArtifactID != artifactID || locator.Tag != manifest.Tag ||
 		formpackage.DigestBytes(indexRaw) != candidate.PackageDigest ||
 		manifest.FormRef != index.FormRef || manifest.PackageDigest != formpackage.DigestBytes(indexRaw) {
 		return nil, formpackage.PackageIndex{}, fmt.Errorf("signed package index does not bind the exact planned package")
@@ -2008,6 +2191,13 @@ func validateDownloadedPackageSBOM(
 	index formpackage.PackageIndex,
 	manifest releaseManifest,
 ) error {
+	artifactIdentity := manifest.PackageVersion
+	if artifactIdentity == "" {
+		artifactIdentity = manifest.ArtifactID
+	}
+	if artifactIdentity == "" {
+		return fmt.Errorf("release manifest omits package artifact identity")
+	}
 	canonical, err := formpackage.Canonicalize(raw)
 	if err != nil {
 		return fmt.Errorf("invalid RFC 8785 I-JSON: %w", err)
@@ -2020,7 +2210,7 @@ func validateDownloadedPackageSBOM(
 		return fmt.Errorf("strict SPDX document: %w", err)
 	}
 	if document.SPDXVersion != "SPDX-2.3" || document.DataLicense != "CC0-1.0" || document.SPDXID != "SPDXRef-DOCUMENT" ||
-		document.Name != "Takoform Form Package "+manifest.FormRef.Kind+" "+manifest.PackageVersion ||
+		document.Name != "Takoform Form Package "+manifest.FormRef.Kind+" "+artifactIdentity ||
 		document.DocumentNamespace != "https://forms.takoform.com/spdx/package/"+strings.TrimPrefix(manifest.PackageDigest, "sha256:") ||
 		!reflect.DeepEqual(document.CreationInfo.Creators, []string{"Tool: takoform-form-package-release"}) {
 		return fmt.Errorf("document identity does not bind the exact FormRef and package digest")
@@ -2036,7 +2226,7 @@ func validateDownloadedPackageSBOM(
 		return err
 	}
 	wantPackage := spdxPackage{
-		Name: manifest.FormRef.Kind, SPDXID: "SPDXRef-Package", VersionInfo: manifest.PackageVersion,
+		Name: manifest.FormRef.Kind, SPDXID: "SPDXRef-Package", VersionInfo: artifactIdentity,
 		DownloadLocation: "NOASSERTION", FilesAnalyzed: true,
 		PackageVerificationCode: spdxPackageVerificationCode{Value: verificationCode},
 		LicenseConcluded:        "NOASSERTION", LicenseDeclared: "NOASSERTION", CopyrightText: "NOASSERTION",

@@ -1,19 +1,31 @@
 # Form Package release sources
 
-Each child directory is one exact data-only release source:
+Each child directory is one exact data-only release source. Current packages
+use their closed package digest as their only publication artifact identity:
 
 ```text
-<release-id>/<packageVersion>/package-index.json
-<release-id>/<packageVersion>/<listed payloads>
+<release-id>/sha256-<64-lowercase-hex>/package-index.json
+<release-id>/sha256-<64-lowercase-hex>/<listed payloads>
 ```
 
 The directory must pass `go run ./cmd/form-package verify`. Its release ID is
 `k-` followed by the lowercase, unpadded base32 encoding of the exact ASCII
 FormRef Kind bytes. This encoding is reversible and preserves distinctions such
-as `SQLDatabase` versus `SqlDatabase`. Its version must equal `packageVersion`
-and the `forms/<release-id>/v<packageVersion>` tag. Compatibility and test fixtures stay
-under `conformance/`; copying one here is an explicit reviewed release
-decision, not automatic standardization.
+as `SQLDatabase` versus `SqlDatabase`. For a current v1alpha2 package, the
+directory artifact ID and `forms/<release-id>/sha256-<hex>` tag MUST equal the
+verified package digest with `:` replaced by `-`. Compatibility and test
+fixtures stay under `conformance/`; copying one here is an explicit reviewed
+release decision, not automatic standardization.
+
+Published v1alpha1 packages retain their Legacy locator and are never renamed:
+
+```text
+<release-id>/<packageVersion>/...
+forms/<release-id>/v<packageVersion>
+```
+
+Their `packageVersion` is a compatibility field of the retained v1alpha1
+package profile, not a second maturity stream for current Forms.
 
 The retired `1.0.0` directories are the release-owned source copies of the
 historical first structural-candidate set. They are no longer regenerated from

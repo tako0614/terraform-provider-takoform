@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
@@ -22,7 +23,7 @@ func TestCreateAndUpdateRejectUnknownPlanBeforeHost(t *testing.T) {
 	var hostRequests atomic.Int64
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/.well-known/takoform" {
+		if request.URL.Path == "/.well-known/takoform/v1alpha2" {
 			writeProviderDiscovery(t, w, server.URL)
 			return
 		}
@@ -98,7 +99,7 @@ func TestFormApplyRejectsUnknownDesiredValuesBeforeHost(t *testing.T) {
 	var hostRequests atomic.Int64
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/.well-known/takoform" {
+		if request.URL.Path == "/.well-known/takoform/v1alpha2" {
 			writeProviderDiscovery(t, w, server.URL)
 			return
 		}
@@ -142,23 +143,6 @@ func TestFormApplyRejectsUnknownDesiredValuesBeforeHost(t *testing.T) {
 			},
 		},
 		{
-			name: "top-level set",
-			kind: "ObjectBucket",
-			mutate: func(values *formValues) {
-				values.Fields["access_protocols"] = types.SetUnknown(types.StringType)
-			},
-		},
-		{
-			name: "set member",
-			kind: "ObjectBucket",
-			mutate: func(values *formValues) {
-				values.Fields["access_protocols"] = types.SetValueMust(
-					types.StringType,
-					[]attr.Value{types.StringUnknown()},
-				)
-			},
-		},
-		{
 			name: "top-level map",
 			kind: "EdgeWorker",
 			mutate: func(values *formValues) {
@@ -177,14 +161,14 @@ func TestFormApplyRejectsUnknownDesiredValuesBeforeHost(t *testing.T) {
 		},
 		{
 			name: "top-level connections list",
-			kind: "HttpRoute",
+			kind: "EdgeWorker",
 			mutate: func(values *formValues) {
 				values.Connections = types.ListUnknown(types.ObjectType{AttrTypes: resourceConnectionAttrTypes})
 			},
 		},
 		{
 			name: "connection object",
-			kind: "HttpRoute",
+			kind: "EdgeWorker",
 			mutate: func(values *formValues) {
 				values.Connections = types.ListValueMust(
 					types.ObjectType{AttrTypes: resourceConnectionAttrTypes},
@@ -245,7 +229,7 @@ func TestFormApplyRejectsEveryUnknownOrNullConnectionFieldBeforeHost(t *testing.
 	var hostRequests atomic.Int64
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/.well-known/takoform" {
+		if request.URL.Path == "/.well-known/takoform/v1alpha2" {
 			writeProviderDiscovery(t, w, server.URL)
 			return
 		}
@@ -349,7 +333,7 @@ func TestFormApplyRejectsEveryUnknownOrNullConnectionFieldBeforeHost(t *testing.
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			kind := applyTestKind(t, "HttpRoute")
+			kind := applyTestKind(t, "EdgeWorker")
 			values := canonicalApplyTestValues(t, kind)
 			values.Connections = types.ListValueMust(
 				types.ObjectType{AttrTypes: resourceConnectionAttrTypes},
@@ -381,7 +365,7 @@ func TestFormApplyValidatesExactDesiredSchemaBeforeHost(t *testing.T) {
 	var hostRequests atomic.Int64
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/.well-known/takoform" {
+		if request.URL.Path == "/.well-known/takoform/v1alpha2" {
 			writeProviderDiscovery(t, w, server.URL)
 			return
 		}
@@ -390,9 +374,9 @@ func TestFormApplyValidatesExactDesiredSchemaBeforeHost(t *testing.T) {
 	}))
 	defer server.Close()
 
-	kind := applyTestKind(t, "ObjectBucket")
+	kind := applyTestKind(t, "KeyValueStore")
 	values := canonicalApplyTestValues(t, kind)
-	values.Fields["storage_class"] = types.StringValue("not-in-the-current-schema")
+	values.Fields["consistency"] = types.StringValue("not-in-the-current-schema")
 	resource := &formResource{
 		kind: kind,
 		data: &providerData{
@@ -417,10 +401,7 @@ func TestFormApplyPreservesOptionalNullAndComputedSpacePlanningSemantics(t *test
 	values := canonicalApplyTestValues(t, kind)
 	values.Space = types.StringUnknown()
 	values.Connections = types.ListNull(types.ObjectType{AttrTypes: resourceConnectionAttrTypes})
-	values.Fields["runtime"] = types.StringNull()
 	values.Fields["runtime_version"] = types.StringNull()
-	values.Fields["request_timeout_seconds"] = types.Int64Null()
-	values.Fields["concurrency"] = types.Int64Null()
 	values.Fields["configuration"] = types.MapNull(types.StringType)
 
 	resource := &formResource{
@@ -438,7 +419,7 @@ func TestFormApplyPreservesOptionalNullAndComputedSpacePlanningSemantics(t *test
 		t.Fatalf("effective Space = %q / %q, want provider-default", space, body.Metadata.Space)
 	}
 	for _, absent := range []string{
-		"connections", "runtime", "runtimeVersion", "requestTimeoutSeconds", "concurrency", "configuration",
+		"connections", "runtimeVersion", "configuration",
 	} {
 		if _, exists := body.Spec[absent]; exists {
 			t.Errorf("optional null field %s entered desired state: %#v", absent, body.Spec[absent])
@@ -447,7 +428,7 @@ func TestFormApplyPreservesOptionalNullAndComputedSpacePlanningSemantics(t *test
 }
 
 func TestEveryCanonicalFormPlanPassesTheExactDesiredSchemaGate(t *testing.T) {
-	for _, kind := range formcatalog.Kinds {
+	for _, kind := range currentformcatalog.Kinds {
 		kind := kind
 		t.Run(kind.Kind, func(t *testing.T) {
 			values := canonicalApplyTestValues(t, kind)
@@ -471,7 +452,7 @@ func TestEveryCanonicalFormPlanPassesTheExactDesiredSchemaGate(t *testing.T) {
 
 func applyTestKind(t *testing.T, name string) formcatalog.Kind {
 	t.Helper()
-	kind, ok := formcatalog.ByKind(name)
+	kind, ok := currentformcatalog.ByKind(name)
 	if !ok {
 		t.Fatalf("%s Form is not declared", name)
 	}

@@ -66,8 +66,8 @@ func TestCurrentReviewedPolicyLoadsWithoutRelabelingV1(t *testing.T) {
 	}
 }
 
-// TestPolicyRejectsUnusableEntries keeps the allowlist fail-closed: a malformed
-// entry must not silently widen who may sign admission input.
+// TestPolicyRejectsUnusableEntries keeps historical verification fail-closed:
+// a malformed entry must not widen the retained signer set.
 func TestPolicyRejectsUnusableEntries(t *testing.T) {
 	valid := validTestPolicy
 	for name, mutation := range map[string]func(string) string{

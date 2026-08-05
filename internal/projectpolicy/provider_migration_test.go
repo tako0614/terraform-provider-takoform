@@ -130,7 +130,7 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(candidates) != audit.To.FormResourceCount {
-		t.Fatalf("migration target count = %d, current candidate count = %d", audit.To.FormResourceCount, len(candidates))
+		t.Fatalf("migration target count = %d, Legacy compatibility count = %d", audit.To.FormResourceCount, len(candidates))
 	}
 
 	var release releaseDescriptor
@@ -144,11 +144,10 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 		t.Fatalf("parse migration target provider version: %v", err)
 	}
 	if release.Tag != "v"+release.Version ||
-		currentVersion.Major != migrationTarget.Major ||
 		currentVersion.LT(migrationTarget) ||
 		release.ProviderAddress != audit.To.CanonicalProviderAddress {
 		t.Fatalf(
-			"current release %s (%s) is not a compatible successor of migration target %s (%s)",
+			"current release %s (%s) does not retain the migration target address/history %s (%s)",
 			release.Version,
 			release.ProviderAddress,
 			audit.To.ProviderVersion,
@@ -194,17 +193,18 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	}
 	providerPublish := localPublisher[providerPublishStart:providerPublishEnd]
 	if !strings.Contains(providerPublish, "body:") ||
-		!strings.Contains(providerPublish, "Breaking upgrade from v0.2.1") ||
-		!strings.Contains(providerPublish, "release/migrations/v0.2.1-to-v1.0.1.md") {
-		t.Fatal("owner-local provider publication does not link the breaking v0.2.1-to-v1.0.1 migration guide")
+		!strings.Contains(providerPublish, "Breaking upgrade from provider v1") ||
+		!strings.Contains(providerPublish, "forms.takoform.com/v1alpha2") ||
+		!strings.Contains(providerPublish, "release/migrations/v1-to-v2.md") {
+		t.Fatal("owner-local provider publication does not link the breaking v1-to-v2 migration guide")
 	}
 
 	resourceDocs, err := filepath.Glob(filepath.Join(root, "docs", "resources", "*.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(resourceDocs) != audit.To.FormResourceCount {
-		t.Fatalf("resource docs = %d, want %d", len(resourceDocs), audit.To.FormResourceCount)
+	if len(resourceDocs) != 9 {
+		t.Fatalf("current provider-v2 resource docs = %d, want 9", len(resourceDocs))
 	}
 	for _, filename := range resourceDocs {
 		raw, err := os.ReadFile(filename)
