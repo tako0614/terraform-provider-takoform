@@ -175,7 +175,7 @@ post-publication readback with:
 go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
   --opentofu tofu --terraform terraform \
   > /tmp/provider-lifecycle-matrix.json
-go run ./cmd/admission-readback registry \
+go run ./cmd/provider-registry-readback \
   --matrix /tmp/provider-lifecycle-matrix.json \
   --provider-release-commit "$(git rev-list -n 1 "$(jq -r .tag release/version.json)")" \
   --output /tmp/provider-readback.json

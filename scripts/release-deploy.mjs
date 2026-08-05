@@ -4218,8 +4218,7 @@ function verifyRegistryCandidate(
   }
   const rebuilt = command(context, "go", [
     "run",
-    "./cmd/admission-readback",
-    "registry",
+    "./cmd/provider-registry-readback",
     "--matrix",
     join(root, "provider-lifecycle-matrix.json"),
     "--provider-release-commit",
