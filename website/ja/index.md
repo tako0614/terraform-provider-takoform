@@ -54,9 +54,8 @@ resource "takoform_edge_worker" "example" {
 ```
 
 資格情報・配置・価格は書きません。これらはホストが決めることで、state には
-入りません。provider `v2.0.0` は**未公開の source candidate** で、Registry に
-公開されているのは `v1.0.3` (Legacy client) だけです。ローカルでの試し方は
-[docs](/ja/docs/) を参照してください。
+入りません。provider `v2.0.0` は現在の公開済み client で、`v1.0.3` は公開済みの
+Legacy client です。[docs](/ja/docs/) で使い方を確認してください。
 
 ## リソース
 
@@ -91,6 +90,6 @@ resource "takoform_edge_worker" "example" {
 > **ステータス:** Takoform は **Experimental specification project** です。現行の
 > FormRef は `forms.takoform.com/v1alpha2`、現行の package envelope は
 > `packages.forms.takoform.com/v1alpha3` です。provider `v1.0.3` は公開済みの
-> Legacy client、provider `v2.0.0` は未公開の source candidate です。
+> Legacy client、provider `v2.0.0` は現在の公開済み client です。
 > `forms.takoform.com/v1alpha1` の公開済み Form Package identity 34件は、不変の
 > Legacy 証跡です。現在、中央による承認や admission はありません。

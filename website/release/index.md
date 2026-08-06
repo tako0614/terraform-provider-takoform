@@ -22,10 +22,21 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-Provider `v1.0.3` is the current published `v1` release. Its signed tag,
-immutable GitHub Release, and canonical Terraform Registry listing exist.
+Provider `v2.0.0` is the current published release. Provider `v1.0.3` is the
+published Legacy `v1` release. Their signed tags, immutable GitHub Releases,
+and canonical Terraform Registry listings exist.
 `release/version.json` retains `publicationStatus: candidate-only` because it
 is tag-time build metadata, not a live availability field.
+
+`release/provider-release-identities.json` retains the exact six-file signed
+Registry readback closure for current provider releases as canonical base64.
+The closure binds the provider release commit, readback tooling commit,
+Terraform and OpenTofu direct installs, one provider binary digest, the
+workflow certificate identity, transparency-log proof, and original checksum
+manifest. `scripts/publication-truth.mjs` reconstructs and validates those
+exact bytes before public documentation can call the current provider
+Registry-published. This distribution evidence grants no Form maturity, Host
+Support, activation, placement, or commercial authority.
 
 ## Provider v1.0.3 RelationalDatabase schema inputs
 
@@ -175,7 +186,7 @@ post-publication readback with:
 go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
   --opentofu tofu --terraform terraform \
   > /tmp/provider-lifecycle-matrix.json
-go run ./cmd/admission-readback registry \
+go run ./cmd/provider-registry-readback \
   --matrix /tmp/provider-lifecycle-matrix.json \
   --provider-release-commit "$(git rev-list -n 1 "$(jq -r .tag release/version.json)")" \
   --output /tmp/provider-readback.json
@@ -242,7 +253,7 @@ descriptor tag and current protected-main commit:
 
 ```console
 bun run deploy -- takoform-provider-release prepare \
-  --tag v1.0.3 \
+  --tag <descriptor-tag-from-release/version.json> \
   --expected-commit <40-character-protected-main-commit>
 ```
 
@@ -262,7 +273,7 @@ exact signed-tag run through the same owner entrypoint:
 
 ```console
 bun run deploy -- takoform-provider-release tag \
-  --tag v1.0.3 \
+  --tag <descriptor-tag-from-release/version.json> \
   --expected-commit <same-40-character-commit> \
   --run-id <signed-tag-workflow-run-id> \
   --run-attempt <signed-tag-workflow-attempt>
@@ -299,7 +310,7 @@ After that second run succeeds, publish only its exact run/attempt:
 
 ```console
 bun run deploy -- takoform-provider-release publish \
-  --tag v1.0.3 \
+  --tag <descriptor-tag-from-release/version.json> \
   --expected-commit <same-40-character-commit> \
   --run-id <provider-release-candidate-run-id> \
   --run-attempt <provider-release-candidate-run-attempt>
@@ -322,7 +333,7 @@ intentionally unusable. Complete only that exact partial identity with:
 
 ```console
 bun run deploy -- takoform-provider-release recover-tag-only \
-  --tag v1.0.3 \
+  --tag <descriptor-tag-from-release/version.json> \
   --expected-release-commit <signed-tag-peeled-release-commit-E> \
   --expected-tag-object <exact-annotated-signed-tag-object> \
   --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
@@ -336,7 +347,7 @@ documentation. It requires current protected `main` to equal `F`; the exact
 local and remote annotated tag object must still peel to `E` and verify with
 the pinned provider key; the GitHub Release and Registry version must still be
 absent; and the successful candidate run must have exact head `E`, branch
-`v1.0.3`, run, attempt, checksums, 15 assets, GPG signatures, and provenance.
+the descriptor tag, run, attempt, checksums, 15 assets, GPG signatures, and provenance.
 The owner gate and the same recovery fence run immediately before draft
 creation and again immediately before publication. Recovery never moves,
 deletes, or recreates the tag.
@@ -346,7 +357,7 @@ identity:
 
 ```console
 bun run deploy -- takoform-provider-release recover-draft \
-  --tag v1.0.3 \
+  --tag <descriptor-tag-from-release/version.json> \
   --expected-release-commit <signed-tag-peeled-release-commit-E> \
   --expected-tag-object <exact-annotated-signed-tag-object> \
   --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
@@ -384,11 +395,11 @@ provider bytes as having been built from `F`.
 
 ```console
 bun run deploy -- takoform-provider-release readback \
-  --tag v1.0.3 \
+  --tag <descriptor-tag-from-release/version.json> \
   --expected-commit <current-reviewed-protected-main-source-commit>
 
 bun run deploy -- takoform-provider-release verify \
-  --tag v1.0.3 \
+  --tag <descriptor-tag-from-release/version.json> \
   --expected-commit <same-current-reviewed-protected-main-source-commit> \
   --run-id <registry-readback-workflow-run-id> \
   --run-attempt <registry-readback-workflow-attempt>

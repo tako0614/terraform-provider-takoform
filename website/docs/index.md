@@ -5,10 +5,9 @@ job.
 
 ## Quick start
 
-The current line is provider `v2.0.0`, an **unpublished source candidate**.
-The fastest honest way to try it is the repository conformance matrix — it
-builds the provider and runs all nine resources through isolated Terraform and
-OpenTofu development overrides:
+The current line is provider `v2.0.0`, published in the Registry. To see the
+provider and all nine resources exercised together, run the repository
+conformance matrix:
 
 ```sh
 bun run check:current-form-candidates
@@ -21,10 +20,10 @@ v1alpha2 contracts without touching a real host. Against a real host, first
 verify it advertises the exact v1alpha2 FormRefs at its versioned discovery
 path (`/.well-known/takoform/v1alpha2`).
 
-### Pinning the current source candidate
+### Pinning the current provider
 
-This pin identifies the v2 source candidate; ordinary `init` cannot install it
-until a v2 release exists in the Registry.
+Pin provider `v2.0.0` to use the current line. `init` installs it from the
+Registry.
 
 ```hcl
 terraform {
@@ -45,7 +44,7 @@ lanes:
 | Lane | Use for | Install |
 | --- | --- | --- |
 | **v1.0.3** (published) | existing Legacy state, refresh, delete, recovery | from the Registry |
-| **v2.0.0** (source candidate) | the nine current contracts | source build + dev override |
+| **v2.0.0** (current) | the nine current contracts | from the Registry |
 
 ### Maintain published Legacy
 
@@ -102,8 +101,8 @@ quota, and SLA.
 
 Takoform is an **Experimental specification project**. Current FormRefs use
 `forms.takoform.com/v1alpha2` and current package envelopes use
-`packages.forms.takoform.com/v1alpha3`. Provider `v1.0.3` is the published
-Legacy client; provider `v2.0.0` is an unpublished source candidate. The 34
+`packages.forms.takoform.com/v1alpha3`. Provider `v2.0.0` is the current
+published client; provider `v1.0.3` is the published Legacy client. The 34
 published Form Package identities from `forms.takoform.com/v1alpha1` are
 immutable Legacy evidence. There is no current central approval or admission.
 

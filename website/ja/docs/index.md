@@ -4,10 +4,8 @@ Terraform / OpenTofu で Takoform を使うための手順と、2 つの利用�
 
 ## クイックスタート
 
-現行ラインは provider `v2.0.0` で、**未公開の source candidate** です。いちばん
-手軽な試し方は、リポジトリの conformance matrix を使う方法です。provider を
-ビルドして、9 種類すべてのリソースを、Terraform / OpenTofu の隔離された開発用
-override で一通り動かします:
+現行ラインは provider `v2.0.0` で、Registry に公開済みです。provider と 9 種類の
+リソースをまとめて動かすには、リポジトリの conformance matrix を使います:
 
 ```sh
 bun run check:current-form-candidates
@@ -20,10 +18,10 @@ preview/apply/observe/refresh/delete を検証します。実ホスト相手に�
 そのホストが versioned discovery 経路 (`/.well-known/takoform/v1alpha2`) で
 exact な v1alpha2 FormRef を公開していることを先に確認してください。
 
-### 現行 source candidate のピン留め
+### 現行 provider のピン留め
 
-次のピンは、v2 source candidate の identity を示すためのものです。v2 の
-リリースが Registry に存在するまでは、通常の `init` ではインストールできません。
+現行ラインを使うには provider `v2.0.0` をピン留めします。`init` で Registry
+からインストールされます。
 
 ```hcl
 terraform {
@@ -44,7 +42,7 @@ provider の address は `registry.terraform.io/tako0614/takoform` の 1 つだ�
 | 経路 | 用途 | インストール |
 | --- | --- | --- |
 | **v1.0.3** (公開済み) | 既存の Legacy state の保守・delete・recovery | Registry から |
-| **v2.0.0** (source candidate) | 現行の 9 契約 | ソースからビルド + dev override |
+| **v2.0.0** (現行) | 現行の 9 契約 | Registry から |
 
 ### 公開済み Legacy の保守
 
@@ -102,7 +100,7 @@ Takosumi Cloud が所有します。
 Takoform は **Experimental specification project** です。現行の FormRef は
 `forms.takoform.com/v1alpha2`、現行の package envelope は
 `packages.forms.takoform.com/v1alpha3` です。provider `v1.0.3` は公開済みの
-Legacy client、provider `v2.0.0` は未公開の source candidate です。
+Legacy client、provider `v2.0.0` は現在の公開済み client です。
 `forms.takoform.com/v1alpha1` の公開済み Form Package identity 34件は、不変の
 Legacy 証跡です。現在、中央による承認や admission はありません。
 
