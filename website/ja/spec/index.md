@@ -10,7 +10,7 @@ exact な **FormRef** は、API group・kind・definition version・schema diges
 | 現行 FormRef | `forms.takoform.com/v1alpha2` |
 | Legacy FormRef | `forms.takoform.com/v1alpha1` |
 | 現行 package envelope | `packages.forms.takoform.com/v1alpha3` |
-| Provider | `v1.0.3` 公開済み · `v2.0.0` source candidate |
+| Provider | `v2.0.0` 現行 · `v1.0.3` Legacy |
 
 ## Normative schemas
 
@@ -33,7 +33,7 @@ provider ネイティブのリソース) から検討を始めます。
 Takoform は **Experimental specification project** です。現行の FormRef は
 `forms.takoform.com/v1alpha2`、現行の package envelope は
 `packages.forms.takoform.com/v1alpha3` です。provider `v1.0.3` は公開済みの
-Legacy client、provider `v2.0.0` は未公開の source candidate です。
+Legacy client、provider `v2.0.0` は現在の公開済み client です。
 `forms.takoform.com/v1alpha1` の公開済み Form Package identity 34件は、不変の
 Legacy 証跡です。現在、中央による承認や admission はありません。
 

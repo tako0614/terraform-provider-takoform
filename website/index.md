@@ -54,9 +54,9 @@ resource "takoform_edge_worker" "example" {
 ```
 
 No credentials, no placement, no pricing — the host decides those and keeps
-them out of your state. Provider `v2.0.0` is an unpublished source candidate;
-the Registry still serves the published `v1.0.3` Legacy client.
-[Start here](/docs/) to run the current line locally.
+them out of your state. Provider `v2.0.0` is the current published client;
+`v1.0.3` remains the published Legacy client.
+[Start here](/docs/) to install and use it.
 
 ## The resources
 
@@ -90,7 +90,7 @@ more. See the [resource reference](/docs/#resource-reference).
 
 > **Status:** Takoform is an Experimental specification project. Current
 > FormRefs use `forms.takoform.com/v1alpha2` and current package envelopes use
-> `packages.forms.takoform.com/v1alpha3`. Provider `v1.0.3` is the published
-> Legacy client; provider `v2.0.0` is an unpublished source candidate. The 34
+> `packages.forms.takoform.com/v1alpha3`. Provider `v2.0.0` is the current
+> published client; provider `v1.0.3` is the published Legacy client. The 34
 > published Form Package identities from `forms.takoform.com/v1alpha1` are
 > immutable Legacy evidence. There is no current central approval or admission.

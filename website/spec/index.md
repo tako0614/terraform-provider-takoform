@@ -11,7 +11,7 @@ the same kind in a different epoch is a different contract.
 | Current FormRef | `forms.takoform.com/v1alpha2` |
 | Legacy FormRef | `forms.takoform.com/v1alpha1` |
 | Current package envelope | `packages.forms.takoform.com/v1alpha3` |
-| Provider | `v1.0.3` published · `v2.0.0` source candidate |
+| Provider | `v2.0.0` current · `v1.0.3` Legacy |
 
 ## Normative schemas
 
@@ -33,8 +33,8 @@ Kubernetes/Crossplane, provider-native resources).
 
 Takoform is an **Experimental specification project**. Current FormRefs use
 `forms.takoform.com/v1alpha2` and current package envelopes use
-`packages.forms.takoform.com/v1alpha3`. Provider `v1.0.3` is the published
-Legacy client; provider `v2.0.0` is an unpublished source candidate. The 34
+`packages.forms.takoform.com/v1alpha3`. Provider `v2.0.0` is the current
+published client; provider `v1.0.3` is the published Legacy client. The 34
 published Form Package identities from `forms.takoform.com/v1alpha1` are
 immutable Legacy evidence. There is no current central approval or admission.
 

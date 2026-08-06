@@ -34,9 +34,8 @@ terraform {
 }
 ```
 
-Provider `v2.0.0` is an unpublished source candidate. Its examples require a
-reviewed local build and Terraform/OpenTofu development override; this exact
-pin must not be mistaken for Registry availability:
+Provider `v2.0.0` is the published current client. Terraform and OpenTofu can
+install this exact pin from the canonical Registry address:
 
 ```hcl
 terraform {
@@ -58,7 +57,7 @@ Provider v2 rejects provider-v1 state rather than guessing a migration. Pin v1
 to recover or remove Legacy resources; create/import the v1alpha2 resource
 explicitly when migration is intended. See [the migration boundary](../release/migrations/v1-to-v2.md).
 
-## Verify the published Legacy provider
+## Verify the published current provider
 
 Availability is verified, not declared by this immutable documentation.
 
@@ -66,7 +65,7 @@ Availability is verified, not declared by this immutable documentation.
 curl -fsS https://registry.terraform.io/v1/providers/tako0614/takoform/versions
 git clone https://github.com/tako0614/terraform-provider-takoform.git
 cd terraform-provider-takoform
-git checkout --detach v1.0.3
+git checkout --detach v2.0.0
 ```
 
 A source tag, documentation page, or local build alone is not Registry publication or installation evidence.
