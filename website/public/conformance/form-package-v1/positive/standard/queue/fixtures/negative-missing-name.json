@@ -1,0 +1,9 @@
+{
+  "deliveryDelaySeconds": 0,
+  "maxBatchSize": 10,
+  "maxMessageBytes": 262144,
+  "maxRetries": 5,
+  "messageRetentionSeconds": 345600,
+  "ordering": "best_effort",
+  "visibilityTimeoutSeconds": 30
+}

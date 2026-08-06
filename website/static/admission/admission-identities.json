@@ -1,0 +1,75 @@
+{
+  "format": "takoform.standard-admission-identities@v2",
+  "entries": [
+    {
+      "version": "1.0.1",
+      "tag": "forms/admissions/v1.0.1",
+      "status": "assigned-historical",
+      "tagObject": "2b1ca9f68688392869a79de122fbce2a54842301",
+      "commit": "57aba7f374bb0d45274044e1dacbea52d16f3f6b",
+      "retainedRoot": "admission/v1",
+      "retainedTree": "6add327241bfb347a1e8766efa699c6c483c46bb",
+      "setDigest": "sha256:892ae3d51586e50ac0b1c51c57a4889e70d52d1788b379652acb0fd11b680e1b"
+    },
+    {
+      "version": "1.0.2",
+      "tag": "forms/admissions/v1.0.2",
+      "status": "assigned-historical",
+      "tagObject": "98af8dd461f24e6dc902f5c56dc6740f74ceb5af",
+      "commit": "ff65142ecfab206f58239f095b5e170854ef9dde",
+      "retainedRoot": "admission/v1",
+      "retainedTree": "c9654cfd490bd0f8282984ecad031f5e17b07b5f",
+      "setDigest": "sha256:b5da01634c1da78afe527e05af17487ddaf76dac9a85317ebc5298ea4395f0fb"
+    },
+    {
+      "version": "1.0.3",
+      "tag": "forms/admissions/v1.0.3",
+      "status": "assigned-historical",
+      "tagObject": "82af8a61666e0194506d0d23d04422ccda4b3d86",
+      "commit": "4a40826c7ed467af84e856487998ce365ffe00dd",
+      "retainedRoot": "admission/v1",
+      "retainedTree": "94c9d4ab118880f8a1f6be3db9a68084e63b6f66",
+      "setDigest": "sha256:4f0d8942e437262465e079d89d74e29d36f7d7f7d53312bb1cb29671f34c82fc"
+    },
+    {
+      "version": "1.0.4",
+      "tag": "forms/admissions/v1.0.4",
+      "status": "assigned-historical",
+      "tagObject": "b49a55016362d8787966f41b14570e3b67b8ddba",
+      "commit": "a426a379e2743b4345e868becf3618357c015447",
+      "retainedRoot": "admission/v1",
+      "retainedTree": "d2255a52b30b7542554d3468f9dc34e867eae3ec",
+      "setDigest": "sha256:e37b651716a74739d60e91b14aa00e39851ec4fe2fb591957644f7eeafc041c3"
+    },
+    {
+      "version": "1.0.5",
+      "tag": "forms/admissions/v1.0.5",
+      "status": "reserved-abandoned",
+      "retainedPaths": [
+        "admission/v3/candidates/host-report-1.0.5-63dabf0c64be-bd0b3184aaad",
+        "admission/v3/candidates/provider-report-1.0.5-bd0b3184aaad",
+        "admission/v3/candidates/registry-readback-1.0.5-bd0b3184aaad"
+      ]
+    },
+    {
+      "version": "1.0.6",
+      "tag": "forms/admissions/v1.0.6",
+      "status": "assigned-historical",
+      "tagObject": "b34b13a6e2fd3acbcbd73935e3e353f5d05b5c31",
+      "commit": "1e438d61ed77f1ccfd3e000250f7dcf0c578c1af",
+      "retainedRoot": "admission/v4",
+      "retainedTree": "2d7fd930e86738619388f91c0083a983c38628cb",
+      "setDigest": "sha256:ab73d976ed8f8e727a835101e80e3bd519931aa730e87d14de9bbb539bf72951"
+    },
+    {
+      "version": "1.0.7",
+      "tag": "forms/admissions/v1.0.7",
+      "status": "assigned-historical",
+      "tagObject": "83a231dfb1a39af50f86de6fe8b7a9004e6b7075",
+      "commit": "e56cfc866cc98469bbe4fcfe106cfc73cb08ae8c",
+      "retainedRoot": "admission/v4",
+      "retainedTree": "5b81172ca01f0c47a3d6b7ff653e591dd4b5d5bb",
+      "setDigest": "sha256:6c85f5eebc35d77eef9646f782bd63bfb08ee00321baf0f42f95d36cbd408462"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "cacheControlSeconds": 300,
+  "errorDocument": "../escape",
+  "indexDocument": "index.html",
+  "name": "static-site",
+  "singlePageApp": false,
+  "source": {
+    "artifactMediaType": "application/vnd.takoform.static-site+tar",
+    "artifactSha256": "3b1d4c2f9a8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a392817065f4e",
+    "artifactUrl": "https://artifacts.portable-conformance.invalid/static-site.tar"
+  }
+}

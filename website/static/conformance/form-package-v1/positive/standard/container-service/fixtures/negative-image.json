@@ -1,0 +1,15 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "cpuMillicores": 250,
+  "healthCheckPath": "/healthz",
+  "image": "docker.io/library/nginx:latest",
+  "memoryMib": 512,
+  "name": "container-service",
+  "ports": [
+    80
+  ],
+  "publicHttp": true,
+  "replicas": 2
+}

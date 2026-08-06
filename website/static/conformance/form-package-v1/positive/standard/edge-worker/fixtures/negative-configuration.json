@@ -1,0 +1,27 @@
+{
+  "assetsNotFoundHandling": "single_page_application",
+  "assetsPath": "assets",
+  "concurrency": 100,
+  "configuration": {
+    "1 invalid key": "value"
+  },
+  "connections": {
+    "assets": {
+      "permissions": [
+        "read"
+      ],
+      "projection": "object.binding.v1",
+      "resource": "ObjectBucket/object-bucket"
+    }
+  },
+  "entrypoint": "worker.mjs",
+  "name": "edge-worker",
+  "requestTimeoutSeconds": 30,
+  "runtime": "javascript",
+  "runtimeVersion": "2026.1",
+  "source": {
+    "artifactMediaType": "application/vnd.takoform.edge-worker+tar",
+    "artifactSha256": "0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37",
+    "artifactUrl": "https://artifacts.portable-conformance.invalid/edge-worker.tar"
+  }
+}

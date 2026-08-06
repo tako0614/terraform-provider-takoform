@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 3,
+  "status": "architecture-decision-accepted-implementation-in-progress",
+  "provider": {
+    "status": "implemented-registry-key-registered-first-install-proof-pending",
+    "artifactDigest": "sha256",
+    "releaseTagPattern": "v*",
+    "signature": {
+      "format": "openpgp-detached-binary",
+      "signedAsset": "terraform-provider-takoform_<version>_SHA256SUMS",
+      "fingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709"
+    },
+    "provenance": {
+      "envelope": "in-toto-statement-v1",
+      "predicate": "slsa-provenance-v1",
+      "canonicalization": "RFC8785",
+      "payloadSubjects": {
+        "count": 13,
+        "fields": [
+          "name",
+          "digest.sha256",
+          "annotations.size"
+        ],
+        "included": [
+          "terraform-provider-takoform_<version>_darwin_amd64.zip",
+          "terraform-provider-takoform_<version>_darwin_arm64.zip",
+          "terraform-provider-takoform_<version>_linux_amd64.zip",
+          "terraform-provider-takoform_<version>_linux_arm64.zip",
+          "terraform-provider-takoform_<version>_windows_amd64.zip",
+          "terraform-provider-takoform_<version>_darwin_amd64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_darwin_arm64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_linux_amd64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_linux_arm64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_windows_amd64.zip.spdx.json",
+          "terraform-provider-takoform_<version>_manifest.json",
+          "terraform-provider-takoform_<version>_SHA256SUMS",
+          "terraform-provider-takoform_<version>_SHA256SUMS.sig"
+        ],
+        "excluded": [
+          "terraform-provider-takoform_<version>_provenance.intoto.json",
+          "terraform-provider-takoform_<version>_provenance.intoto.json.sig"
+        ],
+        "derivation": "public-inventory-minus-provenance-and-signature"
+      },
+      "buildBindings": [
+        "buildDefinition.externalParameters.tag",
+        "buildDefinition.externalParameters.requestId",
+        "buildDefinition.internalParameters.sourceCommit",
+        "buildDefinition.internalParameters.toolingCommit",
+        "buildDefinition.internalParameters.workflow.path",
+        "buildDefinition.internalParameters.workflow.ref",
+        "buildDefinition.internalParameters.run.id",
+        "buildDefinition.internalParameters.run.attempt",
+        "buildDefinition.internalParameters.tagObject.oid",
+        "buildDefinition.internalParameters.tagObject.sha256",
+        "runDetails.metadata.invocationId"
+      ],
+      "signature": {
+        "format": "openpgp-detached-binary",
+        "signedAsset": "terraform-provider-takoform_<version>_provenance.intoto.json",
+        "fingerprint": "3510E75E05BBCC303B92D77934FC18AC897FB709"
+      },
+      "publicInventoryAssetCount": 15
+    },
+    "distribution": {
+      "source": "github-release",
+      "registry": "registry.terraform.io/tako0614/takoform",
+      "overwriteExistingVersion": false
+    }
+  },
+  "formPackage": {
+    "status": "current-content-addressed-release-lane-implemented-first-current-release-pending",
+    "canonicalization": {
+      "format": "RFC8785",
+      "encoding": "UTF-8 I-JSON",
+      "reject": [
+        "duplicate-object-name",
+        "invalid-unicode",
+        "nan-or-infinity",
+        "negative-zero"
+      ]
+    },
+    "identity": {
+      "digest": "sha256",
+      "subject": "RFC8785 bytes of the package index",
+      "archiveBytesAreIdentity": false
+    },
+    "signature": {
+      "format": "application/vnd.dev.sigstore.bundle.v0.3+json",
+      "mode": "keyless-blob-signature",
+      "signedSubject": "RFC8785 bytes of the package index"
+    },
+    "publisherPolicy": {
+      "oidcIssuer": "https://token.actions.githubusercontent.com",
+      "sourceRepository": "github.com/tako0614/terraform-provider-takoform",
+      "workflow": ".github/workflows/form-package-release.yml",
+      "workflowIdentity": "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-release.yml@refs/heads/main",
+      "currentTagPattern": "refs/tags/forms/k-*/sha256-*",
+      "retainedLegacyTagPattern": "refs/tags/forms/k-*/v*"
+    },
+    "tagProtection": {
+      "currentTagPattern": "refs/tags/forms/*/sha256-*",
+      "retainedLegacyTagPattern": "refs/tags/forms/*/v*",
+      "restrictCreation": true,
+      "restrictDeletion": true,
+      "restrictNonFastForward": true,
+      "releaseEnvironment": "form-package-release",
+      "deploymentRef": "refs/heads/main"
+    },
+    "transparency": {
+      "authority": "sigstore-public-good-instance",
+      "requiredEvidence": "bundle transparency-log inclusion proof",
+      "offlineBundleVerificationRequired": true
+    },
+    "provenance": {
+      "envelope": "in-toto-statement-v1",
+      "predicate": "slsa-provenance-v1",
+      "sbom": "spdx-2.3"
+    },
+    "distribution": {
+      "status": "github-release-current-workflow-implemented-first-current-release-pending",
+      "initialSource": "github-release",
+      "mirrorPolicy": "copy exact assets only after bundle and digest verification",
+      "customerRequestFetch": false,
+      "overwriteExistingVersion": false
+    },
+    "revocation": {
+      "status": "signed-append-only-delivery-lane-implemented-no-statements-published",
+      "metadata": "signed append-only statement by exact package digest",
+      "workflow": ".github/workflows/form-package-revocation.yml",
+      "workflowIdentity": "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/form-package-revocation.yml@refs/heads/main",
+      "tagPattern": "refs/tags/forms/revocations/v*",
+      "checkpoint": {
+        "signedSubject": "RFC8785 bytes of the cumulative revocation checkpoint",
+        "cumulative": true,
+        "sequenceStartsAt": 1,
+        "previousCheckpointDigest": "sha256",
+        "hostPinRequired": true,
+        "hostPinFields": [
+          "sequence",
+          "checkpointDigest",
+          "cumulativeEntriesDigest"
+        ]
+      },
+      "blockNewCreateOrUpdate": true,
+      "retainReferencedBytesForObserveAndDelete": true,
+      "replaceBytesInPlace": false
+    },
+    "contentPolicy": {
+      "dataOnly": true,
+      "allowSymlinks": false,
+      "allowExecutableFiles": false,
+      "allowCredentialsOrOperatorFields": false
+    }
+  },
+  "runnerReport": {
+    "hostFormat": "takoform.standard-runner-report@v1",
+    "providerFormat": "takoform.standard-provider-runner-report@v2",
+    "providerBinaryDigest": "sha256",
+    "unknownFields": "reject"
+  },
+  "separation": {
+    "reuseProviderGPGKeyForFormPackages": false,
+    "reuseForTakosumiLegacyProvider": false
+  }
+}

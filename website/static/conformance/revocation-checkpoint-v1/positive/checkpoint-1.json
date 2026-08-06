@@ -1,0 +1,21 @@
+{
+  "apiVersion": "trust.forms.takoform.com/v1alpha1",
+  "kind": "FormPackageRevocationCheckpoint",
+  "checkpointVersion": "1.0.0",
+  "sequence": 1,
+  "previousCheckpointDigest": null,
+  "entries": [
+    {
+      "sequence": 1,
+      "statementVersion": "1.0.0",
+      "statementDigest": "sha256:6b527ba1c61048bff9ea48bd68f139a8833e34acc8a3cc6b986d2d018b77786e",
+      "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "formRef": {
+        "apiVersion": "forms.takoform.com/v1alpha1",
+        "kind": "ObjectBucket",
+        "definitionVersion": "1.0.0",
+        "schemaDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  ]
+}

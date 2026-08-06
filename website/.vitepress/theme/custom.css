@@ -1,0 +1,17 @@
+/*
+ * Takoform website — light, default VitePress theme.
+ * No custom palette: the platform theme is the design system.
+ * Only the status note and focus treatment are customized.
+ */
+.status-note {
+  border-block-start: 1px solid var(--vp-c-divider);
+  border-block-end: 1px solid var(--vp-c-divider);
+  padding: 0.75rem 0;
+  color: var(--vp-c-text-2);
+  font-size: 0.9rem;
+}
+
+.VPHero .name,
+.VPHero .text {
+  max-width: 64ch;
+}

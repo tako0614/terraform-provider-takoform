@@ -1,0 +1,13 @@
+{
+  "connections": {
+    "invocation": {
+      "permissions": [
+        "request"
+      ],
+      "projection": "schedule.trigger.v1",
+      "resource": "EdgeWorker/edge-worker"
+    }
+  },
+  "name": "schedule",
+  "timezone": "UTC"
+}

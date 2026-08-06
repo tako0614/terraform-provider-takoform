@@ -1,0 +1,10 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "entrypoint": "RoomEntity",
+  "name": "stateful-entity",
+  "persistence": "transactional",
+  "runtime": "javascript",
+  "runtimeVersion": "2026.1"
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json",
+  "title": "Takoform cumulative Form Package revocation checkpoint v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "checkpointVersion",
+    "sequence",
+    "previousCheckpointDigest",
+    "entries"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "trust.forms.takoform.com/v1alpha1"
+    },
+    "kind": {
+      "const": "FormPackageRevocationCheckpoint"
+    },
+    "checkpointVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "previousCheckpointDigest": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/digest" }
+      ]
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "statementVersion",
+          "statementDigest",
+          "packageDigest",
+          "formRef"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "statementVersion": {
+            "$ref": "#/$defs/semver"
+          },
+          "statementDigest": {
+            "$ref": "#/$defs/digest"
+          },
+          "packageDigest": {
+            "$ref": "#/$defs/digest"
+          },
+          "formRef": {
+            "$ref": "form-ref.schema.json"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(\\+([0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*))?$"
+    }
+  }
+}

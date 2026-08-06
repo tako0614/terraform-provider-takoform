@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "DnsRecord/dns-record",
+  "kind": "DnsRecord",
+  "name": "dns-record",
+  "portability": "portable"
+}

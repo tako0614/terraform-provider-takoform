@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "LogSink/log-sink",
+  "kind": "LogSink",
+  "name": "log-sink",
+  "portability": "portable"
+}

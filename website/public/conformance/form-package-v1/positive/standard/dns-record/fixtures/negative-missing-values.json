@@ -1,0 +1,15 @@
+{
+  "connections": {
+    "parent": {
+      "permissions": [
+        "administer"
+      ],
+      "projection": "dns.zone.v1",
+      "resource": "DnsZone/primary"
+    }
+  },
+  "name": "dns-record",
+  "recordName": "api",
+  "recordType": "CNAME",
+  "ttlSeconds": 300
+}

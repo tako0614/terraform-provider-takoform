@@ -1,0 +1,6 @@
+{
+  "hostname": "api.portable-conformance.invalid",
+  "name": "http-route",
+  "pathPrefix": "/",
+  "stripPathPrefix": false
+}

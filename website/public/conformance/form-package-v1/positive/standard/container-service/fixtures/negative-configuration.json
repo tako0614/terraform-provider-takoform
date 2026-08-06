@@ -1,0 +1,15 @@
+{
+  "configuration": {
+    "1 invalid key": "value"
+  },
+  "cpuMillicores": 250,
+  "healthCheckPath": "/healthz",
+  "image": "docker.io/library/nginx@sha256:845b5424415de5f77dd5753cbb7c1be8bd8e44cc81f20f9705783a02f8848317",
+  "memoryMib": 512,
+  "name": "container-service",
+  "ports": [
+    80
+  ],
+  "publicHttp": true,
+  "replicas": 2
+}

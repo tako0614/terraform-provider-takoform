@@ -1,0 +1,24 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "connections": {
+    "data": {
+      "permissions": [
+        "read",
+        "write"
+      ],
+      "projection": "keyvalue.binding.v1",
+      "resource": "KeyValueStore/key-value-store"
+    }
+  },
+  "entrypoint": "worker.mjs",
+  "name": "edge-worker",
+  "runtime": "javascript",
+  "runtimeVersion": "2026.1",
+  "source": {
+    "artifactMediaType": "application/vnd.takoform.edge-worker+tar",
+    "artifactSha256": "not-a-sha256",
+    "artifactUrl": "https://artifacts.portable-conformance.invalid/edge-worker.tar"
+  }
+}

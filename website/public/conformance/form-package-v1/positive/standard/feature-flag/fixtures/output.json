@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "FeatureFlag/feature-flag",
+  "kind": "FeatureFlag",
+  "name": "feature-flag",
+  "portability": "portable"
+}

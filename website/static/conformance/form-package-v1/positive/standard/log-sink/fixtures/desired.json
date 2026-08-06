@@ -1,0 +1,5 @@
+{
+  "format": "json",
+  "name": "log-sink",
+  "retentionDays": 30
+}

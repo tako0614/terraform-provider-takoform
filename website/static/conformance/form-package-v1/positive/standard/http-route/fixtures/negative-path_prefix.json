@@ -1,0 +1,15 @@
+{
+  "connections": {
+    "application": {
+      "permissions": [
+        "request"
+      ],
+      "projection": "http.route.v1",
+      "resource": "EdgeWorker/edge-worker"
+    }
+  },
+  "hostname": "api.portable-conformance.invalid",
+  "name": "http-route",
+  "pathPrefix": "relative/path",
+  "stripPathPrefix": false
+}

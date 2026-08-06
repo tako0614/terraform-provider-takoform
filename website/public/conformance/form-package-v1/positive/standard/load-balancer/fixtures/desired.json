@@ -1,0 +1,17 @@
+{
+  "connections": {
+    "upstream": {
+      "permissions": [
+        "request"
+      ],
+      "projection": "network.backend.v1",
+      "resource": "ContainerService/container-service"
+    }
+  },
+  "healthCheckPath": "/healthz",
+  "idleTimeoutSeconds": 60,
+  "internal": false,
+  "listenPort": 443,
+  "name": "load-balancer",
+  "protocol": "https"
+}

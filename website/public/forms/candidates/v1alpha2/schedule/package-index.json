@@ -1,0 +1,85 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha3",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha2",
+    "kind": "Schedule",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:4d99cf7dcc944a91f796c3b028bfd8a48337b0f91de2b1b84b75d647d171ffc3"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 6373,
+      "digest": "sha256:545f33540578be3453a48817da8c7d7af8529fa08a8c1d9c0058589a2aba0553"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 255,
+      "digest": "sha256:88c220113b94bc984f246174bb05df7870eabb2dfd2fe36766d967cf3acd9dd3"
+    },
+    {
+      "path": "fixtures/negative-connections-cardinality.json",
+      "mediaType": "application/json",
+      "size": 417,
+      "digest": "sha256:36f3bf9625b8fea058911946e4c1554fc80def4f75cc95103aa892ebc71fb703"
+    },
+    {
+      "path": "fixtures/negative-connections-required.json",
+      "mediaType": "application/json",
+      "size": 90,
+      "digest": "sha256:2bf205a6d6bb72b75928cab59509bf22124cdb5135f559f070e59c0f4861e27a"
+    },
+    {
+      "path": "fixtures/negative-cron.json",
+      "mediaType": "application/json",
+      "size": 253,
+      "digest": "sha256:d75defd8cf2e7dc72482ba4ace31d485ce8ff22b92b9a799c906122fb74ad569"
+    },
+    {
+      "path": "fixtures/negative-missing-connections.json",
+      "mediaType": "application/json",
+      "size": 69,
+      "digest": "sha256:d4a9b8360c2bb898893311e184cca19b5b956f2f9685297cbf5d171713bccd26"
+    },
+    {
+      "path": "fixtures/negative-missing-cron.json",
+      "mediaType": "application/json",
+      "size": 232,
+      "digest": "sha256:41bb0b6b34df395a74a5b10cf691a26f7739348df5c42c5a0f559e14b5a9f7df"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 233,
+      "digest": "sha256:a8e3792f41d5ff82afd3709599e3b104487d23d2333239a38f4d7bae63a8a069"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 141,
+      "digest": "sha256:1a9b3700120c3c8e7c2250d76aaf2d937ed6495a62fed2eea8b7f65f6a10f49b"
+    },
+    {
+      "path": "fixtures/negative-timezone.json",
+      "mediaType": "application/json",
+      "size": 266,
+      "digest": "sha256:a756c48235ae387f610fd6ff6de4889b3558ac126c5baf2a8b9055a59ef59170"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 140,
+      "digest": "sha256:9061ed153767b9d16c2f98f6d71142514789d69ceb74a281d8aa71461c479181"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 124,
+      "digest": "sha256:d427bf560510b19efff209173fb758434174c39f175a0d05fd0fed7c6e7fa885"
+    }
+  ]
+}

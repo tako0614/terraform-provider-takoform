@@ -1,0 +1,10 @@
+{
+  "deliveryDelaySeconds": 0,
+  "maxBatchSize": 10,
+  "maxMessageBytes": 0,
+  "maxRetries": 5,
+  "messageRetentionSeconds": 345600,
+  "name": "queue",
+  "ordering": "best_effort",
+  "visibilityTimeoutSeconds": 30
+}

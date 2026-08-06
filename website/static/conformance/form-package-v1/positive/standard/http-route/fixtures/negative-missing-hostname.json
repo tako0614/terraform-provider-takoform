@@ -1,0 +1,14 @@
+{
+  "connections": {
+    "application": {
+      "permissions": [
+        "request"
+      ],
+      "projection": "http.route.v1",
+      "resource": "EdgeWorker/edge-worker"
+    }
+  },
+  "name": "http-route",
+  "pathPrefix": "/",
+  "stripPathPrefix": false
+}

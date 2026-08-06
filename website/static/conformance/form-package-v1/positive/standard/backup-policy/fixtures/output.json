@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "BackupPolicy/backup-policy",
+  "kind": "BackupPolicy",
+  "name": "backup-policy",
+  "portability": "portable"
+}

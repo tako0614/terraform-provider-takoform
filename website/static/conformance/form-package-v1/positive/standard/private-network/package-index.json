@@ -1,0 +1,62 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha1",
+  "kind": "FormPackage",
+  "packageVersion": "1.0.0",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha1",
+    "kind": "PrivateNetwork",
+    "definitionVersion": "1.0.0",
+    "schemaDigest": "sha256:df2235a251bf01a6b59ab8c22ced60350a38b475ee469082195780fdbbfba954"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 5479,
+      "digest": "sha256:28d9526ba8bf9edca780fd397b47dd19d6ba6cc46f984f1cc7f214cd47ff9687"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 91,
+      "digest": "sha256:680d27778c29237889d11c8cfadf806f9695c903a1b44841958112dceecc6d36"
+    },
+    {
+      "path": "fixtures/negative-address_space.json",
+      "mediaType": "application/json",
+      "size": 88,
+      "digest": "sha256:c4f8f60ab0514d18169382d84dd3fe21abf7e6797ad34d45fa6a95123329eb73"
+    },
+    {
+      "path": "fixtures/negative-missing-address_space.json",
+      "mediaType": "application/json",
+      "size": 57,
+      "digest": "sha256:7dd50f28af0c18bffc433aa341ab7ef474cc73e4cfec684b2bf643ea4fa38b5f"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 62,
+      "digest": "sha256:7a9c5bd8c50aa2cef53f34a3536f1e604928d4a0f245efc5b5d1461d9bb6a193"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 148,
+      "digest": "sha256:6c9fefddee48554923757afa6fbffef328c5fd075d6eb236b8534205f040e106"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 153,
+      "digest": "sha256:86453183e6c22db127beaa333b1adaa89ece7abd840788e711c1f0e1f664025a"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 150,
+      "digest": "sha256:4189bf70663d540475022e3dd50ede0602f6284eca7cb14d0431e9975a296e09"
+    }
+  ]
+}

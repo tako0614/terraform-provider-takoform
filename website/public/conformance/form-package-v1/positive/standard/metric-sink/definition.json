@@ -1,0 +1,251 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha1",
+  "kind": "MetricSink",
+  "definitionVersion": "1.0.0",
+  "title": "Metric Sink",
+  "description": "Portable destination that retains numeric time series.",
+  "status": "standard",
+  "desiredSchema": {
+    "$defs": {
+      "connection": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "projection": {
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "resource": {
+            "pattern": "^[A-Z][A-Za-z0-9]{0,63}/[a-z][a-z0-9-]{0,62}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "permissions",
+          "projection",
+          "resource"
+        ],
+        "type": "object"
+      },
+      "connections": {
+        "additionalProperties": {
+          "$ref": "#/$defs/connection"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "connections": {
+        "$ref": "#/$defs/connections"
+      },
+      "name": {
+        "maxLength": 63,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "resolutionSeconds": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "retentionDays": {
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "type": "object"
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "driftedFields": {
+        "items": {
+          "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "generation": {
+        "maximum": 9223372036854775807,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "pattern": "^MetricSink/[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "imported": {
+        "type": "boolean"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "driftedFields",
+      "generation",
+      "id",
+      "imported",
+      "portability",
+      "ready"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "generation": {
+        "maximum": 9223372036854775807,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "pattern": "^MetricSink/[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "kind": {
+        "const": "MetricSink",
+        "type": "string"
+      },
+      "name": {
+        "maxLength": 63,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "generation",
+      "id",
+      "kind",
+      "name",
+      "portability"
+    ],
+    "type": "object"
+  },
+  "immutableFields": [
+    "/name"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh",
+    "drift"
+  ],
+  "interfaces": [
+    {
+      "name": "metric.ingest",
+      "version": "1",
+      "description": "Portable metric ingest and read operations.",
+      "required": true,
+      "document": {
+        "operations": [
+          "query",
+          "write"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "query",
+                "write"
+              ],
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json",
+      "observedPath": "fixtures/observed.json",
+      "outputPath": "fixtures/output.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-missing-name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-name.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-retention_days",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-retention_days.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-resolution_seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-resolution_seconds.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-observed-foreign-kind-id",
+      "stage": "observed",
+      "inputPath": "fixtures/negative-observed-foreign-kind-id.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

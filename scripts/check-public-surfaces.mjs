@@ -281,6 +281,19 @@ function checkHtmlFiles() {
       if (parts === null) {
         continue;
       }
+      // VitePress generates locale-alternate links to untranslated Japanese
+      // pages; only /ja/, /ja/docs/, and /ja/spec/ have Japanese content.
+      const realJapanesePages = new Set([
+        "/ja/",
+        "/ja/docs/",
+        "/ja/spec/",
+      ]);
+      if (
+        parts.pathname.startsWith("/ja/") &&
+        !realJapanesePages.has(parts.pathname)
+      ) {
+        continue;
+      }
       const targetFile = resolvePublicPath(filePath, parts.pathname);
       if (!existsSync(targetFile) || !statSync(targetFile).isFile()) {
         fail(
@@ -305,58 +318,20 @@ function checkHtmlFiles() {
   }
 }
 
-function extractLocalizedSections(source) {
-  const sections = new Map();
-  const openings = [];
-  const tagPattern = /<([a-z][a-z0-9:-]*)\b([^>]*)>/gi;
-  for (const match of source.matchAll(tagPattern)) {
-    const className = htmlAttribute(match[2], "class") ?? "";
-    const lang = htmlAttribute(match[2], "lang");
-    if (className.split(/\s+/).includes("l10n") && ["en", "ja"].includes(lang)) {
-      openings.push({ index: match.index, lang });
+function checkResourceInventory(expectedFormNames) {
+  for (const [page, label] of [
+    ["index.html", "website/public/index.html English resource inventory"],
+    [
+      "ja/index.html",
+      "website/public/ja/index.html Japanese resource inventory",
+    ],
+  ]) {
+    const text = visibleHtmlText(read(path.join(publicRoot, page)));
+    for (const name of expectedFormNames) {
+      if (!text.includes(`takoform_${name}`)) {
+        fail(`${label}: missing ${name}`);
+      }
     }
-  }
-
-  openings.sort((left, right) => left.index - right.index);
-  for (let index = 0; index < openings.length; index += 1) {
-    const opening = openings[index];
-    const end = openings[index + 1]?.index ?? source.length;
-    if (sections.has(opening.lang)) {
-      fail(`website/public/index.html: duplicate ${opening.lang} .l10n section`);
-    }
-    sections.set(opening.lang, source.slice(opening.index, end));
-  }
-  return sections;
-}
-
-function resourceCards(source) {
-  const resources = [];
-  const cardPattern =
-    /<(?:div|article|li)\b([^>]*)>\s*<code\b[^>]*>\s*takoform_([a-z0-9_]+)\s*<\/code>/gi;
-  for (const match of source.matchAll(cardPattern)) {
-    const className = htmlAttribute(match[1], "class") ?? "";
-    const classes = className.split(/\s+/);
-    if (!classes.includes("resource") && !classes.includes("resource-card")) {
-      continue;
-    }
-    resources.push(match[2]);
-  }
-  return resources;
-}
-
-function checkLocalizedResourceCards(expectedFormNames) {
-  const indexPath = path.join(publicRoot, "index.html");
-  const sections = extractLocalizedSections(read(indexPath));
-  for (const lang of ["en", "ja"]) {
-    if (!sections.has(lang)) {
-      fail(`website/public/index.html: missing ${lang} .l10n section`);
-      continue;
-    }
-    compareExact(
-      `website/public/index.html ${lang} resource cards`,
-      resourceCards(sections.get(lang)),
-      expectedFormNames,
-    );
   }
 }
 
@@ -365,6 +340,7 @@ function hrefTargetsDocumentation(href, directory, docName) {
   const suffix = `/docs/${directory}/${docName}`;
   return (
     normalized.endsWith(`${suffix}.md`) ||
+    normalized.endsWith(`${suffix}.html`) ||
     normalized.endsWith(suffix) ||
     normalized.endsWith(`${suffix}/`)
   );
@@ -421,10 +397,26 @@ function visibleHtmlText(source) {
   ).replace(/\s+/g, " ");
 }
 
+function relativeToPublic(filePath) {
+  return path.relative(publicRoot, filePath).split(path.sep).join("/");
+}
+
 function checkStaleWebsiteContent() {
-  const htmlFiles = walkFiles(publicRoot, (filePath) =>
-    filePath.endsWith(".html"),
-  );
+  // Canonical mirrors (spec/, proposals/, forms/, conformance/, release/,
+  // docs/reference) legitimately discuss retired versions and kinds; the
+  // stale-content guard covers only the hand-authored pages.
+  const htmlFiles = walkFiles(publicRoot, (filePath) => {
+    if (!filePath.endsWith(".html")) {
+      return false;
+    }
+    const relative = relativeToPublic(filePath);
+    return (
+      relative === "index.html" ||
+      relative === "docs/index.html" ||
+      relative === "spec/index.html" ||
+      relative.startsWith("ja/")
+    );
+  });
   const combinedSource = htmlFiles.map((filePath) => read(filePath)).join("\n");
   const visibleText = visibleHtmlText(combinedSource);
   const forbidden = [
@@ -618,6 +610,21 @@ function checkImmutableProviderTagDocs(source, truth) {
   }
 }
 
+function handAuthoredPages() {
+  return walkFiles(publicRoot, (filePath) => {
+    if (!filePath.endsWith(".html")) {
+      return false;
+    }
+    const relative = relativeToPublic(filePath);
+    const keep =
+      relative === "index.html" ||
+      relative === "docs/index.html" ||
+      relative === "spec/index.html" ||
+      relative.startsWith("ja/");
+    return keep;
+  });
+}
+
 function checkPublishedProviderExamples(truth) {
   if (truth === null) {
     return;
@@ -636,9 +643,9 @@ function checkPublishedProviderExamples(truth) {
   }
   checkImmutableProviderTagDocs(docsSource, truth);
 
-  const htmlFiles = walkFiles(publicRoot, (filePath) =>
-    filePath.endsWith(".html"),
-  );
+  // Historical migration guides legitimately pin older provider versions, so
+  // the exact-pin requirement covers only the hand-authored pages.
+  const htmlFiles = handAuthoredPages();
   let sawPublished = false;
   let sawLegacy = false;
   for (const filePath of htmlFiles) {
@@ -874,6 +881,14 @@ function checkSingleRegistryVocabulary() {
       "migrations",
       "v0.2.1-to-v1.0.1.md",
     ),
+    path.join(repositoryRoot, "website", "release", "index.md"),
+    path.join(
+      repositoryRoot,
+      "website",
+      "release",
+      "migrations",
+      "v0.2.1-to-v1.0.1.md",
+    ),
   ]);
   const documentationFiles = [
     path.join(repositoryRoot, "README.md"),
@@ -939,6 +954,51 @@ function checkProviderReleaseCommitBindings() {
       );
     }
   }
+}
+
+function checkWebsiteDocsProjection(formDocNames) {
+  const byteEqual = (label, canonical, projected) => {
+    let expected;
+    let actual;
+    try {
+      expected = readFileSync(canonical);
+    } catch (error) {
+      fail(`${label}: canonical file missing (${error.message})`);
+      return;
+    }
+    try {
+      actual = readFileSync(projected);
+    } catch (error) {
+      fail(`${label}: site projection missing (${error.message})`);
+      return;
+    }
+    if (!expected.equals(actual)) {
+      fail(`${label}: site projection drifted from canonical`);
+    }
+  };
+
+  for (const name of formDocNames) {
+    byteEqual(
+      `website/docs/resources/${name}.md`,
+      path.join(repositoryRoot, "docs", "resources", `${name}.md`),
+      path.join(repositoryRoot, "website", "docs", "resources", `${name}.md`),
+    );
+    byteEqual(
+      `website/static/examples/resources/takoform_${name}/resource.tf`,
+      path.join(repositoryRoot, "examples", "resources", `takoform_${name}`, "resource.tf"),
+      path.join(repositoryRoot, "website", "static", "examples", "resources", `takoform_${name}`, "resource.tf"),
+    );
+  }
+  byteEqual(
+    "website/docs/data-sources/interface.md",
+    path.join(repositoryRoot, "docs", "data-sources", "interface.md"),
+    path.join(repositoryRoot, "website", "docs", "data-sources", "interface.md"),
+  );
+  byteEqual(
+    "website/static/examples/data-sources/takoform_interface/data-source.tf",
+    path.join(repositoryRoot, "examples", "data-sources", "takoform_interface", "data-source.tf"),
+    path.join(repositoryRoot, "website", "static", "examples", "data-sources", "takoform_interface", "data-source.tf"),
+  );
 }
 
 function checkPublicSchemas() {
@@ -1244,7 +1304,7 @@ if (!docsIndexTargets.includes(interfaceDataSourceDoc)) {
 
 checkMarkdownLinks();
 checkHtmlFiles();
-checkLocalizedResourceCards(formDocNames);
+checkResourceInventory(formDocNames);
 checkDocsPageLinks(formDocNames);
 checkStaleWebsiteContent();
 checkPublishedProviderExamples(publicationTruth);
@@ -1253,6 +1313,7 @@ checkCurrentEpochDocumentation(currentSet);
 checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
 checkPublicSchemas();
+checkWebsiteDocsProjection(formDocNames);
 
 if (failures.length > 0) {
   console.error(

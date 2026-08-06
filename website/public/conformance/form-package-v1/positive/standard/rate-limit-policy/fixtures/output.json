@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "RateLimitPolicy/rate-limit-policy",
+  "kind": "RateLimitPolicy",
+  "name": "rate-limit-policy",
+  "portability": "portable"
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "date": "2026-08-05",
+    "scope": "app",
+    "macrostructure": "Workbench + Long Document",
+    "theme": "custom",
+    "theme_axes": "dark / old-style-serif / aka-red",
+    "vibe": "austere, exact, low-cost, technical",
+    "enrichment": "none",
+    "nav": "N5",
+    "footer": "Ft2",
+    "brief": "Truth-generated bilingual Takoform overview, task docs, and specification map"
+  },
+  {
+    "date": "2026-08-04",
+    "scope": "app",
+    "macrostructure": "Workbench + Long Document",
+    "theme": "custom",
+    "theme_axes": "dark / geometric-sans / warm",
+    "vibe": "ink-black, aka-red, exact, technical",
+    "enrichment": "none",
+    "nav": "N5",
+    "footer": "Ft2",
+    "brief": "Takoform public overview, documentation, and specification"
+  }
+]

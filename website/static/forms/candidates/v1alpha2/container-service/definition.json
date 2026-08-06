@@ -1,0 +1,269 @@
+{
+  "apiVersion": "forms.takoform.com/v1alpha2",
+  "kind": "ContainerService",
+  "definitionVersion": "0.1.0",
+  "title": "Container Service",
+  "description": "Portable service executed from an immutable OCI image digest.",
+  "desiredSchema": {
+    "$defs": {
+      "connection": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "projection": {
+            "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "resource": {
+            "pattern": "^[A-Z][A-Za-z0-9]{0,63}/[a-z][a-z0-9-]{0,62}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "permissions",
+          "projection",
+          "resource"
+        ],
+        "type": "object"
+      },
+      "connections": {
+        "additionalProperties": {
+          "$ref": "#/$defs/connection"
+        },
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Portable service executed from an immutable OCI image digest.",
+    "properties": {
+      "configuration": {
+        "additionalProperties": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "description": "Non-secret application configuration. Credentials remain host-owned.",
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      },
+      "connections": {
+        "$ref": "#/$defs/connections",
+        "description": "Named references to other Resources and the portable permissions and projection required from each."
+      },
+      "image": {
+        "description": "Immutable OCI image reference pinned by one lowercase sha256 digest.",
+        "pattern": "^[^@\\s]+@sha256:[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "name": {
+        "description": "Portable Resource name within this Form kind.",
+        "maxLength": 63,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "image",
+      "name"
+    ],
+    "title": "Container Service desired state",
+    "type": "object"
+  },
+  "observedSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "driftedFields": {
+        "items": {
+          "pattern": "^(?:/(?:[^~/]|~0|~1)*)+$",
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "generation": {
+        "maximum": 9223372036854776000,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "pattern": "^ContainerService/[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "imported": {
+        "type": "boolean"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "ready": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "driftedFields",
+      "generation",
+      "id",
+      "imported",
+      "portability",
+      "ready"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "generation": {
+        "maximum": 9223372036854776000,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "id": {
+        "pattern": "^ContainerService/[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "kind": {
+        "const": "ContainerService",
+        "type": "string"
+      },
+      "name": {
+        "maxLength": 63,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9-]{0,62}$",
+        "type": "string"
+      },
+      "portability": {
+        "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "generation",
+      "id",
+      "kind",
+      "name",
+      "portability"
+    ],
+    "type": "object"
+  },
+  "immutableFields": [
+    "/name"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh",
+    "drift"
+  ],
+  "interfaces": [
+    {
+      "name": "http.request",
+      "version": "1",
+      "description": "Portable HTTP request surface exposed by the service.",
+      "required": true,
+      "document": {
+        "operations": [
+          "request"
+        ]
+      },
+      "documentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "enum": [
+                "request"
+              ],
+              "type": "string"
+            },
+            "maxItems": 1,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "type": "object"
+      },
+      "inputs": [
+        {
+          "name": "resource",
+          "source": "output",
+          "pointer": "/id"
+        },
+        {
+          "name": "name",
+          "source": "output",
+          "pointer": "/name"
+        }
+      ]
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json",
+      "observedPath": "fixtures/observed.json",
+      "outputPath": "fixtures/output.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-missing-name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-name.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-image",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-image.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-image",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-image.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-configuration",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-configuration.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-observed-foreign-kind-id",
+      "stage": "observed",
+      "inputPath": "fixtures/negative-observed-foreign-kind-id.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

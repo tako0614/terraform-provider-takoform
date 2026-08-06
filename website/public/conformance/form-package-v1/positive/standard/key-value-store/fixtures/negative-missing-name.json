@@ -1,0 +1,4 @@
+{
+  "consistency": "eventual",
+  "defaultTtlSeconds": 3600
+}
