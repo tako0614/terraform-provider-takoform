@@ -1,0 +1,72 @@
+{
+  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "kind": "AtLeastOnceQueue",
+  "definitionVersion": "0.1.0",
+  "title": "At-Least-Once Queue",
+  "description": "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form.",
+  "role": "identity",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form.",
+    "properties": {
+      "deliveryDelaySeconds": {
+        "description": "Default delay before a sent message becomes deliverable, in seconds.",
+        "maximum": 43200,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "messageRetentionSeconds": {
+        "description": "How long an undelivered message is retained before it is dropped, in seconds.",
+        "maximum": 1209600,
+        "minimum": 60,
+        "type": "integer"
+      }
+    },
+    "title": "At-Least-Once Queue desired state",
+    "type": "object"
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh"
+  ],
+  "providedInterfaces": [
+    {
+      "apiVersion": "interfaces.takoform.com/v1alpha1",
+      "name": "edge.queue",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:822e71c8bde4c8391a21d2de0d51f1fcc25ab6cbc1737a14cc8d3fe9bcb5d254"
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-unexpected-property",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-message-retention-seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-message-retention-seconds.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-delivery-delay-seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-delivery-delay-seconds.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

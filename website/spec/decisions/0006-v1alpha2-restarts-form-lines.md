@@ -1,6 +1,8 @@
 # 0006 — v1alpha2 restarts Form lines without reusing v1alpha1 identities
 
-- Status: accepted
+- Status: accepted; the v1alpha2 epoch it creates is retained provider-v2
+  preview source since
+  [0013](0013-v1alpha3-lane-ships-in-provider-v2-1.md)
 - Date: 2026-08-05
 - Owners: Takoform maintainers
 - Supersedes: the rule in [0004](0004-takoform-is-an-experimental-specification.md)

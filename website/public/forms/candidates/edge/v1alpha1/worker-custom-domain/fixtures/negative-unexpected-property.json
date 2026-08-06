@@ -1,0 +1,8 @@
+{
+  "hostname": "app.portable-conformance.invalid",
+  "takoformUnexpected": true,
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "module-worker"
+  }
+}

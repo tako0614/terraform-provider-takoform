@@ -4,17 +4,46 @@
 
 exact な **FormRef** は、API group・kind・definition version・schema digest の
 組み合わせです。互換性は kind 名だけから推測しません — epoch が違えば別の契約です。
+Form group は [Form Families](/spec/form-families.html) で namespace 化され、
+Host API group はどの Form group からも独立した protocol 互換性 identity です。
 
 | Surface | Identity |
 | --- | --- |
-| 現行 FormRef | `forms.takoform.com/v1alpha2` |
-| Legacy FormRef | `forms.takoform.com/v1alpha1` |
-| 現行 package envelope | `packages.forms.takoform.com/v1alpha3` |
-| Provider | `v2.0.0` 現行 · `v1.0.3` Legacy |
+| 現在の Form Family | `edge.forms.takoform.com/v1alpha1` |
+| 現在の Host API wire | `forms.takoform.com/v1alpha3` (discovery は `/.well-known/takoform/v1alpha3`) |
+| 現在の package envelope | `packages.forms.takoform.com/v1alpha4` |
+| 保持される provider-v2 FormRef | `forms.takoform.com/v1alpha2` (wire discovery は `/.well-known/takoform/v1alpha2`) |
+| 保持される provider-v2 package envelope | `packages.forms.takoform.com/v1alpha3` |
+| Legacy FormRef | `forms.takoform.com/v1alpha1` (凍結) |
+| Provider | `v2.0.0` 現在の公開済み · `v1.0.3` Legacy · `v2.1.0` source candidate (未公開) |
+
+`forms.takoform.com/v1alpha2` epoch と 9 種の `0.1.0` 候補は provider-v2 の
+互換面として保持されるもので、新しい仕様作業の基盤ではありません。provider の
+SemVer はどの API identity からも独立しています。
+
+## 現在レーンの契約 (英語のみ)
+
+- [Form Families](/spec/form-families.html) — namespace 化された Form group と
+  Edge Platform Family
+- [Host API v1alpha3](/spec/host-api/v1alpha3.html) — uid/generation/revision
+  識別・long-running operation・fencing
+- [Interface contracts](/spec/interface-contract/) — Form のサービスが公開する
+  exact な capability 契約
+- [Binding contracts](/spec/binding-contract/) — revision が保持する typed な
+  capability 利用
+- [Artifact transport](/spec/artifact-transport/) — content-addressed な
+  artifact upload と manifest
 
 ## Normative schemas
 
-`forms.takoform.com/schemas/...` で公開しています:
+`forms.takoform.com/schemas/...` で公開しています。現在レーン:
+
+- [form-ref v1alpha3](/schemas/v1alpha3/form-ref.schema.json)
+- [form-definition v1alpha3](/schemas/v1alpha3/form-definition.schema.json)
+- [host-api-wire v1alpha3](/schemas/v1alpha3/host-api-wire.schema.json)
+- [package-index v1alpha4](/schemas/v1alpha4/package-index.schema.json)
+
+保持される provider-v2 レーン:
 
 - [form-ref v1alpha2](/schemas/v1alpha2/form-ref.schema.json)
 - [form-definition v1alpha2](/schemas/v1alpha2/form-definition.schema.json)
@@ -28,13 +57,4 @@ Form は Proposal → Experimental → Stable → Legacy の順に進みます�
 ありません。新しい Form は必ず先行事例 (OCCI、CIMI、TOSCA、Kubernetes/Crossplane、
 provider ネイティブのリソース) から検討を始めます。
 
-<div class="status-note">
-
-Takoform は **Experimental specification project** です。現行の FormRef は
-`forms.takoform.com/v1alpha2`、現行の package envelope は
-`packages.forms.takoform.com/v1alpha3` です。provider `v1.0.3` は公開済みの
-Legacy client、provider `v2.0.0` は現在の公開済み client です。
-`forms.takoform.com/v1alpha1` の公開済み Form Package identity 34件は、不変の
-Legacy 証跡です。現在、中央による承認や admission はありません。
-
-</div>
+<StatusNote />

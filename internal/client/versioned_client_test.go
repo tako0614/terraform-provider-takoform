@@ -538,29 +538,32 @@ func TestClientRejectsOversizedResponses(t *testing.T) {
 	}
 }
 
-func TestCaptureResourceVersionRejectsMissingInvalidAndConflictingFences(t *testing.T) {
+func TestCaptureRevisionRejectsMissingInvalidAndConflictingFences(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
-		name, bodyVersion, etag string
-		wantError               bool
+		name, bodyVersion, revision, etag string
+		wantError                         bool
 	}{
 		{name: "missing ETag", bodyVersion: "2", wantError: true},
 		{name: "missing body", etag: `"2"`, wantError: true},
-		{name: "matching", bodyVersion: "2", etag: `"2"`},
+		{name: "matching fallback", bodyVersion: "2", etag: `"2"`},
+		{name: "matching revision", bodyVersion: "2", revision: "r7", etag: `"r7"`},
 		{name: "missing", wantError: true},
 		{name: "invalid body", bodyVersion: "rv-2", wantError: true},
 		{name: "overflowing body", bodyVersion: "9223372036854775808", etag: `"9223372036854775808"`, wantError: true},
 		{name: "unquoted ETag", bodyVersion: "2", etag: "2", wantError: true},
 		{name: "weak ETag", bodyVersion: "2", etag: `W/"2"`, wantError: true},
 		{name: "conflict", bodyVersion: "2", etag: `"3"`, wantError: true},
+		{name: "revision conflict", bodyVersion: "2", revision: "r7", etag: `"r8"`, wantError: true},
+		{name: "revision but generation ETag", bodyVersion: "2", revision: "r7", etag: `"2"`, wantError: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			resource := Resource{Metadata: Metadata{ResourceVersion: test.bodyVersion}}
+			resource := Resource{Metadata: Metadata{ResourceVersion: test.bodyVersion, Revision: test.revision}}
 			headers := http.Header{}
 			if test.etag != "" {
 				headers.Set("ETag", test.etag)
 			}
-			err := captureResourceVersion(&resource, headers)
+			err := captureRevision(&resource, headers)
 			if (err != nil) != test.wantError {
 				t.Fatalf("error=%v wantError=%v", err, test.wantError)
 			}
@@ -900,14 +903,18 @@ func writeVersionedDiscovery(t *testing.T, w http.ResponseWriter, origin string)
 func assertExactQuery(t *testing.T, r *http.Request, form InstalledFormReference) {
 	t.Helper()
 	query := r.URL.Query()
+	// The packageDigest is not an exact-query selector: read/lifecycle
+	// identity is the FormRef plus Space (see exactResourceQuery).
 	want := map[string]string{
 		"space": "prod", "apiVersion": form.FormRef.APIVersion, "kind": form.FormRef.Kind,
 		"definitionVersion": form.FormRef.DefinitionVersion, "schemaDigest": form.FormRef.SchemaDigest,
-		"packageDigest": form.PackageDigest,
 	}
 	for key, value := range want {
 		if query.Get(key) != value {
 			t.Errorf("query %s=%q, want %q", key, query.Get(key), value)
 		}
+	}
+	if query.Get("packageDigest") != "" {
+		t.Errorf("query packageDigest=%q, want absent from exact query", query.Get("packageDigest"))
 	}
 }

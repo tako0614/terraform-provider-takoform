@@ -1,0 +1,727 @@
+package portableconformancev3
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"path/filepath"
+	"strings"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
+)
+
+const (
+	// HostRunnerReportFormat identifies the Host API v1alpha3 runner report.
+	HostRunnerReportFormat = "takoform.portable-host-runner-report@v3"
+	// ReferenceHostSelfTest classifies a local reference-host run: it proves
+	// the executable runner, never an external host.
+	ReferenceHostSelfTest = "deterministic-reference-host-self-test"
+	// EndpointConformanceRun classifies a disposable external endpoint run.
+	EndpointConformanceRun = "disposable-endpoint-conformance-run"
+)
+
+// EndpointOptions configures one runner invocation.
+type EndpointOptions struct {
+	Endpoint             string
+	Token                string
+	AlternateToken       string
+	AlternateTenantToken string
+	HTTPClient           *http.Client
+	Classification       string
+	Subject              string
+}
+
+// ErrorProbeEvidence records one probed stable error outcome.
+type ErrorProbeEvidence struct {
+	Code       string `json:"code"`
+	HTTPStatus int    `json:"httpStatus"`
+	Retryable  bool   `json:"retryable"`
+}
+
+// NegativeFixtureEvidence records one executed byte-pinned negative fixture.
+type NegativeFixtureEvidence struct {
+	Name   string `json:"name"`
+	Kind   string `json:"kind"`
+	Stage  string `json:"stage"`
+	SHA256 string `json:"sha256"`
+}
+
+// HostRunnerReport is the data-only result of one run. PublicationReady is
+// always false: this report proves conformance behavior only and grants no
+// publication, admission, support, or maturity state.
+type HostRunnerReport struct {
+	Format                 string                    `json:"format"`
+	Classification         string                    `json:"classification"`
+	PublicationReady       bool                      `json:"publicationReady"`
+	Status                 string                    `json:"status"`
+	Subject                string                    `json:"subject"`
+	RunnerSubject          string                    `json:"runnerSubject"`
+	Checks                 []string                  `json:"checks"`
+	ErrorProbes            []ErrorProbeEvidence      `json:"errorProbes"`
+	NegativeFixtures       []NegativeFixtureEvidence `json:"negativeFixtures"`
+	UIDTransitions         []string                  `json:"uidTransitions"`
+	GenerationTransitions  []string                  `json:"generationTransitions"`
+	RevisionTransitions    []string                  `json:"revisionTransitions"`
+	ArtifactManifestDigest string                    `json:"artifactManifestDigest"`
+	AsyncOperationID       string                    `json:"asyncOperationId"`
+	CancelledOperationID   string                    `json:"cancelledOperationId"`
+}
+
+// SelfTest starts the deterministic reference host over the real Edge Family
+// candidate catalog and drives the complete runner matrix through real HTTP.
+// It is local implementation evidence only.
+func SelfTest(ctx context.Context, contract Contract) (HostRunnerReport, error) {
+	repoRoot, err := filepath.Abs(filepath.Join(contract.Root(), "..", ".."))
+	if err != nil {
+		return HostRunnerReport{}, err
+	}
+	catalog, err := LoadCatalog(repoRoot, contract)
+	if err != nil {
+		return HostRunnerReport{}, err
+	}
+	host := NewReferenceHost(contract, catalog)
+	server := httptest.NewServer(host)
+	defer server.Close()
+	return RunEndpoint(ctx, contract, EndpointOptions{
+		Endpoint:             server.URL,
+		Token:                referencePrimaryToken,
+		AlternateToken:       referenceAlternateToken,
+		AlternateTenantToken: referenceAlternateTenantToken,
+		HTTPClient:           server.Client(),
+		Classification:       ReferenceHostSelfTest,
+		Subject:              "reference-host",
+	})
+}
+
+// RunEndpoint executes the complete black-box v1alpha3 matrix against a
+// disposable endpoint. The endpoint must implement the runner-only probe
+// header (error, async, touch-status values) through a disposable adapter;
+// production endpoints must not implement it.
+func RunEndpoint(ctx context.Context, contract Contract, options EndpointOptions) (HostRunnerReport, error) {
+	if err := validateContract(contract); err != nil {
+		return HostRunnerReport{}, fmt.Errorf("portable host v3 contract: %w", err)
+	}
+	endpoint := strings.TrimRight(strings.TrimSpace(options.Endpoint), "/")
+	if endpoint == "" {
+		return HostRunnerReport{}, errors.New("portable host v3 runner endpoint is required")
+	}
+	httpClient := options.HTTPClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	transportClient := *httpClient
+	transportClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	classification := options.Classification
+	if classification == "" {
+		classification = EndpointConformanceRun
+	}
+	token := strings.TrimSpace(options.Token)
+	alternateToken := strings.TrimSpace(options.AlternateToken)
+	alternateTenantToken := strings.TrimSpace(options.AlternateTenantToken)
+	if token == "" || alternateToken == "" || alternateTenantToken == "" {
+		return HostRunnerReport{}, errors.New(
+			"portable host v3 runner requires primary, same-tenant alternate-principal, and alternate-tenant credentials",
+		)
+	}
+	if token == alternateToken || token == alternateTenantToken || alternateToken == alternateTenantToken {
+		return HostRunnerReport{}, errors.New("portable host v3 runner requires three distinct bearer credentials")
+	}
+	subject := strings.TrimSpace(options.Subject)
+	if subject == "" {
+		subject = "host:" + endpoint
+	}
+	runner := &v3Runner{
+		ctx:                  ctx,
+		contract:             contract,
+		endpoint:             endpoint,
+		token:                token,
+		alternateToken:       alternateToken,
+		alternateTenantToken: alternateTenantToken,
+		httpClient:           &transportClient,
+		apiBase:              endpoint + contract.APIPath,
+		completed:            map[string]bool{},
+	}
+	if err := runner.run(); err != nil {
+		return HostRunnerReport{}, err
+	}
+	checks := make([]string, 0, len(contract.RequiredRunnerChecks))
+	for _, check := range contract.RequiredRunnerChecks {
+		if !runner.completed[check] {
+			return HostRunnerReport{}, fmt.Errorf("portable host v3 runner did not execute required check %q", check)
+		}
+		checks = append(checks, check)
+	}
+	return HostRunnerReport{
+		Format:                 HostRunnerReportFormat,
+		Classification:         classification,
+		PublicationReady:       false,
+		Status:                 "passed",
+		Subject:                subject,
+		RunnerSubject:          "takoform.portable-host-conformance-runner@v3",
+		Checks:                 checks,
+		ErrorProbes:            runner.errorProbes,
+		NegativeFixtures:       runner.negativeFixtures,
+		UIDTransitions:         runner.uidTransitions,
+		GenerationTransitions:  runner.generationTransitions,
+		RevisionTransitions:    runner.revisionTransitions,
+		ArtifactManifestDigest: runner.artifactManifestDigest,
+		AsyncOperationID:       runner.asyncOperationID,
+		CancelledOperationID:   runner.cancelledOperationID,
+	}, nil
+}
+
+type v3Runner struct {
+	ctx                  context.Context
+	contract             Contract
+	endpoint             string
+	token                string
+	alternateToken       string
+	alternateTenantToken string
+	httpClient           *http.Client
+	apiBase              string
+
+	completed              map[string]bool
+	errorProbes            []ErrorProbeEvidence
+	negativeFixtures       []NegativeFixtureEvidence
+	uidTransitions         []string
+	generationTransitions  []string
+	revisionTransitions    []string
+	artifactManifestDigest string
+	asyncOperationID       string
+	cancelledOperationID   string
+}
+
+func (r *v3Runner) complete(check string) { r.completed[check] = true }
+
+type wireResponse struct {
+	Status int
+	Header http.Header
+	Body   []byte
+}
+
+type wireCondition struct {
+	Type               string `json:"type"`
+	Status             string `json:"status"`
+	Reason             string `json:"reason"`
+	HostReason         string `json:"hostReason,omitempty"`
+	Message            string `json:"message,omitempty"`
+	LastTransitionTime string `json:"lastTransitionTime"`
+}
+
+type wireStatus struct {
+	ObservedGeneration string          `json:"observedGeneration"`
+	Conditions         []wireCondition `json:"conditions"`
+	Observed           map[string]any  `json:"observed,omitempty"`
+	Outputs            map[string]any  `json:"outputs,omitempty"`
+}
+
+type wireResource struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Form       struct {
+		FormRef       FormRef `json:"formRef"`
+		PackageDigest string  `json:"packageDigest,omitempty"`
+	} `json:"form"`
+	Metadata struct {
+		Name       string `json:"name"`
+		Space      string `json:"space"`
+		UID        string `json:"uid"`
+		Generation string `json:"generation"`
+		Revision   string `json:"revision"`
+	} `json:"metadata"`
+	Spec   map[string]any `json:"spec"`
+	Status *wireStatus    `json:"status"`
+}
+
+// probeTarget is one exact resource the runner addresses.
+type probeTarget struct {
+	Ref           FormRef
+	PackageDigest string
+	Name          string
+	Space         string
+	Spec          map[string]any
+}
+
+func (r *v3Runner) target(probe ResourceProbe) probeTarget {
+	return probeTarget{
+		Ref:           probe.Identity.FormRef,
+		PackageDigest: probe.Identity.PackageDigest,
+		Name:          probe.Name,
+		Space:         r.contract.RunnerInput.Space,
+		Spec:          probe.Desired,
+	}
+}
+
+// ---- transport helpers ----
+
+func (r *v3Runner) requestWithToken(
+	token, method, target string,
+	headers map[string]string,
+	body []byte,
+) (wireResponse, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	request, err := http.NewRequestWithContext(r.ctx, method, target, reader)
+	if err != nil {
+		return wireResponse{}, err
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Authorization", "Bearer "+token)
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	for key, value := range headers {
+		request.Header.Set(key, value)
+	}
+	response, err := r.httpClient.Do(request)
+	if err != nil {
+		return wireResponse{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxBodyBytes+1))
+	if err != nil {
+		return wireResponse{}, err
+	}
+	return wireResponse{Status: response.StatusCode, Header: response.Header.Clone(), Body: data}, nil
+}
+
+func (r *v3Runner) request(method, target string, headers map[string]string, body []byte) (wireResponse, error) {
+	return r.requestWithToken(r.token, method, target, headers, body)
+}
+
+func encodeRunnerJSON(value any) ([]byte, error) { return json.Marshal(value) }
+
+func escapeGroup(group string) string { return url.PathEscape(group) }
+
+func (r *v3Runner) resourceURL(ref FormRef, name, action string, query url.Values) string {
+	target := fmt.Sprintf(
+		"%s/resources/%s/%s/%s",
+		r.apiBase, escapeGroup(ref.APIVersion), url.PathEscape(ref.Kind), url.PathEscape(name),
+	)
+	if action != "" {
+		target += "/" + action
+	}
+	if len(query) > 0 {
+		target += "?" + query.Encode()
+	}
+	return target
+}
+
+func (r *v3Runner) exactQuery(space string, ref FormRef) url.Values {
+	query := url.Values{}
+	query.Set("space", space)
+	query.Set("group", ref.APIVersion)
+	query.Set("kind", ref.Kind)
+	query.Set("definitionVersion", ref.DefinitionVersion)
+	query.Set("schemaDigest", ref.SchemaDigest)
+	return query
+}
+
+// ---- decode/assert helpers ----
+
+func decodeStrictResponse(response wireResponse, target any) error {
+	if len(bytes.TrimSpace(response.Body)) == 0 {
+		return errors.New("empty JSON response body")
+	}
+	return formpackage.DecodeStrictIJSON(response.Body, target)
+}
+
+func (r *v3Runner) expectStableError(response wireResponse, code string) error {
+	wantStatus, known := stableErrorHTTPStatusByCode[code]
+	if !known {
+		return fmt.Errorf("unknown stable error code %q", code)
+	}
+	if response.Status != wantStatus {
+		return fmt.Errorf(
+			"HTTP %d, want %d for %s; body=%s",
+			response.Status, wantStatus, code, strings.TrimSpace(string(response.Body)),
+		)
+	}
+	var envelope struct {
+		Error struct {
+			Code      string          `json:"code"`
+			Message   string          `json:"message"`
+			RequestID string          `json:"requestId"`
+			Retryable *bool           `json:"retryable"`
+			HostCode  string          `json:"hostCode,omitempty"`
+			Details   json.RawMessage `json:"details,omitempty"`
+		} `json:"error"`
+	}
+	if err := decodeStrictResponse(response, &envelope); err != nil {
+		return fmt.Errorf("decode %s error envelope: %w", code, err)
+	}
+	if envelope.Error.Code != code ||
+		strings.TrimSpace(envelope.Error.Message) == "" ||
+		strings.TrimSpace(envelope.Error.RequestID) == "" ||
+		envelope.Error.Retryable == nil ||
+		*envelope.Error.Retryable != isAutomaticallyRetryable(code) {
+		return fmt.Errorf("invalid %s error envelope: %s", code, strings.TrimSpace(string(response.Body)))
+	}
+	return nil
+}
+
+func decodeResource(response wireResponse, wantStatuses ...int) (wireResource, error) {
+	if len(wantStatuses) > 0 {
+		matched := false
+		for _, status := range wantStatuses {
+			if response.Status == status {
+				matched = true
+			}
+		}
+		if !matched {
+			return wireResource{}, fmt.Errorf(
+				"HTTP %d, want %v; body=%s",
+				response.Status, wantStatuses, strings.TrimSpace(string(response.Body)),
+			)
+		}
+	}
+	var resource wireResource
+	if err := decodeStrictResponse(response, &resource); err != nil {
+		return wireResource{}, err
+	}
+	return resource, nil
+}
+
+func decodeResourceEnvelope(response wireResponse) (wireResource, error) {
+	if response.Status != http.StatusOK {
+		return wireResource{}, fmt.Errorf(
+			"HTTP %d, want 200; body=%s", response.Status, strings.TrimSpace(string(response.Body)),
+		)
+	}
+	var envelope struct {
+		Resource wireResource `json:"resource"`
+	}
+	if err := decodeStrictResponse(response, &envelope); err != nil {
+		return wireResource{}, err
+	}
+	return envelope.Resource, nil
+}
+
+func verifyResourceIdentity(got wireResource, target probeTarget) error {
+	if got.APIVersion != target.Ref.APIVersion || got.Kind != target.Ref.Kind ||
+		got.Form.FormRef != target.Ref {
+		return errors.New("host response changed the exact FormRef identity")
+	}
+	if got.Metadata.Name != target.Name || got.Metadata.Space != target.Space {
+		return errors.New("host response changed the requested name or space")
+	}
+	if !uidPattern.MatchString(got.Metadata.UID) {
+		return errors.New("host response omitted a valid metadata.uid")
+	}
+	if got.Metadata.Generation == "" || got.Metadata.Revision == "" {
+		return errors.New("host response omitted generation or revision")
+	}
+	if got.Status == nil || got.Status.ObservedGeneration != got.Metadata.Generation {
+		return errors.New("host response status.observedGeneration must reflect metadata.generation")
+	}
+	if err := verifyClosedConditionReasons(got); err != nil {
+		return err
+	}
+	ready := false
+	for _, condition := range got.Status.Conditions {
+		if condition.Type == "Ready" && condition.Status == "True" {
+			ready = condition.Reason != "" && condition.LastTransitionTime != ""
+		}
+	}
+	if !ready {
+		return errors.New("host response omitted a complete Ready condition")
+	}
+	return nil
+}
+
+// verifyClosedConditionReasons holds every returned condition to the closed
+// portable reason vocabulary. Two conforming hosts must name one state with
+// one reason, so an unrecognized reason is a portability defect even when it
+// is otherwise well formed; host-specific detail belongs in hostReason.
+func verifyClosedConditionReasons(got wireResource) error {
+	if got.Status == nil {
+		return nil
+	}
+	for _, condition := range got.Status.Conditions {
+		if !isPortableConditionReason(condition.Reason) {
+			return fmt.Errorf(
+				"condition %s carries reason %q outside the closed portable vocabulary %v; "+
+					"host-specific detail belongs in hostReason",
+				condition.Type, condition.Reason, portableConditionReasons,
+			)
+		}
+	}
+	return nil
+}
+
+func verifyRevisionETag(response wireResponse, revision string) error {
+	values := response.Header.Values("ETag")
+	if len(values) != 1 || values[0] != `"`+revision+`"` {
+		return fmt.Errorf("ETag = %v, want exactly %q", values, `"`+revision+`"`)
+	}
+	return nil
+}
+
+// ---- lifecycle request builders ----
+
+type prepareOutcome struct {
+	PrepareDigest string
+	SpecDigest    string
+}
+
+func (r *v3Runner) resourceBody(target probeTarget) map[string]any {
+	form := map[string]any{"formRef": refJSON(target.Ref)}
+	if target.PackageDigest != "" {
+		form["packageDigest"] = target.PackageDigest
+	}
+	spec := target.Spec
+	if spec == nil {
+		spec = map[string]any{}
+	}
+	return map[string]any{
+		"apiVersion": target.Ref.APIVersion,
+		"kind":       target.Ref.Kind,
+		"form":       form,
+		"metadata":   map[string]any{"name": target.Name, "space": target.Space},
+		"spec":       spec,
+	}
+}
+
+// prepareRequest posts one raw prepare; extraHeaders may carry the update
+// generation fence.
+func (r *v3Runner) prepareRequest(target probeTarget, extraHeaders map[string]string) (wireResponse, error) {
+	body, err := encodeRunnerJSON(r.resourceBody(target))
+	if err != nil {
+		return wireResponse{}, err
+	}
+	return r.request(http.MethodPost, r.apiBase+"/resources/prepare", extraHeaders, body)
+}
+
+// prepare binds a create-intent prepare (no update fence).
+func (r *v3Runner) prepare(target probeTarget) (prepareOutcome, error) {
+	return r.prepareWithFence(target, "")
+}
+
+// prepareWithFence binds a prepare under the Takoform-Expected-Generation
+// update fence when generation is non-empty ("generation-fence-when-
+// updating").
+func (r *v3Runner) prepareWithFence(target probeTarget, generation string) (prepareOutcome, error) {
+	var headers map[string]string
+	if generation != "" {
+		headers = map[string]string{expectedGenerationHeader: generation}
+	}
+	response, err := r.prepareRequest(target, headers)
+	if err != nil {
+		return prepareOutcome{}, err
+	}
+	if response.Status != http.StatusOK {
+		return prepareOutcome{}, fmt.Errorf(
+			"prepare HTTP %d; body=%s", response.Status, strings.TrimSpace(string(response.Body)),
+		)
+	}
+	var result struct {
+		Resource wireResource `json:"resource"`
+		Review   struct {
+			PrepareDigest string `json:"prepareDigest"`
+			SpecDigest    string `json:"specDigest"`
+		} `json:"review"`
+	}
+	if err := decodeStrictResponse(response, &result); err != nil {
+		return prepareOutcome{}, err
+	}
+	if result.Resource.Form.FormRef != target.Ref ||
+		result.Resource.Metadata.Name != target.Name ||
+		result.Resource.Metadata.Space != target.Space {
+		return prepareOutcome{}, errors.New("prepare substituted the requested identity")
+	}
+	wantSpecDigest, err := specCanonicalDigest(target.Spec)
+	if err != nil {
+		return prepareOutcome{}, err
+	}
+	gotSpecDigest, err := specCanonicalDigest(result.Resource.Spec)
+	if err != nil {
+		return prepareOutcome{}, err
+	}
+	if gotSpecDigest != wantSpecDigest || result.Review.SpecDigest != wantSpecDigest {
+		return prepareOutcome{}, errors.New("prepare did not bind the exact requested spec digest")
+	}
+	if !formpackage.ValidDigest(result.Review.PrepareDigest) {
+		return prepareOutcome{}, errors.New("prepare returned an invalid prepareDigest")
+	}
+	return prepareOutcome{
+		PrepareDigest: result.Review.PrepareDigest,
+		SpecDigest:    result.Review.SpecDigest,
+	}, nil
+}
+
+type applyOptions struct {
+	Create             bool
+	ExpectedGeneration string
+	ExpectedUID        string
+	IdempotencyKey     string
+	OmitIdempotencyKey bool
+	OmitPrecondition   bool
+	ExtraHeaders       map[string]string
+	PrepareDigest      string
+}
+
+func (r *v3Runner) applyRequestParts(target probeTarget, options applyOptions) (string, map[string]string, []byte, error) {
+	document := r.resourceBody(target)
+	document["review"] = map[string]any{"prepareDigest": options.PrepareDigest}
+	if options.ExpectedUID != "" {
+		document["expectedUid"] = options.ExpectedUID
+	}
+	body, err := encodeRunnerJSON(document)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	headers := map[string]string{}
+	if !options.OmitIdempotencyKey {
+		headers["Idempotency-Key"] = options.IdempotencyKey
+	}
+	if !options.OmitPrecondition {
+		if options.Create {
+			headers["If-None-Match"] = "*"
+		} else {
+			headers[expectedGenerationHeader] = options.ExpectedGeneration
+		}
+	}
+	for key, value := range options.ExtraHeaders {
+		headers[key] = value
+	}
+	return r.resourceURL(target.Ref, target.Name, "", nil), headers, body, nil
+}
+
+func (r *v3Runner) apply(target probeTarget, options applyOptions) (wireResponse, error) {
+	if options.PrepareDigest == "" {
+		fence := ""
+		if !options.Create {
+			fence = options.ExpectedGeneration
+		}
+		prepared, err := r.prepareWithFence(target, fence)
+		if err != nil {
+			return wireResponse{}, err
+		}
+		options.PrepareDigest = prepared.PrepareDigest
+	}
+	fullURL, headers, body, err := r.applyRequestParts(target, options)
+	if err != nil {
+		return wireResponse{}, err
+	}
+	return r.request(http.MethodPut, fullURL, headers, body)
+}
+
+func (r *v3Runner) applyResource(target probeTarget, options applyOptions, wantStatus int) (wireResource, wireResponse, error) {
+	response, err := r.apply(target, options)
+	if err != nil {
+		return wireResource{}, wireResponse{}, err
+	}
+	resource, err := decodeResource(response, wantStatus)
+	if err != nil {
+		return wireResource{}, wireResponse{}, err
+	}
+	if err := verifyResourceIdentity(resource, target); err != nil {
+		return wireResource{}, wireResponse{}, err
+	}
+	if err := verifyRevisionETag(response, resource.Metadata.Revision); err != nil {
+		return wireResource{}, wireResponse{}, err
+	}
+	return resource, response, nil
+}
+
+// importOptions configures one adoption of a pre-existing native resource.
+type importOptions struct {
+	NativeID           string
+	IdempotencyKey     string
+	Create             bool
+	ExpectedGeneration string
+}
+
+func (r *v3Runner) importResource(target probeTarget, options importOptions) (wireResponse, error) {
+	document := r.resourceBody(target)
+	document["nativeId"] = options.NativeID
+	headers := map[string]string{"Idempotency-Key": options.IdempotencyKey}
+	if options.Create {
+		headers["If-None-Match"] = "*"
+	} else {
+		headers[expectedGenerationHeader] = options.ExpectedGeneration
+	}
+	body, err := encodeRunnerJSON(document)
+	if err != nil {
+		return wireResponse{}, err
+	}
+	return r.request(http.MethodPost, r.resourceURL(target.Ref, target.Name, "import", nil), headers, body)
+}
+
+func (r *v3Runner) read(target probeTarget) (wireResource, wireResponse, error) {
+	response, err := r.request(
+		http.MethodGet,
+		r.resourceURL(target.Ref, target.Name, "", r.exactQuery(target.Space, target.Ref)),
+		nil, nil,
+	)
+	if err != nil {
+		return wireResource{}, wireResponse{}, err
+	}
+	resource, err := decodeResource(response, http.StatusOK)
+	if err != nil {
+		return wireResource{}, wireResponse{}, err
+	}
+	if err := verifyResourceIdentity(resource, target); err != nil {
+		return wireResource{}, wireResponse{}, err
+	}
+	if err := verifyRevisionETag(response, resource.Metadata.Revision); err != nil {
+		return wireResource{}, wireResponse{}, err
+	}
+	return resource, response, nil
+}
+
+func (r *v3Runner) expectResourceAbsent(target probeTarget) error {
+	response, err := r.request(
+		http.MethodGet,
+		r.resourceURL(target.Ref, target.Name, "", r.exactQuery(target.Space, target.Ref)),
+		nil, nil,
+	)
+	if err != nil {
+		return err
+	}
+	return r.expectStableError(response, "resource_not_found")
+}
+
+func (r *v3Runner) deleteResource(target probeTarget, revision, key string, extraHeaders map[string]string) (wireResponse, error) {
+	headers := map[string]string{
+		"If-Match":        `"` + revision + `"`,
+		"Idempotency-Key": key,
+	}
+	for headerKey, value := range extraHeaders {
+		headers[headerKey] = value
+	}
+	return r.request(
+		http.MethodDelete,
+		r.resourceURL(target.Ref, target.Name, "", r.exactQuery(target.Space, target.Ref)),
+		headers, nil,
+	)
+}
+
+func (r *v3Runner) statusAction(
+	target probeTarget,
+	action, generation, key string,
+	extraHeaders map[string]string,
+) (wireResponse, error) {
+	headers := map[string]string{
+		expectedGenerationHeader: generation,
+		"Idempotency-Key":        key,
+	}
+	for headerKey, value := range extraHeaders {
+		headers[headerKey] = value
+	}
+	return r.request(
+		http.MethodPost,
+		r.resourceURL(target.Ref, target.Name, action, r.exactQuery(target.Space, target.Ref)),
+		headers, nil,
+	)
+}

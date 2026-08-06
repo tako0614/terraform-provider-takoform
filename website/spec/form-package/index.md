@@ -3,13 +3,18 @@
 A Form Package is a closed local directory with a root `package-index.json` and
 exactly the payload files listed by that index. Requirement keywords are used
 as described in [`../conformance.md`](../conformance.md). The normative Draft
-2020-12 index schemas are the current
-[`v1alpha3`](../../formpackage/schemas/package-index-v1alpha3.schema.json) and
-retained Legacy
+2020-12 index schemas are the current family
+[`v1alpha4`](/schemas/v1alpha4/package-index.schema.json) profile carrying
+namespaced-group `forms.takoform.com` family FormRefs, the retained
+provider-v2
+[`v1alpha3`](../../formpackage/schemas/package-index-v1alpha3.schema.json)
+profile for v1alpha2 FormRefs, and the retained Legacy
 [`v1alpha2`](../../formpackage/schemas/package-index-v1alpha2.schema.json) and
 [`v1alpha1`](../../formpackage/schemas/package-index.schema.json) profiles.
 The v1alpha2 envelope is immutable and content-addressed, but it refers to a
-v1alpha1 FormRef; it cannot carry a current v1alpha2 Form.
+v1alpha1 FormRef; it cannot carry a current v1alpha2 Form. The v1alpha3
+envelope likewise carries only `forms.takoform.com/v1alpha2` FormRefs and
+cannot carry a family Form.
 
 One package MUST contain exactly one Form Definition and therefore exactly one
 FormRef. There is no `packageId` and no multi-form `definitions` collection in
@@ -20,10 +25,12 @@ one package never carries a catalog-wide version or multiple definitions.
 
 ## Index and identity
 
-The current index has the fixed identity
-`packages.forms.takoform.com/v1alpha3` / `FormPackage`, an exact
-`forms.takoform.com/v1alpha2` `FormRef`, one
-`definitionPath`, and a
+The current family index has the fixed identity
+`packages.forms.takoform.com/v1alpha4` / `FormPackage` with an exact
+namespaced-group `FormRef`; the retained provider-v2 index has the identity
+`packages.forms.takoform.com/v1alpha3` / `FormPackage` with an exact
+`forms.takoform.com/v1alpha2` `FormRef`. Both carry one
+`definitionPath` and a
 lexicographically sorted `files` array. Every file entry records a canonical
 relative slash path, an allowlisted data media type, its byte length, and a
 lowercase `sha256:` digest over the exact payload bytes.
@@ -46,8 +53,8 @@ only for exact Legacy read, verification, recovery, and migration.
 
 ## Local verifier
 
-[`../../formpackage/`] and
-[`../../cmd/form-package/`] implement a library and
+`../../formpackage/` and
+`../../cmd/form-package/` implement a library and
 CLI verifier. Verification performs no network access and executes no package
 content. It rejects:
 
@@ -122,7 +129,7 @@ go run ./cmd/form-package conformance
 ## Release boundary
 
 The repository-owned release tooling and protected workflows are documented in
-[`../../release/form-packages.md`](../../release/form-packages.md). A current
+[`../../release/form-packages.md`](../../release/form-packages.md). A
 package source under
 `forms/releases/<release-id>/sha256-<package-digest-hex>/` is re-verified,
 canonicalized, deterministically archived, described by SPDX 2.3 and SLSA v1
@@ -133,8 +140,9 @@ the dispatcher separately verifies the exact
 `forms/<release-id>/sha256-<package-digest-hex>` source tag and approved commit
 before signing. Legacy v1alpha1 locators retain their existing
 `<packageVersion>` directory and `v<packageVersion>` tag unchanged. Legacy
-content-addressed v1alpha2 packages and current v1alpha3 packages use their
-full digest locator, but only v1alpha3 may carry a current v1alpha2 FormRef.
+content-addressed v1alpha2 packages and retained provider-v2 v1alpha3
+packages use their full digest locator, but only v1alpha3 may carry a
+retained v1alpha2 FormRef.
 The canonical index bytes—not archive metadata—remain the signed semantic
 subject.
 

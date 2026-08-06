@@ -1,0 +1,31 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha4",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
+    "kind": "SQLiteDatabase",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:af5ec0881f147aeaabb7243822fc3ab67f56a2d7e7510141ae1fe773b8b2b05f"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 1637,
+      "digest": "sha256:5ce46621ed83a07025aac70122b4fd1fcc9a1e0216de2d752b3b14cd41f535ea"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 3,
+      "digest": "sha256:ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+    },
+    {
+      "path": "fixtures/negative-unexpected-property.json",
+      "mediaType": "application/json",
+      "size": 33,
+      "digest": "sha256:d10f45f42473405c10b441faafa3d23e863d4160f2ca3a7d0c32874b386f1ae9"
+    }
+  ]
+}

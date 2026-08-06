@@ -1,0 +1,256 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "edge.sql",
+  "version": "1.0.0",
+  "title": "Embedded SQLite database",
+  "description": "SQL statements executed against one embedded SQLite database with serializable transactions: a transaction observes a single consistent snapshot and its statements apply atomically or not at all. Concurrent writers may fail with busy and must retry.",
+  "operations": [
+    {
+      "name": "execute",
+      "description": "Run one write statement with bound parameters and return the written row count.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "params": {
+            "items": {
+              "type": [
+                "boolean",
+                "null",
+                "number",
+                "string"
+              ]
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "sql": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "lastInsertRowId": {
+            "type": "integer"
+          },
+          "rowsWritten": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rowsWritten"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "sql_error",
+        "busy",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "query",
+      "description": "Run one read statement with bound parameters and return its rows.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "params": {
+            "items": {
+              "type": [
+                "boolean",
+                "null",
+                "number",
+                "string"
+              ]
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "sql": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "items": {
+              "additionalProperties": {
+                "type": [
+                  "boolean",
+                  "null",
+                  "number",
+                  "string"
+                ]
+              },
+              "maxProperties": 256,
+              "propertyNames": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "sql_error",
+        "busy",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "transaction",
+      "description": "Apply an ordered statement list atomically under serializable isolation.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "statements": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "params": {
+                  "items": {
+                    "type": [
+                      "boolean",
+                      "null",
+                      "number",
+                      "string"
+                    ]
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "sql": {
+                  "maxLength": 100000,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sql"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "statements"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "results": {
+            "items": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "additionalProperties": false,
+              "properties": {
+                "lastInsertRowId": {
+                  "type": "integer"
+                },
+                "rowsWritten": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rowsWritten"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "sql_error",
+        "busy",
+        "backend_unavailable"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "serializable"
+  },
+  "limits": {
+    "maxBoundParameters": 100,
+    "maxStatementBytes": 100000
+  },
+  "fixtures": [
+    {
+      "name": "create-insert-select",
+      "steps": [
+        {
+          "operation": "execute",
+          "input": {
+            "sql": "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)"
+          }
+        },
+        {
+          "operation": "execute",
+          "input": {
+            "params": [
+              "first note"
+            ],
+            "sql": "INSERT INTO notes (body) VALUES (?1)"
+          },
+          "expected": {
+            "rowsWritten": 1
+          }
+        },
+        {
+          "operation": "query",
+          "input": {
+            "sql": "SELECT body FROM notes ORDER BY id"
+          },
+          "expected": {
+            "rows": [
+              {
+                "body": "first note"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

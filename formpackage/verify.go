@@ -67,7 +67,7 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 	if len(index.Files) > maxPackageFiles {
 		return VerificationReport{}, fmt.Errorf("package lists %d files; maximum is %d", len(index.Files), maxPackageFiles)
 	}
-	if (index.APIVersion != PackageAPIVersion && index.APIVersion != LegacyContentAddressedPackageAPIVersion && index.APIVersion != CurrentPackageAPIVersion) || index.Kind != PackageKind {
+	if (index.APIVersion != PackageAPIVersion && index.APIVersion != LegacyContentAddressedPackageAPIVersion && index.APIVersion != CurrentPackageAPIVersion && index.APIVersion != FamilyPackageAPIVersion) || index.Kind != PackageKind {
 		return VerificationReport{}, fmt.Errorf("unsupported package identity %s/%s", index.APIVersion, index.Kind)
 	}
 
@@ -206,10 +206,18 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 				return VerificationReport{}, fmt.Errorf("conformance fixture %q payload %q must use application/json", fixture.Name, fixturePath)
 			}
 		}
+		// desiredSchema is required by every Form Definition epoch, so
+		// definitionSchemas.desired is always compiled. observedSchema and
+		// outputSchema are optional in the v1alpha3 family lane, so a fixture
+		// naming that stage must be refused with a verification error rather than
+		// handed a nil compiled schema.
 		if err := validateFixtureAgainstSchema(definitionSchemas.desired, definition.DesiredSchema, payloads[fixture.DesiredPath], fixture.Name+" desired"); err != nil {
 			return VerificationReport{}, err
 		}
 		if fixture.ObservedPath != "" {
+			if definitionSchemas.observed == nil {
+				return VerificationReport{}, fmt.Errorf("conformance fixture %q declares observedPath but Form Definition has no observedSchema", fixture.Name)
+			}
 			if err := validateFixtureAgainstSchema(definitionSchemas.observed, definition.ObservedSchema, payloads[fixture.ObservedPath], fixture.Name+" observed"); err != nil {
 				return VerificationReport{}, err
 			}
@@ -243,6 +251,9 @@ func VerifyDirectory(root string) (VerificationReport, error) {
 		default:
 			return VerificationReport{}, fmt.Errorf("negative conformance fixture %q uses unsupported package-validation stage %q", fixture.Name, fixture.Stage)
 		}
+		// The optional observed/output stages are declared per Form; a negative
+		// fixture naming a stage this Form does not declare has no contract to
+		// fail against and must not reach the nil compiled schema.
 		if schema == nil {
 			return VerificationReport{}, fmt.Errorf("negative conformance fixture %q stage %q has no schema", fixture.Name, fixture.Stage)
 		}

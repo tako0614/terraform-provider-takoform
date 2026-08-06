@@ -216,8 +216,17 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	if verifiedLocator.Tag != requestedLocator.Tag || verifiedLocator.ReleaseID != requestedLocator.ReleaseID || verifiedLocator.ArtifactID != requestedLocator.ArtifactID {
 		return fmt.Errorf("tag %q does not match verified package publication locator %q", requestedLocator.Tag, verifiedLocator.Tag)
 	}
-	if tagKind != index.FormRef.Kind {
-		return fmt.Errorf("tag release id %q decodes to kind %q, not FormRef kind %q", releaseID, tagKind, index.FormRef.Kind)
+	// The release id decodes to a bare Kind in the central lanes and to
+	// "<group>/<Kind>" in the Form Family lane (formpackage.ReleaseIDForGroupKind),
+	// because one Kind name may exist in several family groups. Comparing the
+	// decoded value against the bare FormRef kind therefore never matches a
+	// family package, and nothing in a family could be tagged at all.
+	wantTagIdentity := index.FormRef.Kind
+	if verifiedLocator.APIVersion == formpackage.FamilyPackageAPIVersion {
+		wantTagIdentity = index.FormRef.APIVersion + "/" + index.FormRef.Kind
+	}
+	if tagKind != wantTagIdentity {
+		return fmt.Errorf("tag release id %q decodes to %q, not FormRef identity %q", releaseID, tagKind, wantTagIdentity)
 	}
 	canonicalIndex, err := formpackage.Canonicalize(indexRaw)
 	if err != nil {

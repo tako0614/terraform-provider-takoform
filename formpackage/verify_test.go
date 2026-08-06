@@ -40,7 +40,11 @@ func TestFormRefSchemaIsExactAndUsesSemVer(t *testing.T) {
 		{name: "unknown field", mutate: func(value map[string]any) { value["extension"] = true }},
 		{name: "numeric prerelease leading zero", mutate: func(value map[string]any) { value["definitionVersion"] = "1.2.3-01" }},
 		{name: "uppercase digest", mutate: func(value map[string]any) { value["schemaDigest"] = "sha256:" + strings.Repeat("A", 64) }},
-		{name: "wrong api", mutate: func(value map[string]any) { value["apiVersion"] = "forms.example/v1" }},
+		// A dotless group is outside the frozen epochs and outside the
+		// namespaced family grammar, so every lane rejects it. A DNS-like
+		// group such as forms.example/v1 is a valid family group by
+		// decision 0009 and is covered in family_lane_test.go.
+		{name: "wrong api", mutate: func(value map[string]any) { value["apiVersion"] = "forms/v1" }},
 	} {
 		test := test
 		t.Run(test.name, func(t *testing.T) {

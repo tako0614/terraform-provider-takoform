@@ -104,7 +104,6 @@
     "apiVersion",
     "definitionVersion",
     "kind",
-    "packageDigest",
     "schemaDigest",
     "space"
   ],

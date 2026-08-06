@@ -1,0 +1,34 @@
+{
+  "apiVersion": "bindings.takoform.com/v1alpha1",
+  "kind": "BindingDefinition",
+  "name": "module-worker.object-bucket",
+  "version": "1.0.0",
+  "title": "Module Worker object bucket binding",
+  "description": "Projects the complete edge.objects runtime API into a Worker Version under one JavaScript-identifier binding name, without exposing credentials or endpoints.",
+  "sourceRole": "revision",
+  "targetInterface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "edge.objects",
+    "version": "1.0.0",
+    "schemaDigest": "sha256:275b50a9337e5a9ea2367fee1a64e21401e5e74fb9c543b6ce3c4f2be7365f26"
+  },
+  "allowedTargetForms": [
+    {
+      "apiVersion": "edge.forms.takoform.com/v1alpha1",
+      "kind": "ObjectBucket"
+    }
+  ],
+  "bindingNameGrammar": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+  "runtimeProjection": {
+    "operations": [
+      "get",
+      "head",
+      "put",
+      "delete",
+      "list"
+    ]
+  },
+  "lifecycle": {
+    "targetDeletion": "refuse_while_bound"
+  }
+}

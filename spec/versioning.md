@@ -9,17 +9,30 @@ defined in [`project-lifecycle.md`](project-lifecycle.md).
 
 | Concern      | Identifier                                      | Meaning                                                                                    |
 | ------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Host API     | API group such as current `forms.takoform.com/v1alpha2` | Protocol envelope, discovery, and lifecycle compatibility                             |
-| Form epoch   | API group inside an exact `FormRef`             | Namespace boundary between frozen v1alpha1 Legacy Forms and current v1alpha2 Forms          |
-| Form         | SemVer inside an exact `FormRef`                | Compatibility of one portable desired-state contract within its epoch                      |
+| Host API     | API group such as current `forms.takoform.com/v1alpha3` | Protocol envelope, discovery, and lifecycle compatibility                             |
+| Form group   | DNS-like API group inside an exact `FormRef`    | Namespace boundary between Form Families and retained epochs; versioned per family          |
+| Form         | SemVer inside an exact `FormRef`                | Compatibility of one portable desired-state contract within its group                      |
 | Form Package | Exact package identity plus content digest      | Immutable distribution of one exact Form and its fixtures                                  |
+| Interface / Binding contract | Exact ref plus schema digest       | Immutable operation-surface and typed-capability contracts referenced by Forms             |
 | Provider     | Provider SemVer                                 | Terraform/OpenTofu protocol, typed surface, persisted state, and host-client compatibility |
+
+Since [decision 0009](decisions/0009-form-families-and-namespaced-api-versions.md)
+the FormRef group is a namespaced DNS-like identifier. Official families use
+subdomains of `forms.takoform.com` (the first is
+`edge.forms.takoform.com/v1alpha1`); third-party groups are valid FormRefs
+under their own domains. `forms.takoform.com/v1alpha1` (Legacy) and
+`forms.takoform.com/v1alpha2` (retained provider-v2 preview) are frozen
+groups; new families never reuse them. Each family group versions
+independently.
 
 Host Support, Form Activation, and Service Offering records refer to exact
 identities but are not version streams. Updating one of those facts MUST NOT
 change a Form or provider version.
 
-Current `packages.forms.takoform.com/v1alpha3` packages have no independent
+Current family packages use the `packages.forms.takoform.com/v1alpha4`
+envelope, which carries namespaced FormRef groups; the
+`packages.forms.takoform.com/v1alpha3` envelope remains the retained
+provider-v2 candidate profile. Content-addressed packages have no independent
 SemVer. Their exact package digest produces the publication artifact ID
 `sha256-<hex>` and therefore the source path and tag. Existing v1alpha1
 `packageVersion` values and the published content-addressed v1alpha2 package
@@ -27,8 +40,12 @@ profile remain immutable Legacy identities; tooling MUST preserve and verify
 their paths, tags, signatures, and bytes without interpreting a package profile
 as Form maturity. The content-addressed locator decision is recorded in
 [`decisions/0005`](decisions/0005-current-form-packages-use-content-addressed-locators.md),
-and the v1alpha3 envelope required by the Form epoch reset is recorded in
-[`decisions/0006`](decisions/0006-v1alpha2-restarts-form-lines.md).
+the v1alpha3 envelope required by the Form epoch reset is recorded in
+[`decisions/0006`](decisions/0006-v1alpha2-restarts-form-lines.md), and the
+family-carrying v1alpha4 envelope is minted by
+[`decisions/0013`](decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md)
+(the namespaced family groups it carries are decided in
+[`decisions/0009`](decisions/0009-form-families-and-namespaced-api-versions.md)).
 
 ## Provider versions are independent
 
@@ -127,14 +144,19 @@ new Form SemVer unless the Form contract itself changed.
 
 ## Host API group
 
-The current Host API wire `forms.takoform.com/v1alpha2` remains Experimental
-and carries only exact v1alpha2 FormRefs. The frozen
+The current Host API wire is `forms.takoform.com/v1alpha3`, discovered at
+`/.well-known/takoform/v1alpha3` with API base
+`/apis/forms.takoform.com/v1alpha3`. It carries namespaced FormRef groups,
+UID/generation/revision identity, long-running Operations, content-addressed
+artifact upload, and Host Support Profiles
+([decisions 0011–0013](decisions/0011-resource-identity-generation-and-revision.md)).
+
+The `forms.takoform.com/v1alpha2` wire remains the retained provider-v2 lane
+at `/.well-known/takoform/v1alpha2`, and the frozen
 `forms.takoform.com/v1alpha1` Host API and Form epoch remain a closed
-provider-v1 compatibility lane. Current discovery is
-`/.well-known/takoform/v1alpha2`; frozen Legacy discovery remains
-`/.well-known/takoform`. Each lane has its own discovery path and API base; a
-Host wire version never implies Form maturity.
-Breaking protocol changes require a new Host API group identity.
+provider-v1 compatibility lane at `/.well-known/takoform`. Each lane has its
+own discovery path and API base; a Host wire version never implies Form
+maturity. Breaking protocol changes require a new Host API group identity.
 
 The API group MUST NOT graduate based on a Form count, package publication,
 provider major, historical admission, or one host's conformance report. A

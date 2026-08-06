@@ -4,18 +4,48 @@
 
 An exact **FormRef** is the join of an API group, a kind, a definition version,
 and a schema digest. Compatibility is never inferred from a kind name alone:
-the same kind in a different epoch is a different contract.
+the same kind in a different epoch is a different contract. Form groups are
+namespaced into [Form Families](/spec/form-families.html); the Host API group
+is a protocol compatibility identity independent of any nested Form group.
 
 | Surface | Identity |
 | --- | --- |
-| Current FormRef | `forms.takoform.com/v1alpha2` |
-| Legacy FormRef | `forms.takoform.com/v1alpha1` |
-| Current package envelope | `packages.forms.takoform.com/v1alpha3` |
-| Provider | `v2.0.0` current · `v1.0.3` Legacy |
+| Current Form Family | `edge.forms.takoform.com/v1alpha1` |
+| Current Host API wire | `forms.takoform.com/v1alpha3`, discovered at `/.well-known/takoform/v1alpha3` |
+| Current package envelope | `packages.forms.takoform.com/v1alpha4` |
+| Retained provider-v2 FormRef | `forms.takoform.com/v1alpha2`, wire discovered at `/.well-known/takoform/v1alpha2` |
+| Retained provider-v2 package envelope | `packages.forms.takoform.com/v1alpha3` |
+| Legacy FormRef | `forms.takoform.com/v1alpha1` (frozen) |
+| Provider | `v2.0.0` current published · `v1.0.3` Legacy · `v2.1.0` source candidate (not yet published) |
+
+The `forms.takoform.com/v1alpha2` epoch and its nine `0.1.0` candidates are
+retained provider-v2 preview source; they are not the basis for new
+specification work. The provider's SemVer is independent of every API
+identity.
+
+## Current-lane contracts
+
+- [Form Families](/spec/form-families.html) — namespaced Form groups and the
+  Edge Platform Family
+- [Host API v1alpha3](/spec/host-api/v1alpha3.html) — uid/generation/revision
+  identity, long-running operations, fencing
+- [Interface contracts](/spec/interface-contract/) — exact capability
+  contracts a Form's service exposes
+- [Binding contracts](/spec/binding-contract/) — typed outward capability use
+  held by revisions
+- [Artifact transport](/spec/artifact-transport/) — content-addressed
+  artifact upload and manifests
 
 ## Normative schemas
 
-Published at `forms.takoform.com/schemas/...`:
+Published at `forms.takoform.com/schemas/...`. Current lane:
+
+- [form-ref v1alpha3](/schemas/v1alpha3/form-ref.schema.json)
+- [form-definition v1alpha3](/schemas/v1alpha3/form-definition.schema.json)
+- [host-api-wire v1alpha3](/schemas/v1alpha3/host-api-wire.schema.json)
+- [package-index v1alpha4](/schemas/v1alpha4/package-index.schema.json)
+
+Retained provider-v2 lane:
 
 - [form-ref v1alpha2](/schemas/v1alpha2/form-ref.schema.json)
 - [form-definition v1alpha2](/schemas/v1alpha2/form-definition.schema.json)
@@ -29,13 +59,13 @@ from independent implementation and evidence, never from publication or
 popularity. Every new Form starts from prior art (OCCI, CIMI, TOSCA,
 Kubernetes/Crossplane, provider-native resources).
 
-<div class="status-note">
+## More surfaces
 
-Takoform is an **Experimental specification project**. Current FormRefs use
-`forms.takoform.com/v1alpha2` and current package envelopes use
-`packages.forms.takoform.com/v1alpha3`. Provider `v2.0.0` is the current
-published client; provider `v1.0.3` is the published Legacy client. The 34
-published Form Package identities from `forms.takoform.com/v1alpha1` are
-immutable Legacy evidence. There is no current central approval or admission.
+- [Proposals](/proposals/) — mutable design material for Forms that have not
+  earned a public FormRef
+- [Form inventory](/forms/) — generated candidate and family inventory
+- [Conformance](/conformance/) — executable compatibility evidence
+- [Release](/release/) — provider and Form Package publication boundary
+- [Glossary](/docs/glossary.html) — terms used across the documentation
 
-</div>
+<StatusNote />

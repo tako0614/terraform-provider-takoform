@@ -1,0 +1,136 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "edge.queue",
+  "version": "1.0.0",
+  "title": "At-least-once queue producer",
+  "description": "Asynchronous message submission with at-least-once delivery and no ordering guarantee: an accepted message is delivered to the consumer one or more times, possibly out of send order. Consumers must be idempotent against duplicates.",
+  "operations": [
+    {
+      "name": "send",
+      "description": "Submit one message, optionally delayed before it becomes deliverable.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 131072,
+            "type": "string"
+          },
+          "delaySeconds": {
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "messageId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "messageId"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "message_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "sendBatch",
+      "description": "Submit an ordered batch of messages; acceptance is all-or-nothing.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "messages": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "body": {
+                  "maxLength": 131072,
+                  "type": "string"
+                },
+                "delaySeconds": {
+                  "maximum": 43200,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "body"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "messageIds": {
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "messageIds"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "message_too_large",
+        "batch_too_large",
+        "backend_unavailable"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "eventual",
+    "delivery": "at_least_once",
+    "ordering": "none"
+  },
+  "limits": {
+    "maxBatchMessages": 100,
+    "maxMessageBytes": 131072
+  },
+  "fixtures": [
+    {
+      "name": "send-accepted",
+      "steps": [
+        {
+          "operation": "send",
+          "input": {
+            "body": "{\"event\":\"user.created\"}"
+          }
+        }
+      ]
+    }
+  ]
+}

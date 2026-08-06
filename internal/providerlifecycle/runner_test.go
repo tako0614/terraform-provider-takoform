@@ -572,7 +572,7 @@ func completeReport(product, version, address string) Report {
 		},
 		NegativeChecks: []NegativeEvidence{
 			{Name: "response-name-substitution-rejected", Kind: resourceCases[0].Kind, Fixture: "fixture", Passed: true},
-			{Name: "response-package-digest-substitution-rejected", Kind: resourceCases[1].Kind, Fixture: "fixture", Passed: true},
+			{Name: "response-schema-digest-substitution-rejected", Kind: resourceCases[1].Kind, Fixture: "fixture", Passed: true},
 		},
 		ImmutableReplace: immutable,
 	}

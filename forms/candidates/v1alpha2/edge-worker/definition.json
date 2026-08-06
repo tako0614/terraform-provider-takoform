@@ -18,7 +18,7 @@
           },
           "artifactUrl": {
             "format": "uri",
-            "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\\s   -     　﻿?#]*)?$",
+            "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\\s   - \u2028\u2029  　﻿?#]*)?$",
             "type": "string"
           }
         },
@@ -143,7 +143,7 @@
         "uniqueItems": true
       },
       "generation": {
-        "maximum": 9223372036854776000,
+        "maximum": 9223372036854775807,
         "minimum": 1,
         "type": "integer"
       },
@@ -177,7 +177,7 @@
     "additionalProperties": false,
     "properties": {
       "generation": {
-        "maximum": 9223372036854776000,
+        "maximum": 9223372036854775807,
         "minimum": 1,
         "type": "integer"
       },

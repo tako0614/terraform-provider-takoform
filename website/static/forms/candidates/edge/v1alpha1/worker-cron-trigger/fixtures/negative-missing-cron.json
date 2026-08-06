@@ -1,0 +1,6 @@
+{
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "module-worker"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "bucketBindings": [
+    {
+      "name": "MEDIA",
+      "resource": {
+        "kind": "ObjectBucket",
+        "name": "object-bucket"
+      }
+    }
+  ],
+  "compatibilityDate": "2026-08-06",
+  "compatibilityFlags": [
+    "nodejs_compat"
+  ],
+  "handlers": [
+    "fetch"
+  ],
+  "kvBindings": [
+    {
+      "name": "CACHE",
+      "resource": {
+        "kind": "EdgeKVNamespace",
+        "name": "edge-kv-namespace"
+      }
+    }
+  ],
+  "queueProducerBindings": [
+    {
+      "name": "EVENTS",
+      "resource": {
+        "kind": "AtLeastOnceQueue",
+        "name": "at-least-once-queue"
+      }
+    }
+  ],
+  "requiredSensitiveVars": [
+    "API_SIGNING_TOKEN_NAME"
+  ],
+  "serviceBindings": [
+    {
+      "name": "AUTH",
+      "resource": {
+        "kind": "ModuleWorker",
+        "name": "auth-worker"
+      }
+    }
+  ],
+  "sqliteBindings": [
+    {
+      "name": "DB",
+      "resource": {
+        "kind": "SQLiteDatabase",
+        "name": "sqlite-database"
+      }
+    }
+  ],
+  "vars": {
+    "LOG_LEVEL": "info"
+  },
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "module-worker"
+  }
+}

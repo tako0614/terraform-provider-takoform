@@ -2,10 +2,52 @@
   "kind": "takoform.public-schema-identities@v1",
   "identities": [
     {
+      "id": "https://forms.takoform.com/schemas/artifacts/v1alpha1/artifact-manifest.schema.json",
+      "sha256": "sha256:9ebd0fcad6f25f513a8146de9ddda412e2d38ca2ac515f0d33b0e962ba1d2906",
+      "source": "spec/schemas/artifact-manifest-v1alpha1.schema.json",
+      "public": "website/public/schemas/artifacts/v1alpha1/artifact-manifest.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/bindings/v1alpha1/binding-definition.schema.json",
+      "sha256": "sha256:9955287f8c450886173e025cef776a0520ab45667ae1cb1f94a0bdb9864e7a60",
+      "source": "spec/schemas/binding-definition-v1alpha1.schema.json",
+      "public": "website/public/schemas/bindings/v1alpha1/binding-definition.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/bindings/v1alpha1/binding-ref.schema.json",
+      "sha256": "sha256:d911ecb73ab4681a75a99a30807035a8c9238e35e2b2e3027816a09bbeca7580",
+      "source": "spec/schemas/binding-ref-v1alpha1.schema.json",
+      "public": "website/public/schemas/bindings/v1alpha1/binding-ref.schema.json"
+    },
+    {
       "id": "https://forms.takoform.com/schemas/host-discovery.schema.json",
       "sha256": "sha256:6b89594b9dc41d374df5d159966d3e78a066c63c4032581c1907448ab4b7201a",
       "source": "spec/schemas/host-discovery.schema.json",
       "public": "website/public/schemas/host-discovery.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-definition.schema.json",
+      "sha256": "sha256:df25f05329c6466d95b5c6743a366cb20949d9a524d4bad45130ad2e9ad10f95",
+      "source": "spec/schemas/interface-definition-v1alpha1.schema.json",
+      "public": "website/public/schemas/interfaces/v1alpha1/interface-definition.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-ref.schema.json",
+      "sha256": "sha256:b88fb231c93d707cac0fbd9f6948ee6ff7807e135bd25d53d2f6112c58259f61",
+      "source": "spec/schemas/interface-ref-v1alpha1.schema.json",
+      "public": "website/public/schemas/interfaces/v1alpha1/interface-ref.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/operations/v1alpha1/operation.schema.json",
+      "sha256": "sha256:ae46224561c66a893bb66728f4a65dc38f4043c881eb644efcc920d8dbc03eed",
+      "source": "spec/schemas/operation-v1alpha1.schema.json",
+      "public": "website/public/schemas/operations/v1alpha1/operation.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/support/v1alpha1/host-support-profile.schema.json",
+      "sha256": "sha256:3d093b7637f86c904de1db9d96125427bb6a606411ed3cafaeb46b049abdfff3",
+      "source": "spec/schemas/host-support-profile-v1alpha1.schema.json",
+      "public": "website/public/schemas/support/v1alpha1/host-support-profile.schema.json"
     },
     {
       "id": "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json",
@@ -74,10 +116,40 @@
       "public": "website/public/schemas/v1alpha2/package-index.schema.json"
     },
     {
+      "id": "https://forms.takoform.com/schemas/v1alpha3/form-definition.schema.json",
+      "sha256": "sha256:ac7f439d3517dbc635362911dad18573f4bed616d6e602338850c1c564bdb417",
+      "source": "spec/schemas/form-definition-v1alpha3.schema.json",
+      "public": "website/public/schemas/v1alpha3/form-definition.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha3/form-ref.schema.json",
+      "sha256": "sha256:2b12dc2c8c65716204cae0258e9aaca0bc7ceb7255b7a47ad6baf876cdcfdf4a",
+      "source": "spec/schemas/form-ref-v1alpha3.schema.json",
+      "public": "website/public/schemas/v1alpha3/form-ref.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha3/host-api-wire.schema.json",
+      "sha256": "sha256:22d38bca92a14e74f6869741b5f17b2f732fe27c6636df8e22eaa42b00fc84f7",
+      "source": "spec/schemas/host-api-wire-v1alpha3.schema.json",
+      "public": "website/public/schemas/v1alpha3/host-api-wire.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha3/host-discovery.schema.json",
+      "sha256": "sha256:3ec12d4737290252016a8c3d2f1ea9f4d784584f61366e5b3b8fbb67048f18b8",
+      "source": "spec/schemas/host-discovery-v1alpha3.schema.json",
+      "public": "website/public/schemas/v1alpha3/host-discovery.schema.json"
+    },
+    {
       "id": "https://forms.takoform.com/schemas/v1alpha3/package-index.schema.json",
       "sha256": "sha256:04c85b0b7c48f489d0ac21615420a77f39f74c48831d848b2f9840211d73b5ed",
       "source": "spec/schemas/package-index-v1alpha3.schema.json",
       "public": "website/public/schemas/v1alpha3/package-index.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1alpha4/package-index.schema.json",
+      "sha256": "sha256:ef892ebcad9bb03fa98a9e6e74c557b1d34c235c28549d694c0b588554213f7e",
+      "source": "spec/schemas/package-index-v1alpha4.schema.json",
+      "public": "website/public/schemas/v1alpha4/package-index.schema.json"
     }
   ]
 }

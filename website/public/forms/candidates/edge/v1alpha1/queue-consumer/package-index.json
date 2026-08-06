@@ -1,0 +1,91 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha4",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
+    "kind": "QueueConsumer",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:f7312a321e0b3ab496fe54923aa700bf15d53912db17560a58800def0689b10b"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 6149,
+      "digest": "sha256:d42b252d1fd1d39aa132e17b3571bc27ce4d20271308ba1978d060982859eb78"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 371,
+      "digest": "sha256:9b1815098050ab8040010c75aa424428c2a3b9609b550aa965cf26c49229bfb2"
+    },
+    {
+      "path": "fixtures/negative-dead-letter-queue.json",
+      "mediaType": "application/json",
+      "size": 378,
+      "digest": "sha256:396180b4132bcf64096742f69082a9c4a0053e81147bf5f76a360e8857bff14e"
+    },
+    {
+      "path": "fixtures/negative-max-batch-size.json",
+      "mediaType": "application/json",
+      "size": 370,
+      "digest": "sha256:2ca5e461771efebd72c5275786cabe660a434ced6186a086c0fb91bb27888c31"
+    },
+    {
+      "path": "fixtures/negative-max-batch-timeout-seconds.json",
+      "mediaType": "application/json",
+      "size": 372,
+      "digest": "sha256:c2b9358a856326c7a65b250a4ecbaf0487197f0493239f5672dda25f8bf4a578"
+    },
+    {
+      "path": "fixtures/negative-max-concurrency.json",
+      "mediaType": "application/json",
+      "size": 371,
+      "digest": "sha256:ea158349aa4799953e703313cd6dc0932c5a95e82080c0ffe1c4553aeb9093b3"
+    },
+    {
+      "path": "fixtures/negative-max-retries.json",
+      "mediaType": "application/json",
+      "size": 372,
+      "digest": "sha256:d4080c10c8cd5b0818441735255061bfbd046be7b743e0cfd489cf3f7f846d66"
+    },
+    {
+      "path": "fixtures/negative-missing-queue.json",
+      "mediaType": "application/json",
+      "size": 287,
+      "digest": "sha256:e040b3c1d9f4e7a54353c9d4f4a22a2a6525020d4e21beafc77d3478e6afb847"
+    },
+    {
+      "path": "fixtures/negative-missing-worker.json",
+      "mediaType": "application/json",
+      "size": 296,
+      "digest": "sha256:5b639e8a3a16c7880631d6375bc5594ea08d62c70eab68747ea6361677c36acb"
+    },
+    {
+      "path": "fixtures/negative-queue.json",
+      "mediaType": "application/json",
+      "size": 371,
+      "digest": "sha256:e26a9e1b9cc768eedd2fa20fb7f026075d7f97c7a30716563804c6597ac82f97"
+    },
+    {
+      "path": "fixtures/negative-retry-delay-seconds.json",
+      "mediaType": "application/json",
+      "size": 371,
+      "digest": "sha256:30ec7565223aa0fba076110e1cc64b05ba93a4b3c77bf2b63d215aa82f49ac16"
+    },
+    {
+      "path": "fixtures/negative-unexpected-property.json",
+      "mediaType": "application/json",
+      "size": 401,
+      "digest": "sha256:f7745d71d0b67575c6ab010d7b7c336b821482c29fc00e84a91fbb63b6f4cfc9"
+    },
+    {
+      "path": "fixtures/negative-worker.json",
+      "mediaType": "application/json",
+      "size": 377,
+      "digest": "sha256:77500b0c32cb2bab4670c73fd9eebe33742eabc507dcfedf8b222a167a4c50dc"
+    }
+  ]
+}

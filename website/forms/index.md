@@ -82,3 +82,33 @@ set may be rewritten, re-signed, promoted, or used to derive a current approved
 subset. Current lifecycle truth comes only from
 [`lifecycle.json`](lifecycle.json); Host Support and activation remain
 separate host-owned facts.
+
+## Edge Platform Family (edge.forms.takoform.com/v1alpha1)
+
+The first official Form Family fixes the shape of a proven edge developer
+platform without naming its vendor (spec/form-families.md). Its members are
+source candidates for the Host API v1alpha3 resource lane; the typed
+resources require provider v2.1.0 or later (source candidate; not yet
+published). Roles come from the closed v1alpha3 role enum and decide
+lifecycle mechanics: revisions are immutable, deployments move traffic,
+attachments activate inward events.
+
+| Kind | Resource | Role | Version | Portable intent |
+| --- | --- | --- | --- | --- |
+| `ModuleWorker` | `takoform_module_worker` | `identity` | `0.1.0` | Long-lived logical identity of one ES Module Worker application. The Form fixes the ES module worker ABI by identity: handlers are exported module functions receiving typed events and a binding environment. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments. |
+| `WorkerBundle` | `takoform_worker_bundle` | `revision` | `0.1.0` | Immutable content-addressed module bundle of one worker build: a main module plus additional modules, each pinned by size and digest and resolved through the content-addressed artifact upload API (decision 0012). Different bytes are a different bundle. |
+| `WorkerVersion` | `takoform_worker_version` | `revision` | `0.1.0` | Immutable executable snapshot of one Module Worker: a bundle, a runtime compatibility date, declared handlers, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. |
+| `WorkerDeployment` | `takoform_worker_deployment` | `deployment` | `0.1.0` | Selects which Worker Versions of one Module Worker serve traffic and in what proportion. Weights are basis points and must sum to exactly 10000 across entries; the sum is host-validated semantics because a schema cannot add weights. Rollback is re-weighting, never mutating a revision. |
+| `WorkerCustomDomain` | `takoform_worker_custom_domain` | `attachment` | `0.1.0` | Attaches one DNS hostname to a Module Worker so its active deployment serves that hostname over HTTPS. Inward activation is an attachment, never a binding; deleting the attachment detaches the hostname and never deletes the worker. |
+| `WorkerCronTrigger` | `takoform_worker_cron_trigger` | `attachment` | `0.1.0` | Attaches one cron schedule to a Module Worker, invoking its scheduled handler at each match. Schedules are interpreted in UTC only; there is no timezone field, so two hosts can never fire the same trigger at different instants. The accepted grammar is exactly five single-value fields separated by single spaces: minute is a literal 0-59 and hour a literal 0-23, day-of-month is `*` or 1-31, month is `*` or 1-12, and day-of-week is `*` or 0-6. Ranges, lists, steps such as `*/5`, names, and `*` in the minute or hour field are all rejected, so the most frequent representable schedule is once per day at one fixed UTC time. Hourly and sub-hourly schedules are not expressible and need a future grammar revision, which is a new definition version of this Form. |
+| `EdgeKVNamespace` | `takoform_edge_kv_namespace` | `identity` | `0.1.0` | Globally replicated key/value namespace with eventual consistency, exactly as fixed by the edge.kv Interface. Eventual consistency is the Form's semantics, not an option: a store with different convergence behavior is a different Form. |
+| `ObjectBucket` | `takoform_edge_object_bucket` | `identity` | `0.1.0` | Flat-namespace object store with read-after-write consistency, exactly as fixed by the edge.objects Interface. Operating rules such as CORS, lifecycle, and lock are separate policy resources, never desired fields of the bucket identity. |
+| `SQLiteDatabase` | `takoform_sqlite_database` | `identity` | `0.1.0` | Embedded SQLite database with serializable transactions, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. |
+| `AtLeastOnceQueue` | `takoform_at_least_once_queue` | `identity` | `0.1.0` | Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form. |
+| `QueueConsumer` | `takoform_queue_consumer` | `attachment` | `0.1.0` | Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking its queue handler with message batches and redelivering failed batches. Consumption is inward activation and therefore an attachment, never a binding. |
+
+A generic `takoform_resource` carries any third-party v1alpha3 Form by exact
+FormRef. Family membership grants no maturity: these members are tracked in
+the family candidate set, a lifecycle record begins only at an Experimental
+transition, and hosts state their supported subset in their Host Support
+Profiles.

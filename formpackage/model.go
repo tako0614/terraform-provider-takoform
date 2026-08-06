@@ -23,6 +23,12 @@ const (
 	// current Form epoch. Their publication locator is derived from
 	// packageDigest, never a second SemVer.
 	CurrentPackageAPIVersion = "packages.forms.takoform.com/v1alpha3"
+	// FamilyPackageAPIVersion identifies content-addressed packages carrying
+	// Form Family (namespaced-group, v1alpha3 form-definition) Forms. FormRefs
+	// in this lane use DNS-like groups, so there is no single Form apiVersion
+	// constant; validation accepts any namespaced group outside the two frozen
+	// central epochs.
+	FamilyPackageAPIVersion  = "packages.forms.takoform.com/v1alpha4"
 	PackageKind              = "FormPackage"
 	TrustAPIVersion          = "trust.forms.takoform.com/v1alpha1"
 	RevocationKind           = "FormPackageRevocation"
@@ -49,15 +55,42 @@ type FormDefinition struct {
 	// Status is retained only for immutable v1alpha1 Definition bytes. The
 	// v1alpha2 schema forbids it because forms/lifecycle.json is the sole
 	// authority for Proposal, Experimental, Stable, and Legacy maturity.
-	Status                string                `json:"status,omitempty"`
-	DesiredSchema         map[string]any        `json:"desiredSchema"`
-	ObservedSchema        map[string]any        `json:"observedSchema"`
+	Status string `json:"status,omitempty"`
+	// Role is the closed v1alpha3 resource role (decision 0009). The frozen
+	// v1alpha1/v1alpha2 schemas forbid it, so it stays empty on those epochs.
+	Role          string         `json:"role,omitempty"`
+	DesiredSchema map[string]any `json:"desiredSchema"`
+	// ObservedSchema is required by the frozen v1alpha1/v1alpha2 schemas and
+	// optional in the v1alpha3 family lane, where the envelope owns status.
+	ObservedSchema        map[string]any        `json:"observedSchema,omitempty"`
 	OutputSchema          map[string]any        `json:"outputSchema,omitempty"`
 	ImmutableFields       []string              `json:"immutableFields,omitempty"`
 	LifecycleCapabilities []string              `json:"lifecycleCapabilities"`
 	Interfaces            []InterfaceDescriptor `json:"interfaces,omitempty"`
-	ConformanceFixtures   []ConformanceFixture  `json:"conformanceFixtures,omitempty"`
-	NegativeFixtures      []NegativeFixture     `json:"negativeConformanceFixtures,omitempty"`
+	// ProvidedInterfaces and AcceptedBindings are the exact digest-bound
+	// contracts of the v1alpha3 family lane (decision 0010).
+	ProvidedInterfaces  []InterfaceRef       `json:"providedInterfaces,omitempty"`
+	AcceptedBindings    []BindingRef         `json:"acceptedBindings,omitempty"`
+	ConformanceFixtures []ConformanceFixture `json:"conformanceFixtures,omitempty"`
+	NegativeFixtures    []NegativeFixture    `json:"negativeConformanceFixtures,omitempty"`
+}
+
+// InterfaceRef is the exact identity of one published Interface Definition.
+// SchemaDigest is calculated over the definition's RFC 8785 bytes.
+type InterfaceRef struct {
+	APIVersion   string `json:"apiVersion"`
+	Name         string `json:"name"`
+	Version      string `json:"version"`
+	SchemaDigest string `json:"schemaDigest"`
+}
+
+// BindingRef is the exact identity of one published Binding Definition.
+// SchemaDigest is calculated over the definition's RFC 8785 bytes.
+type BindingRef struct {
+	APIVersion   string `json:"apiVersion"`
+	Name         string `json:"name"`
+	Version      string `json:"version"`
+	SchemaDigest string `json:"schemaDigest"`
 }
 
 // InterfaceDescriptor declares one portable runtime interface a Form exposes.

@@ -40,6 +40,11 @@ normative specification text remain the Markdown files in the repository; the
 public pages link to those files instead of silently redefining their
 contracts.
 
+The canonical provider reference `docs/index.md` is projected to
+`website/docs/reference.md` and published as `/docs/reference.html`. The
+`/docs/` index itself (`website/docs/index.md`) is a separate hand-written
+quick-start page, not a projection of `docs/index.md`.
+
 [`public/schemas/`](public/schemas/) is generated from the normative
 [`../spec/schemas/`](../spec/schemas/) set. Run
 `bun run sync:public-schemas` from the repository root after a normative schema

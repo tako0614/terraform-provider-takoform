@@ -40,6 +40,7 @@ type formResource struct {
 
 var (
 	_ resource.Resource                 = (*formResource)(nil)
+	_ resource.ResourceWithModifyPlan   = (*formResource)(nil)
 	_ resource.ResourceWithImportState  = (*formResource)(nil)
 	_ resource.ResourceWithUpgradeState = (*formResource)(nil)
 )
@@ -530,6 +531,17 @@ func (r *formResource) toResource(ctx context.Context, values formValues) (*clie
 }
 
 func (r *formResource) assertConfigured(diags *diag.Diagnostics) bool {
+	if r.data != nil && r.data.client == nil && r.data.v2Err != nil {
+		// The provider configured, but only the v1alpha3 lane negotiated.
+		// Surface the recorded v1alpha2 negotiation error for this v2-lane
+		// resource instead of a generic wiring failure.
+		diags.AddError(
+			"Takoform v1alpha2 lane unavailable",
+			"The configured endpoint did not negotiate the Host API v1alpha2 lane required by "+
+				r.kind.ResourceType+". "+r.data.v2Err.Error(),
+		)
+		return false
+	}
 	if r.data == nil || r.data.client == nil {
 		diags.AddError(
 			"Provider not configured",
@@ -546,7 +558,6 @@ func (r *formResource) assertConfigured(diags *diag.Diagnostics) bool {
 }
 
 func (r *formResource) assertStateFormIdentity(values formValues, diags *diag.Diagnostics) bool {
-	want := r.data.forms[r.kind.Kind]
 	got, ok := values.FormIdentity.reference()
 	if !ok {
 		diags.AddError(
@@ -555,19 +566,36 @@ func (r *formResource) assertStateFormIdentity(values formValues, diags *diag.Di
 		)
 		return false
 	}
-	if got != want {
-		diags.AddError(
-			"State Form identity does not match this provider",
-			fmt.Sprintf(
-				"State is bound to %s; this provider is bound to %s. "+
-					"Pin provider v1 for v1alpha1 state or perform an explicit create/import migration; "+
-					"the provider will not query a different exact FormRef and interpret a 404 as deletion.",
-				formatFormIdentity(got), formatFormIdentity(want),
-			),
-		)
-		return false
+	// The FormRef is the identity fence; the packageDigest recorded in state
+	// is distribution provenance, not contract identity (a host may serve the
+	// same FormRef from a re-packaged distribution). Membership in the
+	// supported set — not equality with the current default create target —
+	// decides Read/Update/Delete, so a future Form line bump keeps existing
+	// state readable instead of stranding it on an old provider pin. When the
+	// supported set is unpopulated (partial constructions), the defaults are
+	// the supported set, preserving the strict single-line behavior.
+	supported := r.data.supported
+	if len(supported) == 0 {
+		for _, form := range r.data.forms {
+			supported = append(supported, form)
+		}
 	}
-	return true
+	for _, candidate := range supported {
+		if candidate.FormRef == got.FormRef {
+			return true
+		}
+	}
+	defaultRef := r.data.forms[r.kind.Kind]
+	diags.AddError(
+		"State Form identity is not supported by this provider",
+		fmt.Sprintf(
+			"State is bound to %s; this provider supports %s for kind %s. "+
+				"Pin the provider version that wrote the state or perform an explicit create/import migration; "+
+				"the provider will not query a different exact FormRef and interpret a 404 as deletion.",
+			formatFormIdentity(got), formatFormIdentity(defaultRef), r.kind.Kind,
+		),
+	)
+	return false
 }
 
 func (identity formStateIdentity) reference() (client.InstalledFormReference, bool) {
@@ -603,6 +631,61 @@ func formatFormIdentity(identity client.InstalledFormReference) string {
 		identity.FormRef.SchemaDigest,
 		identity.PackageDigest,
 	)
+}
+
+// ModifyPlan surfaces the host's reviewed preview at plan time, so a user's
+// `terraform plan` includes host validation instead of discovering it only at
+// apply. The preview is a read-only validation fence: the framework release
+// pinned here does not carry plan private state into apply, so apply performs
+// its own authoritative review. A host that is unavailable or rejects the
+// planned desired state produces a warning and apply reports the error.
+func (r *formResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if !r.assertConfigured(&resp.Diagnostics) {
+		return
+	}
+	// Destroy plans have no desired spec to review.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	// Plans built from interpolated/unknown configuration cannot be reviewed
+	// yet; apply reviews the resolved values.
+	if !req.Config.Raw.IsFullyKnown() {
+		return
+	}
+	values, diags := r.valuesFrom(ctx, req.Plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	body, space, bodyDiags := r.toResource(ctx, values)
+	resp.Diagnostics.Append(bodyDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	form := r.data.forms[r.kind.Kind]
+	body.Form = &form
+	if !values.ResourceVersion.IsNull() && !values.ResourceVersion.IsUnknown() {
+		body.Metadata.ResourceVersion = values.ResourceVersion.ValueString()
+	}
+	operation := "create"
+	if !req.State.Raw.IsNull() {
+		operation = "update"
+	}
+	previewCtx, cancel := context.WithTimeout(ctx, planPreviewTimeout)
+	defer cancel()
+	if err := r.data.client.EnsureFormAvailable(previewCtx, space, form, operation); err != nil {
+		resp.Diagnostics.AddWarning(
+			"Takoform host preview unavailable",
+			"The host could not confirm the exact Form for this plan: "+err.Error()+" Apply will re-validate.",
+		)
+		return
+	}
+	if _, err := r.data.client.PreviewResource(previewCtx, body); err != nil {
+		resp.Diagnostics.AddWarning(
+			"Takoform host preview rejected the plan",
+			"The host reviewed the planned desired state and rejected it: "+err.Error()+" Apply will report the authoritative error.",
+		)
+	}
 }
 
 func (r *formResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -648,8 +731,6 @@ func (r *formResource) put(ctx context.Context, values formValues, state *tfsdk.
 	if !values.ResourceVersion.IsNull() && !values.ResourceVersion.IsUnknown() {
 		body.Metadata.ResourceVersion = values.ResourceVersion.ValueString()
 	}
-	r.data.serviceFormMutate.Lock()
-	defer r.data.serviceFormMutate.Unlock()
 	res, err := r.data.client.PutResource(ctx, r.kind.Kind, body.Metadata.Name, body)
 	if err != nil {
 		diags.AddError("Failed to apply "+r.kind.Kind, err.Error())
@@ -725,8 +806,6 @@ func (r *formResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		)
 		return
 	}
-	r.data.serviceFormMutate.Lock()
-	defer r.data.serviceFormMutate.Unlock()
 	form := r.data.forms[r.kind.Kind]
 	if err := r.data.client.DeleteResource(ctx, r.kind.Kind, values.Name.ValueString(), space,
 		client.MutationFence{ResourceVersion: values.ResourceVersion.ValueString(), Form: form}); err != nil {

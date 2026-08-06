@@ -9,6 +9,13 @@
 //
 // The copies are byte-identical projections of the canonical files; the check
 // mode is also exercised by check-public-surfaces.mjs.
+//
+// Naming note: the canonical provider reference `docs/index.md` projects to
+// `website/docs/reference.md`, because the site's `/docs/` index
+// (`website/docs/index.md`) is a separate hand-written quick-start page that
+// is NOT a projection of `docs/index.md`. Keep those two pages distinct:
+// edit the canonical `docs/` tree for reference content and the
+// `website/docs/index.md` page for the quick-start surface.
 
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";

@@ -2,6 +2,7 @@ package portableconformance
 
 import (
 	"bytes"
+
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -592,6 +593,12 @@ func (h *referenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 	h.recordReplay(request, raw, body.Resource.Metadata.Space, status, etag, response)
 }
 
+// The published v1alpha2 wire contract defines the ETag as the quoted
+// resourceVersion (see spec/schemas/host-api-wire-v1alpha2.schema.json), so
+// the reference host returns that exact value. The client additionally
+// accepts a quoted metadata.revision ETag when a host supplies one
+// (forward-compatible; revision is introduced by the next wire revision).
+
 func (h *referenceHost) handleDelete(w http.ResponseWriter, request *http.Request, name string) {
 	raw, err := io.ReadAll(io.LimitReader(request.Body, 1))
 	if err != nil || len(raw) != 0 {
@@ -682,8 +689,10 @@ func (h *referenceHost) referenceIdentityForExactQuery(
 	if !ok ||
 		query.Get("apiVersion") != identity.FormRef.APIVersion ||
 		query.Get("definitionVersion") != identity.FormRef.DefinitionVersion ||
-		query.Get("schemaDigest") != identity.FormRef.SchemaDigest ||
-		query.Get("packageDigest") != identity.PackageDigest {
+		query.Get("schemaDigest") != identity.FormRef.SchemaDigest {
+		// The packageDigest is not an exact-query selector: read/lifecycle
+		// identity is the FormRef plus Space, so a re-packaged but
+		// contract-identical Form stays addressable.
 		return client.InstalledFormReference{}, false
 	}
 	return identity, true

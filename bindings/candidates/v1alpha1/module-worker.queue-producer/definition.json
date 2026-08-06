@@ -1,0 +1,31 @@
+{
+  "apiVersion": "bindings.takoform.com/v1alpha1",
+  "kind": "BindingDefinition",
+  "name": "module-worker.queue-producer",
+  "version": "1.0.0",
+  "title": "Module Worker queue producer binding",
+  "description": "Projects only the submission half of edge.queue (send, sendBatch) into a Worker Version. Consumption is never a binding: it is the QueueConsumer attachment resource.",
+  "sourceRole": "revision",
+  "targetInterface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "edge.queue",
+    "version": "1.0.0",
+    "schemaDigest": "sha256:822e71c8bde4c8391a21d2de0d51f1fcc25ab6cbc1737a14cc8d3fe9bcb5d254"
+  },
+  "allowedTargetForms": [
+    {
+      "apiVersion": "edge.forms.takoform.com/v1alpha1",
+      "kind": "AtLeastOnceQueue"
+    }
+  ],
+  "bindingNameGrammar": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+  "runtimeProjection": {
+    "operations": [
+      "send",
+      "sendBatch"
+    ]
+  },
+  "lifecycle": {
+    "targetDeletion": "refuse_while_bound"
+  }
+}

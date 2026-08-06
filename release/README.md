@@ -3,7 +3,8 @@
 `release/version.json` is the independent Takoform provider version source. It
 does not inherit a Takosumi package or release version.
 
-The provider-specific trust lane is pinned by the D-08 profile in
+The provider-specific trust lane is pinned by the release trust profile
+(internal decision identifier D-08) in
 [`../spec/trust/`](../spec/trust/). Form Packages use a separate keyless trust
 lane and never reuse this provider GPG key. Its release and revocation delivery
 boundary is documented in [`form-packages.md`](form-packages.md).
@@ -27,6 +28,15 @@ published Legacy `v1` release. Their signed tags, immutable GitHub Releases,
 and canonical Terraform Registry listings exist.
 `release/version.json` retains `publicationStatus: candidate-only` because it
 is tag-time build metadata, not a live availability field.
+
+The Form Family lane on Host API `forms.takoform.com/v1alpha3` is carried by
+provider `v2.1.0`, which is an unpublished source candidate: no signed tag,
+GitHub Release, or Registry version exists for it, and it must be built from
+source. `release/version.json` therefore continues to describe the latest
+ASSIGNED release, `2.0.0`, until the owner's release flow assigns `2.1.0` with
+signed Registry-readback evidence through the phases below; a repository
+worktree never claims an unpublished version as released
+([decision 0013](../spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md)).
 
 `release/provider-release-identities.json` retains the exact six-file signed
 Registry readback closure for current provider releases as canonical base64.
@@ -101,9 +111,11 @@ the machine-readable
 
 This is the first stable provider compatibility line, not a claim that any Form
 epoch graduated. The `forms.takoform.com/v1alpha1` Form epoch is now frozen
-Legacy; post-reset Forms use `forms.takoform.com/v1alpha2` inside
-`packages.forms.takoform.com/v1alpha3` after an individual lifecycle transition.
-The current nine are still unpublished candidates. The outer Host API wire independently
+Legacy; the retained provider-v2 epoch uses `forms.takoform.com/v1alpha2`
+inside `packages.forms.takoform.com/v1alpha3` after an individual lifecycle
+transition, and is superseded for new design work by the namespaced Form
+Families lane. The retained nine are still unpublished candidates. The outer
+Host API wire independently
 uses `forms.takoform.com/v1alpha2` behind `/.well-known/takoform/v1alpha2` for
 provider v2. The frozen provider-v1 lane retains
 `forms.takoform.com/v1alpha1` behind `/.well-known/takoform`; one discovery
@@ -436,7 +448,7 @@ manifest was absent from `SHA256SUMS`. Existing version paths must never be
 overwritten. At that historical point the corrected six-entry candidate was
 `v0.1.3`, and direct Terraform/OpenTofu Registry install evidence remained
 post-publication; the coordinated Form `1.0.1` candidate therefore used
-provider `0.1.3`. Those retained facts do not define the current provider
+provider `0.1.3`. Those retained facts do not define the then-current
 published `v1.0.1` release or its 15-asset provenance closure.
 
 Key rotation is additive and review-gated: create a distinct repo-external key,

@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -26,6 +25,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
+	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
@@ -37,6 +37,11 @@ const (
 	envToken    = "TAKOFORM_TOKEN"
 
 	defaultResourceAPITimeout = 12 * time.Minute
+
+	// planPreviewTimeout bounds the read-only host preview performed during
+	// `terraform plan` so a slow host cannot stall planning; apply performs
+	// the authoritative review under defaultResourceAPITimeout.
+	planPreviewTimeout = 30 * time.Second
 )
 
 // Ensure takoformProvider satisfies the provider.Provider interface.
@@ -48,12 +53,23 @@ type takoformProvider struct {
 	version string
 }
 
-// providerData is shared with every resource via Configure.
+// providerData is shared with every resource via Configure. It carries both
+// negotiated Host API lanes: the retained v1alpha2 client for the nine v2
+// resources, and the v1alpha3 client for the Edge Family lane. At least one
+// lane must have negotiated; each resource asserts its own lane and reports
+// the recorded per-lane negotiation error otherwise.
 type providerData struct {
-	client            *client.Client
-	defaultSpace      string
-	forms             map[string]client.InstalledFormReference
-	serviceFormMutate sync.Mutex
+	client       *client.Client
+	clientV3     *clientv3.Client
+	v2Err        error
+	v3Err        error
+	defaultSpace string
+	// forms maps kind to the recommended create target (default FormRef line).
+	forms map[string]client.InstalledFormReference
+	// supported is every exact FormRef this build can read, observe, update,
+	// and delete. A state FormRef only needs membership here; it does not have
+	// to be the current default, so a future Form bump never strands state.
+	supported []client.InstalledFormReference
 }
 
 // takoformProviderModel maps the provider configuration schema.
@@ -163,16 +179,32 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 
 	httpClient := newResourceAPIHTTPClient()
 
-	c, err := configureClient(ctx, endpoint, token, httpClient)
-	if err != nil {
-		resp.Diagnostics.AddError("Takoform configuration failed", err.Error())
+	// Negotiate both Host API lanes against the same endpoint and token. At
+	// least one must succeed; a host may legitimately serve only v1alpha2
+	// (the retained v2 resources) or only v1alpha3 (the Edge Family lane).
+	// Each resource asserts its own lane and surfaces the recorded per-lane
+	// error, so a v2-only host still runs v2 resources while v3 resources
+	// explain exactly why they cannot.
+	v2Client, v2Err := configureClient(ctx, endpoint, token, httpClient)
+	v3Client, v3Err := configureClientV3(ctx, endpoint, token, httpClient)
+	if v2Err != nil && v3Err != nil {
+		resp.Diagnostics.AddError(
+			"Takoform configuration failed",
+			"Neither Host API lane negotiated at "+endpoint+".\n\n"+
+				"v1alpha2: "+v2Err.Error()+"\n\n"+
+				"v1alpha3: "+v3Err.Error(),
+		)
 		return
 	}
 
 	data := &providerData{
-		client:       c,
+		client:       v2Client,
+		clientV3:     v3Client,
+		v2Err:        v2Err,
+		v3Err:        v3Err,
 		defaultSpace: space,
 		forms:        providerCandidateForms(),
+		supported:    providerSupportedForms(),
 	}
 	resp.ResourceData = data
 	resp.DataSourceData = data
@@ -194,6 +226,9 @@ func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resour
 	for _, kind := range currentformcatalog.Kinds {
 		resources = append(resources, NewFormResource(kind))
 	}
+	// The Host API v1alpha3 lane: the eleven typed Edge Platform Family
+	// resources plus the generic exact-FormRef carrier.
+	resources = append(resources, newV3FormResources()...)
 	return resources
 }
 
@@ -231,6 +266,18 @@ func configureClient(ctx context.Context, endpoint, token string, httpClient *ht
 	return c, nil
 }
 
+// configureClientV3 negotiates the Host API v1alpha3 lane against the same
+// endpoint and token. The v1alpha3 discovery contract is strict (closed
+// api_versions, required features, same-origin endpoints), so a successful
+// Discover is the whole gate.
+func configureClientV3(ctx context.Context, endpoint, token string, httpClient *http.Client) (*clientv3.Client, error) {
+	c := clientv3.NewWithOptions(endpoint, token, httpClient, clientv3.Options{})
+	if _, err := c.Discover(ctx); err != nil {
+		return nil, fmt.Errorf("discovering Takoform v1alpha3 endpoint %q: %w", endpoint, err)
+	}
+	return c, nil
+}
+
 func providerCandidateForms() map[string]client.InstalledFormReference {
 	refs := currentformregistry.All()
 	out := make(map[string]client.InstalledFormReference, len(refs))
@@ -242,6 +289,24 @@ func providerCandidateForms() map[string]client.InstalledFormReference {
 			},
 			PackageDigest: ref.PackageDigest,
 		}
+	}
+	return out
+}
+
+// providerSupportedForms is the full Read/Observe/Update/Delete surface: every
+// exact FormRef this build can serve, including older FormRefs of the same
+// kind that are no longer the default create target.
+func providerSupportedForms() []client.InstalledFormReference {
+	refs := currentformregistry.SupportedFormRefs()
+	out := make([]client.InstalledFormReference, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, client.InstalledFormReference{
+			FormRef: client.FormRef{
+				APIVersion: ref.APIVersion, Kind: ref.Kind,
+				DefinitionVersion: ref.DefinitionVersion, SchemaDigest: ref.SchemaDigest,
+			},
+			PackageDigest: ref.PackageDigest,
+		})
 	}
 	return out
 }

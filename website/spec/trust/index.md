@@ -1,7 +1,8 @@
 # Release trust profile
 
-This directory records the D-08 trust decision for Takoform provider and Form
-Package artifacts. Requirement keywords are used as described in
+This directory records the D-08 trust decision — the owning engineering
+policy's package/provider trust decision, internal identifier D-08 — for
+Takoform provider and Form Package artifacts. Requirement keywords are used as described in
 [`../conformance.md`](../conformance.md). It does not make either artifact publishable. The
 machine-readable authority is [`profile.json`](profile.json); implementation
 and live distribution evidence must satisfy it before a release descriptor can

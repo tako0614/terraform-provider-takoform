@@ -1,0 +1,47 @@
+{
+  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "kind": "SQLiteDatabase",
+  "definitionVersion": "0.1.0",
+  "title": "SQLite Database",
+  "description": "Embedded SQLite database with serializable transactions, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token.",
+  "role": "identity",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Embedded SQLite database with serializable transactions, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token.",
+    "properties": {},
+    "title": "SQLite Database desired state",
+    "type": "object"
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh"
+  ],
+  "providedInterfaces": [
+    {
+      "apiVersion": "interfaces.takoform.com/v1alpha1",
+      "name": "edge.sql",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:92a270d639a2f607367172b9b36a1c511a9ced4ba1f79f7585b1ce3094231f24"
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-unexpected-property",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

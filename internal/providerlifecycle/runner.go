@@ -3,6 +3,7 @@ package providerlifecycle
 import (
 	"context"
 	"crypto/sha256"
+
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -302,7 +303,7 @@ func run(ctx context.Context, repoRoot, cliPath, installationSource, providerBin
 	if negativeErr == nil || !strings.Contains(negativeOutput, "changed the requested Resource name or space") {
 		return Report{}, fmt.Errorf("identity-substitution negative fixture was not rejected\n%s", negativeOutput)
 	}
-	host.setSubstitution(resourceCases[1].Kind, "packageDigest")
+	host.setSubstitution(resourceCases[1].Kind, "schemaDigest")
 	negativeFormOutput, negativeFormErr := terraformRun("plan", "-refresh-only", "-input=false", "-no-color")
 	host.setSubstitution("", "")
 	if negativeFormErr == nil || !strings.Contains(negativeFormOutput, "changed the exact FormRef/package identity") {
@@ -408,11 +409,24 @@ func validateReportAgainst(report Report, installationSource string, cases []res
 	// The two substitution negatives must name two distinct declared Forms.
 	// Pinning which Forms would make the evidence depend on catalogue order,
 	// so the requirement is the property, not the position.
+	//
+	// The packageDigest was part of the exact Form identity fence in the
+	// provider-v1 era, so retained provider-v1 closure evidence names
+	// "response-package-digest-substitution-rejected". Current v1alpha2
+	// evidence substitutes a FormRef field (schemaDigest) instead because the
+	// packageDigest is no longer a Resource identity selector. Both names are
+	// accepted so immutable historical evidence remains verifiable.
+	const (
+		nameSubstitutionNegative = "response-name-substitution-rejected"
+		identitySubstitutionV2   = "response-schema-digest-substitution-rejected"
+		identitySubstitutionV1   = "response-package-digest-substitution-rejected"
+	)
 	expectedNegative := map[string]struct{}{
-		"response-name-substitution-rejected":           {},
-		"response-package-digest-substitution-rejected": {},
+		nameSubstitutionNegative: {},
+		identitySubstitutionV2:   {},
+		identitySubstitutionV1:   {},
 	}
-	if len(report.NegativeChecks) != len(expectedNegative) {
+	if len(report.NegativeChecks) != 2 {
 		return errors.New("provider lifecycle negative fixture is incomplete")
 	}
 	negativeKinds := map[string]struct{}{}
@@ -430,7 +444,7 @@ func validateReportAgainst(report Report, installationSource string, cases []res
 		seenNegative[evidence.Name] = struct{}{}
 		negativeKinds[evidence.Kind] = struct{}{}
 	}
-	if len(negativeKinds) != len(expectedNegative) {
+	if len(negativeKinds) != 2 {
 		return errors.New("provider lifecycle substitution negatives did not cover two distinct Forms")
 	}
 	immutablePointers := immutableFieldPointers(kinds)
@@ -1898,10 +1912,10 @@ func (h *formHost) maybeSubstitute(resource client.Resource, kind string) client
 		switch h.substitutionField {
 		case "name":
 			resource.Metadata.Name = "substituted"
-		case "packageDigest":
+		case "schemaDigest":
 			if resource.Form != nil {
 				form := *resource.Form
-				form.PackageDigest = "sha256:" + strings.Repeat("f", 64)
+				form.FormRef.SchemaDigest = "sha256:" + strings.Repeat("f", 64)
 				resource.Form = &form
 			}
 		}
@@ -1994,8 +2008,8 @@ func (h *formHost) report(identity CLIIdentity, providerBinary ProviderBinaryIde
 		NegativeChecks: []NegativeEvidence{
 			{Name: "response-name-substitution-rejected", Kind: resourceCases[0].Kind,
 				Fixture: "versioned host observe response with substituted metadata.name", Passed: true},
-			{Name: "response-package-digest-substitution-rejected", Kind: resourceCases[1].Kind,
-				Fixture: "versioned host observe response with substituted exact FormRef packageDigest", Passed: true},
+			{Name: "response-schema-digest-substitution-rejected", Kind: resourceCases[1].Kind,
+				Fixture: "versioned host observe response with substituted exact FormRef schemaDigest", Passed: true},
 		},
 		ImmutableReplace: immutable,
 	}
@@ -2077,7 +2091,7 @@ func exactQuery(r *http.Request, space string, form client.InstalledFormReferenc
 	query := r.URL.Query()
 	return query.Get("space") == space && query.Get("apiVersion") == form.FormRef.APIVersion &&
 		query.Get("kind") == form.FormRef.Kind && query.Get("definitionVersion") == form.FormRef.DefinitionVersion &&
-		query.Get("schemaDigest") == form.FormRef.SchemaDigest && query.Get("packageDigest") == form.PackageDigest
+		query.Get("schemaDigest") == form.FormRef.SchemaDigest
 }
 
 func matchFence(r *http.Request, version string) bool {

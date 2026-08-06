@@ -1,0 +1,673 @@
+{
+  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "kind": "WorkerVersion",
+  "definitionVersion": "0.1.0",
+  "title": "Worker Version",
+  "description": "Immutable executable snapshot of one Module Worker: a bundle, a runtime compatibility date, declared handlers, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments.",
+  "role": "revision",
+  "desiredSchema": {
+    "$defs": {
+      "jsonValueDepth1": {
+        "additionalProperties": {
+          "$ref": "#/$defs/jsonValueDepth2"
+        },
+        "items": {
+          "$ref": "#/$defs/jsonValueDepth2"
+        },
+        "maxItems": 64,
+        "maxLength": 8192,
+        "maxProperties": 64,
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": [
+          "array",
+          "boolean",
+          "null",
+          "number",
+          "object",
+          "string"
+        ]
+      },
+      "jsonValueDepth2": {
+        "additionalProperties": {
+          "$ref": "#/$defs/jsonValueDepth3"
+        },
+        "items": {
+          "$ref": "#/$defs/jsonValueDepth3"
+        },
+        "maxItems": 64,
+        "maxLength": 8192,
+        "maxProperties": 64,
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": [
+          "array",
+          "boolean",
+          "null",
+          "number",
+          "object",
+          "string"
+        ]
+      },
+      "jsonValueDepth3": {
+        "additionalProperties": {
+          "$ref": "#/$defs/jsonValueDepth4"
+        },
+        "items": {
+          "$ref": "#/$defs/jsonValueDepth4"
+        },
+        "maxItems": 64,
+        "maxLength": 8192,
+        "maxProperties": 64,
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": [
+          "array",
+          "boolean",
+          "null",
+          "number",
+          "object",
+          "string"
+        ]
+      },
+      "jsonValueDepth4": {
+        "additionalProperties": {
+          "$ref": "#/$defs/jsonValueDepth5"
+        },
+        "items": {
+          "$ref": "#/$defs/jsonValueDepth5"
+        },
+        "maxItems": 64,
+        "maxLength": 8192,
+        "maxProperties": 64,
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": [
+          "array",
+          "boolean",
+          "null",
+          "number",
+          "object",
+          "string"
+        ]
+      },
+      "jsonValueDepth5": {
+        "additionalProperties": {
+          "$ref": "#/$defs/jsonValueDepth6"
+        },
+        "items": {
+          "$ref": "#/$defs/jsonValueDepth6"
+        },
+        "maxItems": 64,
+        "maxLength": 8192,
+        "maxProperties": 64,
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": [
+          "array",
+          "boolean",
+          "null",
+          "number",
+          "object",
+          "string"
+        ]
+      },
+      "jsonValueDepth6": {
+        "additionalProperties": {
+          "$ref": "#/$defs/jsonValueDepth7"
+        },
+        "items": {
+          "$ref": "#/$defs/jsonValueDepth7"
+        },
+        "maxItems": 64,
+        "maxLength": 8192,
+        "maxProperties": 64,
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": [
+          "array",
+          "boolean",
+          "null",
+          "number",
+          "object",
+          "string"
+        ]
+      },
+      "jsonValueDepth7": {
+        "additionalProperties": {
+          "$ref": "#/$defs/jsonValueDepth8"
+        },
+        "items": {
+          "$ref": "#/$defs/jsonValueDepth8"
+        },
+        "maxItems": 64,
+        "maxLength": 8192,
+        "maxProperties": 64,
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": [
+          "array",
+          "boolean",
+          "null",
+          "number",
+          "object",
+          "string"
+        ]
+      },
+      "jsonValueDepth8": {
+        "maxLength": 8192,
+        "type": [
+          "boolean",
+          "null",
+          "number",
+          "string"
+        ]
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Immutable executable snapshot of one Module Worker: a bundle, a runtime compatibility date, declared handlers, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments.",
+    "properties": {
+      "bucketBindings": {
+        "description": "Typed module-worker.object-bucket bindings projecting the edge.objects API.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string"
+            },
+            "resource": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "ObjectBucket",
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 63,
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "name",
+            "resource"
+          ],
+          "type": "object"
+        },
+        "maxItems": 64,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "bundle": {
+        "additionalProperties": false,
+        "description": "Worker Bundle carrying the exact module bytes this version executes.",
+        "properties": {
+          "kind": {
+            "const": "WorkerBundle",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]{0,62}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "type": "object"
+      },
+      "compatibilityDate": {
+        "description": "Runtime compatibility date fixing default runtime behavior for this version.",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "type": "string"
+      },
+      "compatibilityFlags": {
+        "description": "Closed runtime compatibility flags enabled for this version.",
+        "items": {
+          "enum": [
+            "nodejs_compat"
+          ],
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "handlers": {
+        "description": "Module event handlers this version exports. A host rejects an attachment whose event kind is not declared here.",
+        "items": {
+          "enum": [
+            "fetch",
+            "scheduled",
+            "queue",
+            "tail"
+          ],
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "kvBindings": {
+        "description": "Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string"
+            },
+            "resource": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "EdgeKVNamespace",
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 63,
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "name",
+            "resource"
+          ],
+          "type": "object"
+        },
+        "maxItems": 64,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "queueProducerBindings": {
+        "description": "Typed module-worker.queue-producer bindings projecting only send and sendBatch.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string"
+            },
+            "resource": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "AtLeastOnceQueue",
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 63,
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "name",
+            "resource"
+          ],
+          "type": "object"
+        },
+        "maxItems": 64,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "requiredSensitiveVars": {
+        "description": "Names of sensitive values this version requires the host to supply out-of-band. Only the names are portable state; values travel through each host's own sealed path.",
+        "items": {
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "serviceBindings": {
+        "description": "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string"
+            },
+            "resource": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "ModuleWorker",
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 63,
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "name",
+            "resource"
+          ],
+          "type": "object"
+        },
+        "maxItems": 64,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "sqliteBindings": {
+        "description": "Typed module-worker.sqlite bindings projecting the edge.sql API.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string"
+            },
+            "resource": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "SQLiteDatabase",
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 63,
+                  "minLength": 1,
+                  "pattern": "^[a-z][a-z0-9-]{0,62}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "name",
+            "resource"
+          ],
+          "type": "object"
+        },
+        "maxItems": 64,
+        "type": "array",
+        "uniqueItems": true
+      },
+      "vars": {
+        "additionalProperties": {
+          "$ref": "#/$defs/jsonValueDepth1"
+        },
+        "description": "Non-secret configuration values projected into the module environment. Sensitive material never enters portable state.",
+        "maxProperties": 64,
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+          "type": "string",
+          "x-takoform-fieldPolicy": "portable-data-only-v1"
+        },
+        "type": "object"
+      },
+      "worker": {
+        "additionalProperties": false,
+        "description": "Module Worker identity this version belongs to.",
+        "properties": {
+          "kind": {
+            "const": "ModuleWorker",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]{0,62}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "bundle",
+      "compatibilityDate",
+      "handlers",
+      "worker"
+    ],
+    "title": "Worker Version desired state",
+    "type": "object"
+  },
+  "immutableFields": [
+    "/bucketBindings",
+    "/bundle",
+    "/compatibilityDate",
+    "/compatibilityFlags",
+    "/handlers",
+    "/kvBindings",
+    "/queueProducerBindings",
+    "/requiredSensitiveVars",
+    "/serviceBindings",
+    "/sqliteBindings",
+    "/vars",
+    "/worker"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "providedInterfaces": [
+    {
+      "apiVersion": "interfaces.takoform.com/v1alpha1",
+      "name": "worker.service",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:8beedb6fa4399836c24afa0a7adb17fbe13e8bc705b86441dc210e7614c95507"
+    }
+  ],
+  "acceptedBindings": [
+    {
+      "apiVersion": "bindings.takoform.com/v1alpha1",
+      "name": "module-worker.edge-kv",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:e5ae1b382e0abfd2306ff6eb79e170e8e638ccc2b816f8d27af019947363461a"
+    },
+    {
+      "apiVersion": "bindings.takoform.com/v1alpha1",
+      "name": "module-worker.object-bucket",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:1e71e12cc53248d4f7c1e99fa9c1726d5cd7eaad0a876ffd3d109355218d43bc"
+    },
+    {
+      "apiVersion": "bindings.takoform.com/v1alpha1",
+      "name": "module-worker.sqlite",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:39e32924cb119fc59a3adf1c3e3db2d78b23ec3adf13034ba973e3439e0250f6"
+    },
+    {
+      "apiVersion": "bindings.takoform.com/v1alpha1",
+      "name": "module-worker.queue-producer",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:58688098edfd77587d1e3f33a9adfc8bd082ab6c13cdc57720a52158757ae057"
+    },
+    {
+      "apiVersion": "bindings.takoform.com/v1alpha1",
+      "name": "module-worker.service",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:9d7250946c1229919f44c0ba7665f925c7aa5f7b55e4af15f55317d01129dc5a"
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-unexpected-property",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-worker",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-worker.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-bundle",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-bundle.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-compatibility-date",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-compatibility-date.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-handlers",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-handlers.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-worker",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-worker.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-bundle",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-bundle.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-compatibility-date",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-compatibility-date.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-compatibility-flags",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-compatibility-flags.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-handlers",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-handlers.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-vars",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-vars.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-required-sensitive-vars",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-required-sensitive-vars.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-kv-bindings-binding-name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-kv-bindings-binding-name.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-bucket-bindings-binding-name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-bucket-bindings-binding-name.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-sqlite-bindings-binding-name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-sqlite-bindings-binding-name.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-queue-producer-bindings-binding-name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-queue-producer-bindings-binding-name.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-service-bindings-binding-name",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-service-bindings-binding-name.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/operations/v1alpha1/operation.schema.json",
+  "title": "Takoform long-running Operation v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "id", "done"],
+  "properties": {
+    "apiVersion": {
+      "const": "operations.takoform.com/v1alpha1"
+    },
+    "kind": {
+      "const": "Operation"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^op_[A-Za-z0-9][A-Za-z0-9._-]{0,124}$"
+    },
+    "done": {
+      "type": "boolean"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "manifestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Z][A-Za-z0-9]{0,63}$"
+        },
+        "progress": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "description": "Present only when done is true and the operation succeeded. Contains the terminal representation, for example { \"resource\": { ... } } validated against the owning wire schema."
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "hostCode": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Present only when done is true and the operation failed."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "done": {
+            "const": false
+          }
+        },
+        "required": ["done"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [{ "required": ["result"] }, { "required": ["error"] }]
+        }
+      }
+    },
+    {
+      "not": {
+        "required": ["result", "error"]
+      }
+    }
+  ]
+}

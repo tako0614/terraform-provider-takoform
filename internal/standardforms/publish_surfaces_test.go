@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
@@ -18,9 +19,18 @@ func TestPublishedSurfaceManifestCoversCatalogExactly(t *testing.T) {
 		expected[filepath.ToSlash(filepath.Join("docs", "resources", docBasename(kind)))] = struct{}{}
 		expected[filepath.ToSlash(filepath.Join("examples", "resources", kind.ResourceType, "resource.tf"))] = struct{}{}
 	}
+	for _, form := range edgeformcatalog.Forms {
+		expected[filepath.ToSlash(filepath.Join("docs", "resources", v3DocBasename(form)))] = struct{}{}
+		expected[filepath.ToSlash(filepath.Join("examples", "resources", form.ResourceType, "resource.tf"))] = struct{}{}
+	}
+	// The generic takoform_resource carrier has no Form Definition, so its two
+	// surfaces are authored in the renderer instead of derived from a catalog.
+	expected["docs/resources/resource.md"] = struct{}{}
+	expected["examples/resources/takoform_resource/resource.tf"] = struct{}{}
 	surfaces := renderPublishedSurfaces()
-	if len(surfaces) != 2*len(currentformcatalog.Kinds)+1 {
-		t.Fatalf("published surface count = %d, want %d", len(surfaces), 2*len(currentformcatalog.Kinds)+1)
+	wantCount := 2*(len(currentformcatalog.Kinds)+len(edgeformcatalog.Forms)+1) + 1
+	if len(surfaces) != wantCount {
+		t.Fatalf("published surface count = %d, want %d", len(surfaces), wantCount)
 	}
 	for _, surface := range surfaces {
 		if _, ok := expected[surface.path]; !ok {

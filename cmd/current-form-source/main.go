@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -17,7 +18,12 @@ type sourceForm struct {
 	ProposalID string                     `json:"proposalId"`
 	Slug       string                     `json:"slug"`
 	Definition formpackage.FormDefinition `json:"definition"`
-	Fixtures   map[string]map[string]any  `json:"fixtures"`
+	// DefinitionJSON is the exact indented JSON text of Definition. The
+	// candidate writer consumes this verbatim so large integer schema values
+	// (for example the generation maximum 9223372036854775807) survive the
+	// JavaScript pipeline without IEEE 754 float64 rounding.
+	DefinitionJSON string                    `json:"definitionJson"`
+	Fixtures       map[string]map[string]any `json:"fixtures"`
 }
 
 func main() {
@@ -68,18 +74,37 @@ func render(kind formcatalog.Kind) (sourceForm, error) {
 		Name: "reject-observed-foreign-kind-id", Stage: "observed", InputPath: observedPath,
 		ExpectedFailure: "schema_validation_failed",
 	})
+	definition := formpackage.FormDefinition{
+		APIVersion: formpackage.CurrentFormAPIVersion, Kind: kind.Kind,
+		DefinitionVersion: kind.DefinitionVersion, Title: kind.Title,
+		Description:   kind.Description,
+		DesiredSchema: kind.DesiredSchema(), ObservedSchema: kind.ObservedSchema(),
+		OutputSchema: kind.OutputSchema(), ImmutableFields: kind.ImmutableFields(),
+		LifecycleCapabilities: []string{"create", "read", "update", "delete", "import", "observe", "refresh", "drift"},
+		Interfaces:            kind.InterfaceDescriptors(),
+		ConformanceFixtures:   []formpackage.ConformanceFixture{{Name: "canonical", DesiredPath: "fixtures/desired.json", ObservedPath: "fixtures/observed.json", OutputPath: "fixtures/output.json"}},
+		NegativeFixtures:      negative,
+	}
+	definitionJSON, err := marshalIndented(definition)
+	if err != nil {
+		return sourceForm{}, fmt.Errorf("%s: %w", kind.Kind, err)
+	}
 	return sourceForm{
 		Kind: kind.Kind, ProposalID: kind.ProposalID, Slug: kind.Slug, Fixtures: fixtures,
-		Definition: formpackage.FormDefinition{
-			APIVersion: formpackage.CurrentFormAPIVersion, Kind: kind.Kind,
-			DefinitionVersion: kind.DefinitionVersion, Title: kind.Title,
-			Description:   kind.Description,
-			DesiredSchema: kind.DesiredSchema(), ObservedSchema: kind.ObservedSchema(),
-			OutputSchema: kind.OutputSchema(), ImmutableFields: kind.ImmutableFields(),
-			LifecycleCapabilities: []string{"create", "read", "update", "delete", "import", "observe", "refresh", "drift"},
-			Interfaces:            kind.InterfaceDescriptors(),
-			ConformanceFixtures:   []formpackage.ConformanceFixture{{Name: "canonical", DesiredPath: "fixtures/desired.json", ObservedPath: "fixtures/observed.json", OutputPath: "fixtures/output.json"}},
-			NegativeFixtures:      negative,
-		},
+		Definition: definition, DefinitionJSON: definitionJSON,
 	}, nil
+}
+
+// marshalIndented renders value as two-space-indented JSON text with HTML
+// escaping disabled, matching the JSON text the candidate writer emits. The
+// trailing newline mirrors the previous JavaScript writer output.
+func marshalIndented(value any) (string, error) {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetIndent("", "  ")
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		return "", err
+	}
+	return buffer.String(), nil
 }
