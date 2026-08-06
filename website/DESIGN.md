@@ -43,9 +43,9 @@ uses text or symbols so colour is never the only distinction.
 
 ## Spacing
 
-A 4-point named scale lives in `public/tokens.css`. Page CSS uses only named
-tokens. Major sections vary their vertical rhythm; repeated equal card padding
-is not part of this system.
+A 4-point named scale is expressed through the VitePress spacing tokens used
+in the theme CSS. Major sections vary their vertical rhythm; repeated equal
+card padding is not part of this system.
 
 ## Motion
 
@@ -61,7 +61,8 @@ is not part of this system.
 - Pointer hover exists only where the same affordance works by focus/tap.
 - Touch targets are at least 44 CSS pixels.
 - The language toggle changes content in place and preserves the selected
-  language; it does not announce a success toast.
+  language; it does not announce a success toast. The site is built with
+  VitePress i18n: English at `/`, Japanese at `/ja/`.
 
 ## CTA voice
 
@@ -99,9 +100,9 @@ is not part of this system.
 
 ## Exports
 
-`public/tokens.css` is the executable source of truth. The equivalent portable
-formats are recorded below for consumers; this vanilla site does not execute
-Tailwind, DTCG, or shadcn configuration.
+`.vitepress/theme/custom.css` is the executable source of truth. The equivalent
+portable formats are recorded below for consumers; this VitePress site does not
+execute Tailwind, DTCG, or shadcn configuration.
 
 ### Tailwind v4 `@theme`
 

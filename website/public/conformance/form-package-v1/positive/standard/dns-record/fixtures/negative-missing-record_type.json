@@ -1,0 +1,17 @@
+{
+  "connections": {
+    "parent": {
+      "permissions": [
+        "administer"
+      ],
+      "projection": "dns.zone.v1",
+      "resource": "DnsZone/primary"
+    }
+  },
+  "name": "dns-record",
+  "recordName": "api",
+  "ttlSeconds": 300,
+  "values": [
+    "service.portable-conformance.invalid"
+  ]
+}

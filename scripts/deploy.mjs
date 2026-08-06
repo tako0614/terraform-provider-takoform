@@ -14,7 +14,13 @@
 //
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
@@ -83,6 +89,7 @@ const SITE = {
   authorityGate: "check:public-authority",
   gate: "check:public-surfaces",
   snapshotGate: "check:public-snapshot",
+  websiteGate: "check:website-snapshot",
   url: "https://takoform.com",
 };
 const PUBLICATION_PATHS = [SITE.config, SITE.assets];
@@ -112,6 +119,7 @@ const CONTRACT = {
         SITE.gate,
         SITE.authorityGate,
         SITE.snapshotGate,
+        SITE.websiteGate,
       ],
       requiresTools: ["git", "bun", "go", "node", "tar"],
       requiresEnv: [CLOUDFLARE_ACCOUNT_ENV, CLOUDFLARE_ZONE_ENV],
@@ -119,7 +127,7 @@ const CONTRACT = {
       // 持ちません。ただし schema $id は consumer が固定する公開 identity です。
       triggers: ["irreversible", "authority", "published-identity"],
       obligations: {
-        provenance: `refuses a dirty or shallow worktree, rejects ignored and untracked publication files, requires main HEAD to equal a fresh read of the canonical HTTPS origin/main ref, creates both an isolated git-archive content snapshot and an independent non-local detached Git authority clone of that exact commit, and removes the clone's remote. The source-retained publication/admission authority gate runs only in the frozen clone; the static public-surface gate, credential scan, digest manifest, and Wrangler input run only in the archive. Both roots are hardened and re-hashed before and after validation and again before every writer. Every archive byte is also proved against its Git blob. Wrangler is installed from the exact committed lock and executed through the fixed absolute Node entrypoint, bypassing PATH and its environment shebang. \`bun run ${SITE.gate}\` remains the composite source gate, while the repository-wide \`bun run check\` remains separate handoff evidence because its other Go and OpenTofu checks do not validate these static bytes.`,
+        provenance: `refuses a dirty or shallow worktree, rejects ignored and untracked publication files, requires main HEAD to equal a fresh read of the canonical HTTPS origin/main ref, creates both an isolated git-archive content snapshot and an independent non-local detached Git authority clone of that exact commit, and removes the clone's remote. The source-retained publication/admission authority gate runs only in the frozen clone; the static public-surface gate, credential scan, digest manifest, and Wrangler input run only in the archive. The committed website output is re-derived by a fresh VitePress build from the same frozen commit, using the pinned lock installed in a managed home outside the archive, and must reproduce every committed page semantically; the build output itself never enters the archive. Both roots are hardened and re-hashed before and after validation and again before every writer. Every archive byte is also proved against its Git blob. Wrangler is installed from the exact committed lock and executed through the fixed absolute Node entrypoint, bypassing PATH and its environment shebang. \`bun run ${SITE.gate}\` remains the composite source gate, while the repository-wide \`bun run check\` remains separate handoff evidence because its other Go and OpenTofu checks do not validate these static bytes.`,
         "post-conditions": `requires the exact three-domain Cloudflare control-plane closure, queries every hostname independently, and reads back ${SITE.url}/, the www root, docs, spec, sitemap, static assets, the custom 404 body/status, and every normative schema $id with the exact committed digest`,
         reversal: `the current version id is read and printed before publishing. A previous version may be restored with \`wrangler versions deploy <previous-id>@100%\` only after proving it still serves every already-minted schema $id byte-for-byte. An initial origin mint or append-only identity mint has no schema-safe rollback to a version without those identities; repair it forward while preserving the minted bytes.`,
         "failure-handling":
@@ -594,6 +602,78 @@ try {
 } catch (error) {
   process.stderr.write(`${error.stdout ?? ""}${error.stderr ?? ""}\n`);
   die("the public snapshot gate failed before publication; production is unchanged");
+}
+
+// VitePress/Vue scoped-style hashes depend on the absolute build path, so a
+// byte-for-byte rebuild comparison is impossible. This step instead proves
+// that the committed website output is not stale: a fresh pinned build, run in
+// a managed install home outside the archive, must reproduce every committed
+// page semantically. The source copy is first proved equal to the frozen
+// commit's Git blobs via the committed publication manifest.
+process.stdout.write(`\n==> verifying the committed website dist with a fresh pinned build\n`);
+let websiteBuildHome;
+try {
+  websiteBuildHome = resolve(publicationRepo, "..", "website-build-home");
+  mkdirSync(websiteBuildHome, { mode: 0o700 });
+  const siteRoot = join(websiteBuildHome, "site");
+  const copiedPrefixes = [
+    "package.json",
+    "bun.lock",
+    "scripts/check-website-dist.mjs",
+    "website",
+  ];
+  for (const prefix of copiedPrefixes) {
+    cpSync(join(publicationRepo, prefix), join(siteRoot, prefix), {
+      recursive: true,
+    });
+  }
+  const copiedEntries = committedPublicationManifest.entries.filter((entry) =>
+    copiedPrefixes.some(
+      (prefix) =>
+        entry.path === prefix || entry.path.startsWith(`${prefix}/`),
+    ),
+  );
+  if (copiedEntries.length === 0) {
+    throw new Error("no website source entries in the committed publication manifest");
+  }
+  assertPublicationManifest(
+    { sha256: "website-source-copy", entries: copiedEntries },
+    createPublicationManifestFromEntries(siteRoot, copiedEntries),
+  );
+  const websiteGateEnvironment = createHardenedGateEnvironment(
+    process.env,
+    process.execPath,
+    websiteBuildHome,
+  );
+  process.stdout.write(
+    run(process.execPath, ["install", "--frozen-lockfile"], {
+      cwd: siteRoot,
+      environment: websiteGateEnvironment,
+    }),
+  );
+  process.stdout.write(
+    run(
+      process.execPath,
+      ["--config=/dev/null", "--no-env-file", "run", SITE.websiteGate],
+      {
+        cwd: siteRoot,
+        environment: websiteGateEnvironment,
+      },
+    ),
+  );
+  assertPublicationManifest(
+    verifiedPublicationManifest,
+    createPublicationManifest(publicationRepo, VERIFIED_SNAPSHOT_PATHS),
+  );
+} catch (error) {
+  process.stderr.write(`${error.stdout ?? ""}${error.stderr ?? ""}\n`);
+  die(
+    "the website fresh-build gate failed before publication; production is unchanged",
+  );
+} finally {
+  if (websiteBuildHome !== undefined) {
+    rmSync(websiteBuildHome, { force: true, recursive: true });
+  }
 }
 
 let schemaIdentities;
@@ -1412,11 +1492,11 @@ const readbackTargets = [
     status: 200,
     url: "https://www.takoform.com/",
   },
-  ...[
+  ...[ 
     ["docs/index.html", "/docs/"],
     ["spec/index.html", "/spec/"],
     ["ja/index.html", "/ja/"],
-    ["styles.css", "/styles.css"],
+    ["hashmap.json", "/hashmap.json"],
     ["robots.txt", "/robots.txt"],
     ["sitemap.xml", "/sitemap.xml"],
     ["tako.png", "/tako.png"],

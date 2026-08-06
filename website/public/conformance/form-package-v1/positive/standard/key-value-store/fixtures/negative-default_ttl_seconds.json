@@ -1,0 +1,5 @@
+{
+  "consistency": "eventual",
+  "defaultTtlSeconds": -1,
+  "name": "key-value-store"
+}

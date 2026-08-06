@@ -1,0 +1,452 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/v1alpha2/host-api-wire.schema.json",
+  "title": "Takoform portable host API wire envelopes v1alpha2",
+  "$ref": "#/$defs/resourceResponse",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "credentialFreeHTTPSURL": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\\s\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff?#]*)?$",
+      "description": "Absolute credential-free HTTPS URI with a dotted ASCII hostname, optional numeric port and path, and no userinfo, query, or fragment."
+    },
+    "spaceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "allOf": [
+        {
+          "not": {
+            "pattern": "^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+          }
+        },
+        {
+          "not": {
+            "pattern": "[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]$"
+          }
+        },
+        {
+          "not": {
+            "pattern": "[/\u0000-\u001f\u007f-\u009f]"
+          }
+        }
+      ],
+      "description": "Case-sensitive opaque SpaceID. It is valid UTF-8 containing 1..255 Unicode code points. Hosts and clients preserve the exact value without trimming, normalization, or case folding. Embedded whitespace is data; leading or trailing Unicode White_Space code points or U+FEFF, C0/C1 control characters, and slash are forbidden."
+    },
+    "installedFormReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formRef", "packageDigest"],
+      "properties": {
+        "formRef": {
+          "$ref": "https://forms.takoform.com/schemas/v1alpha2/form-ref.schema.json"
+        },
+        "packageDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "resourceMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "space"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z][a-z0-9-]{0,62}$"
+        },
+        "space": {
+          "$ref": "#/$defs/spaceId"
+        },
+        "resourceVersion": {
+          "$ref": "#/$defs/resourceVersion"
+        }
+      }
+    },
+    "responseMetadata": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceMetadata"
+        },
+        {
+          "required": ["resourceVersion"]
+        }
+      ]
+    },
+    "resourceVersion": {
+      "type": "string",
+      "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-7])$",
+      "description": "Canonical positive-decimal desired-state generation in the inclusive range 1..9223372036854775807. The ETag is this exact value surrounded by one pair of double quotes."
+    },
+    "resourceCore": {
+      "type": "object",
+      "required": ["apiVersion", "kind", "form", "metadata", "spec"],
+      "properties": {
+        "apiVersion": {
+          "const": "forms.takoform.com/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]{0,63}$",
+          "x-takoform-equals": "/form/formRef/kind"
+        },
+        "form": {
+          "$ref": "#/$defs/installedFormReference"
+        },
+        "metadata": {
+          "$ref": "#/$defs/resourceMetadata"
+        },
+        "spec": {
+          "type": "object",
+          "x-takoform-validatesAgainst": "installed Form Definition desiredSchema"
+        }
+      }
+    },
+    "resourceRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceCore"
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "resourceStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed"],
+      "properties": {
+        "observed": {
+          "type": "object",
+          "x-takoform-validatesAgainst": "installed Form Definition observedSchema"
+        },
+        "output": {
+          "type": "object",
+          "x-takoform-validatesAgainst": "installed Form Definition outputSchema",
+          "x-takoform-requiredWhen": "installed Form Definition declares outputSchema",
+          "x-takoform-omittedWhen": "installed Form Definition does not declare outputSchema"
+        }
+      }
+    },
+    "resourceResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceCore"
+        },
+        {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "metadata": {
+              "$ref": "#/$defs/responseMetadata"
+            },
+            "status": {
+              "$ref": "#/$defs/resourceStatus"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planDigest", "specDigest"],
+      "properties": {
+        "planDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "specDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "previewResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource", "review"],
+      "properties": {
+        "resource": {
+          "$ref": "#/$defs/resourceRequest"
+        },
+        "review": {
+          "$ref": "#/$defs/review"
+        }
+      }
+    },
+    "applyRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceCore"
+        },
+        {
+          "type": "object",
+          "required": ["review"],
+          "properties": {
+            "review": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["planDigest"],
+              "properties": {
+                "planDigest": {
+                  "$ref": "#/$defs/digest"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "importRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceCore"
+        },
+        {
+          "type": "object",
+          "required": ["nativeId"],
+          "properties": {
+            "nativeId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "resourceEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource"],
+      "properties": {
+        "resource": {
+          "$ref": "#/$defs/resourceResponse"
+        }
+      }
+    },
+    "formAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "definitionKnown",
+        "installed",
+        "executable",
+        "activated",
+        "availableToPrincipal",
+        "operations"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/installedFormReference"
+        },
+        "definitionKnown": {
+          "type": "boolean"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "executable": {
+          "type": "boolean"
+        },
+        "activated": {
+          "type": "boolean"
+        },
+        "availableToPrincipal": {
+          "type": "boolean"
+        },
+        "operations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["create", "read", "update", "delete", "import", "observe", "refresh"]
+          }
+        },
+        "deprecated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "formsResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forms"],
+      "properties": {
+        "forms": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/$defs/formAvailability"
+          }
+        }
+      }
+    },
+    "formDefinitionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "desiredSchema"],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/installedFormReference"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "desiredSchema": {
+          "type": "object"
+        }
+      },
+      "x-takoform-validatesAgainst": "the exact retained current Form Definition desiredSchema"
+    },
+    "interfaceResourceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]{0,63}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z][a-z0-9-]{0,62}$"
+        }
+      }
+    },
+    "interfaceDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "resource", "document", "values"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "resource": {
+          "$ref": "#/$defs/interfaceResourceReference"
+        },
+        "document": {
+          "type": "object",
+          "x-takoform-portableDataOnly": true
+        },
+        "values": {
+          "type": "object",
+          "x-takoform-portableDataOnly": true
+        },
+        "resourceUri": {
+          "$ref": "#/$defs/credentialFreeHTTPSURL"
+        },
+        "form": {
+          "$ref": "#/$defs/installedFormReference"
+        }
+      }
+    },
+    "interfacesResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interfaces"],
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interfaceDeclaration"
+          }
+        }
+      }
+    },
+    "errorBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "requestId", "retryable"],
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_argument",
+            "unauthenticated",
+            "permission_denied",
+            "form_unknown",
+            "form_not_installed",
+            "form_unavailable",
+            "form_identity_conflict",
+            "resource_not_found",
+            "resource_version_conflict",
+            "resource_busy",
+            "import_conflict",
+            "policy_denied",
+            "backend_unavailable",
+            "interface_identity_ambiguous",
+            "interface_instance_ambiguous",
+            "internal_error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "hostCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": true
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "not": {
+                  "enum": ["resource_busy", "backend_unavailable"]
+                }
+              }
+            },
+            "required": ["code"]
+          },
+          "then": {
+            "properties": {
+              "retryable": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "errorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error"],
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/errorBody"
+        }
+      }
+    }
+  }
+}

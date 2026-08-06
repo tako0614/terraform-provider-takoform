@@ -1,0 +1,4 @@
+{
+  "defaultTtlSeconds": 3600,
+  "domain": "portable-conformance.invalid"
+}

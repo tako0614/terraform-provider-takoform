@@ -1,0 +1,8 @@
+{
+  "indexedAttributes": [
+    "status"
+  ],
+  "name": "indexed-store",
+  "partitionKey": "tenantId",
+  "sortKey": "createdAt"
+}

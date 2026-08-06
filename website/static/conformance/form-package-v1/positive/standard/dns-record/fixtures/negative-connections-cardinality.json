@@ -1,0 +1,25 @@
+{
+  "connections": {
+    "overflow1": {
+      "permissions": [
+        "administer"
+      ],
+      "projection": "dns.zone.v1",
+      "resource": "DnsZone/primary"
+    },
+    "parent": {
+      "permissions": [
+        "administer"
+      ],
+      "projection": "dns.zone.v1",
+      "resource": "DnsZone/primary"
+    }
+  },
+  "name": "dns-record",
+  "recordName": "api",
+  "recordType": "CNAME",
+  "ttlSeconds": 300,
+  "values": [
+    "service.portable-conformance.invalid"
+  ]
+}

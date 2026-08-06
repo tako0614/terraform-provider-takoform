@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "StreamTopic/stream-topic",
+  "kind": "StreamTopic",
+  "name": "stream-topic",
+  "portability": "portable"
+}

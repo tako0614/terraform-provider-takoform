@@ -1,0 +1,15 @@
+{
+  "burst": 100,
+  "connections": {
+    "subject": {
+      "permissions": [
+        "administer"
+      ],
+      "projection": "http.route.v1",
+      "resource": "HttpRoute/http-route"
+    }
+  },
+  "name": "rate-limit-policy",
+  "requestsPerMinute": 600,
+  "scope": "client"
+}

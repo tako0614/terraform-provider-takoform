@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "KeyValueStore/key-value-store",
+  "kind": "KeyValueStore",
+  "name": "key-value-store",
+  "portability": "portable"
+}

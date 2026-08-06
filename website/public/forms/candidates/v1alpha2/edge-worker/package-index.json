@@ -1,0 +1,115 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha3",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "forms.takoform.com/v1alpha2",
+    "kind": "EdgeWorker",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:226d21f90c739cd749fe41525d4fc3ddd848938aa270df1fdf10f273d8d4e0f8"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 10116,
+      "digest": "sha256:af6864759ebd0e9e342f2ea0bca34f64e0174916e77c8ba8fe27f26d892a6bb5"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 635,
+      "digest": "sha256:dae62da477bf29cae50fbd09360ffdad6af3181d819c2f3dd53c8a245ce280ef"
+    },
+    {
+      "path": "fixtures/negative-artifact-source.json",
+      "mediaType": "application/json",
+      "size": 576,
+      "digest": "sha256:01c0a683cf2d94241235a0f9cb1683ed7a248005c4e8d2812275545ceed34861"
+    },
+    {
+      "path": "fixtures/negative-artifact-url-fragment.json",
+      "mediaType": "application/json",
+      "size": 635,
+      "digest": "sha256:938e1835423f7420ca9470ee5d36e412a36b999d31828bd176c81533fb0a35dd"
+    },
+    {
+      "path": "fixtures/negative-artifact-url-query.json",
+      "mediaType": "application/json",
+      "size": 638,
+      "digest": "sha256:5132feb4366eb72f0254284de51168c95957b56d151060dc6c268a1f03445131"
+    },
+    {
+      "path": "fixtures/negative-artifact-url-userinfo.json",
+      "mediaType": "application/json",
+      "size": 635,
+      "digest": "sha256:b75a45cc29bd2c5b923c7e70db31e983bad5c848040244d932aec51547069bdc"
+    },
+    {
+      "path": "fixtures/negative-configuration.json",
+      "mediaType": "application/json",
+      "size": 640,
+      "digest": "sha256:4f7d111206b1e1e96c2a12858895ecf97bfc7388af989cdaedc43b35ff6661ad"
+    },
+    {
+      "path": "fixtures/negative-entrypoint.json",
+      "mediaType": "application/json",
+      "size": 638,
+      "digest": "sha256:b05be3b963c968f8831ef1910bbfb3b1d7d44d849fd951fb6c17fbe41f7326ce"
+    },
+    {
+      "path": "fixtures/negative-missing-entrypoint.json",
+      "mediaType": "application/json",
+      "size": 605,
+      "digest": "sha256:b9d6b7ddbe694f77f28e53be36e8a3a1ec20f4b96c076fc9d4d385631696e5d4"
+    },
+    {
+      "path": "fixtures/negative-missing-name.json",
+      "mediaType": "application/json",
+      "size": 610,
+      "digest": "sha256:04acde086a7e2e0f2eade02e36705620a16e60b4a5ee7b19b483d25d2d70c10c"
+    },
+    {
+      "path": "fixtures/negative-missing-runtime.json",
+      "mediaType": "application/json",
+      "size": 608,
+      "digest": "sha256:5112ab7858b710209988d6ebf74a3bf264abe654c08d78a5d6e2d9bba728656b"
+    },
+    {
+      "path": "fixtures/negative-missing-source.json",
+      "mediaType": "application/json",
+      "size": 366,
+      "digest": "sha256:87c607ebf2b041e9e2f8b407ee4d10feb6042385f8bdf3fafba33b37964acb0b"
+    },
+    {
+      "path": "fixtures/negative-observed-foreign-kind-id.json",
+      "mediaType": "application/json",
+      "size": 144,
+      "digest": "sha256:a4a2781957421b29d2e71d0f0fd9b87f89feed4341159cc0d40b693f1c9a54cc"
+    },
+    {
+      "path": "fixtures/negative-runtime.json",
+      "mediaType": "application/json",
+      "size": 638,
+      "digest": "sha256:c73f3cb913393c8ce2b430c0ade3161aeb75e1d6644116f6f7a55baa2d244d26"
+    },
+    {
+      "path": "fixtures/negative-runtime_version.json",
+      "mediaType": "application/json",
+      "size": 642,
+      "digest": "sha256:4808e5be69cedf2eb991e1162f82aa05802b3f6f5e453568367c663d4603112d"
+    },
+    {
+      "path": "fixtures/observed.json",
+      "mediaType": "application/json",
+      "size": 145,
+      "digest": "sha256:bcb6bcc9fa6cba712ebc88ab44d5f6b6a0b9a9c7b3db41ddfa0d602280758917"
+    },
+    {
+      "path": "fixtures/output.json",
+      "mediaType": "application/json",
+      "size": 134,
+      "digest": "sha256:bab3547619e3a0f8fc582b0b81da9e6702ea37cf349e0b315e95b8506ffd642c"
+    }
+  ]
+}

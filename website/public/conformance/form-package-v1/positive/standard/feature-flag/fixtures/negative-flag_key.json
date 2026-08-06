@@ -1,0 +1,5 @@
+{
+  "enabledPercentage": 25,
+  "flagKey": "not a key",
+  "name": "feature-flag"
+}

@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "DnsZone/dns-zone",
+  "kind": "DnsZone",
+  "name": "dns-zone",
+  "portability": "portable"
+}

@@ -1,0 +1,6 @@
+{
+  "action": "expire",
+  "afterDays": 90,
+  "name": "object-lifecycle-rule",
+  "prefix": "logs/"
+}

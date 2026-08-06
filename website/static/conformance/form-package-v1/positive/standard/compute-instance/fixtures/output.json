@@ -1,0 +1,7 @@
+{
+  "generation": 1,
+  "id": "ComputeInstance/compute-instance",
+  "kind": "ComputeInstance",
+  "name": "compute-instance",
+  "portability": "portable"
+}

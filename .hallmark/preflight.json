@@ -1,0 +1,10 @@
+{
+  "date": "2026-08-05",
+  "target": "website/public",
+  "framework": "vanilla HTML",
+  "font_stack": "system old-style serif and Japanese mincho display, UI/Japanese sans body, and mono; no downloaded font",
+  "palette": "named OKLCH tokens with one aka-red accent",
+  "motion": "motion-cut; no animation library",
+  "spacing": "4-point named token scale",
+  "preserve": ["dark surface", "aka-red signal accent", "bilingual overview", "static routes"]
+}

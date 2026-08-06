@@ -1,0 +1,15 @@
+{
+  "configuration": {
+    "LOG_LEVEL": "info"
+  },
+  "entrypoint": "RoomEntity",
+  "name": "stateful-entity",
+  "persistence": "transactional",
+  "runtime": "javascript",
+  "runtimeVersion": "2026.1",
+  "source": {
+    "artifactMediaType": "application/vnd.takoform.stateful-entity+tar",
+    "artifactSha256": "sha256:5d877f919bf8db6e6fd819e32f74dff6fc94b06f8914fa1abf5bcd2fb32ae958",
+    "artifactUrl": "https://builder@artifacts.portable-conformance.invalid/app.tar"
+  }
+}

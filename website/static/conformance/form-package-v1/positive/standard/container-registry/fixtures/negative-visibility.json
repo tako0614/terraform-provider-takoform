@@ -1,0 +1,5 @@
+{
+  "immutableTags": true,
+  "name": "container-registry",
+  "visibility": "internal"
+}
