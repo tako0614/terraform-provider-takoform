@@ -636,10 +636,26 @@ try {
   if (copiedEntries.length === 0) {
     throw new Error("no website source entries in the committed publication manifest");
   }
-  assertPublicationManifest(
-    { sha256: "website-source-copy", entries: copiedEntries },
-    createPublicationManifestFromEntries(siteRoot, copiedEntries),
+  const copiedDigests = new Map(
+    copiedEntries.map((entry) => [entry.path, entry.sha256]),
   );
+  const observedDigests = new Map(
+    createPublicationManifestFromEntries(siteRoot, copiedEntries).entries.map(
+      (entry) => [entry.path, entry.sha256],
+    ),
+  );
+  const drifted = [...copiedDigests.keys()]
+    .filter(
+      (path) =>
+        !observedDigests.has(path) ||
+        observedDigests.get(path) !== copiedDigests.get(path),
+    )
+    .slice(0, 20);
+  if (drifted.length > 0) {
+    throw new Error(
+      `website source copy drifted from the frozen commit: ${drifted.join(", ")}`,
+    );
+  }
   const websiteGateEnvironment = createHardenedGateEnvironment(
     process.env,
     process.execPath,
