@@ -1,0 +1,2039 @@
+package portableconformancev3
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
+)
+
+// run executes the complete ordered v1alpha3 matrix. Every named required
+// check is marked completed exactly where its evidence was actually
+// exercised over real HTTP.
+func (r *v3Runner) run() error {
+	input := r.contract.RunnerInput
+	kv := r.target(input.EdgeKvNamespace)
+	mw := r.target(input.ModuleWorker)
+	queue := r.target(input.AtLeastOnceQueue)
+	bundle := r.target(input.WorkerBundle.ResourceProbe)
+	version := r.target(input.WorkerVersion)
+
+	steps := []func() error{
+		r.checkDiscovery,
+		r.checkErrorTaxonomy,
+		func() error { return r.checkFormsAvailability(mw) },
+		func() error { return r.checkFormDefinitions(mw, kv) },
+		func() error { return r.checkValidate(mw, kv, queue) },
+		r.checkNegativeFixtures,
+		func() error { return r.checkPrepareBinding(queue) },
+		func() error { return r.checkPrepareSubstitution(queue) },
+		func() error { return r.checkApplyHeaders(kv) },
+		func() error { return r.checkCreateLifecycle(kv, mw, queue) },
+		func() error { return r.checkGenerationFences(queue) },
+		func() error { return r.checkPrepareFences(queue) },
+		func() error { return r.checkReadETags(kv, queue) },
+		func() error { return r.checkConditionReasonsClosed(kv, mw, queue) },
+		func() error { return r.checkSpaceIDGrammar(kv) },
+		func() error { return r.checkConcurrentUnrelatedMutation(kv, queue) },
+		func() error { return r.checkObserveAndStatusTouch(queue) },
+		func() error { return r.checkExpectedUID(queue) },
+		func() error { return r.checkPackageDigestNotIdentity(kv) },
+		r.checkSameKindTwoGroups,
+		func() error { return r.checkArtifacts(bundle) },
+		r.checkArtifactRejectList,
+		func() error { return r.checkWorkerVersionFlow(version, kv) },
+		r.checkHandlerGatedAttachments,
+		r.checkDeploymentWeightSum,
+		func() error { return r.checkImportFlows(kv, version) },
+		func() error { return r.checkDeleteFences(version, kv) },
+		func() error { return r.checkOperations(kv) },
+		func() error { return r.checkAsyncCommitRevalidates(kv, version) },
+		func() error { return r.checkCrossSpace(kv) },
+		r.checkSupportProfiles,
+	}
+	for _, step := range steps {
+		if err := step(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *v3Runner) checkDiscovery() error {
+	response, err := r.request(http.MethodGet, r.endpoint+r.contract.DiscoveryPath, nil, nil)
+	if err != nil {
+		return err
+	}
+	if response.Status != http.StatusOK {
+		return fmt.Errorf("discovery HTTP %d", response.Status)
+	}
+	var discovery struct {
+		APIVersions []string          `json:"api_versions"`
+		Features    map[string]bool   `json:"features"`
+		Endpoints   map[string]string `json:"endpoints"`
+	}
+	if err := decodeStrictResponse(response, &discovery); err != nil {
+		return err
+	}
+	if len(discovery.APIVersions) != 1 || discovery.APIVersions[0] != r.contract.APIVersion {
+		return fmt.Errorf("discovery api_versions = %v", discovery.APIVersions)
+	}
+	for _, feature := range []string{
+		"service_forms", "exact_form_ref", "optimistic_concurrency",
+		"idempotent_lifecycle", "operations", "artifact_upload", "support_profiles",
+	} {
+		if !discovery.Features[feature] {
+			return fmt.Errorf("discovery does not advertise features.%s", feature)
+		}
+	}
+	wantEndpoints := map[string]string{
+		"api":        r.contract.APIPath,
+		"artifacts":  r.contract.APIPath + "/artifacts",
+		"operations": r.contract.APIPath + "/operations",
+		"support":    r.contract.APIPath + "/support",
+	}
+	configured, err := url.Parse(r.endpoint)
+	if err != nil {
+		return err
+	}
+	for name, wantPath := range wantEndpoints {
+		raw := discovery.Endpoints[name]
+		if raw == "" {
+			if name == "api" {
+				return errors.New("discovery omitted endpoints.api")
+			}
+			continue
+		}
+		advertised, err := url.Parse(raw)
+		if err != nil || !advertised.IsAbs() {
+			return fmt.Errorf("discovery %s endpoint is not absolute: %q", name, raw)
+		}
+		if !strings.EqualFold(advertised.Scheme, configured.Scheme) || advertised.Host != configured.Host {
+			return fmt.Errorf("discovery %s endpoint is not same-origin: %q", name, raw)
+		}
+		if advertised.EscapedPath() != wantPath {
+			return fmt.Errorf("discovery %s endpoint path = %q, want %q", name, advertised.EscapedPath(), wantPath)
+		}
+	}
+	r.complete("discovery-exact")
+	return nil
+}
+
+func (r *v3Runner) checkErrorTaxonomy() error {
+	for _, code := range r.contract.ErrorEnvelope.Codes {
+		response, err := r.request(
+			http.MethodGet,
+			r.apiBase+"/forms",
+			map[string]string{ErrorProbeHeader: ProbeErrorPrefix + code},
+			nil,
+		)
+		if err != nil {
+			return err
+		}
+		if err := r.expectStableError(response, code); err != nil {
+			return fmt.Errorf("error probe %s: %w", code, err)
+		}
+		r.errorProbes = append(r.errorProbes, ErrorProbeEvidence{
+			Code:       code,
+			HTTPStatus: response.Status,
+			Retryable:  isAutomaticallyRetryable(code),
+		})
+	}
+	r.complete("error-envelope-taxonomy")
+	return nil
+}
+
+func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
+	response, err := r.request(
+		http.MethodGet,
+		r.apiBase+"/forms?"+r.exactQuery(target.Space, target.Ref).Encode(),
+		nil, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if response.Status != http.StatusOK {
+		return fmt.Errorf("forms HTTP %d; body=%s", response.Status, strings.TrimSpace(string(response.Body)))
+	}
+	var availability struct {
+		Forms []struct {
+			Identity struct {
+				FormRef       FormRef `json:"formRef"`
+				PackageDigest string  `json:"packageDigest,omitempty"`
+			} `json:"identity"`
+			DefinitionKnown      bool     `json:"definitionKnown"`
+			Installed            bool     `json:"installed"`
+			Executable           bool     `json:"executable"`
+			Activated            bool     `json:"activated"`
+			AvailableToPrincipal bool     `json:"availableToPrincipal"`
+			Operations           []string `json:"operations"`
+			Deprecated           bool     `json:"deprecated,omitempty"`
+		} `json:"forms"`
+	}
+	if err := decodeStrictResponse(response, &availability); err != nil {
+		return err
+	}
+	if len(availability.Forms) != 1 {
+		return fmt.Errorf("forms returned %d availabilities, want exactly 1", len(availability.Forms))
+	}
+	entry := availability.Forms[0]
+	if entry.Identity.FormRef != target.Ref {
+		return errors.New("forms availability identity is not the requested exact FormRef")
+	}
+	if entry.Identity.PackageDigest != target.PackageDigest {
+		return errors.New("forms availability packageDigest audit evidence drifted")
+	}
+	if !entry.DefinitionKnown || !entry.Installed || !entry.Executable ||
+		!entry.Activated || !entry.AvailableToPrincipal {
+		return errors.New("forms availability is not fully available")
+	}
+	for _, operation := range []string{"create", "read", "update", "delete"} {
+		found := false
+		for _, candidate := range entry.Operations {
+			if candidate == operation {
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("forms availability omits operation %s", operation)
+		}
+	}
+	// A substituted schemaDigest is a different exact Form and must be
+	// unknown, not silently resolved.
+	substituted := r.exactQuery(target.Space, target.Ref)
+	substituted.Set("schemaDigest", formpackage.DigestBytes([]byte("substituted-schema")))
+	wrongResponse, err := r.request(http.MethodGet, r.apiBase+"/forms?"+substituted.Encode(), nil, nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(wrongResponse, "form_unknown"); err != nil {
+		return err
+	}
+	r.complete("forms-exact-availability")
+	return nil
+}
+
+func (r *v3Runner) checkFormDefinitions(targets ...probeTarget) error {
+	for _, target := range targets {
+		fullURL := fmt.Sprintf(
+			"%s/form-definitions/%s/%s?%s",
+			r.apiBase,
+			escapeGroup(target.Ref.APIVersion),
+			url.PathEscape(target.Ref.Kind),
+			r.exactQuery(target.Space, target.Ref).Encode(),
+		)
+		response, err := r.request(http.MethodGet, fullURL, nil, nil)
+		if err != nil {
+			return err
+		}
+		if response.Status != http.StatusOK {
+			return fmt.Errorf("form-definition HTTP %d; body=%s", response.Status, strings.TrimSpace(string(response.Body)))
+		}
+		var definition struct {
+			Identity struct {
+				FormRef       FormRef `json:"formRef"`
+				PackageDigest string  `json:"packageDigest,omitempty"`
+			} `json:"identity"`
+			DisplayName   string         `json:"displayName,omitempty"`
+			Description   string         `json:"description,omitempty"`
+			DesiredSchema map[string]any `json:"desiredSchema"`
+		}
+		if err := decodeStrictResponse(response, &definition); err != nil {
+			return err
+		}
+		if definition.Identity.FormRef != target.Ref {
+			return errors.New("form-definition identity is not the requested exact FormRef")
+		}
+		if len(definition.DesiredSchema) == 0 {
+			return errors.New("form-definition omitted the desiredSchema")
+		}
+	}
+	r.complete("form-definition-exact")
+	return nil
+}
+
+func (r *v3Runner) validateResource(target probeTarget, spec map[string]any) (bool, int, error) {
+	document := r.resourceBody(probeTarget{
+		Ref: target.Ref, PackageDigest: target.PackageDigest,
+		Name: target.Name, Space: target.Space, Spec: spec,
+	})
+	body, err := encodeRunnerJSON(document)
+	if err != nil {
+		return false, 0, err
+	}
+	response, err := r.request(http.MethodPost, r.apiBase+"/resources/validate", nil, body)
+	if err != nil {
+		return false, 0, err
+	}
+	if response.Status != http.StatusOK {
+		return false, 0, fmt.Errorf("validate HTTP %d; body=%s", response.Status, strings.TrimSpace(string(response.Body)))
+	}
+	var result struct {
+		Valid       bool `json:"valid"`
+		Diagnostics []struct {
+			Severity string `json:"severity"`
+			Field    string `json:"field,omitempty"`
+			Message  string `json:"message"`
+		} `json:"diagnostics"`
+	}
+	if err := decodeStrictResponse(response, &result); err != nil {
+		return false, 0, err
+	}
+	if result.Diagnostics == nil {
+		return false, 0, errors.New("validate omitted diagnostics")
+	}
+	return result.Valid, len(result.Diagnostics), nil
+}
+
+func (r *v3Runner) checkValidate(targets ...probeTarget) error {
+	for _, target := range targets {
+		valid, diagnostics, err := r.validateResource(target, target.Spec)
+		if err != nil {
+			return err
+		}
+		if !valid || diagnostics != 0 {
+			return fmt.Errorf("validate rejected the canonical %s probe", target.Ref.Kind)
+		}
+	}
+	r.complete("validate-accepts-canonical")
+	return nil
+}
+
+func (r *v3Runner) checkNegativeFixtures() error {
+	byKind := map[string]probeTarget{
+		r.contract.RunnerInput.ModuleWorker.Identity.FormRef.Kind:     r.target(r.contract.RunnerInput.ModuleWorker),
+		r.contract.RunnerInput.EdgeKvNamespace.Identity.FormRef.Kind:  r.target(r.contract.RunnerInput.EdgeKvNamespace),
+		r.contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef.Kind: r.target(r.contract.RunnerInput.AtLeastOnceQueue),
+		r.contract.RunnerInput.WorkerVersion.Identity.FormRef.Kind:    r.target(r.contract.RunnerInput.WorkerVersion),
+		r.contract.RunnerInput.WorkerBundle.Identity.FormRef.Kind:     r.target(r.contract.RunnerInput.WorkerBundle.ResourceProbe),
+	}
+	for _, fixture := range r.contract.RunnerInput.NegativeFixtures {
+		target, known := byKind[fixture.Kind]
+		if !known {
+			return fmt.Errorf("negative fixture %q names an unknown probe kind", fixture.Name)
+		}
+		valid, diagnostics, err := r.validateResource(target, fixture.Input)
+		if err != nil {
+			return err
+		}
+		if valid || diagnostics == 0 {
+			return fmt.Errorf("validate accepted negative fixture %q", fixture.Name)
+		}
+		r.negativeFixtures = append(r.negativeFixtures, NegativeFixtureEvidence{
+			Name: fixture.Name, Kind: fixture.Kind, Stage: fixture.Stage, SHA256: fixture.SHA256,
+		})
+	}
+	r.complete("validate-rejects-negative-fixtures")
+	return nil
+}
+
+func (r *v3Runner) checkPrepareBinding(queue probeTarget) error {
+	prepared, err := r.prepare(queue)
+	if err != nil {
+		return err
+	}
+	wantSpecDigest, err := specCanonicalDigest(queue.Spec)
+	if err != nil {
+		return err
+	}
+	if prepared.SpecDigest != wantSpecDigest {
+		return errors.New("prepare specDigest is not the RFC 8785 canonical digest of the requested spec")
+	}
+	r.complete("prepare-binds-exact-spec")
+	return nil
+}
+
+func (r *v3Runner) checkPrepareSubstitution(queue probeTarget) error {
+	prepared, err := r.prepare(queue)
+	if err != nil {
+		return err
+	}
+	substituted := queue
+	substituted.Spec = map[string]any{"messageRetentionSeconds": 600}
+	response, err := r.apply(substituted, applyOptions{
+		Create:         true,
+		IdempotencyKey: "key-prepare-substitution",
+		PrepareDigest:  prepared.PrepareDigest,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(response, "invalid_argument"); err != nil {
+		return fmt.Errorf("prepare substitution: %w", err)
+	}
+	if err := r.expectResourceAbsent(queue); err != nil {
+		return fmt.Errorf("prepare substitution mutated state: %w", err)
+	}
+	r.complete("prepare-substitution-rejected")
+	return nil
+}
+
+func (r *v3Runner) checkApplyHeaders(kv probeTarget) error {
+	headersProbe := kv
+	headersProbe.Name = "headers-probe"
+	prepared, err := r.prepare(headersProbe)
+	if err != nil {
+		return err
+	}
+	missingKey, err := r.apply(headersProbe, applyOptions{
+		Create:             true,
+		OmitIdempotencyKey: true,
+		PrepareDigest:      prepared.PrepareDigest,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(missingKey, "invalid_argument"); err != nil {
+		return fmt.Errorf("missing Idempotency-Key: %w", err)
+	}
+	missingPrecondition, err := r.apply(headersProbe, applyOptions{
+		IdempotencyKey:   "key-headers-probe",
+		OmitPrecondition: true,
+		PrepareDigest:    prepared.PrepareDigest,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(missingPrecondition, "invalid_argument"); err != nil {
+		return fmt.Errorf("missing If-None-Match: %w", err)
+	}
+	if err := r.expectResourceAbsent(headersProbe); err != nil {
+		return fmt.Errorf("header rejection mutated state: %w", err)
+	}
+	r.complete("apply-headers-required")
+	return nil
+}
+
+func (r *v3Runner) checkCreateLifecycle(kv, mw, queue probeTarget) error {
+	// Create the KV namespace and keep the exact request for byte-replay.
+	prepared, err := r.prepare(kv)
+	if err != nil {
+		return err
+	}
+	createOptions := applyOptions{
+		Create:         true,
+		IdempotencyKey: "key-create-kv",
+		PrepareDigest:  prepared.PrepareDigest,
+	}
+	fullURL, headers, body, err := r.applyRequestParts(kv, createOptions)
+	if err != nil {
+		return err
+	}
+	createResponse, err := r.request(http.MethodPut, fullURL, headers, body)
+	if err != nil {
+		return err
+	}
+	created, err := decodeResource(createResponse, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	if err := verifyResourceIdentity(created, kv); err != nil {
+		return err
+	}
+	// The uid is host-issued and opaque: the runner asserts only the wire
+	// grammar ($defs/uid), never a host-private format.
+	if created.Metadata.UID == "" || !uidPattern.MatchString(created.Metadata.UID) {
+		return fmt.Errorf("create did not mint a grammar-valid host-issued uid, got %q", created.Metadata.UID)
+	}
+	if created.Metadata.Generation != "1" || created.Metadata.Revision != "1" {
+		return fmt.Errorf(
+			"create identity = generation %s revision %s, want 1/1",
+			created.Metadata.Generation, created.Metadata.Revision,
+		)
+	}
+	if err := verifyRevisionETag(createResponse, created.Metadata.Revision); err != nil {
+		return err
+	}
+	r.uidTransitions = append(r.uidTransitions, "create:"+created.Metadata.UID)
+	r.complete("apply-create-uid-minted")
+
+	// Exact byte replay must return the recorded response byte-for-byte.
+	replayResponse, err := r.request(http.MethodPut, fullURL, headers, body)
+	if err != nil {
+		return err
+	}
+	if replayResponse.Status != createResponse.Status ||
+		!bytes.Equal(replayResponse.Body, createResponse.Body) ||
+		replayResponse.Header.Get("ETag") != createResponse.Header.Get("ETag") {
+		return errors.New("idempotent replay was not byte-identical")
+	}
+	// The same key with a different fingerprint is a client defect.
+	mutated := kv
+	mutated.PackageDigest = formpackage.DigestBytes([]byte("fingerprint-change"))
+	conflictURL, conflictHeaders, conflictBody, err := r.applyRequestParts(mutated, createOptions)
+	if err != nil {
+		return err
+	}
+	conflictResponse, err := r.request(http.MethodPut, conflictURL, conflictHeaders, conflictBody)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(conflictResponse, "invalid_argument"); err != nil {
+		return fmt.Errorf("idempotency fingerprint conflict: %w", err)
+	}
+	r.complete("apply-idempotency-replay")
+
+	// Another principal and another tenant must not address the primary
+	// principal's cached success: their independent execution collides with
+	// the existing resource instead of replaying 201.
+	for _, token := range []string{r.alternateToken, r.alternateTenantToken} {
+		crossResponse, err := r.requestWithToken(token, http.MethodPut, fullURL, headers, body)
+		if err != nil {
+			return err
+		}
+		if err := r.expectStableError(crossResponse, "generation_conflict"); err != nil {
+			return fmt.Errorf("cross-principal idempotency isolation: %w", err)
+		}
+	}
+	r.complete("cross-principal-idempotency-isolation")
+
+	// A fresh create of an existing resource conflicts. The If-None-Match: *
+	// fence is checked before the prepare binding, so the recorded create
+	// digest is reused; a fresh create-intent prepare would itself fail closed
+	// because the target already exists.
+	conflictCreate, err := r.apply(kv, applyOptions{
+		Create:         true,
+		IdempotencyKey: "key-create-kv-again",
+		PrepareDigest:  prepared.PrepareDigest,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(conflictCreate, "generation_conflict"); err != nil {
+		return fmt.Errorf("create conflict: %w", err)
+	}
+	r.complete("create-conflict-when-exists")
+
+	// The remaining probes used by later steps.
+	if _, _, err := r.applyResource(mw, applyOptions{
+		Create: true, IdempotencyKey: "key-create-mw",
+	}, http.StatusCreated); err != nil {
+		return err
+	}
+	queueCreated, _, err := r.applyResource(queue, applyOptions{
+		Create: true, IdempotencyKey: "key-create-queue",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	r.generationTransitions = append(r.generationTransitions, "create:"+queueCreated.Metadata.Generation)
+	r.revisionTransitions = append(r.revisionTransitions, "create:"+queueCreated.Metadata.Revision)
+	return nil
+}
+
+func (r *v3Runner) checkGenerationFences(queue probeTarget) error {
+	updated := queue
+	updated.Spec = map[string]any{
+		"deliveryDelaySeconds":    60,
+		"messageRetentionSeconds": 600000,
+	}
+	resource, _, err := r.applyResource(updated, applyOptions{
+		ExpectedGeneration: "1",
+		IdempotencyKey:     "key-update-queue",
+	}, http.StatusOK)
+	if err != nil {
+		return err
+	}
+	if resource.Metadata.Generation != "2" || resource.Metadata.Revision != "2" {
+		return fmt.Errorf(
+			"spec change advanced generation/revision to %s/%s, want 2/2",
+			resource.Metadata.Generation, resource.Metadata.Revision,
+		)
+	}
+	r.generationTransitions = append(r.generationTransitions, "spec-change:"+resource.Metadata.Generation)
+	r.revisionTransitions = append(r.revisionTransitions, "spec-change:"+resource.Metadata.Revision)
+	r.complete("update-generation-fence")
+	r.complete("spec-change-bumps-generation")
+
+	// The stale-fence apply carries a prepareDigest minted under the CURRENT
+	// generation, so the rejection below is the apply fence itself.
+	stalePrepared, err := r.prepareWithFence(updated, resource.Metadata.Generation)
+	if err != nil {
+		return err
+	}
+	stale, err := r.apply(updated, applyOptions{
+		ExpectedGeneration: "1",
+		IdempotencyKey:     "key-update-queue-stale",
+		PrepareDigest:      stalePrepared.PrepareDigest,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(stale, "generation_conflict"); err != nil {
+		return fmt.Errorf("stale generation: %w", err)
+	}
+	r.complete("stale-generation-rejected")
+	return nil
+}
+
+// checkPrepareFences proves the prepare precondition ("generation-fence-when-
+// updating") and the generation binding of the prepareDigest on a dedicated
+// probe resource, leaving every other probe untouched.
+func (r *v3Runner) checkPrepareFences(queue probeTarget) error {
+	probe := queue
+	probe.Name = "prepare-fence-probe"
+	created, _, err := r.applyResource(probe, applyOptions{
+		Create: true, IdempotencyKey: "key-create-prepare-fence",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	// Prepare on an existing resource without the update fence fails closed
+	// before any digest is minted.
+	missingFence, err := r.prepareRequest(probe, nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(missingFence, "invalid_argument"); err != nil {
+		return fmt.Errorf("prepare without update fence: %w", err)
+	}
+	// A stale fence is a generation conflict.
+	staleFence, err := r.prepareRequest(probe, map[string]string{expectedGenerationHeader: "7"})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(staleFence, "generation_conflict"); err != nil {
+		return fmt.Errorf("prepare with stale fence: %w", err)
+	}
+	r.complete("prepare-requires-update-fence")
+
+	// Bind a prepare at generation N under a VALID fence...
+	oldPrepared, err := r.prepareWithFence(probe, created.Metadata.Generation)
+	if err != nil {
+		return err
+	}
+	// ...perform a real update to N+1...
+	updated := probe
+	updated.Spec = map[string]any{
+		"deliveryDelaySeconds":    30,
+		"messageRetentionSeconds": 700000,
+	}
+	afterUpdate, _, err := r.applyResource(updated, applyOptions{
+		ExpectedGeneration: created.Metadata.Generation,
+		IdempotencyKey:     "key-update-prepare-fence",
+	}, http.StatusOK)
+	if err != nil {
+		return err
+	}
+	if afterUpdate.Metadata.Generation == created.Metadata.Generation {
+		return errors.New("prepare-fence probe update did not advance the generation")
+	}
+	// ...then apply the OLD prepareDigest under a FRESH, valid fence. Both
+	// digests bind the same spec, so the invalid_argument below is exactly the
+	// cross-generation prepare binding — and it fails before mutation.
+	staleApply, err := r.apply(probe, applyOptions{
+		ExpectedGeneration: afterUpdate.Metadata.Generation,
+		IdempotencyKey:     "key-stale-prepare-apply",
+		PrepareDigest:      oldPrepared.PrepareDigest,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(staleApply, "invalid_argument"); err != nil {
+		return fmt.Errorf("stale prepareDigest apply: %w", err)
+	}
+	unchanged, _, err := r.read(probe)
+	if err != nil {
+		return err
+	}
+	if unchanged.Metadata.Generation != afterUpdate.Metadata.Generation ||
+		unchanged.Metadata.Revision != afterUpdate.Metadata.Revision {
+		return errors.New("stale prepareDigest apply mutated the resource")
+	}
+	staleSpecDigest, err := specCanonicalDigest(unchanged.Spec)
+	if err != nil {
+		return err
+	}
+	wantSpecDigest, err := specCanonicalDigest(updated.Spec)
+	if err != nil {
+		return err
+	}
+	if staleSpecDigest != wantSpecDigest {
+		return errors.New("stale prepareDigest apply changed the desired spec")
+	}
+	r.complete("stale-prepare-rejected")
+	return nil
+}
+
+func (r *v3Runner) checkReadETags(targets ...probeTarget) error {
+	for _, target := range targets {
+		if _, _, err := r.read(target); err != nil {
+			return err
+		}
+	}
+	r.complete("revision-etag-exact")
+	return nil
+}
+
+// checkConditionReasonsClosed proves the portable condition reason
+// vocabulary is closed. A probe that forced an out-of-enum reason would
+// require the host to emit a document its own wire schema rejects, so the
+// evidence is the assertion itself: every reason the host actually returns is
+// held to the closed set, and the assertion is shown to reject a reason
+// outside it.
+func (r *v3Runner) checkConditionReasonsClosed(targets ...probeTarget) error {
+	seen := 0
+	for _, target := range targets {
+		resource, _, err := r.read(target)
+		if err != nil {
+			return err
+		}
+		if resource.Status == nil || len(resource.Status.Conditions) == 0 {
+			return fmt.Errorf("%s returned no conditions to hold to the closed vocabulary", target.Ref.Kind)
+		}
+		if err := verifyClosedConditionReasons(resource); err != nil {
+			return err
+		}
+		for _, condition := range resource.Status.Conditions {
+			if condition.Reason == condition.HostReason && condition.HostReason != "" {
+				return errors.New("hostReason must carry host detail, not a copy of the portable reason")
+			}
+			seen++
+		}
+	}
+	if seen == 0 {
+		return errors.New("no condition reason evidence was collected")
+	}
+	// The assertion has teeth: a PascalCase reason that is merely well formed
+	// is still rejected when it is outside the closed vocabulary.
+	outside := wireResource{Status: &wireStatus{Conditions: []wireCondition{{
+		Type: "Ready", Status: "True", Reason: "HostSpecificMeltdown",
+	}}}}
+	if err := verifyClosedConditionReasons(outside); err == nil {
+		return errors.New("the closed condition reason assertion accepts a non-portable reason")
+	}
+	r.complete("condition-reason-closed")
+	return nil
+}
+
+// spaceIDViolations are the exact grammar violations $defs/spaceId forbids.
+// A host that accepts any of them is laxer than the wire contract, and two
+// such hosts can disagree about which space a resource lives in.
+func spaceIDViolations() []string {
+	return []string{
+		"",
+		" leading-space",
+		"trailing-space ",
+		"\uFEFFleading-bom",
+		"trailing-bom\uFEFF",
+		"\u00A0leading-no-break-space",
+		"embedded/slash",
+		"embedded\u0001control",
+		"embedded\u007Fcontrol",
+		strings.Repeat("s", 256),
+	}
+}
+
+// checkSpaceIDGrammar proves the host enforces the closed SpaceID grammar on
+// both the query surface and the request-body surface.
+func (r *v3Runner) checkSpaceIDGrammar(kv probeTarget) error {
+	for _, space := range spaceIDViolations() {
+		query := r.exactQuery(space, kv.Ref)
+		queryResponse, err := r.request(http.MethodGet, r.resourceURL(kv.Ref, kv.Name, "", query), nil, nil)
+		if err != nil {
+			return err
+		}
+		if err := r.expectStableError(queryResponse, "invalid_argument"); err != nil {
+			return fmt.Errorf("space query %q: %w", space, err)
+		}
+		body := kv
+		body.Space = space
+		document, err := encodeRunnerJSON(r.resourceBody(body))
+		if err != nil {
+			return err
+		}
+		bodyResponse, err := r.request(http.MethodPost, r.apiBase+"/resources/validate", nil, document)
+		if err != nil {
+			return err
+		}
+		if err := r.expectStableError(bodyResponse, "invalid_argument"); err != nil {
+			return fmt.Errorf("space body %q: %w", space, err)
+		}
+	}
+	// The exact contract space, which sits inside the grammar, still resolves.
+	if _, _, err := r.read(kv); err != nil {
+		return fmt.Errorf("SpaceID grammar enforcement rejected the contract space: %w", err)
+	}
+	r.complete("space-id-grammar-enforced")
+	return nil
+}
+
+// checkConcurrentUnrelatedMutation proves the host does not serialize the
+// whole space behind one lock: two different resources mutate at the same
+// time and both succeed with distinct host-issued uids.
+func (r *v3Runner) checkConcurrentUnrelatedMutation(kv, queue probeTarget) error {
+	first := kv
+	first.Name = "concurrent-probe-one"
+	second := queue
+	second.Name = "concurrent-probe-two"
+	targets := []probeTarget{first, second}
+	keys := []string{"key-concurrent-one", "key-concurrent-two"}
+	resources := make([]wireResource, len(targets))
+	failures := make([]error, len(targets))
+	var group sync.WaitGroup
+	for index := range targets {
+		group.Add(1)
+		go func(index int) {
+			defer group.Done()
+			resource, _, err := r.applyResource(targets[index], applyOptions{
+				Create: true, IdempotencyKey: keys[index],
+			}, http.StatusCreated)
+			resources[index], failures[index] = resource, err
+		}(index)
+	}
+	group.Wait()
+	for index, err := range failures {
+		if err != nil {
+			return fmt.Errorf("concurrent create of %s: %w", targets[index].Name, err)
+		}
+	}
+	if resources[0].Metadata.UID == resources[1].Metadata.UID {
+		return errors.New("concurrent unrelated creates shared one uid")
+	}
+	for index, target := range targets {
+		readBack, _, err := r.read(target)
+		if err != nil {
+			return err
+		}
+		if readBack.Metadata.UID != resources[index].Metadata.UID {
+			return fmt.Errorf("concurrent create of %s did not persist its uid", target.Name)
+		}
+	}
+	r.complete("concurrent-unrelated-mutation")
+	return nil
+}
+
+func (r *v3Runner) checkObserveAndStatusTouch(queue probeTarget) error {
+	staleObserve, err := r.statusAction(queue, "observe", "1", "key-observe-stale", nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(staleObserve, "generation_conflict"); err != nil {
+		return fmt.Errorf("stale observe fence: %w", err)
+	}
+	observeResponse, err := r.statusAction(queue, "observe", "2", "key-observe", nil)
+	if err != nil {
+		return err
+	}
+	observed, err := decodeResourceEnvelope(observeResponse)
+	if err != nil {
+		return err
+	}
+	if err := verifyResourceIdentity(observed, queue); err != nil {
+		return err
+	}
+	if observed.Metadata.Generation != "2" {
+		return fmt.Errorf("observe changed the fenced generation to %s", observed.Metadata.Generation)
+	}
+	r.complete("observe-fence-exact")
+
+	before, _, err := r.read(queue)
+	if err != nil {
+		return err
+	}
+	touchResponse, err := r.statusAction(queue, "refresh", "2", "key-refresh-touch", map[string]string{
+		ErrorProbeHeader: ProbeTouchStatus,
+	})
+	if err != nil {
+		return err
+	}
+	touched, err := decodeResourceEnvelope(touchResponse)
+	if err != nil {
+		return err
+	}
+	if touched.Metadata.Generation != before.Metadata.Generation {
+		return errors.New("host-side status touch changed the desired generation")
+	}
+	if touched.Metadata.Revision == before.Metadata.Revision {
+		return errors.New("host-side status touch did not advance the representation revision")
+	}
+	after, _, err := r.read(queue)
+	if err != nil {
+		return err
+	}
+	if after.Metadata.Revision != touched.Metadata.Revision ||
+		after.Metadata.Generation != before.Metadata.Generation {
+		return errors.New("status touch identity did not persist on read")
+	}
+	r.revisionTransitions = append(r.revisionTransitions, "status-touch:"+touched.Metadata.Revision)
+	r.generationTransitions = append(r.generationTransitions, "status-touch:"+touched.Metadata.Generation)
+	r.complete("status-change-bumps-revision-not-generation")
+	return nil
+}
+
+func (r *v3Runner) checkExpectedUID(queue probeTarget) error {
+	current, _, err := r.read(queue)
+	if err != nil {
+		return err
+	}
+	response, err := r.apply(queue, applyOptions{
+		ExpectedGeneration: current.Metadata.Generation,
+		ExpectedUID:        "uid-never-issued",
+		IdempotencyKey:     "key-uid-mismatch",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(response, "uid_mismatch"); err != nil {
+		return fmt.Errorf("expectedUid mismatch: %w", err)
+	}
+	r.complete("expected-uid-mismatch-rejected")
+	return nil
+}
+
+func (r *v3Runner) checkPackageDigestNotIdentity(kv probeTarget) error {
+	// The exact read query has no packageDigest parameter: supplying one is
+	// outside the closed vocabulary and fails closed.
+	query := r.exactQuery(kv.Space, kv.Ref)
+	query.Set("packageDigest", kv.PackageDigest)
+	queryResponse, err := r.request(http.MethodGet, r.resourceURL(kv.Ref, kv.Name, "", query), nil, nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(queryResponse, "invalid_argument"); err != nil {
+		return fmt.Errorf("packageDigest query key: %w", err)
+	}
+	before, _, err := r.read(kv)
+	if err != nil {
+		return err
+	}
+	// A different audit digest in the apply body addresses the SAME resource
+	// and is not echoed back as a new identity.
+	substituted := kv
+	substituted.PackageDigest = formpackage.DigestBytes([]byte("other-legitimate-package"))
+	resource, _, err := r.applyResource(substituted, applyOptions{
+		ExpectedGeneration: before.Metadata.Generation,
+		IdempotencyKey:     "key-package-digest-audit",
+	}, http.StatusOK)
+	if err != nil {
+		return err
+	}
+	if resource.Metadata.UID != before.Metadata.UID {
+		return errors.New("a substituted audit packageDigest changed the resource identity")
+	}
+	if resource.Form.PackageDigest == substituted.PackageDigest {
+		return errors.New("host echoed a caller-substituted audit packageDigest as its own")
+	}
+	if resource.Metadata.Generation != before.Metadata.Generation {
+		return errors.New("an audit-only digest change advanced the desired generation")
+	}
+	r.complete("package-digest-not-identity")
+	return nil
+}
+
+func (r *v3Runner) checkSameKindTwoGroups() error {
+	input := r.contract.RunnerInput
+	edge := r.target(input.EdgeKvNamespace)
+	edge.Name = "two-group-probe"
+	other := probeTarget{
+		Ref:   input.SyntheticSecondGroup,
+		Name:  "two-group-probe",
+		Space: input.Space,
+		Spec:  map[string]any{},
+	}
+	edgeCreated, _, err := r.applyResource(edge, applyOptions{
+		Create: true, IdempotencyKey: "key-two-group-edge",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	otherCreated, _, err := r.applyResource(other, applyOptions{
+		Create: true, IdempotencyKey: "key-two-group-other",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	if edgeCreated.Metadata.UID == otherCreated.Metadata.UID {
+		return errors.New("one kind name in two groups shared a uid")
+	}
+	edgeRead, _, err := r.read(edge)
+	if err != nil {
+		return err
+	}
+	otherRead, _, err := r.read(other)
+	if err != nil {
+		return err
+	}
+	if edgeRead.APIVersion != edge.Ref.APIVersion || otherRead.APIVersion != other.Ref.APIVersion {
+		return errors.New("group-scoped reads substituted the namespaced group")
+	}
+	deleteResponse, err := r.deleteResource(other, otherRead.Metadata.Revision, "key-two-group-other-delete", nil)
+	if err != nil {
+		return err
+	}
+	if deleteResponse.Status != http.StatusNoContent {
+		return fmt.Errorf("second-group delete HTTP %d", deleteResponse.Status)
+	}
+	if _, _, err := r.read(edge); err != nil {
+		return fmt.Errorf("deleting the second-group resource affected the first group: %w", err)
+	}
+	if err := r.expectResourceAbsent(other); err != nil {
+		return err
+	}
+	r.complete("same-kind-two-groups")
+	return nil
+}
+
+func (r *v3Runner) bundleManifest() (map[string]any, string, error) {
+	bundle := r.contract.RunnerInput.WorkerBundle
+	manifest := map[string]any{
+		"apiVersion": artifactAPIVersion,
+		"kind":       "WorkerBundle",
+		"mainModule": bundle.Desired["mainModule"],
+		"modules":    bundle.Desired["modules"],
+	}
+	raw, err := encodeRunnerJSON(manifest)
+	if err != nil {
+		return nil, "", err
+	}
+	digest, err := formpackage.DigestCanonicalJSON(raw)
+	if err != nil {
+		return nil, "", err
+	}
+	return manifest, digest, nil
+}
+
+func (r *v3Runner) startArtifactUpload(manifest map[string]any, key string) (string, []string, error) {
+	body, err := encodeRunnerJSON(map[string]any{"manifest": manifest})
+	if err != nil {
+		return "", nil, err
+	}
+	response, err := r.request(
+		http.MethodPost, r.apiBase+"/artifacts/uploads",
+		map[string]string{"Idempotency-Key": key}, body,
+	)
+	if err != nil {
+		return "", nil, err
+	}
+	if response.Status != http.StatusOK && response.Status != http.StatusCreated {
+		return "", nil, fmt.Errorf("artifact upload start HTTP %d; body=%s", response.Status, strings.TrimSpace(string(response.Body)))
+	}
+	var status struct {
+		UploadID     string   `json:"uploadId"`
+		MissingBlobs []string `json:"missingBlobs"`
+	}
+	if err := decodeStrictResponse(response, &status); err != nil {
+		return "", nil, err
+	}
+	if !strings.HasPrefix(status.UploadID, "up_") || status.MissingBlobs == nil {
+		return "", nil, errors.New("artifact upload status shape is invalid")
+	}
+	return status.UploadID, status.MissingBlobs, nil
+}
+
+func (r *v3Runner) commitArtifact(uploadID, key string) (wireResponse, error) {
+	return r.request(
+		http.MethodPost,
+		r.apiBase+"/artifacts/uploads/"+url.PathEscape(uploadID)+"/commit",
+		map[string]string{"Idempotency-Key": key}, nil,
+	)
+}
+
+func (r *v3Runner) checkArtifacts(bundle probeTarget) error {
+	manifest, wantDigest, err := r.bundleManifest()
+	if err != nil {
+		return err
+	}
+	moduleDigest := formpackage.DigestBytes([]byte(r.contract.RunnerInput.WorkerBundle.ModuleSource))
+	uploadID, missing, err := r.startArtifactUpload(manifest, "key-artifact-start")
+	if err != nil {
+		return err
+	}
+	if len(missing) != 1 || missing[0] != moduleDigest {
+		return fmt.Errorf("missingBlobs = %v, want exactly the module digest", missing)
+	}
+	// Committing before the blob exists fails closed.
+	earlyCommit, err := r.commitArtifact(uploadID, "key-artifact-early-commit")
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(earlyCommit, "artifact_missing"); err != nil {
+		return fmt.Errorf("commit before upload: %w", err)
+	}
+	r.complete("artifact-upload-missing-blob")
+
+	blobURL := r.apiBase + "/artifacts/uploads/" + url.PathEscape(uploadID) + "/blobs/" + url.PathEscape(moduleDigest)
+	wrongBytes, err := r.request(http.MethodPut, blobURL,
+		map[string]string{"Content-Type": "application/octet-stream"},
+		[]byte("these are not the declared bytes"),
+	)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(wrongBytes, "artifact_invalid"); err != nil {
+		return fmt.Errorf("blob digest mismatch: %w", err)
+	}
+	r.complete("artifact-digest-mismatch")
+
+	uploaded, err := r.request(http.MethodPut, blobURL,
+		map[string]string{"Content-Type": "application/octet-stream"},
+		[]byte(r.contract.RunnerInput.WorkerBundle.ModuleSource),
+	)
+	if err != nil {
+		return err
+	}
+	if uploaded.Status != http.StatusCreated && uploaded.Status != http.StatusNoContent {
+		return fmt.Errorf("blob upload HTTP %d", uploaded.Status)
+	}
+	firstCommit, err := r.commitArtifact(uploadID, "key-artifact-commit")
+	if err != nil {
+		return err
+	}
+	var commitResult struct {
+		ManifestDigest string `json:"manifestDigest"`
+	}
+	if firstCommit.Status != http.StatusOK && firstCommit.Status != http.StatusCreated {
+		return fmt.Errorf("artifact commit HTTP %d; body=%s", firstCommit.Status, strings.TrimSpace(string(firstCommit.Body)))
+	}
+	if err := decodeStrictResponse(firstCommit, &commitResult); err != nil {
+		return err
+	}
+	if commitResult.ManifestDigest != wantDigest {
+		return fmt.Errorf(
+			"commit digest %s is not the RFC 8785 canonical manifest digest %s",
+			commitResult.ManifestDigest, wantDigest,
+		)
+	}
+	secondCommit, err := r.commitArtifact(uploadID, "key-artifact-commit-again")
+	if err != nil {
+		return err
+	}
+	var secondResult struct {
+		ManifestDigest string `json:"manifestDigest"`
+	}
+	if secondCommit.Status != http.StatusOK && secondCommit.Status != http.StatusCreated {
+		return fmt.Errorf("artifact re-commit HTTP %d", secondCommit.Status)
+	}
+	if err := decodeStrictResponse(secondCommit, &secondResult); err != nil {
+		return err
+	}
+	if secondResult.ManifestDigest != wantDigest {
+		return errors.New("artifact re-commit was not idempotent")
+	}
+	manifestResponse, err := r.request(http.MethodGet, r.apiBase+"/artifacts/"+url.PathEscape(wantDigest), nil, nil)
+	if err != nil {
+		return err
+	}
+	if manifestResponse.Status != http.StatusOK {
+		return fmt.Errorf("manifest read HTTP %d", manifestResponse.Status)
+	}
+	roundTrip, err := formpackage.DigestCanonicalJSON(manifestResponse.Body)
+	if err != nil || roundTrip != wantDigest {
+		return errors.New("manifest read is not content-addressed by its canonical digest")
+	}
+	headBlob, err := r.request(http.MethodHead, r.apiBase+"/artifacts/blobs/"+url.PathEscape(moduleDigest), nil, nil)
+	if err != nil {
+		return err
+	}
+	if headBlob.Status != http.StatusOK {
+		return fmt.Errorf("blob HEAD HTTP %d", headBlob.Status)
+	}
+	headAbsent, err := r.request(
+		http.MethodHead,
+		r.apiBase+"/artifacts/blobs/"+url.PathEscape(formpackage.DigestBytes([]byte("absent-blob"))),
+		nil, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if headAbsent.Status != http.StatusNotFound {
+		return fmt.Errorf("absent blob HEAD HTTP %d, want 404", headAbsent.Status)
+	}
+	r.artifactManifestDigest = wantDigest
+	r.complete("artifact-commit-idempotent")
+
+	// The uploaded bytes back the WorkerBundle resource whose module digests
+	// match the committed manifest.
+	if _, _, err := r.applyResource(bundle, applyOptions{
+		Create: true, IdempotencyKey: "key-create-bundle",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("bundle apply after artifact commit: %w", err)
+	}
+	r.complete("artifact-then-bundle-apply")
+	return nil
+}
+
+// startArtifactUploadRaw posts one manifest and returns the raw response so a
+// rejected manifest can be held to its exact stable error.
+func (r *v3Runner) startArtifactUploadRaw(manifest map[string]any, key string) (wireResponse, error) {
+	body, err := encodeRunnerJSON(map[string]any{"manifest": manifest})
+	if err != nil {
+		return wireResponse{}, err
+	}
+	return r.request(
+		http.MethodPost, r.apiBase+"/artifacts/uploads",
+		map[string]string{"Idempotency-Key": key}, body,
+	)
+}
+
+// checkArtifactRejectList drives the manifest reject-list items that
+// spec/artifact-transport/README.md states, plus the commit-time size binding
+// that an upload-time size check alone cannot cover: blobs are
+// content-addressed and shared, so a later manifest can name an
+// already-stored digest under a size it never had.
+func (r *v3Runner) checkArtifactRejectList() error {
+	bundle := r.contract.RunnerInput.WorkerBundle
+	modules, _ := bundle.Desired["modules"].([]any)
+	module, _ := modules[0].(map[string]any)
+	if module == nil {
+		return errors.New("workerBundle probe declares no module")
+	}
+	mainModule, _ := bundle.Desired["mainModule"].(string)
+	moduleDigest := formpackage.DigestBytes([]byte(bundle.ModuleSource))
+
+	// A source map whose target module is absent describes nothing.
+	orphan, err := r.startArtifactUploadRaw(map[string]any{
+		"apiVersion": artifactAPIVersion,
+		"kind":       "WorkerBundle",
+		"mainModule": mainModule,
+		"modules": []any{module, map[string]any{
+			"name":      "absent-module.js.map",
+			"mediaType": "application/source-map+json",
+			"size":      0,
+			"digest":    formpackage.DigestBytes([]byte("orphan-source-map")),
+		}},
+	}, "key-artifact-orphan-source-map")
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(orphan, "artifact_invalid"); err != nil {
+		return fmt.Errorf("orphan source map: %w", err)
+	}
+
+	// A manifest whose declared module sizes overrun the host's published
+	// maximumBundleBytes is rejected before any blob is accepted.
+	overrun, err := r.startArtifactUploadRaw(map[string]any{
+		"apiVersion": artifactAPIVersion,
+		"kind":       "WorkerBundle",
+		"mainModule": "oversized.js",
+		"modules": []any{map[string]any{
+			"name":      "oversized.js",
+			"mediaType": "application/javascript+module",
+			"size":      maximumBundleBytes + 1,
+			"digest":    formpackage.DigestBytes([]byte("oversized-module")),
+		}},
+	}, "key-artifact-overrun")
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(overrun, "artifact_invalid"); err != nil {
+		return fmt.Errorf("published limit overrun: %w", err)
+	}
+	r.complete("artifact-manifest-reject-list")
+
+	// The blob is already stored from the committed manifest, so this upload
+	// needs no bytes at all: only commit can catch the lie.
+	mislabelled := cloneJSONMap(module)
+	mislabelled["size"] = len(bundle.ModuleSource) + 1
+	uploadID, missing, err := r.startArtifactUpload(map[string]any{
+		"apiVersion": artifactAPIVersion,
+		"kind":       "WorkerBundle",
+		"mainModule": mainModule,
+		"modules":    []any{mislabelled},
+	}, "key-artifact-size-lie")
+	if err != nil {
+		return err
+	}
+	if len(missing) != 0 {
+		return fmt.Errorf("missingBlobs = %v, want none for an already-stored blob", missing)
+	}
+	commit, err := r.commitArtifact(uploadID, "key-artifact-size-lie-commit")
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(commit, "artifact_invalid"); err != nil {
+		return fmt.Errorf("commit-time declared size binding: %w", err)
+	}
+	// The honest manifest and its blob are untouched by the rejected commit.
+	headBlob, err := r.request(http.MethodHead, r.apiBase+"/artifacts/blobs/"+url.PathEscape(moduleDigest), nil, nil)
+	if err != nil {
+		return err
+	}
+	if headBlob.Status != http.StatusOK {
+		return fmt.Errorf("rejected commit disturbed the stored blob: HEAD HTTP %d", headBlob.Status)
+	}
+	r.complete("artifact-commit-binds-declared-size")
+	return nil
+}
+
+func (r *v3Runner) checkWorkerVersionFlow(version, kv probeTarget) error {
+	// A typed binding to a missing namespace fails before mutation.
+	missingTarget := version
+	missingTarget.Spec = cloneJSONMap(version.Spec)
+	missingTarget.Spec["kvBindings"] = []any{map[string]any{
+		"name":     "CACHE",
+		"resource": map[string]any{"kind": "EdgeKVNamespace", "name": "absent-kv"},
+	}}
+	response, err := r.apply(missingTarget, applyOptions{
+		Create: true, IdempotencyKey: "key-version-missing-binding",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(response, "resource_not_found"); err != nil {
+		return fmt.Errorf("missing binding target: %w", err)
+	}
+	if err := r.expectResourceAbsent(version); err != nil {
+		return fmt.Errorf("missing binding target mutated state: %w", err)
+	}
+	r.complete("binding-target-missing-404-before-mutation")
+
+	if _, _, err := r.applyResource(version, applyOptions{
+		Create: true, IdempotencyKey: "key-create-version",
+	}, http.StatusCreated); err != nil {
+		return err
+	}
+
+	// WorkerVersion is a revision-role Form: update is not representable.
+	update, err := r.apply(version, applyOptions{
+		ExpectedGeneration: "1",
+		IdempotencyKey:     "key-version-update",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(update, "invalid_argument"); err != nil {
+		return fmt.Errorf("revision-role update: %w", err)
+	}
+	r.complete("revision-role-update-rejected")
+
+	// Deleting the bound KV namespace while the version references it fails.
+	kvCurrent, _, err := r.read(kv)
+	if err != nil {
+		return err
+	}
+	boundDelete, err := r.deleteResource(kv, kvCurrent.Metadata.Revision, "key-kv-bound-delete", nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(boundDelete, "dependency_in_use"); err != nil {
+		return fmt.Errorf("bound target delete: %w", err)
+	}
+	if _, _, err := r.read(kv); err != nil {
+		return fmt.Errorf("dependency_in_use delete mutated state: %w", err)
+	}
+	r.complete("dependency-in-use-on-bound-target-delete")
+	return nil
+}
+
+// checkHandlerGatedAttachments proves the cross-resource attachment gate: a
+// WorkerCronTrigger invokes the scheduled handler and a QueueConsumer invokes
+// the queue handler, so attaching either to a worker whose code declares no
+// such handler is an unsupported capability rejected before any mutation.
+// Declaration is resolved from any stored WorkerVersion of that worker; a
+// stored WorkerDeployment is deliberately NOT required.
+func (r *v3Runner) checkHandlerGatedAttachments() error {
+	input := r.contract.RunnerInput
+	attachments := []probeTarget{r.target(input.WorkerCronTrigger), r.target(input.QueueConsumer)}
+	for _, attachment := range attachments {
+		response, err := r.apply(attachment, applyOptions{
+			Create: true, IdempotencyKey: "key-ungated-" + attachment.Ref.Kind,
+		})
+		if err != nil {
+			return err
+		}
+		if err := r.expectStableError(response, "unsupported_capability"); err != nil {
+			return fmt.Errorf("%s without a declared handler: %w", attachment.Ref.Kind, err)
+		}
+		if err := r.expectResourceAbsent(attachment); err != nil {
+			return fmt.Errorf("%s handler gate mutated state: %w", attachment.Ref.Kind, err)
+		}
+	}
+	// One stored WorkerVersion of the same worker declaring both handlers
+	// opens both gates.
+	declaring := r.target(input.WorkerVersion)
+	declaring.Name = "handler-gate-version"
+	declaring.Spec = cloneJSONMap(input.WorkerVersion.Desired)
+	declaring.Spec["handlers"] = []any{"fetch", "queue", "scheduled"}
+	delete(declaring.Spec, "kvBindings")
+	if _, _, err := r.applyResource(declaring, applyOptions{
+		Create: true, IdempotencyKey: "key-handler-gate-version",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("handler-declaring WorkerVersion: %w", err)
+	}
+	for _, attachment := range attachments {
+		if _, _, err := r.applyResource(attachment, applyOptions{
+			Create: true, IdempotencyKey: "key-gated-" + attachment.Ref.Kind,
+		}, http.StatusCreated); err != nil {
+			return fmt.Errorf("%s after its handler is declared: %w", attachment.Ref.Kind, err)
+		}
+	}
+	r.complete("handler-gated-attachments")
+	return nil
+}
+
+// checkDeploymentWeightSum proves the one WorkerDeployment rule the Form
+// description calls host-validated: a JSON Schema cannot add numbers, so the
+// exact 10000 basis-point sum has to be enforced by the host before mutation.
+func (r *v3Runner) checkDeploymentWeightSum() error {
+	deployment := r.target(r.contract.RunnerInput.WorkerDeployment)
+	versions, _ := deployment.Spec["versions"].([]any)
+	entry, _ := versions[0].(map[string]any)
+	if entry == nil {
+		return errors.New("workerDeployment probe declares no weighted version")
+	}
+	underweight := cloneJSONMap(entry)
+	underweight["weight"] = 9999
+	short := deployment
+	short.Spec = cloneJSONMap(deployment.Spec)
+	short.Spec["versions"] = []any{underweight}
+	response, err := r.apply(short, applyOptions{
+		Create: true, IdempotencyKey: "key-deployment-underweight",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(response, "invalid_argument"); err != nil {
+		return fmt.Errorf("weights summing to 9999: %w", err)
+	}
+	if err := r.expectResourceAbsent(deployment); err != nil {
+		return fmt.Errorf("rejected weight sum mutated state: %w", err)
+	}
+	if _, _, err := r.applyResource(deployment, applyOptions{
+		Create: true, IdempotencyKey: "key-deployment-exact",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("weights summing to exactly 10000: %w", err)
+	}
+	r.complete("deployment-weight-sum-enforced")
+	return nil
+}
+
+// checkImportFlows proves adoption is a real mutation: it mints identity like
+// a create, and it passes the same pre-mutation gauntlet as apply instead of
+// bypassing validation.
+func (r *v3Runner) checkImportFlows(kv, version probeTarget) error {
+	adopted := kv
+	adopted.Name = "import-probe"
+	response, err := r.importResource(adopted, importOptions{
+		NativeID: "native/import-probe", IdempotencyKey: "key-import-adopt", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	resource, err := decodeResource(response, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	if err := verifyResourceIdentity(resource, adopted); err != nil {
+		return err
+	}
+	if !uidPattern.MatchString(resource.Metadata.UID) {
+		return fmt.Errorf("import did not mint a grammar-valid host-issued uid, got %q", resource.Metadata.UID)
+	}
+	if resource.Metadata.Generation != "1" || resource.Metadata.Revision != "1" {
+		return fmt.Errorf(
+			"import identity = generation %s revision %s, want 1/1",
+			resource.Metadata.Generation, resource.Metadata.Revision,
+		)
+	}
+	if err := verifyRevisionETag(response, resource.Metadata.Revision); err != nil {
+		return err
+	}
+	readBack, _, err := r.read(adopted)
+	if err != nil {
+		return err
+	}
+	if readBack.Metadata.UID != resource.Metadata.UID {
+		return errors.New("the adopted resource is not readable under its minted uid")
+	}
+	r.uidTransitions = append(r.uidTransitions, "import:"+resource.Metadata.UID)
+	r.complete("import-adopts-native-resource")
+
+	// The same typed binding an apply rejects before mutation is rejected by
+	// import before mutation, and stores nothing.
+	invalid := version
+	invalid.Name = "import-invalid-probe"
+	invalid.Spec = cloneJSONMap(version.Spec)
+	invalid.Spec["kvBindings"] = []any{map[string]any{
+		"name":     "CACHE",
+		"resource": map[string]any{"kind": "EdgeKVNamespace", "name": "absent-kv"},
+	}}
+	rejected, err := r.importResource(invalid, importOptions{
+		NativeID: "native/import-invalid-probe", IdempotencyKey: "key-import-invalid", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(rejected, "resource_not_found"); err != nil {
+		return fmt.Errorf("import with a missing binding target: %w", err)
+	}
+	if err := r.expectResourceAbsent(invalid); err != nil {
+		return fmt.Errorf("rejected import stored state: %w", err)
+	}
+	r.complete("import-validates-like-apply")
+	return nil
+}
+
+func (r *v3Runner) checkDeleteFences(version, kv probeTarget) error {
+	current, _, err := r.read(version)
+	if err != nil {
+		return err
+	}
+	stale, err := r.deleteResource(version, current.Metadata.Revision+"9", "key-version-delete-stale", nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(stale, "revision_conflict"); err != nil {
+		return fmt.Errorf("stale delete revision: %w", err)
+	}
+	r.complete("stale-revision-rejected")
+
+	deleted, err := r.deleteResource(version, current.Metadata.Revision, "key-version-delete", nil)
+	if err != nil {
+		return err
+	}
+	if deleted.Status != http.StatusNoContent {
+		return fmt.Errorf("delete HTTP %d, want 204", deleted.Status)
+	}
+	if err := r.expectResourceAbsent(version); err != nil {
+		return err
+	}
+	r.complete("delete-revision-fence")
+
+	// Delete and re-create of the same name must mint a NEW uid.
+	kvCurrent, _, err := r.read(kv)
+	if err != nil {
+		return err
+	}
+	kvDeleted, err := r.deleteResource(kv, kvCurrent.Metadata.Revision, "key-kv-delete", nil)
+	if err != nil {
+		return err
+	}
+	if kvDeleted.Status != http.StatusNoContent {
+		return fmt.Errorf("kv delete HTTP %d, want 204", kvDeleted.Status)
+	}
+	recreated, _, err := r.applyResource(kv, applyOptions{
+		Create: true, IdempotencyKey: "key-recreate-kv",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	if recreated.Metadata.UID == kvCurrent.Metadata.UID {
+		return errors.New("delete and re-create returned the same uid")
+	}
+	r.uidTransitions = append(r.uidTransitions, "recreate:"+recreated.Metadata.UID)
+	r.complete("delete-then-recreate-uid-changes")
+	return nil
+}
+
+type wireOperation struct {
+	APIVersion string         `json:"apiVersion"`
+	Kind       string         `json:"kind"`
+	ID         string         `json:"id"`
+	Done       bool           `json:"done"`
+	Target     map[string]any `json:"target,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
+	Result     map[string]any `json:"result,omitempty"`
+	Error      map[string]any `json:"error,omitempty"`
+}
+
+func (r *v3Runner) checkOperations(kv probeTarget) error {
+	asyncTarget := kv
+	asyncTarget.Name = "async-probe"
+	accepted, err := r.apply(asyncTarget, applyOptions{
+		Create:         true,
+		IdempotencyKey: "key-async-create",
+		ExtraHeaders:   map[string]string{ErrorProbeHeader: ProbeAsync},
+	})
+	if err != nil {
+		return err
+	}
+	if accepted.Status != http.StatusAccepted {
+		return fmt.Errorf("async apply HTTP %d, want 202", accepted.Status)
+	}
+	var envelope struct {
+		Operation wireOperation `json:"operation"`
+	}
+	if err := decodeStrictResponse(accepted, &envelope); err != nil {
+		return err
+	}
+	operation := envelope.Operation
+	if operation.APIVersion != "operations.takoform.com/v1alpha1" || operation.Kind != "Operation" ||
+		!strings.HasPrefix(operation.ID, "op_") || operation.Done {
+		return fmt.Errorf("202 operation envelope is invalid: %+v", operation)
+	}
+	operationURL := r.apiBase + "/operations/" + url.PathEscape(operation.ID)
+	var terminal wireOperation
+	var terminalBody []byte
+	sawRetryAfter := false
+	for poll := 0; poll < asyncOperationPolls+2; poll++ {
+		pollResponse, err := r.request(http.MethodGet, operationURL, nil, nil)
+		if err != nil {
+			return err
+		}
+		if pollResponse.Status != http.StatusOK {
+			return fmt.Errorf("operation poll HTTP %d", pollResponse.Status)
+		}
+		var polled wireOperation
+		if err := decodeStrictResponse(pollResponse, &polled); err != nil {
+			return err
+		}
+		if polled.ID != operation.ID {
+			return errors.New("operation id is not stable across polls")
+		}
+		if !polled.Done {
+			if pollResponse.Header.Get("Retry-After") == "" {
+				return errors.New("pending operation response omitted Retry-After")
+			}
+			sawRetryAfter = true
+			continue
+		}
+		terminal = polled
+		terminalBody = pollResponse.Body
+		break
+	}
+	if !terminal.Done || !sawRetryAfter {
+		return errors.New("async operation did not complete after honored Retry-After polling")
+	}
+	if terminal.Error != nil || terminal.Result == nil {
+		return errors.New("terminal operation must carry exactly the result")
+	}
+	resultResource, err := encodeRunnerJSON(terminal.Result["resource"])
+	if err != nil {
+		return err
+	}
+	var resource wireResource
+	if err := formpackage.DecodeStrictIJSON(resultResource, &resource); err != nil {
+		return fmt.Errorf("terminal result resource: %w", err)
+	}
+	if err := verifyResourceIdentity(resource, asyncTarget); err != nil {
+		return err
+	}
+	if _, _, err := r.read(asyncTarget); err != nil {
+		return fmt.Errorf("async-created resource is not readable: %w", err)
+	}
+	r.asyncOperationID = operation.ID
+	r.complete("async-operation-flow")
+
+	replay, err := r.request(http.MethodGet, operationURL, nil, nil)
+	if err != nil {
+		return err
+	}
+	if replay.Status != http.StatusOK || !bytes.Equal(replay.Body, terminalBody) {
+		return errors.New("terminal operation replay was not byte-identical")
+	}
+	r.complete("operation-replay-terminal")
+
+	cancelTarget := kv
+	cancelTarget.Name = "cancel-probe"
+	cancelAccepted, err := r.apply(cancelTarget, applyOptions{
+		Create:         true,
+		IdempotencyKey: "key-cancel-create",
+		ExtraHeaders:   map[string]string{ErrorProbeHeader: ProbeAsync},
+	})
+	if err != nil {
+		return err
+	}
+	if cancelAccepted.Status != http.StatusAccepted {
+		return fmt.Errorf("async cancel-probe apply HTTP %d, want 202", cancelAccepted.Status)
+	}
+	var cancelEnvelope struct {
+		Operation wireOperation `json:"operation"`
+	}
+	if err := decodeStrictResponse(cancelAccepted, &cancelEnvelope); err != nil {
+		return err
+	}
+	cancelResponse, err := r.request(
+		http.MethodPost,
+		r.apiBase+"/operations/"+url.PathEscape(cancelEnvelope.Operation.ID)+"/cancel",
+		map[string]string{"Idempotency-Key": "key-cancel-operation"},
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	if cancelResponse.Status != http.StatusOK {
+		return fmt.Errorf("operation cancel HTTP %d", cancelResponse.Status)
+	}
+	var cancelled wireOperation
+	if err := decodeStrictResponse(cancelResponse, &cancelled); err != nil {
+		return err
+	}
+	if !cancelled.Done || cancelled.Result != nil || cancelled.Error == nil ||
+		cancelled.Error["code"] != "operation_cancelled" {
+		return fmt.Errorf("cancelled operation shape is invalid: %+v", cancelled)
+	}
+	if err := r.expectResourceAbsent(cancelTarget); err != nil {
+		return fmt.Errorf("cancelled operation still mutated state: %w", err)
+	}
+	unknown, err := r.request(http.MethodGet, r.apiBase+"/operations/op_absent", nil, nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(unknown, "operation_not_found"); err != nil {
+		return fmt.Errorf("unknown operation: %w", err)
+	}
+	r.cancelledOperationID = cancelEnvelope.Operation.ID
+	r.complete("operation-cancel")
+	return nil
+}
+
+// pollOperation drives one accepted operation to its terminal document.
+func (r *v3Runner) pollOperation(id string) (wireOperation, error) {
+	operationURL := r.apiBase + "/operations/" + url.PathEscape(id)
+	for poll := 0; poll < asyncOperationPolls+2; poll++ {
+		response, err := r.request(http.MethodGet, operationURL, nil, nil)
+		if err != nil {
+			return wireOperation{}, err
+		}
+		if response.Status != http.StatusOK {
+			return wireOperation{}, fmt.Errorf("operation poll HTTP %d", response.Status)
+		}
+		var polled wireOperation
+		if err := decodeStrictResponse(response, &polled); err != nil {
+			return wireOperation{}, err
+		}
+		if polled.ID != id {
+			return wireOperation{}, errors.New("operation id is not stable across polls")
+		}
+		if polled.Done {
+			return polled, nil
+		}
+	}
+	return wireOperation{}, errors.New("operation never reached a terminal state")
+}
+
+// checkAsyncCommitRevalidates proves a 202 is an acceptance, not a decision:
+// the preconditions an accepted mutation was admitted under are re-derived at
+// COMMIT time. Here the typed binding target is removed by a second request
+// while the operation is still pending, so the operation must terminate with
+// resource_not_found and commit nothing.
+func (r *v3Runner) checkAsyncCommitRevalidates(kv, version probeTarget) error {
+	target := kv
+	target.Name = "revalidate-kv-probe"
+	created, _, err := r.applyResource(target, applyOptions{
+		Create: true, IdempotencyKey: "key-revalidate-kv",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	pending := version
+	pending.Name = "revalidate-version-probe"
+	pending.Spec = cloneJSONMap(version.Spec)
+	pending.Spec["kvBindings"] = []any{map[string]any{
+		"name":     "CACHE",
+		"resource": map[string]any{"kind": "EdgeKVNamespace", "name": target.Name},
+	}}
+	accepted, err := r.apply(pending, applyOptions{
+		Create:         true,
+		IdempotencyKey: "key-revalidate-async",
+		ExtraHeaders:   map[string]string{ErrorProbeHeader: ProbeAsync},
+	})
+	if err != nil {
+		return err
+	}
+	if accepted.Status != http.StatusAccepted {
+		return fmt.Errorf(
+			"async apply HTTP %d, want 202; body=%s",
+			accepted.Status, strings.TrimSpace(string(accepted.Body)),
+		)
+	}
+	var envelope struct {
+		Operation wireOperation `json:"operation"`
+	}
+	if err := decodeStrictResponse(accepted, &envelope); err != nil {
+		return err
+	}
+	if envelope.Operation.Done {
+		return errors.New("the 202 operation was already terminal, so nothing could be revalidated")
+	}
+	// A second request removes the binding target while the accepted apply is
+	// still pending. Nothing holds it: the pending resource is not committed.
+	deleted, err := r.deleteResource(target, created.Metadata.Revision, "key-revalidate-kv-delete", nil)
+	if err != nil {
+		return err
+	}
+	if deleted.Status != http.StatusNoContent {
+		return fmt.Errorf(
+			"binding-target delete HTTP %d, want 204; body=%s",
+			deleted.Status, strings.TrimSpace(string(deleted.Body)),
+		)
+	}
+	terminal, err := r.pollOperation(envelope.Operation.ID)
+	if err != nil {
+		return err
+	}
+	if terminal.Result != nil || terminal.Error == nil {
+		return fmt.Errorf("terminal operation must carry exactly the error: %+v", terminal)
+	}
+	if terminal.Error["code"] != "resource_not_found" {
+		return fmt.Errorf("terminal operation error = %v, want resource_not_found", terminal.Error["code"])
+	}
+	if err := r.expectResourceAbsent(pending); err != nil {
+		return fmt.Errorf("a revalidated-away operation still committed: %w", err)
+	}
+	if err := r.expectResourceAbsent(target); err != nil {
+		return fmt.Errorf("the deleted binding target reappeared: %w", err)
+	}
+	// The same rule holds in the other direction: an accepted DELETE re-runs
+	// the live-binding scan at commit time, so a resource that acquired a
+	// holder while the operation was pending survives.
+	held := kv
+	held.Name = "revalidate-held-probe"
+	heldCreated, _, err := r.applyResource(held, applyOptions{
+		Create: true, IdempotencyKey: "key-revalidate-held",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	acceptedDelete, err := r.deleteResource(
+		held, heldCreated.Metadata.Revision, "key-revalidate-held-delete",
+		map[string]string{ErrorProbeHeader: ProbeAsync},
+	)
+	if err != nil {
+		return err
+	}
+	if acceptedDelete.Status != http.StatusAccepted {
+		return fmt.Errorf(
+			"async delete HTTP %d, want 202; body=%s",
+			acceptedDelete.Status, strings.TrimSpace(string(acceptedDelete.Body)),
+		)
+	}
+	var deleteEnvelope struct {
+		Operation wireOperation `json:"operation"`
+	}
+	if err := decodeStrictResponse(acceptedDelete, &deleteEnvelope); err != nil {
+		return err
+	}
+	holder := version
+	holder.Name = "revalidate-holder-version"
+	holder.Spec = cloneJSONMap(version.Spec)
+	holder.Spec["kvBindings"] = []any{map[string]any{
+		"name":     "CACHE",
+		"resource": map[string]any{"kind": "EdgeKVNamespace", "name": held.Name},
+	}}
+	if _, _, err := r.applyResource(holder, applyOptions{
+		Create: true, IdempotencyKey: "key-revalidate-holder",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("binding holder created while the delete was pending: %w", err)
+	}
+	terminalDelete, err := r.pollOperation(deleteEnvelope.Operation.ID)
+	if err != nil {
+		return err
+	}
+	if terminalDelete.Result != nil || terminalDelete.Error == nil ||
+		terminalDelete.Error["code"] != "dependency_in_use" {
+		return fmt.Errorf(
+			"terminal delete operation = %+v, want a dependency_in_use error",
+			terminalDelete,
+		)
+	}
+	if _, _, err := r.read(held); err != nil {
+		return fmt.Errorf("an accepted delete removed a resource that acquired a holder: %w", err)
+	}
+	r.complete("async-commit-revalidates")
+	return nil
+}
+
+func (r *v3Runner) checkCrossSpace(kv probeTarget) error {
+	primary, _, err := r.read(kv)
+	if err != nil {
+		return err
+	}
+	alternate := kv
+	alternate.Space = r.contract.RunnerInput.AlternateSpace
+	// Reuse the primary Space's create key: replay records are namespaced by
+	// space, so this must execute independently instead of replaying or
+	// failing the fingerprint.
+	created, _, err := r.applyResource(alternate, applyOptions{
+		Create: true, IdempotencyKey: "key-recreate-kv",
+	}, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("alternate-space create with a reused key: %w", err)
+	}
+	if created.Metadata.UID == primary.Metadata.UID {
+		return errors.New("resources in two spaces shared a uid")
+	}
+	primaryAgain, _, err := r.read(kv)
+	if err != nil {
+		return err
+	}
+	if primaryAgain.Metadata.UID != primary.Metadata.UID {
+		return errors.New("alternate-space create changed the primary-space resource")
+	}
+	absent := kv
+	absent.Name = "async-probe"
+	absent.Space = r.contract.RunnerInput.AlternateSpace
+	if err := r.expectResourceAbsent(absent); err != nil {
+		return fmt.Errorf("cross-space read isolation: %w", err)
+	}
+	r.complete("cross-space-isolation")
+	return nil
+}
+
+var forbiddenSupportTokens = []string{`"price"`, `"sku"`, `"region"`, `"quota"`, `"billing"`}
+
+func (r *v3Runner) checkSupportProfiles() error {
+	listResponse, err := r.request(http.MethodGet, r.apiBase+"/support/forms", nil, nil)
+	if err != nil {
+		return err
+	}
+	if listResponse.Status != http.StatusOK {
+		return fmt.Errorf("support forms HTTP %d", listResponse.Status)
+	}
+	var list struct {
+		Profiles []map[string]any `json:"profiles"`
+	}
+	if err := decodeStrictResponse(listResponse, &list); err != nil {
+		return err
+	}
+	if len(list.Profiles) == 0 {
+		return errors.New("support profiles are empty")
+	}
+	var workerVersionProfile map[string]any
+	for _, profile := range list.Profiles {
+		if profile["apiVersion"] != supportAPIVersion || profile["kind"] != "FormSupport" {
+			return fmt.Errorf("support profile identity is invalid: %v", profile)
+		}
+		reference, _ := profile["formRef"].(map[string]any)
+		if reference == nil {
+			return errors.New("FormSupport profile omitted formRef")
+		}
+		if reference["kind"] == "WorkerVersion" {
+			workerVersionProfile = profile
+		}
+	}
+	if workerVersionProfile == nil {
+		return errors.New("support profiles omit the WorkerVersion line")
+	}
+	if err := verifyWorkerVersionProfile(workerVersionProfile); err != nil {
+		return err
+	}
+	version := r.contract.RunnerInput.WorkerVersion.Identity.FormRef
+	oneURL := fmt.Sprintf(
+		"%s/support/forms/%s/%s/%s",
+		r.apiBase, escapeGroup(version.APIVersion),
+		url.PathEscape(version.Kind), url.PathEscape(version.DefinitionVersion),
+	)
+	oneResponse, err := r.request(http.MethodGet, oneURL, nil, nil)
+	if err != nil {
+		return err
+	}
+	if oneResponse.Status != http.StatusOK {
+		return fmt.Errorf("support form HTTP %d", oneResponse.Status)
+	}
+	var one map[string]any
+	if err := decodeStrictResponse(oneResponse, &one); err != nil {
+		return err
+	}
+	if err := verifyWorkerVersionProfile(one); err != nil {
+		return err
+	}
+	probes := r.contract.RunnerInput.SupportProbes
+	interfaceResponse, err := r.request(
+		http.MethodGet,
+		fmt.Sprintf("%s/support/interfaces/%s/%s", r.apiBase,
+			url.PathEscape(probes.Interface.Name), url.PathEscape(probes.Interface.Version)),
+		nil, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if err := verifySupportRefProfile(interfaceResponse, "InterfaceSupport", "interfaceRef", probes.Interface); err != nil {
+		return err
+	}
+	bindingResponse, err := r.request(
+		http.MethodGet,
+		fmt.Sprintf("%s/support/bindings/%s/%s", r.apiBase,
+			url.PathEscape(probes.Binding.Name), url.PathEscape(probes.Binding.Version)),
+		nil, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if err := verifySupportRefProfile(bindingResponse, "BindingSupport", "bindingRef", probes.Binding); err != nil {
+		return err
+	}
+	for _, body := range [][]byte{listResponse.Body, oneResponse.Body, interfaceResponse.Body, bindingResponse.Body} {
+		lowered := strings.ToLower(string(body))
+		for _, token := range forbiddenSupportTokens {
+			if strings.Contains(lowered, token) {
+				return fmt.Errorf("support surface carries forbidden commercial key %s", token)
+			}
+		}
+	}
+	r.complete("support-profiles-present")
+	return nil
+}
+
+func verifyWorkerVersionProfile(profile map[string]any) error {
+	enums, _ := profile["supportedEnums"].(map[string]any)
+	if enums == nil {
+		return errors.New("WorkerVersion profile omitted supportedEnums")
+	}
+	if !stringSliceEquals(enums["compatibilityFlags"], []string{"nodejs_compat"}) {
+		return fmt.Errorf("WorkerVersion supportedEnums.compatibilityFlags = %v", enums["compatibilityFlags"])
+	}
+	if !stringSliceEquals(enums["handlers"], []string{"fetch", "scheduled", "queue", "tail"}) {
+		return fmt.Errorf("WorkerVersion supportedEnums.handlers = %v", enums["handlers"])
+	}
+	ranges, _ := profile["supportedRanges"].(map[string]any)
+	compatibilityDate, _ := rangesMember(ranges, "compatibilityDate")
+	if compatibilityDate["minimum"] != "2024-01-01" || compatibilityDate["maximum"] != "2026-08-06" {
+		return fmt.Errorf("WorkerVersion supportedRanges.compatibilityDate = %v", compatibilityDate)
+	}
+	limits, _ := profile["limits"].(map[string]any)
+	if limits == nil || fmt.Sprintf("%v", limits["maximumBundleBytes"]) != "10485760" {
+		return fmt.Errorf("WorkerVersion limits = %v", limits)
+	}
+	return nil
+}
+
+func rangesMember(ranges map[string]any, name string) (map[string]any, bool) {
+	if ranges == nil {
+		return map[string]any{}, false
+	}
+	member, ok := ranges[name].(map[string]any)
+	if !ok {
+		return map[string]any{}, false
+	}
+	return member, true
+}
+
+func stringSliceEquals(value any, want []string) bool {
+	items, ok := value.([]any)
+	if !ok || len(items) != len(want) {
+		return false
+	}
+	for index, item := range items {
+		if item != want[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func verifySupportRefProfile(response wireResponse, kind, refMember string, want NameVersion) error {
+	if response.Status != http.StatusOK {
+		return fmt.Errorf("%s HTTP %d; body=%s", kind, response.Status, strings.TrimSpace(string(response.Body)))
+	}
+	var profile map[string]any
+	if err := decodeStrictResponse(response, &profile); err != nil {
+		return err
+	}
+	if profile["apiVersion"] != supportAPIVersion || profile["kind"] != kind {
+		return fmt.Errorf("%s profile identity is invalid", kind)
+	}
+	reference, _ := profile[refMember].(map[string]any)
+	if reference == nil || reference["name"] != want.Name || reference["version"] != want.Version {
+		return fmt.Errorf("%s profile %s does not match the probe", kind, refMember)
+	}
+	digest, _ := reference["schemaDigest"].(string)
+	if !formpackage.ValidDigest(digest) {
+		return fmt.Errorf("%s profile schemaDigest is invalid", kind)
+	}
+	return nil
+}
+
+func cloneJSONMap(input map[string]any) map[string]any {
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
+}

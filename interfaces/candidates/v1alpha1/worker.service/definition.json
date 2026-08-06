@@ -1,0 +1,113 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "worker.service",
+  "version": "1.0.0",
+  "title": "Worker-to-worker service invocation",
+  "description": "Direct HTTP-shaped request/response invocation of another Module Worker with read-after-write consistency toward the invoked worker's own state: a response reflects every effect the invoked handler completed before responding. The call never leaves the host.",
+  "operations": [
+    {
+      "name": "fetch",
+      "description": "Invoke the target worker's fetch handler with one request and return its response.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 128,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "method": {
+            "enum": [
+              "DELETE",
+              "GET",
+              "HEAD",
+              "OPTIONS",
+              "PATCH",
+              "POST",
+              "PUT"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 128,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": {
+            "maximum": 599,
+            "minimum": 100,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "backend_unavailable"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "read_after_write"
+  },
+  "limits": {
+    "maxRequestBytes": 104857600
+  },
+  "fixtures": [
+    {
+      "name": "fetch-roundtrip",
+      "steps": [
+        {
+          "operation": "fetch",
+          "input": {
+            "method": "GET",
+            "path": "/health"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    }
+  ]
+}

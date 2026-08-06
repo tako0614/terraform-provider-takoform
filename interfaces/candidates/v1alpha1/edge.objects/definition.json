@@ -1,0 +1,336 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "edge.objects",
+  "version": "1.0.0",
+  "title": "Object bucket",
+  "description": "Flat-namespace object reads and writes with read-after-write consistency: a get or head after a successful put observes that put. Writes to one key are last-writer-wins. Conditional requests fence on the strong etag returned by put and head; range reads return a contiguous byte subrange of one object version.",
+  "operations": [
+    {
+      "name": "get",
+      "description": "Read one object body and its content type by key.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "contentType": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "etag": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "size": {
+            "maximum": 5368709120,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "body",
+          "etag",
+          "size"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "not_found",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "head",
+      "description": "Read one object's size, etag, and content type without its body.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "contentType": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "etag": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "size": {
+            "maximum": 5368709120,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "etag",
+          "size"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "not_found",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "put",
+      "description": "Write one object, replacing any previous object at the key, and return its strong etag. A conditional put carries the expected etag and fails with precondition_failed on mismatch.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "contentType": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "expectedEtag": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "key": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "etag": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "etag"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "value_too_large",
+        "precondition_failed",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "delete",
+      "description": "Delete one object. Deleting an absent key succeeds.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "list",
+      "description": "List objects in lexicographic key order, optionally under a prefix, one cursor page at a time.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "prefix": {
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "objects": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "etag": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "key": {
+                  "maxLength": 1024,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "size": {
+                  "maximum": 5368709120,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "etag",
+                "key",
+                "size"
+              ],
+              "type": "object"
+            },
+            "maxItems": 1000,
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "objects",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_cursor",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    }
+  ],
+  "semantics": {
+    "consistency": "read_after_write",
+    "pagination": "cursor"
+  },
+  "limits": {
+    "maxKeyBytes": 1024,
+    "maxObjectBytes": 5368709120
+  },
+  "fixtures": [
+    {
+      "name": "put-then-get",
+      "steps": [
+        {
+          "operation": "put",
+          "input": {
+            "body": "total: 3",
+            "contentType": "text/plain",
+            "key": "reports/summary.txt"
+          }
+        },
+        {
+          "operation": "get",
+          "input": {
+            "key": "reports/summary.txt"
+          },
+          "expected": {
+            "body": "total: 3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete-then-head-not-found",
+      "steps": [
+        {
+          "operation": "put",
+          "input": {
+            "body": "x",
+            "key": "tmp/scratch.txt"
+          }
+        },
+        {
+          "operation": "delete",
+          "input": {
+            "key": "tmp/scratch.txt"
+          }
+        },
+        {
+          "operation": "head",
+          "input": {
+            "key": "tmp/scratch.txt"
+          },
+          "expectedError": "not_found"
+        }
+      ]
+    }
+  ]
+}

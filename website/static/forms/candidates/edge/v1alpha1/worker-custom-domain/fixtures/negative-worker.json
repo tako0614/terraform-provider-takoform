@@ -1,0 +1,7 @@
+{
+  "hostname": "app.portable-conformance.invalid",
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "Not A Resource Name"
+  }
+}

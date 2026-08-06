@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -25,7 +26,7 @@ func TestPortableWireModelContainsOnlyPortableFields(t *testing.T) {
 		want string
 	}{
 		{name: "discovery", typ: reflect.TypeOf(Discovery{}), want: "api_versions,features,endpoints"},
-		{name: "metadata", typ: reflect.TypeOf(Metadata{}), want: "name,space,resourceVersion"},
+		{name: "metadata", typ: reflect.TypeOf(Metadata{}), want: "name,space,resourceVersion,revision"},
 		{name: "status", typ: reflect.TypeOf(Status{}), want: "observed,output"},
 		{name: "resource", typ: reflect.TypeOf(Resource{}), want: "apiVersion,kind,form,metadata,spec,status"},
 		{name: "preview", typ: reflect.TypeOf(PreviewResourceResult{}), want: "resource,review"},
@@ -142,7 +143,7 @@ func TestErrorEnvelopeAcquiresStableSemanticsOnlyForExactProtocolTuple(t *testin
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			apiErr := parseAPIError(test.status, []byte(test.raw))
+			apiErr := parseAPIError(test.status, []byte(test.raw), "")
 			if apiErr.Code != test.wantCode ||
 				apiErr.Retryable != test.wantRetry ||
 				apiErr.ProtocolInvalid != (test.wantCode == "") {
@@ -479,5 +480,48 @@ func TestDiscoveryValidatesOptionalOIDCIssuer(t *testing.T) {
 				t.Fatalf("negotiateEndpoints() error = %v, wantError = %v", err, test.wantError)
 			}
 		})
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{name: "empty", value: ""},
+		{name: "delta seconds", value: "5", want: 5 * time.Second},
+		{name: "zero seconds", value: "0"},
+		{name: "negative seconds", value: "-1"},
+		{name: "HTTP date", value: time.Now().Add(3 * time.Second).UTC().Format(http.TimeFormat), want: 3 * time.Second},
+		{name: "garbage", value: "soon"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := parseRetryAfter(test.value)
+			if test.want == 0 {
+				if got != 0 {
+					t.Fatalf("parseRetryAfter(%q) = %v, want 0", test.value, got)
+				}
+				return
+			}
+			// HTTP-date parsing is subject to clock skew; allow a small window.
+			if got < test.want-2*time.Second || got > test.want+2*time.Second {
+				t.Fatalf("parseRetryAfter(%q) = %v, want ~%v", test.value, got, test.want)
+			}
+		})
+	}
+}
+
+func TestParseAPIErrorCarriesRetryAfter(t *testing.T) {
+	apiErr := parseAPIError(
+		http.StatusServiceUnavailable,
+		[]byte(`{"error":{"code":"backend_unavailable","message":"retry","requestId":"req-7","retryable":true}}`),
+		"4",
+	)
+	if apiErr.RetryAfter != 4*time.Second {
+		t.Fatalf("RetryAfter = %v, want 4s", apiErr.RetryAfter)
+	}
+	if apiErr.Code != "backend_unavailable" || !apiErr.Retryable || apiErr.ProtocolInvalid {
+		t.Fatalf("unexpected error envelope: %#v", apiErr)
 	}
 }

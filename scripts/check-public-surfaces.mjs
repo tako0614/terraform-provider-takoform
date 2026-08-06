@@ -195,6 +195,70 @@ function checkMarkdownLinks() {
   }
 }
 
+// The site mirrors repository paths as URLs: a link target may resolve in the
+// website tree or in website/static/, which is served verbatim at the same
+// relative URL. The canonical-tree check above covers repository files; this
+// check covers the committed site projections, which can resolve differently.
+function checkWebsiteMarkdownLinks() {
+  const websiteRoot = path.join(repositoryRoot, "website");
+  const staticRoot = path.join(websiteRoot, "static");
+  const siteFiles = walkFiles(websiteRoot, (filePath) => {
+    if (!filePath.endsWith(".md")) {
+      return false;
+    }
+    return !filePath.startsWith(path.join(websiteRoot, "public"));
+  });
+
+  const existsOnSite = (targetPath) => {
+    const candidates = [
+      targetPath,
+      `${targetPath}.md`,
+      `${targetPath}.html`,
+      targetPath.replace(/\.html$/, ".md"),
+      path.join(targetPath, "index.md"),
+    ];
+    if (candidates.some((candidate) => existsSync(candidate))) {
+      return true;
+    }
+    const underWebsite = path.relative(websiteRoot, targetPath);
+    if (underWebsite === "" || underWebsite.startsWith("..")) {
+      return false;
+    }
+    const mirrored = path.join(staticRoot, underWebsite);
+    const mirroredCandidates = [
+      mirrored,
+      `${mirrored}.md`,
+      `${mirrored}.html`,
+      path.join(mirrored, "index.md"),
+    ];
+    return mirroredCandidates.some((candidate) => existsSync(candidate));
+  };
+
+  for (const filePath of siteFiles) {
+    for (const rawTarget of markdownTargets(read(filePath))) {
+      const parts = localLinkParts(rawTarget);
+      if (parts === null) {
+        continue;
+      }
+      const decodedPath = decodePath(
+        parts.pathname,
+        `${relative(filePath)} website link`,
+      );
+      if (decodedPath === "") {
+        continue;
+      }
+      const candidate = decodedPath.startsWith("/")
+        ? path.join(websiteRoot, `.${decodedPath}`)
+        : path.resolve(path.dirname(filePath), decodedPath);
+      if (!existsOnSite(candidate)) {
+        fail(
+          `${relative(filePath)}: website link target does not exist on the site: ${rawTarget}`,
+        );
+      }
+    }
+  }
+}
+
 function htmlAttribute(attributes, name) {
   const pattern = new RegExp(
     `(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>]+))`,
@@ -535,6 +599,36 @@ function checkTerraformProviderExample(filePath, providerVersion) {
   if (!hasExactProviderPin(source, providerVersion)) {
     fail(
       `${relative(filePath)}: provider example must contain version = "= ${providerVersion}"`,
+    );
+  }
+}
+
+// The Edge Platform Family examples pin the v2.1.0 SOURCE CANDIDATE, which is
+// deliberately NOT the published release version: v2.0.0 does not contain
+// these resources, so pinning it would be a false availability claim. The
+// example must state the unpublished source-candidate status and must never
+// pin the published release.
+const edgeFamilySourceCandidateVersion = "2.1.0";
+
+function checkEdgeFamilyProviderExample(filePath, publishedVersion) {
+  const source = read(filePath);
+  if (!source.includes("registry.terraform.io/tako0614/takoform")) {
+    fail(`${relative(filePath)}: missing canonical provider source`);
+    return;
+  }
+  if (!hasExactProviderPin(source, edgeFamilySourceCandidateVersion)) {
+    fail(
+      `${relative(filePath)}: Edge Family example must contain version = "= ${edgeFamilySourceCandidateVersion}"`,
+    );
+  }
+  if (!source.includes("unpublished source candidate")) {
+    fail(
+      `${relative(filePath)}: Edge Family example must state the unpublished source-candidate status`,
+    );
+  }
+  if (hasExactProviderPin(source, publishedVersion)) {
+    fail(
+      `${relative(filePath)}: Edge Family example must not pin the published release version ${publishedVersion}`,
     );
   }
 }
@@ -1209,7 +1303,26 @@ if (publicationTruth !== null) {
   );
 }
 
-const formDocNames = forms.map(({ docName }) => docName);
+// The Host API v1alpha3 lane: the eleven Edge Platform Family resources plus
+// the generic takoform_resource carrier, all rendered by
+// internal/standardforms (doc name = resource type minus the takoform_
+// prefix). They share the v2.1.0 source-candidate example pin.
+const edgeFamilyDocNames = [
+  "module_worker",
+  "worker_bundle",
+  "worker_version",
+  "worker_deployment",
+  "worker_custom_domain",
+  "worker_cron_trigger",
+  "edge_kv_namespace",
+  "edge_object_bucket",
+  "sqlite_database",
+  "at_least_once_queue",
+  "queue_consumer",
+  "resource",
+];
+
+const formDocNames = [...forms.map(({ docName }) => docName), ...edgeFamilyDocNames];
 const expectedResourceDocs = formDocNames.map((name) => `${name}.md`);
 const docsResourceDirectory = path.join(repositoryRoot, "docs", "resources");
 const docsResourceEntries = directoryEntries(docsResourceDirectory);
@@ -1243,8 +1356,18 @@ compareExact(
   ),
   expectedResourceExampleFiles,
 );
+const edgeFamilyExampleDirectories = new Set(
+  edgeFamilyDocNames.map((name) => `takoform_${name}`),
+);
 for (const example of resourceExampleFiles) {
-  checkTerraformProviderExample(example, releaseVersion.version);
+  const directoryName = path
+    .relative(exampleResourceDirectory, example)
+    .split(path.sep)[0];
+  if (edgeFamilyExampleDirectories.has(directoryName)) {
+    checkEdgeFamilyProviderExample(example, releaseVersion.version);
+  } else {
+    checkTerraformProviderExample(example, releaseVersion.version);
+  }
 }
 
 const dataSourceDocs = path.join(repositoryRoot, "docs", "data-sources");
@@ -1303,6 +1426,7 @@ if (!docsIndexTargets.includes(interfaceDataSourceDoc)) {
 }
 
 checkMarkdownLinks();
+checkWebsiteMarkdownLinks();
 checkHtmlFiles();
 checkResourceInventory(formDocNames);
 checkDocsPageLinks(formDocNames);

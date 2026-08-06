@@ -24,14 +24,26 @@ func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 		"package-index.schema.json":                      filepath.Join("..", "formpackage", "schemas", "package-index.schema.json"),
 		"package-index-v1alpha2.schema.json":             filepath.Join("..", "formpackage", "schemas", "package-index-v1alpha2.schema.json"),
 		"package-index-v1alpha3.schema.json":             filepath.Join("..", "formpackage", "schemas", "package-index-v1alpha3.schema.json"),
+		"form-ref-v1alpha3.schema.json":                  filepath.Join("..", "formpackage", "schemas", "form-ref-v1alpha3.schema.json"),
+		"form-definition-v1alpha3.schema.json":           filepath.Join("..", "formpackage", "schemas", "form-definition-v1alpha3.schema.json"),
+		"package-index-v1alpha4.schema.json":             filepath.Join("..", "formpackage", "schemas", "package-index-v1alpha4.schema.json"),
+		"interface-ref-v1alpha1.schema.json":             filepath.Join("..", "formpackage", "schemas", "interface-ref-v1alpha1.schema.json"),
+		"binding-ref-v1alpha1.schema.json":               filepath.Join("..", "formpackage", "schemas", "binding-ref-v1alpha1.schema.json"),
 		"form-package-revocation.schema.json":            filepath.Join("..", "formpackage", "schemas", "form-package-revocation.schema.json"),
 		"form-package-revocation-checkpoint.schema.json": filepath.Join("..", "formpackage", "schemas", "form-package-revocation-checkpoint.schema.json"),
 		"host-discovery.schema.json":                     filepath.Join("..", "schemas", "host-discovery.schema.json"),
 	}
 	normativeOnly := map[string]bool{
-		"host-api-wire.schema.json":           true,
-		"host-api-wire-v1alpha2.schema.json":  true,
-		"host-discovery-v1alpha2.schema.json": true,
+		"host-api-wire.schema.json":                 true,
+		"host-api-wire-v1alpha2.schema.json":        true,
+		"host-discovery-v1alpha2.schema.json":       true,
+		"host-api-wire-v1alpha3.schema.json":        true,
+		"host-discovery-v1alpha3.schema.json":       true,
+		"interface-definition-v1alpha1.schema.json": true,
+		"binding-definition-v1alpha1.schema.json":   true,
+		"artifact-manifest-v1alpha1.schema.json":    true,
+		"operation-v1alpha1.schema.json":            true,
+		"host-support-profile-v1alpha1.schema.json": true,
 	}
 	entries, err := os.ReadDir("schemas")
 	if err != nil {

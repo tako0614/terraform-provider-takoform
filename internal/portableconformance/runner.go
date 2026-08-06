@@ -2849,30 +2849,31 @@ func cloneStringMap(input map[string]string) map[string]string {
 	return output
 }
 
-func (r *endpointRunner) exactQuery(packageDigestOverride string) url.Values {
-	return r.exactQueryForSpace(r.contract.RunnerInput.Space, packageDigestOverride)
+func (r *endpointRunner) exactQuery(schemaDigestOverride string) url.Values {
+	return r.exactQueryForSpace(r.contract.RunnerInput.Space, schemaDigestOverride)
 }
 
-func (r *endpointRunner) exactQueryForSpace(space, packageDigestOverride string) url.Values {
-	return r.exactQueryForIdentity(space, r.contract.RunnerInput.Identity, packageDigestOverride)
+func (r *endpointRunner) exactQueryForSpace(space, schemaDigestOverride string) url.Values {
+	return r.exactQueryForIdentity(space, r.contract.RunnerInput.Identity, schemaDigestOverride)
 }
 
 func (r *endpointRunner) exactQueryForIdentity(
 	space string,
 	identity InstalledFormReference,
-	packageDigestOverride string,
+	schemaDigestOverride string,
 ) url.Values {
-	packageDigest := identity.PackageDigest
-	if packageDigestOverride != "" {
-		packageDigest = packageDigestOverride
+	// The packageDigest is not part of the exact query: read/lifecycle
+	// identity is the FormRef plus Space (see client.exactResourceQuery).
+	schemaDigest := identity.FormRef.SchemaDigest
+	if schemaDigestOverride != "" {
+		schemaDigest = schemaDigestOverride
 	}
 	query := url.Values{}
 	query.Set("space", space)
 	query.Set("apiVersion", identity.FormRef.APIVersion)
 	query.Set("kind", identity.FormRef.Kind)
 	query.Set("definitionVersion", identity.FormRef.DefinitionVersion)
-	query.Set("schemaDigest", identity.FormRef.SchemaDigest)
-	query.Set("packageDigest", packageDigest)
+	query.Set("schemaDigest", schemaDigest)
 	return query
 }
 
@@ -2890,20 +2891,20 @@ func (r *endpointRunner) resourceURLForIdentity(kind, name string) string {
 		url.PathEscape(name))
 }
 
-func (r *endpointRunner) resourceURLWithExactQuery(packageDigestOverride string) string {
-	return r.resourceURLWithExactQueryForName(r.contract.RunnerInput.Name, packageDigestOverride)
+func (r *endpointRunner) resourceURLWithExactQuery(schemaDigestOverride string) string {
+	return r.resourceURLWithExactQueryForName(r.contract.RunnerInput.Name, schemaDigestOverride)
 }
 
-func (r *endpointRunner) resourceURLWithExactQueryForName(name, packageDigestOverride string) string {
-	return r.resourceURLForName(name) + "?" + r.exactQuery(packageDigestOverride).Encode()
+func (r *endpointRunner) resourceURLWithExactQueryForName(name, schemaDigestOverride string) string {
+	return r.resourceURLForName(name) + "?" + r.exactQuery(schemaDigestOverride).Encode()
 }
 
 func (r *endpointRunner) resourceURLWithExactQueryForSpace(
 	name,
 	space,
-	packageDigestOverride string,
+	schemaDigestOverride string,
 ) string {
-	return r.resourceURLForName(name) + "?" + r.exactQueryForSpace(space, packageDigestOverride).Encode()
+	return r.resourceURLForName(name) + "?" + r.exactQueryForSpace(space, schemaDigestOverride).Encode()
 }
 
 func (r *endpointRunner) actionURL(action string) string {
@@ -2952,7 +2953,7 @@ func decodeResourceResponse(response wireResponse) (client.Resource, error) {
 	if err := decodeStrictBytes(response.Body, &resource); err != nil {
 		return client.Resource{}, err
 	}
-	if err := verifyETag(response, resource.Metadata.ResourceVersion); err != nil {
+	if err := verifyETag(response, resource.Metadata); err != nil {
 		return client.Resource{}, err
 	}
 	return resource, nil
@@ -2966,7 +2967,7 @@ func decodeResourceEnvelope(response wireResponse, successStatuses ...int) (clie
 	if err := decodeStrictBytes(response.Body, &envelope); err != nil {
 		return client.Resource{}, err
 	}
-	if err := verifyETag(response, envelope.Resource.Metadata.ResourceVersion); err != nil {
+	if err := verifyETag(response, envelope.Resource.Metadata); err != nil {
 		return client.Resource{}, err
 	}
 	return envelope.Resource, nil
@@ -3060,10 +3061,17 @@ func exactGeneration(value any, want int) bool {
 	}
 }
 
-func verifyETag(response wireResponse, version string) error {
+// verifyETag requires the response ETag to be the quoted representation
+// revision when the host supplies metadata.revision, falling back to the
+// quoted resourceVersion (matching the client's captureRevision rule).
+func verifyETag(response wireResponse, metadata client.Metadata) error {
+	expected := metadata.ResourceVersion
+	if metadata.Revision != "" {
+		expected = metadata.Revision
+	}
 	values := response.Header.Values("ETag")
-	if len(values) != 1 || values[0] != `"`+version+`"` {
-		return fmt.Errorf("ETag = %v, want exactly %q", values, `"`+version+`"`)
+	if len(values) != 1 || values[0] != `"`+expected+`"` {
+		return fmt.Errorf("ETag = %v, want exactly %q", values, `"`+expected+`"`)
 	}
 	return nil
 }

@@ -1,0 +1,16 @@
+{
+  "takoformUnexpected": true,
+  "versions": [
+    {
+      "weight": 10000,
+      "workerVersion": {
+        "kind": "WorkerVersion",
+        "name": "worker-version"
+      }
+    }
+  ],
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "module-worker"
+  }
+}

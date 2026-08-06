@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -77,6 +78,11 @@ type Metadata struct {
 	Name            string `json:"name"`
 	Space           string `json:"space,omitempty"`
 	ResourceVersion string `json:"resourceVersion,omitempty"`
+	// Revision is the host-assigned representation revision. It changes
+	// whenever the Resource representation (observed/output status) changes,
+	// and the response ETag is this exact quoted value. It is a validator for
+	// HTTP caching and readback, not the desired-state generation.
+	Revision string `json:"revision,omitempty"`
 }
 
 // Status carries only the Form's portable observed and output documents.
@@ -113,6 +119,9 @@ func (ref *FormRef) UnmarshalJSON(raw []byte) error {
 	validated, err := formpackage.ValidateFormRef(raw)
 	if err != nil {
 		return fmt.Errorf("takoform: invalid FormRef JSON: %w", err)
+	}
+	if err := requireCentralEpoch(validated.APIVersion); err != nil {
+		return err
 	}
 	ref.APIVersion = validated.APIVersion
 	ref.Kind = validated.Kind
@@ -176,6 +185,10 @@ type APIError struct {
 	ProtocolInvalid bool
 	// Details is the optional, free-form details payload, kept raw.
 	Details json.RawMessage
+	// RetryAfter is the parsed Retry-After header of the error response
+	// (seconds or HTTP-date), or zero when absent or unparseable. When set,
+	// it takes priority over the exponential backoff for the next attempt.
+	RetryAfter time.Duration
 }
 
 var stableErrorHTTPStatusByCode = map[string]int{
@@ -500,6 +513,13 @@ func (c *Client) actionResourceURL(kind, name, action string, query url.Values) 
 	return u
 }
 
+// exactResourceQuery carries the exact FormRef and Space on read/lifecycle
+// URLs. The packageDigest is deliberately not part of this query: it is
+// provenance evidence for the distribution the client verified, not a Resource
+// identity selector. A host MUST resolve read/lifecycle queries by FormRef
+// alone, so a re-packaged but contract-identical Form stays addressable. The
+// packageDigest still travels in the request body (see Resource.Form) so a
+// host can validate the exact distribution it is being asked to apply.
 func exactResourceQuery(space string, form InstalledFormReference) url.Values {
 	query := url.Values{}
 	query.Set("space", space)
@@ -507,7 +527,6 @@ func exactResourceQuery(space string, form InstalledFormReference) url.Values {
 	query.Set("kind", form.FormRef.Kind)
 	query.Set("definitionVersion", form.FormRef.DefinitionVersion)
 	query.Set("schemaDigest", form.FormRef.SchemaDigest)
-	query.Set("packageDigest", form.PackageDigest)
 	return query
 }
 
@@ -642,7 +661,7 @@ func (c *Client) PutResource(ctx context.Context, kind, name string, body *Resou
 	if err := verifyResourceIdentity(body.Form, name, body.Metadata.Space, &out); err != nil {
 		return nil, err
 	}
-	if err := captureResourceVersion(&out, responseHeaders); err != nil {
+	if err := captureRevision(&out, responseHeaders); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -687,7 +706,7 @@ func (c *Client) ImportResource(ctx context.Context, kind, name, nativeID string
 	if err := verifyResourceIdentity(body.Form, name, body.Metadata.Space, &wrapped.Resource); err != nil {
 		return nil, err
 	}
-	if err := captureResourceVersion(&wrapped.Resource, responseHeaders); err != nil {
+	if err := captureRevision(&wrapped.Resource, responseHeaders); err != nil {
 		return nil, err
 	}
 	return &wrapped.Resource, nil
@@ -724,7 +743,7 @@ func (c *Client) GetResource(ctx context.Context, kind, name, space string, form
 	if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
 		return nil, err
 	}
-	if err := captureResourceVersion(&out, responseHeaders); err != nil {
+	if err := captureRevision(&out, responseHeaders); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -770,7 +789,7 @@ func (c *Client) ObserveResource(ctx context.Context, kind, name, space string, 
 	if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
 		return nil, err
 	}
-	if err := captureResourceVersion(&out, responseHeaders); err != nil {
+	if err := captureRevision(&out, responseHeaders); err != nil {
 		return nil, err
 	}
 	if err := requireExactResourceVersion(&out, resourceVersion); err != nil {
@@ -819,7 +838,7 @@ func (c *Client) RefreshResource(ctx context.Context, kind, name, space string, 
 	if err := verifyResourceIdentity(expected, name, space, &out); err != nil {
 		return nil, err
 	}
-	if err := captureResourceVersion(&out, responseHeaders); err != nil {
+	if err := captureRevision(&out, responseHeaders); err != nil {
 		return nil, err
 	}
 	if err := requireExactResourceVersion(&out, resourceVersion); err != nil {
@@ -965,9 +984,9 @@ func (c *Client) doJSONWithHeaders(
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			apiErr := parseAPIError(resp.StatusCode, data)
+			apiErr := parseAPIError(resp.StatusCode, data, resp.Header.Get("Retry-After"))
 			if retryStableAPIError && attempt+1 < attempts && isPortableRetryable(apiErr) {
-				if err := waitForRetry(ctx, attempt); err != nil {
+				if err := waitForRetry(ctx, attempt, apiErr.RetryAfter); err != nil {
 					return nil, err
 				}
 				continue
@@ -1017,8 +1036,32 @@ func decodeStrictJSON(data []byte, out any) error {
 	return formpackage.DecodeStrictIJSON(data, out)
 }
 
-func waitForRetry(ctx context.Context, attempt int) error {
-	delay := 25 * time.Millisecond * time.Duration(1<<attempt)
+// retryBaseDelay is the exponential backoff base. retryMaxDelay caps a
+// host-supplied Retry-After so one hint cannot dominate the whole request
+// timeout.
+const (
+	retryBaseDelay = 25 * time.Millisecond
+	retryMaxDelay  = 60 * time.Second
+)
+
+// waitForRetry sleeps before the next attempt. A host Retry-After hint wins
+// over the exponential backoff; otherwise the backoff window
+// base*2^attempt is applied with full jitter so retrying clients do not
+// synchronize their probes.
+func waitForRetry(ctx context.Context, attempt int, retryAfter time.Duration) error {
+	var delay time.Duration
+	if retryAfter > 0 {
+		delay = retryAfter
+		if delay > retryMaxDelay {
+			delay = retryMaxDelay
+		}
+	} else {
+		window := retryBaseDelay * time.Duration(1<<attempt)
+		if window <= 0 {
+			window = retryBaseDelay
+		}
+		delay = time.Duration(rand.Int63n(int64(window)))
+	}
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	select {
@@ -1032,8 +1075,11 @@ func waitForRetry(ctx context.Context, attempt int) error {
 // parseAPIError decodes the nested error envelope
 // ({ "error": { "code", "message", "requestId", "details" } }), falling back to
 // the raw body when the response is not the expected JSON shape.
-func parseAPIError(status int, data []byte) *APIError {
-	apiErr := &APIError{StatusCode: status, ProtocolInvalid: true}
+func parseAPIError(status int, data []byte, retryAfterHeader string) *APIError {
+	apiErr := &APIError{
+		StatusCode: status, ProtocolInvalid: true,
+		RetryAfter: parseRetryAfter(retryAfterHeader),
+	}
 	if len(bytes.TrimSpace(data)) > 0 {
 		var env errorEnvelope
 		if err := decodeStrictJSON(data, &env); err == nil &&
@@ -1059,6 +1105,24 @@ func parseAPIError(status int, data []byte) *APIError {
 		}
 	}
 	return apiErr
+}
+
+// parseRetryAfter reads the Retry-After header as delta-seconds or an
+// HTTP-date, returning the suggested wait. Zero means "no usable hint".
+func parseRetryAfter(value string) time.Duration {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(trimmed); err == nil && seconds >= 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if when, err := http.ParseTime(trimmed); err == nil {
+		if delay := time.Until(when); delay > 0 {
+			return delay
+		}
+	}
+	return 0
 }
 
 func isStableErrorEnvelope(status int, code string, retryable bool) bool {
@@ -1137,6 +1201,17 @@ func validateResourceIdentity(kind string, resource *Resource) error {
 	return nil
 }
 
+// requireCentralEpoch pins this retained provider-v2 client to the two frozen
+// central Form epochs. Namespaced family groups are valid FormRefs, but they
+// belong to the v1alpha3 client lane (decision 0013); this lane fails closed
+// on them exactly as it did before the family lane existed.
+func requireCentralEpoch(apiVersion string) error {
+	if apiVersion != formpackage.LegacyFormAPIVersion && apiVersion != formpackage.CurrentFormAPIVersion {
+		return fmt.Errorf("takoform: FormRef apiVersion %q is outside the provider-v2 client lane", apiVersion)
+	}
+	return nil
+}
+
 func validateInstalledFormReference(kind string, form InstalledFormReference) error {
 	raw, err := json.Marshal(form.FormRef)
 	if err != nil {
@@ -1144,6 +1219,9 @@ func validateInstalledFormReference(kind string, form InstalledFormReference) er
 	}
 	if _, err := formpackage.ValidateFormRef(raw); err != nil {
 		return fmt.Errorf("takoform: exact FormRef is invalid: %w", err)
+	}
+	if err := requireCentralEpoch(form.FormRef.APIVersion); err != nil {
+		return err
 	}
 	if kind == "" || form.FormRef.Kind != kind || !formpackage.ValidDigest(form.PackageDigest) {
 		return errors.New("takoform: exact InstalledFormReference is incomplete or invalid")
@@ -1187,13 +1265,16 @@ func verifyResourceIdentity(expected *InstalledFormReference, expectedName, expe
 	return nil
 }
 
+// sameForm reports whether the response carries the same contract identity as
+// the request. The packageDigest is excluded by design: it is distribution
+// provenance, not contract identity, and a host legitimately serves a
+// re-packaged but contract-identical Form (see exactResourceQuery).
 func sameForm(left, right *InstalledFormReference) bool {
 	return left != nil && right != nil &&
 		left.FormRef.APIVersion == right.FormRef.APIVersion &&
 		left.FormRef.Kind == right.FormRef.Kind &&
 		left.FormRef.DefinitionVersion == right.FormRef.DefinitionVersion &&
-		left.FormRef.SchemaDigest == right.FormRef.SchemaDigest &&
-		left.PackageDigest == right.PackageDigest
+		left.FormRef.SchemaDigest == right.FormRef.SchemaDigest
 }
 
 func validatePreviewResult(request *Resource, preview *PreviewResourceResult) error {
@@ -1243,7 +1324,13 @@ func canonicalValueDigest(value any) (string, error) {
 	return formpackage.DigestCanonicalJSON(raw)
 }
 
-func captureResourceVersion(resource *Resource, headers http.Header) error {
+// captureRevision validates the response's desired-state generation and its
+// strong ETag. The ETag is a representation validator, not the generation:
+// a host that supplies metadata.revision MUST return that exact quoted value
+// as the ETag, so observe/refresh representation changes are visible to HTTP
+// caching. Hosts that have not adopted the revision field fall back to the
+// quoted resourceVersion, keeping the response a strong validator.
+func captureRevision(resource *Resource, headers http.Header) error {
 	if resource == nil {
 		return errors.New("takoform: host response omitted the Resource")
 	}
@@ -1253,10 +1340,14 @@ func captureResourceVersion(resource *Resource, headers http.Header) error {
 	}
 	etagValues := headers.Values("ETag")
 	if len(etagValues) != 1 {
-		return errors.New("takoform: host response must return exactly one ETag resourceVersion fence")
+		return errors.New("takoform: host response must return exactly one ETag representation revision")
 	}
-	if etagValues[0] != quoteResourceVersion(bodyVersion) {
-		return errors.New("takoform: host response resourceVersion and ETag disagree")
+	expected := quoteResourceVersion(bodyVersion)
+	if revision := resource.Metadata.Revision; revision != "" {
+		expected = quoteResourceVersion(revision)
+	}
+	if etagValues[0] != expected {
+		return errors.New("takoform: host response ETag does not match the representation revision")
 	}
 	return nil
 }

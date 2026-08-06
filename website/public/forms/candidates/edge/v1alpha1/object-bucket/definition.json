@@ -1,0 +1,47 @@
+{
+  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "kind": "ObjectBucket",
+  "definitionVersion": "0.1.0",
+  "title": "Object Bucket",
+  "description": "Flat-namespace object store with read-after-write consistency, exactly as fixed by the edge.objects Interface. Operating rules such as CORS, lifecycle, and lock are separate policy resources, never desired fields of the bucket identity.",
+  "role": "identity",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Flat-namespace object store with read-after-write consistency, exactly as fixed by the edge.objects Interface. Operating rules such as CORS, lifecycle, and lock are separate policy resources, never desired fields of the bucket identity.",
+    "properties": {},
+    "title": "Object Bucket desired state",
+    "type": "object"
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh"
+  ],
+  "providedInterfaces": [
+    {
+      "apiVersion": "interfaces.takoform.com/v1alpha1",
+      "name": "edge.objects",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:275b50a9337e5a9ea2367fee1a64e21401e5e74fb9c543b6ce3c4f2be7365f26"
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-unexpected-property",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

@@ -151,7 +151,14 @@ function generate(outputRoot) {
       writeJson(destination, source.fixtures[fixtureName]);
     }
 
-    const definitionRaw = prettyJson(definition);
+    // Use the verbatim JSON text emitted by the Go source renderer. Re-
+    // serializing the parsed definition through JavaScript would round large
+    // integer schema values (generation maximum 9223372036854775807) to the
+    // nearest float64 and silently change the normative schema bytes.
+    const definitionRaw = source.definitionJson;
+    if (typeof definitionRaw !== "string" || definitionRaw.length === 0) {
+      throw new Error(`${slug}: source renderer emitted no definitionJson text`);
+    }
     writeFileSync(path.join(destinationRoot, "definition.json"), definitionRaw);
     const payloadPaths = [
       "definition.json",

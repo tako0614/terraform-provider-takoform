@@ -1,0 +1,32 @@
+{
+  "format": "takoform.interface-candidates@v1",
+  "publicationStatus": "unpublished",
+  "authoringSource": "internal/edgeformcatalog",
+  "interfaces": [
+    {
+      "name": "edge.kv",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:1db93de87b25b5feedb380cdcf3ac10e0ff81f0a005ca17bc11ae9e416201ebe"
+    },
+    {
+      "name": "edge.objects",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:275b50a9337e5a9ea2367fee1a64e21401e5e74fb9c543b6ce3c4f2be7365f26"
+    },
+    {
+      "name": "edge.sql",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:92a270d639a2f607367172b9b36a1c511a9ced4ba1f79f7585b1ce3094231f24"
+    },
+    {
+      "name": "edge.queue",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:822e71c8bde4c8391a21d2de0d51f1fcc25ab6cbc1737a14cc8d3fe9bcb5d254"
+    },
+    {
+      "name": "worker.service",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:8beedb6fa4399836c24afa0a7adb17fbe13e8bc705b86441dc210e7614c95507"
+    }
+  ]
+}

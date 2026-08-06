@@ -1,0 +1,15 @@
+{
+  "versions": [
+    {
+      "weight": 0,
+      "workerVersion": {
+        "kind": "WorkerVersion",
+        "name": "worker-version"
+      }
+    }
+  ],
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "module-worker"
+  }
+}

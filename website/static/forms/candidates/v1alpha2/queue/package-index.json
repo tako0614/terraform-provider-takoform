@@ -13,7 +13,7 @@
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
       "size": 6685,
-      "digest": "sha256:a16d0b3f2fed07bb3a166844f13afc28be686e637370e0c6b072976f3d82ff65"
+      "digest": "sha256:25439c7cc1a05576d022736153c143655ac86be6bb02be129a98801935dd0130"
     },
     {
       "path": "fixtures/desired.json",

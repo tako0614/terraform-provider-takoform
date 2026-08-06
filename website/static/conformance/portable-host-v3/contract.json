@@ -1,0 +1,324 @@
+{
+  "format": "takoform.portable-host-conformance@v3",
+  "apiVersion": "forms.takoform.com/v1alpha3",
+  "discoveryPath": "/.well-known/takoform/v1alpha3",
+  "apiPath": "/apis/forms.takoform.com/v1alpha3",
+  "identity": {
+    "uid": "host-issued-immutable; delete-and-recreate-changes-uid",
+    "generation": "increments-only-on-portable-desired-spec-change; fence=expectedGeneration-or-Takoform-Expected-Generation; stale=generation_conflict/412",
+    "revision": "increments-on-any-representation-change; etag=exactly-one-strong-quoted-revision; fence=If-Match; stale=revision_conflict/412",
+    "packageDigest": "audit-evidence-only; never-identity-query-or-fence"
+  },
+  "errorEnvelope": {
+    "codes": [
+      "invalid_argument",
+      "unauthenticated",
+      "permission_denied",
+      "form_unknown",
+      "form_not_installed",
+      "form_unavailable",
+      "form_identity_conflict",
+      "resource_not_found",
+      "resource_busy",
+      "import_conflict",
+      "policy_denied",
+      "backend_unavailable",
+      "internal_error",
+      "rate_limited",
+      "deadline_exceeded",
+      "operation_cancelled",
+      "operation_not_found",
+      "dependency_in_use",
+      "deletion_protected",
+      "artifact_missing",
+      "artifact_invalid",
+      "unsupported_capability",
+      "migration_required",
+      "uid_mismatch",
+      "revision_conflict",
+      "generation_conflict"
+    ],
+    "automaticallyRetryable": ["resource_busy", "backend_unavailable", "rate_limited", "deadline_exceeded"],
+    "httpStatusByCode": {
+      "invalid_argument": 400,
+      "unauthenticated": 401,
+      "permission_denied": 403,
+      "form_unknown": 404,
+      "form_not_installed": 409,
+      "form_unavailable": 409,
+      "form_identity_conflict": 409,
+      "resource_not_found": 404,
+      "resource_busy": 409,
+      "import_conflict": 409,
+      "policy_denied": 403,
+      "backend_unavailable": 503,
+      "internal_error": 500,
+      "rate_limited": 429,
+      "deadline_exceeded": 504,
+      "operation_cancelled": 409,
+      "operation_not_found": 404,
+      "dependency_in_use": 409,
+      "deletion_protected": 409,
+      "artifact_missing": 404,
+      "artifact_invalid": 400,
+      "unsupported_capability": 422,
+      "migration_required": 409,
+      "uid_mismatch": 409,
+      "revision_conflict": 412,
+      "generation_conflict": 412
+    }
+  },
+  "runnerInput": {
+    "space": "conformance",
+    "alternateSpace": "conformance-alt",
+    "moduleWorker": {
+      "name": "module-worker-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "ModuleWorker",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:e0097760943371fcf59b0c2a520ce0ae0faeb3062628e98b5d4e49f19e4a325e"
+        },
+        "packageDigest": "sha256:9e09bf185c8835e92505539ab5f4c4eea1204349a599485d3eaf212c4d11736e"
+      },
+      "desired": {}
+    },
+    "edgeKvNamespace": {
+      "name": "edge-kv-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "EdgeKVNamespace",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:fd619c9741cc3f898bd17614e11e1a7106f322c427169dd81caeed437c9cf620"
+        },
+        "packageDigest": "sha256:cf5c4b3654f16574da48c32d8eb4bb8fbab337155ee0814158d05c728de24431"
+      },
+      "desired": {}
+    },
+    "atLeastOnceQueue": {
+      "name": "queue-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "AtLeastOnceQueue",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:fbfb27fd628e58986d5bdd46fb785402119f79df93b735cc23d08d561bc64979"
+        },
+        "packageDigest": "sha256:34f3ef3524ece07d9145f32816441086b4c977d5153b52f67302e345b9988996"
+      },
+      "desired": {
+        "messageRetentionSeconds": 345600
+      }
+    },
+    "workerVersion": {
+      "name": "worker-version-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "WorkerVersion",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:31a9a97c0bf28c95e0ce382cc7856b03f938a5a8faf3abeba68e44a8dcb803b7"
+        },
+        "packageDigest": "sha256:ea08cd7b910e898c79fe10181471b5627d629fb8a5b64a92512deda9f3477a13"
+      },
+      "desired": {
+        "bundle": {
+          "kind": "WorkerBundle",
+          "name": "worker-bundle-probe"
+        },
+        "compatibilityDate": "2026-01-01",
+        "handlers": ["fetch"],
+        "kvBindings": [
+          {
+            "name": "CACHE",
+            "resource": {
+              "kind": "EdgeKVNamespace",
+              "name": "edge-kv-probe"
+            }
+          }
+        ],
+        "worker": {
+          "kind": "ModuleWorker",
+          "name": "module-worker-probe"
+        }
+      }
+    },
+    "workerBundle": {
+      "name": "worker-bundle-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "WorkerBundle",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:fc2ae97b3ee3fb52ad611b348aeebd6ffbbaee2c76ca41527fb1320c658a7de9"
+        },
+        "packageDigest": "sha256:4fa281311512bdd9f381fd73a0ec5201d0349a378bcba246b08a9ec77f327a2f"
+      },
+      "desired": {
+        "mainModule": "index.js",
+        "modules": [
+          {
+            "digest": "sha256:8624fd492ece196a5048414afd598275b811beafc00aab602bfb59978f880765",
+            "mediaType": "application/javascript+module",
+            "name": "index.js",
+            "size": 96
+          }
+        ]
+      },
+      "moduleSource": "export default { async fetch() { return new Response(\"portable-host-v3 reference module\"); } };\n"
+    },
+    "workerDeployment": {
+      "name": "worker-deployment-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "WorkerDeployment",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:e09e4f3b1f839b45530968272add99382b32d188bc3a69e679af3e2a20c37ccc"
+        },
+        "packageDigest": "sha256:346d139b7036426905d52604cfb549c7d409053be5059ea81dbf62256c8160d3"
+      },
+      "desired": {
+        "versions": [
+          {
+            "weight": 10000,
+            "workerVersion": {
+              "kind": "WorkerVersion",
+              "name": "worker-version-probe"
+            }
+          }
+        ],
+        "worker": {
+          "kind": "ModuleWorker",
+          "name": "module-worker-probe"
+        }
+      }
+    },
+    "workerCronTrigger": {
+      "name": "cron-trigger-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "WorkerCronTrigger",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:4da1fbfeec8c982a2c26a4091db44a4bde89e745ea3c4cbccf51eaf6b20545e3"
+        },
+        "packageDigest": "sha256:a8fe8b5e8829450d8a5c7ad9616c531b742df04d032ae227c7b9b75f7be1b377"
+      },
+      "desired": {
+        "cron": "0 0 * * *",
+        "worker": {
+          "kind": "ModuleWorker",
+          "name": "module-worker-probe"
+        }
+      }
+    },
+    "queueConsumer": {
+      "name": "queue-consumer-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "QueueConsumer",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:f7312a321e0b3ab496fe54923aa700bf15d53912db17560a58800def0689b10b"
+        },
+        "packageDigest": "sha256:cd8abc4f8e4dc1601b90d6782d93bf730a4184c31b553a01c1f7f17bd0edca1b"
+      },
+      "desired": {
+        "queue": {
+          "kind": "AtLeastOnceQueue",
+          "name": "queue-probe"
+        },
+        "worker": {
+          "kind": "ModuleWorker",
+          "name": "module-worker-probe"
+        }
+      }
+    },
+    "syntheticSecondGroup": {
+      "apiVersion": "other.forms.takoform.com/v1alpha1",
+      "kind": "EdgeKVNamespace",
+      "definitionVersion": "0.1.0",
+      "schemaDigest": "sha256:6c0c743c4fcd5332da4b484b391d93ed6e93118a7773e254e1c7b0657557aefb"
+    },
+    "supportProbes": {
+      "interface": {
+        "name": "edge.kv",
+        "version": "1.0.0"
+      },
+      "binding": {
+        "name": "module-worker.edge-kv",
+        "version": "1.0.0"
+      }
+    },
+    "negativeFixtures": [
+      {
+        "name": "reject-unexpected-property",
+        "kind": "ModuleWorker",
+        "stage": "desired",
+        "path": "fixtures/negative-module-worker-unexpected-property.json",
+        "sha256": "sha256:d10f45f42473405c10b441faafa3d23e863d4160f2ca3a7d0c32874b386f1ae9"
+      },
+      {
+        "name": "reject-bad-retention",
+        "kind": "AtLeastOnceQueue",
+        "stage": "desired",
+        "path": "fixtures/negative-queue-retention.json",
+        "sha256": "sha256:1dee6d1574d4c8a06aaac8ed51b1192ad30f2fd643cd203ea532ec08b4f7bbb1"
+      }
+    ]
+  },
+  "requiredRunnerChecks": [
+    "discovery-exact",
+    "forms-exact-availability",
+    "form-definition-exact",
+    "validate-accepts-canonical",
+    "validate-rejects-negative-fixtures",
+    "prepare-binds-exact-spec",
+    "prepare-substitution-rejected",
+    "apply-create-uid-minted",
+    "apply-headers-required",
+    "apply-idempotency-replay",
+    "create-conflict-when-exists",
+    "update-generation-fence",
+    "stale-generation-rejected",
+    "revision-etag-exact",
+    "observe-fence-exact",
+    "status-change-bumps-revision-not-generation",
+    "spec-change-bumps-generation",
+    "delete-revision-fence",
+    "stale-revision-rejected",
+    "delete-then-recreate-uid-changes",
+    "expected-uid-mismatch-rejected",
+    "package-digest-not-identity",
+    "same-kind-two-groups",
+    "revision-role-update-rejected",
+    "binding-target-missing-404-before-mutation",
+    "dependency-in-use-on-bound-target-delete",
+    "async-operation-flow",
+    "operation-replay-terminal",
+    "operation-cancel",
+    "artifact-upload-missing-blob",
+    "artifact-digest-mismatch",
+    "artifact-commit-idempotent",
+    "artifact-then-bundle-apply",
+    "support-profiles-present",
+    "error-envelope-taxonomy",
+    "cross-space-isolation",
+    "cross-principal-idempotency-isolation",
+    "prepare-requires-update-fence",
+    "stale-prepare-rejected",
+    "condition-reason-closed",
+    "space-id-grammar-enforced",
+    "concurrent-unrelated-mutation",
+    "async-commit-revalidates",
+    "import-adopts-native-resource",
+    "import-validates-like-apply",
+    "deployment-weight-sum-enforced",
+    "handler-gated-attachments",
+    "artifact-manifest-reject-list",
+    "artifact-commit-binds-declared-size"
+  ]
+}

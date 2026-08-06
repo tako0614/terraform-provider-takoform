@@ -269,14 +269,18 @@ func mustDiscoveredProviderClient(t *testing.T, server *httptest.Server) *client
 
 func assertProviderExactQuery(t *testing.T, r *http.Request, form client.InstalledFormReference) {
 	t.Helper()
+	// The packageDigest is not an exact-query selector: read/lifecycle
+	// identity is the FormRef plus Space (see client.exactResourceQuery).
 	want := map[string]string{
 		"space": "prod", "apiVersion": form.FormRef.APIVersion, "kind": form.FormRef.Kind,
 		"definitionVersion": form.FormRef.DefinitionVersion, "schemaDigest": form.FormRef.SchemaDigest,
-		"packageDigest": form.PackageDigest,
 	}
 	for key, value := range want {
 		if r.URL.Query().Get(key) != value {
 			t.Errorf("query %s = %q, want %q", key, r.URL.Query().Get(key), value)
 		}
+	}
+	if r.URL.Query().Get("packageDigest") != "" {
+		t.Errorf("query packageDigest = %q, want absent from exact query", r.URL.Query().Get("packageDigest"))
 	}
 }

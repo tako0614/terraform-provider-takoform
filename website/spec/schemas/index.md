@@ -10,18 +10,30 @@ wins.
 | Schema | Contract |
 | --- | --- |
 | [`form-ref.schema.json`](form-ref.schema.json) | the frozen v1alpha1 four-field immutable Form reference |
-| [`form-ref-v1alpha2.schema.json`](form-ref-v1alpha2.schema.json) | the current v1alpha2 four-field immutable Form reference |
+| [`form-ref-v1alpha2.schema.json`](form-ref-v1alpha2.schema.json) | the retained v1alpha2 four-field immutable Form reference |
 | [`form-definition.schema.json`](form-definition.schema.json) | the frozen v1alpha1 data-only Form Definition |
-| [`form-definition-v1alpha2.schema.json`](form-definition-v1alpha2.schema.json) | the current v1alpha2 data-only Form Definition |
+| [`form-definition-v1alpha2.schema.json`](form-definition-v1alpha2.schema.json) | the retained v1alpha2 data-only Form Definition |
 | [`package-index.schema.json`](package-index.schema.json) | the closed Form Package inventory and its identity |
 | [`package-index-v1alpha2.schema.json`](package-index-v1alpha2.schema.json) | the retained content-addressed package profile for v1alpha1 FormRefs |
-| [`package-index-v1alpha3.schema.json`](package-index-v1alpha3.schema.json) | the current content-addressed package profile for v1alpha2 FormRefs |
+| [`package-index-v1alpha3.schema.json`](package-index-v1alpha3.schema.json) | the retained provider-v2 content-addressed package profile for v1alpha2 FormRefs |
 | [`form-package-revocation.schema.json`](form-package-revocation.schema.json) | one append-only revocation statement |
 | [`form-package-revocation-checkpoint.schema.json`](form-package-revocation-checkpoint.schema.json) | the cumulative, hash-chained revocation checkpoint |
 | [`host-discovery.schema.json`](host-discovery.schema.json) | the frozen provider-v1 host discovery document |
 | [`host-api-wire.schema.json`](host-api-wire.schema.json) | the frozen provider-v1 Resource and Interface wire envelopes |
-| [`host-discovery-v1alpha2.schema.json`](host-discovery-v1alpha2.schema.json) | the current provider-v2 host discovery document |
-| [`host-api-wire-v1alpha2.schema.json`](host-api-wire-v1alpha2.schema.json) | the current Resource, lifecycle response, Interface projection, and error envelopes |
+| [`host-discovery-v1alpha2.schema.json`](host-discovery-v1alpha2.schema.json) | the retained provider-v2 host discovery document |
+| [`host-api-wire-v1alpha2.schema.json`](host-api-wire-v1alpha2.schema.json) | the retained provider-v2 Resource, lifecycle response, Interface projection, and error envelopes |
+| [`form-ref-v1alpha3.schema.json`](form-ref-v1alpha3.schema.json) | the current namespaced-group four-field immutable Form reference |
+| [`form-definition-v1alpha3.schema.json`](form-definition-v1alpha3.schema.json) | the current data-only Form Definition with roles, exact Interfaces, and typed Bindings |
+| [`package-index-v1alpha4.schema.json`](package-index-v1alpha4.schema.json) | the current content-addressed package profile for namespaced-group FormRefs |
+| [`host-discovery-v1alpha3.schema.json`](host-discovery-v1alpha3.schema.json) | the current v1alpha3 host discovery document |
+| [`host-api-wire-v1alpha3.schema.json`](host-api-wire-v1alpha3.schema.json) | the current UID/generation/revision Resource, condition, operation, artifact, and error envelopes |
+| [`interface-ref-v1alpha1.schema.json`](interface-ref-v1alpha1.schema.json) | the exact digest-bound Interface reference |
+| [`interface-definition-v1alpha1.schema.json`](interface-definition-v1alpha1.schema.json) | the exact data-only Interface Definition with operations, semantics, and behavior fixtures |
+| [`binding-ref-v1alpha1.schema.json`](binding-ref-v1alpha1.schema.json) | the exact digest-bound Binding reference |
+| [`binding-definition-v1alpha1.schema.json`](binding-definition-v1alpha1.schema.json) | the typed Binding Definition: source role, target Interface, runtime projection |
+| [`artifact-manifest-v1alpha1.schema.json`](artifact-manifest-v1alpha1.schema.json) | the content-addressed artifact manifest for uploaded bundles |
+| [`operation-v1alpha1.schema.json`](operation-v1alpha1.schema.json) | the long-running Operation envelope |
+| [`host-support-profile-v1alpha1.schema.json`](host-support-profile-v1alpha1.schema.json) | the Host Support Profile: supported refs, capability subsets, and limits |
 
 The Form Package verifier embeds its own copies of the package schemas so it
 has no filesystem dependency at runtime. The host discovery implementation
@@ -46,5 +58,5 @@ cannot disappear by deleting both its source and current ledger entry.
 Deployment fetches every retained URL immediately before mutation and refuses
 to overwrite a differing or unavailable identity. A wholly DNS-absent origin
 can be minted only through the explicit initial-origin acknowledgement
-documented in [`website/README.md`]; that
+documented in `website/README.md`; that
 acknowledgement cannot bypass any existing response or mismatch.

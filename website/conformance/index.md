@@ -1,14 +1,18 @@
 # Conformance
 
-The current v1alpha2 candidate compatibility evidence is executable Go
+The retained v1alpha2 candidate compatibility evidence is executable Go
 characterization:
 
-- `internal/provider/*_test.go` asserts that provider v2 exposes exactly the
-  nine independently authored current candidates, and covers typed schema
+- `internal/provider/*_test.go` asserts that the published provider v2.0.0
+  exposes exactly the
+  nine independently authored v1alpha2 candidates, and covers typed schema
   behavior, validation, CRUD, import, state refresh, and the absence of
-  plan-time remote mutation;
+  plan-time remote mutation; the source tree additionally registers the
+  v1alpha3-lane Edge Platform Family resources and the generic
+  `takoform_resource` carrier for the unpublished v2.1 source candidate
+  ([decision 0013](../spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md));
 - `internal/client/client_test.go` asserts discovery, capability negotiation, preview/apply evidence, error envelopes, observation, and deletion;
-- `examples/resources/` contains one formatted HCL example for every registered resource.
+- `examples/resources/` contains one formatted HCL example for every registered typed resource; the generic `takoform_resource` carrier intentionally has none.
 
 Run:
 
@@ -97,7 +101,7 @@ definition calls immutable really forces replacement.
 
 ## Retained v1alpha1 Legacy package corpus
 
-[`form-package-v1/`] is a separate corpus for the portable
+`form-package-v1/` is a separate corpus for the portable
 package layer. It includes one valid closed ExampleStore package. Each package
 has one exact FormRef, one definition, one positive desired fixture, closed
 desired/observed schemas, and no host authority fields. Tests pin every
@@ -169,12 +173,53 @@ evidence.
 v1alpha1 discovery/API paths and exact Legacy ObjectBucket identity so retained
 publication evidence remains independently verifiable.
 
-`portable-host-v2/` is the current provider-v2 corpus. It pins the separate
-v1alpha2 discovery/API paths, an exact current EdgeWorker candidate and all of
-its desired-negative fixtures, a current Schedule-to-EdgeWorker connection
+`portable-host-v2/` is the retained provider-v2 corpus. It pins the separate
+v1alpha2 discovery/API paths, an exact EdgeWorker candidate and all of
+its desired-negative fixtures, a Schedule-to-EdgeWorker connection
 probe, concurrency/idempotency rules, stable errors, and required cross-repo
-black-box checks. The current provider client consumes this contract in
+black-box checks. The retained-lane provider client consumes this contract in
 adversarial HTTP tests.
+
+`portable-host-v3/` is the Host API v1alpha3 corpus consumed by the provider
+v2.1 client lane. It pins the v1alpha3 discovery/API paths, the closed
+26-code error taxonomy with its exact HTTP status map and 4-code retryable
+set, the uid/generation/revision identity rules, the closed portable
+condition-reason vocabulary, and exact Edge Family probe identities
+(ModuleWorker, EdgeKVNamespace, AtLeastOnceQueue, WorkerBundle,
+WorkerVersion, WorkerDeployment, WorkerCronTrigger, QueueConsumer) with their
+registry package digests plus byte-pinned
+desired-negative fixtures. `self-test --contract conformance/portable-host-v3`
+starts a deterministic reference host over the real candidate definitions and
+drives the complete 49-check matrix over real HTTP: exact discovery and
+availability,
+validate/prepare with RFC 8785 prepare binding and substitution rejection
+(a prepare against an existing resource requires the update generation
+fence, and a fence-less or stale prepare is rejected),
+uid minting and delete-then-recreate uid change, generation fences versus
+revision fences (including a host-side status touch that advances only the
+revision), packageDigest as audit-only evidence that never enters identity or
+queries, one kind name in two namespaced groups, revision-role update
+rejection, typed binding resolution before mutation with
+`dependency_in_use` on bound-target deletion, import validated exactly like
+apply, cross-resource semantics the Forms declare in prose but only a host can
+enforce (WorkerDeployment weights summing to 10000; a cron trigger or queue
+consumer refused with `unsupported_capability` until some WorkerVersion
+declares the matching handler), 202 Operation polling with
+Retry-After plus terminal replay and cancel — with every fence, binding
+resolution, and blob requirement re-verified at commit time rather than at
+accept time — the content-addressed artifact
+upload/commit flow feeding a WorkerBundle apply including its manifest reject
+list and commit-time size binding, the closed SpaceID grammar, support
+profiles free of
+price/SKU/region/quota, concurrent mutation of unrelated resources, and
+idempotency isolation across principals, tenants,
+and Spaces. Probing every stable error uses the runner-only
+`Takoform-Conformance-Probe` header (`error:<code>`, `async`,
+`touch-status`); it is disposable-adapter transport, never a production
+surface. As with the other lanes, a passing local report is implementation
+evidence for the runner and reference host only: it is explicitly
+`publicationReady: false` and is never publication, admission, host support,
+or Form maturity evidence.
 
 The executable runner is
 `go run ./cmd/portable-host-conformance`. Its `self-test` command starts a

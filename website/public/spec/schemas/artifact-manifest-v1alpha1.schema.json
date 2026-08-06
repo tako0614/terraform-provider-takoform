@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/artifacts/v1alpha1/artifact-manifest.schema.json",
+  "title": "Takoform content-addressed artifact manifest v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind"],
+  "properties": {
+    "apiVersion": {
+      "const": "artifacts.takoform.com/v1alpha1"
+    },
+    "kind": {
+      "enum": ["WorkerBundle", "StaticAssetBundle", "MigrationBundle"]
+    },
+    "mainModule": {
+      "$ref": "#/$defs/artifactPath"
+    },
+    "modules": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "mediaType", "size", "digest"],
+        "properties": {
+          "name": {
+            "$ref": "#/$defs/artifactPath"
+          },
+          "mediaType": {
+            "enum": [
+              "application/javascript+module",
+              "application/wasm",
+              "text/plain",
+              "application/octet-stream",
+              "application/source-map+json"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 268435456
+          },
+          "digest": {
+            "$ref": "#/$defs/digest"
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16384,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "mediaType", "size", "digest"],
+        "properties": {
+          "path": {
+            "$ref": "#/$defs/artifactPath"
+          },
+          "mediaType": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 268435456
+          },
+          "digest": {
+            "$ref": "#/$defs/digest"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "WorkerBundle"
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["mainModule", "modules"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": ["StaticAssetBundle", "MigrationBundle"]
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["files"]
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$",
+      "not": {
+        "pattern": "(^|/)\\.\\.?($|/)"
+      },
+      "description": "Relative slash-separated path: no absolute prefix, no backslash, no dot or dot-dot segments, no NUL, valid UTF-8."
+    }
+  }
+}

@@ -26,6 +26,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
 func discoveryHandler(t *testing.T, serviceForms bool) http.HandlerFunc {
@@ -39,6 +40,13 @@ func discoveryHandler(t *testing.T, serviceForms bool) http.HandlerFunc {
 func versionedDiscoveryHandler(t *testing.T, discoveryVersion string, serviceForms bool) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/takoform/v1alpha3" {
+			// Configure probes both Host API lanes; a v2-only host answers the
+			// v1alpha3 probe with a plain 404 and the provider records the
+			// per-lane error instead of failing.
+			http.NotFound(w, r)
+			return
+		}
 		if r.URL.Path != "/.well-known/takoform/v1alpha2" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 			http.NotFound(w, r)
@@ -184,6 +192,10 @@ func TestInterfaceDataSourceRejectsUnknownIdentityAndScopeBeforeRead(t *testing.
 }
 
 func TestProviderStateExcludesBackendCredentialAndPriceAuthority(t *testing.T) {
+	v2Types := map[string]struct{}{}
+	for _, kind := range currentformcatalog.Kinds {
+		v2Types[kind.ResourceType] = struct{}{}
+	}
 	for _, factory := range (&takoformProvider{}).Resources(context.Background()) {
 		candidate := factory()
 		var metadata frameworkresource.MetadataResponse
@@ -194,6 +206,17 @@ func TestProviderStateExcludesBackendCredentialAndPriceAuthority(t *testing.T) {
 			if _, ok := schemaResponse.Schema.Attributes[forbidden]; ok {
 				t.Errorf("%s exposes forbidden provider-state attribute %s", metadata.TypeName, forbidden)
 			}
+		}
+		if _, isV2 := v2Types[metadata.TypeName]; !isV2 {
+			// The Host API v1alpha3 lane splits the single resource_version
+			// into the generation/revision fence pair and starts fresh state
+			// (no v2 schema-version guard applies).
+			for _, fence := range []string{"uid", "generation", "revision"} {
+				if _, ok := schemaResponse.Schema.Attributes[fence]; !ok {
+					t.Errorf("%s omits the v1alpha3 %s identity attribute", metadata.TypeName, fence)
+				}
+			}
+			continue
 		}
 		if _, ok := schemaResponse.Schema.Attributes["resource_version"]; !ok {
 			t.Errorf("%s omits the optimistic-concurrency fence", metadata.TypeName)
@@ -428,7 +451,10 @@ func TestProviderExampleResourcesMatchCurrentResources(t *testing.T) {
 		}
 	}
 	sort.Strings(got)
-	want := currentProviderResourceTypeNames()
+	// The generic exact-FormRef carrier now renders an example too: it uses a
+	// clearly third-party example FormRef, so every registered resource type
+	// has exactly one example directory.
+	want := append([]string(nil), currentProviderResourceTypeNames()...)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("example resource directories must match provider resources:\ngot  %v\nwant %v", got, want)
 	}
@@ -471,10 +497,23 @@ func TestPublishedHCLUsesFullyQualifiedProviderAddress(t *testing.T) {
 }
 
 func currentProviderResourceTypeNames() []string {
-	names := make([]string, 0, len(currentformcatalog.Kinds))
+	names := make([]string, 0, len(currentformcatalog.Kinds)+len(edgeformcatalog.Forms)+1)
 	for _, kind := range currentformcatalog.Kinds {
 		names = append(names, kind.ResourceType)
 	}
+	names = append(names, v3ProviderResourceTypeNames()...)
+	sort.Strings(names)
+	return names
+}
+
+// v3ProviderResourceTypeNames is the Host API v1alpha3 lane: the typed Edge
+// Platform Family resources plus the generic exact-FormRef carrier.
+func v3ProviderResourceTypeNames() []string {
+	names := make([]string, 0, len(edgeformcatalog.Forms)+1)
+	for _, form := range edgeformcatalog.Forms {
+		names = append(names, form.ResourceType)
+	}
+	names = append(names, "takoform_resource")
 	sort.Strings(names)
 	return names
 }

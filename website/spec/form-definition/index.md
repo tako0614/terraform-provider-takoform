@@ -2,15 +2,31 @@
 
 A Form Definition is a deterministic, data-only description of one portable
 service shape. Requirement keywords are used as described in
-[`../conformance.md`](../conformance.md). The current
-`forms.takoform.com/v1alpha2` Draft 2020-12 schemas are
+[`../conformance.md`](../conformance.md).
+
+The current family profile is
+[`form-definition-v1alpha3.schema.json`](/schemas/v1alpha3/form-definition.schema.json)
+with
+[`form-ref-v1alpha3.schema.json`](/schemas/v1alpha3/form-ref.schema.json):
+its `apiVersion` is a namespaced Form Family group
+([decision 0009](../decisions/0009-form-families-and-namespaced-api-versions.md)),
+it declares a required closed `role`
+(identity/revision/deployment/attachment/policy), it references exact
+Interface and Binding contracts (`providedInterfaces`, `acceptedBindings`),
+its desired schema never contains a `name` property (the wire envelope owns
+`metadata.name` — [decision 0011](../decisions/0011-resource-identity-generation-and-revision.md)),
+and free semantic tokens are prohibited
+([decision 0008](../decisions/0008-forms-preserve-service-shape.md)).
+
+The retained `forms.takoform.com/v1alpha2` Draft 2020-12 schemas are
 [`form-definition-v1alpha2.schema.json`](../../formpackage/schemas/form-definition-v1alpha2.schema.json)
 and
 [`form-ref-v1alpha2.schema.json`](../../formpackage/schemas/form-ref-v1alpha2.schema.json).
 The unversioned filenames
 [`form-definition.schema.json`](../../formpackage/schemas/form-definition.schema.json)
 and [`form-ref.schema.json`](../../formpackage/schemas/form-ref.schema.json)
-are retained v1alpha1 Legacy profiles, not aliases for current.
+are retained v1alpha1 Legacy profiles, not aliases for the retained v1alpha2
+or current family profiles.
 
 ## Exact FormRef
 
@@ -51,7 +67,7 @@ A definition contains:
   and negative schema fixtures in the same package, with independent maxima of
   32 positive fixtures and 32 negative fixtures.
 
-The current v1alpha2 structure deliberately has no maturity or deprecation
+The retained v1alpha2 structure deliberately has no maturity or deprecation
 field. Proposal, Experimental, Stable, and Legacy state is owned only by the
 external lifecycle record defined in
 [`../project-lifecycle.md`](../project-lifecycle.md). This keeps one mutable

@@ -1,0 +1,32 @@
+{
+  "apiVersion": "bindings.takoform.com/v1alpha1",
+  "kind": "BindingDefinition",
+  "name": "module-worker.sqlite",
+  "version": "1.0.0",
+  "title": "Module Worker SQLite binding",
+  "description": "Projects the complete edge.sql runtime API into a Worker Version under one JavaScript-identifier binding name, without exposing credentials or connection material.",
+  "sourceRole": "revision",
+  "targetInterface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "edge.sql",
+    "version": "1.0.0",
+    "schemaDigest": "sha256:92a270d639a2f607367172b9b36a1c511a9ced4ba1f79f7585b1ce3094231f24"
+  },
+  "allowedTargetForms": [
+    {
+      "apiVersion": "edge.forms.takoform.com/v1alpha1",
+      "kind": "SQLiteDatabase"
+    }
+  ],
+  "bindingNameGrammar": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+  "runtimeProjection": {
+    "operations": [
+      "execute",
+      "query",
+      "transaction"
+    ]
+  },
+  "lifecycle": {
+    "targetDeletion": "refuse_while_bound"
+  }
+}

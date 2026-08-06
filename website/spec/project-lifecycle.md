@@ -37,6 +37,22 @@ No package, provider release, generated catalog entry, host report, activation,
 or Service Offering MAY by itself promote Form maturity. A host implementation
 MUST NOT describe its support decision as Takoform approval or certification.
 
+## Form Families
+
+Forms are grouped into named Form Families with namespaced API groups
+([`form-families.md`](form-families.md),
+[decision 0009](decisions/0009-form-families-and-namespaced-api-versions.md)).
+A family is a catalog and namespace fact only. It carries no maturity: family
+members are tracked in the family candidate set, a member Form gains its own
+lifecycle record only at its Experimental transition — no family member has
+made that transition, so no family member has a lifecycle record — and adding
+a Form to a family, or publishing one family member, promotes nothing else.
+The retained
+`forms.takoform.com/v1alpha2` candidates are superseded provider-v2 preview
+source ([decision 0013](decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md));
+they are not a published current Form line and are not the basis for new
+specification work.
+
 ## Form lifecycle
 
 ### Proposal

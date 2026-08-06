@@ -2,16 +2,61 @@ import { defineConfig } from "vitepress";
 
 const github = "https://github.com/tako0614/terraform-provider-takoform";
 
+const projectNavItems = [
+  { text: "Proposals", link: "/proposals/" },
+  { text: "Form inventory", link: "/forms/" },
+  { text: "Conformance evidence", link: "/conformance/" },
+  { text: "Release", link: "/release/" },
+];
+
 const englishNav = [
   { text: "Docs", link: "/docs/" },
   { text: "Spec", link: "/spec/" },
+  { text: "Project", items: projectNavItems },
   { text: "GitHub", link: github },
+];
+
+// The project trees are published once, in English. The Japanese navigation
+// points at the same targets and marks them 英語のみ, matching the note
+// convention used inside the Japanese pages.
+const japaneseProjectNavItems = [
+  { text: "Proposals (英語のみ)", link: "/proposals/" },
+  { text: "Form inventory (英語のみ)", link: "/forms/" },
+  { text: "Conformance evidence (英語のみ)", link: "/conformance/" },
+  { text: "Release (英語のみ)", link: "/release/" },
 ];
 
 const japaneseNav = [
   { text: "Docs", link: "/ja/docs/" },
   { text: "Spec", link: "/ja/spec/" },
+  { text: "Project", items: japaneseProjectNavItems },
   { text: "GitHub", link: github },
+];
+
+const edgeResourceItems = [
+  { text: "Module worker", link: "/docs/resources/module_worker.html" },
+  { text: "Worker bundle", link: "/docs/resources/worker_bundle.html" },
+  { text: "Worker version", link: "/docs/resources/worker_version.html" },
+  { text: "Worker deployment", link: "/docs/resources/worker_deployment.html" },
+  {
+    text: "Worker custom domain",
+    link: "/docs/resources/worker_custom_domain.html",
+  },
+  {
+    text: "Worker cron trigger",
+    link: "/docs/resources/worker_cron_trigger.html",
+  },
+  { text: "Edge KV namespace", link: "/docs/resources/edge_kv_namespace.html" },
+  {
+    text: "Edge object bucket",
+    link: "/docs/resources/edge_object_bucket.html",
+  },
+  { text: "SQLite database", link: "/docs/resources/sqlite_database.html" },
+  {
+    text: "At-least-once queue",
+    link: "/docs/resources/at_least_once_queue.html",
+  },
+  { text: "Queue consumer", link: "/docs/resources/queue_consumer.html" },
 ];
 
 const resourceItems = [
@@ -39,6 +84,7 @@ const specSidebar = [
     text: "Concepts",
     items: [
       { text: "Portability boundary", link: "/spec/portability-boundary.html" },
+      { text: "Form Families", link: "/spec/form-families.html" },
       { text: "Project lifecycle", link: "/spec/project-lifecycle.html" },
       { text: "Versioning", link: "/spec/versioning.html" },
       { text: "Conformance", link: "/spec/conformance.html" },
@@ -49,12 +95,40 @@ const specSidebar = [
     items: [
       { text: "Form Definition", link: "/spec/form-definition/" },
       { text: "Form Package", link: "/spec/form-package/" },
-      { text: "Host API", link: "/spec/host-api/" },
+      { text: "Host API (retained v1alpha2)", link: "/spec/host-api/" },
+      { text: "Host API v1alpha3", link: "/spec/host-api/v1alpha3.html" },
+      { text: "Interface contracts", link: "/spec/interface-contract/" },
+      { text: "Binding contracts", link: "/spec/binding-contract/" },
+      { text: "Artifact transport", link: "/spec/artifact-transport/" },
       { text: "Interface declaration", link: "/spec/interface-declaration/" },
       { text: "Trust", link: "/spec/trust/" },
       { text: "Decisions", link: "/spec/decisions/" },
     ],
   },
+];
+
+const edgeProposalItems = [
+  { text: "Family overview", link: "/proposals/edge/" },
+  { text: "Module worker", link: "/proposals/edge/module-worker.html" },
+  { text: "Worker bundle", link: "/proposals/edge/worker-bundle.html" },
+  { text: "Worker version", link: "/proposals/edge/worker-version.html" },
+  { text: "Worker deployment", link: "/proposals/edge/worker-deployment.html" },
+  {
+    text: "Worker custom domain",
+    link: "/proposals/edge/worker-custom-domain.html",
+  },
+  {
+    text: "Worker cron trigger",
+    link: "/proposals/edge/worker-cron-trigger.html",
+  },
+  { text: "Edge KV namespace", link: "/proposals/edge/edge-kv-namespace.html" },
+  { text: "Object bucket", link: "/proposals/edge/object-bucket.html" },
+  { text: "SQLite database", link: "/proposals/edge/sqlite-database.html" },
+  {
+    text: "At-least-once queue",
+    link: "/proposals/edge/at-least-once-queue.html",
+  },
+  { text: "Queue consumer", link: "/proposals/edge/queue-consumer.html" },
 ];
 
 const proposalItems = [
@@ -76,14 +150,20 @@ const englishSidebar = {
       items: [
         { text: "Quick start", link: "/docs/" },
         { text: "Reference", link: "/docs/reference.html" },
+        { text: "Glossary", link: "/docs/glossary.html" },
       ],
     },
-    { text: "Resources", items: resourceItems },
+    { text: "Edge Platform Family (v1alpha3 lane)", items: edgeResourceItems },
+    { text: "Retained v2 resources", items: resourceItems },
   ],
   "/spec/": specSidebar,
   "/proposals/": [
     {
-      text: "Proposals",
+      text: "Edge Platform Family",
+      items: edgeProposalItems,
+    },
+    {
+      text: "Retained v2 proposals",
       items: [
         { text: "Overview", link: "/proposals/" },
         ...proposalItems,
@@ -111,9 +191,13 @@ const japaneseSidebar = {
   "/ja/docs/": [
     {
       text: "Docs",
-      items: [{ text: "クイックスタート", link: "/ja/docs/" }],
+      items: [
+        { text: "クイックスタート", link: "/ja/docs/" },
+        { text: "用語集 (英語のみ)", link: "/docs/glossary.html" },
+      ],
     },
-    { text: "Resources", items: resourceItems },
+    { text: "Edge Platform Family (v1alpha3 lane)", items: edgeResourceItems },
+    { text: "Retained v2 resources", items: resourceItems },
   ],
   "/ja/spec/": [
     {
@@ -132,8 +216,16 @@ export default defineConfig({
   lastUpdated: false,
   srcExclude: ["**/README.md", "**/DESIGN.md", "static/**"],
   outDir: "public",
+  // The 404 page is generated like every other page; it must not appear in the
+  // sitemap. transformItems filters it before the sitemap is written, so the
+  // exclusion applies in every build path (local, snapshot, deploy).
   sitemap: {
     hostname: "https://takoform.com",
+    transformItems(items) {
+      return items.filter(
+        (item) => item.url !== "404.html" && !item.url.endsWith("/404.html"),
+      );
+    },
   },
   vite: {
     build: {
@@ -143,7 +235,7 @@ export default defineConfig({
     publicDir: "static",
   },
   themeConfig: {
-    outline: false,
+    outline: { level: [2, 3] },
     search: {
       provider: "local",
     },

@@ -71,9 +71,30 @@ The repository path and Git tag derived from a Package Digest for transport and
 retention; it expresses no compatibility or maturity.
 _Avoid_: Package version, Form version, latest tag
 
+**Form Family**:
+A named group of Forms sharing one platform model and a namespaced API group;
+a catalog and namespace fact that carries no maturity and merges no packages.
+_Avoid_: Package bundle, product suite, maturity tier
+
+**Resource Role**:
+The closed classification of one Form as identity, revision, deployment,
+attachment, or policy; tooling enforces role lifecycle rules mechanically.
+_Avoid_: Resource category, type tag
+
+**Interface Contract**:
+An independently published, digest-bound operation-surface contract fixing
+operations, types, errors, consistency, and behavior fixtures.
+_Avoid_: Open descriptor, endpoint credential
+
+**Binding Contract**:
+A digest-bound typed-capability contract granting a consumer a runtime API and
+permission together without exposing credentials.
+_Avoid_: Generic connection, permission token
+
 **Interface Declaration**:
 A non-secret portable description of a runtime-facing interface that a Form may
-produce; binding, authorization, and credentials remain host-owned.
+produce in the retained lanes; binding, authorization, and credentials remain
+host-owned.
 _Avoid_: Endpoint credential, connection record
 
 ## Implementation and availability

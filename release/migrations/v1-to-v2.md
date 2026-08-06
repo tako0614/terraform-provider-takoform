@@ -6,7 +6,12 @@ different Form epochs.
 | Provider | Form epoch | Status | Purpose |
 | --- | --- | --- | --- |
 | `1.x` | `forms.takoform.com/v1alpha1` | published Legacy | recovery and existing state |
-| `2.x` | `forms.takoform.com/v1alpha2` | source candidate | current nine-Form line |
+| `2.x` | `forms.takoform.com/v1alpha2` | published current | retained nine-Form v1alpha2 line |
+
+Provider v2.1 and later additionally carry the current Edge Platform Family
+lane over Host API `forms.takoform.com/v1alpha3` as an unpublished source
+candidate
+([decision 0013](../../spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md)).
 
 This boundary is intentionally fail-closed. Provider v2 does not upgrade v1
 state in place because definition and package identities changed and the new

@@ -5,26 +5,45 @@ host-neutral desired-state contracts. It is not an industry standard, a cloud
 catalog, or a promise that a workload can move between backends without
 migration.
 
-The specification has two explicit epochs:
+Takoform does not define least-common-denominator cloud resources. A Form
+fixes the application-visible shape of one proven service primitive —
+execution ABI, consistency, delivery guarantees, update units — completely,
+and leaves only the vendor's identity, account, placement, and commerce
+outside the contract. Hosts are exchangeable; resource semantics are not
+([decision 0008](spec/decisions/0008-forms-preserve-service-shape.md)).
+
+The specification has three explicit lanes:
 
 - `forms.takoform.com/v1alpha1` is the frozen **Legacy Epoch**. Its 34 published
   Form Package identities are immutable Legacy evidence. There is no current
   central approval or admission derived from that history.
-- `forms.takoform.com/v1alpha2` is the current **Specification Epoch**. It starts
-  with nine Proposal-derived, unpublished `0.1.0` candidates. Each requires an
-  explicit lifecycle transition before it can become Experimental. They are backed by real
-  Takosumi Cloud resource implementations: `EdgeWorker`,
+- `forms.takoform.com/v1alpha2` is the retained **provider-v2 epoch**. Its nine
+  Proposal-derived, unpublished `0.1.0` candidates (`EdgeWorker`,
   `RelationalDatabase`, `ObjectBucket`, `KeyValueStore`, `Queue`, `Schedule`,
-  `ContainerService`, `StatefulEntity`, and `VectorIndex`.
+  `ContainerService`, `StatefulEntity`, `VectorIndex`) remain reproducible
+  provider-v2 preview source. They are superseded for new design work
+  ([decision 0013](spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md)).
+- Current design work happens in namespaced **Form Families**
+  ([spec/form-families.md](spec/form-families.md)). The first family is the
+  Edge Platform Family, `edge.forms.takoform.com/v1alpha1`: `ModuleWorker`,
+  `WorkerBundle`, `WorkerVersion`, `WorkerDeployment`, `WorkerCustomDomain`,
+  `WorkerCronTrigger`, `EdgeKVNamespace`, `ObjectBucket`, `SQLiteDatabase`,
+  `AtLeastOnceQueue`, and `QueueConsumer`, with exact Interface and typed
+  Binding contracts under `interfaces.takoform.com/v1alpha1` and
+  `bindings.takoform.com/v1alpha1`.
 
-Current package envelopes use `packages.forms.takoform.com/v1alpha3` because a
-published v1alpha2 package schema already refers to Legacy FormRefs. Published
-v1alpha1/v1alpha2 package bytes remain unchanged.
+Retained v1alpha2 package envelopes use `packages.forms.takoform.com/v1alpha3`
+because a published v1alpha2 package schema already refers to Legacy FormRefs;
+family packages use `packages.forms.takoform.com/v1alpha4`. Published
+v1alpha1/v1alpha2/v1alpha3 package bytes remain unchanged.
 
 Host transport follows the same explicit split. Provider v1 uses the frozen
 `/.well-known/takoform` and `/apis/forms.takoform.com/v1alpha1` lane. Provider
 v2 uses `/.well-known/takoform/v1alpha2` and
-`/apis/forms.takoform.com/v1alpha2`; one discovery response never points both
+`/apis/forms.takoform.com/v1alpha2`. The current v1alpha3 lane (carried by provider v2.1, the next minor) uses
+`/.well-known/takoform/v1alpha3` and `/apis/forms.takoform.com/v1alpha3` with
+UID/generation/revision identity, long-running operations, and
+content-addressed artifact upload; one discovery response never points two
 client generations at an ambiguous API base.
 
 ## Provider lines
@@ -33,18 +52,25 @@ There is one provider address:
 `registry.terraform.io/tako0614/takoform`. Provider SemVer is independent from
 Form definition versions and the Form API epoch.
 
-Terraform and OpenTofu use one provider source and state identity. Both current
-v2 and Legacy v1 are published at the canonical Terraform Registry address;
-installation is verified through CLI rather than inferred from repository
-files. `release/version.json` is release-descriptor metadata, while the
-signed release, immutable tag identity, and Registry listing establish publication.
+Terraform and OpenTofu use one provider source and state identity. The
+published v2 line and Legacy v1 are both
+published at the canonical Terraform Registry address; installation is
+verified through CLI rather than inferred
+from repository files. `release/version.json` is release-descriptor metadata,
+while the signed release, immutable tag identity, and Registry listing
+establish publication.
 
 - Provider `v1.0.3` is published and Registry-verified. It is the Legacy
   `v1alpha1` client. Existing Legacy state must pin provider v1.
-- Provider `v2.0.0` is published and Registry-verified as the current
-  `v1alpha2` client. It exposes exactly the nine current Form candidates. Its
+- Provider `v2.0.0` is published and Registry-verified as the retained
+  `v1alpha2` client. The published provider v2.0.0 exposes exactly the
+  retained nine Form candidates, which are superseded for new design work. Its
   `release/version.json` value `publicationStatus: candidate-only` remains
   source descriptor metadata; it does not describe live Registry state.
+- The Edge Platform Family and its Host API `v1alpha3` lane ride provider
+  `v2.1.0`, an unpublished source candidate that must be built from source
+  ([decision 0013](spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md)).
+  No family Form is published, Experimental, or Stable.
 - Provider v2 fails closed on provider-v1 state. Migration is an explicit
   create/import operation, not an automatic state rewrite.
 
@@ -82,9 +108,10 @@ provider "takoform" {
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
-## Current Forms and Cloud
+## Retained v1alpha2 Forms and Cloud
 
-The current inventory is generated from the exact nine-candidate manifest:
+The retained provider-v2 inventory is generated from the exact nine-candidate
+manifest:
 
 - [Form inventory](forms/README.md)
 - [Provider reference](docs/index.md)

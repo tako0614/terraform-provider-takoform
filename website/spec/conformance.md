@@ -46,6 +46,24 @@ reject a request whose exact Form identity it has not installed, and it MUST
 NOT return a Resource whose name, space, or Form identity differs from the one
 requested.
 
+A conforming **v1alpha3 host** ([`host-api/v1alpha3.md`](host-api/v1alpha3.md))
+additionally MUST: issue immutable UIDs and change them across
+delete/recreate; increment `generation` only on desired-spec change and
+`revision` on any representation change, serving the quoted revision as the
+strong ETag; reject stale generation and revision fences with
+`generation_conflict` and `revision_conflict`; keep the package digest out of
+resource identity, queries, and fences; enforce role rules (no in-place
+revision update, `dependency_in_use` for bound targets); complete accepted
+mutations either synchronously or through resumable Operations; verify
+content-addressed artifact manifests blob-by-blob; and publish Host Support
+Profiles free of price, SKU, region, and quota.
+
+A conforming **exact Interface implementation**
+([`interface-contract/`](interface-contract/)) MUST satisfy each operation's
+input/output schemas, the closed error vocabulary, the declared consistency
+and pagination semantics, and every deterministic behavior fixture of the
+exact Interface Definition it claims.
+
 When desired state contains a portable Connection, the host MUST resolve its
 `Kind/name` only within the source Resource's exact `metadata.space`.
 Cross-Space selection is not part of the portable Connection shape, and a host
@@ -73,9 +91,13 @@ appear in portable desired state.
 
 ### Form provider (client)
 
-A **conforming provider** MUST send only declared desired state, MUST carry the
-exact five-field installed Form identity on every mutation, and MUST NOT place
-a credential, price, target, or backend selection in its state.
+A **conforming provider** MUST send only declared desired state and MUST NOT
+place a credential, price, target, or backend selection in its state. On the
+retained v1alpha1 and v1alpha2 lanes it MUST carry the exact five-field
+installed Form identity on every mutation; on the v1alpha3 lane it carries
+the exact four-field FormRef, with the package digest as optional audit
+evidence that never enters resource identity, queries, or fences
+([decision 0011](decisions/0011-resource-identity-generation-and-revision.md)).
 
 Provider compatibility evidence MUST execute every `desired`-stage negative
 and every `observed`-stage negative, rejecting the latter before host-produced

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,11 @@ const (
 	packageIndexV1Alpha1SchemaID  = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
 	packageIndexV1Alpha2SchemaID  = "https://forms.takoform.com/schemas/v1alpha2/package-index.schema.json"
 	packageIndexV1Alpha3SchemaID  = "https://forms.takoform.com/schemas/v1alpha3/package-index.schema.json"
+	packageIndexV1Alpha4SchemaID  = "https://forms.takoform.com/schemas/v1alpha4/package-index.schema.json"
+	familyFormRefSchemaID         = "https://forms.takoform.com/schemas/v1alpha3/form-ref.schema.json"
+	familyFormDefinitionSchemaID  = "https://forms.takoform.com/schemas/v1alpha3/form-definition.schema.json"
+	interfaceRefSchemaID          = "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-ref.schema.json"
+	bindingRefSchemaID            = "https://forms.takoform.com/schemas/bindings/v1alpha1/binding-ref.schema.json"
 	revocationSchemaID            = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
 	revocationCheckpointSchemaID  = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json"
 	portableMapKeyPattern         = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
@@ -44,13 +50,65 @@ func (closedSchemaLoader) Load(resourceURL string) (any, error) {
 type compiledSchemas struct {
 	legacyFormRef        *jsonschema.Schema
 	currentFormRef       *jsonschema.Schema
+	familyFormRef        *jsonschema.Schema
 	legacyDefinition     *jsonschema.Schema
 	currentDefinition    *jsonschema.Schema
+	familyDefinition     *jsonschema.Schema
 	indexV1Alpha1        *jsonschema.Schema
 	indexV1Alpha2        *jsonschema.Schema
 	indexV1Alpha3        *jsonschema.Schema
+	indexV1Alpha4        *jsonschema.Schema
 	revocation           *jsonschema.Schema
 	revocationCheckpoint *jsonschema.Schema
+}
+
+// namespacedFormGroupPattern mirrors the apiVersion grammar of the v1alpha3
+// FormRef schema: a DNS-like Form group plus its group version. The two frozen
+// central groups are recognized before this pattern is consulted, so a match
+// always selects the family (v1alpha3) validation lane.
+var namespacedFormGroupPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$`)
+
+// reservedFormsTakoformNamespaces are the subdomains of forms.takoform.com the
+// specification reserves for envelope identities rather than Form groups:
+// packages.forms.takoform.com carries Form Package indexes (PackageAPIVersion
+// through FamilyPackageAPIVersion) and trust.forms.takoform.com carries
+// revocation statements and checkpoints (TrustAPIVersion). A Form Definition
+// published under either namespace would collide with the envelope that
+// distributes it.
+var reservedFormsTakoformNamespaces = map[string]struct{}{
+	"packages.forms.takoform.com": {},
+	"trust.forms.takoform.com":    {},
+}
+
+// NamespacedFormGroup reports whether apiVersion is a namespaced Form group
+// from the family model (decision 0009).
+//
+// This guard is deliberately STRICTER than the normative grammar it mirrors.
+// spec/schemas/form-ref-v1alpha3.schema.json constrains apiVersion with the
+// DNS-like group/version pattern and excludes exactly two enum values,
+// forms.takoform.com/v1alpha1 and forms.takoform.com/v1alpha2. On top of that
+// minimum this function also rejects:
+//
+//   - every OTHER version of the bare forms.takoform.com group, not just the
+//     two frozen epochs. That domain names retained Form epochs and Host API
+//     wire identities (forms.takoform.com/v1alpha3 is the Host API lane, not a
+//     Form group), while official families use subdomains of it.
+//   - the reserved envelope namespaces packages.forms.takoform.com and
+//     trust.forms.takoform.com in every version.
+//
+// Both exclusions are a strict superset of the schema's, so every apiVersion
+// this function accepts also satisfies the normative schema; the extra rules
+// only ever refuse. Loosening them is a specification change, not a Go change.
+func NamespacedFormGroup(apiVersion string) bool {
+	if group, _, ok := strings.Cut(apiVersion, "/"); ok {
+		if group == "forms.takoform.com" {
+			return false
+		}
+		if _, reserved := reservedFormsTakoformNamespaces[group]; reserved {
+			return false
+		}
+	}
+	return len(apiVersion) <= 320 && namespacedFormGroupPattern.MatchString(apiVersion)
 }
 
 var (
@@ -65,7 +123,7 @@ func loadSchemas() (compiledSchemas, error) {
 		compiler.DefaultDraft(jsonschema.Draft2020)
 		compiler.AssertFormat()
 		compiler.UseLoader(closedSchemaLoader{})
-		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
+		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-ref-v1alpha3.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "form-definition-v1alpha3.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "package-index-v1alpha4.schema.json", "interface-ref-v1alpha1.schema.json", "binding-ref-v1alpha1.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
 		entries, err := schemaFiles.ReadDir("schemas")
 		if err != nil {
 			schemasErr = fmt.Errorf("read embedded schema closure: %w", err)
@@ -129,6 +187,11 @@ func loadSchemas() (compiledSchemas, error) {
 			schemasErr = fmt.Errorf("compile current FormRef schema: %w", schemasErr)
 			return
 		}
+		schemasValue.familyFormRef, schemasErr = compiler.Compile(familyFormRefSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile family FormRef schema: %w", schemasErr)
+			return
+		}
 		schemasValue.legacyDefinition, schemasErr = compiler.Compile(legacyFormDefinitionSchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile legacy Form Definition schema: %w", schemasErr)
@@ -137,6 +200,11 @@ func loadSchemas() (compiledSchemas, error) {
 		schemasValue.currentDefinition, schemasErr = compiler.Compile(currentFormDefinitionSchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile current Form Definition schema: %w", schemasErr)
+			return
+		}
+		schemasValue.familyDefinition, schemasErr = compiler.Compile(familyFormDefinitionSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile family Form Definition schema: %w", schemasErr)
 			return
 		}
 		schemasValue.indexV1Alpha1, schemasErr = compiler.Compile(packageIndexV1Alpha1SchemaID)
@@ -152,6 +220,11 @@ func loadSchemas() (compiledSchemas, error) {
 		schemasValue.indexV1Alpha3, schemasErr = compiler.Compile(packageIndexV1Alpha3SchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile v1alpha3 package-index schema: %w", schemasErr)
+			return
+		}
+		schemasValue.indexV1Alpha4, schemasErr = compiler.Compile(packageIndexV1Alpha4SchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile v1alpha4 package-index schema: %w", schemasErr)
 			return
 		}
 		schemasValue.revocation, schemasErr = compiler.Compile(revocationSchemaID)
@@ -179,11 +252,13 @@ func validateFormRef(raw []byte) (FormRef, error) {
 		return FormRef{}, fmt.Errorf("FormRef: %w", err)
 	}
 	var schema *jsonschema.Schema
-	switch envelope.APIVersion {
-	case LegacyFormAPIVersion:
+	switch {
+	case envelope.APIVersion == LegacyFormAPIVersion:
 		schema = schemas.legacyFormRef
-	case CurrentFormAPIVersion:
+	case envelope.APIVersion == CurrentFormAPIVersion:
 		schema = schemas.currentFormRef
+	case NamespacedFormGroup(envelope.APIVersion):
+		schema = schemas.familyFormRef
 	default:
 		return FormRef{}, fmt.Errorf("FormRef: unsupported apiVersion %q", envelope.APIVersion)
 	}
@@ -218,11 +293,13 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition: %w", err)
 	}
 	var schema *jsonschema.Schema
-	switch envelope.APIVersion {
-	case LegacyFormAPIVersion:
+	switch {
+	case envelope.APIVersion == LegacyFormAPIVersion:
 		schema = schemas.legacyDefinition
-	case CurrentFormAPIVersion:
+	case envelope.APIVersion == CurrentFormAPIVersion:
 		schema = schemas.currentDefinition
+	case NamespacedFormGroup(envelope.APIVersion):
+		schema = schemas.familyDefinition
 	default:
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition: unsupported apiVersion %q", envelope.APIVersion)
 	}
@@ -238,9 +315,16 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 	if err != nil {
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
 	}
-	observed, err := compileInlineSchema(definition.ObservedSchema, "observedSchema")
-	if err != nil {
-		return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
+	// The v1alpha3 family lane makes observedSchema optional: the envelope owns
+	// status, and a Form only declares an observed contract when it has one.
+	// The frozen v1alpha1/v1alpha2 schemas keep requiring it, so this branch is
+	// always taken for those epochs.
+	var observed *jsonschema.Schema
+	if definition.ObservedSchema != nil {
+		observed, err = compileInlineSchema(definition.ObservedSchema, "observedSchema")
+		if err != nil {
+			return FormDefinition{}, nil, compiledDefinitionSchemas{}, err
+		}
 	}
 	var output *jsonschema.Schema
 	if definition.OutputSchema != nil {
@@ -315,6 +399,8 @@ func validateIndex(raw []byte) (PackageIndex, any, error) {
 		schema = schemas.indexV1Alpha2
 	case CurrentPackageAPIVersion:
 		schema = schemas.indexV1Alpha3
+	case FamilyPackageAPIVersion:
+		schema = schemas.indexV1Alpha4
 	default:
 		return PackageIndex{}, nil, fmt.Errorf("package index: unsupported apiVersion %q", envelope.APIVersion)
 	}
@@ -1438,6 +1524,9 @@ func validateInterfaceInputs(interfaceKey, resourceURIInput string, inputs []Int
 }
 
 func validateDefinitionSemantics(definition FormDefinition) error {
+	if definition.Role != "" && definition.Role != "revision" && len(definition.AcceptedBindings) > 0 {
+		return fmt.Errorf("Form Definition role %q must not accept capability bindings; only revision-role Forms hold them", definition.Role)
+	}
 	if len(definition.ConformanceFixtures) > maxConformanceFixtures {
 		return fmt.Errorf("Form Definition has %d conformance fixtures; maximum is %d", len(definition.ConformanceFixtures), maxConformanceFixtures)
 	}

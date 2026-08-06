@@ -94,7 +94,7 @@
         "uniqueItems": true
       },
       "generation": {
-        "maximum": 9223372036854776000,
+        "maximum": 9223372036854775807,
         "minimum": 1,
         "type": "integer"
       },
@@ -128,7 +128,7 @@
     "additionalProperties": false,
     "properties": {
       "generation": {
-        "maximum": 9223372036854776000,
+        "maximum": 9223372036854775807,
         "minimum": 1,
         "type": "integer"
       },

@@ -114,7 +114,9 @@ function transformMarkdown(source) {
     (match, text, rawTarget) => {
       const rewritten = transformLink(rawTarget);
       if (rewritten === null) {
-        return text; // stripped internal link, keep the text
+        // stripped internal link, keep the plain text without the link
+        // brackets so the projected page does not show `[`text`]` residue
+        return text.replace(/^!?\[/, "").replace(/\]$/, "");
       }
       if (rewritten === rawTarget) {
         return match;
@@ -140,11 +142,14 @@ for (const file of markdownFiles(path.join(repositoryRoot, "spec"))) {
   });
 }
 for (const directory of [
+  "artifact-transport",
+  "binding-contract",
   "data-indexed",
   "decisions",
   "form-definition",
   "form-package",
   "host-api",
+  "interface-contract",
   "interface-declaration",
   "schemas",
   "trust",
@@ -174,6 +179,20 @@ for (const file of markdownFiles(path.join(repositoryRoot, "proposals"))) {
       file.replace(/^README\.md$/i, "index.md"),
     ),
   });
+}
+for (const familyDirectory of ["edge"]) {
+  const dir = path.join(repositoryRoot, "proposals", familyDirectory);
+  for (const file of markdownFiles(dir)) {
+    pages.push({
+      canonical: path.join(dir, file),
+      site: path.join(
+        websiteRoot,
+        "proposals",
+        familyDirectory,
+        file.replace(/^README\.md$/i, "index.md"),
+      ),
+    });
+  }
 }
 for (const [canonical, site] of [
   [path.join(repositoryRoot, "forms", "README.md"), path.join(websiteRoot, "forms", "index.md")],

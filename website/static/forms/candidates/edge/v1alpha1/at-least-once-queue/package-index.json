@@ -1,0 +1,43 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha4",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
+    "kind": "AtLeastOnceQueue",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:fbfb27fd628e58986d5bdd46fb785402119f79df93b735cc23d08d561bc64979"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 2378,
+      "digest": "sha256:50c9bf218b2f4656cfbe5400977102d48e4c9e9179f1fe7ee838d59b48df34a3"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 69,
+      "digest": "sha256:5a848ddd80365a1f088f60f3393a4b119b54e8f31bec76f8093974fb588144ca"
+    },
+    {
+      "path": "fixtures/negative-delivery-delay-seconds.json",
+      "mediaType": "application/json",
+      "size": 70,
+      "digest": "sha256:63e537b477b6672ed0d0a29582c3c18b8abce6affe8c2bb346f7c177d2331120"
+    },
+    {
+      "path": "fixtures/negative-message-retention-seconds.json",
+      "mediaType": "application/json",
+      "size": 65,
+      "digest": "sha256:1dee6d1574d4c8a06aaac8ed51b1192ad30f2fd643cd203ea532ec08b4f7bbb1"
+    },
+    {
+      "path": "fixtures/negative-unexpected-property.json",
+      "mediaType": "application/json",
+      "size": 99,
+      "digest": "sha256:06b80d0ddcdfeaf78acbcb5cc2878d27003f90da4dc1a0b52fd9e76479fdaf43"
+    }
+  ]
+}

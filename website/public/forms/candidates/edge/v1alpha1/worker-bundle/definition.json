@@ -1,0 +1,122 @@
+{
+  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "kind": "WorkerBundle",
+  "definitionVersion": "0.1.0",
+  "title": "Worker Bundle",
+  "description": "Immutable content-addressed module bundle of one worker build: a main module plus additional modules, each pinned by size and digest and resolved through the content-addressed artifact upload API (decision 0012). Different bytes are a different bundle.",
+  "role": "revision",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Immutable content-addressed module bundle of one worker build: a main module plus additional modules, each pinned by size and digest and resolved through the content-addressed artifact upload API (decision 0012). Different bytes are a different bundle.",
+    "properties": {
+      "mainModule": {
+        "description": "Relative path of the ES module the runtime instantiates first. It must name one declared module.",
+        "maxLength": 240,
+        "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$",
+        "type": "string"
+      },
+      "modules": {
+        "description": "Every module of the bundle, exactly as committed to the artifact manifest: relative path, closed media type, size, and sha256 digest.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "digest": {
+              "description": "Canonical lowercase sha256 digest of the module bytes.",
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "mediaType": {
+              "description": "Closed media type deciding how the runtime links the module.",
+              "enum": [
+                "application/javascript+module",
+                "application/wasm",
+                "text/plain",
+                "application/octet-stream",
+                "application/source-map+json"
+              ],
+              "type": "string"
+            },
+            "name": {
+              "description": "Relative module path inside the bundle.",
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$",
+              "type": "string"
+            },
+            "size": {
+              "description": "Exact module size in bytes.",
+              "maximum": 268435456,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "digest",
+            "mediaType",
+            "name",
+            "size"
+          ],
+          "type": "object"
+        },
+        "minItems": 1,
+        "type": "array",
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "mainModule",
+      "modules"
+    ],
+    "title": "Worker Bundle desired state",
+    "type": "object"
+  },
+  "immutableFields": [
+    "/mainModule",
+    "/modules"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "delete",
+    "import",
+    "observe"
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-unexpected-property",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-main-module",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-main-module.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-modules",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-modules.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-main-module",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-main-module.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-modules",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-modules.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

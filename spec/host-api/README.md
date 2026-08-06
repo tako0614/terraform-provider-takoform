@@ -4,6 +4,15 @@ The provider uses a versioned, provider-neutral HTTP boundary. A host owns
 placement and execution; this protocol owns exact Form identity, portable
 desired state, optimistic concurrency, mutation replay, and stable errors.
 
+This document specifies the retained provider-v2 lane,
+`forms.takoform.com/v1alpha2`, which continues to govern the published
+provider v2.0.0. The current Host API lane is [`v1alpha3.md`](v1alpha3.md)
+([decision 0013](../decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md)).
+The retained lane's contract is frozen EXCEPT for the two recorded errata
+below; every other rule in this document stays normative for the retained
+lane, unchanged by that redesign. The published v1alpha2 wire schema and the
+published Legacy and v1alpha2 package bytes are unchanged by either erratum.
+
 Requirement keywords are used as described in
 [`../conformance.md`](../conformance.md).
 
@@ -18,8 +27,44 @@ The published v1alpha1 wire remains immutable in
 [`../schemas/host-api-wire.schema.json`](../schemas/host-api-wire.schema.json),
 and [`../schemas/host-discovery.schema.json`](../schemas/host-discovery.schema.json).
 Provider v1 uses `/.well-known/takoform` and `/apis/forms.takoform.com/v1alpha1`.
-Provider v2 uses only the current endpoints below; the two epochs are never
-negotiated through one ambiguous `endpoints.api` value.
+Provider v2 uses only the retained provider-v2 lane's endpoints below; the
+two epochs are never negotiated through one ambiguous `endpoints.api` value.
+
+## Retained-lane errata
+
+Two normative rules of this lane were corrected after provider v2.0.0
+shipped. Both correct defects in how the *distribution* digest was treated as
+*identity*; the rationale is
+[decision 0011](../decisions/0011-resource-identity-generation-and-revision.md),
+which records that the package digest is provenance evidence, not resource
+identity, and that keying a resource by it makes the same resource
+unaddressable through an equally valid package of the same Form.
+
+1. **`packageDigest` is not an exact-query selector.** The
+   `exactFormQueryParameters` set of [`operations.json`](operations.json) is
+   exactly `apiVersion`, `definitionVersion`, `kind`, `schemaDigest`, and
+   `space`; the `packageDigest` was removed from it, and a conforming client
+   MUST NOT send it as a query parameter. A host MUST resolve read/lifecycle
+   queries by FormRef alone. The digest still travels in the request body's
+   five-field `form` and still binds the reviewed plan
+   (`resource.form.packageDigest` remains a plan-binding portable input), so a
+   host can still validate the exact distribution it is asked to apply.
+2. **A client may accept any supported exact FormRef recorded in state.**
+   Response identity is compared on the four FormRef fields only, so a host
+   that serves a re-packaged but contract-identical Form is not treated as
+   having substituted an identity. A client (including the provider) MAY
+   therefore operate on state bound to any exact FormRef its build supports,
+   rather than only the one exact reference it currently uses for new
+   creates. Every other identity fence is unchanged: an unsupported FormRef,
+   a substituted `kind`, `metadata.name`, or `metadata.space` still fails
+   closed, and a client still never queries a different exact FormRef and
+   reads its `404` as deletion.
+
+The forward-compatible `metadata.revision` ETag acceptance stated under
+[Resource lifecycle](#resource-lifecycle) is deliberately not an erratum: it
+relaxes nothing a host must do — a host MUST still return the quoted
+`resourceVersion` as the ETag on this lane — and only widens what a client
+tolerates.
 
 ## Discovery and endpoint selection
 
@@ -38,7 +83,7 @@ A conforming host MUST answer `GET /.well-known/takoform/v1alpha2` with:
   is exactly `/apis/forms.takoform.com/v1alpha2/interfaces`.
 
 A provider MUST send bearer credentials only to same-origin advertised URLs
-and MUST use the exact current paths above. A provider MUST reject a discovery
+and MUST use the exact retained-lane v1alpha2 paths above. A provider MUST reject a discovery
 document that adds another API version or points any endpoint at the frozen
 Legacy lane: there is no negotiation or unversioned downgrade in provider v2.
 
@@ -56,8 +101,15 @@ Every typed provider resource MUST be compiled against one release-owned
 `InstalledFormReference`: `apiVersion`, `kind`, `definitionVersion`,
 `schemaDigest`, and `packageDigest`. `GET /forms` MUST return that exact
 identity as installed, executable, activated, available to the principal, and
-supporting the requested operation. Resource bodies carry the same `form` and
-read/lifecycle URLs carry all five fields as query parameters. A host MUST NOT substitute any Form identity field or
+supporting the requested operation. Resource bodies carry the same `form`, and
+read/lifecycle URLs carry the four FormRef fields (`apiVersion`, `kind`,
+`definitionVersion`, `schemaDigest`) plus `space` as query parameters. The
+`packageDigest` is deliberately not an exact-query selector: it is provenance
+evidence for the distribution a client verified, not Resource identity. A host
+MUST resolve read/lifecycle queries by FormRef alone, so a re-packaged but
+contract-identical Form remains addressable; the `packageDigest` still travels
+in the request body so a host can validate the exact distribution it is asked
+to apply. A host MUST NOT substitute any Form identity field or
 the requested Resource `metadata.name` / `metadata.space`, and a provider MUST
 fail closed when it observes such a substitution.
 
@@ -191,16 +243,30 @@ ambiguous and MUST NOT be automatically retried for a mutation.
 `resourceVersion` is not an opaque host token. It is the canonical
 positive-decimal desired-state generation in the inclusive range
 `1..9223372036854775807`. Leading zeroes, zero, larger values, and
-non-decimal tokens are invalid. A successful response MUST return the same value in
-`metadata.resourceVersion` and in `ETag` surrounded by exactly one pair of
-double quotes. A create with anything other than `If-None-Match: *`, a create
-when the exact Resource already exists, a missing or stale `If-Match`, and a
-body/ETag generation mismatch all fail as
-`resource_version_conflict` / HTTP 412. No mutation occurs on that failure.
-Observe and refresh do not advance desired state: their HTTP 200 response MUST
-repeat the exact generation sent in `If-Match`. If that generation is no
-longer current, the host MUST return `resource_version_conflict` / HTTP 412
-instead of returning a Resource at another generation.
+non-decimal tokens are invalid. A successful response MUST return that value in
+`metadata.resourceVersion`, and the published v1alpha2 wire schema
+(`spec/schemas/host-api-wire-v1alpha2.schema.json`) defines the `ETag` as this
+exact quoted value.
+
+The generation is a mutation precondition, not an HTTP representation
+validator: observe/refresh can change the observed/output representation at an
+unchanged generation, so a generation-based ETag does not change with the
+representation. The client therefore also accepts a quoted
+`metadata.revision` ETag when a host supplies one (forward-compatible
+acceptance); the `revision` field itself is formally introduced by the next
+Host API wire revision, where the ETag becomes the quoted revision and the
+generation stays the mutation fence. Until then, hosts MUST keep returning the
+quoted `resourceVersion` as the ETag so the published v1alpha2 contract and
+released clients remain valid.
+
+A create with anything other than `If-None-Match: *`, a create when the exact
+Resource already exists, a missing or stale `If-Match`, and a body/ETag
+generation mismatch all fail as `resource_version_conflict` / HTTP 412. No
+mutation occurs on that failure. Observe and refresh do not advance desired
+state: their HTTP 200 response MUST repeat the exact generation sent in
+`If-Match`. If that generation is no longer current, the host MUST return
+`resource_version_conflict` / HTTP 412 instead of returning a Resource at
+another generation.
 
 An OpenTofu/Terraform provider Read is not the host refresh operation. Every
 provider Read first performs the exact GET to obtain the current

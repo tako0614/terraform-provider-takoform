@@ -1,0 +1,349 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "edge.kv",
+  "version": "1.0.0",
+  "title": "Edge key/value namespace",
+  "description": "Globally replicated key/value reads and writes with eventual consistency: a read after a write may return the previous value until replication converges. Keys are UTF-8 strings; values are opaque text. Deleting an absent key succeeds.",
+  "operations": [
+    {
+      "name": "get",
+      "description": "Read one value by key. Absent keys fail with not_found.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "maxLength": 26214400,
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "not_found",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "getWithMetadata",
+      "description": "Read one value and its non-secret metadata document by key.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "metadata": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 64,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "value": {
+            "maxLength": 26214400,
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "not_found",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "put",
+      "description": "Write one value, replacing any previous value for the key. An optional expiration TTL removes the entry after at least that many seconds.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "expirationTtlSeconds": {
+            "maximum": 315360000,
+            "minimum": 60,
+            "type": "integer"
+          },
+          "key": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 64,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "value": {
+            "maxLength": 26214400,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "value_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "delete",
+      "description": "Delete one key. Deleting an absent key succeeds.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "invalid_key",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "list",
+      "description": "List key names in lexicographic order, optionally under a prefix, one cursor page at a time.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "prefix": {
+            "maxLength": 512,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "keys": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 1000,
+            "type": "array"
+          },
+          "listComplete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "keys",
+          "listComplete"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_cursor",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    }
+  ],
+  "semantics": {
+    "consistency": "eventual",
+    "pagination": "cursor"
+  },
+  "limits": {
+    "maxKeyBytes": 512,
+    "maxMetadataBytes": 1024,
+    "maxValueBytes": 26214400
+  },
+  "fixtures": [
+    {
+      "name": "put-then-get",
+      "steps": [
+        {
+          "operation": "put",
+          "input": {
+            "key": "greeting",
+            "value": "hello"
+          }
+        },
+        {
+          "operation": "get",
+          "input": {
+            "key": "greeting"
+          },
+          "expected": {
+            "value": "hello"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete-then-get-not-found",
+      "steps": [
+        {
+          "operation": "put",
+          "input": {
+            "key": "ephemeral",
+            "value": "x"
+          }
+        },
+        {
+          "operation": "delete",
+          "input": {
+            "key": "ephemeral"
+          }
+        },
+        {
+          "operation": "get",
+          "input": {
+            "key": "ephemeral"
+          },
+          "expectedError": "not_found"
+        }
+      ]
+    },
+    {
+      "name": "list-prefix",
+      "steps": [
+        {
+          "operation": "put",
+          "input": {
+            "key": "config/a",
+            "value": "1"
+          }
+        },
+        {
+          "operation": "put",
+          "input": {
+            "key": "config/b",
+            "value": "2"
+          }
+        },
+        {
+          "operation": "put",
+          "input": {
+            "key": "other/c",
+            "value": "3"
+          }
+        },
+        {
+          "operation": "list",
+          "input": {
+            "prefix": "config/"
+          },
+          "expected": {
+            "keys": [
+              {
+                "name": "config/a"
+              },
+              {
+                "name": "config/b"
+              }
+            ],
+            "listComplete": true
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "apiVersion": "bindings.takoform.com/v1alpha1",
+  "kind": "BindingDefinition",
+  "name": "module-worker.edge-kv",
+  "version": "1.0.0",
+  "title": "Module Worker edge KV binding",
+  "description": "Projects the complete edge.kv runtime API into a Worker Version under one JavaScript-identifier binding name. The binding grants capability and API together; no credential or endpoint ever reaches the consumer.",
+  "sourceRole": "revision",
+  "targetInterface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "edge.kv",
+    "version": "1.0.0",
+    "schemaDigest": "sha256:1db93de87b25b5feedb380cdcf3ac10e0ff81f0a005ca17bc11ae9e416201ebe"
+  },
+  "allowedTargetForms": [
+    {
+      "apiVersion": "edge.forms.takoform.com/v1alpha1",
+      "kind": "EdgeKVNamespace"
+    }
+  ],
+  "bindingNameGrammar": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+  "runtimeProjection": {
+    "operations": [
+      "get",
+      "getWithMetadata",
+      "put",
+      "delete",
+      "list"
+    ]
+  },
+  "lifecycle": {
+    "targetDeletion": "refuse_while_bound"
+  }
+}

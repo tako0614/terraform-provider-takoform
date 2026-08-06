@@ -1,0 +1,47 @@
+{
+  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "kind": "EdgeKVNamespace",
+  "definitionVersion": "0.1.0",
+  "title": "Edge KV Namespace",
+  "description": "Globally replicated key/value namespace with eventual consistency, exactly as fixed by the edge.kv Interface. Eventual consistency is the Form's semantics, not an option: a store with different convergence behavior is a different Form.",
+  "role": "identity",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Globally replicated key/value namespace with eventual consistency, exactly as fixed by the edge.kv Interface. Eventual consistency is the Form's semantics, not an option: a store with different convergence behavior is a different Form.",
+    "properties": {},
+    "title": "Edge KV Namespace desired state",
+    "type": "object"
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh"
+  ],
+  "providedInterfaces": [
+    {
+      "apiVersion": "interfaces.takoform.com/v1alpha1",
+      "name": "edge.kv",
+      "version": "1.0.0",
+      "schemaDigest": "sha256:1db93de87b25b5feedb380cdcf3ac10e0ff81f0a005ca17bc11ae9e416201ebe"
+    }
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-unexpected-property",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

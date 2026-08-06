@@ -141,9 +141,11 @@ func TestProviderConfigureValidatesAndPreservesEnvironmentSpaceID(t *testing.T) 
 			wantErr: true,
 		},
 		{
-			name:         "embedded whitespace is preserved",
-			space:        "Prod North",
-			wantRequests: 1,
+			name:  "embedded whitespace is preserved",
+			space: "Prod North",
+			// Configure probes both Host API lanes: v1alpha2 succeeds and the
+			// v1alpha3 probe records its 404 as the per-lane error.
+			wantRequests: 2,
 		},
 	} {
 		test := test

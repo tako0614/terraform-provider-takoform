@@ -1,0 +1,39 @@
+{
+  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "kind": "ModuleWorker",
+  "definitionVersion": "0.1.0",
+  "title": "Module Worker",
+  "description": "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES module worker ABI by identity: handlers are exported module functions receiving typed events and a binding environment. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.",
+  "role": "identity",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES module worker ABI by identity: handlers are exported module functions receiving typed events and a binding environment. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.",
+    "properties": {},
+    "title": "Module Worker desired state",
+    "type": "object"
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh"
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-unexpected-property",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

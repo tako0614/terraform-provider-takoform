@@ -9,10 +9,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/portableconformance"
+	"github.com/tako0614/terraform-provider-takoform/internal/portableconformancev3"
 )
 
 func main() {
@@ -46,6 +48,17 @@ func run(args []string, stdout io.Writer) error {
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
+	}
+	format, err := manifestFormat(*contractPath)
+	if err != nil {
+		return err
+	}
+	if format == portableconformancev3.ManifestFormat {
+		return runV3(
+			args[0], *contractPath, *endpoint,
+			*tokenEnv, *alternateTokenEnv, *alternateTenantTokenEnv,
+			stdout,
+		)
 	}
 	contract, err := portableconformance.Verify(*contractPath)
 	if err != nil {
@@ -96,6 +109,84 @@ func run(args []string, stdout io.Writer) error {
 		})
 	default:
 		return fmt.Errorf("unknown command %q; use self-test or run", args[0])
+	}
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(report)
+}
+
+// manifestFormat reads only the corpus manifest identity so the command can
+// dispatch to the retained v1/v2 lane or the Host API v1alpha3 lane.
+func manifestFormat(contractPath string) (string, error) {
+	raw, err := os.ReadFile(filepath.Join(contractPath, "manifest.json"))
+	if err != nil {
+		return "", err
+	}
+	var index struct {
+		Format string `json:"format"`
+	}
+	if err := json.Unmarshal(raw, &index); err != nil {
+		return "", fmt.Errorf("decode %s manifest: %w", contractPath, err)
+	}
+	return index.Format, nil
+}
+
+func runV3(
+	command, contractPath, endpoint string,
+	tokenEnv, alternateTokenEnv, alternateTenantTokenEnv string,
+	stdout io.Writer,
+) error {
+	contract, err := portableconformancev3.Verify(contractPath)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	var report portableconformancev3.HostRunnerReport
+	switch command {
+	case "self-test":
+		if endpoint != "" || tokenEnv != "" || alternateTokenEnv != "" || alternateTenantTokenEnv != "" {
+			return errors.New(
+				"self-test does not accept --endpoint, --token-env, --alternate-token-env, or --alternate-tenant-token-env",
+			)
+		}
+		report, err = portableconformancev3.SelfTest(ctx, contract)
+	case "run":
+		if strings.TrimSpace(endpoint) == "" {
+			return errors.New("run requires --endpoint")
+		}
+		token := ""
+		alternateToken := ""
+		alternateTenantToken := ""
+		if tokenEnv != "" {
+			token, err = requiredEnvironment(tokenEnv)
+			if err != nil {
+				return err
+			}
+		}
+		if alternateTokenEnv != "" {
+			alternateToken, err = requiredEnvironment(alternateTokenEnv)
+			if err != nil {
+				return err
+			}
+		}
+		if alternateTenantTokenEnv != "" {
+			alternateTenantToken, err = requiredEnvironment(alternateTenantTokenEnv)
+			if err != nil {
+				return err
+			}
+		}
+		report, err = portableconformancev3.RunEndpoint(ctx, contract, portableconformancev3.EndpointOptions{
+			Endpoint: endpoint, Token: token, AlternateToken: alternateToken,
+			AlternateTenantToken: alternateTenantToken,
+			HTTPClient:           &http.Client{Timeout: 30 * time.Second},
+			Classification:       portableconformancev3.EndpointConformanceRun,
+		})
+	default:
+		return fmt.Errorf("unknown command %q; use self-test or run", command)
 	}
 	if err != nil {
 		return err

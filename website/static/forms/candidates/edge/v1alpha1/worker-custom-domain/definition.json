@@ -1,0 +1,99 @@
+{
+  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "kind": "WorkerCustomDomain",
+  "definitionVersion": "0.1.0",
+  "title": "Worker Custom Domain",
+  "description": "Attaches one DNS hostname to a Module Worker so its active deployment serves that hostname over HTTPS. Inward activation is an attachment, never a binding; deleting the attachment detaches the hostname and never deletes the worker.",
+  "role": "attachment",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Attaches one DNS hostname to a Module Worker so its active deployment serves that hostname over HTTPS. Inward activation is an attachment, never a binding; deleting the attachment detaches the hostname and never deletes the worker.",
+    "properties": {
+      "hostname": {
+        "description": "Dotted DNS hostname this attachment serves. Changing it replaces the attachment.",
+        "maxLength": 253,
+        "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$",
+        "type": "string"
+      },
+      "worker": {
+        "additionalProperties": false,
+        "description": "Module Worker served on this hostname.",
+        "properties": {
+          "kind": {
+            "const": "ModuleWorker",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]{0,62}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "hostname",
+      "worker"
+    ],
+    "title": "Worker Custom Domain desired state",
+    "type": "object"
+  },
+  "immutableFields": [
+    "/hostname",
+    "/worker"
+  ],
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "import",
+    "observe",
+    "refresh"
+  ],
+  "conformanceFixtures": [
+    {
+      "name": "canonical",
+      "desiredPath": "fixtures/desired.json"
+    }
+  ],
+  "negativeConformanceFixtures": [
+    {
+      "name": "reject-unexpected-property",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-worker",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-worker.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-hostname",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-hostname.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-worker",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-worker.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-hostname",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-hostname.json",
+      "expectedFailure": "schema_validation_failed"
+    }
+  ]
+}

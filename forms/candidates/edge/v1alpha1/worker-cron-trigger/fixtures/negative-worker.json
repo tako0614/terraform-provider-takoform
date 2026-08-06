@@ -1,0 +1,7 @@
+{
+  "cron": "0 3 * * *",
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "Not A Resource Name"
+  }
+}

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -14,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/client"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
@@ -389,6 +392,86 @@ func TestReadFailsClosedBeforeHostWhenStateFormIdentityChanged(t *testing.T) {
 	}
 }
 
+// TestReadAcceptsStateBoundToAnySupportedFormRef verifies the multi-FormRef
+// dispatch: state written against an older FormRef of the same kind stays
+// readable as long as that FormRef is in the provider's supported set, even
+// though it is no longer the default create target.
+func TestReadAcceptsStateBoundToAnySupportedFormRef(t *testing.T) {
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
+	if !ok {
+		t.Fatal("ObjectBucket is not declared")
+	}
+	requests := 0
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Path == "/.well-known/takoform/v1alpha2" {
+			writeProviderDiscovery(t, w, srv.URL)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	defaultForm := providerCandidateForms()[kind.Kind]
+	olderForm := defaultForm
+	olderForm.FormRef.DefinitionVersion = "0.0.9"
+	olderForm.FormRef.SchemaDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	unsupportedForm := defaultForm
+	unsupportedForm.FormRef.DefinitionVersion = "9.9.9"
+	unsupportedForm.FormRef.SchemaDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+
+	resource := &formResource{kind: kind, data: &providerData{
+		client:       mustDiscoveredProviderClient(t, srv),
+		forms:        map[string]client.InstalledFormReference{kind.Kind: defaultForm},
+		defaultSpace: "prod",
+		supported:    []client.InstalledFormReference{defaultForm, olderForm},
+	}}
+	ctx := context.Background()
+	var schemaResponse frameworkresource.SchemaResponse
+	resource.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
+	seedState := func(form client.InstalledFormReference) tfsdk.State {
+		state := tfsdk.State{Schema: schemaResponse.Schema, Raw: tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil)}
+		for name, value := range map[string]types.String{
+			"name": types.StringValue("assets"), "space": types.StringValue("prod"),
+			"resource_version": types.StringValue("7"),
+		} {
+			if diags := state.SetAttribute(ctx, path.Root(name), value); diags.HasError() {
+				t.Fatalf("seed %s: %v", name, diags)
+			}
+		}
+		if diags := state.SetAttribute(ctx, path.Root("versioning"), types.BoolValue(true)); diags.HasError() {
+			t.Fatalf("seed versioning: %v", diags)
+		}
+		if diags := setFormIdentityState(ctx, &state, form); diags.HasError() {
+			t.Fatalf("seed exact Form identity: %v", diags)
+		}
+		return state
+	}
+
+	// State bound to the older supported FormRef passes the identity fence
+	// and reaches the host (the plain 404 response fails as a protocol error,
+	// proving the client was invoked instead of the fence blocking first).
+	before := requests
+	readResponse := frameworkresource.ReadResponse{State: seedState(olderForm)}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: seedState(olderForm)}, &readResponse)
+	if requests == before {
+		t.Fatal("supported older FormRef state did not reach the host")
+	}
+
+	// State bound to a FormRef outside the supported set fails closed before
+	// any host request.
+	before = requests
+	readResponse = frameworkresource.ReadResponse{State: seedState(unsupportedForm)}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: seedState(unsupportedForm)}, &readResponse)
+	if !readResponse.Diagnostics.HasError() {
+		t.Fatal("unsupported FormRef state was accepted")
+	}
+	if requests != before {
+		t.Fatal("unsupported FormRef state reached the host")
+	}
+}
+
 func assertStateFormIdentity(t *testing.T, ctx context.Context, state tfsdk.State, want client.InstalledFormReference) {
 	t.Helper()
 	got := formStateIdentity{}
@@ -420,4 +503,122 @@ func jsonRoundTrip(t *testing.T, value map[string]any) map[string]any {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// TestModifyPlanSurfacesHostPreview verifies that `terraform plan` performs a
+// read-only host preview and surfaces its outcome as diagnostics: no warning
+// when the host accepts the planned desired state, and a warning when the
+// host rejects it (apply still reports the authoritative error).
+func TestModifyPlanSurfacesHostPreview(t *testing.T) {
+	kind, ok := currentformcatalog.ByKind("ObjectBucket")
+	if !ok {
+		t.Fatal("ObjectBucket is not declared")
+	}
+	var hostRequests atomic.Int32
+	var rejectPreview atomic.Bool
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/takoform/v1alpha2" {
+			writeProviderDiscovery(t, w, server.URL)
+			return
+		}
+		hostRequests.Add(1)
+		if r.URL.Path == "/apis/forms.takoform.com/v1alpha2/forms" && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"forms": []client.FormAvailability{{
+				Identity:             providerCandidateForms()[kind.Kind],
+				DefinitionKnown:      true,
+				Installed:            true,
+				Executable:           true,
+				Activated:            true,
+				AvailableToPrincipal: true,
+				Operations:           []string{"create", "update", "read", "delete", "import", "observe", "refresh"},
+			}}})
+			return
+		}
+		if r.URL.Path == "/apis/forms.takoform.com/v1alpha2/resources/preview" && r.Method == http.MethodPost {
+			if rejectPreview.Load() {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":{"code":"invalid_argument","message":"planned spec is invalid","requestId":"req-preview","retryable":false}}`))
+				return
+			}
+			var previewBody client.Resource
+			if err := json.NewDecoder(r.Body).Decode(&previewBody); err != nil {
+				t.Fatalf("decoding preview request: %v", err)
+			}
+			specRaw, err := json.Marshal(previewBody.Spec)
+			if err != nil {
+				t.Fatalf("marshaling preview spec: %v", err)
+			}
+			specDigest, err := formpackage.DigestCanonicalJSON(specRaw)
+			if err != nil {
+				t.Fatalf("digesting preview spec: %v", err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"resource": previewBody,
+				"review": map[string]any{
+					"planDigest": "sha256:" + strings.Repeat("d", 64),
+					"specDigest": specDigest,
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	resource := &formResource{kind: kind, data: &providerData{
+		client: mustDiscoveredProviderClient(t, server), forms: providerCandidateForms(),
+		supported: providerSupportedForms(), defaultSpace: "prod",
+	}}
+	ctx := context.Background()
+	var schemaResponse frameworkresource.SchemaResponse
+	resource.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
+
+	plan := tfsdk.Plan{
+		Schema: schemaResponse.Schema,
+		Raw:    tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil),
+	}
+	for name, value := range map[string]types.String{
+		"name": types.StringValue("assets"), "space": types.StringValue("prod"),
+	} {
+		if diags := plan.SetAttribute(ctx, path.Root(name), value); diags.HasError() {
+			t.Fatalf("seed plan %s: %v", name, diags)
+		}
+	}
+	if diags := plan.SetAttribute(ctx, path.Root("versioning"), types.BoolValue(true)); diags.HasError() {
+		t.Fatalf("seed plan versioning: %v", diags)
+	}
+	config := tfsdk.Config{Schema: schemaResponse.Schema, Raw: plan.Raw.Copy()}
+
+	// Accepted preview: the plan carries no warning and the preview endpoint
+	// was reached.
+	before := hostRequests.Load()
+	modifyResponse := frameworkresource.ModifyPlanResponse{}
+	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
+		Config: config, Plan: plan,
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil)},
+	}, &modifyResponse)
+	if modifyResponse.Diagnostics.HasError() || len(modifyResponse.Diagnostics.Warnings()) != 0 {
+		t.Fatalf("accepted preview produced diagnostics: %v", modifyResponse.Diagnostics)
+	}
+	if hostRequests.Load() == before {
+		t.Fatal("plan did not reach the host preview endpoint")
+	}
+
+	// Rejected preview: the plan carries a warning and still completes.
+	rejectPreview.Store(true)
+	modifyResponse = frameworkresource.ModifyPlanResponse{}
+	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
+		Config: config, Plan: plan,
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: tftypes.NewValue(schemaResponse.Schema.Type().TerraformType(ctx), nil)},
+	}, &modifyResponse)
+	if modifyResponse.Diagnostics.HasError() {
+		t.Fatal("rejected preview aborted the plan; apply must remain authoritative")
+	}
+	if len(modifyResponse.Diagnostics.Warnings()) == 0 {
+		t.Fatal("rejected preview did not surface a warning")
+	}
 }

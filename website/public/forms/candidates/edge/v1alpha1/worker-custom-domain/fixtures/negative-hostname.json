@@ -1,0 +1,7 @@
+{
+  "hostname": "not a hostname",
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "module-worker"
+  }
+}

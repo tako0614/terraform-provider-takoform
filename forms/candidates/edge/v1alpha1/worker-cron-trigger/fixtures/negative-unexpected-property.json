@@ -1,0 +1,8 @@
+{
+  "cron": "0 3 * * *",
+  "takoformUnexpected": true,
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "module-worker"
+  }
+}

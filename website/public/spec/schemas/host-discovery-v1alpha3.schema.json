@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/v1alpha3/host-discovery.schema.json",
+  "title": "Takoform current host discovery v1alpha3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["api_versions", "features", "endpoints"],
+  "properties": {
+    "api_versions": {
+      "const": ["forms.takoform.com/v1alpha3"]
+    },
+    "features": {
+      "type": "object",
+      "required": [
+        "service_forms",
+        "exact_form_ref",
+        "optimistic_concurrency",
+        "idempotent_lifecycle",
+        "operations",
+        "artifact_upload",
+        "support_profiles"
+      ],
+      "properties": {
+        "service_forms": {
+          "const": true
+        },
+        "exact_form_ref": {
+          "const": true
+        },
+        "optimistic_concurrency": {
+          "const": true
+        },
+        "idempotent_lifecycle": {
+          "const": true
+        },
+        "operations": {
+          "const": true
+        },
+        "artifact_upload": {
+          "const": true
+        },
+        "support_profiles": {
+          "const": true
+        }
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "endpoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api"],
+      "properties": {
+        "api": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            },
+            {
+              "pattern": "^https?://[^/?#]+/apis/forms\\.takoform\\.com/v1alpha3$"
+            }
+          ]
+        },
+        "artifacts": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            },
+            {
+              "pattern": "^https?://[^/?#]+/apis/forms\\.takoform\\.com/v1alpha3/artifacts$"
+            }
+          ],
+          "x-takoform-sameOriginWith": "/endpoints/api"
+        },
+        "operations": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            },
+            {
+              "pattern": "^https?://[^/?#]+/apis/forms\\.takoform\\.com/v1alpha3/operations$"
+            }
+          ],
+          "x-takoform-sameOriginWith": "/endpoints/api"
+        },
+        "support": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            },
+            {
+              "pattern": "^https?://[^/?#]+/apis/forms\\.takoform\\.com/v1alpha3/support$"
+            }
+          ],
+          "x-takoform-sameOriginWith": "/endpoints/api"
+        },
+        "oidc_issuer": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpEndpoint"
+            },
+            {
+              "pattern": "^https://"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "httpEndpoint": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "allOf": [
+        {
+          "not": {
+            "pattern": "^[a-z][a-z0-9+.-]*://[^/?#]*@"
+          }
+        },
+        {
+          "not": {
+            "pattern": "[?#]"
+          }
+        }
+      ]
+    }
+  }
+}

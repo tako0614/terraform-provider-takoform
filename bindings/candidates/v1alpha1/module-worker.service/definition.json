@@ -1,0 +1,30 @@
+{
+  "apiVersion": "bindings.takoform.com/v1alpha1",
+  "kind": "BindingDefinition",
+  "name": "module-worker.service",
+  "version": "1.0.0",
+  "title": "Module Worker service binding",
+  "description": "Projects the worker.service fetch operation into a Worker Version, addressing another Module Worker by logical identity without any network endpoint.",
+  "sourceRole": "revision",
+  "targetInterface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "worker.service",
+    "version": "1.0.0",
+    "schemaDigest": "sha256:8beedb6fa4399836c24afa0a7adb17fbe13e8bc705b86441dc210e7614c95507"
+  },
+  "allowedTargetForms": [
+    {
+      "apiVersion": "edge.forms.takoform.com/v1alpha1",
+      "kind": "ModuleWorker"
+    }
+  ],
+  "bindingNameGrammar": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+  "runtimeProjection": {
+    "operations": [
+      "fetch"
+    ]
+  },
+  "lifecycle": {
+    "targetDeletion": "refuse_while_bound"
+  }
+}

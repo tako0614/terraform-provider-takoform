@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
@@ -74,7 +75,7 @@ var formInventoryDomains = []formInventoryDomain{
 // these exact bytes, so the read-only owner gate cannot silently bless
 // hand-written drift.
 func renderPublishedSurfaces() []publishedSurface {
-	surfaces := make([]publishedSurface, 0, len(currentformcatalog.Kinds)*2+1)
+	surfaces := make([]publishedSurface, 0, (len(currentformcatalog.Kinds)+len(edgeformcatalog.Forms))*2+1)
 	for _, kind := range currentformcatalog.Kinds {
 		surfaces = append(surfaces,
 			publishedSurface{
@@ -87,9 +88,12 @@ func renderPublishedSurfaces() []publishedSurface {
 			},
 		)
 	}
+	// The Host API v1alpha3 lane surfaces render from the family catalog; the
+	// retained v2 renderer above stays byte-identical.
+	surfaces = append(surfaces, v3PublishedSurfaces()...)
 	surfaces = append(surfaces, publishedSurface{
 		path:    "forms/README.md",
-		content: []byte(formInventoryDoc()),
+		content: []byte(formInventoryDoc() + v3FormInventorySection()),
 	})
 	sort.Slice(surfaces, func(left, right int) bool {
 		return surfaces[left].path < surfaces[right].path
@@ -138,7 +142,7 @@ func validatePublishedSurfaceCatalog(kinds []formcatalog.Kind) error {
 	for _, domain := range formInventoryDomains {
 		domains[domain.name] = struct{}{}
 	}
-	paths := make(map[string]string, len(kinds)*2)
+	paths := make(map[string]string, (len(kinds)+len(edgeformcatalog.Forms))*2)
 	for _, kind := range kinds {
 		if _, ok := domains[kind.Domain]; !ok {
 			return fmt.Errorf("Form %s has unknown public inventory domain %q", kind.Kind, kind.Domain)
@@ -151,6 +155,19 @@ func validatePublishedSurfaceCatalog(kinds []formcatalog.Kind) error {
 				return fmt.Errorf("Forms %s and %s render the same public surface %s", owner, kind.Kind, path)
 			}
 			paths[path] = kind.Kind
+		}
+	}
+	// The family-lane surfaces share the same trees; a colliding resource
+	// type or doc basename across lanes fails generation and verification.
+	for _, form := range edgeformcatalog.Forms {
+		for _, path := range []string{
+			filepath.ToSlash(filepath.Join("docs", "resources", v3DocBasename(form))),
+			filepath.ToSlash(filepath.Join("examples", "resources", form.ResourceType, "resource.tf")),
+		} {
+			if owner, duplicate := paths[path]; duplicate {
+				return fmt.Errorf("Forms %s and %s render the same public surface %s", owner, form.Kind, path)
+			}
+			paths[path] = form.Kind
 		}
 	}
 	return nil
