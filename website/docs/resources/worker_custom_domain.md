@@ -22,12 +22,12 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 - `worker` (String, required, forces replacement) — Module Worker served on this hostname. Set the name of the target `ModuleWorker` resource.
 - `hostname` (String, required, forces replacement) — Dotted DNS hostname this attachment serves. Changing it replaces the attachment.
 - `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.
-- `create_timeout` / `update_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `20m` / `30m`).
+- `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.
 
 ## Read-only attributes
 
 - `uid` — host-issued immutable resource identity; delete and re-create yields a new UID.
-- `generation` — desired-state generation; increments only when the portable desired spec changes. Updates fence on it.
+- `generation` — desired-state generation; increments only when the portable desired spec changes; this Form declares no update capability — every desired attribute forces replacement instead.
 - `revision` — representation revision; increments whenever the representation changes — a spec-changing update, new status, or new outputs. Deletes fence on it via `If-Match`.
 - `ready` — true when the closed `Ready` condition reports `True`.
 - `outputs_json` — JSON-serialized `status.outputs` document (`"{}"` when empty).

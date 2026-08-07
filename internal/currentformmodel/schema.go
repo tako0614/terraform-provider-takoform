@@ -104,6 +104,13 @@ func (f Field) jsonSchema() map[string]any {
 	if f.Doc != "" {
 		schema["description"] = f.Doc
 	}
+	// The portable default travels inside the desired schema, on the property
+	// that declares it. That is what makes it portable at all: it reaches every
+	// host through the Form Definition the host already installed, so an
+	// omitted optional field means one thing everywhere (decision 0008).
+	if f.Default != nil {
+		schema["default"] = cloneValue(f.Default)
+	}
 	return schema
 }
 

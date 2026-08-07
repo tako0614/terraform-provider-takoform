@@ -10,6 +10,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
@@ -26,11 +27,32 @@ type installedForm struct {
 	compiled      *jsonschema.Schema
 }
 
+// operations is the exact lifecycle capability set the installed Form
+// Definition declares. There is deliberately no fallback: a host that cannot
+// say which operations a Form supports must not guess a generous set, because
+// every guessed capability is a promise a client will hold it to.
 func (form *installedForm) operations() []string {
-	if len(form.Lifecycle) > 0 {
-		return append([]string(nil), form.Lifecycle...)
+	return append([]string(nil), form.Lifecycle...)
+}
+
+// declaresUpdate reports whether the installed Definition permits a
+// spec-changing apply on an existing resource.
+func (form *installedForm) declaresUpdate() bool {
+	for _, operation := range form.Lifecycle {
+		if operation == "update" {
+			return true
+		}
 	}
-	return []string{"create", "read", "update", "delete", "import", "observe", "refresh"}
+	return false
+}
+
+// materialize is the host's single entry-point application of the Form's
+// declared portable defaults. It runs before validation, digesting, storage,
+// and echo, so the effective spec IS the wire spec: a client that omits a
+// defaulted field and a client that writes its default produce the same
+// specDigest and therefore the same generation.
+func (form *installedForm) materialize(spec map[string]any) map[string]any {
+	return currentformmodel.MaterializeDefaults(form.DesiredSchema, spec)
 }
 
 // supportRef is one interface or binding contract the host declares support
@@ -50,6 +72,17 @@ type Catalog struct {
 }
 
 func formKey(group, kind string) string { return group + "\x00" + kind }
+
+// baseLifecycleCapabilities is the closed v1alpha3 capability set of a Form
+// with nothing mutable to change. It carries no refresh: the lane has no such
+// operation.
+func baseLifecycleCapabilities() []string {
+	return []string{"create", "read", "delete", "import", "observe"}
+}
+
+func lifecycleCapabilitiesWithUpdate() []string {
+	return []string{"create", "read", "update", "delete", "import", "observe"}
+}
 
 func (catalog *Catalog) form(group, kind string) *installedForm {
 	return catalog.forms[formKey(group, kind)]
@@ -221,8 +254,9 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 		{contract.RunnerInput.EdgeKvNamespace, "identity", emptyObject},
 		{contract.RunnerInput.AtLeastOnceQueue, "identity", map[string]any{
 			"type": "object", "additionalProperties": false,
+			"required": []any{"messageRetentionSeconds"},
 			"properties": map[string]any{
-				"deliveryDelaySeconds":    map[string]any{"type": "integer", "minimum": 0, "maximum": 43200},
+				"deliveryDelaySeconds":    map[string]any{"type": "integer", "minimum": 0, "maximum": 43200, "default": 0},
 				"messageRetentionSeconds": map[string]any{"type": "integer", "minimum": 60, "maximum": 1209600},
 			},
 		}},
@@ -261,7 +295,9 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 			},
 		}},
 	}
-	revisionLifecycle := []string{"create", "read", "delete", "import", "observe"}
+	// Capabilities are stated, never derived from the role: the fallback forms
+	// mirror the real candidates, where update follows the presence of a
+	// mutable desired field. Only the queue has one.
 	for _, entry := range schemas {
 		form := &installedForm{
 			Ref:           entry.probe.Identity.FormRef,
@@ -269,9 +305,10 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 			Role:          entry.role,
 			Title:         entry.probe.Identity.FormRef.Kind,
 			DesiredSchema: entry.schema,
+			Lifecycle:     baseLifecycleCapabilities(),
 		}
-		if entry.role == "revision" {
-			form.Lifecycle = append([]string(nil), revisionLifecycle...)
+		if entry.probe.Identity.FormRef.Kind == contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef.Kind {
+			form.Lifecycle = lifecycleCapabilitiesWithUpdate()
 		}
 		if err := form.compileDesiredSchema(); err != nil {
 			return nil, err
@@ -307,6 +344,7 @@ func (catalog *Catalog) installSyntheticSecondGroup(contract Contract) error {
 		DesiredSchema: map[string]any{
 			"type": "object", "additionalProperties": false, "properties": map[string]any{},
 		},
+		Lifecycle: baseLifecycleCapabilities(),
 	}
 	if err := form.compileDesiredSchema(); err != nil {
 		return err

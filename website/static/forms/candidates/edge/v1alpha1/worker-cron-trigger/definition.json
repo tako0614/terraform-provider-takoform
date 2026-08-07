@@ -54,8 +54,7 @@
     "update",
     "delete",
     "import",
-    "observe",
-    "refresh"
+    "observe"
   ],
   "conformanceFixtures": [
     {

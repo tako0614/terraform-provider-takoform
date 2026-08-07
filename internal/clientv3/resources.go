@@ -436,12 +436,10 @@ func (c *Client) ObserveResource(ctx context.Context, space string, ref FormRef,
 	return c.fencedStatusAction(ctx, "observe", space, ref, name, generation)
 }
 
-// RefreshResource re-reads backend state into status/outputs under a
-// generation fence without mutating native resources.
-func (c *Client) RefreshResource(ctx context.Context, space string, ref FormRef, name, generation string) (*Resource, error) {
-	return c.fencedStatusAction(ctx, "refresh", space, ref, name, generation)
-}
-
+// fencedStatusAction performs one fenced, read-only status action. observe is
+// the lane's only such action: v1alpha3 has no refresh operation, because two
+// fenced read-only re-observations with the same contract were one operation
+// spelled two ways.
 func (c *Client) fencedStatusAction(ctx context.Context, action, space string, ref FormRef, name, generation string) (*Resource, error) {
 	if err := c.requireReady(); err != nil {
 		return nil, err

@@ -28,11 +28,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -60,7 +65,7 @@ func v3AttributeName(field model.Field) string {
 }
 
 func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attrs := v3CommonAttributes(r.form.Role != model.RoleRevision)
+	attrs := v3CommonAttributes(r.form.DeclaresUpdate())
 	if r.form.Kind == workerBundleKind {
 		for name, attribute := range workerBundleAttributes() {
 			attrs[name] = attribute
@@ -165,6 +170,9 @@ func v3CommonAttributes(hasUpdate bool) map[string]schema.Attribute {
 			Validators:  []validator.String{v3DurationValidator{}},
 		},
 	}
+	// A Form that declares no update capability has no update to bound: the
+	// attribute is not declared at all, so a configuration that sets it fails
+	// at validate time instead of silently naming a deadline nothing observes.
 	if hasUpdate {
 		attrs["update_timeout"] = schema.StringAttribute{
 			Optional:    true,
@@ -193,14 +201,36 @@ func v3PendingOperationIDAttribute() schema.StringAttribute {
 }
 
 // v3FieldAttribute maps one declared catalog field to its framework schema
-// attribute. Immutable fields — and every field of a revision-role Form —
-// require replacement.
+// attribute.
+//
+// Two rules run through every case:
+//
+//   - a field requires replacement when it is immutable, or when its Form
+//     declares no update at all — in that Form nothing is changeable in place,
+//     so every desired attribute must force replacement;
+//   - a field that declares a portable default becomes Optional AND Computed
+//     with the matching framework default, so the plan holds the same value
+//     the host will materialize. Without the framework default the plan would
+//     read null, the host would answer the default, and every apply would be
+//     followed by a permanent diff.
 func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
-	replace := field.Immutable || form.Role == model.RoleRevision
+	replace := field.Immutable || !form.DeclaresUpdate()
+	// Computed is the framework's precondition for Default, and it is also the
+	// honest description of a defaulted attribute: the value in state is the
+	// host's materialized value, not only what the configuration wrote.
+	computed := field.Default != nil
+	optional := !field.Required
+	description := field.Doc
+	if computed {
+		description += " Omitting it means " + v3DefaultProse(field) + "."
+	}
 	switch field.Kind {
 	case model.KindBoolean:
 		attribute := schema.BoolAttribute{
-			Required: field.Required, Optional: !field.Required, Description: field.Doc,
+			Required: field.Required, Optional: optional, Computed: computed, Description: description,
+		}
+		if computed {
+			attribute.Default = booldefault.StaticBool(field.Default.(bool))
 		}
 		if replace {
 			attribute.PlanModifiers = []planmodifier.Bool{boolplanmodifier.RequiresReplace()}
@@ -215,8 +245,11 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 			validators = append(validators, Int64AtMost(*field.Max))
 		}
 		attribute := schema.Int64Attribute{
-			Required: field.Required, Optional: !field.Required, Description: field.Doc,
+			Required: field.Required, Optional: optional, Computed: computed, Description: description,
 			Validators: validators,
+		}
+		if computed {
+			attribute.Default = int64default.StaticInt64(v3DefaultInt64(field))
 		}
 		if replace {
 			attribute.PlanModifiers = []planmodifier.Int64{int64planmodifier.RequiresReplace()}
@@ -233,8 +266,11 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 			))
 		}
 		attribute := schema.SetAttribute{
-			Required: field.Required, Optional: !field.Required, Description: field.Doc,
+			Required: field.Required, Optional: optional, Computed: computed, Description: description,
 			ElementType: types.StringType, Validators: validators,
+		}
+		if computed {
+			attribute.Default = setdefault.StaticValue(v3DefaultStringSet(field))
 		}
 		if replace {
 			attribute.PlanModifiers = []planmodifier.Set{setplanmodifier.RequiresReplace()}
@@ -242,9 +278,12 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 		return attribute
 	case model.KindJSONMap:
 		attribute := schema.StringAttribute{
-			Optional: !field.Required, Required: field.Required,
-			Description: field.Doc + " Authored as one JSON object string (for example jsonencode({...})); the provider sends the parsed object.",
+			Optional: optional, Required: field.Required, Computed: computed,
+			Description: description + " Authored as one JSON object string (for example jsonencode({...})); the provider sends the parsed object.",
 			Validators:  []validator.String{v3JSONObjectValidator{}},
+		}
+		if computed {
+			attribute.Default = stringdefault.StaticString(v3DefaultJSONText(field))
 		}
 		if replace {
 			attribute.PlanModifiers = []planmodifier.String{stringplanmodifier.RequiresReplace()}
@@ -252,12 +291,15 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 		return attribute
 	case model.KindResourceRef:
 		attribute := schema.StringAttribute{
-			Required: field.Required, Optional: !field.Required,
-			Description: field.Doc + " Set the name of the target " + field.TargetKind + " resource.",
+			Required: field.Required, Optional: optional, Computed: computed,
+			Description: description + " Set the name of the target " + field.TargetKind + " resource.",
 			Validators: []validator.String{StringMatches(
 				model.PatternResourceName,
 				field.HCL+" must be a portable resource name",
 			)},
+		}
+		if computed {
+			attribute.Default = stringdefault.StaticString(v3DefaultReferenceName(field.Default))
 		}
 		if replace {
 			attribute.PlanModifiers = []planmodifier.String{stringplanmodifier.RequiresReplace()}
@@ -265,7 +307,7 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 		return attribute
 	case model.KindBindingList:
 		attribute := schema.ListNestedAttribute{
-			Optional: !field.Required, Required: field.Required, Description: field.Doc,
+			Optional: optional, Required: field.Required, Computed: computed, Description: description,
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: map[string]schema.Attribute{
 					"name": schema.StringAttribute{
@@ -288,6 +330,9 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 			},
 			Validators: []validator.List{v3ListSizeValidator{minItems: field.MinItems, maxItems: field.MaxItems}},
 		}
+		if computed {
+			attribute.Default = listdefault.StaticValue(v3DefaultBindingList(field))
+		}
 		if replace {
 			attribute.PlanModifiers = []planmodifier.List{listplanmodifier.RequiresReplace()}
 		}
@@ -302,9 +347,12 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 			validators = append(validators, v3WeightSumValidator{})
 		}
 		attribute := schema.ListNestedAttribute{
-			Optional: !field.Required, Required: field.Required, Description: field.Doc,
+			Optional: optional, Required: field.Required, Computed: computed, Description: description,
 			NestedObject: schema.NestedAttributeObject{Attributes: nested},
 			Validators:   validators,
+		}
+		if computed {
+			attribute.Default = listdefault.StaticValue(v3DefaultObjectList(field))
 		}
 		if replace {
 			attribute.PlanModifiers = []planmodifier.List{listplanmodifier.RequiresReplace()}
@@ -322,14 +370,125 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 			validators = append(validators, StringMatches(field.Pattern, field.HCL+" must match "+field.Pattern))
 		}
 		attribute := schema.StringAttribute{
-			Required: field.Required, Optional: !field.Required, Description: field.Doc,
+			Required: field.Required, Optional: optional, Computed: computed, Description: description,
 			Validators: validators,
+		}
+		if computed {
+			text, _ := field.Default.(string)
+			attribute.Default = stringdefault.StaticString(text)
 		}
 		if replace {
 			attribute.PlanModifiers = []planmodifier.String{stringplanmodifier.RequiresReplace()}
 		}
 		return attribute
 	}
+}
+
+// v3DefaultProse renders the declared default for the attribute description,
+// so an operator reading the schema sees the same value the host will
+// materialize.
+func v3DefaultProse(field model.Field) string {
+	if model.EmptyCollectionDefault(field) {
+		if field.Kind == model.KindJSONMap {
+			return "the empty object `{}`"
+		}
+		return "the empty list `[]`"
+	}
+	text, err := v3MarshalJSON(field.Default)
+	if err != nil {
+		return "the Form's declared default"
+	}
+	return "`" + text + "`"
+}
+
+func v3DefaultInt64(field model.Field) int64 {
+	switch typed := field.Default.(type) {
+	case int:
+		return int64(typed)
+	case int32:
+		return int64(typed)
+	case int64:
+		return typed
+	default:
+		return 0
+	}
+}
+
+func v3DefaultJSONText(field model.Field) string {
+	text, err := v3MarshalJSON(field.Default)
+	if err != nil {
+		return "{}"
+	}
+	return text
+}
+
+func v3DefaultReferenceName(value any) string {
+	reference, _ := value.(map[string]any)
+	name, _ := reference["name"].(string)
+	return name
+}
+
+func v3DefaultAnySlice(value any) []any {
+	switch typed := value.(type) {
+	case []any:
+		return typed
+	case []string:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, item)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func v3DefaultStringSet(field model.Field) types.Set {
+	items := v3DefaultAnySlice(field.Default)
+	elements := make([]attr.Value, 0, len(items))
+	for _, item := range items {
+		text, _ := item.(string)
+		elements = append(elements, types.StringValue(text))
+	}
+	return types.SetValueMust(types.StringType, elements)
+}
+
+func v3DefaultBindingList(field model.Field) types.List {
+	elementType := v3BindingObjectType()
+	items := v3DefaultAnySlice(field.Default)
+	elements := make([]attr.Value, 0, len(items))
+	for _, item := range items {
+		entry, _ := item.(map[string]any)
+		name, _ := entry["name"].(string)
+		elements = append(elements, types.ObjectValueMust(elementType.AttrTypes, map[string]attr.Value{
+			"name":        types.StringValue(name),
+			"target_name": types.StringValue(v3DefaultReferenceName(entry["resource"])),
+		}))
+	}
+	return types.ListValueMust(elementType, elements)
+}
+
+func v3DefaultObjectList(field model.Field) types.List {
+	elementType := v3ObjectListType(field)
+	items := v3DefaultAnySlice(field.Default)
+	elements := make([]attr.Value, 0, len(items))
+	for _, item := range items {
+		entry, _ := item.(map[string]any)
+		memberValues := map[string]attr.Value{}
+		for _, member := range field.Fields {
+			switch member.Kind {
+			case model.KindInteger:
+				memberValues[member.HCL] = int64FromSpec(entry[member.Wire])
+			case model.KindResourceRef:
+				memberValues[member.HCL] = types.StringValue(v3DefaultReferenceName(entry[member.Wire]))
+			default:
+				text, _ := entry[member.Wire].(string)
+				memberValues[member.HCL] = types.StringValue(text)
+			}
+		}
+		elements = append(elements, types.ObjectValueMust(elementType.AttrTypes, memberValues))
+	}
+	return types.ListValueMust(elementType, elements)
 }
 
 // v3NestedMemberAttribute maps one object-list member field. A nested
@@ -436,6 +595,13 @@ func v3FieldToWire(ctx context.Context, field model.Field, attrName string, valu
 		}
 		diags.Append(set.ElementsAs(ctx, &members, false)...)
 		if len(members) == 0 {
+			if model.EmptyCollectionDefault(field) {
+				// The Form's normative default IS the empty collection, so the
+				// empty value is desired state and must travel. Dropping it would
+				// send a spec the host then materializes right back to the same
+				// empty value — agreement by luck, not by contract.
+				return []string{}, diags
+			}
 			return nil, diags
 		}
 		return members, diags
@@ -447,6 +613,9 @@ func v3FieldToWire(ctx context.Context, field model.Field, attrName string, valu
 			return nil, diags
 		}
 		if len(parsed) == 0 {
+			if model.EmptyCollectionDefault(field) {
+				return map[string]any{}, diags
+			}
 			return nil, diags
 		}
 		return parsed, diags
@@ -476,6 +645,9 @@ func v3FieldToWire(ctx context.Context, field model.Field, attrName string, valu
 			})
 		}
 		if len(out) == 0 {
+			if model.EmptyCollectionDefault(field) {
+				return []any{}, diags
+			}
 			return nil, diags
 		}
 		return out, diags
@@ -517,6 +689,9 @@ func v3FieldToWire(ctx context.Context, field model.Field, attrName string, valu
 			out = append(out, entry)
 		}
 		if len(out) == 0 {
+			if model.EmptyCollectionDefault(field) {
+				return []any{}, diags
+			}
 			return nil, diags
 		}
 		return out, diags

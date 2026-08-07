@@ -22,12 +22,12 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 - `main_module` (String, required, forces replacement) — Relative path of the ES module the runtime instantiates first; it must name one declared module.
 - `modules` (List of Object, required, forces replacement) — Every module of the bundle. Each entry declares `name`, `content_type` (one of the five closed media types), and `content_file` (a local file path). The provider reads each file, computes its exact `size` and sha256 `digest` (both computed attributes), uploads the bytes through the content-addressed artifact API, and pins the module by digest. File paths stay in state; file bytes never do. At every plan against existing state the provider re-reads and re-hashes each `content_file`: changed bytes at an unchanged path change the planned digest and force replacement.
 - `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.
-- `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). Changing only these provider-side timeouts is applied in place without any host call.
+- `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.
 
 ## Read-only attributes
 
 - `uid` — host-issued immutable resource identity; delete and re-create yields a new UID.
-- `generation` — desired-state generation; increments only when the portable desired spec changes; a revision has no spec-changing update — every desired attribute forces replacement instead.
+- `generation` — desired-state generation; increments only when the portable desired spec changes; this Form declares no update capability — every desired attribute forces replacement instead.
 - `revision` — representation revision; increments whenever the representation changes — a spec-changing update, new status, or new outputs. Deletes fence on it via `If-Match`.
 - `ready` — true when the closed `Ready` condition reports `True`.
 - `outputs_json` — JSON-serialized `status.outputs` document (`"{}"` when empty).

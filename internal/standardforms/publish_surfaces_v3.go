@@ -7,6 +7,7 @@ package standardforms
 // bytes, exactly like the retained v2 renderer above them.
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -95,10 +96,32 @@ func v3DocRequirement(form model.Form, field model.Field) string {
 	if field.Required {
 		requirement = "required"
 	}
-	if field.Immutable || form.Role == model.RoleRevision {
+	// A Form that declares no update has no in-place path for any desired
+	// attribute, so every one of them forces replacement.
+	if field.Immutable || !form.DeclaresUpdate() {
 		requirement += ", forces replacement"
 	}
 	return requirement
+}
+
+// v3DocDefault states the portable meaning of omitting an optional argument.
+// Every optional argument has one: a declared default, or an explicit
+// absent-case behavior stated in the field's own Doc.
+func v3DocDefault(field model.Field) string {
+	if field.Default == nil {
+		return ""
+	}
+	if model.EmptyCollectionDefault(field) {
+		if field.Kind == model.KindJSONMap {
+			return " Defaults to the empty object `{}`."
+		}
+		return " Defaults to the empty list `[]`."
+	}
+	rendered, err := json.Marshal(field.Default)
+	if err != nil {
+		return ""
+	}
+	return " Defaults to `" + string(rendered) + "`."
 }
 
 func v3DocConstraint(field model.Field) string {
@@ -157,7 +180,8 @@ func v3FieldDocLine(form model.Form, field model.Field) string {
 			doc += fmt.Sprintf(" The list must declare between %d and %d entries.", field.MinItems, field.MaxItems)
 		}
 	}
-	return fmt.Sprintf("- `%s` (%s, %s) — %s%s\n", name, docType, v3DocRequirement(form, field), doc, v3DocConstraint(field))
+	return fmt.Sprintf("- `%s` (%s, %s) — %s%s%s\n",
+		name, docType, v3DocRequirement(form, field), doc, v3DocConstraint(field), v3DocDefault(field))
 }
 
 // v3ResourceDoc renders one family resource reference document.
@@ -192,14 +216,14 @@ description: |-
 		}
 	}
 	builder.WriteString("- `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.\n")
-	if form.Role == model.RoleRevision {
-		builder.WriteString("- `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). Changing only these provider-side timeouts is applied in place without any host call.\n")
-	} else {
+	if form.DeclaresUpdate() {
 		builder.WriteString("- `create_timeout` / `update_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `20m` / `30m`).\n")
+	} else {
+		builder.WriteString("- `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.\n")
 	}
 	generationDoc := "increments only when the portable desired spec changes. Updates fence on it."
-	if form.Role == model.RoleRevision {
-		generationDoc = "increments only when the portable desired spec changes; a revision has no spec-changing update — every desired attribute forces replacement instead."
+	if !form.DeclaresUpdate() {
+		generationDoc = "increments only when the portable desired spec changes; this Form declares no update capability — every desired attribute forces replacement instead."
 	}
 	builder.WriteString(`
 ## Read-only attributes
@@ -371,6 +395,19 @@ func v3GenericResourceDoc() string {
 		"shows the drift. When the host serves a different `uid` for the same name, the\n" +
 		"provider warns that the resource was replaced out of band and removes it from\n" +
 		"state so the next plan proposes re-creating it.\n" +
+		"\n" +
+		"## Write the Form's defaults explicitly\n" +
+		"\n" +
+		"A host materializes the portable defaults a Form declares before it validates,\n" +
+		"digests, or stores your spec, so the `spec` it serves back can carry properties\n" +
+		"your `spec_json` omitted. Because this carrier reads no Form Definition, it\n" +
+		"cannot fill those defaults into the plan, and a read that adopts the host's\n" +
+		"materialized document leaves a difference the next plan proposes again — each\n" +
+		"apply is a host no-op that never advances `generation`, and the difference\n" +
+		"returns. Write every defaulted property explicitly in `spec_json`, or use the\n" +
+		"typed resource for that Form where one exists: typed resources carry each\n" +
+		"declared default in the schema, so an omitted attribute plans as the value the\n" +
+		"host will materialize and the second plan is empty.\n" +
 		"\n" +
 		"## Import\n" +
 		"\n" +

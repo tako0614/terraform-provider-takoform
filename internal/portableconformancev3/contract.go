@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 49-entry executed-check list every v3
+// requiredRunnerChecks is the closed 50-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -146,6 +146,7 @@ var requiredRunnerChecks = []string{
 	"package-digest-not-identity",
 	"same-kind-two-groups",
 	"revision-role-update-rejected",
+	"no-update-spec-change-rejected",
 	"binding-target-missing-404-before-mutation",
 	"dependency-in-use-on-bound-target-delete",
 	"async-operation-flow",
@@ -189,11 +190,14 @@ type InstalledFormReference struct {
 }
 
 // ResourceProbe is one pinned probe resource the runner drives through the
-// complete lifecycle.
+// complete lifecycle. LifecycleCapabilities pins the EXACT capability set the
+// host must advertise for this exact Form, so the runner never has to assume
+// which operations a Form ought to support.
 type ResourceProbe struct {
-	Name     string                 `json:"name"`
-	Identity InstalledFormReference `json:"identity"`
-	Desired  map[string]any         `json:"desired"`
+	Name                  string                 `json:"name"`
+	Identity              InstalledFormReference `json:"identity"`
+	LifecycleCapabilities []string               `json:"lifecycleCapabilities"`
+	Desired               map[string]any         `json:"desired"`
 }
 
 // WorkerBundleProbe additionally carries the exact module source bytes the
@@ -427,6 +431,36 @@ func validateProbe(label string, probe ResourceProbe, kind string) error {
 	}
 	if probe.Desired == nil {
 		return fmt.Errorf("portable host v3 %s probe desired must be present", label)
+	}
+	return validateProbeCapabilities(label, probe.LifecycleCapabilities)
+}
+
+// baseCapabilities is the closed set every v1alpha3 Form must advertise; the
+// only permitted addition is update. refresh is not a v1alpha3 capability.
+var baseCapabilities = []string{"create", "read", "delete", "import", "observe"}
+
+func validateProbeCapabilities(label string, capabilities []string) error {
+	if len(capabilities) == 0 {
+		return fmt.Errorf("portable host v3 %s probe must pin its exact lifecycle capabilities", label)
+	}
+	seen := map[string]bool{}
+	for _, capability := range capabilities {
+		switch capability {
+		case "create", "read", "update", "delete", "import", "observe":
+		case "refresh":
+			return fmt.Errorf("portable host v3 %s probe pins refresh; the v1alpha3 lane has no refresh capability", label)
+		default:
+			return fmt.Errorf("portable host v3 %s probe pins unknown capability %q", label, capability)
+		}
+		if seen[capability] {
+			return fmt.Errorf("portable host v3 %s probe pins duplicate capability %q", label, capability)
+		}
+		seen[capability] = true
+	}
+	for _, capability := range baseCapabilities {
+		if !seen[capability] {
+			return fmt.Errorf("portable host v3 %s probe omits the mandatory capability %q", label, capability)
+		}
 	}
 	return nil
 }

@@ -16,6 +16,12 @@ import (
 // check is marked completed exactly where its evidence was actually
 // exercised over real HTTP.
 func (r *v3Runner) run() error {
+	// The served Form Definitions come first: every probe spec is materialized
+	// against the declared defaults before it is sent, so the runner speaks the
+	// same effective specs the host stores and echoes.
+	if err := r.loadDesiredSchemas(); err != nil {
+		return err
+	}
 	input := r.contract.RunnerInput
 	kv := r.target(input.EdgeKvNamespace)
 	mw := r.target(input.ModuleWorker)
@@ -42,7 +48,7 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkConcurrentUnrelatedMutation(kv, queue) },
 		func() error { return r.checkObserveAndStatusTouch(queue) },
 		func() error { return r.checkExpectedUID(queue) },
-		func() error { return r.checkPackageDigestNotIdentity(kv) },
+		func() error { return r.checkPackageDigestNotIdentity(queue) },
 		r.checkSameKindTwoGroups,
 		func() error { return r.checkArtifacts(bundle) },
 		r.checkArtifactRejectList,
@@ -192,16 +198,16 @@ func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
 		!entry.Activated || !entry.AvailableToPrincipal {
 		return errors.New("forms availability is not fully available")
 	}
-	for _, operation := range []string{"create", "read", "update", "delete"} {
-		found := false
-		for _, candidate := range entry.Operations {
-			if candidate == operation {
-				found = true
-			}
-		}
-		if !found {
-			return fmt.Errorf("forms availability omits operation %s", operation)
-		}
+	// The advertised capability set must be EXACTLY the set the corpus pins for
+	// this exact Form. An omitted capability breaks a client that was promised
+	// it; an extra one promises an operation the Definition never declared, and
+	// a client will hold the host to it. Asserting a hardcoded "must include
+	// update" instead would have baked one Form's shape into every Form.
+	if !equalStringSlices(entry.Operations, target.Lifecycle) {
+		return fmt.Errorf(
+			"forms availability operations = %v, want exactly the contract-declared %v",
+			entry.Operations, target.Lifecycle,
+		)
 	}
 	// A substituted schemaDigest is a different exact Form and must be
 	// unknown, not silently resolved.
@@ -220,41 +226,31 @@ func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
 
 func (r *v3Runner) checkFormDefinitions(targets ...probeTarget) error {
 	for _, target := range targets {
-		fullURL := fmt.Sprintf(
-			"%s/form-definitions/%s/%s?%s",
-			r.apiBase,
-			escapeGroup(target.Ref.APIVersion),
-			url.PathEscape(target.Ref.Kind),
-			r.exactQuery(target.Space, target.Ref).Encode(),
-		)
-		response, err := r.request(http.MethodGet, fullURL, nil, nil)
+		definition, err := r.formDefinition(target.Ref)
 		if err != nil {
 			return err
 		}
-		if response.Status != http.StatusOK {
-			return fmt.Errorf("form-definition HTTP %d; body=%s", response.Status, strings.TrimSpace(string(response.Body)))
-		}
-		var definition struct {
-			Identity struct {
-				FormRef       FormRef `json:"formRef"`
-				PackageDigest string  `json:"packageDigest,omitempty"`
-			} `json:"identity"`
-			DisplayName   string         `json:"displayName,omitempty"`
-			Description   string         `json:"description,omitempty"`
-			DesiredSchema map[string]any `json:"desiredSchema"`
-		}
-		if err := decodeStrictResponse(response, &definition); err != nil {
-			return err
-		}
-		if definition.Identity.FormRef != target.Ref {
-			return errors.New("form-definition identity is not the requested exact FormRef")
-		}
-		if len(definition.DesiredSchema) == 0 {
-			return errors.New("form-definition omitted the desiredSchema")
+		// packageDigest is optional audit evidence on this surface; when a host
+		// does state it, it must be the installed one.
+		if definition.Identity.PackageDigest != "" &&
+			definition.Identity.PackageDigest != target.PackageDigest {
+			return errors.New("form-definition packageDigest audit evidence drifted")
 		}
 	}
 	r.complete("form-definition-exact")
 	return nil
+}
+
+func equalStringSlices(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *v3Runner) validateResource(target probeTarget, spec map[string]any) (bool, int, error) {
@@ -836,7 +832,7 @@ func (r *v3Runner) checkObserveAndStatusTouch(queue probeTarget) error {
 	if err != nil {
 		return err
 	}
-	touchResponse, err := r.statusAction(queue, "refresh", "2", "key-refresh-touch", map[string]string{
+	touchResponse, err := r.statusAction(queue, "observe", "2", "key-observe-touch", map[string]string{
 		ErrorProbeHeader: ProbeTouchStatus,
 	})
 	if err != nil {
@@ -886,25 +882,30 @@ func (r *v3Runner) checkExpectedUID(queue probeTarget) error {
 	return nil
 }
 
-func (r *v3Runner) checkPackageDigestNotIdentity(kv probeTarget) error {
+// checkPackageDigestNotIdentity drives a generation-fenced apply, so it runs
+// against a Form that actually declares update. The applied spec is the
+// resource's CURRENT desired spec, so the only thing that differs between the
+// two requests is the audit-only package digest.
+func (r *v3Runner) checkPackageDigestNotIdentity(queue probeTarget) error {
 	// The exact read query has no packageDigest parameter: supplying one is
 	// outside the closed vocabulary and fails closed.
-	query := r.exactQuery(kv.Space, kv.Ref)
-	query.Set("packageDigest", kv.PackageDigest)
-	queryResponse, err := r.request(http.MethodGet, r.resourceURL(kv.Ref, kv.Name, "", query), nil, nil)
+	query := r.exactQuery(queue.Space, queue.Ref)
+	query.Set("packageDigest", queue.PackageDigest)
+	queryResponse, err := r.request(http.MethodGet, r.resourceURL(queue.Ref, queue.Name, "", query), nil, nil)
 	if err != nil {
 		return err
 	}
 	if err := r.expectStableError(queryResponse, "invalid_argument"); err != nil {
 		return fmt.Errorf("packageDigest query key: %w", err)
 	}
-	before, _, err := r.read(kv)
+	before, _, err := r.read(queue)
 	if err != nil {
 		return err
 	}
 	// A different audit digest in the apply body addresses the SAME resource
 	// and is not echoed back as a new identity.
-	substituted := kv
+	substituted := queue
+	substituted.Spec = before.Spec
 	substituted.PackageDigest = formpackage.DigestBytes([]byte("other-legitimate-package"))
 	resource, _, err := r.applyResource(substituted, applyOptions{
 		ExpectedGeneration: before.Metadata.Generation,
@@ -1302,6 +1303,13 @@ func (r *v3Runner) checkWorkerVersionFlow(version, kv probeTarget) error {
 	}
 	r.complete("revision-role-update-rejected")
 
+	// The capability rule, independent of the role rule above: this Form's
+	// Definition omits update, so a SPEC-CHANGING apply is refused before any
+	// mutation and the stored identity does not move.
+	if err := r.checkNoUpdateSpecChangeRejected(version); err != nil {
+		return err
+	}
+
 	// Deleting the bound KV namespace while the version references it fails.
 	kvCurrent, _, err := r.read(kv)
 	if err != nil {
@@ -1318,6 +1326,65 @@ func (r *v3Runner) checkWorkerVersionFlow(version, kv probeTarget) error {
 		return fmt.Errorf("dependency_in_use delete mutated state: %w", err)
 	}
 	r.complete("dependency-in-use-on-bound-target-delete")
+	return nil
+}
+
+// checkNoUpdateSpecChangeRejected proves the capability contract in the
+// direction that matters: a Form Definition whose lifecycleCapabilities omit
+// update must refuse a spec-changing apply to an existing resource, and must
+// refuse it BEFORE mutating anything. A host that quietly performed the update
+// would make the advertised capability set a lie, and clients that planned a
+// replacement around the missing capability would diverge from the host.
+func (r *v3Runner) checkNoUpdateSpecChangeRejected(target probeTarget) error {
+	for _, capability := range target.Lifecycle {
+		if capability == "update" {
+			return fmt.Errorf(
+				"no-update probe %s declares update; this check needs a Form whose Definition omits it",
+				target.Ref.Kind,
+			)
+		}
+	}
+	before, _, err := r.read(target)
+	if err != nil {
+		return err
+	}
+	changed := target
+	changed.Spec = cloneJSONMap(target.Spec)
+	changed.Spec["compatibilityFlags"] = []any{"nodejs_compat"}
+	response, err := r.apply(changed, applyOptions{
+		ExpectedGeneration: before.Metadata.Generation,
+		IdempotencyKey:     "key-no-update-spec-change",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(response, "invalid_argument"); err != nil {
+		return fmt.Errorf("spec-changing apply to a Form without update: %w", err)
+	}
+	after, _, err := r.read(target)
+	if err != nil {
+		return err
+	}
+	if after.Metadata.Generation != before.Metadata.Generation ||
+		after.Metadata.Revision != before.Metadata.Revision {
+		return fmt.Errorf(
+			"a refused spec change moved identity from generation %s revision %s to %s/%s",
+			before.Metadata.Generation, before.Metadata.Revision,
+			after.Metadata.Generation, after.Metadata.Revision,
+		)
+	}
+	afterDigest, err := specCanonicalDigest(after.Spec)
+	if err != nil {
+		return err
+	}
+	beforeDigest, err := specCanonicalDigest(before.Spec)
+	if err != nil {
+		return err
+	}
+	if afterDigest != beforeDigest {
+		return errors.New("a refused spec change still altered the stored desired spec")
+	}
+	r.complete("no-update-spec-change-rejected")
 	return nil
 }
 
@@ -1348,9 +1415,12 @@ func (r *v3Runner) checkHandlerGatedAttachments() error {
 	// opens both gates.
 	declaring := r.target(input.WorkerVersion)
 	declaring.Name = "handler-gate-version"
-	declaring.Spec = cloneJSONMap(input.WorkerVersion.Desired)
+	declaring.Spec = cloneJSONMap(declaring.Spec)
 	declaring.Spec["handlers"] = []any{"fetch", "queue", "scheduled"}
-	delete(declaring.Spec, "kvBindings")
+	// No typed binding: the declared default of kvBindings is the empty list, so
+	// stating it explicitly is the same desired state the host would materialize
+	// and needs no binding target to exist.
+	declaring.Spec["kvBindings"] = []any{}
 	if _, _, err := r.applyResource(declaring, applyOptions{
 		Create: true, IdempotencyKey: "key-handler-gate-version",
 	}, http.StatusCreated); err != nil {

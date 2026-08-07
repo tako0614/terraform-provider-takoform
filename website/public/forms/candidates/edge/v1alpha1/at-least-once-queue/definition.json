@@ -11,7 +11,8 @@
     "description": "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form.",
     "properties": {
       "deliveryDelaySeconds": {
-        "description": "Default delay before a sent message becomes deliverable, in seconds.",
+        "default": 0,
+        "description": "Default delay before a sent message becomes deliverable, in seconds. Omitting it delivers immediately.",
         "maximum": 43200,
         "minimum": 0,
         "type": "integer"
@@ -23,6 +24,9 @@
         "type": "integer"
       }
     },
+    "required": [
+      "messageRetentionSeconds"
+    ],
     "title": "At-Least-Once Queue desired state",
     "type": "object"
   },
@@ -32,8 +36,7 @@
     "update",
     "delete",
     "import",
-    "observe",
-    "refresh"
+    "observe"
   ],
   "providedInterfaces": [
     {
@@ -54,6 +57,12 @@
       "name": "reject-unexpected-property",
       "stage": "desired",
       "inputPath": "fixtures/negative-unexpected-property.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-message-retention-seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-message-retention-seconds.json",
       "expectedFailure": "schema_validation_failed"
     },
     {
