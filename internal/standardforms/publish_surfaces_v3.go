@@ -208,8 +208,9 @@ description: |-
 	builder.WriteString("\n## Arguments\n\n")
 	builder.WriteString("- `name` (String, required, forces replacement) — Portable resource name (`metadata.name`).\n")
 	if form.Kind == "WorkerBundle" {
-		builder.WriteString("- `main_module` (String, required, forces replacement) — Relative path of the ES module the runtime instantiates first; it must name one declared module.\n")
-		builder.WriteString("- `modules` (List of Object, required, forces replacement) — Every module of the bundle. Each entry declares `name`, `content_type` (one of the five closed media types), and `content_file` (a local file path). The provider reads each file, computes its exact `size` and sha256 `digest` (both computed attributes), uploads the bytes through the content-addressed artifact API, and pins the module by digest. File paths stay in state; file bytes never do. At every plan against existing state the provider re-reads and re-hashes each `content_file`: changed bytes at an unchanged path change the planned digest and force replacement.\n")
+		builder.WriteString("- `manifest_digest` (String, optional, computed, forces replacement) — Immutable digest of the committed artifact manifest this bundle is. It is the whole portable desired state: the manifest, not this resource, describes the modules. Declare exactly one of the two authoring modes — reference a manifest already committed to the host by setting this digest, or leave it unset and author the bundle locally with the two arguments below. Writing it alongside local authoring is accepted only when the authored bytes commit exactly that manifest; a disagreement is refused before any host call.\n")
+		builder.WriteString("- `main_module` (String, optional, forces replacement) — Local authoring only: relative path of the ES module the runtime instantiates first; it must name one declared module. It is not portable desired state; it describes the artifact manifest the provider commits.\n")
+		builder.WriteString("- `modules` (List of Object, optional, forces replacement) — Local authoring only: every module of the bundle. Each entry declares `name`, `content_type` (one of the five closed media types), and `content_file` (a local file path). The provider reads each file, computes its exact `size` and sha256 `digest` (both computed attributes), commits the artifact manifest through the content-addressed artifact API, and records the returned `manifest_digest`. File paths stay in state; file bytes never do. At every plan against existing state the provider re-reads and re-hashes each `content_file`: changed bytes at an unchanged path change the planned manifest digest and force replacement.\n")
 	} else {
 		for _, field := range form.Fields {
 			builder.WriteString(v3FieldDocLine(form, field))
@@ -251,7 +252,7 @@ description: |-
 	}
 	builder.WriteString("\n## Import\n\n```console\nterraform import " + form.ResourceType + ".example NAME\nterraform import " + form.ResourceType + ".example SPACE/NAME\n```\n")
 	if form.Kind == "WorkerBundle" {
-		builder.WriteString("\nImport is supported for adoption, but an imported bundle cannot converge\nwith local `content_file` authoring: the wire does not echo local file\npaths, so imported state carries no authored modules and the first plan\nafter import proposes replacement. The replacement re-uploads your authored\nfiles; byte-identical files pin the same content-addressed digests.\n")
+		builder.WriteString("\nAn imported bundle restores `manifest_digest` from the host and leaves\n`main_module` and `modules` null: those are local authoring facts the wire\nnever echoes. The resource is fully manageable afterwards — a configuration\nthat states the same `manifest_digest` plans empty, and adopting the local\nfiles that commit exactly that manifest is not a change either, because the\nbundle's identity is the digest.\n")
 	}
 	return builder.String()
 }

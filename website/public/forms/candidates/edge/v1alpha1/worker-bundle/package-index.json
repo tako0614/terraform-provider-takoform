@@ -5,51 +5,39 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "WorkerBundle",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:fc2ae97b3ee3fb52ad611b348aeebd6ffbbaee2c76ca41527fb1320c658a7de9"
+    "schemaDigest": "sha256:d7fd1bfc966a90b9f15ebfc6530c2465ee19b14fed3fef91c72502e799539f74"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4146,
-      "digest": "sha256:00d11e87771d96e1f9582995d04c6d8e4f445f5ed136e56d9e08c4addc6c524d"
+      "size": 2724,
+      "digest": "sha256:57fe7bd65a2924825e9fdb331af4b52a2b6ed5897f5c0d37aa84036594947d73"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 255,
-      "digest": "sha256:df629774a4008fc8e587902ee99a616abf2585fcb080b39c820edad83df9c69c"
+      "size": 98,
+      "digest": "sha256:3ea06a3004abc68a19bc0f99aaa9579264a0110909e16b7dbd82389369d29af4"
     },
     {
-      "path": "fixtures/negative-main-module.json",
+      "path": "fixtures/negative-manifest-digest.json",
       "mediaType": "application/json",
-      "size": 258,
-      "digest": "sha256:30627483ac5efd7f10b5b0803010626c24ef46ec6b5e13ea7c979de52528179e"
+      "size": 65,
+      "digest": "sha256:23c2d176ab56f4e71df1b57e8ff53e95615a2293073872453477b40e0ca3ee44"
     },
     {
-      "path": "fixtures/negative-missing-main-module.json",
+      "path": "fixtures/negative-missing-manifest-digest.json",
       "mediaType": "application/json",
-      "size": 225,
-      "digest": "sha256:d3e436a706c7946f6824a00e28ce2579e27cd8c858edc8154236b0a4683a9cf5"
-    },
-    {
-      "path": "fixtures/negative-missing-modules.json",
-      "mediaType": "application/json",
-      "size": 33,
-      "digest": "sha256:4f41c17073d1967ad1f7853273b51ae87e4fd81e5eb5b010c29dee19a2616391"
-    },
-    {
-      "path": "fixtures/negative-modules.json",
-      "mediaType": "application/json",
-      "size": 50,
-      "digest": "sha256:9f1383425364409c060d497394bb7032f4b67ae470d0eacf71ea244046149ee3"
+      "size": 3,
+      "digest": "sha256:ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
     },
     {
       "path": "fixtures/negative-unexpected-property.json",
       "mediaType": "application/json",
-      "size": 285,
-      "digest": "sha256:04ed515821ca6b17601e512ad7a8e7c6d183567078b0613b9c2f193d40eb0208"
+      "size": 128,
+      "digest": "sha256:4aa7cc025a071ee222020ac0198d840e7e603484c10428cf7b57ca8972b941c8"
     }
   ]
 }

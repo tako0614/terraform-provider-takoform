@@ -216,17 +216,19 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	var spec map[string]any
-	var bundleModules []v3BundleModule
+	var bundle v3BundleAuthoring
 	if r.form.Kind == workerBundleKind {
-		// Worker bundles author local module files: their bytes travel through
-		// the content-addressed artifact upload, never through state.
-		bundle, modules, bundleDiags := r.workerBundleSpec(ctx, &values)
+		// A worker bundle is authored either by referencing a committed manifest
+		// or from local module files whose bytes travel through the
+		// content-addressed artifact upload, never through state. Both modes
+		// resolve to the same one-field desired spec.
+		resolved, bundleDiags := r.workerBundleAuthoring(&values)
 		resp.Diagnostics.Append(bundleDiags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		spec = bundle
-		bundleModules = modules
+		bundle = resolved
+		spec = bundle.Spec()
 	} else {
 		var specDiags diag.Diagnostics
 		spec, specDiags = r.v3SpecFromValues(ctx, values)
@@ -241,10 +243,15 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	opCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	if r.form.Kind == workerBundleKind {
-		if !r.uploadWorkerBundle(opCtx, spec, bundleModules, &resp.Diagnostics) {
+	if bundle.Local {
+		// The digest the commit RETURNED is the desired state: a client never
+		// asserts an artifact identity the host has not issued.
+		committed, ok := r.uploadWorkerBundle(opCtx, bundle, &resp.Diagnostics)
+		if !ok {
 			return
 		}
+		spec = map[string]any{"manifestDigest": committed}
+		values.Fields["manifest_digest"] = types.StringValue(committed)
 	}
 	res, err := r.data.clientV3.ApplyResource(opCtx, v3RequestResource(ref, values.Name.ValueString(), space, spec), clientv3.Fence{})
 	if err != nil {
@@ -385,25 +392,43 @@ func (r *v3FormResource) updateProviderSideTimeouts(ctx context.Context, req res
 	resp.State.Schema = req.State.Schema
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("create_timeout"), planValues.CreateTimeout)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("delete_timeout"), planValues.DeleteTimeout)...)
+	if r.form.Kind == workerBundleKind {
+		// The bundle's desired state is unchanged, but its LOCAL authoring may
+		// have moved — a manifest_digest reference replaced by the files that
+		// commit that exact manifest. Those attributes are provider-side facts,
+		// so recording the planned ones settles the plan without any host call.
+		resp.Diagnostics.Append(resp.State.SetAttribute(
+			ctx, path.Root("main_module"), v3StateStringOf(planValues.Fields["main_module"]))...)
+		modules, ok := planValues.Fields["modules"].(types.List)
+		if !ok || modules.IsUnknown() {
+			modules = types.ListNull(v3WorkerBundleModuleType())
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("modules"), modules)...)
+	}
 }
 
 // v3DesiredSpecUnchanged reports whether a planned in-place update leaves the
-// desired identity and wire spec exactly as recorded in state. Worker bundles
-// compare their authored byte identity (main_module plus the plan-resolved
-// modules with size and digest) instead of re-reading files; every other Form
-// compares the projected wire spec.
+// desired identity and wire spec exactly as recorded in state. A worker bundle
+// resolves both sides through its authoring modes and compares the resulting
+// manifest digest, because that digest IS its desired state: local files that
+// commit the manifest already in state are the same bundle, not a change.
+// Every other Form compares the projected wire spec.
 func (r *v3FormResource) v3DesiredSpecUnchanged(ctx context.Context, plan, state v3Values, diags *diag.Diagnostics) bool {
 	if !plan.Name.Equal(state.Name) || !plan.Space.Equal(state.Space) {
 		return false
 	}
 	if r.form.Kind == workerBundleKind {
-		for _, name := range []string{"main_module", "modules"} {
-			planned, prior := plan.Fields[name], state.Fields[name]
-			if planned == nil || prior == nil || !planned.Equal(prior) {
-				return false
-			}
+		planned, plannedDiags := r.workerBundleAuthoring(&plan)
+		diags.Append(plannedDiags...)
+		if diags.HasError() {
+			return false
 		}
-		return true
+		// The recorded manifest digest is the desired state as the host holds
+		// it. Re-deriving the prior side from the local files instead would
+		// compare the working tree against itself and call a real byte change no
+		// change at all.
+		recorded, ok := v3PlanKnownString(state.Fields["manifest_digest"])
+		return ok && planned.Digest == recorded
 	}
 	plannedSpec, planDiags := r.v3SpecFromValues(ctx, plan)
 	diags.Append(planDiags...)

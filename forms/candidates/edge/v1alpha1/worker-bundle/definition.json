@@ -3,76 +3,27 @@
   "kind": "WorkerBundle",
   "definitionVersion": "0.1.0",
   "title": "Worker Bundle",
-  "description": "Immutable content-addressed module bundle of one worker build: a main module plus additional modules, each pinned by size and digest and resolved through the content-addressed artifact upload API (decision 0012). Different bytes are a different bundle.",
+  "description": "Immutable content-addressed module bundle of one worker build, named by the digest of the artifact manifest committed through the content-addressed upload API (decision 0012). The manifest, not this Form, describes the main module and every additional module with its closed media type, exact size, and sha256 digest, so the bundle keeps exactly one source of truth for its bytes. Different bytes commit a different manifest, which is a different bundle.",
   "role": "revision",
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
-    "description": "Immutable content-addressed module bundle of one worker build: a main module plus additional modules, each pinned by size and digest and resolved through the content-addressed artifact upload API (decision 0012). Different bytes are a different bundle.",
+    "description": "Immutable content-addressed module bundle of one worker build, named by the digest of the artifact manifest committed through the content-addressed upload API (decision 0012). The manifest, not this Form, describes the main module and every additional module with its closed media type, exact size, and sha256 digest, so the bundle keeps exactly one source of truth for its bytes. Different bytes commit a different manifest, which is a different bundle.",
     "properties": {
-      "mainModule": {
-        "description": "Relative path of the ES module the runtime instantiates first. It must name one declared module.",
-        "maxLength": 240,
-        "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$",
+      "manifestDigest": {
+        "description": "Immutable identity of the committed artifact manifest that describes this bundle: the RFC 8785 canonical sha256 digest the host returned when the manifest was committed. A host resolves that manifest and holds it to the artifact contract before it mutates anything, and rejects a digest it has not committed.",
+        "pattern": "^sha256:[0-9a-f]{64}$",
         "type": "string"
-      },
-      "modules": {
-        "description": "Every module of the bundle, exactly as committed to the artifact manifest: relative path, closed media type, size, and sha256 digest.",
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "digest": {
-              "description": "Canonical lowercase sha256 digest of the module bytes.",
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            },
-            "mediaType": {
-              "description": "Closed media type deciding how the runtime links the module.",
-              "enum": [
-                "application/javascript+module",
-                "application/wasm",
-                "text/plain",
-                "application/octet-stream",
-                "application/source-map+json"
-              ],
-              "type": "string"
-            },
-            "name": {
-              "description": "Relative module path inside the bundle.",
-              "maxLength": 240,
-              "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$",
-              "type": "string"
-            },
-            "size": {
-              "description": "Exact module size in bytes.",
-              "maximum": 268435456,
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "digest",
-            "mediaType",
-            "name",
-            "size"
-          ],
-          "type": "object"
-        },
-        "minItems": 1,
-        "type": "array",
-        "uniqueItems": true
       }
     },
     "required": [
-      "mainModule",
-      "modules"
+      "manifestDigest"
     ],
     "title": "Worker Bundle desired state",
     "type": "object"
   },
   "immutableFields": [
-    "/mainModule",
-    "/modules"
+    "/manifestDigest"
   ],
   "lifecycleCapabilities": [
     "create",
@@ -95,27 +46,15 @@
       "expectedFailure": "schema_validation_failed"
     },
     {
-      "name": "reject-missing-main-module",
+      "name": "reject-missing-manifest-digest",
       "stage": "desired",
-      "inputPath": "fixtures/negative-missing-main-module.json",
+      "inputPath": "fixtures/negative-missing-manifest-digest.json",
       "expectedFailure": "schema_validation_failed"
     },
     {
-      "name": "reject-missing-modules",
+      "name": "reject-manifest-digest",
       "stage": "desired",
-      "inputPath": "fixtures/negative-missing-modules.json",
-      "expectedFailure": "schema_validation_failed"
-    },
-    {
-      "name": "reject-main-module",
-      "stage": "desired",
-      "inputPath": "fixtures/negative-main-module.json",
-      "expectedFailure": "schema_validation_failed"
-    },
-    {
-      "name": "reject-modules",
-      "stage": "desired",
-      "inputPath": "fixtures/negative-modules.json",
+      "inputPath": "fixtures/negative-manifest-digest.json",
       "expectedFailure": "schema_validation_failed"
     }
   ]

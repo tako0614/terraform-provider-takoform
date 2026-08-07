@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 50-entry executed-check list every v3
+// requiredRunnerChecks is the closed 52-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -172,6 +172,8 @@ var requiredRunnerChecks = []string{
 	"handler-gated-attachments",
 	"artifact-manifest-reject-list",
 	"artifact-commit-binds-declared-size",
+	"artifact-manifest-kind-exclusive",
+	"artifact-retention-while-referenced",
 }
 
 // FormRef is the exact four-field v1alpha3 Form identity.
@@ -200,12 +202,16 @@ type ResourceProbe struct {
 	Desired               map[string]any         `json:"desired"`
 }
 
-// WorkerBundleProbe additionally carries the exact module source bytes the
-// runner uploads through the artifact API; the probe desired modules pin
-// their sha256.
+// WorkerBundleProbe carries what the WorkerBundle probe needs beyond its
+// desired state. Its desired state is only a manifest digest, so the corpus
+// also pins the exact artifact manifest that digest addresses and the exact
+// module source bytes the runner uploads: the runner commits the manifest
+// through the artifact API and drives the resource with the digest the host
+// returned.
 type WorkerBundleProbe struct {
 	ResourceProbe
-	ModuleSource string `json:"moduleSource"`
+	ModuleSource string         `json:"moduleSource"`
+	Manifest     map[string]any `json:"manifest"`
 }
 
 // NegativeFixture is exact desired-request evidence hydrated from a byte-
@@ -489,19 +495,32 @@ func validateWorkerVersionProbe(input RunnerInput) error {
 	return nil
 }
 
+// validateWorkerBundleProbe proves the corpus states one bundle, once. The
+// desired state is exactly a manifest digest; the pinned manifest is the
+// document that digest addresses, and the module it declares is the pinned
+// moduleSource bytes. Recomputing the digest here is what makes the corpus
+// self-verifying: a manifest edited without re-deriving the digest, or a digest
+// copied from another bundle, fails to load rather than silently driving a run
+// against a resource nothing uploaded.
 func validateWorkerBundleProbe(probe WorkerBundleProbe) error {
 	if probe.ModuleSource == "" {
 		return errors.New("portable host v3 workerBundle probe moduleSource is empty")
 	}
-	modules, _ := probe.Desired["modules"].([]any)
+	if probe.Manifest["apiVersion"] != artifactAPIVersion || probe.Manifest["kind"] != "WorkerBundle" {
+		return errors.New("portable host v3 workerBundle probe manifest identity is invalid")
+	}
+	if _, present := probe.Manifest["files"]; present {
+		return errors.New("portable host v3 workerBundle probe manifest must not carry files")
+	}
+	modules, _ := probe.Manifest["modules"].([]any)
 	if len(modules) != 1 {
-		return errors.New("portable host v3 workerBundle probe must declare exactly one module")
+		return errors.New("portable host v3 workerBundle probe manifest must declare exactly one module")
 	}
 	module, _ := modules[0].(map[string]any)
 	if module == nil {
 		return errors.New("portable host v3 workerBundle probe module is invalid")
 	}
-	mainModule, _ := probe.Desired["mainModule"].(string)
+	mainModule, _ := probe.Manifest["mainModule"].(string)
 	if name, _ := module["name"].(string); mainModule == "" || name != mainModule {
 		return errors.New("portable host v3 workerBundle mainModule must name its one module")
 	}
@@ -513,7 +532,28 @@ func validateWorkerBundleProbe(probe WorkerBundleProbe) error {
 	if !ok || size.String() != fmt.Sprintf("%d", len(probe.ModuleSource)) {
 		return errors.New("portable host v3 workerBundle module size does not match moduleSource bytes")
 	}
+	manifestDigest, err := canonicalDigestOfValue(probe.Manifest)
+	if err != nil {
+		return fmt.Errorf("portable host v3 workerBundle probe manifest: %w", err)
+	}
+	if len(probe.Desired) != 1 || probe.Desired["manifestDigest"] != manifestDigest {
+		return fmt.Errorf(
+			"portable host v3 workerBundle probe desired must be exactly {manifestDigest: %s}",
+			manifestDigest,
+		)
+	}
 	return nil
+}
+
+// canonicalDigestOfValue is the RFC 8785 identity of one decoded JSON
+// document, computed exactly the way a host computes a committed manifest
+// digest.
+func canonicalDigestOfValue(value any) (string, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return formpackage.DigestCanonicalJSON(raw)
 }
 
 // validateCrossResourceProbes pins the three probes whose portable rules are

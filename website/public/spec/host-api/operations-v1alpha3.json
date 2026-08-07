@@ -61,6 +61,17 @@
     "missing": "resource_not_found/404-before-mutation",
     "boundTargetDeletion": "dependency_in_use/409"
   },
+  "artifactReference": {
+    "desiredState": "bundle-shaped-revision-carries-the-manifest-digest-and-nothing-else",
+    "resolution": "host-resolves-the-committed-manifest-before-mutation-on-apply-and-import",
+    "uncommittedDigest": "artifact_missing/404-before-mutation",
+    "digestMismatchOrUndecodable": "artifact_invalid/400-before-mutation",
+    "kindMismatch": "artifact_invalid/400-before-mutation",
+    "manifestContractViolation": "artifact_invalid/400-before-mutation",
+    "perKindExclusivity": "WorkerBundle-carries-modules-not-files; StaticAssetBundle-and-MigrationBundle-carry-files-not-modules",
+    "commitRevalidation": "every-manifest-rule-re-verified-at-commit",
+    "retention": "committed-manifest-and-blobs-readable-while-any-resource-references-them"
+  },
   "roleRules": {
     "revisionUpdate": "invalid_argument",
     "attachmentDeleteCascade": "never-deletes-parent",

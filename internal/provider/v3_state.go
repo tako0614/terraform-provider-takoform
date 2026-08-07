@@ -64,7 +64,7 @@ func (r *v3FormResource) writeV3State(
 	}
 	diags.Append(state.SetAttribute(ctx, path.Root("delete_timeout"), values.DeleteTimeout)...)
 	if r.form.Kind == workerBundleKind {
-		diags.Append(r.writeWorkerBundleState(ctx, state, values)...)
+		diags.Append(r.writeWorkerBundleState(ctx, state, values, res)...)
 		return diags
 	}
 	for _, field := range r.form.Fields {
@@ -211,10 +211,12 @@ type v3AttributeGetter interface {
 func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGetter) (v3Values, diag.Diagnostics) {
 	values, diags := v3CommonValuesFrom(ctx, getter, r.form.DeclaresUpdate())
 	if r.form.Kind == workerBundleKind {
-		var mainModule types.String
+		var manifestDigest, mainModule types.String
 		var modules types.List
+		diags.Append(getter.GetAttribute(ctx, path.Root("manifest_digest"), &manifestDigest)...)
 		diags.Append(getter.GetAttribute(ctx, path.Root("main_module"), &mainModule)...)
 		diags.Append(getter.GetAttribute(ctx, path.Root("modules"), &modules)...)
+		values.Fields["manifest_digest"] = manifestDigest
 		values.Fields["main_module"] = mainModule
 		values.Fields["modules"] = modules
 		return values, diags

@@ -14,12 +14,19 @@ different bundle resource, never an update.
 
 ## Observable semantics
 
-`mainModule` names the module the runtime instantiates first and must name a
-declared module. `modules` lists every module with its relative path, closed
-media type, exact size, and canonical sha256 digest — the same facts the
-committed artifact manifest carries, so the desired state and the uploaded
-bytes cannot drift apart. Module linking follows the ES module graph rooted
-at the main module.
+`manifestDigest` is the whole desired state: the immutable identity of the
+artifact manifest committed for this build. That manifest names `mainModule`
+and lists every module with its relative path, closed media type, exact size,
+and canonical sha256 digest; the resource repeats none of it, so the bundle
+has exactly one source of truth for its bytes and nothing can drift apart
+from anything. Module linking follows the ES module graph rooted at the main
+module.
+
+Before it mutates anything, a host resolves the referenced manifest and holds
+it to the artifact contract: an uncommitted digest is `artifact_missing`, and
+a manifest of another kind, one whose `mainModule` is not declared, one
+carrying asset `files`, one naming a media type outside the closed set, or
+one overrunning the host's published bundle limit is `artifact_invalid`.
 
 ## Why this is one Form
 
@@ -45,8 +52,10 @@ capabilities to executable snapshots, not to raw bytes.
 ## Lifecycle risks
 
 Deleting a bundle still referenced by a Worker Version must fail with
-`dependency_in_use`. A host must reject a bundle whose declared digests do
-not match committed artifact blobs (`artifact_invalid` / `artifact_missing`).
+`dependency_in_use`. A host must reject a bundle whose `manifestDigest` names
+no committed manifest, or names one the artifact contract refuses
+(`artifact_missing` / `artifact_invalid`), and must keep a referenced manifest
+and its blobs readable for as long as the bundle exists.
 
 ## Prior art
 

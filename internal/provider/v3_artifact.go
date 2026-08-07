@@ -1,17 +1,24 @@
 package provider
 
-// v3_artifact.go is the takoform_worker_bundle authoring path. The wire
-// desired fields of a WorkerBundle are mainModule plus modules pinned by
-// {name, mediaType, size, digest}; the provider authors them from local
-// files: each module declares a content_file, whose bytes are hashed locally
-// and uploaded through the content-addressed artifact API
-// (spec/decisions/0012) before the WorkerBundle resource is applied. Only
-// paths, sizes, and digests enter state — raw bytes never do.
+// v3_artifact.go is the takoform_worker_bundle authoring path.
+//
+// The portable desired state of a WorkerBundle is exactly one field:
+// manifestDigest, the immutable identity of a committed artifact manifest.
+// The manifest — not the Form — describes the modules, so the bytes have one
+// source of truth (spec/artifact-transport, spec/decisions/0012 and 0014).
+//
+// Local-file authoring survives as a PROVIDER-ONLY convenience: main_module
+// plus modules[] name local files whose bytes are read and hashed here, built
+// into the artifact manifest, and uploaded through the content-addressed
+// artifact API before the resource is applied. What travels to the host is the
+// digest the commit returned. Only paths, sizes, and digests enter state — raw
+// module bytes never do.
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -27,6 +34,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
@@ -34,8 +43,8 @@ import (
 // artifact manifest (spec/schemas/artifact-manifest-v1alpha1.schema.json).
 const artifactManifestAPIVersion = "artifacts.takoform.com/v1alpha1"
 
-// workerBundleMediaTypes is the closed module media-type enum, exactly the
-// catalog's WorkerBundle media_type field.
+// workerBundleMediaTypes is the closed module media-type set of a WorkerBundle
+// artifact manifest.
 var workerBundleMediaTypes = []string{
 	"application/javascript+module",
 	"application/wasm",
@@ -44,18 +53,33 @@ var workerBundleMediaTypes = []string{
 	"application/source-map+json",
 }
 
-// workerBundleMaxModuleBytes mirrors the schema's per-module size ceiling.
+// workerBundleMaxModuleBytes mirrors the artifact manifest's per-module size
+// ceiling.
 const workerBundleMaxModuleBytes = 268435456
 
 // workerBundleAttributes is the authoring surface of takoform_worker_bundle.
-// Every attribute requires replacement: a bundle is an immutable revision;
-// different bytes are a different bundle.
+// Every attribute requires replacement: a bundle is an immutable revision, and
+// different bytes are a different manifest and therefore a different bundle.
 func workerBundleAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
+		"manifest_digest": schema.StringAttribute{
+			Optional: true,
+			Computed: true,
+			Description: "Immutable digest of the committed artifact manifest this bundle is — the whole " +
+				"portable desired state. Set it to reference a manifest already committed to the host, or " +
+				"leave it unset and author main_module plus modules: the provider then commits the manifest " +
+				"and records the digest the host returned.",
+			Validators: []validator.String{StringMatches(
+				model.PatternCanonicalSHA256,
+				"manifest_digest must be a canonical lowercase sha256:<hex> digest",
+			)},
+			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+		},
 		"main_module": schema.StringAttribute{
-			Required: true,
-			Description: "Relative path of the ES module the runtime instantiates first. " +
-				"It must name one declared module.",
+			Optional: true,
+			Description: "Local authoring only: relative path of the ES module the runtime instantiates first. " +
+				"It must name one declared module. It is not portable desired state; it describes the artifact " +
+				"manifest this provider commits.",
 			Validators: []validator.String{StringMatches(
 				model.PatternRelativePath,
 				"main_module must be a non-escaping relative module path",
@@ -63,10 +87,10 @@ func workerBundleAttributes() map[string]schema.Attribute {
 			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 		},
 		"modules": schema.ListNestedAttribute{
-			Required: true,
-			Description: "Every module of the bundle. The provider reads each content_file locally, " +
-				"computes its exact size and sha256 digest, uploads the bytes through the " +
-				"content-addressed artifact API, and pins the module by digest. File paths stay in " +
+			Optional: true,
+			Description: "Local authoring only: every module of the bundle. The provider reads each content_file, " +
+				"computes its exact size and sha256 digest, commits the artifact manifest through the " +
+				"content-addressed artifact API, and records the returned manifest_digest. File paths stay in " +
 				"state; file bytes never do.",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: map[string]schema.Attribute{
@@ -83,8 +107,11 @@ func workerBundleAttributes() map[string]schema.Attribute {
 						Description: "Closed media type deciding how the runtime links the module.",
 						Validators:  []validator.String{StringOneOf(workerBundleMediaTypes...)},
 					},
+					// content_file is deliberately NOT Required: an imported bundle
+					// carries no local path, and requiring one would make imported
+					// state unrepresentable.
 					"content_file": schema.StringAttribute{
-						Required:    true,
+						Optional:    true,
 						Description: "Local path of the module file whose bytes this bundle pins.",
 					},
 					"size": schema.Int64Attribute{
@@ -123,72 +150,173 @@ type v3BundleModule struct {
 	bytes       []byte
 }
 
-// workerBundleSpec resolves the planned bundle: it validates main_module
-// against the declared module names, reads and hashes every content_file,
-// and returns the wire spec {mainModule, modules} together with the resolved
-// modules (whose bytes feed the upload). It performs no network traffic; the
-// upload happens in uploadWorkerBundle. The resolved sizes and digests are
-// written back onto values.Fields for the state projection.
-func (r *v3FormResource) workerBundleSpec(_ context.Context, values *v3Values) (map[string]any, []v3BundleModule, diag.Diagnostics) {
+// v3BundleAuthoring is the resolved authoring intent of one worker bundle:
+// which of the two modes was used, the manifest digest that identifies the
+// bundle, and — in local mode — the manifest document and blobs that still
+// have to be committed.
+type v3BundleAuthoring struct {
+	// Local reports local-file authoring; false means the configuration
+	// referenced an already-committed manifest by digest.
+	Local bool
+	// Digest is the manifest digest the desired spec carries. In local mode it
+	// is the RFC 8785 canonical digest computed from the manifest below, which
+	// the host must return verbatim from the commit.
+	Digest   string
+	Manifest map[string]any
+	Blobs    map[string][]byte
+}
+
+// Spec renders the complete portable desired state of a worker bundle.
+func (authoring v3BundleAuthoring) Spec() map[string]any {
+	return map[string]any{"manifestDigest": authoring.Digest}
+}
+
+// workerBundleAuthoring resolves the authoring mode of a worker bundle and
+// everything derived from it. It performs no network traffic: local files are
+// read and hashed, the artifact manifest is built, and its canonical digest is
+// computed locally, so every mode error is raised before any host call. The
+// resolved sizes and digests are written back onto values.Fields for the state
+// projection, together with the resolved manifest digest.
+func (r *v3FormResource) workerBundleAuthoring(values *v3Values) (v3BundleAuthoring, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	mainModule, mainDiags := v3KnownString("main_module", "value", values.Fields["main_module"])
-	diags.Append(mainDiags...)
-	modulesValue, ok := values.Fields["modules"].(types.List)
-	if !ok || modulesValue.IsNull() || modulesValue.IsUnknown() {
-		diags.AddAttributeError(path.Root("modules"), "Unknown modules",
-			"modules must be wholly known before the provider can author this bundle.")
-		return nil, nil, diags
+	written, writtenSet := v3PlanKnownString(values.Fields["manifest_digest"])
+	mainModule, mainSet := v3PlanKnownString(values.Fields["main_module"])
+	modulesValue, modulesList := values.Fields["modules"].(types.List)
+	modulesSet := modulesList && !modulesValue.IsNull() && !modulesValue.IsUnknown()
+
+	if !mainSet && !modulesSet {
+		if !writtenSet {
+			diags.AddAttributeError(path.Root("manifest_digest"), "No bundle authored",
+				"A worker bundle is either referenced by manifest_digest or authored locally with "+
+					"main_module plus modules. Declare one of the two.")
+			return v3BundleAuthoring{}, diags
+		}
+		values.Fields["manifest_digest"] = types.StringValue(written)
+		return v3BundleAuthoring{Digest: written}, diags
 	}
+	if !mainSet || !modulesSet {
+		diags.AddAttributeError(path.Root("modules"), "Incomplete local bundle authoring",
+			"Local authoring declares main_module and modules together; declare both, or reference a "+
+				"committed manifest with manifest_digest alone.")
+		return v3BundleAuthoring{}, diags
+	}
+
+	modules, moduleDiags := v3AuthoredBundleModules(modulesValue, mainModule)
+	diags.Append(moduleDiags...)
 	if diags.HasError() {
-		return nil, nil, diags
+		return v3BundleAuthoring{}, diags
 	}
-	modules := make([]v3BundleModule, 0, len(modulesValue.Elements()))
+	blobs := make(map[string][]byte, len(modules))
+	for index := range modules {
+		module := &modules[index]
+		if module.ContentFile == "" {
+			diags.AddAttributeError(path.Root("modules"), "Missing module content_file",
+				fmt.Sprintf("module %q declares no content_file; local authoring reads each module from a local file.", module.Name))
+			return v3BundleAuthoring{}, diags
+		}
+		if err := readWorkerBundleModule(module); err != nil {
+			diags.AddAttributeError(path.Root("modules"), "Unreadable module file", err.Error())
+			return v3BundleAuthoring{}, diags
+		}
+		blobs[module.Digest] = module.bytes
+	}
+	manifest := workerBundleManifest(mainModule, modules)
+	digest, err := digestWorkerBundleManifest(manifest)
+	if err != nil {
+		diags.AddAttributeError(path.Root("modules"), "Unencodable artifact manifest", err.Error())
+		return v3BundleAuthoring{}, diags
+	}
+	// Both spellings may be written together, but then they must agree: the
+	// digest is the identity, so a written digest that does not name the bytes
+	// on disk is a contradiction, not a preference.
+	if writtenSet && written != digest {
+		diags.AddAttributeError(path.Root("manifest_digest"), "Conflicting bundle authoring",
+			fmt.Sprintf(
+				"manifest_digest is %s but the authored modules commit manifest %s. "+
+					"Write the digest of the authored bytes, or drop manifest_digest and let the provider record it.",
+				written, digest,
+			))
+		return v3BundleAuthoring{}, diags
+	}
+	values.Fields["modules"] = v3WorkerBundleModulesValue(modules, &diags)
+	values.Fields["manifest_digest"] = types.StringValue(digest)
+	return v3BundleAuthoring{Local: true, Digest: digest, Manifest: manifest, Blobs: blobs}, diags
+}
+
+// v3AuthoredBundleModules reads the declared modules and proves the two rules
+// a manifest must satisfy before it is built: module names are unique and
+// main_module names one of them.
+func v3AuthoredBundleModules(list types.List, mainModule string) ([]v3BundleModule, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	elements := list.Elements()
+	if len(elements) == 0 {
+		diags.AddAttributeError(path.Root("modules"), "Empty bundle",
+			"Local authoring requires at least one module.")
+		return nil, diags
+	}
+	modules := make([]v3BundleModule, 0, len(elements))
 	names := map[string]struct{}{}
-	for index, element := range modulesValue.Elements() {
+	for index, element := range elements {
 		object, objectDiags := v3KnownObject("modules", index, element)
 		diags.Append(objectDiags...)
 		if objectDiags.HasError() {
-			return nil, nil, diags
+			return nil, diags
 		}
 		attributes := object.Attributes()
 		name, nameDiags := v3KnownString("modules", "name", attributes["name"])
 		contentType, typeDiags := v3KnownString("modules", "content_type", attributes["content_type"])
-		contentFile, fileDiags := v3KnownString("modules", "content_file", attributes["content_file"])
 		diags.Append(nameDiags...)
 		diags.Append(typeDiags...)
-		diags.Append(fileDiags...)
 		if diags.HasError() {
-			return nil, nil, diags
+			return nil, diags
 		}
 		if _, duplicate := names[name]; duplicate {
 			diags.AddAttributeError(path.Root("modules"), "Duplicate module name",
 				fmt.Sprintf("module %q is declared more than once.", name))
-			return nil, nil, diags
+			return nil, diags
 		}
 		names[name] = struct{}{}
+		contentFile, _ := v3PlanKnownString(attributes["content_file"])
 		modules = append(modules, v3BundleModule{Name: name, ContentType: contentType, ContentFile: contentFile})
 	}
 	if _, declared := names[mainModule]; !declared {
 		diags.AddAttributeError(path.Root("main_module"), "Unknown main module",
 			fmt.Sprintf("main_module %q does not name a declared module.", mainModule))
-		return nil, nil, diags
+		return nil, diags
 	}
-	wireModules := make([]any, 0, len(modules))
-	for index := range modules {
-		module := &modules[index]
-		if err := readWorkerBundleModule(module); err != nil {
-			diags.AddAttributeError(path.Root("modules"), "Unreadable module file", err.Error())
-			return nil, nil, diags
-		}
-		wireModules = append(wireModules, map[string]any{
+	return modules, diags
+}
+
+// workerBundleManifest renders the artifact manifest document of one locally
+// authored bundle. It is the exact document the upload commits, so its
+// canonical digest is the bundle's identity.
+func workerBundleManifest(mainModule string, modules []v3BundleModule) map[string]any {
+	entries := make([]any, 0, len(modules))
+	for _, module := range modules {
+		entries = append(entries, map[string]any{
 			"name":      module.Name,
 			"mediaType": module.ContentType,
 			"size":      module.Size,
 			"digest":    module.Digest,
 		})
 	}
-	values.Fields["modules"] = v3WorkerBundleModulesValue(modules, &diags)
-	return map[string]any{"mainModule": mainModule, "modules": wireModules}, modules, diags
+	return map[string]any{
+		"apiVersion": artifactManifestAPIVersion,
+		"kind":       workerBundleKind,
+		"mainModule": mainModule,
+		"modules":    entries,
+	}
+}
+
+// digestWorkerBundleManifest computes the manifest's immutable identity with
+// exactly the RFC 8785 canonicalization the host commits under, so the digest
+// the plan shows is the digest the host will return.
+func digestWorkerBundleManifest(manifest map[string]any) (string, error) {
+	raw, err := json.Marshal(manifest)
+	if err != nil {
+		return "", err
+	}
+	return formpackage.DigestCanonicalJSON(raw)
 }
 
 // readWorkerBundleModule is the single read+hash authority for one module's
@@ -212,14 +340,19 @@ func readWorkerBundleModule(module *v3BundleModule) error {
 	return nil
 }
 
-// ModifyPlan implements plan-time byte identity for worker bundles: a bundle
-// is pinned by module bytes, so changed bytes at an UNCHANGED content_file
-// path must surface as a real diff. When prior state exists and the planned
-// modules list plus its content_file values are wholly known, each file is
-// re-read and its exact size and sha256 digest are written into the planned
-// modules, and any resulting difference forces replacement (a bundle is an
-// immutable revision). An unreadable content_file leaves that module's
-// planned size and digest unknown instead of erroring the plan.
+// ModifyPlan implements plan-time byte identity for worker bundles. A bundle
+// IS its manifest digest, so changed bytes at an UNCHANGED content_file path
+// must surface as a real diff on manifest_digest. When prior state exists and
+// the planned modules are wholly known, each file is re-read, the artifact
+// manifest is rebuilt, and its canonical digest is written into the plan
+// whenever the configuration did not pin one itself.
+//
+// Replacement then follows the DIGEST, not the authoring attributes: identical
+// bytes authored a different way (a manifest_digest reference replaced by the
+// local files that commit that exact manifest) are the same bundle, so the
+// attribute-level replacement those authoring attributes carry is withdrawn.
+// An unreadable content_file leaves the computed values unknown instead of
+// erroring the plan.
 func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if r.form.Kind != workerBundleKind {
 		return
@@ -231,55 +364,121 @@ func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	}
 	var planned types.List
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("modules"), &planned)...)
-	if resp.Diagnostics.HasError() || planned.IsNull() || planned.IsUnknown() {
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	modules := make([]v3BundleModule, 0, len(planned.Elements()))
-	for _, element := range planned.Elements() {
-		object, ok := element.(types.Object)
-		if !ok || object.IsNull() || object.IsUnknown() {
-			return
+	if planned.IsNull() || planned.IsUnknown() {
+		// Manifest-digest authoring: there is no local file to re-read, and the
+		// attribute-level replacement on manifest_digest already speaks for any
+		// change.
+		return
+	}
+	var plannedMain, plannedDigest, priorDigest types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("main_module"), &plannedMain)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("manifest_digest"), &plannedDigest)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("manifest_digest"), &priorDigest)...)
+	// A configuration that pins manifest_digest owns that value. Terraform
+	// always supplies the configuration here; an absent one is a direct-call
+	// harness, where "nothing was configured" is the honest reading.
+	configuredDigest := types.StringNull()
+	if req.Config.Schema != nil && !req.Config.Raw.IsNull() {
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("manifest_digest"), &configuredDigest)...)
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	mainModule, mainKnown := v3PlanKnownString(plannedMain)
+	if !mainKnown {
+		return
+	}
+	modules, moduleDiags := v3AuthoredBundleModules(planned, mainModule)
+	if moduleDiags.HasError() {
+		// A malformed authoring block is reported by the apply-time resolver
+		// against the same attribute paths; the plan stays silent rather than
+		// duplicating the diagnostic.
+		return
+	}
+	resolved := true
+	for index := range modules {
+		module := &modules[index]
+		if module.ContentFile == "" || readWorkerBundleModule(module) != nil {
+			resolved = false
 		}
-		attributes := object.Attributes()
-		name, nameOK := v3PlanKnownString(attributes["name"])
-		contentType, typeOK := v3PlanKnownString(attributes["content_type"])
-		contentFile, fileOK := v3PlanKnownString(attributes["content_file"])
-		if !nameOK || !typeOK || !fileOK {
-			return
-		}
-		modules = append(modules, v3BundleModule{Name: name, ContentType: contentType, ContentFile: contentFile})
 	}
 	elementType := v3WorkerBundleModuleType()
 	elements := make([]attr.Value, 0, len(modules))
-	for index := range modules {
-		module := &modules[index]
+	for _, module := range modules {
 		size := types.Int64Unknown()
 		digest := types.StringUnknown()
-		if err := readWorkerBundleModule(module); err == nil {
+		if resolved {
 			size = types.Int64Value(module.Size)
 			digest = types.StringValue(module.Digest)
 		}
 		elements = append(elements, types.ObjectValueMust(elementType.AttrTypes, map[string]attr.Value{
 			"name":         types.StringValue(module.Name),
 			"content_type": types.StringValue(module.ContentType),
-			"content_file": types.StringValue(module.ContentFile),
+			"content_file": v3OptionalStateString(module.ContentFile),
 			"size":         size,
 			"digest":       digest,
 		}))
 	}
-	resolved, listDiags := types.ListValue(elementType, elements)
+	resolvedModules, listDiags := types.ListValue(elementType, elements)
 	resp.Diagnostics.Append(listDiags...)
-	if resp.Diagnostics.HasError() || resolved.Equal(planned) {
-		return
-	}
-	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("modules"), resolved)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	// The attribute-level RequiresReplace modifiers already ran over the
-	// framework's proposed plan, which still carried the prior byte identity;
-	// the refreshed identity marks the replacement here.
-	resp.RequiresReplace = append(resp.RequiresReplace, path.Root("modules"))
+	computed := types.StringUnknown()
+	if resolved {
+		digest, err := digestWorkerBundleManifest(workerBundleManifest(mainModule, modules))
+		if err != nil {
+			return
+		}
+		computed = types.StringValue(digest)
+	}
+	if !resolvedModules.Equal(planned) {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("modules"), resolvedModules)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+	// A pinned manifest_digest is never overwritten here; the computed digest is
+	// checked against it at apply time, where a disagreement is a hard error
+	// rather than a silent substitution.
+	if configuredDigest.IsNull() && !computed.Equal(plannedDigest) {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("manifest_digest"), computed)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		plannedDigest = computed
+	}
+	if plannedDigest.Equal(priorDigest) {
+		resp.RequiresReplace = v3WithoutPaths(resp.RequiresReplace,
+			path.Root("main_module"), path.Root("modules"))
+		return
+	}
+	// The attribute-level modifier already ran over the framework's proposed
+	// plan, which still carried the prior byte identity; the refreshed identity
+	// marks the replacement here.
+	if !resp.RequiresReplace.Contains(path.Root("manifest_digest")) {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("manifest_digest"))
+	}
+}
+
+// v3WithoutPaths drops the named replacement triggers from a plan response.
+func v3WithoutPaths(paths path.Paths, drop ...path.Path) path.Paths {
+	kept := make(path.Paths, 0, len(paths))
+	for _, candidate := range paths {
+		remove := false
+		for _, unwanted := range drop {
+			if candidate.Equal(unwanted) {
+				remove = true
+			}
+		}
+		if !remove {
+			kept = append(kept, candidate)
+		}
+	}
+	return kept
 }
 
 // v3PlanKnownString unwraps one wholly known planned string.
@@ -291,31 +490,20 @@ func v3PlanKnownString(value attr.Value) (string, bool) {
 	return text.ValueString(), true
 }
 
-// uploadWorkerBundle uploads the resolved module blobs and commits the
-// bundle's artifact manifest before the WorkerBundle resource is applied.
-func (r *v3FormResource) uploadWorkerBundle(ctx context.Context, spec map[string]any, modules []v3BundleModule, diags *diag.Diagnostics) bool {
-	manifestModules := make([]any, 0, len(modules))
-	blobs := make(map[string][]byte, len(modules))
-	for _, module := range modules {
-		manifestModules = append(manifestModules, map[string]any{
-			"name":      module.Name,
-			"mediaType": module.ContentType,
-			"size":      module.Size,
-			"digest":    module.Digest,
-		})
-		blobs[module.Digest] = module.bytes
-	}
-	manifest := map[string]any{
-		"apiVersion": artifactManifestAPIVersion,
-		"kind":       workerBundleKind,
-		"mainModule": spec["mainModule"],
-		"modules":    manifestModules,
-	}
-	if _, err := r.data.clientV3.UploadArtifact(ctx, manifest, blobs); err != nil {
+// uploadWorkerBundle commits the authored artifact manifest and returns the
+// digest the host issued. That returned digest — never a locally asserted one
+// — is what the WorkerBundle desired state carries.
+func (r *v3FormResource) uploadWorkerBundle(
+	ctx context.Context,
+	authoring v3BundleAuthoring,
+	diags *diag.Diagnostics,
+) (string, bool) {
+	committed, err := r.data.clientV3.UploadArtifact(ctx, authoring.Manifest, authoring.Blobs)
+	if err != nil {
 		diags.AddError("Worker bundle upload failed", err.Error())
-		return false
+		return "", false
 	}
-	return true
+	return committed, true
 }
 
 // v3WorkerBundleModulesValue renders the resolved modules — including the
@@ -327,7 +515,7 @@ func v3WorkerBundleModulesValue(modules []v3BundleModule, diags *diag.Diagnostic
 		elements = append(elements, types.ObjectValueMust(elementType.AttrTypes, map[string]attr.Value{
 			"name":         types.StringValue(module.Name),
 			"content_type": types.StringValue(module.ContentType),
-			"content_file": types.StringValue(module.ContentFile),
+			"content_file": v3OptionalStateString(module.ContentFile),
 			"size":         types.Int64Value(module.Size),
 			"digest":       types.StringValue(module.Digest),
 		}))
@@ -337,16 +525,40 @@ func v3WorkerBundleModulesValue(modules []v3BundleModule, diags *diag.Diagnostic
 	return list
 }
 
-// writeWorkerBundleState preserves the authored bundle fields. Reads never
-// rewrite them: a bundle is an immutable revision, and content_file paths are
-// local authoring facts the wire cannot echo.
-func (r *v3FormResource) writeWorkerBundleState(ctx context.Context, state *tfsdk.State, values v3Values) diag.Diagnostics {
+// writeWorkerBundleState writes the bundle's state. manifest_digest is adopted
+// from the host's desired spec whenever the host stated one — that is what
+// makes an imported bundle manageable, because the wire carries the digest and
+// nothing else. The local authoring attributes are preserved from the
+// plan or prior state: they are local facts the wire cannot echo, and an
+// imported bundle simply has none.
+func (r *v3FormResource) writeWorkerBundleState(
+	ctx context.Context,
+	state *tfsdk.State,
+	values v3Values,
+	res *clientv3.Resource,
+) diag.Diagnostics {
 	var diags diag.Diagnostics
-	diags.Append(state.SetAttribute(ctx, path.Root("main_module"), values.Fields["main_module"])...)
-	modules := values.Fields["modules"]
-	if modules == nil {
+	digest := v3StateStringOf(values.Fields["manifest_digest"])
+	if hosted, ok := res.Spec["manifestDigest"].(string); ok && hosted != "" {
+		digest = types.StringValue(hosted)
+	}
+	diags.Append(state.SetAttribute(ctx, path.Root("manifest_digest"), digest)...)
+	diags.Append(state.SetAttribute(ctx, path.Root("main_module"), v3StateStringOf(values.Fields["main_module"]))...)
+	modules, ok := values.Fields["modules"].(types.List)
+	if !ok || modules.IsUnknown() {
 		modules = types.ListNull(v3WorkerBundleModuleType())
 	}
 	diags.Append(state.SetAttribute(ctx, path.Root("modules"), modules)...)
 	return diags
+}
+
+// v3StateStringOf renders one plan or state string as a storable value: an
+// absent or still-unknown value becomes null rather than an illegal unknown in
+// committed state.
+func v3StateStringOf(value attr.Value) types.String {
+	text, ok := value.(types.String)
+	if !ok || text.IsUnknown() {
+		return types.StringNull()
+	}
+	return text
 }

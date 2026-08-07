@@ -18,9 +18,6 @@ var Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"}
 // edgeDefinitionVersion is the definition SemVer every MVP member starts at.
 const edgeDefinitionVersion = "0.1.0"
 
-// modulePathPattern is a non-escaping relative bundle module path.
-const modulePathPattern = model.PatternRelativePath
-
 func moduleWorkerRef(hcl, wire, doc string, required, immutable bool) model.Field {
 	return model.Field{
 		HCL: hcl, Wire: wire, Kind: model.KindResourceRef, TargetKind: "ModuleWorker",
@@ -44,37 +41,22 @@ var Forms = []model.Form{
 		Kind: "WorkerBundle", Slug: "worker-bundle", ResourceType: "takoform_worker_bundle",
 		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Bundle",
-		Description: "Immutable content-addressed module bundle of one worker build: a main module plus " +
-			"additional modules, each pinned by size and digest and resolved through the content-addressed " +
-			"artifact upload API (decision 0012). Different bytes are a different bundle.",
+		Description: "Immutable content-addressed module bundle of one worker build, named by the digest of the " +
+			"artifact manifest committed through the content-addressed upload API (decision 0012). The manifest, " +
+			"not this Form, describes the main module and every additional module with its closed media type, " +
+			"exact size, and sha256 digest, so the bundle keeps exactly one source of truth for its bytes. " +
+			"Different bytes commit a different manifest, which is a different bundle.",
 		Fields: []model.Field{
-			{HCL: "main_module", Wire: "mainModule", Kind: model.KindString, Required: true,
-				Pattern: modulePathPattern, MaxLength: 240,
-				Doc:     "Relative path of the ES module the runtime instantiates first. It must name one declared module.",
-				Example: "worker.mjs", AltExample: "src/index.mjs", CounterExample: "../worker.mjs"},
-			{HCL: "modules", Wire: "modules", Kind: model.KindObjectList, Required: true, MinItems: 1,
-				Doc: "Every module of the bundle, exactly as committed to the artifact manifest: relative path, closed media type, size, and sha256 digest.",
-				Fields: []model.Field{
-					{HCL: "name", Wire: "name", Kind: model.KindString, Required: true,
-						Pattern: modulePathPattern, MaxLength: 240,
-						Doc: "Relative module path inside the bundle."},
-					{HCL: "media_type", Wire: "mediaType", Kind: model.KindStringEnum, Required: true,
-						Enum: []string{"application/javascript+module", "application/wasm", "text/plain", "application/octet-stream", "application/source-map+json"},
-						Doc:  "Closed media type deciding how the runtime links the module."},
-					{HCL: "size", Wire: "size", Kind: model.KindInteger, Required: true,
-						Min: model.I64(0), Max: model.I64(268435456),
-						Doc: "Exact module size in bytes."},
-					{HCL: "digest", Wire: "digest", Kind: model.KindString, Required: true,
-						Pattern: model.PatternCanonicalSHA256,
-						Doc:     "Canonical lowercase sha256 digest of the module bytes."},
-				},
-				Example: []any{map[string]any{
-					"name":      "worker.mjs",
-					"mediaType": "application/javascript+module",
-					"size":      2048,
-					"digest":    "sha256:6a5cbf24f5d0c86479ae13b9d1731a626a1729f01aef65403c5c8ac82ed85f43",
-				}},
-				CounterExample: []any{}},
+			{HCL: "manifest_digest", Wire: "manifestDigest", Kind: model.KindString,
+				Required: true, Immutable: true,
+				Pattern: model.PatternCanonicalSHA256,
+				Doc: "Immutable identity of the committed artifact manifest that describes this bundle: the RFC 8785 " +
+					"canonical sha256 digest the host returned when the manifest was committed. A host resolves that " +
+					"manifest and holds it to the artifact contract before it mutates anything, and rejects a digest it " +
+					"has not committed.",
+				Example:        "sha256:6a5cbf24f5d0c86479ae13b9d1731a626a1729f01aef65403c5c8ac82ed85f43",
+				AltExample:     "sha256:8624fd492ece196a5048414afd598275b811beafc00aab602bfb59978f880765",
+				CounterExample: "sha256:not-a-canonical-manifest-digest"},
 		},
 	},
 	{

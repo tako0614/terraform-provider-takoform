@@ -29,9 +29,10 @@ DELETE {api}/artifacts/uploads/{uploadId}           abandon an incomplete upload
    host does not already hold.
 3. The client uploads only the missing blobs. Each `PUT` body is the exact
    blob; the host verifies its size and digest on receipt.
-4. `POST .../commit` re-verifies every blob against the manifest (size,
-   digest, media type, path grammar) and returns the immutable
-   `manifestDigest`: the RFC 8785 canonical digest of the manifest bytes.
+4. `POST .../commit` re-verifies the manifest and every blob against it
+   (size, digest, media type, path grammar, per-kind shape) and returns the
+   immutable `manifestDigest`: the RFC 8785 canonical digest of the manifest
+   bytes.
 5. Desired state (for example a `WorkerBundle` revision) references the
    manifest digest only.
 
@@ -56,6 +57,41 @@ A host MUST reject, before commit:
 
 Rejections use `artifact_invalid` (400); a commit referencing a blob that was
 never uploaded uses `artifact_missing` (404).
+
+Every rule above is re-verified at commit, because commit is the step that
+mints an immutable identity. A host MUST NOT rely on having checked the
+manifest only when the upload started.
+
+## Per-kind exclusivity
+
+A manifest kind decides which payload members the document may carry, and it
+is normative:
+
+- a `WorkerBundle` manifest carries `mainModule` and `modules` and MUST NOT
+  carry `files`;
+- a `StaticAssetBundle` or `MigrationBundle` manifest carries `files` and MUST
+  NOT carry `mainModule` or `modules`.
+
+A manifest carrying both shapes has two meanings, which a content-addressed
+identity must never have; violations are `artifact_invalid` (400). The
+published manifest schema is the structural minimum for this document and
+declares all three members for every kind, so this closure is enforced by the
+host and proved by a required conformance check rather than by the schema
+([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)).
+
+## Referencing a manifest from desired state
+
+A bundle-shaped revision resource carries the manifest digest as its whole
+desired state; the manifest, not the resource, describes the bytes. Before any
+mutation — apply and import alike — a host MUST resolve the referenced
+manifest and fail closed when the digest names no committed manifest
+(`artifact_missing`, 404), when the stored document does not canonicalize to
+the referenced digest, when its `kind` is not the kind the Form requires, or
+when it violates any rule above (`artifact_invalid`, 400).
+
+A committed manifest and its blobs MUST stay readable while any resource
+references the manifest: abandoning an unrelated upload session, or
+collecting staged blobs, MUST NOT make a referenced artifact unresolvable.
 
 ## Boundary
 
