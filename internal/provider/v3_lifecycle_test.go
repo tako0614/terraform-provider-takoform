@@ -128,35 +128,71 @@ func TestV3Apply202OperationPathResolvesToResource(t *testing.T) {
 	}
 }
 
-func TestV3WorkerBundleCreateUploadsBlobsThenApplies(t *testing.T) {
+// v3BundleFile writes one module file and returns its path.
+func v3BundleFile(t *testing.T, dir, name string, content []byte) string {
+	t.Helper()
+	full := filepath.Join(dir, name)
+	if err := os.WriteFile(full, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return full
+}
+
+// v3BundleModulesValue builds the authored modules list of one single-module
+// bundle, with the computed size and digest still unknown exactly as a fresh
+// plan carries them.
+func v3BundleModulesValue(name, contentFile string) types.List {
+	moduleType := v3WorkerBundleModuleType()
+	return types.ListValueMust(moduleType, []attr.Value{
+		types.ObjectValueMust(moduleType.AttrTypes, map[string]attr.Value{
+			"name":         types.StringValue(name),
+			"content_type": types.StringValue("application/javascript+module"),
+			"content_file": types.StringValue(contentFile),
+			"size":         types.Int64Unknown(),
+			"digest":       types.StringUnknown(),
+		}),
+	})
+}
+
+// v3ExpectedManifestDigest computes the manifest digest one authored module
+// commits, through the same helpers the provider uses.
+func v3ExpectedManifestDigest(t *testing.T, mainModule, contentFile string, content []byte) string {
+	t.Helper()
+	sum := sha256.Sum256(content)
+	manifest := workerBundleManifest(mainModule, []v3BundleModule{{
+		Name:        mainModule,
+		ContentType: "application/javascript+module",
+		ContentFile: contentFile,
+		Size:        int64(len(content)),
+		Digest:      "sha256:" + hex.EncodeToString(sum[:]),
+	}})
+	digest, err := digestWorkerBundleManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return digest
+}
+
+// TestV3WorkerBundleCreateUploadsThenAppliesOnlyTheManifestDigest proves the
+// collapse onto one source of truth: local authoring commits the artifact
+// manifest first, and the resource that follows carries exactly the returned
+// manifest digest — no module list, no main module, no bytes.
+func TestV3WorkerBundleCreateUploadsThenAppliesOnlyTheManifestDigest(t *testing.T) {
 	host := newV3FakeHost(t)
 	resource := v3TestFormResource(t, "WorkerBundle", newV3TestProviderData(t, host))
 	ctx := context.Background()
 	schemaResponse := v3SchemaOf(t, resource)
 
-	dir := t.TempDir()
 	workerBytes := []byte("export default { fetch() { return new Response(\"ok\") } }\n")
-	workerFile := filepath.Join(dir, "worker.mjs")
-	if err := os.WriteFile(workerFile, workerBytes, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	workerFile := v3BundleFile(t, t.TempDir(), "worker.mjs", workerBytes)
 	sum := sha256.Sum256(workerBytes)
-	wantDigest := "sha256:" + hex.EncodeToString(sum[:])
+	wantBlobDigest := "sha256:" + hex.EncodeToString(sum[:])
+	wantManifestDigest := v3ExpectedManifestDigest(t, "worker.mjs", workerFile, workerBytes)
 
-	moduleType := v3WorkerBundleModuleType()
-	modules := types.ListValueMust(moduleType, []attr.Value{
-		types.ObjectValueMust(moduleType.AttrTypes, map[string]attr.Value{
-			"name":         types.StringValue("worker.mjs"),
-			"content_type": types.StringValue("application/javascript+module"),
-			"content_file": types.StringValue(workerFile),
-			"size":         types.Int64Unknown(),
-			"digest":       types.StringUnknown(),
-		}),
-	})
 	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
 		"name":        types.StringValue("worker-bundle"),
 		"main_module": types.StringValue("worker.mjs"),
-		"modules":     modules,
+		"modules":     v3BundleModulesValue("worker.mjs", workerFile),
 	})
 	createResponse := frameworkresource.CreateResponse{
 		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
@@ -169,23 +205,34 @@ func TestV3WorkerBundleCreateUploadsBlobsThenApplies(t *testing.T) {
 	// The host must receive: upload start, the blob, the manifest commit, and
 	// only then the WorkerBundle apply.
 	start := host.eventIndex("artifact-start")
-	blob := host.eventIndex("blob:" + wantDigest)
+	blob := host.eventIndex("blob:" + wantBlobDigest)
 	commit := host.eventIndex("commit")
 	apply := host.eventPrefixIndex("apply:WorkerBundle/")
 	if start < 0 || blob < 0 || commit < 0 || apply < 0 || !(start < blob && blob < commit && commit < apply) {
 		t.Fatalf("event order = %v, want artifact-start < blob < commit < apply", host.events)
 	}
-	if !reflect.DeepEqual(host.blobs[wantDigest], workerBytes) {
+	if !reflect.DeepEqual(host.blobs[wantBlobDigest], workerBytes) {
 		t.Fatalf("host blob bytes differ from the module file")
 	}
+	// The applied desired state is the manifest digest and nothing else: the
+	// manifest, not the resource, describes the modules.
+	if len(host.applySpecs) != 1 {
+		t.Fatalf("apply count = %d, want exactly 1", len(host.applySpecs))
+	}
+	if !reflect.DeepEqual(host.applySpecs[0], map[string]any{"manifestDigest": wantManifestDigest}) {
+		t.Fatalf("applied spec = %v, want exactly {manifestDigest: %s}", host.applySpecs[0], wantManifestDigest)
+	}
 
+	if got := v3StateString(t, ctx, createResponse.State, "manifest_digest").ValueString(); got != wantManifestDigest {
+		t.Fatalf("state manifest_digest = %q, want %q", got, wantManifestDigest)
+	}
 	var stateModules types.List
 	if diags := createResponse.State.GetAttribute(ctx, path.Root("modules"), &stateModules); diags.HasError() {
 		t.Fatalf("state modules: %v", diags)
 	}
 	element := stateModules.Elements()[0].(types.Object).Attributes()
-	if got := element["digest"].(types.String).ValueString(); got != wantDigest {
-		t.Fatalf("state module digest = %q, want %q", got, wantDigest)
+	if got := element["digest"].(types.String).ValueString(); got != wantBlobDigest {
+		t.Fatalf("state module digest = %q, want %q", got, wantBlobDigest)
 	}
 	if got := element["size"].(types.Int64).ValueInt64(); got != int64(len(workerBytes)) {
 		t.Fatalf("state module size = %d, want %d", got, len(workerBytes))
@@ -195,9 +242,98 @@ func TestV3WorkerBundleCreateUploadsBlobsThenApplies(t *testing.T) {
 	}
 }
 
+// TestV3WorkerBundleManifestDigestAuthoringPerformsNoUpload proves the second
+// authoring mode: a digest that already names a committed manifest is applied
+// as-is, and the provider touches the artifact API not at all.
+func TestV3WorkerBundleManifestDigestAuthoringPerformsNoUpload(t *testing.T) {
+	host := newV3FakeHost(t)
+	resource := v3TestFormResource(t, "WorkerBundle", newV3TestProviderData(t, host))
+	ctx := context.Background()
+	schemaResponse := v3SchemaOf(t, resource)
+
+	const digest = "sha256:6a5cbf24f5d0c86479ae13b9d1731a626a1729f01aef65403c5c8ac82ed85f43"
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name":            types.StringValue("worker-bundle"),
+		"manifest_digest": types.StringValue(digest),
+	})
+	createResponse := frameworkresource.CreateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
+	if createResponse.Diagnostics.HasError() {
+		t.Fatalf("create: %v", createResponse.Diagnostics)
+	}
+	if host.eventIndex("artifact-start") >= 0 || host.eventIndex("commit") >= 0 {
+		t.Fatalf("manifest-digest authoring reached the artifact API: %v", host.events)
+	}
+	if len(host.applySpecs) != 1 ||
+		!reflect.DeepEqual(host.applySpecs[0], map[string]any{"manifestDigest": digest}) {
+		t.Fatalf("applied spec = %v, want exactly {manifestDigest: %s}", host.applySpecs, digest)
+	}
+	var mainModule types.String
+	if diags := createResponse.State.GetAttribute(ctx, path.Root("main_module"), &mainModule); diags.HasError() {
+		t.Fatalf("state main_module: %v", diags)
+	}
+	if !mainModule.IsNull() {
+		t.Fatalf("state main_module = %v, want null for manifest-digest authoring", mainModule)
+	}
+}
+
+// TestV3WorkerBundleBothSpellingsMustAgree proves the one rule that keeps two
+// spellings of one identity honest: writing a manifest_digest alongside local
+// authoring is accepted only when the authored bytes commit exactly that
+// manifest, and the disagreement is caught before any host call.
+func TestV3WorkerBundleBothSpellingsMustAgree(t *testing.T) {
+	ctx := context.Background()
+	workerBytes := []byte("export default { fetch() { return new Response(\"agree\") } }\n")
+	dir := t.TempDir()
+	workerFile := v3BundleFile(t, dir, "worker.mjs", workerBytes)
+	agreeing := v3ExpectedManifestDigest(t, "worker.mjs", workerFile, workerBytes)
+
+	disagreeingHost := newV3FakeHost(t)
+	disagreeing := v3TestFormResource(t, "WorkerBundle", newV3TestProviderData(t, disagreeingHost))
+	schemaResponse := v3SchemaOf(t, disagreeing)
+	conflicting := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name":            types.StringValue("worker-bundle"),
+		"manifest_digest": types.StringValue("sha256:" + strings.Repeat("0", 64)),
+		"main_module":     types.StringValue("worker.mjs"),
+		"modules":         v3BundleModulesValue("worker.mjs", workerFile),
+	})
+	conflictResponse := frameworkresource.CreateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	disagreeing.Create(ctx, frameworkresource.CreateRequest{Plan: conflicting}, &conflictResponse)
+	if !conflictResponse.Diagnostics.HasError() {
+		t.Fatal("a manifest_digest that contradicts the authored bytes was accepted")
+	}
+	if len(disagreeingHost.events) != 0 {
+		t.Fatalf("the rejected bundle still reached the host: %v", disagreeingHost.events)
+	}
+
+	agreeingHost := newV3FakeHost(t)
+	accepted := v3TestFormResource(t, "WorkerBundle", newV3TestProviderData(t, agreeingHost))
+	agreeingPlan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name":            types.StringValue("worker-bundle"),
+		"manifest_digest": types.StringValue(agreeing),
+		"main_module":     types.StringValue("worker.mjs"),
+		"modules":         v3BundleModulesValue("worker.mjs", workerFile),
+	})
+	acceptedResponse := frameworkresource.CreateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	accepted.Create(ctx, frameworkresource.CreateRequest{Plan: agreeingPlan}, &acceptedResponse)
+	if acceptedResponse.Diagnostics.HasError() {
+		t.Fatalf("agreeing spellings rejected: %v", acceptedResponse.Diagnostics)
+	}
+	if len(agreeingHost.applySpecs) != 1 ||
+		!reflect.DeepEqual(agreeingHost.applySpecs[0], map[string]any{"manifestDigest": agreeing}) {
+		t.Fatalf("applied spec = %v, want exactly {manifestDigest: %s}", agreeingHost.applySpecs, agreeing)
+	}
+}
+
 // TestV3WorkerBundleModifyPlanDetectsChangedBytes proves plan-time byte
 // identity: rewriting a module file at an UNCHANGED content_file path makes
-// the plan carry the new size and digest and forces replacement.
+// the plan carry a different MANIFEST digest and forces replacement.
 func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	host := newV3FakeHost(t)
 	resource := v3TestFormResource(t, "WorkerBundle", newV3TestProviderData(t, host))
@@ -206,25 +342,13 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 
 	dir := t.TempDir()
 	originalBytes := []byte("export default { fetch() { return new Response(\"one\") } }\n")
-	workerFile := filepath.Join(dir, "worker.mjs")
-	if err := os.WriteFile(workerFile, originalBytes, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	workerFile := v3BundleFile(t, dir, "worker.mjs", originalBytes)
+	originalManifest := v3ExpectedManifestDigest(t, "worker.mjs", workerFile, originalBytes)
 
-	moduleType := v3WorkerBundleModuleType()
-	modules := types.ListValueMust(moduleType, []attr.Value{
-		types.ObjectValueMust(moduleType.AttrTypes, map[string]attr.Value{
-			"name":         types.StringValue("worker.mjs"),
-			"content_type": types.StringValue("application/javascript+module"),
-			"content_file": types.StringValue(workerFile),
-			"size":         types.Int64Unknown(),
-			"digest":       types.StringUnknown(),
-		}),
-	})
 	createPlan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
 		"name":        types.StringValue("worker-bundle"),
 		"main_module": types.StringValue("worker.mjs"),
-		"modules":     modules,
+		"modules":     v3BundleModulesValue("worker.mjs", workerFile),
 	})
 	createResponse := frameworkresource.CreateResponse{
 		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
@@ -233,6 +357,9 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	if createResponse.Diagnostics.HasError() {
 		t.Fatalf("create: %v", createResponse.Diagnostics)
 	}
+	if got := v3StateString(t, ctx, createResponse.State, "manifest_digest").ValueString(); got != originalManifest {
+		t.Fatalf("created state manifest_digest = %q, want %q", got, originalManifest)
+	}
 
 	// Rewrite the module bytes at the SAME path.
 	changedBytes := []byte("export default { fetch() { return new Response(\"two\") } }\n")
@@ -240,7 +367,8 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(changedBytes)
-	wantDigest := "sha256:" + hex.EncodeToString(sum[:])
+	wantBlobDigest := "sha256:" + hex.EncodeToString(sum[:])
+	wantManifestDigest := v3ExpectedManifestDigest(t, "worker.mjs", workerFile, changedBytes)
 
 	// Terraform's proposed new state for an unchanged config equals prior
 	// state; without plan-time byte identity this plan would claim no change.
@@ -253,18 +381,28 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	if modifyResponse.Diagnostics.HasError() {
 		t.Fatalf("modify plan: %v", modifyResponse.Diagnostics)
 	}
+	var plannedDigest types.String
+	if diags := modifyResponse.Plan.GetAttribute(ctx, path.Root("manifest_digest"), &plannedDigest); diags.HasError() {
+		t.Fatalf("planned manifest_digest: %v", diags)
+	}
+	if plannedDigest.ValueString() != wantManifestDigest || wantManifestDigest == originalManifest {
+		t.Fatalf(
+			"planned manifest_digest = %q, want the rewritten bytes' manifest %q (prior %q)",
+			plannedDigest.ValueString(), wantManifestDigest, originalManifest,
+		)
+	}
 	var plannedModules types.List
 	if diags := modifyResponse.Plan.GetAttribute(ctx, path.Root("modules"), &plannedModules); diags.HasError() {
 		t.Fatalf("planned modules: %v", diags)
 	}
 	element := plannedModules.Elements()[0].(types.Object).Attributes()
-	if got := element["digest"].(types.String).ValueString(); got != wantDigest {
-		t.Fatalf("planned module digest = %q, want the rewritten bytes' digest %q", got, wantDigest)
+	if got := element["digest"].(types.String).ValueString(); got != wantBlobDigest {
+		t.Fatalf("planned module digest = %q, want the rewritten bytes' digest %q", got, wantBlobDigest)
 	}
 	if got := element["size"].(types.Int64).ValueInt64(); got != int64(len(changedBytes)) {
 		t.Fatalf("planned module size = %d, want %d", got, len(changedBytes))
 	}
-	if !modifyResponse.RequiresReplace.Contains(path.Root("modules")) {
+	if !modifyResponse.RequiresReplace.Contains(path.Root("manifest_digest")) {
 		t.Fatalf("changed module bytes did not force replacement: %v", modifyResponse.RequiresReplace)
 	}
 
@@ -290,6 +428,127 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	}
 }
 
+// TestV3WorkerBundleImportRestoresManifestDigest proves an imported bundle is
+// manageable: import restores the digest the host serves and leaves the local
+// authoring attributes null, the next plan is empty, and adopting local files
+// that commit exactly that manifest is not a change either.
+func TestV3WorkerBundleImportRestoresManifestDigest(t *testing.T) {
+	host := newV3FakeHost(t)
+	resource := v3TestFormResource(t, "WorkerBundle", newV3TestProviderData(t, host))
+	ctx := context.Background()
+	schemaResponse := v3SchemaOf(t, resource)
+
+	workerBytes := []byte("export default { fetch() { return new Response(\"imported\") } }\n")
+	workerFile := v3BundleFile(t, t.TempDir(), "worker.mjs", workerBytes)
+	digest := v3ExpectedManifestDigest(t, "worker.mjs", workerFile, workerBytes)
+
+	// The bundle already exists on the host, referencing a committed manifest.
+	createPlan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name":            types.StringValue("worker-bundle"),
+		"manifest_digest": types.StringValue(digest),
+	})
+	createResponse := frameworkresource.CreateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: createPlan}, &createResponse)
+	if createResponse.Diagnostics.HasError() {
+		t.Fatalf("create: %v", createResponse.Diagnostics)
+	}
+
+	importResponse := frameworkresource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	resource.ImportState(ctx, frameworkresource.ImportStateRequest{ID: "prod/worker-bundle"}, &importResponse)
+	if importResponse.Diagnostics.HasError() {
+		t.Fatalf("import: %v", importResponse.Diagnostics)
+	}
+	readResponse := frameworkresource.ReadResponse{State: importResponse.State}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: importResponse.State}, &readResponse)
+	if readResponse.Diagnostics.HasError() {
+		t.Fatalf("read after import: %v", readResponse.Diagnostics)
+	}
+	if got := v3StateString(t, ctx, readResponse.State, "manifest_digest").ValueString(); got != digest {
+		t.Fatalf("imported manifest_digest = %q, want the host's %q", got, digest)
+	}
+	if got := v3StateString(t, ctx, readResponse.State, "main_module"); !got.IsNull() {
+		t.Fatalf("imported main_module = %v, want null", got)
+	}
+	var importedModules types.List
+	if diags := readResponse.State.GetAttribute(ctx, path.Root("modules"), &importedModules); diags.HasError() {
+		t.Fatalf("imported modules: %v", diags)
+	}
+	if !importedModules.IsNull() {
+		t.Fatalf("imported modules = %v, want null", importedModules)
+	}
+
+	// A plan that re-states the same manifest digest is empty.
+	sameDigest := tfsdk.Plan{Schema: schemaResponse.Schema, Raw: readResponse.State.Raw}
+	sameResponse := frameworkresource.ModifyPlanResponse{Plan: sameDigest}
+	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
+		State: readResponse.State,
+		Plan:  sameDigest,
+	}, &sameResponse)
+	if sameResponse.Diagnostics.HasError() {
+		t.Fatalf("same-digest plan: %v", sameResponse.Diagnostics)
+	}
+	if len(sameResponse.RequiresReplace) != 0 || !sameResponse.Plan.Raw.Equal(readResponse.State.Raw) {
+		t.Fatalf("re-stating the same manifest digest was not an empty plan: %v", sameResponse.RequiresReplace)
+	}
+
+	// Adopting the local files that commit exactly that manifest is the same
+	// bundle: the authoring attributes carry attribute-level replacement, and
+	// the unchanged digest withdraws it.
+	local := tfsdk.Plan{Schema: schemaResponse.Schema, Raw: readResponse.State.Raw}
+	if diags := local.SetAttribute(ctx, path.Root("main_module"), types.StringValue("worker.mjs")); diags.HasError() {
+		t.Fatalf("set planned main_module: %v", diags)
+	}
+	if diags := local.SetAttribute(ctx, path.Root("modules"), v3BundleModulesValue("worker.mjs", workerFile)); diags.HasError() {
+		t.Fatalf("set planned modules: %v", diags)
+	}
+	localResponse := frameworkresource.ModifyPlanResponse{
+		Plan:            local,
+		RequiresReplace: path.Paths{path.Root("main_module"), path.Root("modules")},
+	}
+	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
+		State: readResponse.State,
+		Plan:  local,
+	}, &localResponse)
+	if localResponse.Diagnostics.HasError() {
+		t.Fatalf("local-authoring plan: %v", localResponse.Diagnostics)
+	}
+	if len(localResponse.RequiresReplace) != 0 {
+		t.Fatalf("adopting byte-identical local authoring forced replacement: %v", localResponse.RequiresReplace)
+	}
+	var adoptedDigest types.String
+	if diags := localResponse.Plan.GetAttribute(ctx, path.Root("manifest_digest"), &adoptedDigest); diags.HasError() {
+		t.Fatalf("planned manifest_digest: %v", diags)
+	}
+	if adoptedDigest.ValueString() != digest {
+		t.Fatalf("local authoring planned manifest_digest = %q, want the unchanged %q", adoptedDigest.ValueString(), digest)
+	}
+
+	// And the in-place apply of that plan touches no host state.
+	eventsBefore := len(host.events)
+	updateResponse := frameworkresource.UpdateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	resource.Update(ctx, frameworkresource.UpdateRequest{
+		Plan: localResponse.Plan, State: readResponse.State,
+	}, &updateResponse)
+	if updateResponse.Diagnostics.HasError() {
+		t.Fatalf("adopting local authoring: %v", updateResponse.Diagnostics)
+	}
+	if len(host.events) != eventsBefore {
+		t.Fatalf("adopting local authoring mutated the host: %v", host.events[eventsBefore:])
+	}
+	if got := v3StateString(t, ctx, updateResponse.State, "main_module").ValueString(); got != "worker.mjs" {
+		t.Fatalf("adopted state main_module = %q, want worker.mjs", got)
+	}
+	if got := v3StateString(t, ctx, updateResponse.State, "manifest_digest").ValueString(); got != digest {
+		t.Fatalf("adopted state manifest_digest = %q, want %q", got, digest)
+	}
+}
+
 // TestV3WorkerBundleTimeoutOnlyUpdateSucceedsWithoutHostMutation proves the
 // one legal in-place update of a revision-role resource: changing only the
 // provider-side timeout attributes writes the plan to state without any host
@@ -300,25 +559,12 @@ func TestV3WorkerBundleTimeoutOnlyUpdateSucceedsWithoutHostMutation(t *testing.T
 	ctx := context.Background()
 	schemaResponse := v3SchemaOf(t, resource)
 
-	dir := t.TempDir()
-	workerFile := filepath.Join(dir, "worker.mjs")
-	if err := os.WriteFile(workerFile, []byte("export default {}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	moduleType := v3WorkerBundleModuleType()
-	modules := types.ListValueMust(moduleType, []attr.Value{
-		types.ObjectValueMust(moduleType.AttrTypes, map[string]attr.Value{
-			"name":         types.StringValue("worker.mjs"),
-			"content_type": types.StringValue("application/javascript+module"),
-			"content_file": types.StringValue(workerFile),
-			"size":         types.Int64Unknown(),
-			"digest":       types.StringUnknown(),
-		}),
-	})
+	workerBytes := []byte("export default {}\n")
+	workerFile := v3BundleFile(t, t.TempDir(), "worker.mjs", workerBytes)
 	createPlan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
 		"name":        types.StringValue("worker-bundle"),
 		"main_module": types.StringValue("worker.mjs"),
-		"modules":     modules,
+		"modules":     v3BundleModulesValue("worker.mjs", workerFile),
 	})
 	createResponse := frameworkresource.CreateResponse{
 		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
@@ -355,8 +601,14 @@ func TestV3WorkerBundleTimeoutOnlyUpdateSucceedsWithoutHostMutation(t *testing.T
 	// A desired-spec change planned as an in-place update stays a hard error
 	// and still performs no host mutation.
 	specPlan := tfsdk.Plan{Schema: schemaResponse.Schema, Raw: createResponse.State.Raw}
-	if diags := specPlan.SetAttribute(ctx, path.Root("main_module"), types.StringValue("other.mjs")); diags.HasError() {
-		t.Fatalf("set planned main_module: %v", diags)
+	for name, value := range map[string]attr.Value{
+		"manifest_digest": types.StringValue("sha256:" + strings.Repeat("1", 64)),
+		"main_module":     types.StringNull(),
+		"modules":         types.ListNull(v3WorkerBundleModuleType()),
+	} {
+		if diags := specPlan.SetAttribute(ctx, path.Root(name), value); diags.HasError() {
+			t.Fatalf("set planned %s: %v", name, diags)
+		}
 	}
 	rejectedResponse := frameworkresource.UpdateResponse{
 		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},

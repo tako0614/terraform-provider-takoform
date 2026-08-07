@@ -10,6 +10,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 // TestRenderedFormsVerifyAsV1Alpha4Packages proves the complete authoring
@@ -90,6 +91,52 @@ func TestRenderedFormsVerifyAsV1Alpha4Packages(t *testing.T) {
 				t.Fatalf("verified FormRef = %+v", report.FormRef)
 			}
 		})
+	}
+}
+
+// TestWorkerBundleWireSpecIsOnlyTheManifestDigest asserts the collapse onto
+// one source of truth against the bytes that actually ship: the GENERATED
+// candidate definition, not the in-memory catalog. A WorkerBundle's desired
+// state is exactly manifestDigest — the artifact manifest, not the Form,
+// describes the modules, so a second spelling of the same bytes must not
+// reappear in the wire spec.
+func TestWorkerBundleWireSpecIsOnlyTheManifestDigest(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(filepath.Join(
+		"..", "..", "forms", "candidates", "edge", "v1alpha1", "worker-bundle", "definition.json",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, err := formpackage.ValidateDefinition(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	properties, ok := definition.DesiredSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("the generated WorkerBundle definition has no desired properties object")
+	}
+	names := make([]string, 0, len(properties))
+	for name := range properties {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	if !slices.Equal(names, []string{"manifestDigest"}) {
+		t.Fatalf("WorkerBundle wire spec = %v, want exactly [manifestDigest]", names)
+	}
+	digest, _ := properties["manifestDigest"].(map[string]any)
+	if digest["type"] != "string" || digest["pattern"] != model.PatternCanonicalSHA256 {
+		t.Fatalf("manifestDigest is not a canonical sha256 string: %v", digest)
+	}
+	required, _ := definition.DesiredSchema["required"].([]any)
+	if len(required) != 1 || required[0] != "manifestDigest" {
+		t.Fatalf("WorkerBundle required = %v, want exactly [manifestDigest]", required)
+	}
+	if !slices.Equal(definition.ImmutableFields, []string{"/manifestDigest"}) {
+		t.Fatalf("WorkerBundle immutableFields = %v", definition.ImmutableFields)
+	}
+	if closed, _ := definition.DesiredSchema["additionalProperties"].(bool); closed {
+		t.Fatal("the WorkerBundle desired schema is not closed")
 	}
 }
 

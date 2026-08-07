@@ -154,6 +154,26 @@ The content-addressed upload API is
 [`../artifact-transport/`](../artifact-transport/README.md). The artifact
 endpoints share the lane's auth, idempotency, and error taxonomy.
 
+The desired state of a bundle-shaped revision resource is the **manifest
+digest and nothing else**: the committed artifact manifest describes the
+bytes, so the manifest and the desired spec are never two spellings of the
+same facts. A host MUST therefore resolve the referenced manifest before it
+mutates anything, on apply and on import alike, and fail closed when
+
+- the digest names no committed manifest — `artifact_missing` (404);
+- the stored manifest's RFC 8785 canonical digest differs from the referenced
+  digest, its document is undecodable, or its `kind` is not the kind the Form
+  requires — `artifact_invalid` (400);
+- the manifest violates any rule of
+  [`../artifact-transport/`](../artifact-transport/README.md), including its
+  per-kind exclusivity, its closed media types, and the host's published
+  `limits` — `artifact_invalid` (400).
+
+A committed manifest and its blobs MUST remain readable while any resource
+references the manifest. Abandoning an unrelated upload session, or
+garbage-collecting staged blobs, MUST NOT make a referenced artifact
+unresolvable.
+
 ## Support profiles
 
 ```

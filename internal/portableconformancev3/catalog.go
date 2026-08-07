@@ -262,22 +262,9 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 		}},
 		{contract.RunnerInput.WorkerBundle.ResourceProbe, "revision", map[string]any{
 			"type": "object", "additionalProperties": false,
-			"required": []any{"mainModule", "modules"},
+			"required": []any{"manifestDigest"},
 			"properties": map[string]any{
-				"mainModule": map[string]any{"type": "string", "minLength": 1},
-				"modules": map[string]any{
-					"type": "array", "minItems": 1, "uniqueItems": true,
-					"items": map[string]any{
-						"type": "object", "additionalProperties": false,
-						"required": []any{"digest", "mediaType", "name", "size"},
-						"properties": map[string]any{
-							"digest":    map[string]any{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-							"mediaType": map[string]any{"type": "string"},
-							"name":      map[string]any{"type": "string", "minLength": 1},
-							"size":      map[string]any{"type": "integer", "minimum": 0},
-						},
-					},
-				},
+				"manifestDigest": map[string]any{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
 			},
 		}},
 		{contract.RunnerInput.WorkerVersion, "revision", map[string]any{

@@ -48,7 +48,10 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 	t.Parallel()
 	want := map[string][]string{
 		"ModuleWorker": {},
-		"WorkerBundle": {"mainModule", "modules"},
+		// A bundle's portable desired state is exactly the immutable identity of
+		// its committed artifact manifest: the manifest, not the Form, describes
+		// the modules (spec/artifact-transport, decision 0014).
+		"WorkerBundle": {"manifestDigest"},
 		"WorkerVersion": {
 			"bucketBindings", "bundle", "compatibilityDate", "compatibilityFlags",
 			"handlers", "kvBindings", "queueProducerBindings", "requiredSensitiveVars",

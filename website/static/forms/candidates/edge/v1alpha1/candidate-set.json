@@ -26,9 +26,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerBundle",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:fc2ae97b3ee3fb52ad611b348aeebd6ffbbaee2c76ca41527fb1320c658a7de9"
+        "schemaDigest": "sha256:d7fd1bfc966a90b9f15ebfc6530c2465ee19b14fed3fef91c72502e799539f74"
       },
-      "packageDigest": "sha256:4fa281311512bdd9f381fd73a0ec5201d0349a378bcba246b08a9ec77f327a2f"
+      "packageDigest": "sha256:00f37d9f9c974eb71fded615de362d67953983b1888c14ad418d18b959c2c42c"
     },
     {
       "kind": "WorkerVersion",

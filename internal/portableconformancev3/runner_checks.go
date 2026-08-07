@@ -52,6 +52,8 @@ func (r *v3Runner) run() error {
 		r.checkSameKindTwoGroups,
 		func() error { return r.checkArtifacts(bundle) },
 		r.checkArtifactRejectList,
+		r.checkArtifactManifestKindExclusive,
+		func() error { return r.checkArtifactRetentionWhileReferenced(bundle) },
 		func() error { return r.checkWorkerVersionFlow(version, kv) },
 		r.checkHandlerGatedAttachments,
 		r.checkDeploymentWeightSum,
@@ -980,14 +982,12 @@ func (r *v3Runner) checkSameKindTwoGroups() error {
 	return nil
 }
 
+// bundleManifest returns the pinned WorkerBundle artifact manifest and its
+// immutable identity. The corpus already proves that identity is the probe's
+// desired manifestDigest, so the runner uploads the manifest and then drives
+// the resource with the digest the host returned for it.
 func (r *v3Runner) bundleManifest() (map[string]any, string, error) {
-	bundle := r.contract.RunnerInput.WorkerBundle
-	manifest := map[string]any{
-		"apiVersion": artifactAPIVersion,
-		"kind":       "WorkerBundle",
-		"mainModule": bundle.Desired["mainModule"],
-		"modules":    bundle.Desired["modules"],
-	}
+	manifest := r.contract.RunnerInput.WorkerBundle.Manifest
 	raw, err := encodeRunnerJSON(manifest)
 	if err != nil {
 		return nil, "", err
@@ -1148,14 +1148,281 @@ func (r *v3Runner) checkArtifacts(bundle probeTarget) error {
 	r.artifactManifestDigest = wantDigest
 	r.complete("artifact-commit-idempotent")
 
-	// The uploaded bytes back the WorkerBundle resource whose module digests
-	// match the committed manifest.
+	// A bundle's desired state is the manifest digest and nothing else, so the
+	// resource is applied under the digest the COMMIT returned.
+	bundle.Spec = map[string]any{"manifestDigest": commitResult.ManifestDigest}
 	if _, _, err := r.applyResource(bundle, applyOptions{
 		Create: true, IdempotencyKey: "key-create-bundle",
 	}, http.StatusCreated); err != nil {
 		return fmt.Errorf("bundle apply after artifact commit: %w", err)
 	}
+
+	// A digest that names no committed manifest is not desired state a host may
+	// accept: it would leave a resource whose bytes nobody ever uploaded.
+	uncommitted := bundle
+	uncommitted.Name = "bundle-uncommitted-probe"
+	uncommitted.Spec = map[string]any{"manifestDigest": formpackage.DigestBytes([]byte("never-committed-manifest"))}
+	missingResponse, err := r.apply(uncommitted, applyOptions{
+		Create: true, IdempotencyKey: "key-bundle-uncommitted",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(missingResponse, "artifact_missing"); err != nil {
+		return fmt.Errorf("bundle referencing an uncommitted manifest: %w", err)
+	}
+	if err := r.expectResourceAbsent(uncommitted); err != nil {
+		return fmt.Errorf("uncommitted manifest reference mutated state: %w", err)
+	}
+
+	// A manifest digest carries WHAT the document is, not only which bytes it
+	// is: a committed asset manifest is not a worker bundle.
+	assetSource := "<!doctype html><title>portable-host-v3</title>\n"
+	assetDigest, err := r.uploadAndCommitManifest(map[string]any{
+		"apiVersion": artifactAPIVersion,
+		"kind":       "StaticAssetBundle",
+		"files": []any{map[string]any{
+			"path":      "index.html",
+			"mediaType": "text/html",
+			"size":      len(assetSource),
+			"digest":    formpackage.DigestBytes([]byte(assetSource)),
+		}},
+	}, map[string][]byte{
+		formpackage.DigestBytes([]byte(assetSource)): []byte(assetSource),
+	}, "key-artifact-asset")
+	if err != nil {
+		return fmt.Errorf("committing the asset manifest: %w", err)
+	}
+	wrongKind := bundle
+	wrongKind.Name = "bundle-wrong-kind-probe"
+	wrongKind.Spec = map[string]any{"manifestDigest": assetDigest}
+	wrongKindResponse, err := r.apply(wrongKind, applyOptions{
+		Create: true, IdempotencyKey: "key-bundle-wrong-kind",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(wrongKindResponse, "artifact_invalid"); err != nil {
+		return fmt.Errorf("bundle referencing a non-WorkerBundle manifest: %w", err)
+	}
+	if err := r.expectResourceAbsent(wrongKind); err != nil {
+		return fmt.Errorf("wrong-kind manifest reference mutated state: %w", err)
+	}
 	r.complete("artifact-then-bundle-apply")
+	return nil
+}
+
+// uploadAndCommitManifest drives one complete upload — start, the blobs the
+// host reports missing, commit — and returns the committed manifest digest.
+func (r *v3Runner) uploadAndCommitManifest(
+	manifest map[string]any,
+	blobs map[string][]byte,
+	keyPrefix string,
+) (string, error) {
+	uploadID, missing, err := r.startArtifactUpload(manifest, keyPrefix+"-start")
+	if err != nil {
+		return "", err
+	}
+	for _, digest := range missing {
+		blob, staged := blobs[digest]
+		if !staged {
+			return "", fmt.Errorf("host requires blob %s which this check did not stage", digest)
+		}
+		uploaded, err := r.request(
+			http.MethodPut,
+			r.apiBase+"/artifacts/uploads/"+url.PathEscape(uploadID)+"/blobs/"+url.PathEscape(digest),
+			map[string]string{"Content-Type": "application/octet-stream"}, blob,
+		)
+		if err != nil {
+			return "", err
+		}
+		if uploaded.Status != http.StatusCreated && uploaded.Status != http.StatusNoContent {
+			return "", fmt.Errorf("blob upload HTTP %d", uploaded.Status)
+		}
+	}
+	commit, err := r.commitArtifact(uploadID, keyPrefix+"-commit")
+	if err != nil {
+		return "", err
+	}
+	if commit.Status != http.StatusOK && commit.Status != http.StatusCreated {
+		return "", fmt.Errorf(
+			"artifact commit HTTP %d; body=%s", commit.Status, strings.TrimSpace(string(commit.Body)),
+		)
+	}
+	var result struct {
+		ManifestDigest string `json:"manifestDigest"`
+	}
+	if err := decodeStrictResponse(commit, &result); err != nil {
+		return "", err
+	}
+	if !formpackage.ValidDigest(result.ManifestDigest) {
+		return "", errors.New("artifact commit returned an invalid manifestDigest")
+	}
+	return result.ManifestDigest, nil
+}
+
+// checkArtifactManifestKindExclusive proves the per-kind closure the published
+// manifest schema cannot state. That schema is the structural minimum
+// (spec/decisions/0014): it declares mainModule, modules, and files as
+// properties for every kind, so only the host stops a manifest from carrying
+// two shapes at once — and a manifest with two shapes has two meanings, which
+// is precisely what a content-addressed identity must never have. A laxer host
+// that accepts either mixture fails the lane here.
+func (r *v3Runner) checkArtifactManifestKindExclusive() error {
+	bundle := r.contract.RunnerInput.WorkerBundle
+	modules, _ := bundle.Manifest["modules"].([]any)
+	mainModule, _ := bundle.Manifest["mainModule"].(string)
+	if len(modules) == 0 || mainModule == "" {
+		return errors.New("workerBundle probe manifest declares no module")
+	}
+	assetSource := "<!doctype html><title>kind-exclusive</title>\n"
+	assetFile := map[string]any{
+		"path":      "index.html",
+		"mediaType": "text/html",
+		"size":      len(assetSource),
+		"digest":    formpackage.DigestBytes([]byte(assetSource)),
+	}
+	mixtures := []struct {
+		name     string
+		key      string
+		manifest map[string]any
+	}{
+		{
+			name: "a WorkerBundle manifest carrying files",
+			key:  "key-artifact-bundle-with-files",
+			manifest: map[string]any{
+				"apiVersion": artifactAPIVersion,
+				"kind":       "WorkerBundle",
+				"mainModule": mainModule,
+				"modules":    modules,
+				"files":      []any{assetFile},
+			},
+		},
+		{
+			name: "a StaticAssetBundle manifest carrying modules",
+			key:  "key-artifact-assets-with-modules",
+			manifest: map[string]any{
+				"apiVersion": artifactAPIVersion,
+				"kind":       "StaticAssetBundle",
+				"files":      []any{assetFile},
+				"modules":    modules,
+			},
+		},
+		{
+			name: "a MigrationBundle manifest carrying a main module",
+			key:  "key-artifact-migration-with-main-module",
+			manifest: map[string]any{
+				"apiVersion": artifactAPIVersion,
+				"kind":       "MigrationBundle",
+				"files":      []any{assetFile},
+				"mainModule": mainModule,
+			},
+		},
+	}
+	for _, mixture := range mixtures {
+		response, err := r.startArtifactUploadRaw(mixture.manifest, mixture.key)
+		if err != nil {
+			return err
+		}
+		if err := r.expectStableError(response, "artifact_invalid"); err != nil {
+			return fmt.Errorf("%s: %w", mixture.name, err)
+		}
+		// A rejected manifest must not have become an immutable identity.
+		raw, err := encodeRunnerJSON(mixture.manifest)
+		if err != nil {
+			return err
+		}
+		digest, err := formpackage.DigestCanonicalJSON(raw)
+		if err != nil {
+			return err
+		}
+		read, err := r.request(http.MethodGet, r.apiBase+"/artifacts/"+url.PathEscape(digest), nil, nil)
+		if err != nil {
+			return err
+		}
+		if err := r.expectStableError(read, "artifact_missing"); err != nil {
+			return fmt.Errorf("%s became readable: %w", mixture.name, err)
+		}
+	}
+	r.complete("artifact-manifest-kind-exclusive")
+	return nil
+}
+
+// checkArtifactRetentionWhileReferenced proves the retention rule a bundle
+// resource depends on: its desired state is a manifest digest, so a committed
+// manifest and its blobs must stay resolvable while any resource references
+// them. An unrelated upload session stages fresh bytes and is abandoned; the
+// abandoned session's own bytes may be collected, but the referenced manifest
+// and blob must survive it untouched.
+func (r *v3Runner) checkArtifactRetentionWhileReferenced(bundle probeTarget) error {
+	if _, _, err := r.read(bundle); err != nil {
+		return fmt.Errorf("the referencing bundle is not readable: %w", err)
+	}
+	referencedBlob := formpackage.DigestBytes([]byte(r.contract.RunnerInput.WorkerBundle.ModuleSource))
+	unrelatedSource := "export default { async fetch() { return new Response(\"unrelated\"); } };\n"
+	unrelatedBlob := formpackage.DigestBytes([]byte(unrelatedSource))
+	uploadID, missing, err := r.startArtifactUpload(map[string]any{
+		"apiVersion": artifactAPIVersion,
+		"kind":       "WorkerBundle",
+		"mainModule": "unrelated.js",
+		"modules": []any{map[string]any{
+			"name":      "unrelated.js",
+			"mediaType": "application/javascript+module",
+			"size":      len(unrelatedSource),
+			"digest":    unrelatedBlob,
+		}},
+	}, "key-artifact-unrelated-start")
+	if err != nil {
+		return err
+	}
+	if len(missing) != 1 || missing[0] != unrelatedBlob {
+		return fmt.Errorf("unrelated upload missingBlobs = %v, want exactly its own module", missing)
+	}
+	staged, err := r.request(
+		http.MethodPut,
+		r.apiBase+"/artifacts/uploads/"+url.PathEscape(uploadID)+"/blobs/"+url.PathEscape(unrelatedBlob),
+		map[string]string{"Content-Type": "application/octet-stream"}, []byte(unrelatedSource),
+	)
+	if err != nil {
+		return err
+	}
+	if staged.Status != http.StatusCreated && staged.Status != http.StatusNoContent {
+		return fmt.Errorf("unrelated blob upload HTTP %d", staged.Status)
+	}
+	abandoned, err := r.request(
+		http.MethodDelete, r.apiBase+"/artifacts/uploads/"+url.PathEscape(uploadID),
+		map[string]string{"Idempotency-Key": "key-artifact-unrelated-abandon"}, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if abandoned.Status != http.StatusNoContent {
+		return fmt.Errorf("upload abandon HTTP %d, want 204", abandoned.Status)
+	}
+	manifestResponse, err := r.request(
+		http.MethodGet, r.apiBase+"/artifacts/"+url.PathEscape(r.artifactManifestDigest), nil, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if manifestResponse.Status != http.StatusOK {
+		return fmt.Errorf("referenced manifest read HTTP %d after an unrelated abandon", manifestResponse.Status)
+	}
+	roundTrip, err := formpackage.DigestCanonicalJSON(manifestResponse.Body)
+	if err != nil || roundTrip != r.artifactManifestDigest {
+		return errors.New("the referenced manifest changed while a resource referenced it")
+	}
+	referenced, err := r.request(http.MethodHead, r.apiBase+"/artifacts/blobs/"+url.PathEscape(referencedBlob), nil, nil)
+	if err != nil {
+		return err
+	}
+	if referenced.Status != http.StatusOK {
+		return fmt.Errorf("referenced manifest blob HEAD HTTP %d after an unrelated abandon", referenced.Status)
+	}
+	if _, _, err := r.read(bundle); err != nil {
+		return fmt.Errorf("the referencing bundle stopped resolving: %w", err)
+	}
+	r.complete("artifact-retention-while-referenced")
 	return nil
 }
 
@@ -1179,12 +1446,12 @@ func (r *v3Runner) startArtifactUploadRaw(manifest map[string]any, key string) (
 // already-stored digest under a size it never had.
 func (r *v3Runner) checkArtifactRejectList() error {
 	bundle := r.contract.RunnerInput.WorkerBundle
-	modules, _ := bundle.Desired["modules"].([]any)
+	modules, _ := bundle.Manifest["modules"].([]any)
 	module, _ := modules[0].(map[string]any)
 	if module == nil {
 		return errors.New("workerBundle probe declares no module")
 	}
-	mainModule, _ := bundle.Desired["mainModule"].(string)
+	mainModule, _ := bundle.Manifest["mainModule"].(string)
 	moduleDigest := formpackage.DigestBytes([]byte(bundle.ModuleSource))
 
 	// A source map whose target module is absent describes nothing.

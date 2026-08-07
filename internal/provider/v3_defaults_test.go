@@ -86,7 +86,9 @@ func TestV3DefaultedAttributesSurviveApplyWithoutDiff(t *testing.T) {
 	checked := 0
 	for _, form := range edgeformcatalog.Forms {
 		if form.Kind == workerBundleKind {
-			// Worker bundles author local files instead of the declared fields.
+			// A worker bundle's one declared field is projected through the
+			// provider-only authoring surface (manifest_digest plus the local
+			// main_module/modules inputs), not through v3FieldAttribute.
 			continue
 		}
 		resource := &v3FormResource{form: form}
@@ -261,7 +263,7 @@ func TestV3NoUpdateFormsDeclareNoUpdateTimeout(t *testing.T) {
 			t.Errorf("%s declares update=%v but update_timeout present=%v",
 				form.Kind, form.DeclaresUpdate(), present)
 		}
-		if form.DeclaresUpdate() || form.Kind == workerBundleKind {
+		if form.DeclaresUpdate() {
 			continue
 		}
 		// Without an in-place update path, every desired attribute must force

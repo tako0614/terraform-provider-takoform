@@ -751,7 +751,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 		}
 	}
 	if form.Ref.Kind == "WorkerBundle" {
-		if hostErr := h.requireBundleBlobs(spec); hostErr != nil {
+		if hostErr := h.requireReferencedBundleManifest(spec); hostErr != nil {
 			return hostErr
 		}
 	}
@@ -1046,16 +1046,37 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 	h.recordReplay(request, raw, space, status, etag, response)
 }
 
-func (h *ReferenceHost) requireBundleBlobs(spec map[string]any) *hostError {
-	modules, _ := spec["modules"].([]any)
-	for _, member := range modules {
-		module, _ := member.(map[string]any)
-		digest, _ := module["digest"].(string)
-		if digest == "" || h.blobs[digest] == nil {
-			return stableError("artifact_missing", "bundle module bytes were not uploaded through the artifact API")
-		}
+// requireReferencedBundleManifest resolves the ONE thing a WorkerBundle's
+// desired state carries — the manifest digest — and holds the manifest it
+// names to the artifact contract before anything is mutated. The manifest,
+// never the resource spec, describes the bundle's modules, so this is where a
+// host learns what it is being asked to run.
+func (h *ReferenceHost) requireReferencedBundleManifest(spec map[string]any) *hostError {
+	digest, _ := spec["manifestDigest"].(string)
+	if !formpackage.ValidDigest(digest) {
+		return stableError("artifact_invalid", "manifestDigest must be a lowercase sha256:<hex> digest")
 	}
-	return nil
+	raw := h.manifests[digest]
+	if raw == nil {
+		return stableError("artifact_missing", "manifestDigest names no committed artifact manifest")
+	}
+	// The content address is re-derived rather than trusted: a stored document
+	// that no longer canonicalizes to the digest it is filed under is not the
+	// manifest the client referenced.
+	stored, err := formpackage.DigestCanonicalJSON(raw)
+	if err != nil || stored != digest {
+		return stableError("artifact_invalid", "the stored manifest does not canonicalize to the referenced digest")
+	}
+	var manifest artifactManifest
+	if err := formpackage.DecodeStrictIJSON(raw, &manifest); err != nil {
+		return stableError("artifact_invalid", "the stored manifest is not a decodable artifact manifest")
+	}
+	if manifest.Kind != "WorkerBundle" {
+		return stableError("artifact_invalid", "manifestDigest names a "+manifest.Kind+" manifest, not a WorkerBundle")
+	}
+	// The same closure the commit path enforces is re-proved here: a manifest
+	// committed by an older or laxer path must not become executable state.
+	return validateArtifactManifest(manifest)
 }
 
 // nextResource computes the post-mutation identity: uid minted on create,
@@ -1452,14 +1473,27 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 	if manifest.APIVersion != artifactAPIVersion {
 		return stableError("artifact_invalid", "manifest apiVersion must be "+artifactAPIVersion)
 	}
+	// Per-kind closure is enforced HERE, in code, and proved by a required
+	// conformance check (spec/decisions/0014): the published manifest schema is
+	// the structural minimum and declares mainModule, modules, and files as
+	// properties for every kind, so nothing but the host stops a module bundle
+	// from also shipping asset files, or an asset bundle from shipping modules.
+	// A manifest that carries both shapes has two meanings, and two hosts would
+	// be free to pick different ones.
 	switch manifest.Kind {
 	case "WorkerBundle":
 		if manifest.MainModule == "" || len(manifest.Modules) == 0 {
 			return stableError("artifact_invalid", "a WorkerBundle manifest requires mainModule and modules")
 		}
+		if len(manifest.Files) != 0 {
+			return stableError("artifact_invalid", "a WorkerBundle manifest must not carry files")
+		}
 	case "StaticAssetBundle", "MigrationBundle":
 		if len(manifest.Files) == 0 {
 			return stableError("artifact_invalid", "a file bundle manifest requires files")
+		}
+		if manifest.MainModule != "" || len(manifest.Modules) != 0 {
+			return stableError("artifact_invalid", "a "+manifest.Kind+" manifest must not carry mainModule or modules")
 		}
 	default:
 		return stableError("artifact_invalid", "manifest kind is not a closed artifact kind")
@@ -1664,6 +1698,13 @@ func (h *ReferenceHost) handleArtifactCommit(w http.ResponseWriter, request *htt
 		h.writeError(w, "artifact_missing", "upload is unknown")
 		return
 	}
+	// The manifest is re-validated at commit, not only at upload start: commit
+	// is the step that mints an immutable identity, so every closure rule has
+	// to hold at exactly the moment the document becomes permanent.
+	if hostErr := validateArtifactManifest(upload.Manifest); hostErr != nil {
+		h.writeHostError(w, hostErr)
+		return
+	}
 	for _, digest := range upload.Manifest.blobDigests() {
 		if h.blobs[digest] == nil {
 			h.writeError(w, "artifact_missing", "manifest blob "+digest+" was not uploaded")
@@ -1723,8 +1764,37 @@ func (h *ReferenceHost) handleArtifactUploadAbandon(w http.ResponseWriter, reque
 		h.writeError(w, "invalid_argument", "Idempotency-Key is required")
 		return
 	}
+	upload := h.uploads[uploadID]
 	delete(h.uploads, uploadID)
+	if upload != nil {
+		h.collectStagedBlobs(upload)
+	}
 	h.writeRaw(w, http.StatusNoContent, "", nil)
+}
+
+// collectStagedBlobs frees the blobs an abandoned upload session staged. A
+// blob any COMMITTED manifest still names is retained: committed manifests are
+// never collected, so a manifest a Resource references stays readable and its
+// bytes stay resolvable no matter what unrelated upload sessions are abandoned
+// around it. Blobs are content-addressed and therefore shared, which is
+// exactly why this has to be a reachability question rather than a per-session
+// one.
+func (h *ReferenceHost) collectStagedBlobs(upload *artifactUpload) {
+	retained := map[string]bool{}
+	for _, raw := range h.manifests {
+		var committed artifactManifest
+		if err := formpackage.DecodeStrictIJSON(raw, &committed); err != nil {
+			continue
+		}
+		for _, digest := range committed.blobDigests() {
+			retained[digest] = true
+		}
+	}
+	for _, digest := range upload.Manifest.blobDigests() {
+		if !retained[digest] {
+			delete(h.blobs, digest)
+		}
+	}
 }
 
 func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Request, parts []string) {
