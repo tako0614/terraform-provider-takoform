@@ -86,6 +86,7 @@ const specSidebar = [
       { text: "Portability boundary", link: "/spec/portability-boundary.html" },
       { text: "Form Families", link: "/spec/form-families.html" },
       { text: "Project lifecycle", link: "/spec/project-lifecycle.html" },
+      { text: "Publication freeze", link: "/spec/publication-freeze.html" },
       { text: "Versioning", link: "/spec/versioning.html" },
       { text: "Conformance", link: "/spec/conformance.html" },
     ],

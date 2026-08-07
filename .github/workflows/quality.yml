@@ -58,6 +58,31 @@ jobs:
       - name: Run the complete portable product gate
         run: bun run check
 
+      # bun run check builds and runs every package, but `go test` alone cannot
+      # observe a data race. The lanes below own concurrent state — an HTTP
+      # client with retry/poll loops, a provider the CLI drives in parallel, and
+      # an in-memory reference host — so they are re-run under the race
+      # detector.
+      - name: Run the concurrent lanes under the race detector
+        run: >-
+          go test -race
+          ./internal/clientv3/...
+          ./internal/provider/...
+          ./internal/portableconformancev3/...
+
+      # Every tracked generated tree must already be the output of its
+      # generator. Running them here proves a change set regenerated what it
+      # touched instead of hand-editing it.
+      - name: Prove every generated surface is reproducible
+        run: |
+          bun run build:current-form-families
+          bun run build:current-form-candidates
+          go run ./cmd/standard-form-conformance generate-current-surfaces
+          bun run sync:public-schemas
+          bun run sync:website-docs
+          bun run sync:website-spec
+          git diff --exit-code
+
       - name: Enforce append-only revocation sources
         if: ${{ github.event_name == 'pull_request' }}
         run: >-

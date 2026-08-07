@@ -37,6 +37,11 @@ No package, provider release, generated catalog entry, host report, activation,
 or Service Offering MAY by itself promote Form maturity. A host implementation
 MUST NOT describe its support decision as Takoform approval or certification.
 
+The v1alpha3 lane and the Edge Platform Family are additionally
+**publication-frozen** while their publication blockers are open; the freeze,
+what it forbids, and what is already immutable are recorded in
+[`publication-freeze.md`](publication-freeze.md).
+
 ## Form Families
 
 Forms are grouped into named Form Families with namespaced API groups
