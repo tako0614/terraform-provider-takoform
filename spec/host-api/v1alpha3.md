@@ -64,9 +64,14 @@ PUT    {api}/resources/{group}/{kind}/{name}    apply; carries review.prepareDig
 GET    {api}/resources/{group}/{kind}/{name}
 POST   {api}/resources/{group}/{kind}/{name}/import
 POST   {api}/resources/{group}/{kind}/{name}/observe
-POST   {api}/resources/{group}/{kind}/{name}/refresh
 DELETE {api}/resources/{group}/{kind}/{name}
 ```
+
+`observe` is the lane's only fenced read-only re-observation. There is no
+`refresh` operation: v1alpha2 carried both under one contract, which meant two
+spellings of one behavior and therefore two ways for hosts to differ. A
+v1alpha3 Form never declares the `refresh` capability and a v1alpha3 host
+serves no `/refresh` route.
 
 `validate` reports diagnostics without mutating and without minting a
 digest; a client MUST NOT describe provider apply-time preparation as
@@ -77,6 +82,45 @@ substitution after prepare fails `invalid_argument` before mutation.
 Role rules are wire-enforced: an update to a `revision`-role resource fails
 `invalid_argument`; deleting a bound target fails `dependency_in_use` (409);
 a resource protected by policy fails `deletion_protected` (409).
+
+## Lifecycle capabilities
+
+`lifecycleCapabilities` is a claim about what a host can actually be asked to
+do, so it is derived from the Form's own declared fields rather than from its
+role. The base set every Form declares is exactly `create`, `read`, `delete`,
+`import`, `observe`. `update` is added only when the Form has at least one
+mutable desired field — a field that is not immutable, on a Form whose role is
+not `revision`. A Form with no field at all, or whose every field is immutable,
+therefore declares no `update`.
+
+The rule is enforced on the wire in both directions. A host MUST refuse a
+spec-CHANGING apply to an existing resource whose Form Definition omits
+`update`, failing `invalid_argument` before any mutation; a client MUST plan a
+replacement rather than an in-place change for such a Form.
+
+## Portable defaults
+
+An optional desired property carries its portable meaning in its own schema:
+the Form Definition declares a JSON Schema `default` on that property inside
+`desiredSchema`. That default is normative, not advisory.
+
+A host MUST materialize every declared top-level default into the desired spec
+at the entry point of `validate`, `prepare`, `apply`, and `import` — before the
+spec is validated, digested, stored, or echoed. Materialization fills only
+absent properties; a property that is present keeps its written value, even
+when that value equals the default. It follows that:
+
+- the effective spec IS the wire spec: there is no second, host-private
+  document a client cannot see;
+- `specDigest` is the digest of the MATERIALIZED spec;
+- omitting a defaulted property and writing its default are one desired state:
+  same `specDigest`, same `metadata.generation`, no update;
+- a client that sends an unmaterialized spec MUST accept the materialized echo
+  from `prepare`, `apply`, `import`, and `read` as its own desired state.
+
+An optional property with no declared default is only legitimate when its
+ABSENCE is itself the portable semantics, and the property's `description`
+must then state what the absent case does.
 
 ## Long-running operations
 

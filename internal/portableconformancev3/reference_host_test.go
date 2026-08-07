@@ -79,20 +79,12 @@ func TestMutationFences(t *testing.T) {
 	host, contract := fallbackHost(t)
 	queueRef := contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef
 	form := host.catalog.form(queueRef.APIVersion, queueRef.Kind)
-	versionRef := contract.RunnerInput.WorkerVersion.Identity.FormRef
-	versionForm := host.catalog.form(versionRef.APIVersion, versionRef.Kind)
 	existing := &storedResource{
 		Group: queueRef.APIVersion, Kind: queueRef.Kind,
 		Name: "queue-probe", Space: "conformance",
 		UID: "uid-7", Generation: 3, Revision: 5,
 	}
 	host.storeResource(existing)
-	versionExisting := &storedResource{
-		Group: versionRef.APIVersion, Kind: versionRef.Kind,
-		Name: "worker-version-probe", Space: "conformance",
-		UID: "uid-8", Generation: 1, Revision: 1,
-	}
-	host.storeResource(versionExisting)
 
 	cases := []struct {
 		name     string
@@ -133,15 +125,11 @@ func TestMutationFences(t *testing.T) {
 			name: "absent-update", form: form, resource: "missing-name",
 			headers: map[string]string{expectedGenerationHeader: "1"}, wantCode: "resource_not_found",
 		},
-		{
-			name: "revision-role-update", form: versionForm, resource: "worker-version-probe",
-			headers: map[string]string{expectedGenerationHeader: "1"}, wantCode: "invalid_argument",
-		},
 	}
 	for _, testCase := range cases {
 		_, _, hostErr := host.mutationFences(
 			fenceRequest(t, testCase.headers), testCase.form,
-			"conformance", testCase.resource, testCase.bodyGen, testCase.uid, true,
+			"conformance", testCase.resource, testCase.bodyGen, testCase.uid,
 		)
 		if hostErr == nil || hostErr.Code != testCase.wantCode {
 			t.Fatalf("%s: hostErr = %+v, want code %s", testCase.name, hostErr, testCase.wantCode)
@@ -151,7 +139,7 @@ func TestMutationFences(t *testing.T) {
 	// The exact fence over the existing generation admits the update.
 	resolved, create, hostErr := host.mutationFences(
 		fenceRequest(t, map[string]string{expectedGenerationHeader: "3"}),
-		form, "conformance", "queue-probe", "", "uid-7", true,
+		form, "conformance", "queue-probe", "", "uid-7",
 	)
 	if hostErr != nil || create || resolved != existing {
 		t.Fatalf("exact fence rejected: %+v %v", hostErr, create)
@@ -362,10 +350,18 @@ func TestPrepareFenceOnExistingResource(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The digest binds the CURRENT uid and generation: the same request bound
-	// with create markers yields a different digest.
-	specDigest, err := specCanonicalDigest(map[string]any{"messageRetentionSeconds": json.Number("345600")})
+	// with create markers yields a different digest. The bound spec digest is
+	// the digest of the MATERIALIZED spec — the request omitted
+	// deliveryDelaySeconds, whose declared default the host filled in.
+	specDigest, err := specCanonicalDigest(map[string]any{
+		"messageRetentionSeconds": json.Number("345600"),
+		"deliveryDelaySeconds":    json.Number("0"),
+	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if prepared.Review.SpecDigest != specDigest {
+		t.Fatalf("prepare specDigest = %s, want the materialized %s", prepared.Review.SpecDigest, specDigest)
 	}
 	_, createDigest, err := prepareBindingPayload(
 		specDigest, queueRef, "queue-probe", "conformance", prepareCreateUID, prepareCreateGeneration,

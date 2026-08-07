@@ -1,0 +1,18 @@
+{
+  "deadLetterQueue": {
+    "kind": "AtLeastOnceQueue",
+    "name": "dead-letters"
+  },
+  "maxBatchSize": 10,
+  "maxConcurrency": 4,
+  "maxRetries": 3,
+  "queue": {
+    "kind": "AtLeastOnceQueue",
+    "name": "at-least-once-queue"
+  },
+  "retryDelaySeconds": 60,
+  "worker": {
+    "kind": "ModuleWorker",
+    "name": "module-worker"
+  }
+}

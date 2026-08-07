@@ -32,8 +32,8 @@ const (
 	// one apply or delete.
 	ProbeAsync = "async"
 	// ProbeTouchStatus asks the disposable host to perform one host-side
-	// status touch during observe/refresh, so the runner can prove that
-	// revision advances while generation does not.
+	// status touch during observe, so the runner can prove that revision
+	// advances while generation does not.
 	ProbeTouchStatus = "touch-status"
 	// ProbeErrorPrefix carries one stable error code to return verbatim,
 	// e.g. "error:permission_denied".
@@ -276,8 +276,11 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 	case parts[0] == "resources" && len(parts) == 5 && request.Method == http.MethodPost:
 		group, kind, name, action := parts[1], parts[2], parts[3], parts[4]
 		switch action {
-		case "observe", "refresh":
-			h.handleObserveOrRefresh(w, request, group, kind, name, action)
+		// There is no refresh action in the v1alpha3 lane: observe is the one
+		// fenced read-only re-observation. A request for /refresh is an unknown
+		// route, exactly like any other operation the lane does not define.
+		case "observe":
+			h.handleObserve(w, request, group, kind, name)
 		case "import":
 			h.handleImport(w, request, group, kind, name)
 		default:
@@ -543,6 +546,7 @@ func (h *ReferenceHost) handleValidate(w http.ResponseWriter, request *http.Requ
 		h.writeHostError(w, hostErr)
 		return
 	}
+	body.Spec = form.materialize(body.Spec)
 	diagnostics, hostErr := h.specDiagnostics(form, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
@@ -618,6 +622,7 @@ func (h *ReferenceHost) handlePrepare(w http.ResponseWriter, request *http.Reque
 		h.writeHostError(w, hostErr)
 		return
 	}
+	body.Spec = form.materialize(body.Spec)
 	diagnostics, hostErr := h.specDiagnostics(form, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
@@ -871,7 +876,6 @@ func (h *ReferenceHost) mutationFences(
 	form *installedForm,
 	space, name string,
 	bodyExpectedGeneration, expectedUID string,
-	enforceRoleRules bool,
 ) (existing *storedResource, create bool, hostErr *hostError) {
 	ifNoneMatch := fences.IfNoneMatch
 	if ifNoneMatch != "" && ifNoneMatch != "*" {
@@ -907,9 +911,6 @@ func (h *ReferenceHost) mutationFences(
 	if current == nil {
 		return nil, false, stableError("resource_not_found", "resource is absent")
 	}
-	if enforceRoleRules && form.Role == "revision" {
-		return nil, false, stableError("invalid_argument", "update to a revision-role resource is not representable")
-	}
 	if expectedUID != "" && expectedUID != current.UID {
 		return nil, false, stableError("uid_mismatch", "expectedUid does not match the host-issued uid")
 	}
@@ -942,6 +943,11 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 		h.writeHostError(w, hostErr)
 		return
 	}
+	// Materialization happens HERE: before validation, before the spec digest,
+	// before the applyOnce closure captures body.Spec, and before anything is
+	// stored or echoed. Anywhere later and the prepare digest a client already
+	// holds would not match what this apply computes.
+	body.Spec = form.materialize(body.Spec)
 	diagnostics, hostErr := h.specDiagnostics(form, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
@@ -972,10 +978,25 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 			return nil, false, hostErr
 		}
 		existing, create, hostErr := h.mutationFences(
-			fences, form, space, name, body.ExpectedGeneration, body.ExpectedUID, true,
+			fences, form, space, name, body.ExpectedGeneration, body.ExpectedUID,
 		)
 		if hostErr != nil {
 			return nil, false, hostErr
+		}
+		// Capability, not role, decides what an apply to an EXISTING resource
+		// may do. A Form Definition that omits update advertises no in-place
+		// spec change, so accepting one here would let a host silently perform
+		// an operation the Definition told every client was unavailable. The
+		// refusal lands before any mutation, and before the prepare binding is
+		// even consulted.
+		if !create && !form.declaresUpdate() && specDigest != existing.SpecDigest {
+			return nil, false, stableError(
+				"invalid_argument",
+				"the installed Form Definition declares no update capability; a spec-changing apply is not representable",
+			)
+		}
+		if !create && form.Role == "revision" {
+			return nil, false, stableError("invalid_argument", "update to a revision-role resource is not representable")
 		}
 		// The expected prepare binding is recomputed from the POST-fence
 		// resolved state: a prepareDigest minted for another spec, another
@@ -1142,11 +1163,12 @@ func (h *ReferenceHost) handleRead(w http.ResponseWriter, request *http.Request,
 	h.writeRaw(w, http.StatusOK, quotedRevision(resource.Revision), encodeJSONBody(h.renderResource(resource)))
 }
 
-func (h *ReferenceHost) handleObserveOrRefresh(
+func (h *ReferenceHost) handleObserve(
 	w http.ResponseWriter,
 	request *http.Request,
-	group, kind, name, action string,
+	group, kind, name string,
 ) {
+	const action = "observe"
 	raw, hostErr := h.readBody(request)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
@@ -1215,6 +1237,7 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 		h.writeHostError(w, hostErr)
 		return
 	}
+	body.Spec = form.materialize(body.Spec)
 	diagnostics, hostErr := h.specDiagnostics(form, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
@@ -1237,7 +1260,7 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 		return
 	}
 	existing, create, hostErr := h.mutationFences(
-		mutationFenceOf(request), form, body.Metadata.Space, name, body.Metadata.Generation, "", false,
+		mutationFenceOf(request), form, body.Metadata.Space, name, body.Metadata.Generation, "",
 	)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)

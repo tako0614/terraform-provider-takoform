@@ -19,8 +19,8 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 ## Arguments
 
 - `name` (String, required, forces replacement) — Portable resource name (`metadata.name`).
-- `message_retention_seconds` (Number, optional) — How long an undelivered message is retained before it is dropped, in seconds. Between 60 and 1209600.
-- `delivery_delay_seconds` (Number, optional) — Default delay before a sent message becomes deliverable, in seconds. Between 0 and 43200.
+- `message_retention_seconds` (Number, required) — How long an undelivered message is retained before it is dropped, in seconds. Between 60 and 1209600.
+- `delivery_delay_seconds` (Number, optional) — Default delay before a sent message becomes deliverable, in seconds. Omitting it delivers immediately. Between 0 and 43200. Defaults to `0`.
 - `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.
 - `create_timeout` / `update_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `20m` / `30m`).
 

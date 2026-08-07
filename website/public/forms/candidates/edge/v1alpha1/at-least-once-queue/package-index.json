@@ -5,15 +5,15 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "AtLeastOnceQueue",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:fbfb27fd628e58986d5bdd46fb785402119f79df93b735cc23d08d561bc64979"
+    "schemaDigest": "sha256:092c0a77dc7a4755b509bba61d777933c0f028c6aa36da8809bc7200525e8949"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 2378,
-      "digest": "sha256:50c9bf218b2f4656cfbe5400977102d48e4c9e9179f1fe7ee838d59b48df34a3"
+      "size": 2704,
+      "digest": "sha256:cbacb2b5de7327f718a2a2fde42545fbc85375bfa45c285a1f41bc74b142affd"
     },
     {
       "path": "fixtures/desired.json",
@@ -32,6 +32,12 @@
       "mediaType": "application/json",
       "size": 65,
       "digest": "sha256:1dee6d1574d4c8a06aaac8ed51b1192ad30f2fd643cd203ea532ec08b4f7bbb1"
+    },
+    {
+      "path": "fixtures/negative-missing-message-retention-seconds.json",
+      "mediaType": "application/json",
+      "size": 32,
+      "digest": "sha256:c6921431de83f0570d9cd21988ae61094177644f3252f1947c80d2951e3cfbb6"
     },
     {
       "path": "fixtures/negative-unexpected-property.json",

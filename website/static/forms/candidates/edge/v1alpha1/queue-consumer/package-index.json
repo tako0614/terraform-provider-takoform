@@ -5,15 +5,15 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "QueueConsumer",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:f7312a321e0b3ab496fe54923aa700bf15d53912db17560a58800def0689b10b"
+    "schemaDigest": "sha256:eaa278a78a7549e38d5b51b261097e190b9bf7c113ac1883cbb0530607459f2c"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 6149,
-      "digest": "sha256:d42b252d1fd1d39aa132e17b3571bc27ce4d20271308ba1978d060982859eb78"
+      "size": 7317,
+      "digest": "sha256:ff8cfd7731f3785d2629b1e06dce8e93b74fde1b6b35c7b0f4dcf0698689f80e"
     },
     {
       "path": "fixtures/desired.json",
@@ -52,10 +52,40 @@
       "digest": "sha256:d4080c10c8cd5b0818441735255061bfbd046be7b743e0cfd489cf3f7f846d66"
     },
     {
+      "path": "fixtures/negative-missing-max-batch-size.json",
+      "mediaType": "application/json",
+      "size": 349,
+      "digest": "sha256:9b9ab0433ebb65118e665b66cf20c0e7f6c79c3f569a0d0d32f668e69f14c34d"
+    },
+    {
+      "path": "fixtures/negative-missing-max-batch-timeout-seconds.json",
+      "mediaType": "application/json",
+      "size": 340,
+      "digest": "sha256:6fb49641c7024c6b1f76bf20110275f0dd1fedd1b74bb97bef8155105e8e7991"
+    },
+    {
+      "path": "fixtures/negative-missing-max-concurrency.json",
+      "mediaType": "application/json",
+      "size": 348,
+      "digest": "sha256:58227e0aceb3e8a9406dca023cbc850889499569d88b6450946cdad4a91f989e"
+    },
+    {
+      "path": "fixtures/negative-missing-max-retries.json",
+      "mediaType": "application/json",
+      "size": 352,
+      "digest": "sha256:2020142aa7088dd908f0b89671ddf78aae443c842d26efaf546a8a1b8fa73e8a"
+    },
+    {
       "path": "fixtures/negative-missing-queue.json",
       "mediaType": "application/json",
       "size": 287,
       "digest": "sha256:e040b3c1d9f4e7a54353c9d4f4a22a2a6525020d4e21beafc77d3478e6afb847"
+    },
+    {
+      "path": "fixtures/negative-missing-retry-delay-seconds.json",
+      "mediaType": "application/json",
+      "size": 344,
+      "digest": "sha256:8bb8abb9503c3821cf17df944d27d84a678d9b4ef90a74909fc29eaf9a846322"
     },
     {
       "path": "fixtures/negative-missing-worker.json",

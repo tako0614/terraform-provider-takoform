@@ -190,7 +190,8 @@
     "description": "Immutable executable snapshot of one Module Worker: a bundle, a runtime compatibility date, declared handlers, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments.",
     "properties": {
       "bucketBindings": {
-        "description": "Typed module-worker.object-bucket bindings projecting the edge.objects API.",
+        "default": [],
+        "description": "Typed module-worker.object-bucket bindings projecting the edge.objects API. Omitting it declares no such binding.",
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -257,7 +258,8 @@
         "type": "string"
       },
       "compatibilityFlags": {
-        "description": "Closed runtime compatibility flags enabled for this version.",
+        "default": [],
+        "description": "Closed runtime compatibility flags enabled for this version. Omitting it enables no flag.",
         "items": {
           "enum": [
             "nodejs_compat"
@@ -283,7 +285,8 @@
         "uniqueItems": true
       },
       "kvBindings": {
-        "description": "Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names.",
+        "default": [],
+        "description": "Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names. Omitting it declares no such binding.",
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -324,7 +327,8 @@
         "uniqueItems": true
       },
       "queueProducerBindings": {
-        "description": "Typed module-worker.queue-producer bindings projecting only send and sendBatch.",
+        "default": [],
+        "description": "Typed module-worker.queue-producer bindings projecting only send and sendBatch. Omitting it declares no such binding.",
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -365,7 +369,8 @@
         "uniqueItems": true
       },
       "requiredSensitiveVars": {
-        "description": "Names of sensitive values this version requires the host to supply out-of-band. Only the names are portable state; values travel through each host's own sealed path.",
+        "default": [],
+        "description": "Names of sensitive values this version requires the host to supply out-of-band. Only the names are portable state; values travel through each host's own sealed path. Omitting it requires no sensitive value.",
         "items": {
           "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
           "type": "string"
@@ -374,7 +379,8 @@
         "uniqueItems": true
       },
       "serviceBindings": {
-        "description": "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker.",
+        "default": [],
+        "description": "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker. Omitting it declares no such binding.",
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -415,7 +421,8 @@
         "uniqueItems": true
       },
       "sqliteBindings": {
-        "description": "Typed module-worker.sqlite bindings projecting the edge.sql API.",
+        "default": [],
+        "description": "Typed module-worker.sqlite bindings projecting the edge.sql API. Omitting it declares no such binding.",
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -459,7 +466,8 @@
         "additionalProperties": {
           "$ref": "#/$defs/jsonValueDepth1"
         },
-        "description": "Non-secret configuration values projected into the module environment. Sensitive material never enters portable state.",
+        "default": {},
+        "description": "Non-secret configuration values projected into the module environment. Sensitive material never enters portable state. Omitting it projects no variable.",
         "maxProperties": 64,
         "propertyNames": {
           "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",

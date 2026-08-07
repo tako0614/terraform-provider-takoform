@@ -15,12 +15,14 @@ func testForm() Form {
 				Pattern: PatternRelativePath, MaxLength: 240, Doc: "Main module path.",
 				Example: "worker.mjs", CounterExample: "../worker.mjs"},
 			{HCL: "vars", Wire: "vars", Kind: KindJSONMap, Doc: "Non-secret vars.",
+				Default: map[string]any{},
 				Example: map[string]any{"LOG_LEVEL": "info"}},
 			{HCL: "kv_bindings", Wire: "kvBindings", Kind: KindBindingList,
 				TargetKind: "EdgeKVNamespace", BindingType: "module-worker.edge-kv", Doc: "KV bindings.",
+				Default: []any{},
 				Example: []any{map[string]any{"name": "CACHE", "resource": map[string]any{"kind": "EdgeKVNamespace", "name": "cache"}}}},
 			{HCL: "retention_seconds", Wire: "retentionSeconds", Kind: KindInteger,
-				Min: I64(60), Max: I64(600), Doc: "Retention bound."},
+				Min: I64(60), Max: I64(600), Default: 300, Doc: "Retention bound."},
 		},
 	}
 }
@@ -33,23 +35,50 @@ func TestFamilyRendersNamespacedAPIVersion(t *testing.T) {
 	}
 }
 
-func TestRoleLifecycleCapabilities(t *testing.T) {
+// TestLifecycleCapabilitiesFollowMutableFields proves the capability set is
+// derived from what the Form can actually represent, not from its role: a
+// mutable role with nothing mutable to change declares no update, and no Form
+// of any role declares refresh.
+func TestLifecycleCapabilitiesFollowMutableFields(t *testing.T) {
 	t.Parallel()
-	for role, want := range map[Role][]string{
-		RoleIdentity:   {"create", "read", "update", "delete", "import", "observe", "refresh"},
-		RoleAttachment: {"create", "read", "update", "delete", "import", "observe", "refresh"},
-		RolePolicy:     {"create", "read", "update", "delete", "import", "observe", "refresh"},
-		RoleDeployment: {"create", "read", "update", "delete", "import", "observe", "refresh"},
-		RoleRevision:   {"create", "read", "delete", "import", "observe"},
-	} {
-		got := role.LifecycleCapabilities()
-		if strings.Join(got, ",") != strings.Join(want, ",") {
-			t.Errorf("%s capabilities = %v, want %v", role, got, want)
-		}
+	base := []string{"create", "read", "delete", "import", "observe"}
+	withUpdate := []string{"create", "read", "update", "delete", "import", "observe"}
+
+	fieldless := Form{
+		Kind: "Fieldless", Slug: "fieldless", ResourceType: "takoform_fieldless",
+		Role: RoleIdentity, Title: "Fieldless", DefinitionVersion: "0.1.0",
 	}
-	for _, capability := range RoleRevision.LifecycleCapabilities() {
-		if capability == "update" || capability == "refresh" {
-			t.Errorf("revision role must not declare %s", capability)
+	mutable := fieldless
+	mutable.Fields = []Field{{
+		HCL: "size", Wire: "size", Kind: KindInteger, Min: I64(1), Max: I64(9),
+		Default: 1, Doc: "Size.",
+	}}
+	allImmutable := fieldless
+	allImmutable.Fields = []Field{{
+		HCL: "host", Wire: "host", Kind: KindString, Required: true, Immutable: true,
+		Pattern: PatternHostname, MaxLength: 253, Doc: "Host.", Example: "a.example.invalid",
+	}}
+	revision := mutable
+	revision.Role = RoleRevision
+
+	for _, testCase := range []struct {
+		name string
+		form Form
+		want []string
+	}{
+		{"identity with no field", fieldless, base},
+		{"identity with a mutable field", mutable, withUpdate},
+		{"identity whose every field is immutable", allImmutable, base},
+		{"revision with an otherwise-mutable field", revision, base},
+	} {
+		got := testCase.form.LifecycleCapabilities()
+		if strings.Join(got, ",") != strings.Join(testCase.want, ",") {
+			t.Errorf("%s capabilities = %v, want %v", testCase.name, got, testCase.want)
+		}
+		for _, capability := range got {
+			if capability == "refresh" {
+				t.Errorf("%s declares refresh; the v1alpha3 lane has no refresh capability", testCase.name)
+			}
 		}
 	}
 }

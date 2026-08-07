@@ -32,11 +32,11 @@ func setV3FormIdentityState(ctx context.Context, state *tfsdk.State, ref current
 	return diags
 }
 
-// writeV3State projects one host response into Terraform state. refreshSpec
-// selects whether declared desired fields are re-read from the response spec
-// (identity/deployment/attachment/policy reads adopt out-of-band changes so
-// the next plan shows the drift) or preserved from the plan/state (creates,
-// updates, and immutable revision reads).
+// writeV3State projects one host response into Terraform state.
+// adoptHostSpec selects whether declared desired fields are re-read from the
+// response spec (a read of a Form that declares update adopts out-of-band
+// changes so the next plan shows the drift) or preserved from the plan/state
+// (creates, updates, and reads of a Form with no in-place update path).
 func (r *v3FormResource) writeV3State(
 	ctx context.Context,
 	state *tfsdk.State,
@@ -44,7 +44,7 @@ func (r *v3FormResource) writeV3State(
 	space string,
 	values v3Values,
 	res *clientv3.Resource,
-	refreshSpec bool,
+	adoptHostSpec bool,
 ) diag.Diagnostics {
 	var diags diag.Diagnostics
 	diags.Append(state.SetAttribute(ctx, path.Root("name"), types.StringValue(res.Metadata.Name))...)
@@ -59,7 +59,7 @@ func (r *v3FormResource) writeV3State(
 	// mutation: there is nothing left to resume.
 	diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_id"), types.StringNull())...)
 	diags.Append(state.SetAttribute(ctx, path.Root("create_timeout"), values.CreateTimeout)...)
-	if r.form.Role != model.RoleRevision {
+	if r.form.DeclaresUpdate() {
 		diags.Append(state.SetAttribute(ctx, path.Root("update_timeout"), values.UpdateTimeout)...)
 	}
 	diags.Append(state.SetAttribute(ctx, path.Root("delete_timeout"), values.DeleteTimeout)...)
@@ -70,7 +70,7 @@ func (r *v3FormResource) writeV3State(
 	for _, field := range r.form.Fields {
 		name := v3AttributeName(field)
 		value := values.Fields[name]
-		if refreshSpec || value == nil || value.IsUnknown() {
+		if adoptHostSpec || value == nil || value.IsUnknown() {
 			value = v3FieldValueFromSpec(ctx, field, res.Spec[field.Wire], &diags)
 		}
 		diags.Append(state.SetAttribute(ctx, path.Root(name), value)...)
@@ -209,7 +209,7 @@ type v3AttributeGetter interface {
 }
 
 func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGetter) (v3Values, diag.Diagnostics) {
-	values, diags := v3CommonValuesFrom(ctx, getter, r.form.Role != model.RoleRevision)
+	values, diags := v3CommonValuesFrom(ctx, getter, r.form.DeclaresUpdate())
 	if r.form.Kind == workerBundleKind {
 		var mainModule types.String
 		var modules types.List

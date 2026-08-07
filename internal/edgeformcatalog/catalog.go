@@ -104,39 +104,49 @@ var Forms = []model.Form{
 				Example: "2026-08-06", AltExample: "2026-01-01"},
 			{HCL: "compatibility_flags", Wire: "compatibilityFlags", Kind: model.KindStringSet,
 				Enum:    []string{"nodejs_compat"},
-				Doc:     "Closed runtime compatibility flags enabled for this version.",
+				Default: []any{},
+				Doc:     "Closed runtime compatibility flags enabled for this version. Omitting it enables no flag.",
 				Example: []any{"nodejs_compat"}},
 			{HCL: "handlers", Wire: "handlers", Kind: model.KindStringSet, Required: true, MinItems: 1,
 				Enum:    []string{"fetch", "scheduled", "queue", "tail"},
 				Doc:     "Module event handlers this version exports. A host rejects an attachment whose event kind is not declared here.",
 				Example: []any{"fetch"}},
 			{HCL: "vars", Wire: "vars", Kind: model.KindJSONMap,
-				Doc:     "Non-secret configuration values projected into the module environment. Sensitive material never enters portable state.",
+				Default: map[string]any{},
+				Doc: "Non-secret configuration values projected into the module environment. Sensitive material never enters portable state. " +
+					"Omitting it projects no variable.",
 				Example: map[string]any{"LOG_LEVEL": "info"}},
 			{HCL: "kv_bindings", Wire: "kvBindings", Kind: model.KindBindingList,
 				TargetKind: "EdgeKVNamespace", BindingType: "module-worker.edge-kv",
-				Doc:     "Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names.",
+				Default: []any{},
+				Doc:     "Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names. Omitting it declares no such binding.",
 				Example: []any{map[string]any{"name": "CACHE", "resource": map[string]any{"kind": "EdgeKVNamespace", "name": "edge-kv-namespace"}}}},
 			{HCL: "bucket_bindings", Wire: "bucketBindings", Kind: model.KindBindingList,
 				TargetKind: "ObjectBucket", BindingType: "module-worker.object-bucket",
-				Doc:     "Typed module-worker.object-bucket bindings projecting the edge.objects API.",
+				Default: []any{},
+				Doc:     "Typed module-worker.object-bucket bindings projecting the edge.objects API. Omitting it declares no such binding.",
 				Example: []any{map[string]any{"name": "MEDIA", "resource": map[string]any{"kind": "ObjectBucket", "name": "object-bucket"}}}},
 			{HCL: "sqlite_bindings", Wire: "sqliteBindings", Kind: model.KindBindingList,
 				TargetKind: "SQLiteDatabase", BindingType: "module-worker.sqlite",
-				Doc:     "Typed module-worker.sqlite bindings projecting the edge.sql API.",
+				Default: []any{},
+				Doc:     "Typed module-worker.sqlite bindings projecting the edge.sql API. Omitting it declares no such binding.",
 				Example: []any{map[string]any{"name": "DB", "resource": map[string]any{"kind": "SQLiteDatabase", "name": "sqlite-database"}}}},
 			{HCL: "queue_producer_bindings", Wire: "queueProducerBindings", Kind: model.KindBindingList,
 				TargetKind: "AtLeastOnceQueue", BindingType: "module-worker.queue-producer",
-				Doc:     "Typed module-worker.queue-producer bindings projecting only send and sendBatch.",
+				Default: []any{},
+				Doc:     "Typed module-worker.queue-producer bindings projecting only send and sendBatch. Omitting it declares no such binding.",
 				Example: []any{map[string]any{"name": "EVENTS", "resource": map[string]any{"kind": "AtLeastOnceQueue", "name": "at-least-once-queue"}}}},
 			{HCL: "service_bindings", Wire: "serviceBindings", Kind: model.KindBindingList,
 				TargetKind: "ModuleWorker", BindingType: "module-worker.service",
-				Doc:     "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker.",
+				Default: []any{},
+				Doc:     "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker. Omitting it declares no such binding.",
 				Example: []any{map[string]any{"name": "AUTH", "resource": map[string]any{"kind": "ModuleWorker", "name": "auth-worker"}}}},
 			{HCL: "required_sensitive_vars", Wire: "requiredSensitiveVars", Kind: model.KindStringSet,
 				ItemPattern: model.PatternSensitiveVarName,
+				Default:     []any{},
 				Doc: "Names of sensitive values this version requires the host to supply out-of-band. " +
-					"Only the names are portable state; values travel through each host's own sealed path.",
+					"Only the names are portable state; values travel through each host's own sealed path. " +
+					"Omitting it requires no sensitive value.",
 				Example: []any{"API_SIGNING_TOKEN_NAME"}, CounterExample: []any{"lowercase name"}},
 		},
 	},
@@ -248,13 +258,18 @@ var Forms = []model.Form{
 			"by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form.",
 		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "edge.queue", Version: "1.0.0"}},
 		Fields: []model.Field{
+			// Retention has no portable default: how long a host keeps an
+			// undelivered message is the whole operational meaning of the queue,
+			// and no value is right for every workload. It is therefore required
+			// rather than silently chosen.
 			{HCL: "message_retention_seconds", Wire: "messageRetentionSeconds", Kind: model.KindInteger,
-				Min: model.I64(60), Max: model.I64(1209600),
+				Required: true,
+				Min:      model.I64(60), Max: model.I64(1209600),
 				Doc:     "How long an undelivered message is retained before it is dropped, in seconds.",
 				Example: 345600},
 			{HCL: "delivery_delay_seconds", Wire: "deliveryDelaySeconds", Kind: model.KindInteger,
-				Min: model.I64(0), Max: model.I64(43200),
-				Doc:     "Default delay before a sent message becomes deliverable, in seconds.",
+				Min: model.I64(0), Max: model.I64(43200), Default: 0,
+				Doc:     "Default delay before a sent message becomes deliverable, in seconds. Omitting it delivers immediately.",
 				Example: 0},
 		},
 	},
@@ -271,27 +286,39 @@ var Forms = []model.Form{
 				Doc:     "Queue this consumer drains. Changing it replaces the attachment.",
 				Example: map[string]any{"kind": "AtLeastOnceQueue", "name": "at-least-once-queue"}},
 			moduleWorkerRef("worker", "worker", "Module Worker whose queue handler receives the batches. Changing it replaces the attachment.", true, true),
+			// Batching, retry, and concurrency decide throughput, duplicate
+			// exposure, and downstream load together. No single value is portable
+			// across workloads, so the consumer states all five rather than
+			// inheriting whatever a host would otherwise pick.
 			{HCL: "max_batch_size", Wire: "maxBatchSize", Kind: model.KindInteger,
-				Min: model.I64(1), Max: model.I64(100),
+				Required: true,
+				Min:      model.I64(1), Max: model.I64(100),
 				Doc:     "Largest number of messages delivered in one batch.",
 				Example: 10},
 			{HCL: "max_batch_timeout_seconds", Wire: "maxBatchTimeoutSeconds", Kind: model.KindInteger,
-				Min: model.I64(0), Max: model.I64(60),
+				Required: true,
+				Min:      model.I64(0), Max: model.I64(60),
 				Doc:     "Longest time the host waits to fill a batch before delivering it, in seconds.",
 				Example: 5},
 			{HCL: "max_retries", Wire: "maxRetries", Kind: model.KindInteger,
-				Min: model.I64(0), Max: model.I64(100),
+				Required: true,
+				Min:      model.I64(0), Max: model.I64(100),
 				Doc:     "How many times a failed batch is redelivered before its messages go to the dead-letter queue or are dropped.",
 				Example: 3},
 			{HCL: "retry_delay_seconds", Wire: "retryDelaySeconds", Kind: model.KindInteger,
-				Min: model.I64(0), Max: model.I64(43200),
+				Required: true,
+				Min:      model.I64(0), Max: model.I64(43200),
 				Doc:     "Delay before a failed batch becomes deliverable again, in seconds.",
 				Example: 60},
+			// The one field whose ABSENCE is the semantics: there is no queue that
+			// means "drop exhausted messages", so no default can express it.
 			{HCL: "dead_letter_queue", Wire: "deadLetterQueue", Kind: model.KindResourceRef, TargetKind: "AtLeastOnceQueue",
-				Doc:     "Queue receiving messages that exhausted their retries. Without it, exhausted messages are dropped.",
-				Example: map[string]any{"kind": "AtLeastOnceQueue", "name": "dead-letters"}},
+				AbsenceIsSemantic: true,
+				Doc:               "Queue receiving messages that exhausted their retries. Without it, exhausted messages are dropped.",
+				Example:           map[string]any{"kind": "AtLeastOnceQueue", "name": "dead-letters"}},
 			{HCL: "max_concurrency", Wire: "maxConcurrency", Kind: model.KindInteger,
-				Min: model.I64(1), Max: model.I64(250),
+				Required: true,
+				Min:      model.I64(1), Max: model.I64(250),
 				Doc:     "Largest number of concurrent batch invocations.",
 				Example: 4},
 		},
@@ -329,6 +356,35 @@ func Validate() error {
 	for _, field := range bindingListTargets() {
 		if _, known := kinds[field]; !known {
 			return fmt.Errorf("binding target kind %q is not a catalog Form", field)
+		}
+	}
+	return validateAbsenceSemanticExemptions()
+}
+
+// absenceSemanticExemptions is the complete, reviewed list of family fields
+// whose absence carries portable meaning instead of a default. It is written
+// out so the exemption is an auditable fact rather than a marker anyone can
+// add: a new AbsenceIsSemantic field fails the catalog until it is listed
+// here, which forces the review that decides whether it deserves the
+// exemption at all.
+var absenceSemanticExemptions = map[string]struct{}{
+	"QueueConsumer/deadLetterQueue": {},
+}
+
+func validateAbsenceSemanticExemptions() error {
+	for _, form := range Forms {
+		for _, field := range form.Fields {
+			if !field.AbsenceIsSemantic {
+				continue
+			}
+			key := form.Kind + "/" + field.Wire
+			if _, allowed := absenceSemanticExemptions[key]; !allowed {
+				return fmt.Errorf(
+					"form %s field %s marks AbsenceIsSemantic without a reviewed exemption; "+
+						"declare a portable Default instead, or add %s to absenceSemanticExemptions",
+					form.Kind, field.Wire, key,
+				)
+			}
 		}
 	}
 	return nil

@@ -61,6 +61,19 @@ shows the drift. When the host serves a different `uid` for the same name, the
 provider warns that the resource was replaced out of band and removes it from
 state so the next plan proposes re-creating it.
 
+## Write the Form's defaults explicitly
+
+A host materializes the portable defaults a Form declares before it validates,
+digests, or stores your spec, so the `spec` it serves back can carry properties
+your `spec_json` omitted. Because this carrier reads no Form Definition, it
+cannot fill those defaults into the plan, and a read that adopts the host's
+materialized document leaves a difference the next plan proposes again — each
+apply is a host no-op that never advances `generation`, and the difference
+returns. Write every defaulted property explicitly in `spec_json`, or use the
+typed resource for that Form where one exists: typed resources carry each
+declared default in the schema, so an omitted attribute plans as the value the
+host will materialize and the second plan is empty.
+
 ## Import
 
 `terraform import` is not supported for `takoform_resource`. An import ID

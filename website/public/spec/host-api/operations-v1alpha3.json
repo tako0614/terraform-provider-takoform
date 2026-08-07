@@ -66,6 +66,17 @@
     "attachmentDeleteCascade": "never-deletes-parent",
     "deploymentTrafficAuthority": "deployment-role-only"
   },
+  "capabilityRules": {
+    "baseCapabilities": ["create", "read", "delete", "import", "observe"],
+    "updateCapability": "declared-only-when-the-Form-has-a-mutable-desired-field",
+    "specChangeWithoutUpdateCapability": "invalid_argument-before-mutation"
+  },
+  "portableDefaults": {
+    "carrier": "desiredSchema-properties-default",
+    "materialization": "host-materializes-declared-defaults-at-the-entry-point-before-validation-and-digesting",
+    "specDigest": "digest-of-the-materialized-spec",
+    "clientObligation": "accept-the-materialized-echo"
+  },
   "operations": [
     {
       "name": "forms",
@@ -152,18 +163,6 @@
       "name": "observe",
       "method": "POST",
       "path": "/apis/forms.takoform.com/v1alpha3/resources/{group}/{kind}/{name}/observe",
-      "exactFormQuery": true,
-      "precondition": "generation-fence",
-      "idempotencyKey": true,
-      "mutates": false,
-      "successStatus": [200],
-      "successGeneration": "equals-fence",
-      "responseSchema": "https://forms.takoform.com/schemas/v1alpha3/host-api-wire.schema.json#/$defs/resourceEnvelope"
-    },
-    {
-      "name": "refresh",
-      "method": "POST",
-      "path": "/apis/forms.takoform.com/v1alpha3/resources/{group}/{kind}/{name}/refresh",
       "exactFormQuery": true,
       "precondition": "generation-fence",
       "idempotencyKey": true,

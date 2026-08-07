@@ -99,8 +99,8 @@ func TestRoleRules(t *testing.T) {
 		}
 		capabilities := form.LifecycleCapabilities()
 		if form.Role == model.RoleRevision {
-			if slices.Contains(capabilities, "update") || slices.Contains(capabilities, "refresh") {
-				t.Errorf("%s is a revision but declares update/refresh: %v", form.Kind, capabilities)
+			if slices.Contains(capabilities, "update") {
+				t.Errorf("%s is a revision but declares update: %v", form.Kind, capabilities)
 			}
 		}
 		for _, field := range form.Fields {
@@ -110,6 +110,87 @@ func TestRoleRules(t *testing.T) {
 		}
 		if len(form.AcceptedBindings) > 0 && form.Role != model.RoleRevision {
 			t.Errorf("%s accepts bindings outside the revision role", form.Kind)
+		}
+	}
+}
+
+// TestLifecycleCapabilityTable pins the exact capability set of every family
+// member. update is a claim about what an in-place apply can move, so a Form
+// with nothing mutable must not advertise it, and no Form of any role
+// advertises refresh in the v1alpha3 lane.
+func TestLifecycleCapabilityTable(t *testing.T) {
+	t.Parallel()
+	base := []string{"create", "read", "delete", "import", "observe"}
+	withUpdate := []string{"create", "read", "update", "delete", "import", "observe"}
+	want := map[string][]string{
+		"ModuleWorker":       base,
+		"WorkerBundle":       base,
+		"WorkerVersion":      base,
+		"WorkerDeployment":   withUpdate,
+		"WorkerCustomDomain": base,
+		"WorkerCronTrigger":  withUpdate,
+		"EdgeKVNamespace":    base,
+		"ObjectBucket":       base,
+		"SQLiteDatabase":     base,
+		"AtLeastOnceQueue":   withUpdate,
+		"QueueConsumer":      withUpdate,
+	}
+	if len(want) != len(Forms) {
+		t.Fatalf("capability table covers %d forms, the family has %d", len(want), len(Forms))
+	}
+	for _, form := range Forms {
+		got := form.LifecycleCapabilities()
+		if !slices.Equal(got, want[form.Kind]) {
+			t.Errorf("%s capabilities = %v, want %v", form.Kind, got, want[form.Kind])
+		}
+		if slices.Contains(got, "refresh") {
+			t.Errorf("%s declares refresh; the v1alpha3 lane has no refresh capability", form.Kind)
+		}
+		if form.Role == model.RoleRevision && slices.Contains(got, "update") {
+			t.Errorf("%s is a revision but declares update", form.Kind)
+		}
+	}
+}
+
+// TestEveryOptionalFieldCarriesPortableMeaning is the family-wide statement of
+// the boundary rule, and pins the single reviewed absence-is-semantics
+// exemption so a second one cannot appear unnoticed.
+func TestEveryOptionalFieldCarriesPortableMeaning(t *testing.T) {
+	t.Parallel()
+	var exempt []string
+	for _, form := range Forms {
+		for _, field := range form.Fields {
+			if field.Required {
+				continue
+			}
+			switch {
+			case field.AbsenceIsSemantic:
+				exempt = append(exempt, form.Kind+"/"+field.Wire)
+			case field.Default == nil:
+				t.Errorf("%s optional field %s has no portable meaning when omitted", form.Kind, field.Wire)
+			}
+		}
+	}
+	if !slices.Equal(exempt, []string{"QueueConsumer/deadLetterQueue"}) {
+		t.Errorf("absence-is-semantics fields = %v, want exactly the reviewed QueueConsumer/deadLetterQueue", exempt)
+	}
+}
+
+// TestDeclaredDefaultsReachTheDesiredSchema proves the default travels where a
+// host can see it: inside the Form Definition's own desiredSchema.
+func TestDeclaredDefaultsReachTheDesiredSchema(t *testing.T) {
+	t.Parallel()
+	for _, form := range Forms {
+		properties, _ := form.DesiredSchema()["properties"].(map[string]any)
+		for _, field := range form.Fields {
+			property, _ := properties[field.Wire].(map[string]any)
+			if property == nil {
+				t.Fatalf("%s desired schema has no property %s", form.Kind, field.Wire)
+			}
+			_, declared := property["default"]
+			if declared != (field.Default != nil) {
+				t.Errorf("%s property %s declares default=%v, want %v", form.Kind, field.Wire, declared, field.Default != nil)
+			}
 		}
 	}
 }

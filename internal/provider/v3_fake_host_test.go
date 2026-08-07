@@ -250,7 +250,7 @@ func (h *v3FakeHost) serveForms(w http.ResponseWriter, r *http.Request) {
 			"identity":        identity,
 			"definitionKnown": true, "installed": true, "executable": true,
 			"activated": true, "availableToPrincipal": true,
-			"operations": []string{"create", "read", "update", "delete", "import", "observe", "refresh"},
+			"operations": []string{"create", "read", "update", "delete", "import", "observe"},
 		}},
 	})
 }

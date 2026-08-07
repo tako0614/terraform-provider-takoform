@@ -105,7 +105,12 @@
       }
     },
     "required": [
+      "maxBatchSize",
+      "maxBatchTimeoutSeconds",
+      "maxConcurrency",
+      "maxRetries",
       "queue",
+      "retryDelaySeconds",
       "worker"
     ],
     "title": "Queue Consumer desired state",
@@ -121,8 +126,7 @@
     "update",
     "delete",
     "import",
-    "observe",
-    "refresh"
+    "observe"
   ],
   "conformanceFixtures": [
     {
@@ -147,6 +151,36 @@
       "name": "reject-missing-worker",
       "stage": "desired",
       "inputPath": "fixtures/negative-missing-worker.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-max-batch-size",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-max-batch-size.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-max-batch-timeout-seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-max-batch-timeout-seconds.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-max-retries",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-max-retries.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-retry-delay-seconds",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-retry-delay-seconds.json",
+      "expectedFailure": "schema_validation_failed"
+    },
+    {
+      "name": "reject-missing-max-concurrency",
+      "stage": "desired",
+      "inputPath": "fixtures/negative-missing-max-concurrency.json",
       "expectedFailure": "schema_validation_failed"
     },
     {

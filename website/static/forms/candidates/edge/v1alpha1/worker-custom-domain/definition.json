@@ -52,11 +52,9 @@
   "lifecycleCapabilities": [
     "create",
     "read",
-    "update",
     "delete",
     "import",
-    "observe",
-    "refresh"
+    "observe"
   ],
   "conformanceFixtures": [
     {

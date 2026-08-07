@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 const (
@@ -188,6 +189,10 @@ type v3Runner struct {
 	httpClient           *http.Client
 	apiBase              string
 
+	// desiredSchemas is the served desiredSchema of every probe kind, keyed
+	// "<group>\x00<kind>". It carries the declared portable defaults.
+	desiredSchemas map[string]map[string]any
+
 	completed              map[string]bool
 	errorProbes            []ErrorProbeEvidence
 	negativeFixtures       []NegativeFixtureEvidence
@@ -248,16 +253,98 @@ type probeTarget struct {
 	Name          string
 	Space         string
 	Spec          map[string]any
+	// Lifecycle is the exact capability set the corpus pins for this Form.
+	Lifecycle []string
 }
 
+// target builds one probe target with its desired spec already materialized
+// against the Form Definition the host serves. The runner does this for the
+// same reason every client must: the host materializes declared defaults at
+// its entry point, so a client that compares digests or echoes against an
+// unmaterialized spec is comparing against a document that no longer exists.
 func (r *v3Runner) target(probe ResourceProbe) probeTarget {
 	return probeTarget{
 		Ref:           probe.Identity.FormRef,
 		PackageDigest: probe.Identity.PackageDigest,
 		Name:          probe.Name,
 		Space:         r.contract.RunnerInput.Space,
-		Spec:          probe.Desired,
+		Spec:          r.materialize(probe.Identity.FormRef, probe.Desired),
+		Lifecycle:     append([]string(nil), probe.LifecycleCapabilities...),
 	}
+}
+
+func (r *v3Runner) materialize(ref FormRef, spec map[string]any) map[string]any {
+	schema, known := r.desiredSchemas[ref.APIVersion+"\x00"+ref.Kind]
+	if !known {
+		return spec
+	}
+	return currentformmodel.MaterializeDefaults(schema, spec)
+}
+
+// loadDesiredSchemas reads the exact Form Definition of every probe kind from
+// the host under test. It is the runner's only source of declared defaults:
+// the corpus pins what to send, the host states what an omitted property
+// means.
+func (r *v3Runner) loadDesiredSchemas() error {
+	input := r.contract.RunnerInput
+	probes := []ResourceProbe{
+		input.ModuleWorker, input.EdgeKvNamespace, input.AtLeastOnceQueue,
+		input.WorkerVersion, input.WorkerBundle.ResourceProbe, input.WorkerDeployment,
+		input.WorkerCronTrigger, input.QueueConsumer,
+	}
+	r.desiredSchemas = map[string]map[string]any{}
+	for _, probe := range probes {
+		ref := probe.Identity.FormRef
+		key := ref.APIVersion + "\x00" + ref.Kind
+		if _, loaded := r.desiredSchemas[key]; loaded {
+			continue
+		}
+		definition, err := r.formDefinition(ref)
+		if err != nil {
+			return err
+		}
+		r.desiredSchemas[key] = definition.DesiredSchema
+	}
+	return nil
+}
+
+// wireFormDefinition is the served Form Definition surface the runner reads.
+type wireFormDefinition struct {
+	Identity struct {
+		FormRef       FormRef `json:"formRef"`
+		PackageDigest string  `json:"packageDigest,omitempty"`
+	} `json:"identity"`
+	DisplayName   string         `json:"displayName,omitempty"`
+	Description   string         `json:"description,omitempty"`
+	DesiredSchema map[string]any `json:"desiredSchema"`
+}
+
+func (r *v3Runner) formDefinition(ref FormRef) (wireFormDefinition, error) {
+	fullURL := fmt.Sprintf(
+		"%s/form-definitions/%s/%s?%s",
+		r.apiBase, escapeGroup(ref.APIVersion), url.PathEscape(ref.Kind),
+		r.exactQuery(r.contract.RunnerInput.Space, ref).Encode(),
+	)
+	response, err := r.request(http.MethodGet, fullURL, nil, nil)
+	if err != nil {
+		return wireFormDefinition{}, err
+	}
+	if response.Status != http.StatusOK {
+		return wireFormDefinition{}, fmt.Errorf(
+			"form-definition HTTP %d; body=%s", response.Status, strings.TrimSpace(string(response.Body)),
+		)
+	}
+	var definition wireFormDefinition
+	if err := decodeStrictResponse(response, &definition); err != nil {
+		return wireFormDefinition{}, err
+	}
+	if definition.Identity.FormRef != ref {
+		return wireFormDefinition{}, errors.New("form-definition identity is not the requested exact FormRef")
+	}
+	if len(definition.DesiredSchema) == 0 {
+		return wireFormDefinition{}, errors.New("form-definition omitted the desiredSchema")
+	}
+	return definition, nil
 }
 
 // ---- transport helpers ----

@@ -21,12 +21,12 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 - `name` (String, required, forces replacement) — Portable resource name (`metadata.name`).
 - `queue` (String, required, forces replacement) — Queue this consumer drains. Changing it replaces the attachment. Set the name of the target `AtLeastOnceQueue` resource.
 - `worker` (String, required, forces replacement) — Module Worker whose queue handler receives the batches. Changing it replaces the attachment. Set the name of the target `ModuleWorker` resource.
-- `max_batch_size` (Number, optional) — Largest number of messages delivered in one batch. Between 1 and 100.
-- `max_batch_timeout_seconds` (Number, optional) — Longest time the host waits to fill a batch before delivering it, in seconds. Between 0 and 60.
-- `max_retries` (Number, optional) — How many times a failed batch is redelivered before its messages go to the dead-letter queue or are dropped. Between 0 and 100.
-- `retry_delay_seconds` (Number, optional) — Delay before a failed batch becomes deliverable again, in seconds. Between 0 and 43200.
+- `max_batch_size` (Number, required) — Largest number of messages delivered in one batch. Between 1 and 100.
+- `max_batch_timeout_seconds` (Number, required) — Longest time the host waits to fill a batch before delivering it, in seconds. Between 0 and 60.
+- `max_retries` (Number, required) — How many times a failed batch is redelivered before its messages go to the dead-letter queue or are dropped. Between 0 and 100.
+- `retry_delay_seconds` (Number, required) — Delay before a failed batch becomes deliverable again, in seconds. Between 0 and 43200.
 - `dead_letter_queue` (String, optional) — Queue receiving messages that exhausted their retries. Without it, exhausted messages are dropped. Set the name of the target `AtLeastOnceQueue` resource.
-- `max_concurrency` (Number, optional) — Largest number of concurrent batch invocations. Between 1 and 250.
+- `max_concurrency` (Number, required) — Largest number of concurrent batch invocations. Between 1 and 250.
 - `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.
 - `create_timeout` / `update_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `20m` / `30m`).
 

@@ -300,18 +300,23 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 		resp.State.RemoveResource(ctx)
 		return
 	}
-	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, ref, space, values, res, r.form.Role != model.RoleRevision)...)
+	// Only a Form that declares update can converge an out-of-band change in
+	// place, so only there does adopting the host's spec produce a plan the
+	// next apply can satisfy. For a Form without update every desired attribute
+	// forces replacement, and the recorded configuration is preserved.
+	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, ref, space, values, res, r.form.DeclaresUpdate())...)
 }
 
 func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	if !r.assertV3Configured(&resp.Diagnostics) {
 		return
 	}
-	if r.form.Role == model.RoleRevision {
-		// Every revision-role DESIRED attribute requires replacement, so the
-		// only legal in-place update is one confined to the provider-side
-		// operation timeout attributes. That change mutates no host state.
-		r.updateRevisionTimeouts(ctx, req, resp)
+	if !r.form.DeclaresUpdate() {
+		// This Form declares no update capability, so every DESIRED attribute
+		// requires replacement and the only legal in-place update is one
+		// confined to the provider-side operation timeout attributes. That
+		// change mutates no host state and makes no host call.
+		r.updateProviderSideTimeouts(ctx, req, resp)
 		return
 	}
 	values, diags := r.v3ValuesFrom(ctx, req.Plan)
@@ -352,13 +357,13 @@ func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest,
 	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, ref, space, values, res, false)...)
 }
 
-// updateRevisionTimeouts handles the one in-place update a revision-role
-// resource accepts: a change confined to the provider-side create_timeout/
-// delete_timeout attributes. The planned wire spec is compared against state;
-// when identical, the planned timeouts are written over the prior state
-// without any host call. Any desired difference should have been forced into
-// a replacement by the plan modifiers, so it stays a hard error.
-func (r *v3FormResource) updateRevisionTimeouts(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+// updateProviderSideTimeouts handles the one in-place update a Form without
+// the update capability accepts: a change confined to the provider-side
+// create_timeout/delete_timeout attributes. The planned wire spec is compared
+// against state; when identical, the planned timeouts are written over the
+// prior state without any host call. Any desired difference should have been
+// forced into a replacement by the plan modifiers, so it stays a hard error.
+func (r *v3FormResource) updateProviderSideTimeouts(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	planValues, diags := r.v3ValuesFrom(ctx, req.Plan)
 	resp.Diagnostics.Append(diags...)
 	stateValues, stateDiags := r.v3ValuesFrom(ctx, req.State)
@@ -366,11 +371,11 @@ func (r *v3FormResource) updateRevisionTimeouts(ctx context.Context, req resourc
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !r.v3RevisionSpecUnchanged(ctx, planValues, stateValues, &resp.Diagnostics) {
+	if !r.v3DesiredSpecUnchanged(ctx, planValues, stateValues, &resp.Diagnostics) {
 		if !resp.Diagnostics.HasError() {
 			resp.Diagnostics.AddError(
-				r.form.Kind+" is an immutable revision",
-				"Revision resources are create-only; desired changes replace the resource. "+
+				r.form.Kind+" declares no update capability",
+				"This Form has no mutable desired field, so desired changes replace the resource. "+
 					"This in-place update carries a desired-spec change, which is a provider bug.",
 			)
 		}
@@ -382,12 +387,12 @@ func (r *v3FormResource) updateRevisionTimeouts(ctx context.Context, req resourc
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("delete_timeout"), planValues.DeleteTimeout)...)
 }
 
-// v3RevisionSpecUnchanged reports whether a planned revision-role update
-// leaves the desired identity and wire spec exactly as recorded in state.
-// Worker bundles compare their authored byte identity (main_module plus the
-// plan-resolved modules with size and digest) instead of re-reading files;
-// every other revision Form compares the projected wire spec.
-func (r *v3FormResource) v3RevisionSpecUnchanged(ctx context.Context, plan, state v3Values, diags *diag.Diagnostics) bool {
+// v3DesiredSpecUnchanged reports whether a planned in-place update leaves the
+// desired identity and wire spec exactly as recorded in state. Worker bundles
+// compare their authored byte identity (main_module plus the plan-resolved
+// modules with size and digest) instead of re-reading files; every other Form
+// compares the projected wire spec.
+func (r *v3FormResource) v3DesiredSpecUnchanged(ctx context.Context, plan, state v3Values, diags *diag.Diagnostics) bool {
 	if !plan.Name.Equal(state.Name) || !plan.Space.Equal(state.Space) {
 		return false
 	}
