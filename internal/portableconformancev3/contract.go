@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 52-entry executed-check list every v3
+// requiredRunnerChecks is the closed 56-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -149,6 +149,10 @@ var requiredRunnerChecks = []string{
 	"no-update-spec-change-rejected",
 	"binding-target-missing-404-before-mutation",
 	"dependency-in-use-on-bound-target-delete",
+	"relation-target-missing-rejected",
+	"relation-target-deletion-blocked",
+	"relation-incarnation-change-detected",
+	"binding-contract-verified",
 	"async-operation-flow",
 	"operation-replay-terminal",
 	"operation-cancel",

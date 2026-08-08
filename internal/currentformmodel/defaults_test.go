@@ -9,7 +9,8 @@ import (
 
 func semanticForm(fields ...Field) Form {
 	return Form{
-		Kind: "ExampleIdentity", Slug: "example-identity", ResourceType: "takoform_example_identity",
+		Family: Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"},
+		Kind:   "ExampleIdentity", Slug: "example-identity", ResourceType: "takoform_example_identity",
 		Role: RoleIdentity, Title: "Example Identity", Description: "Identity.",
 		DefinitionVersion: "0.1.0", Fields: fields,
 	}

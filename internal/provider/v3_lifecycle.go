@@ -307,11 +307,51 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 		resp.State.RemoveResource(ctx)
 		return
 	}
+	v3ReportRelationCondition(r.form.Kind, space, values.Name.ValueString(), res, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	// Only a Form that declares update can converge an out-of-band change in
 	// place, so only there does adopting the host's spec produce a plan the
 	// next apply can satisfy. For a Form without update every desired attribute
 	// forces replacement, and the recorded configuration is preserved.
 	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, ref, space, values, res, r.form.DeclaresUpdate())...)
+}
+
+// v3RelationConditionReasons are the two portable reasons a host uses when a
+// stored cross-resource relation no longer resolves to the resource it was
+// bound to. Both mean the same thing to a client: this resource is pinned to an
+// incarnation that is gone, and only a re-apply can re-resolve the reference.
+var v3RelationConditionReasons = map[string]string{
+	"ExternalChange":    "a referenced resource was replaced by a different incarnation with the same name",
+	"DependencyMissing": "a referenced resource no longer exists",
+}
+
+// v3ReportRelationCondition turns a relation-drift condition into a hard
+// diagnostic. Converging quietly would be worse than failing: the host has NOT
+// re-bound the reference, so a plan that reported no changes would describe a
+// resource that cannot work.
+func v3ReportRelationCondition(
+	kind, space, name string,
+	res *clientv3.Resource,
+	diags *diag.Diagnostics,
+) {
+	condition := clientv3.ResourceCondition(res, "Ready")
+	if condition == nil || condition.Status != "False" {
+		return
+	}
+	summary, tracked := v3RelationConditionReasons[condition.Reason]
+	if !tracked {
+		return
+	}
+	detail := fmt.Sprintf(
+		"The host reports %s/%s as not ready because %s. The host does not re-bind a reference by name, so this resource stays pinned to the incarnation it was applied against. Re-apply it to resolve the reference against the resource that exists now.",
+		space, name, summary,
+	)
+	if condition.HostReason != "" {
+		detail += " Host detail: " + condition.HostReason
+	}
+	diags.AddError(kind+" references a resource that changed out of band", detail)
 }
 
 func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

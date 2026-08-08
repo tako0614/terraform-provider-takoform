@@ -3,12 +3,14 @@
     {
       "name": "1binding",
       "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "ObjectBucket",
         "name": "example-target"
       }
     }
   ],
   "bundle": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "WorkerBundle",
     "name": "worker-bundle"
   },
@@ -23,6 +25,7 @@
     {
       "name": "CACHE",
       "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "EdgeKVNamespace",
         "name": "edge-kv-namespace"
       }
@@ -32,6 +35,7 @@
     {
       "name": "EVENTS",
       "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "AtLeastOnceQueue",
         "name": "at-least-once-queue"
       }
@@ -44,6 +48,7 @@
     {
       "name": "AUTH",
       "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "ModuleWorker",
         "name": "auth-worker"
       }
@@ -53,6 +58,7 @@
     {
       "name": "DB",
       "resource": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "SQLiteDatabase",
         "name": "sqlite-database"
       }
@@ -62,6 +68,7 @@
     "LOG_LEVEL": "info"
   },
   "worker": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "ModuleWorker",
     "name": "module-worker"
   }

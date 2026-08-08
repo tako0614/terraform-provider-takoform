@@ -35,6 +35,12 @@ const (
 	// status touch during observe, so the runner can prove that revision
 	// advances while generation does not.
 	ProbeTouchStatus = "touch-status"
+	// ProbeExternalChange asks the disposable host to perform one delete as an
+	// out-of-band backend change: the relation dependency scan is skipped, as
+	// if the underlying resource had vanished outside the host API. It exists
+	// so a runner can reach the one state deletion protection otherwise makes
+	// unreachable — a live relation whose target was destroyed and recreated.
+	ProbeExternalChange = "external-change"
 	// ProbeErrorPrefix carries one stable error code to return verbatim,
 	// e.g. "error:permission_denied".
 	ProbeErrorPrefix = "error:"
@@ -97,6 +103,9 @@ type storedResource struct {
 	StatusTouches            int64
 	Imported                 bool
 	PackageDigest            string
+	// Relations is the resolved cross-resource reference set of this exact
+	// stored spec, pinned by target UID.
+	Relations []storedRelation
 }
 
 type recordedReplay struct {
@@ -152,32 +161,35 @@ type ReferenceHost struct {
 	contract Contract
 	catalog  *Catalog
 
-	resources      map[string]*storedResource
-	prepares       map[string][]byte
-	replays        map[string]recordedReplay
-	uploads        map[string]*artifactUpload
-	blobs          map[string][]byte
-	manifests      map[string][]byte
-	operations     map[string]*hostOperation
-	uidCounter     int
-	opCounter      int
-	uploadCounter  int
-	requestCounter int
+	resources map[string]*storedResource
+	// relationHolders is the reverse index: target uid -> holder resource keys.
+	relationHolders map[string]map[string]struct{}
+	prepares        map[string][]byte
+	replays         map[string]recordedReplay
+	uploads         map[string]*artifactUpload
+	blobs           map[string][]byte
+	manifests       map[string][]byte
+	operations      map[string]*hostOperation
+	uidCounter      int
+	opCounter       int
+	uploadCounter   int
+	requestCounter  int
 }
 
 // NewReferenceHost constructs the deterministic reference host over the
 // verified contract and an installed catalog.
 func NewReferenceHost(contract Contract, catalog *Catalog) *ReferenceHost {
 	return &ReferenceHost{
-		contract:   contract,
-		catalog:    catalog,
-		resources:  map[string]*storedResource{},
-		prepares:   map[string][]byte{},
-		replays:    map[string]recordedReplay{},
-		uploads:    map[string]*artifactUpload{},
-		blobs:      map[string][]byte{},
-		manifests:  map[string][]byte{},
-		operations: map[string]*hostOperation{},
+		contract:        contract,
+		catalog:         catalog,
+		resources:       map[string]*storedResource{},
+		relationHolders: map[string]map[string]struct{}{},
+		prepares:        map[string][]byte{},
+		replays:         map[string]recordedReplay{},
+		uploads:         map[string]*artifactUpload{},
+		blobs:           map[string][]byte{},
+		manifests:       map[string][]byte{},
+		operations:      map[string]*hostOperation{},
 	}
 }
 
@@ -227,7 +239,7 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 		h.writeError(w, code, "deterministic conformance error probe")
 		return
 	}
-	if probe != "" && probe != ProbeAsync && probe != ProbeTouchStatus {
+	if probe != "" && probe != ProbeAsync && probe != ProbeTouchStatus && probe != ProbeExternalChange {
 		h.writeError(w, "invalid_argument", "unknown conformance probe")
 		return
 	}
@@ -701,61 +713,37 @@ func specOrEmpty(spec map[string]any) map[string]any {
 	return spec
 }
 
-// bindingReferences returns every typed binding target reference inside a
-// desired spec: any object member named "resource" whose value is exactly
-// {"kind": ..., "name": ...}.
-func bindingReferences(value any) [][2]string {
-	var out [][2]string
-	var walk func(any)
-	walk = func(candidate any) {
-		switch typed := candidate.(type) {
-		case map[string]any:
-			for key, member := range typed {
-				if key == "resource" {
-					if reference, ok := member.(map[string]any); ok && len(reference) == 2 {
-						kind, kindOK := reference["kind"].(string)
-						name, nameOK := reference["name"].(string)
-						if kindOK && nameOK {
-							out = append(out, [2]string{kind, name})
-							continue
-						}
-					}
-				}
-				walk(member)
-			}
-		case []any:
-			for _, item := range typed {
-				walk(item)
-			}
-		}
-	}
-	walk(value)
-	return out
-}
-
 // validateDesiredSemantics enforces the portable cross-resource rules that a
-// desired-state schema cannot express. Every rule runs before any mutation on
-// both the apply and the import path, and is re-run at async COMMIT time so a
-// 202 can never commit against a store that has since moved.
+// desired-state schema cannot express, and returns the resolved relation
+// records to store. Every rule runs before any mutation on both the apply and
+// the import path, and is re-run at async COMMIT time so a 202 can never commit
+// against a store that has since moved.
+//
+// Relation resolution is not a binding scan. Every reference a Form derives
+// from its desired schema is resolved to a stored resource and pinned by that
+// resource's UID, so a deployment's worker version, a version's bundle, and an
+// attachment's worker are protected exactly as a typed binding is.
 func (h *ReferenceHost) validateDesiredSemantics(
 	form *installedForm,
 	space string,
 	spec map[string]any,
-) *hostError {
+) ([]storedRelation, *hostError) {
 	if hostErr := validateDeploymentWeightSum(form, spec); hostErr != nil {
-		return hostErr
+		return nil, hostErr
 	}
-	for _, reference := range bindingReferences(spec) {
-		if h.resources[resourceKey(space, form.Ref.APIVersion, reference[0], reference[1])] == nil {
-			return stableError("resource_not_found", "typed binding target is absent in the resource space")
-		}
+	relations, hostErr := h.resolveRelations(form, space, spec)
+	if hostErr != nil {
+		return nil, hostErr
 	}
 	if form.Ref.Kind == "WorkerBundle" {
 		if hostErr := h.requireReferencedBundleManifest(spec); hostErr != nil {
-			return hostErr
+			return nil, hostErr
 		}
 	}
-	return h.requireDeclaredHandler(form, space, spec)
+	if hostErr := h.requireDeclaredHandler(form, space, spec); hostErr != nil {
+		return nil, hostErr
+	}
+	return relations, nil
 }
 
 // validateDeploymentWeightSum enforces the one WorkerDeployment rule the
@@ -835,23 +823,6 @@ func (h *ReferenceHost) requireDeclaredHandler(
 		"unsupported_capability",
 		"no deployed WorkerVersion of worker "+worker+" declares the "+handler+" handler",
 	)
-}
-
-// dependencyInUse is the live typed-binding scan: a resource that is the
-// target of another stored resource's typed binding cannot be deleted.
-func (h *ReferenceHost) dependencyInUse(resource *storedResource) *hostError {
-	for _, holder := range h.resources {
-		if holder.Space != resource.Space || holder.Group != resource.Group ||
-			(holder.Kind == resource.Kind && holder.Name == resource.Name) {
-			continue
-		}
-		for _, reference := range bindingReferences(holder.Spec) {
-			if reference[0] == resource.Kind && reference[1] == resource.Name {
-				return stableError("dependency_in_use", "resource is the target of a live typed binding")
-			}
-		}
-	}
-	return nil
 }
 
 // mutationFence carries the exact precondition headers of one mutation. The
@@ -974,7 +945,8 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 	// poll time, so an accepted operation re-derives every precondition
 	// against the store as it is when the mutation actually lands.
 	applyOnce := func() (*storedResource, bool, *hostError) {
-		if hostErr := h.validateDesiredSemantics(form, space, body.Spec); hostErr != nil {
+		relations, hostErr := h.validateDesiredSemantics(form, space, body.Spec)
+		if hostErr != nil {
 			return nil, false, hostErr
 		}
 		existing, create, hostErr := h.mutationFences(
@@ -1018,6 +990,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 			)
 		}
 		next := h.nextResource(form, existing, create, space, name, body.Spec, specDigest, false)
+		next.Relations = relations
 		h.storeResource(next)
 		return next, create, nil
 	}
@@ -1112,8 +1085,24 @@ func (h *ReferenceHost) nextResource(
 	return &next
 }
 
+// storeResource installs one resource and keeps the UID reverse index exact:
+// whatever the previous incarnation of this key held is unindexed first, so a
+// stale relation can never keep a target undeletable.
 func (h *ReferenceHost) storeResource(resource *storedResource) {
-	h.resources[resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)] = resource
+	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
+	if previous := h.resources[key]; previous != nil {
+		h.unindexRelations(previous)
+	}
+	h.resources[key] = resource
+	h.indexRelations(resource)
+}
+
+// removeResource deletes one resource and its reverse-index entries.
+func (h *ReferenceHost) removeResource(key string) {
+	if existing := h.resources[key]; existing != nil {
+		h.unindexRelations(existing)
+	}
+	delete(h.resources, key)
 }
 
 func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any {
@@ -1122,14 +1111,23 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 	if resource.PackageDigest != "" {
 		reference["packageDigest"] = resource.PackageDigest
 	}
+	ready := map[string]any{
+		"type":               "Ready",
+		"status":             "True",
+		"reason":             "Available",
+		"lastTransitionTime": fixedTransitionTime,
+	}
+	// A stored relation whose target moved is reported, never repaired. The
+	// reason stays inside the closed portable vocabulary; the pointer and both
+	// uids travel in the free-form hostReason.
+	if reason, hostReason, drifted := h.relationDrift(resource); drifted {
+		ready["status"] = "False"
+		ready["reason"] = reason
+		ready["hostReason"] = hostReason
+	}
 	status := map[string]any{
 		"observedGeneration": strconv.FormatInt(resource.Generation, 10),
-		"conditions": []map[string]any{{
-			"type":               "Ready",
-			"status":             "True",
-			"reason":             "Available",
-			"lastTransitionTime": fixedTransitionTime,
-		}},
+		"conditions":         []map[string]any{ready},
 	}
 	if resource.StatusTouches > 0 {
 		status["observed"] = map[string]any{"statusTouches": resource.StatusTouches}
@@ -1276,7 +1274,8 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 	// Adoption is a mutation, so it passes the SAME cross-resource gauntlet
 	// as apply: an import may not mint a resource whose typed bindings, bundle
 	// bytes, deployment weights, or handler gates a fresh apply would reject.
-	if hostErr := h.validateDesiredSemantics(form, body.Metadata.Space, body.Spec); hostErr != nil {
+	relations, hostErr := h.validateDesiredSemantics(form, body.Metadata.Space, body.Spec)
+	if hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
 	}
@@ -1288,6 +1287,7 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 		return
 	}
 	next := h.nextResource(form, existing, create, body.Metadata.Space, name, body.Spec, specDigest, true)
+	next.Relations = relations
 	h.storeResource(next)
 	status := http.StatusOK
 	if create {
@@ -1329,9 +1329,16 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 		h.writeError(w, "revision_conflict", "delete revision fence is stale")
 		return
 	}
-	if hostErr := h.dependencyInUse(resource); hostErr != nil {
-		h.writeHostError(w, hostErr)
-		return
+	// An out-of-band backend deletion is the ONE path that bypasses relation
+	// protection, and only a disposable conformance endpoint implements it.
+	// Everything else — including the async commit re-check below — refuses to
+	// remove a resource a live relation pins.
+	externalChange := request.Header.Get(ErrorProbeHeader) == ProbeExternalChange
+	if !externalChange {
+		if hostErr := h.dependencyInUse(resource); hostErr != nil {
+			h.writeHostError(w, hostErr)
+			return
+		}
 	}
 	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
@@ -1349,12 +1356,12 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 			if hostErr := h.dependencyInUse(current); hostErr != nil {
 				return nil, hostErr
 			}
-			delete(h.resources, key)
+			h.removeResource(key)
 			return map[string]any{"deleted": true}, nil
 		})
 		return
 	}
-	delete(h.resources, key)
+	h.removeResource(key)
 	h.writeRaw(w, http.StatusNoContent, "", nil)
 	h.recordReplay(request, raw, request.URL.Query().Get("space"), http.StatusNoContent, "", nil)
 }

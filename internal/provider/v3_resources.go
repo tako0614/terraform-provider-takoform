@@ -561,7 +561,7 @@ func (r *v3FormResource) v3SpecFromValues(ctx context.Context, values v3Values) 
 			)
 			continue
 		}
-		wire, fieldDiags := v3FieldToWire(ctx, field, name, value)
+		wire, fieldDiags := v3FieldToWire(ctx, r.form.Family.APIVersion(), field, name, value)
 		diags.Append(fieldDiags...)
 		if fieldDiags.HasError() {
 			continue
@@ -573,7 +573,17 @@ func (r *v3FormResource) v3SpecFromValues(ctx context.Context, values v3Values) 
 	return spec, diags
 }
 
-func v3FieldToWire(ctx context.Context, field model.Field, attrName string, value attr.Value) (any, diag.Diagnostics) {
+// v3FieldToWire projects one typed HCL value onto its portable wire form.
+// group is the Form's own family group: a cross-resource reference travels as
+// the exact {apiVersion, kind, name} triple even though the author writes only
+// the target's name.
+func v3FieldToWire(
+	ctx context.Context,
+	group string,
+	field model.Field,
+	attrName string,
+	value attr.Value,
+) (any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	switch field.Kind {
 	case model.KindBoolean:
@@ -620,7 +630,7 @@ func v3FieldToWire(ctx context.Context, field model.Field, attrName string, valu
 		}
 		return parsed, diags
 	case model.KindResourceRef:
-		return map[string]any{"kind": field.TargetKind, "name": value.(types.String).ValueString()}, diags
+		return v3WireReference(group, field.TargetKind, value.(types.String).ValueString()), diags
 	case model.KindBindingList:
 		list := value.(types.List)
 		out := make([]any, 0, len(list.Elements()))
@@ -641,7 +651,7 @@ func v3FieldToWire(ctx context.Context, field model.Field, attrName string, valu
 			out = append(out, map[string]any{
 				"name": name,
 				// The wire key is `resource`, never `target` (decision 0010).
-				"resource": map[string]any{"kind": field.TargetKind, "name": target},
+				"resource": v3WireReference(group, field.TargetKind, target),
 			})
 		}
 		if len(out) == 0 {
@@ -679,9 +689,9 @@ func v3FieldToWire(ctx context.Context, field model.Field, attrName string, valu
 				case model.KindInteger:
 					entry[member.Wire] = memberValue.(types.Int64).ValueInt64()
 				case model.KindResourceRef:
-					entry[member.Wire] = map[string]any{
-						"kind": member.TargetKind, "name": memberValue.(types.String).ValueString(),
-					}
+					entry[member.Wire] = v3WireReference(
+						group, member.TargetKind, memberValue.(types.String).ValueString(),
+					)
 				default:
 					entry[member.Wire] = memberValue.(types.String).ValueString()
 				}
@@ -702,6 +712,11 @@ func v3FieldToWire(ctx context.Context, field model.Field, attrName string, valu
 		}
 		return text, diags
 	}
+}
+
+// v3WireReference builds the exact three-member cross-resource reference.
+func v3WireReference(group, targetKind, name string) map[string]any {
+	return map[string]any{"apiVersion": group, "kind": targetKind, "name": name}
 }
 
 func v3KnownObject(attrName string, index int, element attr.Value) (types.Object, diag.Diagnostics) {

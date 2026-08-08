@@ -54,11 +54,31 @@
     "duplicateMember": "invalid_argument-before-mutation",
     "unknownEnvelopeField": "invalid_argument-before-mutation"
   },
+  "relationResolution": {
+    "derivedFrom": "installed-form-definition-desiredSchema",
+    "referenceShape": "closed-object-requiring-apiVersion-kind-name-with-const-apiVersion-and-const-kind",
+    "pointerNotation": "json-pointer-with-*-for-array-elements",
+    "sourceSpace": "resource.metadata.space",
+    "crossSpace": "unrepresentable",
+    "missingTarget": "resource_not_found/404-before-mutation",
+    "wrongTargetForm": "invalid_argument/400-before-mutation",
+    "storedResolution": "pointer+relation+targetApiVersion+targetKind+targetName+targetUid+bindingRef?",
+    "targetIdentity": "uid-pinned; a-name-is-never-re-resolved-without-a-new-apply",
+    "targetIncarnationChanged": "Ready=False/ExternalChange+hostReason",
+    "targetGone": "Ready=False/DependencyMissing+hostReason",
+    "referencedTargetDeletion": "dependency_in_use/409"
+  },
   "bindingResolution": {
     "sourceSpace": "resource.metadata.space",
-    "reference": "typed-binding-target-kind-and-name",
+    "reference": "typed-binding-target-apiVersion-kind-and-name",
+    "contractAnnotation": "desiredSchema-binding-list-property-x-takoform-binding",
     "crossSpace": "unrepresentable",
     "missing": "resource_not_found/404-before-mutation",
+    "bindingNotAccepted": "invalid_argument/400-before-mutation",
+    "contractNotInstalled": "unsupported_capability/422-before-mutation",
+    "sourceRoleMismatch": "invalid_argument/400-before-mutation",
+    "targetFormNotAllowed": "invalid_argument/400-before-mutation",
+    "targetInterfaceNotProvided": "invalid_argument/400-before-mutation",
     "boundTargetDeletion": "dependency_in_use/409"
   },
   "artifactReference": {

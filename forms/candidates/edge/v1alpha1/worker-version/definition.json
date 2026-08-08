@@ -203,6 +203,10 @@
             "resource": {
               "additionalProperties": false,
               "properties": {
+                "apiVersion": {
+                  "const": "edge.forms.takoform.com/v1alpha1",
+                  "type": "string"
+                },
                 "kind": {
                   "const": "ObjectBucket",
                   "type": "string"
@@ -215,6 +219,7 @@
                 }
               },
               "required": [
+                "apiVersion",
                 "kind",
                 "name"
               ],
@@ -229,12 +234,17 @@
         },
         "maxItems": 64,
         "type": "array",
-        "uniqueItems": true
+        "uniqueItems": true,
+        "x-takoform-binding": "module-worker.object-bucket"
       },
       "bundle": {
         "additionalProperties": false,
         "description": "Worker Bundle carrying the exact module bytes this version executes.",
         "properties": {
+          "apiVersion": {
+            "const": "edge.forms.takoform.com/v1alpha1",
+            "type": "string"
+          },
           "kind": {
             "const": "WorkerBundle",
             "type": "string"
@@ -247,6 +257,7 @@
           }
         },
         "required": [
+          "apiVersion",
           "kind",
           "name"
         ],
@@ -298,6 +309,10 @@
             "resource": {
               "additionalProperties": false,
               "properties": {
+                "apiVersion": {
+                  "const": "edge.forms.takoform.com/v1alpha1",
+                  "type": "string"
+                },
                 "kind": {
                   "const": "EdgeKVNamespace",
                   "type": "string"
@@ -310,6 +325,7 @@
                 }
               },
               "required": [
+                "apiVersion",
                 "kind",
                 "name"
               ],
@@ -324,7 +340,8 @@
         },
         "maxItems": 64,
         "type": "array",
-        "uniqueItems": true
+        "uniqueItems": true,
+        "x-takoform-binding": "module-worker.edge-kv"
       },
       "queueProducerBindings": {
         "default": [],
@@ -340,6 +357,10 @@
             "resource": {
               "additionalProperties": false,
               "properties": {
+                "apiVersion": {
+                  "const": "edge.forms.takoform.com/v1alpha1",
+                  "type": "string"
+                },
                 "kind": {
                   "const": "AtLeastOnceQueue",
                   "type": "string"
@@ -352,6 +373,7 @@
                 }
               },
               "required": [
+                "apiVersion",
                 "kind",
                 "name"
               ],
@@ -366,7 +388,8 @@
         },
         "maxItems": 64,
         "type": "array",
-        "uniqueItems": true
+        "uniqueItems": true,
+        "x-takoform-binding": "module-worker.queue-producer"
       },
       "requiredSensitiveVars": {
         "default": [],
@@ -392,6 +415,10 @@
             "resource": {
               "additionalProperties": false,
               "properties": {
+                "apiVersion": {
+                  "const": "edge.forms.takoform.com/v1alpha1",
+                  "type": "string"
+                },
                 "kind": {
                   "const": "ModuleWorker",
                   "type": "string"
@@ -404,6 +431,7 @@
                 }
               },
               "required": [
+                "apiVersion",
                 "kind",
                 "name"
               ],
@@ -418,7 +446,8 @@
         },
         "maxItems": 64,
         "type": "array",
-        "uniqueItems": true
+        "uniqueItems": true,
+        "x-takoform-binding": "module-worker.service"
       },
       "sqliteBindings": {
         "default": [],
@@ -434,6 +463,10 @@
             "resource": {
               "additionalProperties": false,
               "properties": {
+                "apiVersion": {
+                  "const": "edge.forms.takoform.com/v1alpha1",
+                  "type": "string"
+                },
                 "kind": {
                   "const": "SQLiteDatabase",
                   "type": "string"
@@ -446,6 +479,7 @@
                 }
               },
               "required": [
+                "apiVersion",
                 "kind",
                 "name"
               ],
@@ -460,7 +494,8 @@
         },
         "maxItems": 64,
         "type": "array",
-        "uniqueItems": true
+        "uniqueItems": true,
+        "x-takoform-binding": "module-worker.sqlite"
       },
       "vars": {
         "additionalProperties": {
@@ -480,6 +515,10 @@
         "additionalProperties": false,
         "description": "Module Worker identity this version belongs to.",
         "properties": {
+          "apiVersion": {
+            "const": "edge.forms.takoform.com/v1alpha1",
+            "type": "string"
+          },
           "kind": {
             "const": "ModuleWorker",
             "type": "string"
@@ -492,6 +531,7 @@
           }
         },
         "required": [
+          "apiVersion",
           "kind",
           "name"
         ],
@@ -527,14 +567,6 @@
     "delete",
     "import",
     "observe"
-  ],
-  "providedInterfaces": [
-    {
-      "apiVersion": "interfaces.takoform.com/v1alpha1",
-      "name": "worker.service",
-      "version": "1.0.0",
-      "schemaDigest": "sha256:8beedb6fa4399836c24afa0a7adb17fbe13e8bc705b86441dc210e7614c95507"
-    }
   ],
   "acceptedBindings": [
     {

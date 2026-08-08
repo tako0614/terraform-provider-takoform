@@ -2,6 +2,7 @@
   "cron": "0 3 * * *",
   "takoformUnexpected": true,
   "worker": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "ModuleWorker",
     "name": "module-worker"
   }

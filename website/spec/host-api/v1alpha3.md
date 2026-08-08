@@ -80,8 +80,108 @@ a `prepareDigest` the way v1alpha2 `preview` binds a plan digest;
 substitution after prepare fails `invalid_argument` before mutation.
 
 Role rules are wire-enforced: an update to a `revision`-role resource fails
-`invalid_argument`; deleting a bound target fails `dependency_in_use` (409);
-a resource protected by policy fails `deletion_protected` (409).
+`invalid_argument`; deleting a resource any live relation references fails
+`dependency_in_use` (409); a resource protected by policy fails
+`deletion_protected` (409).
+
+## Cross-resource relations
+
+A **relation** is one reference from a resource's desired spec to another
+resource. Its wire shape is the closed three-member object
+
+```json
+{ "apiVersion": "edge.forms.takoform.com/v1alpha1", "kind": "EdgeKVNamespace", "name": "cache" }
+```
+
+where `apiVersion` and `kind` are `const` in the referring Form's
+`desiredSchema` and `name` follows the portable resource-name grammar. Both
+constants are required. A reference carrying only `{kind, name}` cannot address
+two Form Families at once and forces a host to guess which installed Form a bare
+kind means; a group-qualified reference makes the target Form exact.
+
+Relations are **derived from the Form Definition's `desiredSchema`, never
+declared**. Every reference already states its target group and kind as schema
+constants, so a separate relation list on the Definition would be a second
+source of truth for facts the schema already carries — and the published Form
+Definition schema admits no such member
+([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)).
+A host derives the relation set from the same `desiredSchema` it serves: every
+closed object that requires exactly `apiVersion`, `kind`, and `name` with the
+first two `const` is a relation, identified by its JSON Pointer with `*`
+standing for an array element (`/worker`, `/versions/*/workerVersion`,
+`/kvBindings/*/resource`). A binding-list property additionally carries the
+`x-takoform-binding` annotation naming the Binding contract that governs the
+references inside it; the exact digest-bound BindingRef is the Definition's own
+`acceptedBindings` entry of that name.
+
+### Resolution and UID pinning
+
+On `apply` and `import`, for every derived relation present in the materialized
+spec, a host MUST, before any mutation:
+
+- resolve `(space, apiVersion, kind, name)` to a stored resource. Absent fails
+  `resource_not_found` (404) and the message MUST name the relation pointer.
+  Cross-space references are unrepresentable — a reference carries no space.
+- verify that the resolved resource's Form has exactly the referenced group and
+  kind, failing `invalid_argument` (400) on mismatch. A well-formed spec cannot
+  reach this, because the schema pins both constants; a host that resolved by
+  name alone can, and must refuse rather than bind the wrong Form.
+- verify the binding contract when the relation is a binding (below).
+- record the resolution as
+  `{pointer, relation, targetAPIVersion, targetKind, targetName, targetUID, bindingRef?}`
+  alongside the resource, where `pointer` is the concrete instance pointer and
+  `relation` is the derived pointer it came from.
+
+A host MUST store the **target UID**, not only the name. A name is a label the
+client chose and can reuse; the UID is the identity of one incarnation.
+
+### Incarnation change
+
+When a resource is read or observed and a stored relation's target now resolves
+to a *different* UID, or to nothing, the source reports `Ready=False` with
+
+- `ExternalChange` — the target name resolves to a different incarnation;
+- `DependencyMissing` — the target no longer exists;
+
+and a `hostReason` naming the relation pointer and both UIDs. A host MUST NOT
+re-bind the relation automatically: re-resolving the name would make a delete
+and re-create of the target invisible and silently point the source at a
+resource its author never named. The source stays pinned until it is re-applied,
+and re-reading it does not heal the condition.
+
+### Dependency protection
+
+Deleting a resource that any stored relation references by UID fails
+`dependency_in_use` (409). This covers every relation, not only typed bindings:
+a Worker Bundle a Worker Version executes, a Worker Version a Worker Deployment
+weights, a Module Worker an attachment activates, a queue a consumer drains, and
+a dead-letter queue are all live dependencies. A resource that references itself
+does not block its own deletion. An accepted (202) delete re-runs the scan at
+commit time, so a resource that acquired a holder while the operation was
+pending survives.
+
+### Binding verification
+
+A binding relation is verified, never assumed. Before any mutation a host MUST
+check, in this order:
+
+1. the source Form Definition's `acceptedBindings` carries the Binding contract
+   the desired schema annotates — otherwise `invalid_argument` (400);
+2. the host has installed that contract at exactly the accepted
+   `schemaDigest` — otherwise `unsupported_capability` (422), because the
+   capability itself is unavailable rather than the request malformed;
+3. the source Form's `role` equals the Binding Definition's `sourceRole` —
+   otherwise `invalid_argument` (400);
+4. the resolved target's exact Form (group and kind) appears in the Binding
+   Definition's `allowedTargetForms` — otherwise `invalid_argument` (400);
+5. the target Form's Definition declares the Binding's `targetInterface` in
+   `providedInterfaces` — otherwise `invalid_argument` (400). A binding projects
+   an Interface, so a target that provides none cannot be bound;
+6. source and target share a space, which the wire guarantees: a reference
+   carries no space member.
+
+Rules 3 through 5 are about the target or holder the client chose and are
+therefore argument failures; rule 2 is about what this host can do at all.
 
 ## Lifecycle capabilities
 

@@ -653,9 +653,14 @@ func TestV3WorkerVersionBindingBlocksUseResourceWireKey(t *testing.T) {
 		t.Fatal("apply never reached the host")
 	}
 	spec := host.applySpecs[len(host.applySpecs)-1]
+	group := edgeformcatalog.Family.APIVersion()
+	// The wire carries the exact three-member reference; the HCL surface stays
+	// the bare target name.
 	want := []any{map[string]any{
-		"name":     "CACHE",
-		"resource": map[string]any{"kind": "EdgeKVNamespace", "name": "edge-kv-namespace"},
+		"name": "CACHE",
+		"resource": map[string]any{
+			"apiVersion": group, "kind": "EdgeKVNamespace", "name": "edge-kv-namespace",
+		},
 	}}
 	if !reflect.DeepEqual(spec["kvBindings"], want) {
 		t.Fatalf("kvBindings wire shape = %#v, want %#v", spec["kvBindings"], want)
@@ -665,7 +670,9 @@ func TestV3WorkerVersionBindingBlocksUseResourceWireKey(t *testing.T) {
 			t.Fatal("binding element must carry `resource`, never `target`")
 		}
 	}
-	if !reflect.DeepEqual(spec["worker"], map[string]any{"kind": "ModuleWorker", "name": "module-worker"}) {
+	if !reflect.DeepEqual(spec["worker"], map[string]any{
+		"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker",
+	}) {
 		t.Fatalf("worker reference wire shape = %#v", spec["worker"])
 	}
 }

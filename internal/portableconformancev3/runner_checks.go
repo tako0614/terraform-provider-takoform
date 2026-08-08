@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 // run executes the complete ordered v1alpha3 matrix. Every named required
@@ -55,8 +56,11 @@ func (r *v3Runner) run() error {
 		r.checkArtifactManifestKindExclusive,
 		func() error { return r.checkArtifactRetentionWhileReferenced(bundle) },
 		func() error { return r.checkWorkerVersionFlow(version, kv) },
+		func() error { return r.checkBindingContractVerified(version) },
+		func() error { return r.checkRelationIncarnationChange(version, kv) },
 		r.checkHandlerGatedAttachments,
 		r.checkDeploymentWeightSum,
+		func() error { return r.checkRelationDeletionProtection(version, bundle) },
 		func() error { return r.checkImportFlows(kv, version) },
 		func() error { return r.checkDeleteFences(version, kv) },
 		func() error { return r.checkOperations(kv) },
@@ -1529,13 +1533,49 @@ func (r *v3Runner) checkArtifactRejectList() error {
 	return nil
 }
 
+// kvReference builds the exact three-member reference an EdgeKVNamespace
+// binding carries. The group travels on the wire; only the name is authored.
+func kvReference(target probeTarget, name string) map[string]any {
+	return map[string]any{
+		"apiVersion": target.Ref.APIVersion,
+		"kind":       target.Ref.Kind,
+		"name":       name,
+	}
+}
+
 func (r *v3Runner) checkWorkerVersionFlow(version, kv probeTarget) error {
+	// A NON-binding reference to a missing resource fails before mutation, and
+	// stores nothing. This is the reference class a name-only "resource" scan
+	// never saw: worker is a plain cross-resource reference, not a binding.
+	missingWorker := version
+	missingWorker.Name = "relation-missing-version"
+	missingWorker.Spec = cloneJSONMap(version.Spec)
+	missingWorker.Spec["worker"] = map[string]any{
+		"apiVersion": version.Ref.APIVersion,
+		"kind":       "ModuleWorker",
+		"name":       "absent-worker",
+	}
+
+	missingWorkerResponse, err := r.apply(missingWorker, applyOptions{
+		Create: true, IdempotencyKey: "key-version-missing-worker",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(missingWorkerResponse, "resource_not_found"); err != nil {
+		return fmt.Errorf("missing non-binding relation target: %w", err)
+	}
+	if err := r.expectResourceAbsent(missingWorker); err != nil {
+		return fmt.Errorf("missing non-binding relation target mutated state: %w", err)
+	}
+	r.complete("relation-target-missing-rejected")
+
 	// A typed binding to a missing namespace fails before mutation.
 	missingTarget := version
 	missingTarget.Spec = cloneJSONMap(version.Spec)
 	missingTarget.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": map[string]any{"kind": "EdgeKVNamespace", "name": "absent-kv"},
+		"resource": kvReference(kv, "absent-kv"),
 	}}
 	response, err := r.apply(missingTarget, applyOptions{
 		Create: true, IdempotencyKey: "key-version-missing-binding",
@@ -1593,6 +1633,262 @@ func (r *v3Runner) checkWorkerVersionFlow(version, kv probeTarget) error {
 		return fmt.Errorf("dependency_in_use delete mutated state: %w", err)
 	}
 	r.complete("dependency-in-use-on-bound-target-delete")
+	return nil
+}
+
+// checkBindingContractVerified proves a host does not take a declared binding
+// on trust. The probe points a typed kvBindings entry at the synthetic
+// second-group EdgeKVNamespace: an INSTALLED Form, of the same kind name, in a
+// different group — which the binding does not list in allowedTargetForms and
+// which provides no Interface at all. A conforming host refuses it before any
+// mutation, whether it refuses at the reference's pinned apiVersion constant or
+// at the binding-contract verification behind it.
+//
+// The check also proves the host serves the two facts that verification needs:
+// the Binding contract each binding list carries, stated on the served desired
+// schema, and a support profile for that exact contract.
+func (r *v3Runner) checkBindingContractVerified(version probeTarget) error {
+	input := r.contract.RunnerInput
+	definition, err := r.formDefinition(version.Ref)
+	if err != nil {
+		return err
+	}
+	properties, _ := definition.DesiredSchema["properties"].(map[string]any)
+	bindingList, _ := properties["kvBindings"].(map[string]any)
+	if bindingList == nil {
+		return errors.New("the served WorkerVersion desiredSchema declares no kvBindings property")
+	}
+	contractName, _ := bindingList[currentformmodel.BindingAnnotationKey].(string)
+	if contractName != input.SupportProbes.Binding.Name {
+		return fmt.Errorf(
+			"kvBindings declares binding contract %q, want the pinned %q; without it a host cannot know "+
+				"which Binding Definition governs the references it finds",
+			contractName, input.SupportProbes.Binding.Name,
+		)
+	}
+	profile, err := r.request(
+		http.MethodGet,
+		r.apiBase+"/support/bindings/"+url.PathEscape(contractName)+"/"+
+			url.PathEscape(input.SupportProbes.Binding.Version),
+		nil, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if profile.Status != http.StatusOK {
+		return fmt.Errorf("binding support profile HTTP %d for the contract kvBindings declares", profile.Status)
+	}
+
+	// The out-of-contract target exists, so the refusal cannot be "absent".
+	foreign := probeTarget{
+		Ref:   input.SyntheticSecondGroup,
+		Name:  "binding-contract-kv",
+		Space: input.Space,
+		Spec:  map[string]any{},
+	}
+	if _, _, err := r.applyResource(foreign, applyOptions{
+		Create: true, IdempotencyKey: "key-binding-contract-foreign",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("second-group binding target: %w", err)
+	}
+	offender := version
+	offender.Name = "binding-contract-version"
+	offender.Spec = cloneJSONMap(version.Spec)
+	offender.Spec["kvBindings"] = []any{map[string]any{
+		"name":     "CACHE",
+		"resource": kvReference(foreign, foreign.Name),
+	}}
+	// The refusal may land at prepare or at apply; both are before any
+	// mutation, which is the property under test. A host that admits the
+	// document all the way to apply must still refuse there.
+	response, err := r.prepareRequest(offender, nil)
+	if err != nil {
+		return err
+	}
+	if response.Status == http.StatusOK {
+		var prepared struct {
+			Review struct {
+				PrepareDigest string `json:"prepareDigest"`
+			} `json:"review"`
+		}
+		if err := decodeStrictResponse(response, &prepared); err != nil {
+			return err
+		}
+		response, err = r.apply(offender, applyOptions{
+			Create:         true,
+			IdempotencyKey: "key-binding-contract-offender",
+			PrepareDigest:  prepared.Review.PrepareDigest,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	switch response.Status {
+	case http.StatusBadRequest:
+		if err := r.expectStableError(response, "invalid_argument"); err != nil {
+			return fmt.Errorf("binding whose target Form provides no Interface: %w", err)
+		}
+	case http.StatusUnprocessableEntity:
+		if err := r.expectStableError(response, "unsupported_capability"); err != nil {
+			return fmt.Errorf("binding whose target Form provides no Interface: %w", err)
+		}
+	default:
+		return fmt.Errorf(
+			"binding to a Form outside the contract HTTP %d, want a pre-mutation refusal; body=%s",
+			response.Status, strings.TrimSpace(string(response.Body)),
+		)
+	}
+	if err := r.expectResourceAbsent(offender); err != nil {
+		return fmt.Errorf("an unverifiable binding still mutated state: %w", err)
+	}
+	r.complete("binding-contract-verified")
+	return nil
+}
+
+// checkRelationIncarnationChange proves the rule that makes storing a UID
+// worth anything: a target deleted and recreated under the same name is a
+// DIFFERENT resource, and the source that referenced the old one is not
+// silently re-bound to the new one.
+//
+// The delete uses the out-of-band probe because relation protection otherwise
+// makes this state unreachable through the API — which is the point: the state
+// arises when a backend loses a resource, not when a client asks for it.
+func (r *v3Runner) checkRelationIncarnationChange(version, kv probeTarget) error {
+	target := kv
+	target.Name = "incarnation-kv"
+	created, _, err := r.applyResource(target, applyOptions{
+		Create: true, IdempotencyKey: "key-incarnation-kv",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	source := version
+	source.Name = "incarnation-version"
+	source.Spec = cloneJSONMap(version.Spec)
+	source.Spec["kvBindings"] = []any{map[string]any{
+		"name":     "CACHE",
+		"resource": kvReference(target, target.Name),
+	}}
+	bound, _, err := r.applyResource(source, applyOptions{
+		Create: true, IdempotencyKey: "key-incarnation-version",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+
+	// The target vanishes out of band. The source must report it rather than
+	// carry on as if nothing happened.
+	removed, err := r.deleteResource(
+		target, created.Metadata.Revision, "key-incarnation-kv-delete",
+		map[string]string{ErrorProbeHeader: ProbeExternalChange},
+	)
+	if err != nil {
+		return err
+	}
+	if removed.Status != http.StatusNoContent {
+		return fmt.Errorf(
+			"out-of-band target delete HTTP %d, want 204; body=%s",
+			removed.Status, strings.TrimSpace(string(removed.Body)),
+		)
+	}
+	missing, err := r.readRaw(source)
+	if err != nil {
+		return err
+	}
+	if err := requireNotReady(missing, "DependencyMissing"); err != nil {
+		return fmt.Errorf("source of a vanished target: %w", err)
+	}
+
+	// The name comes back on a NEW incarnation.
+	recreated, _, err := r.applyResource(target, applyOptions{
+		Create: true, IdempotencyKey: "key-incarnation-kv-recreate",
+	}, http.StatusCreated)
+	if err != nil {
+		return err
+	}
+	if recreated.Metadata.UID == created.Metadata.UID {
+		return errors.New("the recreated target reused its uid, so no incarnation changed")
+	}
+	changed, err := r.readRaw(source)
+	if err != nil {
+		return err
+	}
+	if err := requireNotReady(changed, "ExternalChange"); err != nil {
+		return fmt.Errorf("source of a recreated target: %w", err)
+	}
+	hostReason := readyCondition(changed).HostReason
+	for _, want := range []string{"/kvBindings/0/resource", created.Metadata.UID, recreated.Metadata.UID} {
+		if !strings.Contains(hostReason, want) {
+			return fmt.Errorf(
+				"ExternalChange hostReason %q must name the relation pointer and both uids (missing %q)",
+				hostReason, want,
+			)
+		}
+	}
+	if changed.Metadata.Generation != bound.Metadata.Generation {
+		return errors.New("an unre-applied source changed generation, so the host altered desired state")
+	}
+	// Reading again must not heal it: only a re-apply re-resolves the name.
+	again, err := r.readRaw(source)
+	if err != nil {
+		return err
+	}
+	if err := requireNotReady(again, "ExternalChange"); err != nil {
+		return fmt.Errorf("a second read silently re-bound the source: %w", err)
+	}
+	r.complete("relation-incarnation-change-detected")
+	return nil
+}
+
+// checkRelationDeletionProtection proves dependency protection covers every
+// relation, not only typed bindings: a Worker Version pinned by a deployment
+// and a bundle executed by a version are both live dependencies.
+func (r *v3Runner) checkRelationDeletionProtection(version, bundle probeTarget) error {
+	current, _, err := r.read(version)
+	if err != nil {
+		return err
+	}
+	blocked, err := r.deleteResource(version, current.Metadata.Revision, "key-version-relation-delete", nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(blocked, "dependency_in_use"); err != nil {
+		return fmt.Errorf("deleting a WorkerVersion a WorkerDeployment weights: %w", err)
+	}
+	if _, _, err := r.read(version); err != nil {
+		return fmt.Errorf("a refused delete removed the resource: %w", err)
+	}
+	bundleCurrent, _, err := r.read(bundle)
+	if err != nil {
+		return err
+	}
+	blockedBundle, err := r.deleteResource(bundle, bundleCurrent.Metadata.Revision, "key-bundle-relation-delete", nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(blockedBundle, "dependency_in_use"); err != nil {
+		return fmt.Errorf("deleting a WorkerBundle a WorkerVersion executes: %w", err)
+	}
+	// Removing the holder releases the dependency; the deployment itself is
+	// referenced by nothing, so it deletes cleanly.
+	deployment := r.target(r.contract.RunnerInput.WorkerDeployment)
+	deploymentCurrent, _, err := r.read(deployment)
+	if err != nil {
+		return err
+	}
+	released, err := r.deleteResource(
+		deployment, deploymentCurrent.Metadata.Revision, "key-deployment-delete", nil,
+	)
+	if err != nil {
+		return err
+	}
+	if released.Status != http.StatusNoContent {
+		return fmt.Errorf(
+			"deleting an unreferenced WorkerDeployment HTTP %d, want 204; body=%s",
+			released.Status, strings.TrimSpace(string(released.Body)),
+		)
+	}
+	r.complete("relation-target-deletion-blocked")
 	return nil
 }
 
@@ -1788,7 +2084,7 @@ func (r *v3Runner) checkImportFlows(kv, version probeTarget) error {
 	invalid.Spec = cloneJSONMap(version.Spec)
 	invalid.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": map[string]any{"kind": "EdgeKVNamespace", "name": "absent-kv"},
+		"resource": kvReference(kv, "absent-kv"),
 	}}
 	rejected, err := r.importResource(invalid, importOptions{
 		NativeID: "native/import-invalid-probe", IdempotencyKey: "key-import-invalid", Create: true,
@@ -2054,7 +2350,7 @@ func (r *v3Runner) checkAsyncCommitRevalidates(kv, version probeTarget) error {
 	pending.Spec = cloneJSONMap(version.Spec)
 	pending.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": map[string]any{"kind": "EdgeKVNamespace", "name": target.Name},
+		"resource": kvReference(target, target.Name),
 	}}
 	accepted, err := r.apply(pending, applyOptions{
 		Create:         true,
@@ -2142,7 +2438,7 @@ func (r *v3Runner) checkAsyncCommitRevalidates(kv, version probeTarget) error {
 	holder.Spec = cloneJSONMap(version.Spec)
 	holder.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": map[string]any{"kind": "EdgeKVNamespace", "name": held.Name},
+		"resource": kvReference(held, held.Name),
 	}}
 	if _, _, err := r.applyResource(holder, applyOptions{
 		Create: true, IdempotencyKey: "key-revalidate-holder",

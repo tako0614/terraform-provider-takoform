@@ -18,27 +18,49 @@ var Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"}
 // edgeDefinitionVersion is the definition SemVer every MVP member starts at.
 const edgeDefinitionVersion = "0.1.0"
 
+// ref renders one exact in-family cross-resource reference: the target group,
+// the target kind, and the target name. All three travel on the wire; the HCL
+// surface still asks the author for the bare name.
+func ref(kind, name string) map[string]any {
+	return map[string]any{"apiVersion": Family.APIVersion(), "kind": kind, "name": name}
+}
+
+// bindingInstance renders one typed binding instance: the JavaScript
+// identifier the binding is projected under, plus the exact target reference.
+func bindingInstance(bindingName, kind, targetName string) map[string]any {
+	return map[string]any{"name": bindingName, "resource": ref(kind, targetName)}
+}
+
 func moduleWorkerRef(hcl, wire, doc string, required, immutable bool) model.Field {
 	return model.Field{
 		HCL: hcl, Wire: wire, Kind: model.KindResourceRef, TargetKind: "ModuleWorker",
 		Required: required, Immutable: immutable, Doc: doc,
-		Example: map[string]any{"kind": "ModuleWorker", "name": "module-worker"},
+		Example: ref("ModuleWorker", "module-worker"),
 	}
 }
 
 // Forms is the complete Edge Platform Family MVP set, in a stable order.
 var Forms = []model.Form{
 	{
-		Kind: "ModuleWorker", Slug: "module-worker", ResourceType: "takoform_module_worker",
+		Family: Family,
+		Kind:   "ModuleWorker", Slug: "module-worker", ResourceType: "takoform_module_worker",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Module Worker",
 		Description: "Long-lived logical identity of one ES Module Worker application. The Form fixes the " +
 			"ES module worker ABI by identity: handlers are exported module functions receiving typed " +
 			"events and a binding environment. Code, configuration, and bindings live on Worker Version " +
 			"revisions; traffic selection lives on Worker Deployments.",
+		// worker.service is provided by the IDENTITY, not by a revision: a
+		// module-worker.service binding addresses another worker by logical
+		// identity and is served by whichever versions that worker's active
+		// deployment selects. Declaring it on a Worker Version would name a
+		// target no binding may point at, and would leave the binding's
+		// allowedTargetForms Form providing no Interface at all.
+		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "worker.service", Version: "1.0.0"}},
 	},
 	{
-		Kind: "WorkerBundle", Slug: "worker-bundle", ResourceType: "takoform_worker_bundle",
+		Family: Family,
+		Kind:   "WorkerBundle", Slug: "worker-bundle", ResourceType: "takoform_worker_bundle",
 		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Bundle",
 		Description: "Immutable content-addressed module bundle of one worker build, named by the digest of the " +
@@ -60,13 +82,13 @@ var Forms = []model.Form{
 		},
 	},
 	{
-		Kind: "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
+		Family: Family,
+		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
 		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Version",
 		Description: "Immutable executable snapshot of one Module Worker: a bundle, a runtime compatibility " +
 			"date, declared handlers, non-secret vars, and the typed capability bindings the code may use. " +
 			"A change is a new Worker Version; traffic moves only through Worker Deployments.",
-		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "worker.service", Version: "1.0.0"}},
 		AcceptedBindings: []model.BindingRefSource{
 			{Name: "module-worker.edge-kv", Version: "1.0.0"},
 			{Name: "module-worker.object-bucket", Version: "1.0.0"},
@@ -77,10 +99,10 @@ var Forms = []model.Form{
 		Fields: []model.Field{
 			{HCL: "worker", Wire: "worker", Kind: model.KindResourceRef, TargetKind: "ModuleWorker", Required: true,
 				Doc:     "Module Worker identity this version belongs to.",
-				Example: map[string]any{"kind": "ModuleWorker", "name": "module-worker"}},
+				Example: ref("ModuleWorker", "module-worker")},
 			{HCL: "bundle", Wire: "bundle", Kind: model.KindResourceRef, TargetKind: "WorkerBundle", Required: true,
 				Doc:     "Worker Bundle carrying the exact module bytes this version executes.",
-				Example: map[string]any{"kind": "WorkerBundle", "name": "worker-bundle"}},
+				Example: ref("WorkerBundle", "worker-bundle")},
 			{HCL: "compatibility_date", Wire: "compatibilityDate", Kind: model.KindDateString, Required: true,
 				Doc:     "Runtime compatibility date fixing default runtime behavior for this version.",
 				Example: "2026-08-06", AltExample: "2026-01-01"},
@@ -102,27 +124,27 @@ var Forms = []model.Form{
 				TargetKind: "EdgeKVNamespace", BindingType: "module-worker.edge-kv",
 				Default: []any{},
 				Doc:     "Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names. Omitting it declares no such binding.",
-				Example: []any{map[string]any{"name": "CACHE", "resource": map[string]any{"kind": "EdgeKVNamespace", "name": "edge-kv-namespace"}}}},
+				Example: []any{bindingInstance("CACHE", "EdgeKVNamespace", "edge-kv-namespace")}},
 			{HCL: "bucket_bindings", Wire: "bucketBindings", Kind: model.KindBindingList,
 				TargetKind: "ObjectBucket", BindingType: "module-worker.object-bucket",
 				Default: []any{},
 				Doc:     "Typed module-worker.object-bucket bindings projecting the edge.objects API. Omitting it declares no such binding.",
-				Example: []any{map[string]any{"name": "MEDIA", "resource": map[string]any{"kind": "ObjectBucket", "name": "object-bucket"}}}},
+				Example: []any{bindingInstance("MEDIA", "ObjectBucket", "object-bucket")}},
 			{HCL: "sqlite_bindings", Wire: "sqliteBindings", Kind: model.KindBindingList,
 				TargetKind: "SQLiteDatabase", BindingType: "module-worker.sqlite",
 				Default: []any{},
 				Doc:     "Typed module-worker.sqlite bindings projecting the edge.sql API. Omitting it declares no such binding.",
-				Example: []any{map[string]any{"name": "DB", "resource": map[string]any{"kind": "SQLiteDatabase", "name": "sqlite-database"}}}},
+				Example: []any{bindingInstance("DB", "SQLiteDatabase", "sqlite-database")}},
 			{HCL: "queue_producer_bindings", Wire: "queueProducerBindings", Kind: model.KindBindingList,
 				TargetKind: "AtLeastOnceQueue", BindingType: "module-worker.queue-producer",
 				Default: []any{},
 				Doc:     "Typed module-worker.queue-producer bindings projecting only send and sendBatch. Omitting it declares no such binding.",
-				Example: []any{map[string]any{"name": "EVENTS", "resource": map[string]any{"kind": "AtLeastOnceQueue", "name": "at-least-once-queue"}}}},
+				Example: []any{bindingInstance("EVENTS", "AtLeastOnceQueue", "at-least-once-queue")}},
 			{HCL: "service_bindings", Wire: "serviceBindings", Kind: model.KindBindingList,
 				TargetKind: "ModuleWorker", BindingType: "module-worker.service",
 				Default: []any{},
 				Doc:     "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker. Omitting it declares no such binding.",
-				Example: []any{map[string]any{"name": "AUTH", "resource": map[string]any{"kind": "ModuleWorker", "name": "auth-worker"}}}},
+				Example: []any{bindingInstance("AUTH", "ModuleWorker", "auth-worker")}},
 			{HCL: "required_sensitive_vars", Wire: "requiredSensitiveVars", Kind: model.KindStringSet,
 				ItemPattern: model.PatternSensitiveVarName,
 				Default:     []any{},
@@ -133,7 +155,8 @@ var Forms = []model.Form{
 		},
 	},
 	{
-		Kind: "WorkerDeployment", Slug: "worker-deployment", ResourceType: "takoform_worker_deployment",
+		Family: Family,
+		Kind:   "WorkerDeployment", Slug: "worker-deployment", ResourceType: "takoform_worker_deployment",
 		Role: model.RoleDeployment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Deployment",
 		Description: "Selects which Worker Versions of one Module Worker serve traffic and in what " +
@@ -152,17 +175,18 @@ var Forms = []model.Form{
 						Doc: "Traffic share in basis points (1..10000)."},
 				},
 				Example: []any{map[string]any{
-					"workerVersion": map[string]any{"kind": "WorkerVersion", "name": "worker-version"},
+					"workerVersion": ref("WorkerVersion", "worker-version"),
 					"weight":        10000,
 				}},
 				CounterExample: []any{map[string]any{
-					"workerVersion": map[string]any{"kind": "WorkerVersion", "name": "worker-version"},
+					"workerVersion": ref("WorkerVersion", "worker-version"),
 					"weight":        0,
 				}}},
 		},
 	},
 	{
-		Kind: "WorkerCustomDomain", Slug: "worker-custom-domain", ResourceType: "takoform_worker_custom_domain",
+		Family: Family,
+		Kind:   "WorkerCustomDomain", Slug: "worker-custom-domain", ResourceType: "takoform_worker_custom_domain",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Custom Domain",
 		Description: "Attaches one DNS hostname to a Module Worker so its active deployment serves that " +
@@ -178,7 +202,8 @@ var Forms = []model.Form{
 		},
 	},
 	{
-		Kind: "WorkerCronTrigger", Slug: "worker-cron-trigger", ResourceType: "takoform_worker_cron_trigger",
+		Family: Family,
+		Kind:   "WorkerCronTrigger", Slug: "worker-cron-trigger", ResourceType: "takoform_worker_cron_trigger",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Cron Trigger",
 		Description: "Attaches one cron schedule to a Module Worker, invoking its scheduled handler at " +
@@ -200,7 +225,8 @@ var Forms = []model.Form{
 		},
 	},
 	{
-		Kind: "EdgeKVNamespace", Slug: "edge-kv-namespace", ResourceType: "takoform_edge_kv_namespace",
+		Family: Family,
+		Kind:   "EdgeKVNamespace", Slug: "edge-kv-namespace", ResourceType: "takoform_edge_kv_namespace",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Edge KV Namespace",
 		Description: "Globally replicated key/value namespace with eventual consistency, exactly as fixed " +
@@ -209,6 +235,7 @@ var Forms = []model.Form{
 		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "edge.kv", Version: "1.0.0"}},
 	},
 	{
+		Family: Family,
 		// The resource type is takoform_edge_object_bucket, not
 		// takoform_object_bucket: the retained v2 lane still owns that name
 		// while both lanes are co-registered in one provider binary. This is a
@@ -224,7 +251,8 @@ var Forms = []model.Form{
 		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "edge.objects", Version: "1.0.0"}},
 	},
 	{
-		Kind: "SQLiteDatabase", Slug: "sqlite-database", ResourceType: "takoform_sqlite_database",
+		Family: Family,
+		Kind:   "SQLiteDatabase", Slug: "sqlite-database", ResourceType: "takoform_sqlite_database",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "SQLite Database",
 		Description: "Embedded SQLite database with serializable transactions, exactly as fixed by the " +
@@ -233,7 +261,8 @@ var Forms = []model.Form{
 		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "edge.sql", Version: "1.0.0"}},
 	},
 	{
-		Kind: "AtLeastOnceQueue", Slug: "at-least-once-queue", ResourceType: "takoform_at_least_once_queue",
+		Family: Family,
+		Kind:   "AtLeastOnceQueue", Slug: "at-least-once-queue", ResourceType: "takoform_at_least_once_queue",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "At-Least-Once Queue",
 		Description: "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed " +
@@ -256,7 +285,8 @@ var Forms = []model.Form{
 		},
 	},
 	{
-		Kind: "QueueConsumer", Slug: "queue-consumer", ResourceType: "takoform_queue_consumer",
+		Family: Family,
+		Kind:   "QueueConsumer", Slug: "queue-consumer", ResourceType: "takoform_queue_consumer",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Queue Consumer",
 		Description: "Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking " +
@@ -266,7 +296,7 @@ var Forms = []model.Form{
 			{HCL: "queue", Wire: "queue", Kind: model.KindResourceRef, TargetKind: "AtLeastOnceQueue",
 				Required: true, Immutable: true,
 				Doc:     "Queue this consumer drains. Changing it replaces the attachment.",
-				Example: map[string]any{"kind": "AtLeastOnceQueue", "name": "at-least-once-queue"}},
+				Example: ref("AtLeastOnceQueue", "at-least-once-queue")},
 			moduleWorkerRef("worker", "worker", "Module Worker whose queue handler receives the batches. Changing it replaces the attachment.", true, true),
 			// Batching, retry, and concurrency decide throughput, duplicate
 			// exposure, and downstream load together. No single value is portable
@@ -297,7 +327,7 @@ var Forms = []model.Form{
 			{HCL: "dead_letter_queue", Wire: "deadLetterQueue", Kind: model.KindResourceRef, TargetKind: "AtLeastOnceQueue",
 				AbsenceIsSemantic: true,
 				Doc:               "Queue receiving messages that exhausted their retries. Without it, exhausted messages are dropped.",
-				Example:           map[string]any{"kind": "AtLeastOnceQueue", "name": "dead-letters"}},
+				Example:           ref("AtLeastOnceQueue", "dead-letters")},
 			{HCL: "max_concurrency", Wire: "maxConcurrency", Kind: model.KindInteger,
 				Required: true,
 				Min:      model.I64(1), Max: model.I64(250),
@@ -340,7 +370,137 @@ func Validate() error {
 			return fmt.Errorf("binding target kind %q is not a catalog Form", field)
 		}
 	}
+	if err := validateBindingContracts(); err != nil {
+		return err
+	}
+	if err := validateDerivedRelations(); err != nil {
+		return err
+	}
 	return validateAbsenceSemanticExemptions()
+}
+
+// validateBindingContracts proves, at authoring time, exactly the rules a
+// conforming host verifies at apply time (spec/binding-contract/README.md): the
+// declaring Form's role is the Binding's sourceRole, the field's target Form is
+// listed in allowedTargetForms, and that target Form provides the Binding's
+// targetInterface. A catalog that violates any of them would ship a Form whose
+// every binding a correct host must refuse.
+func validateBindingContracts() error {
+	definitions, err := BindingDefinitions()
+	if err != nil {
+		return err
+	}
+	byName := map[string]BindingDefinition{}
+	for _, definition := range definitions {
+		byName[definition.Name] = definition
+	}
+	for _, form := range Forms {
+		accepted := map[string]struct{}{}
+		for _, source := range form.AcceptedBindings {
+			definition, known := byName[source.Name]
+			if !known {
+				return fmt.Errorf("form %s accepts unknown binding %q", form.Kind, source.Name)
+			}
+			if definition.Version != source.Version {
+				return fmt.Errorf("form %s accepts binding %s@%s; the catalog carries %s", form.Kind, source.Name, source.Version, definition.Version)
+			}
+			accepted[source.Name] = struct{}{}
+		}
+		for _, field := range form.Fields {
+			if field.Kind != model.KindBindingList {
+				continue
+			}
+			definition, known := byName[field.BindingType]
+			if !known {
+				return fmt.Errorf("form %s field %s names unknown binding %q", form.Kind, field.Wire, field.BindingType)
+			}
+			if _, declared := accepted[field.BindingType]; !declared {
+				return fmt.Errorf("form %s field %s carries binding %s without accepting it", form.Kind, field.Wire, field.BindingType)
+			}
+			if string(form.Role) != definition.SourceRole {
+				return fmt.Errorf(
+					"form %s role %s holds binding %s whose sourceRole is %s",
+					form.Kind, form.Role, definition.Name, definition.SourceRole,
+				)
+			}
+			allowed := false
+			for _, target := range definition.AllowedTargetForms {
+				if target.APIVersion == Family.APIVersion() && target.Kind == field.TargetKind {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return fmt.Errorf(
+					"form %s field %s targets %s, which binding %s does not list in allowedTargetForms",
+					form.Kind, field.Wire, field.TargetKind, definition.Name,
+				)
+			}
+			target, known := ByKind(field.TargetKind)
+			if !known {
+				return fmt.Errorf("form %s field %s targets unknown kind %q", form.Kind, field.Wire, field.TargetKind)
+			}
+			provides := false
+			for _, provided := range target.ProvidedInterfaces {
+				if provided.Name == definition.TargetInterface.Name && provided.Version == definition.TargetInterface.Version {
+					provides = true
+					break
+				}
+			}
+			if !provides {
+				return fmt.Errorf(
+					"form %s field %s binds %s, but target Form %s does not provide interface %s@%s",
+					form.Kind, field.Wire, definition.Name, target.Kind,
+					definition.TargetInterface.Name, definition.TargetInterface.Version,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+// validateDerivedRelations proves the derivation reads back what the catalog
+// declared: every reference field appears in the relations derived from the
+// emitted desired schema, with the target group and kind the field pinned.
+// Relations are derived, never declared, so this is the only place the two
+// views are compared.
+func validateDerivedRelations() error {
+	for _, form := range Forms {
+		relations, err := model.DeriveRelations(form.DesiredSchema())
+		if err != nil {
+			return fmt.Errorf("form %s: %w", form.Kind, err)
+		}
+		for _, relation := range relations {
+			if relation.TargetAPIVersion != Family.APIVersion() {
+				return fmt.Errorf(
+					"form %s relation %s targets group %q outside the family",
+					form.Kind, relation.Pointer, relation.TargetAPIVersion,
+				)
+			}
+			if _, known := ByKind(relation.TargetKind); !known {
+				return fmt.Errorf(
+					"form %s relation %s targets kind %q, which is not a catalog Form",
+					form.Kind, relation.Pointer, relation.TargetKind,
+				)
+			}
+		}
+		if got, want := len(relations), declaredReferenceCount(form.Fields); got != want {
+			return fmt.Errorf("form %s derives %d relations from %d declared reference fields", form.Kind, got, want)
+		}
+	}
+	return nil
+}
+
+func declaredReferenceCount(fields []model.Field) int {
+	count := 0
+	for _, field := range fields {
+		switch field.Kind {
+		case model.KindResourceRef, model.KindResourceRefList, model.KindBindingList:
+			count++
+		}
+		count += declaredReferenceCount(field.Fields)
+	}
+	return count
 }
 
 // absenceSemanticExemptions is the complete, reviewed list of family fields

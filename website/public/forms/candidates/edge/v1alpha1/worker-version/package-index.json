@@ -5,123 +5,123 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "WorkerVersion",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:b1c8f03c21d4a835484f5db55bff07c379880da9e01c461b13294f224613fac3"
+    "schemaDigest": "sha256:2408d78fa812a2d565d9964c68ffd59f034cc57cf23d6fb9db3a468477ee553c"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 20101,
-      "digest": "sha256:5758ef366083e1ee4d56562ef74f819252096763921a3f00a7fd4ef88c75e058"
+      "size": 21328,
+      "digest": "sha256:33044a6938f9c26ebc230d758c67b34889444f633f6380f428b64a25f10abaa4"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 1168,
-      "digest": "sha256:50e33730ff833574c98a73e48ea9aaddf03bbaa651de88729118e0c0f138f71a"
+      "size": 1566,
+      "digest": "sha256:2c72ac94870c1a26b48b36e964bd669fa23ebbfc603c354ea4a3a88967c35ecb"
     },
     {
       "path": "fixtures/negative-bucket-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1172,
-      "digest": "sha256:4b40b9d33469af354b752397e3bc525aced92dd67db772ee9526e4ad235d17ef"
+      "size": 1570,
+      "digest": "sha256:e4cdb55c44702bb0c78063dab9ef0946a66157afb1da865f31ca6cf985f088db"
     },
     {
       "path": "fixtures/negative-bundle.json",
       "mediaType": "application/json",
-      "size": 1174,
-      "digest": "sha256:df4fa7da0994e6702cf7ab374af2fb03bdcbf49ad78625f863cc72d9975e8878"
+      "size": 1572,
+      "digest": "sha256:e58414c8c306ae52f269600e3ea97e67ddd4f6443983916100ca7abf20299a18"
     },
     {
       "path": "fixtures/negative-compatibility-date.json",
       "mediaType": "application/json",
-      "size": 1168,
-      "digest": "sha256:5f76e314d07e4d435590cfb270e25d2a428cfe0b7063aeb6226976de3cfbd737"
+      "size": 1566,
+      "digest": "sha256:893cc7439a25ce25259685378199ae66cb0e0e284e0c8e20140e4b8cde6b5bff"
     },
     {
       "path": "fixtures/negative-compatibility-flags.json",
       "mediaType": "application/json",
-      "size": 1176,
-      "digest": "sha256:cd919b366992ba5a7a574a181fb875707fa96eb0353220abbd07f81f617db661"
+      "size": 1574,
+      "digest": "sha256:a22e3fe7133ae9c0a6f74160d2c61cad5e14b0da430f68156aa0424003b92614"
     },
     {
       "path": "fixtures/negative-handlers.json",
       "mediaType": "application/json",
-      "size": 1184,
-      "digest": "sha256:601f039b8dd88f1281eaf114a929b4553abd8cd99a7f75641853a9a5a18db3a9"
+      "size": 1582,
+      "digest": "sha256:a4cd4c8946435fe1554c260124a638654397179cbff503d059ce818cf41840ed"
     },
     {
       "path": "fixtures/negative-kv-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1168,
-      "digest": "sha256:cbdf6f2c6378f1343110350c6295fcdab3b60f2a692481e03095a0c90ce1b7df"
+      "size": 1566,
+      "digest": "sha256:0230a517159217619784674f299c24456d2ac59f1b929974502635c59901848c"
     },
     {
       "path": "fixtures/negative-missing-bundle.json",
       "mediaType": "application/json",
-      "size": 1093,
-      "digest": "sha256:7b7f375cd1abd7105b7de69d43b37cf168864fbe615ec2c676f7a60fcaf74f28"
+      "size": 1437,
+      "digest": "sha256:2d120badaec5a71d301a8c725b08fb7eb4cdb029b8f9718b4fd36860b0cf9505"
     },
     {
       "path": "fixtures/negative-missing-compatibility-date.json",
       "mediaType": "application/json",
-      "size": 1131,
-      "digest": "sha256:a291ea0cf72a6dd9197f4de37ea002e7340b962dbaef7794c761e11772983eb3"
+      "size": 1529,
+      "digest": "sha256:5573f3e01b1784f39733e06a51e99bfe1e1d45b53b7172815a0a77b1c9bf7a0a"
     },
     {
       "path": "fixtures/negative-missing-handlers.json",
       "mediaType": "application/json",
-      "size": 1135,
-      "digest": "sha256:37080c01f9692ecc602f9bc67cb1fe5b2595d3489cc8f81eb42b70a02a4f856d"
+      "size": 1533,
+      "digest": "sha256:b46e6a186d2c3312c482fc5dc063a8958ad6e52a546af81a8d14f002c5d50eb7"
     },
     {
       "path": "fixtures/negative-missing-worker.json",
       "mediaType": "application/json",
-      "size": 1093,
-      "digest": "sha256:89c4537ba2f55a4d1be9e8119ddbcaee3c4acf445f75ad9d8b73dd047c5130e9"
+      "size": 1437,
+      "digest": "sha256:fecb3bf4d2719ecec57890711143969720e3af1b6009c1e4d6c20b8d60b05e61"
     },
     {
       "path": "fixtures/negative-queue-producer-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1165,
-      "digest": "sha256:a91785f37b6804b3040ba6e22736ebda7a80c6fceaa19c0c5135b2d72e0945b4"
+      "size": 1563,
+      "digest": "sha256:e6add3b83bf08a50671c9e8cc08f23184bff0f0de03c50f18d5c491d7c93239e"
     },
     {
       "path": "fixtures/negative-required-sensitive-vars.json",
       "mediaType": "application/json",
-      "size": 1160,
-      "digest": "sha256:1d0c7e7a73914a6ca7188f6f47ae03c8fb2609dddaebd845a67104574c801c95"
+      "size": 1558,
+      "digest": "sha256:24ae84d8a61c81f0eada04ac4deb99c68a42e6bbd5b942082600e7297af9bef4"
     },
     {
       "path": "fixtures/negative-service-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1175,
-      "digest": "sha256:f7fbc7cd0b3bc652c6654d16eae951c2fefbd7b490581d89c8955e00500d1847"
+      "size": 1573,
+      "digest": "sha256:d8b258850586ed5a4f2a2fb083e2796b4ef2a4783c0a14bd4993f8f8f1e7fe26"
     },
     {
       "path": "fixtures/negative-sqlite-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1173,
-      "digest": "sha256:01aecde2cb3c039745b2dd4fea2bf680bb9dd87ed618a7a05fa69c7d9a4c3770"
+      "size": 1571,
+      "digest": "sha256:19950d1621cab411dd2951bff5515cf82b5f78618331e039fa051a60c49f25ad"
     },
     {
       "path": "fixtures/negative-unexpected-property.json",
       "mediaType": "application/json",
-      "size": 1198,
-      "digest": "sha256:a7a96565dbbbae9528b37742a9ab64545017fb69282b6f1d2084ef42706703b1"
+      "size": 1596,
+      "digest": "sha256:990a6213844d099b9ae95111b18a0b1d2cf0dc9211646230a369c0a24c2ae606"
     },
     {
       "path": "fixtures/negative-vars.json",
       "mediaType": "application/json",
-      "size": 1173,
-      "digest": "sha256:f6703042b57fb5b95070aae643eeba511da2cc5304775308962b215b57c687a6"
+      "size": 1571,
+      "digest": "sha256:5333c8f83ff3871161c8aef29747618f6ce235f27be910494c31679a216d1eb8"
     },
     {
       "path": "fixtures/negative-worker.json",
       "mediaType": "application/json",
-      "size": 1174,
-      "digest": "sha256:ac64f9de3ca84efad531bff7a7c0551a1174c43e231b69069e9038cfab702ab6"
+      "size": 1572,
+      "digest": "sha256:e9c7e2a09bf9ab655476f61b34dd48514313028c31fff019632124b0e7f2e751"
     }
   ]
 }

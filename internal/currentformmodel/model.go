@@ -142,6 +142,11 @@ type BindingRefSource struct {
 
 // Form is one member of a Form Family.
 type Form struct {
+	// Family is the API group this Form belongs to. It is the apiVersion every
+	// cross-resource reference this Form declares points into: a reference is
+	// {apiVersion, kind, name}, and both the group and the kind are constants
+	// of the referring field.
+	Family       Family
 	Kind         string // PascalCase portable kind
 	Slug         string // kebab-case package directory
 	ResourceType string // takoform_* Terraform resource type
@@ -256,7 +261,32 @@ func (f Form) Validate() error {
 	if len(f.AcceptedBindings) > 0 && f.Role != RoleRevision {
 		return fmt.Errorf("form %s role %s accepts bindings; only revision Forms hold them", f.Kind, f.Role)
 	}
+	// A reference names its target group as a constant, so a Form that declares
+	// one must know which group it belongs to. Without it the emitted schema
+	// would pin an empty apiVersion and every reference would be unresolvable.
+	if f.declaresReference() && (f.Family.Group == "" || f.Family.Version == "") {
+		return fmt.Errorf("form %s declares a cross-resource reference without a Family group", f.Kind)
+	}
 	return nil
+}
+
+// declaresReference reports whether any declared field, at any depth, is a
+// cross-resource reference.
+func (f Form) declaresReference() bool {
+	return fieldsDeclareReference(f.Fields)
+}
+
+func fieldsDeclareReference(fields []Field) bool {
+	for _, field := range fields {
+		switch field.Kind {
+		case KindResourceRef, KindResourceRefList, KindBindingList:
+			return true
+		}
+		if fieldsDeclareReference(field.Fields) {
+			return true
+		}
+	}
+	return false
 }
 
 // absenceSemanticPhrases are the ways a Doc may state what an absent value
@@ -311,9 +341,19 @@ func validateField(kind string, field Field) error {
 		if len(field.Enum) == 0 && field.ItemPattern == "" {
 			return fmt.Errorf("form %s string-set field %s is unbounded; declare Enum or ItemPattern", kind, field.Wire)
 		}
-	case KindResourceRef, KindResourceRefList, KindBindingList:
+	case KindResourceRef, KindResourceRefList:
 		if field.TargetKind == "" {
 			return fmt.Errorf("form %s field %s declares no target kind", kind, field.Wire)
+		}
+	case KindBindingList:
+		if field.TargetKind == "" {
+			return fmt.Errorf("form %s field %s declares no target kind", kind, field.Wire)
+		}
+		// The Binding contract travels into the desired schema as an
+		// annotation, so a list without one would emit a reference no host
+		// could hold to any Binding Definition.
+		if field.BindingType == "" {
+			return fmt.Errorf("form %s binding list %s declares no binding contract", kind, field.Wire)
 		}
 	case KindObject, KindObjectList:
 		if len(field.Fields) == 0 {

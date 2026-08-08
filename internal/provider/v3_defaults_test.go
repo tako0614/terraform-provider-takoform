@@ -120,7 +120,7 @@ func TestV3DefaultedAttributesSurviveApplyWithoutDiff(t *testing.T) {
 			}
 
 			// plan → wire
-			wire, diags := v3FieldToWire(ctx, field, name, planned)
+			wire, diags := v3FieldToWire(ctx, form.Family.APIVersion(), field, name, planned)
 			if diags.HasError() {
 				t.Errorf("%s.%s: projecting the default onto the wire: %v", form.Kind, name, diags)
 				continue
@@ -313,7 +313,7 @@ func TestV3EmptyCollectionDefaultsAreEmitted(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s has no framework default", name)
 		}
-		wire, diags := v3FieldToWire(ctx, field, name, planned)
+		wire, diags := v3FieldToWire(ctx, form.Family.APIVersion(), field, name, planned)
 		if diags.HasError() || wire == nil {
 			t.Fatalf("%s: empty collection default was dropped (%v)", name, diags)
 		}

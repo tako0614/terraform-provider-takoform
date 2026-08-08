@@ -767,6 +767,61 @@ func (r *v3Runner) read(target probeTarget) (wireResource, wireResponse, error) 
 	return resource, response, nil
 }
 
+// readRaw reads one resource without requiring a Ready=True condition. A
+// source whose relation target moved is legitimately NOT ready, so the
+// relation checks need a read that reports the condition instead of rejecting
+// it.
+func (r *v3Runner) readRaw(target probeTarget) (wireResource, error) {
+	response, err := r.request(
+		http.MethodGet,
+		r.resourceURL(target.Ref, target.Name, "", r.exactQuery(target.Space, target.Ref)),
+		nil, nil,
+	)
+	if err != nil {
+		return wireResource{}, err
+	}
+	resource, err := decodeResource(response, http.StatusOK)
+	if err != nil {
+		return wireResource{}, err
+	}
+	if err := verifyClosedConditionReasons(resource); err != nil {
+		return wireResource{}, err
+	}
+	return resource, nil
+}
+
+// readyCondition returns the Ready condition, or the zero value when absent.
+func readyCondition(got wireResource) wireCondition {
+	if got.Status == nil {
+		return wireCondition{}
+	}
+	for _, condition := range got.Status.Conditions {
+		if condition.Type == "Ready" {
+			return condition
+		}
+	}
+	return wireCondition{}
+}
+
+// requireNotReady holds one resource to a Ready=False condition carrying an
+// exact portable reason and a non-empty hostReason.
+func requireNotReady(got wireResource, reason string) error {
+	condition := readyCondition(got)
+	if condition.Type != "Ready" {
+		return errors.New("response carries no Ready condition")
+	}
+	if condition.Status != "False" || condition.Reason != reason {
+		return fmt.Errorf(
+			"Ready = %s/%s, want False/%s",
+			condition.Status, condition.Reason, reason,
+		)
+	}
+	if condition.HostReason == "" {
+		return fmt.Errorf("Ready=False/%s carries no hostReason naming what changed", reason)
+	}
+	return nil
+}
+
 func (r *v3Runner) expectResourceAbsent(target probeTarget) error {
 	response, err := r.request(
 		http.MethodGet,

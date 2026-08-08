@@ -44,10 +44,6 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 - `form_api_version`, `form_kind`, `form_definition_version`, `form_schema_digest` — the exact immutable FormRef this state is bound to; reads dispatch on it.
 - `form_package_digest` — audit-only package provenance; never part of resource identity, queries, or fences.
 
-## Provided interfaces
-
-- `worker.service@1.0.0` — the exact Interface contract this Form's service exposes.
-
 ## Accepted bindings
 
 - `module-worker.edge-kv@1.0.0`

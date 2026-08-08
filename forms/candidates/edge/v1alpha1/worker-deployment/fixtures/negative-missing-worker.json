@@ -3,6 +3,7 @@
     {
       "weight": 10000,
       "workerVersion": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerVersion",
         "name": "worker-version"
       }

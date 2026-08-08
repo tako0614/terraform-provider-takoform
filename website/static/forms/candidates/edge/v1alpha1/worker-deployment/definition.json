@@ -25,6 +25,10 @@
               "additionalProperties": false,
               "description": "Worker Version receiving this weight.",
               "properties": {
+                "apiVersion": {
+                  "const": "edge.forms.takoform.com/v1alpha1",
+                  "type": "string"
+                },
                 "kind": {
                   "const": "WorkerVersion",
                   "type": "string"
@@ -37,6 +41,7 @@
                 }
               },
               "required": [
+                "apiVersion",
                 "kind",
                 "name"
               ],
@@ -58,6 +63,10 @@
         "additionalProperties": false,
         "description": "Module Worker identity whose traffic this deployment governs.",
         "properties": {
+          "apiVersion": {
+            "const": "edge.forms.takoform.com/v1alpha1",
+            "type": "string"
+          },
           "kind": {
             "const": "ModuleWorker",
             "type": "string"
@@ -70,6 +79,7 @@
           }
         },
         "required": [
+          "apiVersion",
           "kind",
           "name"
         ],

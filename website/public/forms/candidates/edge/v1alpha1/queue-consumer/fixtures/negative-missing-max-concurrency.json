@@ -1,5 +1,6 @@
 {
   "deadLetterQueue": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "AtLeastOnceQueue",
     "name": "dead-letters"
   },
@@ -7,11 +8,13 @@
   "maxBatchTimeoutSeconds": 5,
   "maxRetries": 3,
   "queue": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "AtLeastOnceQueue",
     "name": "at-least-once-queue"
   },
   "retryDelaySeconds": 60,
   "worker": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "ModuleWorker",
     "name": "module-worker"
   }

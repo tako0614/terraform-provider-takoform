@@ -380,6 +380,10 @@ func (r *v3GenericResource) Read(ctx context.Context, req resource.ReadRequest, 
 		resp.State.RemoveResource(ctx)
 		return
 	}
+	v3ReportRelationCondition(ref.Kind, space, values.Name.ValueString(), res, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	// spec_json keeps the author's formatting while it is semantically equal
 	// to the host's current spec; a real out-of-band change adopts the host's
 	// canonical serialization so the next plan shows the drift.
