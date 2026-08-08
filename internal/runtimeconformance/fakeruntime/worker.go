@@ -197,11 +197,13 @@ func (r *Runtime) serveWaitUntil(writer http.ResponseWriter, request *http.Reque
 			return
 		}
 		var marker struct {
-			AfterRejection bool `json:"afterRejection"`
+			AfterRejection bool   `json:"afterRejection"`
+			Nonce          string `json:"nonce"`
 		}
 		_ = json.Unmarshal(stored, &marker)
 		writeJSON(writer, http.StatusOK, map[string]any{
-			"probe": ProbeProtocol, "settled": true, "afterRejection": marker.AfterRejection,
+			"probe": ProbeProtocol, "settled": true,
+			"afterRejection": marker.AfterRejection, "nonce": marker.Nonce,
 		})
 		return
 	}
@@ -219,10 +221,14 @@ func (r *Runtime) serveWaitUntil(writer http.ResponseWriter, request *http.Reque
 		r.rejectedTasks++
 		r.mutex.Unlock()
 	})
-	// Task two settles after the response is already on the wire.
+	// Task two settles after the response is already on the wire. The marker
+	// carries the correlation value the RUNNER sent, so the observation names
+	// the run that caused it.
 	r.holdIsolate(func() {
 		time.Sleep(time.Duration(body.DelayMillis) * time.Millisecond)
-		marker, _ := json.Marshal(map[string]any{"afterRejection": true})
+		marker, _ := json.Marshal(map[string]any{
+			"afterRejection": true, "nonce": body.Nonce,
+		})
 		r.kvPut("wait-until:"+body.Nonce, marker)
 	})
 	writeJSON(writer, http.StatusOK, map[string]any{
@@ -323,7 +329,7 @@ func (r *Runtime) moduleQueue(queue, identity string, attempts int, body []byte)
 	}
 	marker, _ := json.Marshal(map[string]any{
 		"queue": queue, "attempts": attempts, "messageId": identity,
-		"payloadBase64": decoded.PayloadBase64,
+		"payloadBase64": decoded.PayloadBase64, "nonce": decoded.Nonce,
 	})
 	r.kvPut("queue:"+decoded.Nonce, marker)
 }

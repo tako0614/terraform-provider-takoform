@@ -13,6 +13,14 @@
  * two bindings the corpus deployment declares: CACHE (edge.kv) and EVENTS
  * (edge.queue). Base64 is implemented here rather than taken from a global,
  * because base64 is not on the floor.
+ *
+ * Correlation is the runner's, never the module's. Every route that stores an
+ * observation stores it under the correlation value the RUNNER sent, and every
+ * route that reports one reports that value back, so the runner can tell an
+ * observation its own run caused from one a previous run against the same
+ * `edge.kv` namespace left behind. The module never mints a value of its own:
+ * a probe that generated its own correlation value would correlate the probe
+ * with itself and prove nothing about which run stored what.
  */
 
 const PROBE = "takoform.runtime-abi-probe@v1";
@@ -219,7 +227,12 @@ async function handleWaitUntil(request, env, ctx, url) {
     if (observed === null) {
       return json({ probe: PROBE, settled: false });
     }
-    return json({ probe: PROBE, settled: true, afterRejection: observed.afterRejection });
+    return json({
+      probe: PROBE,
+      settled: true,
+      afterRejection: observed.afterRejection,
+      nonce: observed.nonce,
+    });
   }
   const body = await request.json();
   const key = "wait-until:" + body.nonce;
@@ -229,7 +242,7 @@ async function handleWaitUntil(request, env, ctx, url) {
   ctx.waitUntil(
     (async () => {
       await sleep(Number(body.delayMillis));
-      await kvPut(env, key, { afterRejection: true });
+      await kvPut(env, key, { afterRejection: true, nonce: body.nonce });
     })(),
   );
   return json({ probe: PROBE, registeredTasks: 2, responseSent: true });
@@ -273,6 +286,7 @@ async function handleQueue(request, env, url) {
     attempts: observed.attempts,
     messageId: observed.messageId,
     payloadBase64: observed.payloadBase64,
+    nonce: observed.nonce,
   });
 }
 
@@ -364,6 +378,7 @@ const handlers = {
         attempts: message.attempts,
         messageId: message.id,
         payloadBase64: decoded.payloadBase64,
+        nonce: decoded.nonce,
       });
     }
   },

@@ -78,6 +78,34 @@ deployment — the same discipline the host lane applies to its probe headers.
 A run without one reports the load lane `unmeasured` and itself `partial`,
 rather than counting an unmeasurable half as evidence.
 
+### An observation is evidence only for the run that caused it
+
+Three checks read back something the runtime stored for them: the `edge.kv`
+round trip, the queue delivery, and the `ctx.waitUntil` marker. The subject
+outlives the run — the `edge.kv` namespace an operator deploys is still there
+the next morning — so a correlation value pinned as a constant makes the second
+measurement of one deployment read the first one's observations. That is the
+disqualifying pair above, both halves of it at once: a runtime whose `put`
+resolves without persisting anything and whose queue never delivers passes on
+the leftovers, and a conforming runtime fails because the `waitUntil` marker was
+written before the task it just registered had run.
+
+A per-run value cannot be a pinned constant and a pinned constant cannot
+correlate a run, so what the corpus pins is the TEMPLATE. `runCorrelation`
+states the placeholder and the token width; each correlated check states a
+template carrying the placeholder exactly once; the runner mints one
+unpredictable token per run, substitutes it for the placeholder in the value it
+sends, and derives the observation it expects by that same substitution. The
+corpus stays byte-identical — the token is never in it — and the loader refuses
+a correlated check whose template is a constant exactly as it refuses a bundle
+claiming an export its bytes do not have. The report states the token the run
+used, so a failed run is diagnosable from the report and the corpus and nothing
+else.
+
+The probe mints nothing. It stores each observation under the value the RUNNER
+sent and reports that value back, for the same reason it holds no expectations:
+a probe that correlated itself would say nothing about which run stored what.
+
 ### A self-test proves the corpus and never a runtime
 
 `SelfTest` runs the whole matrix against an in-process stand-in shipped with
@@ -138,7 +166,20 @@ merely unproven.
 - Three checks are timing-sensitive by nature: streaming is a claim about when
   bytes arrive, and `waitUntil` is a claim about work outliving a response.
   Their bounds are contract data, and each states the bound as a maximum a
-  conforming runtime stays inside.
+  conforming runtime stays inside — including the wait for the streamed
+  request's response headers, which is the wait a host that buffers the body
+  until EOF never ends. A run waits the bound the corpus declares, not whatever
+  timeout the caller's HTTP client happens to carry.
+- The request-body check proves an ordering, not a framing. A `ReadableStream`
+  read is not a transport frame, so the runner accumulates the worker's answers
+  until they account for the bytes it has actually sent, and a conforming stack
+  that splits one write across several reads passes. A host that buffers the
+  body still fails, because it answers for nothing while the second chunk is
+  unsent.
+- Repeat measurement of one deployment is measurement rather than archaeology.
+  A run against a deployment measured ten times behaves exactly like a run
+  against a fresh one, which is the property the run token buys and the reason
+  the correlated checks state templates rather than values.
 - The corpus pins the ABI's `schemaDigest` as data, and a test recomputes it
   from the committed candidate definition. A change to the ABI's bytes fails
   that test by name and asks for a re-pin, instead of leaving a corpus quietly

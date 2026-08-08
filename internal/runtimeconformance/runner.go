@@ -2,7 +2,9 @@ package runtimeconformance
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -69,6 +71,7 @@ type Report struct {
 	Subject          string          `json:"subject"`
 	WorkerEndpoint   string          `json:"workerEndpoint"`
 	LoaderEndpoint   string          `json:"loaderEndpoint"`
+	RunToken         string          `json:"runToken"`
 	Measured         int             `json:"measured"`
 	Unmeasured       int             `json:"unmeasured"`
 	Failed           int             `json:"failed"`
@@ -132,6 +135,36 @@ func RunEndpoint(ctx context.Context, contract Contract, options EndpointOptions
 	if err := validateContract(contract); err != nil {
 		return Report{}, fmt.Errorf("runtime ABI contract: %w", err)
 	}
+	runToken, err := mintRunToken(contract.RunCorrelation)
+	if err != nil {
+		return Report{}, err
+	}
+	return runEndpoint(ctx, contract, options, runToken)
+}
+
+// mintRunToken mints the token that makes one run's observations its own. It is
+// unpredictable rather than merely unique because the corpus is public: a
+// counter or a clock reading would let a runtime precompute the observations a
+// future run will look for, which is the shape of evidence this lane refuses.
+//
+// A fresh token per run does not make a run's OUTCOME vary. Every check resolves
+// its pinned template against whatever token it was given, so a conforming
+// runtime passes for every token and a non-conforming one fails for every
+// token; the self-test is reproducible in the only sense that matters.
+func mintRunToken(correlation RunCorrelation) (string, error) {
+	raw := make([]byte, correlation.TokenBytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("mint a runtime ABI run token: %w", err)
+	}
+	return hex.EncodeToString(raw), nil
+}
+
+// runEndpoint is RunEndpoint with the run's token supplied rather than minted,
+// so a test can state what happens when a corpus reuses one correlation value
+// across runs — the defect the run token exists to close.
+func runEndpoint(
+	ctx context.Context, contract Contract, options EndpointOptions, runToken string,
+) (Report, error) {
 	classification := options.Classification
 	if classification == "" {
 		classification = DeployedRuntimeRun
@@ -142,6 +175,9 @@ func RunEndpoint(ctx context.Context, contract Contract, options EndpointOptions
 	endpoint, err := normalizeEndpoint(options.Endpoint, classification)
 	if err != nil {
 		return Report{}, err
+	}
+	if strings.TrimSpace(runToken) == "" {
+		return Report{}, errors.New("a runtime ABI run must carry a correlation token")
 	}
 	loaderEndpoint := ""
 	if strings.TrimSpace(options.LoaderEndpoint) != "" {
@@ -161,6 +197,7 @@ func RunEndpoint(ctx context.Context, contract Contract, options EndpointOptions
 	target := &target{
 		client: client, worker: endpoint, loader: loaderEndpoint,
 		token: strings.TrimSpace(options.Token), loaderToken: strings.TrimSpace(options.LoaderToken),
+		runToken: runToken,
 	}
 	report := Report{
 		Format:           ReportFormat,
@@ -172,6 +209,7 @@ func RunEndpoint(ctx context.Context, contract Contract, options EndpointOptions
 		Subject:          subject,
 		WorkerEndpoint:   endpoint,
 		LoaderEndpoint:   loaderEndpoint,
+		RunToken:         runToken,
 		BlockerEvidence:  blockerEvidence,
 	}
 	if classification == DeployedRuntimeRun {

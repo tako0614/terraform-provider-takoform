@@ -27,6 +27,20 @@ type target struct {
 	loader      string
 	token       string
 	loaderToken string
+
+	// runToken is this run's correlation token. Every correlated check
+	// resolves its pinned template against it, so the values that reach the
+	// runtime belong to this run and the observations that come back can be
+	// told apart from the ones a previous run against the same deployment
+	// left in the `edge.kv` namespace.
+	runToken string
+}
+
+// correlate resolves one pinned template into the value this run uses. The
+// value the runner sends and the observation it expects come from this one
+// call, so they cannot drift apart.
+func (t *target) correlate(contract Contract, check Check) string {
+	return contract.RunCorrelation.Resolve(check.Payload.NonceTemplate, t.runToken)
 }
 
 // runCheck executes one check and records what was observed. A check never
@@ -57,13 +71,13 @@ func runCheck(ctx context.Context, contract Contract, target *target, check Chec
 	case ProcedureGlobals:
 		observed, err = runGlobals(ctx, contract, target, check)
 	case ProcedureKVRoundTrip:
-		observed, err = runKVRoundTrip(ctx, target, check)
+		observed, err = runKVRoundTrip(ctx, contract, target, check)
 	case ProcedureRequestStream:
 		observed, err = runRequestStream(ctx, target, check)
 	case ProcedureResponseStream:
 		observed, err = runResponseStream(ctx, target, check)
 	case ProcedureWaitUntil:
-		observed, err = runWaitUntil(ctx, target, check)
+		observed, err = runWaitUntil(ctx, contract, target, check)
 	case ProcedureScheduledObservation:
 		observed, err = runScheduledObservation(ctx, contract, target, check)
 	case ProcedureQueueRoundTrip:
@@ -234,12 +248,17 @@ func runGlobals(ctx context.Context, contract Contract, target *target, check Ch
 	return fmt.Sprintf("present=%d of %d", len(document.Present), len(contract.GlobalsFloor)), nil
 }
 
-// runKVRoundTrip writes bytes through the declared edge.kv binding and reads
-// them back through it. edge.kv is eventually consistent and promises no
-// read-your-writes, so the read polls to the deadline rather than asserting
-// the first answer.
-func runKVRoundTrip(ctx context.Context, target *target, check Check) (string, error) {
-	key := "runtime-abi:" + check.Payload.Nonce
+// runKVRoundTrip writes the corpus's pinned bytes through the declared edge.kv
+// binding and reads them back through it. edge.kv is eventually consistent and
+// promises no read-your-writes, so the read polls to the deadline rather than
+// asserting the first answer.
+//
+// The bytes are pinned and the KEY is correlated: a value only this run could
+// have written lives at a key only this run could name, so a runtime whose
+// `put` resolves without persisting anything reads nothing back, however many
+// times the deployment has been measured before.
+func runKVRoundTrip(ctx context.Context, contract Contract, target *target, check Check) (string, error) {
+	key := "runtime-abi:" + target.correlate(contract, check)
 	body, err := json.Marshal(map[string]string{"key": key, "valueBase64": check.Payload.Bytes})
 	if err != nil {
 		return "", err
@@ -276,10 +295,10 @@ func runKVRoundTrip(ctx context.Context, target *target, check Check) (string, e
 				return "valueBase64=" + observed.ValueBase64,
 					errors.New("the bytes read back differ from the bytes written")
 			}
-			return "roundTripBytes=" + strconv.Itoa(decodedLength(check.Payload.Bytes)), nil
+			return fmt.Sprintf("key=%s roundTripBytes=%d", key, decodedLength(check.Payload.Bytes)), nil
 		}
 		if time.Now().After(deadline) {
-			return "found=false",
+			return "key=" + key + " found=false",
 				fmt.Errorf("the value never became readable within %ds", check.Timing.DeadlineSeconds)
 		}
 		if err := sleepContext(ctx, time.Duration(check.Timing.PollMillis)*time.Millisecond); err != nil {
@@ -288,12 +307,28 @@ func runKVRoundTrip(ctx context.Context, target *target, check Check) (string, e
 	}
 }
 
+// requestResult is one outcome of the in-flight streamed request: either the
+// response headers the worker sent, or the transport failure that ended it.
+type requestResult struct {
+	response *http.Response
+	err      error
+}
+
 // runRequestStream proves the request body is not buffered. The runner sends
-// the first chunk, requires the worker's first answer BEFORE the second chunk
-// exists, and only then sends it. A host that waits for the whole body cannot
-// produce that ordering.
+// the first chunk, requires the worker to account for ALL of it BEFORE the
+// second chunk exists, and only then sends the second. A host that waits for
+// the whole body cannot produce that ordering.
+//
+// What the check does not require is that read boundaries mirror write
+// boundaries. A ReadableStream read is not a transport frame, so a conforming
+// stack may deliver one 4096-byte write as several reads; the runner therefore
+// accumulates the worker's incremental answers until they account for the bytes
+// it has actually sent. The property proven is unchanged — every byte counted
+// below was answered for while the second chunk existed nowhere but in this
+// function.
 func runRequestStream(ctx context.Context, target *target, check Check) (string, error) {
 	sizes := check.Timing.RequestChunkSize
+	deadline := time.Duration(check.Timing.DeadlineSeconds) * time.Second
 	pipeReader, pipeWriter := io.Pipe()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, target.worker+check.Request.Path, pipeReader)
 	if err != nil {
@@ -304,14 +339,10 @@ func runRequestStream(ctx context.Context, target *target, check Check) (string,
 	if target.token != "" {
 		request.Header.Set("authorization", "Bearer "+target.token)
 	}
-	type result struct {
-		response *http.Response
-		err      error
-	}
-	results := make(chan result, 1)
+	results := make(chan requestResult, 1)
 	go func() {
 		response, err := target.client.Do(request)
-		results <- result{response: response, err: err}
+		results <- requestResult{response: response, err: err}
 	}()
 	writeChunk := func(size int) error {
 		_, err := pipeWriter.Write(bytes.Repeat([]byte{'x'}, size))
@@ -321,7 +352,16 @@ func runRequestStream(ctx context.Context, target *target, check Check) (string,
 		_ = pipeWriter.CloseWithError(err)
 		return "", err
 	}
-	outcome := <-results
+	// The headers are part of what this check measures, and the wait for them
+	// is bounded by the check's own declared deadline rather than by whatever
+	// the caller's HTTP client happens to allow. A host that buffers the
+	// request body until EOF never sends them, and the run says so here
+	// instead of stalling the matrix.
+	outcome, err := awaitResponse(ctx, results, deadline)
+	if err != nil {
+		_ = pipeWriter.CloseWithError(err)
+		return "responseHeaders=none", err
+	}
 	if outcome.err != nil {
 		_ = pipeWriter.CloseWithError(outcome.err)
 		return "", outcome.err
@@ -333,23 +373,12 @@ func runRequestStream(ctx context.Context, target *target, check Check) (string,
 		return "status=" + strconv.Itoa(response.StatusCode), errors.New("the worker refused the streamed request")
 	}
 	lines := newLineReader(response.Body)
-	deadline := time.Duration(check.Timing.DeadlineSeconds) * time.Second
-	first, err := lines.next(ctx, deadline)
+	reads, err := awaitChunkAccounted(ctx, lines, deadline, 0, sizes[0])
 	if err != nil {
 		_ = pipeWriter.Close()
-		return "", fmt.Errorf("no answer arrived for the first request chunk: %w", err)
+		return fmt.Sprintf("reads=%d", reads), fmt.Errorf("the first request chunk was not answered: %w", err)
 	}
-	firstRead, err := decodeStreamRead(first)
-	if err != nil {
-		_ = pipeWriter.Close()
-		return string(first), err
-	}
-	if firstRead.Read != 1 || firstRead.Bytes != sizes[0] {
-		_ = pipeWriter.Close()
-		return string(first), fmt.Errorf("the worker reported read %d of %d bytes for the first chunk",
-			firstRead.Read, firstRead.Bytes)
-	}
-	// Only now does the second chunk exist. The answer above cannot have
+	// Only now does the second chunk exist. Every answer above cannot have
 	// depended on it.
 	if err := sleepContext(ctx, time.Duration(check.Timing.GapMillis)*time.Millisecond); err != nil {
 		_ = pipeWriter.Close()
@@ -359,21 +388,79 @@ func runRequestStream(ctx context.Context, target *target, check Check) (string,
 		_ = pipeWriter.CloseWithError(err)
 		return "", err
 	}
-	second, err := lines.next(ctx, deadline)
-	if err != nil {
-		_ = pipeWriter.Close()
-		return "", fmt.Errorf("no answer arrived for the second request chunk: %w", err)
-	}
+	total, err := awaitChunkAccounted(ctx, lines, deadline, reads, sizes[1])
 	_ = pipeWriter.Close()
-	secondRead, err := decodeStreamRead(second)
 	if err != nil {
-		return string(second), err
+		return fmt.Sprintf("reads=%d", total), fmt.Errorf("the second request chunk was not answered: %w", err)
 	}
-	if secondRead.Read != 2 || secondRead.Bytes != sizes[1] {
-		return string(second), fmt.Errorf("the worker reported read %d of %d bytes for the second chunk",
-			secondRead.Read, secondRead.Bytes)
+	return fmt.Sprintf("firstChunkAnsweredBeforeSecondSent=true reads=%d", total), nil
+}
+
+// awaitResponse waits for the streamed request's headers under the check's own
+// bound, and says what it was waiting for when the bound expires.
+func awaitResponse(
+	ctx context.Context, results <-chan requestResult, deadline time.Duration,
+) (requestResult, error) {
+	timer := time.NewTimer(deadline)
+	defer timer.Stop()
+	select {
+	case outcome := <-results:
+		return outcome, nil
+	case <-timer.C:
+		go discardResult(results)
+		return requestResult{}, fmt.Errorf(
+			"no response headers arrived within %s of the first request chunk; "+
+				"a host that buffers the request body until EOF never sends them, because this request's body has not ended",
+			deadline)
+	case <-ctx.Done():
+		go discardResult(results)
+		return requestResult{}, ctx.Err()
 	}
-	return fmt.Sprintf("firstChunkAnsweredBeforeSecondSent=true reads=%d", secondRead.Read), nil
+}
+
+// discardResult reclaims the in-flight request once the check has stopped
+// waiting for it, so an abandoned response body never outlives the run.
+func discardResult(results <-chan requestResult) {
+	outcome := <-results
+	closeBody(outcome.response)
+}
+
+// awaitChunkAccounted reads incremental observations until the worker has
+// accounted for `sent` further bytes, and reports the read count it reached.
+//
+// It accepts any split of those bytes across reads and rejects three things: an
+// observation that arrives out of order, one that reports no bytes, and one
+// that pushes the total past what the client has actually written — the last
+// being an answer that cannot have come from the bytes this check sent.
+func awaitChunkAccounted(
+	ctx context.Context, lines *lineReader, deadline time.Duration, reads, sent int,
+) (int, error) {
+	accounted := 0
+	for accounted < sent {
+		line, err := lines.next(ctx, deadline)
+		if err != nil {
+			return reads, fmt.Errorf(
+				"%w (the worker accounted for %d of %d bytes)", err, accounted, sent)
+		}
+		observed, err := decodeStreamRead(line)
+		if err != nil {
+			return reads, err
+		}
+		reads++
+		if observed.Read != reads {
+			return reads, fmt.Errorf(
+				"the worker reported read %d where read %d was due: %s", observed.Read, reads, line)
+		}
+		if observed.Bytes <= 0 {
+			return reads, fmt.Errorf("read %d reported %d bytes: %s", observed.Read, observed.Bytes, line)
+		}
+		accounted += observed.Bytes
+		if accounted > sent {
+			return reads, fmt.Errorf(
+				"the worker accounted for %d bytes where only %d had been sent", accounted, sent)
+		}
+	}
+	return reads, nil
 }
 
 // runResponseStream proves the response body is produced incrementally: two
@@ -422,9 +509,15 @@ func runResponseStream(ctx context.Context, target *target, check Check) (string
 // runWaitUntil proves both halves of the operation at once: a rejected task
 // leaves the already-sent response exactly as it was, and the isolate is still
 // alive long enough afterwards for the second task to settle.
-func runWaitUntil(ctx context.Context, target *target, check Check) (string, error) {
+//
+// The marker is correlated, so "not settled yet" is a statement about THIS
+// run's task. Under a pinned constant the check read a marker a previous run's
+// task had already written and failed a conforming runtime for running its
+// deferred work inline — the mirror image of the defect it exists to catch.
+func runWaitUntil(ctx context.Context, contract Contract, target *target, check Check) (string, error) {
+	nonce := target.correlate(contract, check)
 	body, err := json.Marshal(map[string]any{
-		"nonce": check.Payload.Nonce, "delayMillis": check.Timing.DelayMillis,
+		"nonce": nonce, "delayMillis": check.Timing.DelayMillis,
 	})
 	if err != nil {
 		return "", err
@@ -446,7 +539,7 @@ func runWaitUntil(ctx context.Context, target *target, check Check) (string, err
 			return compactJSON(raw), errors.New("the response the handler returned is not the expected one")
 		}
 	}
-	query := check.Request.Path + "?nonce=" + url.QueryEscape(check.Payload.Nonce)
+	query := check.Request.Path + "?nonce=" + url.QueryEscape(nonce)
 	_, immediateRaw, err := target.request(ctx, http.MethodGet, query, nil)
 	if err != nil {
 		return "", err
@@ -456,7 +549,7 @@ func runWaitUntil(ctx context.Context, target *target, check Check) (string, err
 		return compactJSON(immediateRaw), err
 	}
 	if immediate.Settled {
-		return "settledBeforeResponseWasRead=true", fmt.Errorf(
+		return "nonce=" + nonce + " settledBeforeResponseWasRead=true", fmt.Errorf(
 			"the deferred task had already settled when the response was read; "+
 				"either the host ran it inline or this run's round trip exceeded the declared %dms delay",
 			check.Timing.DelayMillis)
@@ -472,14 +565,19 @@ func runWaitUntil(ctx context.Context, target *target, check Check) (string, err
 			return compactJSON(pollRaw), err
 		}
 		if observed.Settled {
+			if observed.Nonce != nonce {
+				return "nonce=" + observed.Nonce, fmt.Errorf(
+					"the settled marker names run %q, not this run's %q; the observation is not this run's",
+					observed.Nonce, nonce)
+			}
 			if !observed.AfterRejection {
 				return "afterRejection=false",
 					errors.New("the surviving task did not run after the rejected one")
 			}
-			return "responseUnchanged=true isolateHeldUntilSettled=true", nil
+			return "nonce=" + nonce + " responseUnchanged=true isolateHeldUntilSettled=true", nil
 		}
 		if time.Now().After(deadline) {
-			return "settled=false", fmt.Errorf(
+			return "nonce=" + nonce + " settled=false", fmt.Errorf(
 				"the registered task never settled within %ds; the isolate was reclaimed with work outstanding",
 				check.Timing.DeadlineSeconds)
 		}
@@ -535,9 +633,17 @@ func runScheduledObservation(ctx context.Context, contract Contract, target *tar
 
 // runQueueRoundTrip submits one message through the producer binding and reads
 // back what the host delivered to the exported `queue` handler.
+//
+// The correlation value travels WITH the message: the producer writes it into
+// the body, the host delivers the body, and the `queue` handler records it
+// beside the batch. So the observation this check accepts is the delivery of
+// the message this run submitted, not a marker some earlier run's delivery left
+// under a constant name — which the payload, queue, attempts and message id all
+// matched just as well.
 func runQueueRoundTrip(ctx context.Context, contract Contract, target *target, check Check) (string, error) {
+	nonce := target.correlate(contract, check)
 	body, err := json.Marshal(map[string]string{
-		"nonce": check.Payload.Nonce, "payloadBase64": check.Payload.Bytes,
+		"nonce": nonce, "payloadBase64": check.Payload.Bytes,
 	})
 	if err != nil {
 		return "", err
@@ -555,7 +661,7 @@ func runQueueRoundTrip(ctx context.Context, contract Contract, target *target, c
 	if err := json.Unmarshal(raw, &accepted); err != nil || !accepted.Sent {
 		return compactJSON(raw), errors.New("the producer binding did not accept the message")
 	}
-	query := check.Request.Path + "?nonce=" + url.QueryEscape(check.Payload.Nonce)
+	query := check.Request.Path + "?nonce=" + url.QueryEscape(nonce)
 	deadline := time.Now().Add(time.Duration(check.Timing.DeadlineSeconds) * time.Second)
 	for {
 		_, pollRaw, err := target.request(ctx, http.MethodGet, query, nil)
@@ -568,11 +674,17 @@ func runQueueRoundTrip(ctx context.Context, contract Contract, target *target, c
 			Attempts      int    `json:"attempts"`
 			MessageID     string `json:"messageId"`
 			PayloadBase64 string `json:"payloadBase64"`
+			Nonce         string `json:"nonce"`
 		}
 		if err := json.Unmarshal(pollRaw, &observed); err != nil {
 			return compactJSON(pollRaw), err
 		}
 		if observed.Delivered {
+			if observed.Nonce != nonce {
+				return "nonce=" + observed.Nonce, fmt.Errorf(
+					"the delivered batch carries run %q, not this run's %q; the delivery is not this run's",
+					observed.Nonce, nonce)
+			}
 			if observed.PayloadBase64 != check.Payload.Bytes {
 				return "payloadBase64=" + observed.PayloadBase64,
 					errors.New("the batch carried different bytes from the ones produced")
@@ -588,11 +700,11 @@ func runQueueRoundTrip(ctx context.Context, contract Contract, target *target, c
 			if observed.MessageID == "" {
 				return "messageId=", errors.New("the batch carried no stable message identity")
 			}
-			return fmt.Sprintf("queue=%s attempts=%d bytes=%d",
-				observed.Queue, observed.Attempts, decodedLength(observed.PayloadBase64)), nil
+			return fmt.Sprintf("nonce=%s queue=%s attempts=%d bytes=%d",
+				nonce, observed.Queue, observed.Attempts, decodedLength(observed.PayloadBase64)), nil
 		}
 		if time.Now().After(deadline) {
-			return "delivered=false", fmt.Errorf(
+			return "nonce=" + nonce + " delivered=false", fmt.Errorf(
 				"the message was never delivered to the queue handler within %ds", check.Timing.DeadlineSeconds)
 		}
 		if err := sleepContext(ctx, time.Duration(check.Timing.PollMillis)*time.Millisecond); err != nil {
@@ -693,8 +805,9 @@ func decodeStreamRead(line []byte) (streamRead, error) {
 }
 
 type waitUntilObservation struct {
-	Settled        bool `json:"settled"`
-	AfterRejection bool `json:"afterRejection"`
+	Settled        bool   `json:"settled"`
+	AfterRejection bool   `json:"afterRejection"`
+	Nonce          string `json:"nonce"`
 }
 
 func decodeWaitUntil(raw []byte) (waitUntilObservation, error) {

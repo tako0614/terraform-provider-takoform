@@ -193,10 +193,33 @@ type TimingCase struct {
 	RequestChunkSize []int `json:"requestChunkSize,omitempty"`
 }
 
-// PayloadCase is the exact bytes a round-trip check writes.
+// PayloadCase is what a correlated check writes: the exact bytes it round
+// trips, and the TEMPLATE its correlation value is derived from. The template
+// carries the corpus's run-correlation placeholder; the value that reaches the
+// runtime is the template with this run's token substituted, so no observation
+// a previous run stored can answer this one.
 type PayloadCase struct {
-	Nonce string `json:"nonce"`
-	Bytes string `json:"bytesBase64"`
+	NonceTemplate string `json:"nonceTemplate"`
+	Bytes         string `json:"bytesBase64,omitempty"`
+}
+
+// RunCorrelation is how a byte-pinned corpus states a per-run value. A pinned
+// constant cannot correlate a run and a per-run value cannot be pinned, so the
+// corpus pins the TEMPLATE and the placeholder within it: the runner mints one
+// token per run, substitutes it everywhere the placeholder appears, and derives
+// the observation it expects by the same substitution. The corpus bytes never
+// move; the token is never stored in them.
+type RunCorrelation struct {
+	Placeholder string `json:"placeholder"`
+	TokenBytes  int    `json:"tokenBytes"`
+	Note        string `json:"note"`
+}
+
+// Resolve substitutes a run's token for every occurrence of the placeholder.
+// It is the ONE substitution: the value the runner sends and the observation
+// the runner expects are both produced by it, so they cannot drift apart.
+func (c RunCorrelation) Resolve(template, token string) string {
+	return strings.ReplaceAll(template, c.Placeholder, token)
 }
 
 // UnmeasuredCase states why a declared surface is not measured, and what would
@@ -235,6 +258,7 @@ type Contract struct {
 	GlobalsFloor       []string           `json:"globalsFloor"`
 	ProbeProtocol      ProbeProtocol      `json:"probeProtocol"`
 	LoaderProtocol     LoaderProtocol     `json:"loaderProtocol"`
+	RunCorrelation     RunCorrelation     `json:"runCorrelation"`
 	Deployment         DeploymentContract `json:"deployment"`
 	Bundles            []BundleContract   `json:"bundles"`
 	Checks             []Check            `json:"checks"`
@@ -402,6 +426,9 @@ func validateContract(contract Contract) error {
 		contract.LoaderProtocol.Method != "POST" || contract.LoaderProtocol.Note == "" {
 		return errors.New("runtime ABI loader protocol identity is invalid")
 	}
+	if err := validateRunCorrelation(contract.RunCorrelation); err != nil {
+		return err
+	}
 	if err := validateBundles(contract); err != nil {
 		return err
 	}
@@ -409,6 +436,42 @@ func validateContract(contract Contract) error {
 		return err
 	}
 	return validateChecks(contract)
+}
+
+// Run token bounds. A token short enough to repeat across runs correlates
+// nothing; one long enough to push a resolved template past the portable nonce
+// shape would not survive a binding's own key rules.
+const (
+	minRunTokenBytes = 8
+	maxRunTokenBytes = 32
+)
+
+// validateRunCorrelation pins the mechanism itself. The placeholder must be
+// something no resolved nonce could be, so a template can never be mistaken for
+// a constant, and the token must be long enough that two runs cannot share one.
+func validateRunCorrelation(correlation RunCorrelation) error {
+	if correlation.Placeholder == "" || correlation.Note == "" {
+		return errors.New(
+			"runtime ABI corpus must state its run-correlation placeholder and why a correlated check cannot pin a constant")
+	}
+	if noncePattern.MatchString(correlation.Placeholder) {
+		return errors.New(
+			"runtime ABI run-correlation placeholder must not itself read as a portable nonce; " +
+				"a template indistinguishable from a constant would substitute nothing and say nothing")
+	}
+	if correlation.TokenBytes < minRunTokenBytes || correlation.TokenBytes > maxRunTokenBytes {
+		return fmt.Errorf(
+			"runtime ABI run token must be %d..%d bytes; %d does not distinguish one run from another",
+			minRunTokenBytes, maxRunTokenBytes, correlation.TokenBytes)
+	}
+	return nil
+}
+
+// sampleRunToken is the canonical token shape a minted one takes: the corpus is
+// validated against it, so a template that cannot resolve to a portable nonce
+// is refused at load time rather than at the first run that mints a real token.
+func sampleRunToken(correlation RunCorrelation) string {
+	return strings.Repeat("0", correlation.TokenBytes*2)
 }
 
 func validateGlobalsFloor(floor []string) error {
@@ -543,6 +606,7 @@ func validateChecks(contract Contract) error {
 		return fmt.Errorf("runtime ABI corpus declares %d checks for %d required names",
 			len(contract.Checks), len(requiredChecks))
 	}
+	templates := map[string]string{}
 	for index, check := range contract.Checks {
 		if check.Name != requiredChecks[index] {
 			return fmt.Errorf("runtime ABI check %d is %q, want %q", index, check.Name, requiredChecks[index])
@@ -553,6 +617,38 @@ func validateChecks(contract Contract) error {
 		if err := validateCheckShape(contract, check); err != nil {
 			return err
 		}
+		if check.Payload == nil {
+			continue
+		}
+		if owner, seen := templates[check.Payload.NonceTemplate]; seen {
+			return fmt.Errorf(
+				"runtime ABI checks %q and %q share the nonce template %q; two checks reading one observation are one check",
+				owner, check.Name, check.Payload.NonceTemplate)
+		}
+		templates[check.Payload.NonceTemplate] = check.Name
+	}
+	return nil
+}
+
+// validateNonceTemplate enforces what makes an observation a run's own: a
+// correlated check states a TEMPLATE carrying the run-correlation placeholder
+// exactly once, and the value it resolves to is a portable nonce. A constant
+// here is the defect this corpus refuses everywhere else — against a deployment
+// whose `edge.kv` namespace persists, the previous run's observation answers
+// the check, so no incorrect runtime can fail it.
+func validateNonceTemplate(contract Contract, check Check) error {
+	template := check.Payload.NonceTemplate
+	if strings.Count(template, contract.RunCorrelation.Placeholder) != 1 {
+		return fmt.Errorf(
+			"runtime ABI check %q must carry the run-correlation placeholder %s exactly once in its nonce template; "+
+				"a pinned constant reads back the observation a previous run stored",
+			check.Name, contract.RunCorrelation.Placeholder)
+	}
+	resolved := contract.RunCorrelation.Resolve(template, sampleRunToken(contract.RunCorrelation))
+	if !noncePattern.MatchString(resolved) {
+		return fmt.Errorf(
+			"runtime ABI check %q resolves its nonce template to %q, which is not a portable nonce",
+			check.Name, resolved)
 	}
 	return nil
 }
@@ -579,8 +675,12 @@ func validateCheckShape(contract Contract, check Check) error {
 			check.Timing.DeadlineSeconds <= 0 || check.Timing.PollMillis <= 0 {
 			return fmt.Errorf("runtime ABI check %q must carry a request, a payload and a poll deadline", check.Name)
 		}
-		if !noncePattern.MatchString(check.Payload.Nonce) || check.Payload.Bytes == "" {
-			return fmt.Errorf("runtime ABI check %q must pin a portable nonce and non-empty bytes", check.Name)
+		if err := validateNonceTemplate(contract, check); err != nil {
+			return err
+		}
+		if check.Payload.Bytes == "" {
+			return fmt.Errorf(
+				"runtime ABI check %q must pin the exact bytes it round trips; the byte fidelity is the claim", check.Name)
 		}
 	case ProcedureRequestStream:
 		if check.Request == nil || check.Timing == nil || len(check.Timing.RequestChunkSize) < 2 ||
@@ -600,8 +700,8 @@ func validateCheckShape(contract Contract, check Check) error {
 			return fmt.Errorf(
 				"runtime ABI check %q must register deferred work with a delay and a settle deadline", check.Name)
 		}
-		if !noncePattern.MatchString(check.Payload.Nonce) {
-			return fmt.Errorf("runtime ABI check %q must pin a portable nonce", check.Name)
+		if err := validateNonceTemplate(contract, check); err != nil {
+			return err
 		}
 	case ProcedureScheduledObservation:
 		if check.Request == nil || check.Timing == nil ||

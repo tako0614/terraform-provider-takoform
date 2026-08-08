@@ -431,6 +431,22 @@ that claims an export its module does not have is refused, and so is a check
 expecting a failure the bytes cannot cause: a required check no correct runtime
 can pass, and one no incorrect runtime can fail, are the same defect.
 
+Three of those checks read back an observation the runtime stored for them —
+the `edge.kv` round trip, the queue delivery and the `ctx.waitUntil` marker —
+and the deployment they are measured against outlives the run, `edge.kv`
+namespace and all. A pinned constant cannot correlate a run and a per-run value
+cannot be pinned, so what the corpus pins is the correlation TEMPLATE:
+`runCorrelation` states the placeholder and the token width, each of the three
+checks states a template such as `kv-round-trip-{run}`, and the runner mints one
+unpredictable token per run, substitutes it into the value it sends, and derives
+the observation it expects by the same substitution. The corpus bytes never
+move, the token is never in them, and the report states the token a run used so
+a failure stays diagnosable afterwards. Pinning those values as constants
+instead produced both halves of the same defect at once: on a second run a
+runtime whose `put` stored nothing and whose queue delivered nothing passed on
+the first run's leftovers, and a conforming runtime failed because the
+`waitUntil` marker was already there before its deferred task had run.
+
 `self-test` runs the whole matrix against an in-process stand-in shipped with
 this repository, so the corpus is exercised on every `bun run check`. The
 stand-in has no JavaScript engine and reimplements the probe module's behaviour
