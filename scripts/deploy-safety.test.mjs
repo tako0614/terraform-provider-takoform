@@ -428,6 +428,27 @@ describe("a blocked deploy says what went wrong", () => {
     expect(rendered).toContain("uploading");
   });
 
+  // Asserted against a real failure rather than a hand-built one: execFileSync
+  // quotes the captured stderr INSIDE its message, so a containment test
+  // written the other way round prints the same stderr twice.
+  test("a real subprocess failure prints its stderr once, with the command", () => {
+    let failure;
+    try {
+      // The stderr text is assembled at runtime so it is NOT a substring of
+      // the command line the message also quotes; otherwise the count below
+      // would measure the test's own echo argument.
+      execFileSync("/bin/sh", ["-c", "echo \"zone $((400 + 3))\" >&2; exit 7"], {
+        encoding: "utf8",
+        stdio: "pipe",
+      });
+    } catch (error) {
+      failure = error;
+    }
+    const rendered = diagnostics(failure);
+    expect(rendered.match(/zone 403/g)).toHaveLength(1);
+    expect(rendered).toContain("/bin/sh");
+  });
+
   test("a subprocess that already printed the message does not print it twice", () => {
     const failure = Object.assign(new Error("boom"), { stdout: "", stderr: "boom\n" });
     expect(diagnostics(failure).match(/boom/g)).toHaveLength(1);

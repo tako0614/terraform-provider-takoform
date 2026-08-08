@@ -19,7 +19,7 @@ const UUID =
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-export // diagnostics renders what actually went wrong, whatever threw.
+// diagnostics renders what actually went wrong, whatever threw.
 //
 // The failure-handling obligation this entrypoint declares is raw diagnostics
 // and no blind retry, and the two are one requirement: an operator told only
@@ -28,17 +28,23 @@ export // diagnostics renders what actually went wrong, whatever threw.
 // on stdout/stderr, but a fence, a precondition read, or any ordinary assertion
 // throws an Error whose message is the whole diagnosis — printing only the two
 // subprocess members discards it and prints a blank line instead.
-function diagnostics(error) {
-  const parts = [];
-  const stdout = String(error?.stdout ?? "");
-  const stderr = String(error?.stderr ?? "");
-  if (stdout.trim().length > 0) parts.push(stdout.replace(/\n*$/, "\n"));
-  if (stderr.trim().length > 0) parts.push(stderr.replace(/\n*$/, "\n"));
+export function diagnostics(error) {
   const message = error instanceof Error ? error.message : String(error);
-  // A subprocess whose own output already carries the diagnosis does not need
-  // the wrapper's restatement of it.
-  if (message.trim().length > 0 && !stdout.includes(message) && !stderr.includes(message)) {
-    parts.push(`${message}\n`);
+  const captured = [String(error?.stdout ?? ""), String(error?.stderr ?? "")].filter(
+    (stream) => stream.trim().length > 0,
+  );
+  const parts = [];
+  // execFileSync builds its message from the command AND the captured stderr,
+  // so the message is usually the superset: printing both would show the same
+  // stderr twice, once bare and once quoted inside "Command failed: ...".
+  // Whichever text contains the other is the one worth printing.
+  if (message.trim().length > 0 && captured.every((stream) => message.includes(stream.trim()))) {
+    parts.push(`${message.replace(/\n*$/, "")}\n`);
+  } else {
+    parts.push(...captured.map((stream) => stream.replace(/\n*$/, "\n")));
+    if (message.trim().length > 0 && !captured.some((stream) => stream.includes(message))) {
+      parts.push(`${message}\n`);
+    }
   }
   if (error instanceof Error && error.cause !== undefined) {
     parts.push(`caused by: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}\n`);
