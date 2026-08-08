@@ -160,6 +160,7 @@ Edge Platform Family resources (`v2.1.0` source candidate; not yet published):
 - [worker_version](/docs/resources/worker_version.html)
 - [worker_deployment](/docs/resources/worker_deployment.html)
 - [worker_custom_domain](/docs/resources/worker_custom_domain.html)
+- [worker_endpoint](/docs/resources/worker_endpoint.html)
 - [worker_cron_trigger](/docs/resources/worker_cron_trigger.html)
 - [edge_kv_namespace](/docs/resources/edge_kv_namespace.html)
 - [edge_object_bucket](/docs/resources/edge_object_bucket.html)

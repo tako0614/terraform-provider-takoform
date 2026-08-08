@@ -250,6 +250,15 @@ func renderForm(form currentformmodel.Form, resolver currentformmodel.TargetCont
 	if err != nil {
 		return RenderedForm{}, err
 	}
+	// The output contract travels in the Definition a host installs, on the
+	// member the published Form Definition schema already declares. Nothing is
+	// minted for it: the meta-schema admits outputSchema, and the wire schema
+	// already reads it to decide that status.outputs is required for a Form that
+	// declares one and omitted for a Form that does not (decision 0014, rung 1).
+	outputSchema, err := form.OutputSchema()
+	if err != nil {
+		return RenderedForm{}, err
+	}
 	definition := formpackage.FormDefinition{
 		APIVersion:            Family.APIVersion(),
 		Kind:                  form.Kind,
@@ -258,6 +267,7 @@ func renderForm(form currentformmodel.Form, resolver currentformmodel.TargetCont
 		Description:           form.Description,
 		Role:                  string(form.Role),
 		DesiredSchema:         desiredSchema,
+		OutputSchema:          outputSchema,
 		ImmutableFields:       form.ImmutableFields(),
 		LifecycleCapabilities: form.LifecycleCapabilities(),
 		ProvidedInterfaces:    provided,

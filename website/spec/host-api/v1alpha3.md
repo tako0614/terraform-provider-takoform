@@ -447,6 +447,7 @@ against any stored version:
 | Attachment | Required module handler |
 | --- | --- |
 | `WorkerCustomDomain` | `fetch` |
+| `WorkerEndpoint` | `fetch` |
 | `WorkerCronTrigger` | `scheduled` |
 | `QueueConsumer` | `queue` |
 
@@ -479,16 +480,58 @@ the deployment rule above, and removing the first consumer makes the second
 representable. This is the required conformance check
 `queue-single-consumer-enforced`.
 
+### The host-assigned endpoint
+
+The rules of this section are decided by
+[decision 0024](../decisions/0024-a-worker-is-reachable-at-a-host-assigned-address.md).
+
+A `WorkerEndpoint` makes one worker reachable over HTTPS without a
+customer-owned domain. Its desired state is the worker reference and NOTHING
+else: the author asks for reachability, and the address is the host's decision,
+in the same class as an account, a region, and a vendor subdomain
+([decision 0008](../decisions/0008-forms-preserve-service-shape.md)).
+
+- A host returns `status.outputs` carrying `hostname`, the DNS name it assigned,
+  and `url`, which is exactly `https://` + that hostname + `/`. The scheme is
+  HTTPS and TLS is not optional; there is no port and no deeper path.
+- A portable author may rely on three things and no others: that a value comes
+  back, that it is HTTPS, and that it routes to the worker's ACTIVE DEPLOYMENT.
+  The SHAPE of the address — which label, which subdomain, which apex, how long,
+  whether it resembles the resource name — is host detail, so a configuration
+  MUST NOT parse the hostname, assert a suffix, or reconstruct either value from
+  anything else it knows.
+- The endpoint holds no version reference, so promotion and rollback move what
+  answers without the endpoint being re-applied and without its address
+  changing. "Active deployment" is the one this document already defines.
+- A worker has AT MOST ONE endpoint. A second `WorkerEndpoint` whose resolved
+  `/worker` UID already has one fails `invalid_argument` (400) before any
+  mutation, on `apply` and `import` alike. The rule is over the worker's UID and
+  lives in the host because a desired schema cannot count the endpoints pointing
+  at one worker, exactly like the one-deployment and one-consumer rules above.
+- A host that supports the Form but cannot offer a host-assigned hostname MUST
+  fail `unsupported_capability` (422) before any mutation. It MUST NOT store the
+  endpoint, and it MUST NOT answer with an address it did not assign: the whole
+  point of the Form is that the returned address is reachable.
+- Deleting the endpoint never deletes the worker (the `attachment` role rule),
+  and deleting the worker while a live endpoint pins it fails
+  `dependency_in_use` (409) like every other relation. An endpoint therefore
+  never outlives its worker, by refusal and ordering rather than by cascade.
+
+These are the required conformance checks
+`worker-endpoint-address-is-host-assigned`, `worker-endpoint-single-per-worker`,
+and `worker-endpoint-follows-the-active-deployment`.
+
 ### Reverse validation and deletion
 
 The gate holds in both directions.
 
 - An apply that would leave a live dependent unserved fails
   `unsupported_capability` (422) before any mutation. The dependents are a live
-  `WorkerCustomDomain` (`fetch`), a live `WorkerCronTrigger` (`scheduled`), a
-  live `QueueConsumer` (`queue`), and a live INBOUND service binding — another
-  Form's `serviceBindings` entry targeting this worker — which requires `fetch`.
-- Deleting a `WorkerDeployment` while any of those four lives fails
+  `WorkerCustomDomain` (`fetch`), a live `WorkerEndpoint` (`fetch`), a live
+  `WorkerCronTrigger` (`scheduled`), a live `QueueConsumer` (`queue`), and a
+  live INBOUND service binding — another Form's `serviceBindings` entry
+  targeting this worker — which requires `fetch`.
+- Deleting a `WorkerDeployment` while any of those lives fails
   `dependency_in_use` (409). Nothing REFERENCES a deployment, so this is not the
   relation rule above; it is the same statement about a different edge. A host
   fails closed rather than degrading the dependents, and an accepted (202)
@@ -566,6 +609,44 @@ when that value equals the default. It follows that:
 An optional property with no declared default is only legitimate when its
 ABSENCE is itself the portable semantics, and the property's `description`
 must then state what the absent case does.
+
+## Declared outputs
+
+The rules of this section are decided by
+[decision 0025](../decisions/0025-declared-outputs-are-a-typed-contract.md).
+
+A Form Definition MAY declare an `outputSchema`: the closed Draft 2020-12
+contract of the host-computed values it publishes. Every declared member is
+required and the object carries `additionalProperties: false`, because an output
+a host may omit forces every consumer to invent a fallback, and an undeclared
+member is a value the contract never described.
+
+A host is held to it in both directions, which is the rule the wire schema
+already states through `x-takoform-requiredWhen` and `x-takoform-omittedWhen`:
+
+- for a Form that declares an `outputSchema`, `status.outputs` is PRESENT,
+  validates against that schema, and carries exactly its members;
+- for a Form that declares none, `status.outputs` is OMITTED — not an empty
+  object.
+
+This is the required conformance check `form-declared-outputs-are-exact`, driven
+across a Form that declares outputs and Forms that declare none, because a host
+returning an empty document everywhere would satisfy only the first half.
+
+An output is not desired state. It carries no default, no immutability, and no
+cross-resource reference: those describe what an author asks for, and an output
+is what the host answers. A change to an output moves `metadata.revision` and
+never `metadata.generation`, like every other representation change.
+
+The `outputSchema` is not served on the wire. The form-definition response is a
+closed document carrying identity, display name, description, and
+`desiredSchema`, and its bytes are immutable
+([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)),
+so a client learns a Form's output contract from the Form Package it installs.
+
+The Terraform and OpenTofu provider projects each declared output as a typed
+computed attribute, and retains `outputs_json` — carrying the WHOLE document,
+unnarrowed — as the way to reach an output no schema describes.
 
 ## Long-running operations
 
@@ -766,7 +847,10 @@ Proven by required checks:
   refused against a corpus-pinned bundle, and one declaring only exported
   handlers is still accepted;
 - every inward-activation attachment is gated on the handler its events invoke,
-  in both directions.
+  in both directions;
+- a `WorkerEndpoint` is answered with a complete HTTPS address the host
+  assigned, that address survives a promotion of the worker it serves, and a
+  second endpoint against one worker is refused.
 
 Obligations a conforming host MUST meet that this lane does NOT prove, because
 proving them means executing the module rather than driving the Host API:
@@ -783,7 +867,15 @@ proving them means executing the module rather than driving the Host API:
   an already-sent response;
 - an uncaught throw becoming a host-generated 500 in `fetch` and a failed
   invocation in `scheduled` and `queue`;
-- the `globals` floor, and the loadable module media types.
+- the `globals` floor, and the loadable module media types;
+- that a request to a `WorkerEndpoint`'s published address actually ARRIVES at
+  the worker. The lane drives desired state and sends no traffic, so what it
+  proves is that a host answers with a complete HTTPS address it assigned and
+  keeps that address stable across a promotion — not that anything is listening
+  on it. Nor can it prove the refusal branch: a black-box runner cannot take the
+  address-assignment capability away from the host under test, so
+  `unsupported_capability` (422) for a host that cannot assign one is stated
+  normatively and left to that host to honor.
 
 One further obligation is not merely unproven here but UNMEASURABLE anywhere
 today, and is listed rather than left implied:

@@ -55,6 +55,7 @@ func (r *v3FormResource) writeV3State(
 	diags.Append(state.SetAttribute(ctx, path.Root("revision"), types.StringValue(res.Metadata.Revision))...)
 	diags.Append(v3SetConditionsState(ctx, state, res)...)
 	diags.Append(state.SetAttribute(ctx, path.Root("outputs_json"), v3OutputsJSON(res, &diags))...)
+	diags.Append(v3SetOutputState(ctx, state, codec.Form, res)...)
 	diags.Append(setV3FormIdentityState(ctx, state, ref)...)
 	// A verified representation settles any earlier accepted-but-unfinished
 	// mutation: there is nothing left to resume.
@@ -179,8 +180,50 @@ func v3OptionalStateString(value string) types.String {
 	return types.StringValue(value)
 }
 
-// v3OutputsJSON serializes the typed status outputs deterministically;
+// v3SetOutputState writes the Form's declared outputs as typed state.
+//
+// It runs on EVERY state write, including the one an accepted-but-unfinished
+// mutation leaves behind, where the host returned no representation and every
+// output is therefore null. That completeness is the contract with the
+// framework: a Computed attribute the provider leaves unset after an apply
+// whose plan marked it unknown is "Provider produced inconsistent result after
+// apply", and it is unset precisely on the recovery paths nobody exercises by
+// hand (spec/decisions/0017).
+//
+// The declarations come from the STATE ref's own codec, like every desired
+// field: a resource recorded under an earlier definition version publishes that
+// definition's outputs, never whatever this build's current Form declares.
+func v3SetOutputState(
+	ctx context.Context,
+	state *tfsdk.State,
+	form model.Form,
+	res *clientv3.Resource,
+) diag.Diagnostics {
+	var diags diag.Diagnostics
+	var outputs map[string]any
+	if res.Status != nil {
+		outputs = res.Status.Outputs
+	}
+	for _, output := range form.Outputs {
+		diags.Append(state.SetAttribute(
+			ctx, path.Root(output.AttributeName()), v3OutputValue(output, outputs[output.Wire]),
+		)...)
+	}
+	return diags
+}
+
+// v3OutputsJSON serializes the whole status outputs document deterministically;
 // an absent outputs document is the empty object.
+//
+// It carries EVERYTHING the host returned, including every value that also has
+// a typed attribute. Narrowing it to "the members no schema describes" was the
+// alternative, and it would silently break every existing configuration that
+// reads a now-typed key out of it: the expression would keep parsing, keep
+// evaluating, and start producing null. Keeping the document whole makes the
+// typed attributes a strictly additive surface — an author moves to `.url` when
+// they want to, not when a provider upgrade forces them to — and leaves
+// outputs_json doing the one job it is now for: reaching an output the Form's
+// outputSchema does not describe.
 func v3OutputsJSON(res *clientv3.Resource, diags *diag.Diagnostics) types.String {
 	if res.Status == nil || len(res.Status.Outputs) == 0 {
 		return types.StringValue("{}")

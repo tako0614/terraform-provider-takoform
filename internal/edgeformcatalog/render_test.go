@@ -156,8 +156,57 @@ func TestRenderedDefinitionsOmitNameAndEnvelopeFields(t *testing.T) {
 				t.Errorf("%s desired schema declares envelope field %q", form.Kind, forbidden)
 			}
 		}
-		if form.Definition.ObservedSchema != nil || form.Definition.OutputSchema != nil {
-			t.Errorf("%s declares observed/output schemas; MVP forms declare none", form.Kind)
+		if form.Definition.ObservedSchema != nil {
+			t.Errorf("%s declares an observed schema; MVP forms declare none", form.Kind)
+		}
+	}
+}
+
+// TestOutputSchemasArePinnedAndClosed states, once and by hand, which Forms
+// publish an output contract at all.
+//
+// The list matters more than the shape. `status.outputs` is REQUIRED on the
+// wire exactly for a Form whose Definition declares an outputSchema and
+// OMITTED for every other (spec/schemas/host-api-wire-v1alpha3.schema.json), so
+// a Form that gained or lost one silently would change what every conforming
+// host must return for it. Writing the set out means that change cannot happen
+// without an edit here.
+func TestOutputSchemasArePinnedAndClosed(t *testing.T) {
+	t.Parallel()
+	want := map[string][]string{
+		"WorkerEndpoint": {"hostname", "url"},
+	}
+	forms, err := RenderForms()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, form := range forms {
+		declared, publishes := want[form.Kind]
+		if !publishes {
+			if form.Definition.OutputSchema != nil {
+				t.Errorf("%s declares an output schema that the pinned set does not list", form.Kind)
+			}
+			continue
+		}
+		schema := form.Definition.OutputSchema
+		if schema == nil {
+			t.Fatalf("%s must declare an output schema", form.Kind)
+		}
+		if closed, _ := schema["additionalProperties"].(bool); closed {
+			t.Errorf("%s output schema is not closed", form.Kind)
+		}
+		properties, _ := schema["properties"].(map[string]any)
+		names := make([]string, 0, len(properties))
+		for name := range properties {
+			names = append(names, name)
+		}
+		slices.Sort(names)
+		if !slices.Equal(names, declared) {
+			t.Errorf("%s outputs = %v, want %v", form.Kind, names, declared)
+		}
+		required, _ := schema["required"].([]string)
+		if !slices.Equal(required, declared) {
+			t.Errorf("%s required outputs = %v, want every declared output %v", form.Kind, required, declared)
 		}
 	}
 }

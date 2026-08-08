@@ -1303,7 +1303,7 @@ if (publicationTruth !== null) {
   );
 }
 
-// The Host API v1alpha3 lane: exactly the eleven Edge Platform Family
+// The Host API v1alpha3 lane: exactly the twelve Edge Platform Family
 // resources, all rendered by internal/standardforms (doc name = resource type
 // minus the takoform_ prefix). They share the v2.1.0 source-candidate example
 // pin. There is deliberately no generic takoform_resource carrier: the lane
@@ -1315,6 +1315,7 @@ const edgeFamilyDocNames = [
   "worker_version",
   "worker_deployment",
   "worker_custom_domain",
+  "worker_endpoint",
   "worker_cron_trigger",
   "edge_kv_namespace",
   "edge_object_bucket",

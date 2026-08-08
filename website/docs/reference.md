@@ -108,6 +108,7 @@ yet published); the retained v2 resources above are unaffected:
 - [WorkerVersion](resources/worker_version.md)
 - [WorkerDeployment](resources/worker_deployment.md)
 - [WorkerCustomDomain](resources/worker_custom_domain.md)
+- [WorkerEndpoint](resources/worker_endpoint.md)
 - [WorkerCronTrigger](resources/worker_cron_trigger.md)
 - [EdgeKVNamespace](resources/edge_kv_namespace.md)
 - [ObjectBucket (edge)](resources/edge_object_bucket.md)

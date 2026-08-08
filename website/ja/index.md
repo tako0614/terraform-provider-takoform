@@ -35,6 +35,11 @@ resource "takoform_at_least_once_queue" "jobs" {
   message_retention_seconds = 345600
 }
 
+resource "takoform_worker_endpoint" "api" {
+  name   = "api-endpoint"
+  worker = takoform_module_worker.api.name
+}
+
 resource "takoform_worker_custom_domain" "api" {
   name     = "api-domain"
   worker   = takoform_module_worker.api.name
@@ -79,6 +84,7 @@ family ([Form Families](/spec/form-families.html)) で、UID/generation/revision
 | [`takoform_worker_version`](/docs/resources/worker_version.html) | revision | bundle・compatibility date・handlers・typed bindings の不変 snapshot |
 | [`takoform_worker_deployment`](/docs/resources/worker_deployment.html) | deployment | どの version へどれだけ配信するか (basis points) |
 | [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html) | attachment | worker 自身を origin とする hostname |
+| [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html) | attachment | host が割り当てるアドレスでの HTTPS 到達性 |
 | [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html) | attachment | scheduled handler を起動する UTC cron |
 | [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html) | identity | eventually consistent な edge KV namespace |
 | [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html) | identity | 強整合な object bucket |
