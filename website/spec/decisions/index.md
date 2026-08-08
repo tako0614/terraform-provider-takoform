@@ -26,3 +26,4 @@ record does not replace them.
 - [0020 — The edge Interfaces state their data and delivery model](0020-the-edge-interfaces-state-their-data-and-delivery-model.md)
 - [0021 — Third-party Forms and contract distribution](0021-third-party-forms-and-contract-distribution.md)
 - [0022 — A host answers for an exact Form, and a relation pins its target's contract](0022-relations-pin-the-target-contract.md)
+- [0023 — The runtime ABI is measured separately from the control plane](0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)

@@ -93,7 +93,7 @@
     },
     {
       "id": "V3-008",
-      "title": "A real runtime is proven against the ABI contract",
+      "title": "A real runtime is measured against the ABI contract",
       "priority": "P0",
       "affectedForms": [
         "ModuleWorker",
@@ -101,8 +101,11 @@
       ],
       "status": "open",
       "issue": 109,
-      "rationale": "The lane proves that a host states which ABI it implements and holds desired state to it. It does not prove that an isolate behaves that way; that needs a runtime conformance run outside the control plane.",
-      "evidence": []
+      "rationale": "The Host API lane proves that a host states which ABI it implements and holds desired state to it. It does not prove that an isolate behaves that way. conformance/runtime-abi-v1 is the corpus that measures one, and its existence is not this blocker closing: what closes it is a passed deployed-runtime-conformance-run, with the module-loader lane measured, against a runtime this repository does not own. A run against the repository's in-process stand-in proves the corpus and never a runtime, and every report says which of the two it is (decision 0023).",
+      "evidence": [
+        "conformance/runtime-abi-v1/contract.json",
+        "spec/decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md"
+      ]
     },
     {
       "id": "V3-009",
@@ -127,6 +130,21 @@
       "issue": 111,
       "rationale": "A platform that cannot reliably delete what it created is not one anybody should adopt. An orphan scan finding nothing, against a real backend, is the evidence.",
       "evidence": []
+    },
+    {
+      "id": "V3-011",
+      "title": "The ABI declares a tail handler nothing can activate",
+      "priority": "P1",
+      "affectedForms": [
+        "ModuleWorker",
+        "WorkerVersion"
+      ],
+      "status": "open",
+      "rationale": "worker.runtime@1.0.0 declares a tail handler, and no resource in this family activates one: the three inward-activation attachments are WorkerCustomDomain (fetch), WorkerCronTrigger (scheduled) and QueueConsumer (queue). No deployment a portable author can write causes a host to invoke tail, so no conformance run can observe it and two hosts could implement it differently with nothing able to detect the divergence — the same defect as the runtime-selector field decision 0019 removed from WorkerVersion. The runtime corpus records it as explicitly unmeasured rather than silently unchecked. It closes by removing tail from the ABI's declaredHandlers vocabulary in a new exact Interface version, or by adding the Form that attaches a tail consumer; the removal changes Interface bytes and regenerates the Form chain, so it belongs to that regeneration (decision 0023).",
+      "evidence": [
+        "conformance/runtime-abi-v1/contract.json",
+        "spec/decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md"
+      ]
     }
   ]
 }

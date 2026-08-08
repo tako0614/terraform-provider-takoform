@@ -1,0 +1,467 @@
+{
+  "format": "takoform.runtime-abi-conformance@v1",
+  "interface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "worker.runtime",
+    "version": "1.0.0",
+    "schemaDigest": "sha256:06104adeefb967838766a90866f7229f12cfd1bceb31cd79c7b1826b15362c0f"
+  },
+  "handlerVocabulary": [
+    "fetch",
+    "scheduled",
+    "queue",
+    "tail"
+  ],
+  "loadableMediaTypes": [
+    "application/javascript+module",
+    "application/json",
+    "application/octet-stream",
+    "application/wasm",
+    "text/plain"
+  ],
+  "globalsFloor": [
+    "AbortController",
+    "AbortSignal",
+    "Headers",
+    "ReadableStream",
+    "Request",
+    "Response",
+    "TextDecoder",
+    "TextEncoder",
+    "URL",
+    "URLSearchParams",
+    "WritableStream",
+    "clearInterval",
+    "clearTimeout",
+    "crypto.getRandomValues",
+    "crypto.subtle.digest",
+    "fetch",
+    "setInterval",
+    "setTimeout",
+    "structuredClone"
+  ],
+  "probeProtocol": {
+    "protocol": "takoform.runtime-abi-probe@v1",
+    "routePrefix": "/abi/",
+    "kvBinding": "CACHE",
+    "queueBinding": "EVENTS",
+    "note": "The conformance bundle's main module answers these routes and carries no expectation of its own: every route reports what the RUNTIME supplied — the arguments of the invocation, the own property names of env, which of the names the runner asked about exist as globals, what the bindings returned, and what the host later delivered to the scheduled, queue and tail handlers. A probe that knew the answers could pass a runtime that does not implement the ABI. Correlation belongs to the runner too: every route that stores an observation stores it under the value the RUNNER sent and reports that value back, and the module never mints one of its own, because a probe that correlated itself would prove nothing about which run stored what."
+  },
+  "loaderProtocol": {
+    "protocol": "takoform.runtime-abi-loader@v1",
+    "method": "POST",
+    "note": "loadModule decides its outcome before any traffic arrives, so no request to a running worker can observe it. A run measures it through a disposable adapter over the runtime's own module loader: the body carries mainModule, declaredHandlers and every module as name, mediaType and base64 content, and the answer is either {\"exportedHandlers\": [...]} or {\"error\": {\"code\": ...}} with a code from the operation's closed vocabulary. The adapter is not part of the ABI and must never be exposed by a production deployment. Without it the load lane is reported unmeasured and the run is incomplete."
+  },
+  "runCorrelation": {
+    "placeholder": "{run}",
+    "tokenBytes": 16,
+    "note": "Three checks read back an observation the runtime stored for them: the edge.kv round trip, the queue delivery, and the ctx.waitUntil marker. The deployment they are measured against outlives the run — its edge.kv namespace is still there the next morning — so an observation is only evidence if the run that reads it is the run that caused it. This corpus is byte-pinned, and a per-run value cannot be pinned: what is pinned here is the TEMPLATE and the placeholder inside it. The runner mints one unpredictable token per run, substitutes it for every occurrence of the placeholder in the value it sends, and derives the observation it expects by the same substitution; the token is stated in the report and never in the corpus. Pinning the values as constants instead produces exactly the defect this corpus refuses elsewhere, in both directions at once: on a second run a runtime whose put stores nothing and whose queue delivers nothing passes on the first run's leftovers, and a conforming runtime fails because the waitUntil marker was already there before its deferred task had run."
+  },
+  "deployment": {
+    "bundle": "conformance-probe",
+    "declaredHandlers": [
+      "fetch",
+      "scheduled",
+      "queue",
+      "tail"
+    ],
+    "vars": [
+      "LOG_LEVEL"
+    ],
+    "sensitiveVars": [
+      "API_SIGNING_TOKEN_NAME"
+    ],
+    "bindings": [
+      {
+        "name": "CACHE",
+        "interface": "edge.kv"
+      },
+      {
+        "name": "EVENTS",
+        "interface": "edge.queue"
+      }
+    ],
+    "environmentPropertyNames": [
+      "API_SIGNING_TOKEN_NAME",
+      "CACHE",
+      "EVENTS",
+      "LOG_LEVEL"
+    ],
+    "cron": "* * * * *",
+    "queue": "runtime-abi-conformance"
+  },
+  "bundles": [
+    {
+      "name": "conformance-probe",
+      "mainModule": "index.js",
+      "modules": [
+        {
+          "name": "index.js",
+          "mediaType": "application/javascript+module",
+          "source": "bundles/conformance-probe/index.js",
+          "sha256": "sha256:8514cba05d6fae0d9d32e0024f1100874954e38ce40b22693f5432aba32a63b7"
+        }
+      ],
+      "exportedHandlers": [
+        "fetch",
+        "scheduled",
+        "queue",
+        "tail"
+      ]
+    },
+    {
+      "name": "fetch-only",
+      "mainModule": "fetch-only.js",
+      "modules": [
+        {
+          "name": "fetch-only.js",
+          "mediaType": "application/javascript+module",
+          "source": "bundles/fetch-only/fetch-only.js",
+          "sha256": "sha256:03ed11ca712659f61cebcd0455c4c394eec3793bb6a99a7a4e0914ca494ab8a9"
+        }
+      ],
+      "exportedHandlers": [
+        "fetch"
+      ]
+    },
+    {
+      "name": "unparseable",
+      "mainModule": "broken.js",
+      "modules": [
+        {
+          "name": "broken.js",
+          "mediaType": "application/javascript+module",
+          "source": "bundles/unparseable/broken.js",
+          "sha256": "sha256:5eb4981f184929c5300aaf61a68b11c7b71cea2613105b7808064b220896ff06"
+        }
+      ],
+      "unloadableError": "module_syntax_error"
+    },
+    {
+      "name": "unsupported-media-type",
+      "mainModule": "index.js",
+      "modules": [
+        {
+          "name": "index.js",
+          "mediaType": "application/javascript+module",
+          "source": "bundles/conformance-probe/index.js",
+          "sha256": "sha256:8514cba05d6fae0d9d32e0024f1100874954e38ce40b22693f5432aba32a63b7"
+        },
+        {
+          "name": "page.html",
+          "mediaType": "text/html",
+          "source": "bundles/unsupported-media-type/page.html",
+          "sha256": "sha256:1ad9418bc85837a7b1deab827e815158d8aa63fc6aa74be3f5eb959d08bb3d2d"
+        }
+      ],
+      "unloadableError": "unsupported_media_type"
+    },
+    {
+      "name": "missing-main-module",
+      "mainModule": "worker.js",
+      "modules": [
+        {
+          "name": "index.js",
+          "mediaType": "application/javascript+module",
+          "source": "bundles/conformance-probe/index.js",
+          "sha256": "sha256:8514cba05d6fae0d9d32e0024f1100874954e38ce40b22693f5432aba32a63b7"
+        }
+      ],
+      "unloadableError": "module_not_found"
+    }
+  ],
+  "checks": [
+    {
+      "name": "module-loads-and-exports-are-derived-from-bytes",
+      "operation": "loadModule",
+      "procedure": "load",
+      "proves": "an ES module whose default export is a plain object loads, and the runtime reports the handler set THOSE BYTES export rather than the set the version declared.",
+      "bundle": "conformance-probe",
+      "load": {
+        "declaredHandlers": [
+          "fetch",
+          "scheduled",
+          "queue",
+          "tail"
+        ],
+        "expectExportedHandlers": [
+          "fetch",
+          "scheduled",
+          "queue",
+          "tail"
+        ]
+      }
+    },
+    {
+      "name": "unsupported-module-media-type-refused",
+      "operation": "loadModule",
+      "procedure": "load",
+      "proves": "the loadable media-type set is closed: a bundle carrying a module outside it fails unsupported_media_type instead of loading with the entry ignored.",
+      "bundle": "unsupported-media-type",
+      "load": {
+        "declaredHandlers": [
+          "fetch"
+        ],
+        "expectError": "unsupported_media_type"
+      }
+    },
+    {
+      "name": "main-module-missing-refused",
+      "operation": "loadModule",
+      "procedure": "load",
+      "proves": "mainModule names a module of the bundle: a name the bundle does not carry fails module_not_found rather than falling back to some other module.",
+      "bundle": "missing-main-module",
+      "load": {
+        "declaredHandlers": [
+          "fetch"
+        ],
+        "expectError": "module_not_found"
+      }
+    },
+    {
+      "name": "unparseable-module-refused",
+      "operation": "loadModule",
+      "procedure": "load",
+      "proves": "bytes that are not a compilable ES module fail module_syntax_error at load time, before any traffic could reach a handler that does not exist.",
+      "bundle": "unparseable",
+      "load": {
+        "declaredHandlers": [
+          "fetch"
+        ],
+        "expectError": "module_syntax_error"
+      }
+    },
+    {
+      "name": "declared-handler-not-exported-refused",
+      "operation": "loadModule",
+      "procedure": "load",
+      "proves": "handler_not_exported is derived from ARBITRARY module bytes. This is the obligation the Host API lane explicitly cannot prove: that lane drives bundles whose exports the corpus pinned, so it shows a host refusing a version it was told about, not a runtime reading an export set out of bytes an author uploaded.",
+      "bundle": "fetch-only",
+      "load": {
+        "declaredHandlers": [
+          "fetch",
+          "scheduled"
+        ],
+        "expectError": "handler_not_exported"
+      }
+    },
+    {
+      "name": "fetch-receives-request-env-and-context",
+      "operation": "fetch",
+      "procedure": "request",
+      "proves": "the handler is invoked as fetch(request, env, ctx): three arguments, in that order, the first a Request, the second the binding environment, the third an invocation context carrying waitUntil.",
+      "request": {
+        "method": "GET",
+        "path": "/abi/handler"
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "probe": "takoform.runtime-abi-probe@v1",
+          "argumentCount": 3,
+          "requestIsRequest": true,
+          "requestMethod": "GET",
+          "envIsObject": true,
+          "waitUntilIsFunction": true
+        }
+      }
+    },
+    {
+      "name": "fetch-returns-a-response",
+      "operation": "fetch",
+      "procedure": "request",
+      "proves": "a Response the handler returns is the response the caller receives, and a returned promise is awaited before the host answers.",
+      "request": {
+        "method": "GET",
+        "path": "/abi/health"
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "probe": "takoform.runtime-abi-probe@v1",
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "fetch-uncaught-throw-is-a-host-generated-response",
+      "operation": "fetch",
+      "procedure": "request",
+      "proves": "an uncaught throw becomes a host-generated 500 that completes the request. The failure this rules out is not a wrong status but a hung request or a truncated connection with no status at all, which is why the runner requires a complete response rather than only inspecting its code.",
+      "request": {
+        "method": "GET",
+        "path": "/abi/throw"
+      },
+      "expect": {
+        "status": 500
+      }
+    },
+    {
+      "name": "environment-projects-exactly-the-declared-names",
+      "operation": "environment",
+      "procedure": "environment",
+      "proves": "env's own enumerable properties are exactly the union of the version's vars keys, requiredSensitiveVars names and binding names, and nothing else portable. The expectation is the deployment's own declaration above; the check restates nothing, so it cannot drift from what the operator deployed.",
+      "request": {
+        "method": "GET",
+        "path": "/abi/env"
+      },
+      "expect": {
+        "status": 200
+      }
+    },
+    {
+      "name": "globals-floor-present",
+      "operation": "globals",
+      "procedure": "globals",
+      "proves": "every member of the portable globals floor exists in the isolate. The runner sends the floor and the module answers about the names it was sent, so the probe holds no list that could flatter a runtime missing one.",
+      "request": {
+        "method": "GET",
+        "path": "/abi/globals"
+      },
+      "expect": {
+        "status": 200
+      }
+    },
+    {
+      "name": "kv-binding-round-trips-bytes-through-env",
+      "operation": "environment",
+      "procedure": "kvRoundTrip",
+      "proves": "a binding name in env is a working runtime API and not only a property: bytes written through env.CACHE.put are readable through env.CACHE.get, unchanged. edge.kv is eventually consistent and promises no read-your-writes, so the read polls to the deadline; this check is a byte-fidelity claim, never a consistency one. The bytes are pinned and the KEY carries the run token, so the value a run reads back is one only that run could have written: a runtime whose put resolves without persisting anything reads nothing, however often the deployment has been measured before.",
+      "request": {
+        "method": "POST",
+        "path": "/abi/kv"
+      },
+      "payload": {
+        "nonceTemplate": "kv-round-trip-{run}",
+        "bytesBase64": "AAECf3/+/1RBS09GT1JN"
+      },
+      "timing": {
+        "deadlineSeconds": 30,
+        "pollMillis": 250
+      }
+    },
+    {
+      "name": "request-body-streams-rather-than-buffering",
+      "operation": "fetch",
+      "procedure": "requestStream",
+      "proves": "the request body arrives as a stream the handler consumes incrementally. The runner sends the first chunk, requires the worker to account for every byte of it BEFORE the second chunk exists, and only then sends the second: a host that buffers the body cannot produce that ordering. A ReadableStream read is not a transport frame, so the runner accumulates the worker's answers until they account for the bytes it has sent rather than demanding one read per write; what it refuses is an answer for bytes that have not been sent, and silence until the body ends.",
+      "request": {
+        "method": "POST",
+        "path": "/abi/echo-stream"
+      },
+      "timing": {
+        "deadlineSeconds": 30,
+        "gapMillis": 250,
+        "requestChunkSize": [
+          4096,
+          8192
+        ]
+      }
+    },
+    {
+      "name": "response-body-streams-rather-than-buffering",
+      "operation": "fetch",
+      "procedure": "responseStream",
+      "proves": "the response body is streamed out as the handler produces it. The module separates its chunks in time; a host that buffered the body would deliver them together.",
+      "request": {
+        "method": "GET",
+        "path": "/abi/stream"
+      },
+      "timing": {
+        "deadlineSeconds": 30,
+        "gapMillis": 250,
+        "chunks": 3
+      }
+    },
+    {
+      "name": "wait-until-holds-the-isolate-and-a-rejection-leaves-the-response-alone",
+      "operation": "waitUntil",
+      "procedure": "waitUntil",
+      "proves": "both halves of ctx.waitUntil at once. The handler registers a task that rejects and then one that settles after the response is already sent: the response the caller reads is the one the handler returned, and the second task still settles, so the rejection neither rewrote the response nor reclaimed the isolate. The marker carries the run token, so \"not settled yet\" is a statement about THIS run's task rather than about whatever a previous run left behind.",
+      "request": {
+        "method": "POST",
+        "path": "/abi/wait-until"
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "probe": "takoform.runtime-abi-probe@v1",
+          "registeredTasks": 2,
+          "responseSent": true
+        }
+      },
+      "payload": {
+        "nonceTemplate": "wait-until-{run}"
+      },
+      "timing": {
+        "deadlineSeconds": 30,
+        "pollMillis": 250,
+        "delayMillis": 1500
+      }
+    },
+    {
+      "name": "scheduled-invoked-by-the-host-cron-attachment",
+      "operation": "scheduled",
+      "procedure": "scheduledObservation",
+      "proves": "the host invokes the exported scheduled handler from the Worker Cron Trigger attachment, handing it the matched five-field expression and the UTC instant. The runner clears the previous observation first and requires a newer one, so a stale marker cannot pass the check.",
+      "request": {
+        "method": "GET",
+        "path": "/abi/scheduled"
+      },
+      "timing": {
+        "deadlineSeconds": 150,
+        "pollMillis": 1000
+      }
+    },
+    {
+      "name": "queue-batch-delivered-to-the-queue-handler",
+      "operation": "queue",
+      "procedure": "queueRoundTrip",
+      "proves": "a message submitted through the edge.queue producer binding is delivered by the host to the exported queue handler, in a batch naming the queue, with the producer's exact bytes, a stable message identity, and attempts of 1 on first delivery. The run token travels with the message and is recorded beside the batch, so what the check accepts is the delivery of the message THIS run submitted; the payload, the queue name, the attempt count and a nonempty message id are satisfied just as well by a delivery an earlier run caused.",
+      "request": {
+        "method": "POST",
+        "path": "/abi/queue"
+      },
+      "payload": {
+        "nonceTemplate": "queue-round-trip-{run}",
+        "bytesBase64": "cXVldWUtcm91bmQtdHJpcC1ieXRlcw=="
+      },
+      "timing": {
+        "deadlineSeconds": 60,
+        "pollMillis": 500
+      }
+    },
+    {
+      "name": "tail-trace-delivered-to-the-tail-handler",
+      "operation": "tail",
+      "procedure": "unmeasured",
+      "proves": "nothing. This entry exists so the corpus does not silently leave a declared handler unchecked, which is the defect the compatibility date had.",
+      "unmeasured": {
+        "reason": "worker.runtime@1.0.0 declares a tail handler, but nothing in edge.forms.takoform.com/v1alpha1 activates one. The family has exactly three inward-activation attachments — WorkerCustomDomain (fetch), WorkerCronTrigger (scheduled) and QueueConsumer (queue) — so no deployment a portable author can write causes a host to invoke tail, and no run of this corpus can observe it. The handler is not hard to measure; it is unreachable.",
+        "wouldUse": "/abi/tail",
+        "closedBy": "either dropping tail from the ABI's declaredHandlers vocabulary in a new exact Interface version, or adding the Form that attaches a tail consumer so a deployment can cause an invocation.",
+        "blockerId": "V3-011",
+        "recommended": "drop tail from worker.runtime, and re-add it in the version that ships the attachment which makes it observable."
+      }
+    }
+  ],
+  "requiredChecks": [
+    "module-loads-and-exports-are-derived-from-bytes",
+    "unsupported-module-media-type-refused",
+    "main-module-missing-refused",
+    "unparseable-module-refused",
+    "declared-handler-not-exported-refused",
+    "fetch-receives-request-env-and-context",
+    "fetch-returns-a-response",
+    "fetch-uncaught-throw-is-a-host-generated-response",
+    "environment-projects-exactly-the-declared-names",
+    "globals-floor-present",
+    "kv-binding-round-trips-bytes-through-env",
+    "request-body-streams-rather-than-buffering",
+    "response-body-streams-rather-than-buffering",
+    "wait-until-holds-the-isolate-and-a-rejection-leaves-the-response-alone",
+    "scheduled-invoked-by-the-host-cron-attachment",
+    "queue-batch-delivered-to-the-queue-handler",
+    "tail-trace-delivered-to-the-tail-handler"
+  ]
+}

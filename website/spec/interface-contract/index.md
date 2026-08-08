@@ -89,6 +89,18 @@ bodies, `env`'s exact property set, `waitUntil`, exception outcomes, and the
 because a reader deciding whether a passing conformance report means "this host
 runs my code correctly" is entitled to know which half it covers.
 
+The second half has its own corpus, runner, and command —
+[`../../conformance/runtime-abi-v1/`](../../conformance/runtime-abi-v1/contract.json),
+driven against a worker deployed from its own byte-pinned bundle rather than
+against a Host API
+([decision 0023](../decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
+Its reports state which subject was measured: a run against the repository's
+in-process stand-in proves the corpus, only a run against a deployed worker
+proves a runtime, and neither is ever publication evidence. Where a contract
+declares an operation nothing can currently invoke, the corpus records it as
+explicitly unmeasured and says what would close it, rather than leaving a
+member of a published-shaped contract that no check ever reaches.
+
 ## Behavior fixtures
 
 Shape validation alone cannot distinguish a KV store from a queue, so an

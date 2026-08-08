@@ -385,3 +385,101 @@ separate exact package fixture.
 
 It treats drift only as validated observed evidence and defines no drift
 operation or portable audit endpoint.
+
+## Runtime ABI evidence
+
+`runtime-abi-v1/` measures a different subject from every corpus above. Those
+drive a control plane; this one drives a **runtime**. The Host API v1alpha3
+lane can prove that a host advertises `worker.runtime@1.0.0` at the exact
+pinned digest and refuses a `WorkerVersion` that names a handler the ABI does
+not define, and
+[`../spec/host-api/v1alpha3.md`](../spec/host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation)
+lists what it cannot prove, because proving it means executing the module
+rather than driving the API. This corpus executes it
+([decision 0023](../spec/decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
+
+The corpus is digest-pinned the same way `portable-host-v3/` is: `manifest.json`
+carries the sha256 of `contract.json`, and `contract.json` additionally pins the
+sha256 of every module byte it ships. It states, as data, the exact
+`worker.runtime` InterfaceRef it measures, the closed handler vocabulary, the
+closed loadable media-type set, the portable globals floor, the deployment an
+operator reproduces — bundle, declared handlers, vars, sensitive variable,
+`edge.kv` and `edge.queue` bindings, cron expression, queue — and for each of
+the 17 required checks its name, what it proves, the bundle it needs, and the
+request/expected-observation pairs that decide it.
+
+Five checks drive the module loader: a bundle whose bytes load and report the
+handler set THOSE BYTES export, a module media type outside the closed set, a
+`mainModule` the bundle does not carry, bytes that are not a compilable module,
+and a declared handler the module does not export — the last being exactly the
+obligation the Host API lane states it cannot prove for arbitrary bytes. Eleven
+drive a deployed worker over HTTP: the three-argument handler signature, a
+returned `Response`, an uncaught throw becoming a completed host-generated 500
+rather than a hung request, `env` projecting exactly the declared names, the
+globals floor, a byte round trip through the `edge.kv` binding, a request body
+answered chunk by chunk before the next chunk is sent, a response body whose
+chunks arrive separated in time, `ctx.waitUntil` holding the isolate open while
+a rejected task leaves the sent response alone, a `scheduled` invocation from
+the cron attachment, and a queue batch delivered to the `queue` handler with the
+producer's exact bytes. The seventeenth is `tail`, recorded as explicitly
+unmeasured: the contract declares the handler and nothing in the family
+activates one, so the corpus says so rather than leaving it silently unchecked.
+
+The bundles carry module bytes and the handlers those bytes genuinely export,
+and loading the corpus recomputes every stated outcome from the bytes. A bundle
+that claims an export its module does not have is refused, and so is a check
+expecting a failure the bytes cannot cause: a required check no correct runtime
+can pass, and one no incorrect runtime can fail, are the same defect.
+
+Three of those checks read back an observation the runtime stored for them —
+the `edge.kv` round trip, the queue delivery and the `ctx.waitUntil` marker —
+and the deployment they are measured against outlives the run, `edge.kv`
+namespace and all. A pinned constant cannot correlate a run and a per-run value
+cannot be pinned, so what the corpus pins is the correlation TEMPLATE:
+`runCorrelation` states the placeholder and the token width, each of the three
+checks states a template such as `kv-round-trip-{run}`, and the runner mints one
+unpredictable token per run, substitutes it into the value it sends, and derives
+the observation it expects by the same substitution. The corpus bytes never
+move, the token is never in them, and the report states the token a run used so
+a failure stays diagnosable afterwards. Pinning those values as constants
+instead produced both halves of the same defect at once: on a second run a
+runtime whose `put` stored nothing and whose queue delivered nothing passed on
+the first run's leftovers, and a conforming runtime failed because the
+`waitUntil` marker was already there before its deferred task had run.
+
+`self-test` runs the whole matrix against an in-process stand-in shipped with
+this repository, so the corpus is exercised on every `bun run check`. The
+stand-in has no JavaScript engine and reimplements the probe module's behaviour
+in Go; what keeps it honest is that it is constructed from the deployment
+description and the module bytes and nothing else, so it never sees a check or
+an expected observation. A self-test report says this in the document itself:
+its `classification` is `in-process-fake-runtime-self-test` and its `proves`
+member states that it proves the corpus and nothing about any runtime.
+
+```console
+go run ./cmd/runtime-conformance verify
+go run ./cmd/runtime-conformance self-test
+```
+
+Measuring a real runtime means deploying the corpus bundle exactly as the
+contract's `deployment` states and pointing the runner at it. `loadModule`
+decides its outcome before any traffic arrives, so the load lane is measured
+through a disposable adapter over the runtime's own module loader
+(`takoform.runtime-abi-loader@v1`); the adapter is not part of the ABI and must
+never be exposed by a production deployment. Without one the load lane is
+reported `unmeasured` and the run `partial`, rather than counting an
+unmeasurable half as evidence.
+
+```console
+go run ./cmd/runtime-conformance run \
+  --endpoint https://conformance-worker.example \
+  --loader-endpoint https://disposable-loader.example/load \
+  --token-env TAKOFORM_RUNTIME_CONFORMANCE_TOKEN \
+  --loader-token-env TAKOFORM_RUNTIME_LOADER_TOKEN
+```
+
+Both reports are explicitly `publicationReady: false`, as in every other lane.
+Publication blocker V3-008 closes on a passed
+`deployed-runtime-conformance-run` with its load lane measured, against a
+runtime this repository does not own; a self-test never closes it, and each
+report repeats that sentence in its own `blockerEvidence` member.

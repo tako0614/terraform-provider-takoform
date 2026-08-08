@@ -1,0 +1,5 @@
+{
+  "format": "takoform.runtime-abi-conformance-manifest@v1",
+  "contract": "contract.json",
+  "sha256": "2b85baee1a1d65af83c7c43a7bb952610c24c597c47841fa95f1d446c4bccfe7"
+}
