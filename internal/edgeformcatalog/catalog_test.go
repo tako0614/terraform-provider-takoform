@@ -14,6 +14,7 @@ var orderedKinds = []string{
 	"WorkerVersion",
 	"WorkerDeployment",
 	"WorkerCustomDomain",
+	"WorkerEndpoint",
 	"WorkerCronTrigger",
 	"EdgeKVNamespace",
 	"ObjectBucket",
@@ -29,7 +30,7 @@ func TestCatalogValidates(t *testing.T) {
 	}
 }
 
-func TestCatalogIsExactElevenFormFamily(t *testing.T) {
+func TestCatalogIsExactTwelveFormFamily(t *testing.T) {
 	t.Parallel()
 	if len(Forms) != len(orderedKinds) {
 		t.Fatalf("family has %d forms, want %d", len(Forms), len(orderedKinds))
@@ -62,11 +63,14 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 		},
 		"WorkerDeployment":   {"versions", "worker"},
 		"WorkerCustomDomain": {"hostname", "worker"},
-		"WorkerCronTrigger":  {"cron", "worker"},
-		"EdgeKVNamespace":    {},
-		"ObjectBucket":       {},
-		"SQLiteDatabase":     {},
-		"AtLeastOnceQueue":   {"deliveryDelaySeconds", "messageRetentionSeconds"},
+		// Reachability is the whole request; the address is the answer, so the
+		// worker reference is the ONLY desired member (decision 0024).
+		"WorkerEndpoint":    {"worker"},
+		"WorkerCronTrigger": {"cron", "worker"},
+		"EdgeKVNamespace":   {},
+		"ObjectBucket":      {},
+		"SQLiteDatabase":    {},
+		"AtLeastOnceQueue":  {"deliveryDelaySeconds", "messageRetentionSeconds"},
 		"QueueConsumer": {
 			"deadLetterQueue", "maxBatchSize", "maxBatchTimeoutSeconds", "maxConcurrency",
 			"maxRetries", "queue", "retryDelaySeconds", "worker",
@@ -92,6 +96,7 @@ func TestRoleRules(t *testing.T) {
 		"WorkerVersion":      model.RoleRevision,
 		"WorkerDeployment":   model.RoleDeployment,
 		"WorkerCustomDomain": model.RoleAttachment,
+		"WorkerEndpoint":     model.RoleAttachment,
 		"WorkerCronTrigger":  model.RoleAttachment,
 		"EdgeKVNamespace":    model.RoleIdentity,
 		"ObjectBucket":       model.RoleIdentity,
@@ -134,6 +139,7 @@ func TestLifecycleCapabilityTable(t *testing.T) {
 		"WorkerVersion":      base,
 		"WorkerDeployment":   withUpdate,
 		"WorkerCustomDomain": base,
+		"WorkerEndpoint":     base,
 		"WorkerCronTrigger":  withUpdate,
 		"EdgeKVNamespace":    base,
 		"ObjectBucket":       base,

@@ -299,7 +299,7 @@ func (r *v3Runner) loadDesiredSchemas() error {
 	probes := []ResourceProbe{
 		input.ModuleWorker, input.EdgeKvNamespace, input.AtLeastOnceQueue,
 		input.WorkerVersion, input.WorkerBundle.ResourceProbe, input.WorkerDeployment,
-		input.WorkerCustomDomain, input.WorkerCronTrigger, input.QueueConsumer,
+		input.WorkerCustomDomain, input.WorkerEndpoint, input.WorkerCronTrigger, input.QueueConsumer,
 	}
 	r.desiredSchemas = map[string]map[string]any{}
 	for _, probe := range probes {

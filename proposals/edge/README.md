@@ -33,6 +33,7 @@ Binding candidates in `interfaces/candidates/v1alpha1` and
 | [WorkerVersion](worker-version.md) | revision | Immutable executable snapshot: bundle, compatibility date, handlers, vars, typed bindings. | Mutable in-place code or config is not a version of this Form. |
 | [WorkerDeployment](worker-deployment.md) | deployment | Basis-point traffic split across up to eight Worker Versions of one worker. | Per-request routing rules or geographic steering is separate work. |
 | [WorkerCustomDomain](worker-custom-domain.md) | attachment | Serves one DNS hostname from a worker's active deployment over HTTPS. | Path-pattern routes are a separate attachment Form. |
+| [WorkerEndpoint](worker-endpoint.md) | attachment | Makes a worker reachable over HTTPS at an address the host assigns and publishes. | A name the author owns is `WorkerCustomDomain`; a chosen label or region is host placement, not a Form. |
 | [WorkerCronTrigger](worker-cron-trigger.md) | attachment | Invokes the scheduled handler on a five-field UTC cron schedule. | Timezone-aware scheduling is a different Form. |
 | [EdgeKVNamespace](edge-kv-namespace.md) | identity | Globally replicated key/value namespace with eventual consistency. | A linearizable or per-key-consistent store is a different Form. |
 | [ObjectBucket](object-bucket.md) | identity | Flat-namespace object store with read-after-write consistency and strong etags. | CORS/lifecycle/lock rules are separate policy Forms. |

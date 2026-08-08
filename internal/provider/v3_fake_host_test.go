@@ -101,6 +101,13 @@ type v3FakeHost struct {
 	// though a client recorded them: the lane permits an operation record to
 	// expire.
 	forgottenOperations map[string]bool
+
+	// assignedOutputs is the status.outputs document every applied record is
+	// created with. It stands for the values a host COMPUTES rather than the
+	// author writing them — a host-assigned endpoint address is the case the
+	// v1alpha3 lane has — so a test can prove the provider types them without
+	// pretending the configuration supplied anything.
+	assignedOutputs map[string]any
 }
 
 // v3DeferredCommit is one accepted-but-uncommitted mutation: the record the
@@ -365,6 +372,20 @@ func (h *v3FakeHost) storeResource(kind, name, space, group, uid string, spec ma
 	}
 }
 
+// reassignOutputs replaces one stored record's status.outputs, the way a host
+// that recomputed a value it owns answers differently on the next read without
+// any desired state having changed.
+func (h *v3FakeHost) reassignOutputs(kind, name string, outputs map[string]any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	record := h.resources[h.resourceKey(kind, name)]
+	if record == nil {
+		h.t.Fatalf("no stored %s/%s to reassign outputs on", kind, name)
+	}
+	record.outputs = outputs
+	record.revision++
+}
+
 // unescapeSegment decodes one ordinary path segment. It deliberately refuses a
 // percent-encoded slash: no v1alpha3 path carries one, and a fake host that
 // decoded it would let a client regression pass unnoticed
@@ -548,6 +569,7 @@ func (h *v3FakeHost) serveApply(w http.ResponseWriter, r *http.Request, group, k
 			uid:        "uid-" + strconv.Itoa(h.uidCounter),
 			generation: 1, revision: 1,
 			apiVersion: group, kind: kind, form: form, space: space, spec: spec,
+			outputs: h.assignedOutputs,
 		}
 		if h.apply202Uncommitted {
 			// The resource does NOT exist yet: it is created when the operation

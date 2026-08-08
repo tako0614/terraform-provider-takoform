@@ -197,8 +197,62 @@ type Form struct {
 
 	Fields []Field
 
+	// Outputs is the closed set of host-computed values this Form publishes in
+	// `status.outputs`. It is the Form's OUTPUT contract: a host that supports
+	// the Form returns every declared output, and returns nothing else, which
+	// is what makes an output readable as a typed value rather than as an
+	// untyped JSON blob a consumer has to guess the shape of.
+	//
+	// An output is not desired state. It is never written, never defaulted,
+	// never immutable, and never a cross-resource reference: those words all
+	// describe what an author asks for, and an output is what the host answers.
+	// The declarations here are held to that by validateOutput.
+	Outputs []Field
+
 	ProvidedInterfaces []InterfaceRefSource
 	AcceptedBindings   []BindingRefSource
+}
+
+// ReservedResourceAttributes is the closed set of attribute names the
+// v1alpha3 resource surface owns on every Form: the portable envelope
+// (name, space, uid, generation, revision, conditions), the derived
+// conveniences a client renders from it, the exact recorded FormRef, the two
+// internal recovery records, and the operation timeouts.
+//
+// A Form field or output may not take one of these names. The clash would not
+// be a naming inconvenience: the envelope member and the Form member would be
+// one attribute holding two different facts, and whichever the resource wrote
+// last would silently win. The list lives here rather than in the provider so
+// the AUTHORING model refuses the Form, before any surface is derived from it;
+// the provider proves the two agree.
+var ReservedResourceAttributes = []string{
+	"conditions",
+	"create_timeout",
+	"delete_timeout",
+	"form_api_version",
+	"form_definition_version",
+	"form_kind",
+	"form_package_digest",
+	"form_schema_digest",
+	"generation",
+	"name",
+	"outputs_json",
+	"pending_operation_id",
+	"ready",
+	"relation_drift_reason",
+	"revision",
+	"space",
+	"uid",
+	"update_timeout",
+}
+
+func reservedResourceAttribute(name string) bool {
+	for _, reserved := range ReservedResourceAttributes {
+		if reserved == name {
+			return true
+		}
+	}
+	return false
 }
 
 // MutableFields lists the portable desired fields a spec-changing update may
@@ -275,6 +329,12 @@ func (f Form) Validate() error {
 		if field.Wire == "name" || field.HCL == "name" {
 			return fmt.Errorf("form %s declares a top-level name field; the v1alpha3 envelope owns metadata.name (decision 0011)", f.Kind)
 		}
+		if reservedResourceAttribute(field.AttributeName()) {
+			return fmt.Errorf(
+				"form %s field %s takes the reserved resource attribute %q; the v1alpha3 envelope owns it",
+				f.Kind, field.Wire, field.AttributeName(),
+			)
+		}
 		if field.Kind == KindBindingList && f.Role != RoleRevision {
 			return fmt.Errorf("form %s role %s declares binding list %s; capability bindings belong to revision Forms", f.Kind, f.Role, field.Wire)
 		}
@@ -297,6 +357,9 @@ func (f Form) Validate() error {
 			return err
 		}
 	}
+	if err := f.validateOutputs(seen); err != nil {
+		return err
+	}
 	if len(f.AcceptedBindings) > 0 && f.Role != RoleRevision {
 		return fmt.Errorf("form %s role %s accepts bindings; only revision Forms hold them", f.Kind, f.Role)
 	}
@@ -307,6 +370,95 @@ func (f Form) Validate() error {
 		return fmt.Errorf("form %s declares a cross-resource reference without a Family group", f.Kind)
 	}
 	return nil
+}
+
+// validateOutputs proves the Form's output contract is one a host can answer
+// and a client can type. desiredNames is the wire-name set of the desired
+// fields, so an output can never be a second spelling of something the author
+// already writes.
+//
+// The rules are all one rule read from different sides: an output is what the
+// HOST computed, so nothing that describes an author's request may appear on
+// it. A required flag would be meaningless (every declared output is returned,
+// which is what the schema states), a default would name a value no host
+// produced, an immutable flag would fence a value no one writes, and a
+// reference would make an output a relation — a thing the lane resolves, pins
+// by UID, and protects from deletion, none of which a computed value has.
+func (f Form) validateOutputs(desiredNames map[string]struct{}) error {
+	seen := map[string]struct{}{}
+	attributes := map[string]struct{}{}
+	for _, field := range f.Fields {
+		attributes[field.AttributeName()] = struct{}{}
+	}
+	for _, output := range f.Outputs {
+		if output.HCL == "" || output.Wire == "" || output.Doc == "" {
+			return fmt.Errorf("form %s output %q must declare HCL, Wire, and Doc", f.Kind, output.Wire)
+		}
+		if _, duplicate := seen[output.Wire]; duplicate {
+			return fmt.Errorf("form %s declares duplicate output %s", f.Kind, output.Wire)
+		}
+		seen[output.Wire] = struct{}{}
+		if _, taken := desiredNames[output.Wire]; taken {
+			return fmt.Errorf(
+				"form %s output %s is also a desired property; an output is what the host answers, never a second spelling of what the author wrote",
+				f.Kind, output.Wire,
+			)
+		}
+		if _, taken := attributes[output.AttributeName()]; taken {
+			return fmt.Errorf("form %s output %s collides with a desired attribute name", f.Kind, output.Wire)
+		}
+		if reservedResourceAttribute(output.AttributeName()) {
+			return fmt.Errorf(
+				"form %s output %s takes the reserved resource attribute %q; the v1alpha3 envelope owns it",
+				f.Kind, output.Wire, output.AttributeName(),
+			)
+		}
+		switch {
+		case output.Required:
+			return fmt.Errorf(
+				"form %s output %s is marked Required; every declared output is returned, which the output schema states, so the flag could only disagree with it",
+				f.Kind, output.Wire,
+			)
+		case output.Immutable:
+			return fmt.Errorf("form %s output %s is marked Immutable; nothing writes an output", f.Kind, output.Wire)
+		case output.Default != nil || output.AbsenceIsSemantic:
+			return fmt.Errorf(
+				"form %s output %s declares an absence meaning; a host returns every declared output, so there is no absent case",
+				f.Kind, output.Wire,
+			)
+		case output.Target.Declared() || output.TargetKind != "" || output.BindingType != "":
+			return fmt.Errorf("form %s output %s points at another resource; an output is a value, never a relation", f.Kind, output.Wire)
+		case output.ProjectsEnvironmentNames:
+			return fmt.Errorf("form %s output %s claims to project environment names; only desired state does", f.Kind, output.Wire)
+		}
+		switch output.Kind {
+		case KindString:
+			if output.Pattern == "" && output.MaxLength == 0 {
+				return fmt.Errorf("form %s output %s is an unbounded string; declare Pattern or MaxLength", f.Kind, output.Wire)
+			}
+		case KindStringEnum:
+			if len(output.Enum) == 0 {
+				return fmt.Errorf("form %s output %s declares no enum values", f.Kind, output.Wire)
+			}
+		case KindInteger, KindBoolean:
+		default:
+			return fmt.Errorf(
+				"form %s output %s has kind %q; an output is one closed scalar, so a consumer reads a typed value rather than a document",
+				f.Kind, output.Wire, output.Kind,
+			)
+		}
+	}
+	return nil
+}
+
+// AttributeName is the Terraform attribute one field or output surfaces under.
+// The data-only JSON map surfaces as <name>_json because its values are
+// arbitrary bounded JSON, which an HCL map of strings cannot carry faithfully.
+func (f Field) AttributeName() string {
+	if f.Kind == KindJSONMap {
+		return f.HCL + "_json"
+	}
+	return f.HCL
 }
 
 // declaresReference reports whether any declared field, at any depth, is a

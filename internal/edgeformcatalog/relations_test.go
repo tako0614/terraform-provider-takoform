@@ -56,6 +56,9 @@ var wantRelations = map[string][]string{
 	"WorkerCustomDomain": {
 		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
 	},
+	"WorkerEndpoint": {
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
+	},
 	"WorkerCronTrigger": {
 		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
 	},
@@ -148,8 +151,8 @@ func TestEveryDeclaredReferenceIsDerived(t *testing.T) {
 	if totalDeclared != totalDerived {
 		t.Fatalf("catalog declares %d reference fields but derives %d relations", totalDeclared, totalDerived)
 	}
-	if totalDerived != 14 {
-		t.Fatalf("family derives %d relations, want the 14 in the relation table", totalDerived)
+	if totalDerived != 15 {
+		t.Fatalf("family derives %d relations, want the 15 in the relation table", totalDerived)
 	}
 	// Five of the fourteen are typed bindings. Every other relation was
 	// completely unvalidated before this lane learned to derive them.
