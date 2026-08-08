@@ -122,7 +122,12 @@ type recordedReplay struct {
 }
 
 type artifactUpload struct {
-	ID             string
+	ID string
+	// Owner is the authenticated tenant and principal that started this upload
+	// session. An upload id is a handle, never a capability: a caller who is not
+	// the owner is answered as if the session did not exist
+	// (spec/decisions/0018).
+	Owner          hostAuthContext
 	ManifestRaw    []byte
 	Manifest       artifactManifest
 	ManifestDigest string
@@ -151,7 +156,12 @@ type artifactFile struct {
 }
 
 type hostOperation struct {
-	ID             string
+	ID string
+	// Owner is the authenticated tenant and principal the mutation was accepted
+	// from. An operation id is a resumption handle, never a capability: a caller
+	// who is not the owner is answered operation_not_found, because a 403 would
+	// confirm that the id names a real operation (spec/decisions/0018).
+	Owner          hostAuthContext
 	Done           bool
 	PollsRemaining int
 	// DeleteTarget is the resource key an accepted-but-unfinished DELETE is
@@ -178,9 +188,19 @@ type ReferenceHost struct {
 	prepares        map[string][]byte
 	replays         map[string]recordedReplay
 	uploads         map[string]*artifactUpload
-	blobs           map[string][]byte
-	manifests       map[string][]byte
-	operations      map[string]*hostOperation
+	// blobs and manifests are content-addressed and PHYSICALLY deduplicated:
+	// one copy of the bytes, no matter how many tenants hold it.
+	blobs      map[string][]byte
+	manifests  map[string][]byte
+	operations map[string]*hostOperation
+	// blobTenants and manifestTenants are the LOGICAL access facts layered over
+	// that dedup: which tenants hold each content address. A digest is a name for
+	// bytes, not an entitlement to them, so a caller reads a manifest or a blob
+	// only when its own tenant already holds that address — by having uploaded
+	// the bytes, or by having committed a manifest naming them
+	// (spec/decisions/0018).
+	blobTenants     map[string]map[string]bool
+	manifestTenants map[string]map[string]bool
 	uidCounter      int
 	opCounter       int
 	uploadCounter   int
@@ -201,17 +221,54 @@ func NewReferenceHost(contract Contract, catalog *Catalog) *ReferenceHost {
 		blobs:           map[string][]byte{},
 		manifests:       map[string][]byte{},
 		operations:      map[string]*hostOperation{},
+		blobTenants:     map[string]map[string]bool{},
+		manifestTenants: map[string]map[string]bool{},
 	}
+}
+
+// holdsBlob and holdsManifest answer the ONE authorization question the
+// artifact surface asks: does this caller's tenant already hold this content
+// address? Physical storage is shared; these sets are not.
+func (h *ReferenceHost) holdsBlob(tenant, digest string) bool {
+	return h.blobTenants[digest][tenant]
+}
+
+func (h *ReferenceHost) holdsManifest(tenant, digest string) bool {
+	return h.manifestTenants[digest][tenant]
+}
+
+func (h *ReferenceHost) grantBlob(tenant, digest string) {
+	if h.blobTenants[digest] == nil {
+		h.blobTenants[digest] = map[string]bool{}
+	}
+	h.blobTenants[digest][tenant] = true
+}
+
+func (h *ReferenceHost) grantManifest(tenant, digest string) {
+	if h.manifestTenants[digest] == nil {
+		h.manifestTenants[digest] = map[string]bool{}
+	}
+	h.manifestTenants[digest][tenant] = true
 }
 
 func resourceKey(space, group, kind, name string) string {
 	return strings.Join([]string{space, group, kind, name}, "\x00")
 }
 
+// groupOf rejoins the two ordinary path segments a namespaced Form group
+// travels as — {formGroup}/{formVersion} — into the exact FormRef apiVersion
+// string the wire, the queries, and the stored identities use unchanged
+// (spec/decisions/0018).
+func groupOf(name, version string) string { return name + "/" + version }
+
 type hostAuthContext struct {
 	Tenant    string
 	Principal string
 }
+
+// referencePrimaryAuth is the identity referencePrimaryToken authenticates as.
+// It is named once so ownership and holding facts can be stated in one place.
+var referencePrimaryAuth = hostAuthContext{Tenant: "reference-tenant", Principal: "reference-primary"}
 
 func hostRequestAuth(request *http.Request) (hostAuthContext, bool) {
 	const prefix = "Bearer "
@@ -221,7 +278,7 @@ func hostRequestAuth(request *http.Request) (hostAuthContext, bool) {
 	}
 	switch strings.TrimPrefix(authorization, prefix) {
 	case referencePrimaryToken:
-		return hostAuthContext{Tenant: "reference-tenant", Principal: "reference-primary"}, true
+		return referencePrimaryAuth, true
 	case referenceAlternateToken:
 		return hostAuthContext{Tenant: "reference-tenant", Principal: "reference-alternate"}, true
 	case referenceAlternateTenantToken:
@@ -273,19 +330,27 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 			h.writeError(w, "invalid_argument", "invalid percent-encoding in request path")
 			return
 		}
+		// A namespaced Form group travels as TWO ordinary path segments
+		// (spec/decisions/0018). A segment that percent-encodes a slash names no
+		// route this lane defines, and accepting it would make the host's routing
+		// depend on whether an intermediary decoded %2F on the way in.
+		if strings.Contains(part, "/") {
+			h.writeError(w, "resource_not_found", "path segments must not percent-encode a slash")
+			return
+		}
 		parts[index] = part
 	}
 	switch {
 	case parts[0] == "forms" && len(parts) == 1 && request.Method == http.MethodGet:
 		h.handleForms(w, request)
-	case parts[0] == "form-definitions" && len(parts) == 3 && request.Method == http.MethodGet:
-		h.handleFormDefinition(w, request, parts[1], parts[2])
+	case parts[0] == "form-definitions" && len(parts) == 4 && request.Method == http.MethodGet:
+		h.handleFormDefinition(w, request, groupOf(parts[1], parts[2]), parts[3])
 	case parts[0] == "resources" && len(parts) == 2 && parts[1] == "validate" && request.Method == http.MethodPost:
 		h.handleValidate(w, request)
 	case parts[0] == "resources" && len(parts) == 2 && parts[1] == "prepare" && request.Method == http.MethodPost:
 		h.handlePrepare(w, request)
-	case parts[0] == "resources" && len(parts) == 4:
-		group, kind, name := parts[1], parts[2], parts[3]
+	case parts[0] == "resources" && len(parts) == 5:
+		group, kind, name := groupOf(parts[1], parts[2]), parts[3], parts[4]
 		switch request.Method {
 		case http.MethodPut:
 			h.handleApply(w, request, group, kind, name)
@@ -296,8 +361,8 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 		default:
 			h.writeError(w, "resource_not_found", "unknown operation")
 		}
-	case parts[0] == "resources" && len(parts) == 5 && request.Method == http.MethodPost:
-		group, kind, name, action := parts[1], parts[2], parts[3], parts[4]
+	case parts[0] == "resources" && len(parts) == 6 && request.Method == http.MethodPost:
+		group, kind, name, action := groupOf(parts[1], parts[2]), parts[3], parts[4], parts[5]
 		switch action {
 		// There is no refresh action in the v1alpha3 lane: observe is the one
 		// fenced read-only re-observation. A request for /refresh is an unknown
@@ -310,7 +375,7 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 			h.writeError(w, "resource_not_found", "unknown operation")
 		}
 	case parts[0] == "operations" && len(parts) == 2 && request.Method == http.MethodGet:
-		h.handleOperationGet(w, parts[1])
+		h.handleOperationGet(w, request, parts[1])
 	case parts[0] == "operations" && len(parts) == 3 && parts[2] == "cancel" && request.Method == http.MethodPost:
 		h.handleOperationCancel(w, request, parts[1])
 	case parts[0] == "artifacts":
@@ -1367,8 +1432,10 @@ func (h *ReferenceHost) acceptOperation(
 	commit func() (map[string]any, *hostError),
 ) {
 	h.opCounter++
+	owner, _ := hostRequestAuth(request)
 	operation := &hostOperation{
 		ID:             "op_" + strconv.Itoa(h.opCounter),
+		Owner:          owner,
 		PollsRemaining: asyncOperationPolls,
 		DeleteTarget:   deleteTarget,
 		commit:         commit,
@@ -1404,8 +1471,26 @@ func (h *ReferenceHost) completeOperation(operation *hostOperation, result map[s
 	operation.terminalBody = encodeJSONBody(document)
 }
 
-func (h *ReferenceHost) handleOperationGet(w http.ResponseWriter, id string) {
+// ownedOperation resolves one operation for the caller that created it. An
+// operation belonging to another tenant or another principal is indistinguishable
+// from an operation that never existed: both return nil, and the caller is told
+// operation_not_found. Answering permission_denied instead would disclose that
+// the id names a real operation, which is the fact a stranger holding a guessed
+// or leaked id is trying to learn (spec/decisions/0018).
+func (h *ReferenceHost) ownedOperation(request *http.Request, id string) *hostOperation {
 	operation := h.operations[id]
+	if operation == nil {
+		return nil
+	}
+	caller, _ := hostRequestAuth(request)
+	if operation.Owner != caller {
+		return nil
+	}
+	return operation
+}
+
+func (h *ReferenceHost) handleOperationGet(w http.ResponseWriter, request *http.Request, id string) {
+	operation := h.ownedOperation(request, id)
 	if operation == nil {
 		h.writeError(w, "operation_not_found", "operation is unknown")
 		return
@@ -1428,7 +1513,7 @@ func (h *ReferenceHost) handleOperationCancel(w http.ResponseWriter, request *ht
 		h.writeError(w, "invalid_argument", "Idempotency-Key is required")
 		return
 	}
-	operation := h.operations[id]
+	operation := h.ownedOperation(request, id)
 	if operation == nil {
 		h.writeError(w, "operation_not_found", "operation is unknown")
 		return
@@ -1450,14 +1535,19 @@ func (h *ReferenceHost) routeArtifacts(w http.ResponseWriter, request *http.Requ
 	case len(parts) == 5 && parts[1] == "uploads" && parts[3] == "blobs" && request.Method == http.MethodPut:
 		h.handleArtifactBlobUpload(w, request, parts[2], parts[4])
 	case len(parts) == 3 && parts[1] == "blobs" && request.Method == http.MethodHead:
-		if h.blobs[parts[2]] == nil {
+		// A blob digest is a content address, not a bearer capability: a caller
+		// whose tenant does not hold it is told 404 even when the bytes are
+		// physically present for someone else (spec/decisions/0018).
+		caller, _ := hostRequestAuth(request)
+		if h.blobs[parts[2]] == nil || !h.holdsBlob(caller.Tenant, parts[2]) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 	case len(parts) == 2 && request.Method == http.MethodGet:
+		caller, _ := hostRequestAuth(request)
 		manifestRaw := h.manifests[parts[1]]
-		if manifestRaw == nil {
+		if manifestRaw == nil || !h.holdsManifest(caller.Tenant, parts[1]) {
 			h.writeError(w, "artifact_missing", "manifest is unknown")
 			return
 		}
@@ -1620,16 +1710,23 @@ func (h *ReferenceHost) handleArtifactUploadStart(w http.ResponseWriter, request
 		return
 	}
 	h.uploadCounter++
+	owner, _ := hostRequestAuth(request)
 	upload := &artifactUpload{
 		ID:             "up_" + strconv.Itoa(h.uploadCounter),
+		Owner:          owner,
 		ManifestRaw:    append([]byte(nil), envelope.Manifest...),
 		Manifest:       manifest,
 		ManifestDigest: manifestDigest,
 	}
 	h.uploads[upload.ID] = upload
+	// missingBlobs is answered per TENANT, not per byte store. Reporting a blob
+	// as already present because some other tenant uploaded it would hand this
+	// tenant bytes it never had, using the digest as the entitlement — exactly
+	// what a content address must not be. Dedup stays physical: the second
+	// tenant's identical bytes overwrite one stored copy.
 	missing := []string{}
 	for _, digest := range manifest.blobDigests() {
-		if h.blobs[digest] == nil {
+		if !h.holdsBlob(owner.Tenant, digest) {
 			missing = append(missing, digest)
 		}
 	}
@@ -1638,8 +1735,23 @@ func (h *ReferenceHost) handleArtifactUploadStart(w http.ResponseWriter, request
 	h.recordReplay(request, raw, "", http.StatusCreated, "", response)
 }
 
-func (h *ReferenceHost) handleArtifactBlobUpload(w http.ResponseWriter, request *http.Request, uploadID, digest string) {
+// ownedUpload resolves one upload session for the caller that started it. As
+// with operations, a session belonging to another tenant or principal is
+// answered as absent rather than forbidden (spec/decisions/0018).
+func (h *ReferenceHost) ownedUpload(request *http.Request, uploadID string) *artifactUpload {
 	upload := h.uploads[uploadID]
+	if upload == nil {
+		return nil
+	}
+	caller, _ := hostRequestAuth(request)
+	if upload.Owner != caller {
+		return nil
+	}
+	return upload
+}
+
+func (h *ReferenceHost) handleArtifactBlobUpload(w http.ResponseWriter, request *http.Request, uploadID, digest string) {
+	upload := h.ownedUpload(request, uploadID)
 	if upload == nil {
 		h.writeError(w, "artifact_missing", "upload is unknown")
 		return
@@ -1675,6 +1787,9 @@ func (h *ReferenceHost) handleArtifactBlobUpload(w http.ResponseWriter, request 
 		return
 	}
 	h.blobs[digest] = raw
+	// The uploading tenant possessed these exact bytes, so it now holds this
+	// content address; nobody else's holding changed.
+	h.grantBlob(upload.Owner.Tenant, digest)
 	h.writeRaw(w, http.StatusCreated, "", nil)
 }
 
@@ -1691,7 +1806,7 @@ func (h *ReferenceHost) handleArtifactCommit(w http.ResponseWriter, request *htt
 	if h.tryReplay(w, request, raw, "") {
 		return
 	}
-	upload := h.uploads[uploadID]
+	upload := h.ownedUpload(request, uploadID)
 	if upload == nil {
 		h.writeError(w, "artifact_missing", "upload is unknown")
 		return
@@ -1704,7 +1819,7 @@ func (h *ReferenceHost) handleArtifactCommit(w http.ResponseWriter, request *htt
 		return
 	}
 	for _, digest := range upload.Manifest.blobDigests() {
-		if h.blobs[digest] == nil {
+		if h.blobs[digest] == nil || !h.holdsBlob(upload.Owner.Tenant, digest) {
 			h.writeError(w, "artifact_missing", "manifest blob "+digest+" was not uploaded")
 			return
 		}
@@ -1722,6 +1837,10 @@ func (h *ReferenceHost) handleArtifactCommit(w http.ResponseWriter, request *htt
 		status = http.StatusOK
 	}
 	h.manifests[upload.ManifestDigest] = append([]byte(nil), upload.ManifestRaw...)
+	// Committing binds the manifest address to the committing tenant. Its blobs
+	// are already held — commit refused otherwise — so nothing about the byte
+	// store changes when a second tenant commits the same document.
+	h.grantManifest(upload.Owner.Tenant, upload.ManifestDigest)
 	response := encodeJSONBody(map[string]any{"manifestDigest": upload.ManifestDigest})
 	h.writeRaw(w, status, "", response)
 	h.recordReplay(request, raw, "", status, "", response)
@@ -1757,39 +1876,61 @@ func (h *ReferenceHost) verifyCommittedSizes(manifest artifactManifest) *hostErr
 	return nil
 }
 
+// handleArtifactUploadAbandon ends one upload session the caller owns. An id
+// this caller does not hold — never issued, already abandoned, or another
+// tenant's or principal's — is one answer, artifact_missing: replying 204 for
+// an unknown id while replying 404 for a foreign one would make the difference
+// between the two observable, which is the existence disclosure the ownership
+// rule exists to prevent (spec/decisions/0018).
 func (h *ReferenceHost) handleArtifactUploadAbandon(w http.ResponseWriter, request *http.Request, uploadID string) {
 	if request.Header.Get("Idempotency-Key") == "" {
 		h.writeError(w, "invalid_argument", "Idempotency-Key is required")
 		return
 	}
-	upload := h.uploads[uploadID]
-	delete(h.uploads, uploadID)
-	if upload != nil {
-		h.collectStagedBlobs(upload)
+	upload := h.ownedUpload(request, uploadID)
+	if upload == nil {
+		h.writeError(w, "artifact_missing", "upload is unknown")
+		return
 	}
+	delete(h.uploads, uploadID)
+	h.collectStagedBlobs(upload)
 	h.writeRaw(w, http.StatusNoContent, "", nil)
 }
 
-// collectStagedBlobs frees the blobs an abandoned upload session staged. A
-// blob any COMMITTED manifest still names is retained: committed manifests are
-// never collected, so a manifest a Resource references stays readable and its
-// bytes stay resolvable no matter what unrelated upload sessions are abandoned
-// around it. Blobs are content-addressed and therefore shared, which is
-// exactly why this has to be a reachability question rather than a per-session
-// one.
+// collectStagedBlobs frees what an abandoned upload session staged. A blob any
+// COMMITTED manifest the same tenant holds still names is retained: committed
+// manifests are never collected, so a manifest a Resource references stays
+// readable and its bytes stay resolvable no matter what unrelated upload
+// sessions are abandoned around it. Blobs are content-addressed and therefore
+// shared, which is exactly why this has to be a reachability question rather
+// than a per-session one.
+//
+// Reachability is asked per tenant and answered in two steps: the abandoning
+// tenant's HOLD on an unreachable address is dropped, and the shared BYTES are
+// freed only once no tenant holds the address at all. One tenant abandoning a
+// session can therefore never take bytes away from another.
 func (h *ReferenceHost) collectStagedBlobs(upload *artifactUpload) {
+	tenant := upload.Owner.Tenant
 	retained := map[string]bool{}
-	for _, raw := range h.manifests {
+	for digest, raw := range h.manifests {
+		if !h.holdsManifest(tenant, digest) {
+			continue
+		}
 		var committed artifactManifest
 		if err := formpackage.DecodeStrictIJSON(raw, &committed); err != nil {
 			continue
 		}
-		for _, digest := range committed.blobDigests() {
-			retained[digest] = true
+		for _, blobDigest := range committed.blobDigests() {
+			retained[blobDigest] = true
 		}
 	}
 	for _, digest := range upload.Manifest.blobDigests() {
-		if !retained[digest] {
+		if retained[digest] {
+			continue
+		}
+		delete(h.blobTenants[digest], tenant)
+		if len(h.blobTenants[digest]) == 0 {
+			delete(h.blobTenants, digest)
 			delete(h.blobs, digest)
 		}
 	}
@@ -1812,9 +1953,9 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 			profiles = append(profiles, h.formSupportProfile(h.catalog.forms[key]))
 		}
 		h.writeJSON(w, http.StatusOK, "", map[string]any{"profiles": profiles})
-	case len(parts) == 5 && parts[1] == "forms":
-		form := h.catalog.form(parts[2], parts[3])
-		if form == nil || form.Ref.DefinitionVersion != parts[4] {
+	case len(parts) == 6 && parts[1] == "forms":
+		form := h.catalog.form(groupOf(parts[2], parts[3]), parts[4])
+		if form == nil || form.Ref.DefinitionVersion != parts[5] {
 			h.writeError(w, "form_unknown", "exact Form line is unknown")
 			return
 		}

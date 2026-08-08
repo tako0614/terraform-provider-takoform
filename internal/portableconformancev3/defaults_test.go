@@ -24,7 +24,7 @@ func exactQueryValues(space string, ref FormRef) url.Values {
 
 func resourcePath(contract Contract, ref FormRef, name, action string, query url.Values) string {
 	target := contract.APIPath + "/resources/" +
-		url.PathEscape(ref.APIVersion) + "/" + url.PathEscape(ref.Kind) + "/" + url.PathEscape(name)
+		groupSegments(ref.APIVersion) + "/" + url.PathEscape(ref.Kind) + "/" + url.PathEscape(name)
 	if action != "" {
 		target += "/" + action
 	}

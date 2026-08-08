@@ -259,7 +259,7 @@ func (r *v3Runner) checkExactFormRefFailsClosedOnUnknownDefinition(kv probeTarge
 
 		definitionURL := fmt.Sprintf(
 			"%s/form-definitions/%s/%s?%s",
-			r.apiBase, escapeGroup(unknown.ref.APIVersion), url.PathEscape(unknown.ref.Kind), query,
+			r.apiBase, groupSegments(unknown.ref.APIVersion), url.PathEscape(unknown.ref.Kind), query,
 		)
 		definition, err := r.request(http.MethodGet, definitionURL, nil, nil)
 		if err != nil {

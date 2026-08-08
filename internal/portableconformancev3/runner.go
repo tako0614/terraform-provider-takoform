@@ -331,7 +331,7 @@ type wireFormDefinition struct {
 func (r *v3Runner) formDefinition(ref FormRef) (wireFormDefinition, error) {
 	fullURL := fmt.Sprintf(
 		"%s/form-definitions/%s/%s?%s",
-		r.apiBase, escapeGroup(ref.APIVersion), url.PathEscape(ref.Kind),
+		r.apiBase, groupSegments(ref.APIVersion), url.PathEscape(ref.Kind),
 		r.exactQuery(r.contract.RunnerInput.Space, ref).Encode(),
 	)
 	response, err := r.request(http.MethodGet, fullURL, nil, nil)
@@ -397,12 +397,22 @@ func (r *v3Runner) request(method, target string, headers map[string]string, bod
 
 func encodeRunnerJSON(value any) ([]byte, error) { return json.Marshal(value) }
 
-func escapeGroup(group string) string { return url.PathEscape(group) }
+// groupSegments renders a namespaced Form group as the two ordinary path
+// segments the lane's URL templates declare, {formGroup}/{formVersion}. No
+// path segment the runner builds ever percent-encodes a slash
+// (spec/decisions/0018).
+func groupSegments(group string) string {
+	name, version, split := strings.Cut(group, "/")
+	if !split {
+		return url.PathEscape(group)
+	}
+	return url.PathEscape(name) + "/" + url.PathEscape(version)
+}
 
 func (r *v3Runner) resourceURL(ref FormRef, name, action string, query url.Values) string {
 	target := fmt.Sprintf(
 		"%s/resources/%s/%s/%s",
-		r.apiBase, escapeGroup(ref.APIVersion), url.PathEscape(ref.Kind), url.PathEscape(name),
+		r.apiBase, groupSegments(ref.APIVersion), url.PathEscape(ref.Kind), url.PathEscape(name),
 	)
 	if action != "" {
 		target += "/" + action

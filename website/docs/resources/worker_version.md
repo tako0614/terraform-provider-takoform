@@ -39,7 +39,15 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 - `uid` — host-issued immutable resource identity; delete and re-create yields a new UID.
 - `generation` — desired-state generation; increments only when the portable desired spec changes; this Form declares no update capability — every desired attribute forces replacement instead.
 - `revision` — representation revision; increments whenever the representation changes — a spec-changing update, new status, or new outputs. Deletes fence on it via `If-Match`.
-- `ready` — true when the closed `Ready` condition reports `True`.
+- `conditions` — the complete status condition list the host reports, in its order. Each entry carries
+  `type` (the closed `Ready` / `Reconciling` / `Degraded` / `Drifted` / `Blocked` / `Deleting` vocabulary),
+  `status` (`True` / `False` / `Unknown`), the closed portable `reason`, an optional `message`, an optional
+  non-portable `host_reason` naming exactly what is wrong, the `observed_generation` the status reflects,
+  and `last_transition_time`. Conditions are host-rendered state: they change when this resource changes
+  AND when a resource it depends on changes, with no desired spec changing anywhere, so they are read-only
+  and a configuration must not assert them.
+- `ready` — derived convenience: true when `conditions` carries the closed `Ready` condition with status
+  `True`. Read `conditions` for the reason it is not.
 - `outputs_json` — JSON-serialized `status.outputs` document (`"{}"` when empty).
 - `form_api_version`, `form_kind`, `form_definition_version`, `form_schema_digest` — the exact immutable FormRef this state is bound to; reads dispatch on it.
 - `form_package_digest` — audit-only package provenance; never part of resource identity, queries, or fences.

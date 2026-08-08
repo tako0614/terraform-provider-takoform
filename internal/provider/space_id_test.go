@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -151,10 +152,12 @@ func TestProviderConfigureValidatesAndPreservesEnvironmentSpaceID(t *testing.T) 
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv(envSpace, test.space)
-			requests := 0
+			// Configure negotiates both lanes CONCURRENTLY (spec/decisions/0018),
+			// so the two discovery requests arrive on different goroutines.
+			var requests atomic.Int64
 			handler := discoveryHandler(t, true)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-				requests++
+				requests.Add(1)
 				handler(w, request)
 			}))
 			defer server.Close()
@@ -192,8 +195,8 @@ func TestProviderConfigureValidatesAndPreservesEnvironmentSpaceID(t *testing.T) 
 					response.Diagnostics,
 				)
 			}
-			if requests != test.wantRequests {
-				t.Fatalf("Configure made %d request(s), want %d", requests, test.wantRequests)
+			if got := int(requests.Load()); got != test.wantRequests {
+				t.Fatalf("Configure made %d request(s), want %d", got, test.wantRequests)
 			}
 			if test.wantErr {
 				if response.ResourceData != nil || response.DataSourceData != nil {

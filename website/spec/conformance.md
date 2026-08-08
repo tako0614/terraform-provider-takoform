@@ -55,8 +55,14 @@ strong ETag; reject stale generation and revision fences with
 resource identity, queries, and fences; enforce role rules (no in-place
 revision update, `dependency_in_use` for bound targets); complete accepted
 mutations either synchronously or through resumable Operations; verify
-content-addressed artifact manifests blob-by-blob; and publish Host Support
-Profiles free of price, SKU, region, and quota.
+content-addressed artifact manifests blob-by-blob; publish Host Support
+Profiles free of price, SKU, region, and quota; serve a namespaced Form group
+as two ordinary path segments with no percent-encoded slash anywhere in a path;
+answer an operation or upload handle presented by any other tenant or principal
+with the surface's ordinary not-found outcome rather than a forbidden one; and
+answer a manifest or blob read only for a caller whose tenant already holds
+that content address
+([decision 0018](decisions/0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)).
 
 A conforming **exact Interface implementation**
 ([`interface-contract/`](interface-contract/)) MUST satisfy each operation's

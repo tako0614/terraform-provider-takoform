@@ -41,7 +41,15 @@ all force replacement, so existing state is never rebound to another identity.
 - `uid` — host-issued immutable resource identity; delete and re-create yields a new UID.
 - `generation` — desired-state generation; increments only when the portable desired spec changes. Updates fence on it together with `uid`.
 - `revision` — representation revision; increments whenever the representation changes — a spec-changing update, new status, or new outputs. Deletes fence on it via `If-Match`.
-- `ready` — true when the closed `Ready` condition reports `True`.
+- `conditions` — the complete status condition list the host reports, in its order. Each entry carries
+  `type` (the closed `Ready` / `Reconciling` / `Degraded` / `Drifted` / `Blocked` / `Deleting` vocabulary),
+  `status` (`True` / `False` / `Unknown`), the closed portable `reason`, an optional `message`, an optional
+  non-portable `host_reason` naming exactly what is wrong, the `observed_generation` the status reflects,
+  and `last_transition_time`. Conditions are host-rendered state: they change when this resource changes
+  AND when a resource it depends on changes, with no desired spec changing anywhere, so they are read-only
+  and a configuration must not assert them.
+- `ready` — derived convenience: true when `conditions` carries the closed `Ready` condition with status
+  `True`. Read `conditions` for the reason it is not.
 - `outputs_json` — JSON-serialized `status.outputs` document (`"{}"` when empty).
 - `relation_drift_reason` — internal recovery only: `ExternalChange` or `DependencyMissing` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes an in-place re-apply, which is all a host needs to re-resolve and re-pin every reference. A Form whose Definition omits `update` refuses that apply, naming the missing capability; replace the resource instead. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.
 - `pending_operation_id` — internal recovery only: the host operation id of a mutation the host accepted but that did not reach a terminal state before the operation deadline, null in steady state. A refresh consults it before it reads the resource, and it is cleared only once that operation settles. It is not resource identity and configurations must not depend on it.

@@ -44,6 +44,9 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkGenerationFences(queue) },
 		func() error { return r.checkPrepareFences(queue) },
 		func() error { return r.checkReadETags(kv, queue) },
+		// The lane's URL shape is proved against a resource that exists, so the
+		// split path is shown ADDRESSING something rather than merely routing.
+		func() error { return r.checkNamespacedGroupPathSegments(kv) },
 		func() error { return r.checkConditionReasonsClosed(kv, mw, queue) },
 		func() error { return r.checkSpaceIDGrammar(kv) },
 		func() error { return r.checkConcurrentUnrelatedMutation(kv, queue) },
@@ -55,6 +58,11 @@ func (r *v3Runner) run() error {
 		r.checkArtifactRejectList,
 		r.checkArtifactManifestKindExclusive,
 		func() error { return r.checkArtifactRetentionWhileReferenced(bundle) },
+		// Ownership of the artifact surface: an upload id is a handle, and a
+		// content address is a name rather than an entitlement
+		// (spec/decisions/0018).
+		r.checkUploadSessionOwnership,
+		r.checkArtifactDigestIsNotACapability,
 		func() error { return r.checkWorkerVersionFlow(version, kv) },
 		func() error { return r.checkBindingContractVerified(version) },
 		func() error { return r.checkRelationIncarnationChange(version, kv) },
@@ -78,6 +86,7 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkImportFlows(kv, version) },
 		func() error { return r.checkDeleteFences(version, kv) },
 		func() error { return r.checkOperations(kv) },
+		func() error { return r.checkOperationOwnership(kv) },
 		// State continuity: what a client that persists an operation id and
 		// dispatches on the exact FormRef in its state depends on the host for
 		// (spec/decisions/0017).
@@ -2656,7 +2665,7 @@ func (r *v3Runner) checkSupportProfiles() error {
 	version := r.contract.RunnerInput.WorkerVersion.Identity.FormRef
 	oneURL := fmt.Sprintf(
 		"%s/support/forms/%s/%s/%s",
-		r.apiBase, escapeGroup(version.APIVersion),
+		r.apiBase, groupSegments(version.APIVersion),
 		url.PathEscape(version.Kind), url.PathEscape(version.DefinitionVersion),
 	)
 	oneResponse, err := r.request(http.MethodGet, oneURL, nil, nil)

@@ -15,6 +15,29 @@
   "optionalFeatures": [],
   "requiredEndpoints": ["api"],
   "optionalEndpoints": ["artifacts", "operations", "support", "oidc_issuer"],
+  "pathShape": {
+    "namespacedGroup": "two-ordinary-path-segments-formGroup-then-formVersion",
+    "percentEncodedSlash": "never-in-any-path-segment",
+    "formRefApiVersionString": "unchanged-in-bodies-responses-and-the-group-query-key",
+    "advertisedEndpointPaths": "must-carry-no-percent-encoding"
+  },
+  "handleOwnership": {
+    "operationId": "bound-to-the-creating-tenant-and-principal",
+    "uploadId": "bound-to-the-creating-tenant-and-principal",
+    "foreignOperation": "operation_not_found/404",
+    "foreignUpload": "artifact_missing/404",
+    "unknownUpload": "artifact_missing/404-on-continue-commit-and-abandon-alike",
+    "rationale": "403-would-confirm-that-the-handle-names-a-real-record"
+  },
+  "artifactAccess": {
+    "manifestRead": "only-for-a-caller-whose-tenant-holds-the-manifest",
+    "blobHead": "only-for-a-caller-whose-tenant-holds-the-blob",
+    "foreignManifest": "artifact_missing/404",
+    "foreignBlob": "404",
+    "holding": "acquired-by-uploading-the-bytes-or-committing-a-manifest-that-names-them",
+    "missingBlobs": "answered-per-tenant-not-per-byte-store",
+    "deduplication": "physical-storage-may-be-shared; authorization-is-not"
+  },
   "identity": {
     "uid": "host-issued-immutable; delete-and-recreate-changes-uid",
     "generation": {
@@ -123,7 +146,7 @@
     {
       "name": "form-definition",
       "method": "GET",
-      "path": "/apis/forms.takoform.com/v1alpha3/form-definitions/{group}/{kind}",
+      "path": "/apis/forms.takoform.com/v1alpha3/form-definitions/{formGroup}/{formVersion}/{kind}",
       "exactFormQuery": true,
       "precondition": "none",
       "idempotencyKey": false,
@@ -158,7 +181,7 @@
     {
       "name": "apply",
       "method": "PUT",
-      "path": "/apis/forms.takoform.com/v1alpha3/resources/{group}/{kind}/{name}",
+      "path": "/apis/forms.takoform.com/v1alpha3/resources/{formGroup}/{formVersion}/{kind}/{name}",
       "exactFormQuery": false,
       "precondition": "create:if-none-match-star update:generation-fence",
       "idempotencyKey": true,
@@ -170,7 +193,7 @@
     {
       "name": "read",
       "method": "GET",
-      "path": "/apis/forms.takoform.com/v1alpha3/resources/{group}/{kind}/{name}",
+      "path": "/apis/forms.takoform.com/v1alpha3/resources/{formGroup}/{formVersion}/{kind}/{name}",
       "exactFormQuery": true,
       "precondition": "none",
       "idempotencyKey": false,
@@ -181,7 +204,7 @@
     {
       "name": "import",
       "method": "POST",
-      "path": "/apis/forms.takoform.com/v1alpha3/resources/{group}/{kind}/{name}/import",
+      "path": "/apis/forms.takoform.com/v1alpha3/resources/{formGroup}/{formVersion}/{kind}/{name}/import",
       "exactFormQuery": false,
       "precondition": "new:if-none-match-star existing:generation-fence",
       "idempotencyKey": true,
@@ -193,7 +216,7 @@
     {
       "name": "observe",
       "method": "POST",
-      "path": "/apis/forms.takoform.com/v1alpha3/resources/{group}/{kind}/{name}/observe",
+      "path": "/apis/forms.takoform.com/v1alpha3/resources/{formGroup}/{formVersion}/{kind}/{name}/observe",
       "exactFormQuery": true,
       "precondition": "generation-fence",
       "idempotencyKey": true,
@@ -205,7 +228,7 @@
     {
       "name": "delete",
       "method": "DELETE",
-      "path": "/apis/forms.takoform.com/v1alpha3/resources/{group}/{kind}/{name}",
+      "path": "/apis/forms.takoform.com/v1alpha3/resources/{formGroup}/{formVersion}/{kind}/{name}",
       "exactFormQuery": true,
       "precondition": "revision-fence",
       "idempotencyKey": true,
@@ -312,7 +335,7 @@
     {
       "name": "support-form",
       "method": "GET",
-      "path": "/apis/forms.takoform.com/v1alpha3/support/forms/{group}/{kind}/{definitionVersion}",
+      "path": "/apis/forms.takoform.com/v1alpha3/support/forms/{formGroup}/{formVersion}/{kind}/{definitionVersion}",
       "exactFormQuery": false,
       "precondition": "none",
       "idempotencyKey": false,

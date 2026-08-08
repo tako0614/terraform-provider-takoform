@@ -25,6 +25,40 @@ the machine operation table is [`operations-v1alpha3.json`](operations-v1alpha3.
 with path `/apis/forms.takoform.com/v1alpha3`. Each lane has its own
 discovery path; a v1alpha2 client can never select this lane accidentally.
 
+Every advertised endpoint path is compared in its escaped form and MUST carry
+no percent-encoding at all. A client rejects the discovery document otherwise
+([decision 0018](../decisions/0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)):
+an escaped path describes a shape this lane does not have, and comparing the
+decoded path instead would let `%2Fv1alpha3` pass as `/v1alpha3`.
+
+A client negotiates each lane independently, under a deadline of its own that
+is short and separate from its resource-operation deadline. Nothing about one
+lane's outcome may make another lane's resources unusable, and each resource
+type reports its own lane's negotiation error.
+
+## Path shape
+
+A namespaced Form group travels as **two ordinary path segments** — the group
+name, then the group version — wherever a URL template names a group:
+
+```
+{api}/resources/{formGroup}/{formVersion}/{kind}/{name}
+{api}/form-definitions/{formGroup}/{formVersion}/{kind}
+{api}/support/forms/{formGroup}/{formVersion}/{kind}/{definitionVersion}
+```
+
+So `edge.forms.takoform.com/v1alpha1` travels as
+`edge.forms.takoform.com/v1alpha1`. **No path segment ever percent-encodes a
+slash.** Proxies, gateways, and web frameworks disagree about whether `%2F`
+inside a path segment is passed through, decoded, rejected, or normalized, so a
+lane that required it could not be placed behind ordinary infrastructure at all
+([decision 0018](../decisions/0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)).
+A host rejoins the two segments into the exact apiVersion; the FormRef
+`apiVersion` string is unchanged everywhere else — request bodies, responses,
+and the `group` query key still carry `edge.forms.takoform.com/v1alpha1`
+verbatim. This is the required conformance check
+`namespaced-group-travels-as-two-path-segments`.
+
 ## Resource identity
 
 - `metadata.name` is the only name; Form desired schemas do not carry a
@@ -58,7 +92,14 @@ discovery path; a v1alpha2 client can never select this lane accidentally.
 - `status.observedGeneration` names the desired generation the status
   reflects; `status.conditions` uses the closed types `Ready`, `Reconciling`,
   `Degraded`, `Drifted`, `Blocked`, `Deleting` with closed portable reasons
-  and an optional non-portable `hostReason`.
+  and an optional non-portable `hostReason`. A client surfaces the WHOLE
+  condition list, not a boolean derived from it: the reason is what says why a
+  resource is not ready, and a client that discards it forces its operator to
+  leave the tool to find out
+  ([decision 0018](../decisions/0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)).
+  Conditions are host-rendered state that changes without any desired spec
+  changing, so a client MUST NOT carry a previous value forward as if it were
+  still true.
 - The Form semantic identity is the exact FormRef. The package digest used
   at installation is audit evidence (`form.packageDigest`, optional in
   responses); it never enters queries, fences, or state identity, and a host
@@ -80,18 +121,19 @@ discovery path; a v1alpha2 client can never select this lane accidentally.
 ## Lifecycle
 
 Endpoints under `/apis/forms.takoform.com/v1alpha3`, keyed by group and
-kind so one kind name can exist in many groups:
+kind so one kind name can exist in many groups. `{formGroup}/{formVersion}` is
+the two-segment group of [Path shape](#path-shape):
 
 ```
 GET    {api}/forms?space&group&kind&definitionVersion&schemaDigest
-GET    {api}/form-definitions/{group}/{kind}?…
+GET    {api}/form-definitions/{formGroup}/{formVersion}/{kind}?…
 POST   {api}/resources/validate         diagnostics only, no mutation, no digest
 POST   {api}/resources/prepare          short-lived prepare digest for one exact spec
-PUT    {api}/resources/{group}/{kind}/{name}    apply; carries review.prepareDigest
-GET    {api}/resources/{group}/{kind}/{name}
-POST   {api}/resources/{group}/{kind}/{name}/import
-POST   {api}/resources/{group}/{kind}/{name}/observe
-DELETE {api}/resources/{group}/{kind}/{name}
+PUT    {api}/resources/{formGroup}/{formVersion}/{kind}/{name}    apply; carries review.prepareDigest
+GET    {api}/resources/{formGroup}/{formVersion}/{kind}/{name}
+POST   {api}/resources/{formGroup}/{formVersion}/{kind}/{name}/import
+POST   {api}/resources/{formGroup}/{formVersion}/{kind}/{name}/observe
+DELETE {api}/resources/{formGroup}/{formVersion}/{kind}/{name}
 ```
 
 `observe` is the lane's only fenced read-only re-observation. There is no
@@ -421,6 +463,17 @@ operations; an already-terminal operation replays its terminal state.
 `operation_not_found` (404) and `operation_cancelled` (409) are the closed
 outcomes; `deadline_exceeded` (504) reports a host-side deadline.
 
+An operation id is a resumption handle, **not a capability**. A host records the
+authenticated tenant and principal that the mutation was accepted from, and
+answers `GET {api}/operations/{id}` and
+`POST {api}/operations/{id}/cancel` from any other tenant or principal with
+`operation_not_found` (404) — the same answer an id that never existed gets.
+`permission_denied` would confirm that the id names a real operation, which is
+the one fact a stranger holding a guessed or leaked id is trying to learn
+([decision 0018](../decisions/0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)).
+This is the required conformance check
+`operation-bound-to-its-creating-principal`.
+
 "While the record exists" is a retention window, not an ordering: a host MUST NOT
 drop a terminal operation merely because the system moved on. As long as the
 record is retained, the ID stays addressable and its terminal state replays
@@ -465,11 +518,42 @@ references the manifest. Abandoning an unrelated upload session, or
 garbage-collecting staged blobs, MUST NOT make a referenced artifact
 unresolvable.
 
+### Upload sessions are owned
+
+An upload id is a handle bound to the tenant and principal that started the
+session, exactly as an operation id is. Continuing it
+(`PUT {api}/artifacts/uploads/{uploadId}/blobs/{sha256}`), committing it, and
+abandoning it from any other tenant or principal all fail `artifact_missing`
+(404). Abandoning an id the caller does not hold fails the same way whether it
+never existed or belongs to someone else: answering `204` for one and `404` for
+the other would make the difference observable, which is the disclosure the rule
+exists to prevent. This is the required conformance check
+`upload-session-bound-to-its-creating-principal`.
+
+### A content address is not a capability
+
+A digest names bytes; it does not entitle a caller to them
+([decision 0018](../decisions/0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)).
+`GET {api}/artifacts/{manifestDigest}` and
+`HEAD {api}/artifacts/blobs/{sha256}` answer only a caller whose TENANT already
+holds that address — by having uploaded the bytes, or by having committed a
+manifest that names them. Any other tenant is answered `artifact_missing` (404)
+for a manifest and `404` for a blob, even for a digest that exists. It follows
+that `missingBlobs` is answered per tenant and not per byte store: reporting a
+blob as already present because a different tenant uploaded it would hand over
+bytes on the strength of a digest.
+
+A host MAY still deduplicate physically — one stored copy per content address,
+however many tenants hold it. Two tenants that upload the same bytes and commit
+the same manifest see the same immutable identity, and neither one's abandon or
+garbage collection may take the bytes away from the other. This is the required
+conformance check `artifact-digest-is-not-a-capability`.
+
 ## Support profiles
 
 ```
 GET {api}/support/forms
-GET {api}/support/forms/{group}/{kind}/{definitionVersion}
+GET {api}/support/forms/{formGroup}/{formVersion}/{kind}/{definitionVersion}
 GET {api}/support/interfaces/{name}/{version}
 GET {api}/support/bindings/{name}/{version}
 ```

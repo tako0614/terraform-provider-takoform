@@ -66,10 +66,11 @@ func stageUpload(t *testing.T, host *ReferenceHost, id string, manifest map[stri
 		t.Fatal(err)
 	}
 	host.uploads[id] = &artifactUpload{
-		ID: id, ManifestRaw: raw, Manifest: decoded, ManifestDigest: digest,
+		ID: id, Owner: referencePrimaryAuth, ManifestRaw: raw, Manifest: decoded, ManifestDigest: digest,
 	}
 	for blobDigest, body := range blobs {
 		host.blobs[blobDigest] = []byte(body)
+		host.grantBlob(referencePrimaryAuth.Tenant, blobDigest)
 	}
 	return digest
 }
@@ -227,6 +228,10 @@ func TestCommittedManifestSurvivesUnrelatedAbandonedUpload(t *testing.T) {
 	referencedBlob := formpackage.DigestBytes([]byte(artifactModuleSource))
 	host.manifests[referencedDigest] = referencedRaw
 	host.blobs[referencedBlob] = []byte(artifactModuleSource)
+	// A committed artifact is HELD by the tenant that committed it; the read
+	// surfaces answer that tenant and nobody else (spec/decisions/0018).
+	host.grantManifest(referencePrimaryAuth.Tenant, referencedDigest)
+	host.grantBlob(referencePrimaryAuth.Tenant, referencedBlob)
 
 	bundleRef := contract.RunnerInput.WorkerBundle.Identity.FormRef
 	host.storeResource(&storedResource{

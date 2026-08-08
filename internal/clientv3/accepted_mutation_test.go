@@ -27,7 +27,7 @@ func serve202ThenPending(t *testing.T, operationID string, target map[string]any
 			handlePrepare(t, w, r)
 			return true
 		case r.Method == http.MethodPut,
-			r.Method == http.MethodPost && r.URL.EscapedPath() == escapedResourcePath("app", "import"):
+			r.Method == http.MethodPost && r.URL.EscapedPath() == splitGroupResourcePath("app", "import"):
 			body := map[string]any{
 				"apiVersion": OperationAPIVersion, "kind": OperationKind,
 				"id": operationID, "done": false,

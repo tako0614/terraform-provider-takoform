@@ -53,7 +53,7 @@ func (r *v3FormResource) writeV3State(
 	diags.Append(state.SetAttribute(ctx, path.Root("uid"), types.StringValue(res.Metadata.UID))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("generation"), types.StringValue(res.Metadata.Generation))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("revision"), types.StringValue(res.Metadata.Revision))...)
-	diags.Append(state.SetAttribute(ctx, path.Root("ready"), types.BoolValue(clientv3.ResourceReady(res)))...)
+	diags.Append(v3SetConditionsState(ctx, state, res)...)
 	diags.Append(state.SetAttribute(ctx, path.Root("outputs_json"), v3OutputsJSON(res, &diags))...)
 	diags.Append(setV3FormIdentityState(ctx, state, ref)...)
 	// A verified representation settles any earlier accepted-but-unfinished
