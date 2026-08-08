@@ -118,6 +118,38 @@ verbatim. This is the required conformance check
   This is the required conformance check
   `exact-form-ref-fails-closed-on-unknown-definition`.
 
+### The installed set is keyed by the exact identity
+
+The rules of this section are decided by
+[decision 0022](../decisions/0022-relations-pin-the-target-contract.md).
+
+- A host's installed set is keyed by the whole
+  `{apiVersion, kind, definitionVersion, schemaDigest}` tuple, never by group and
+  kind. Two definition versions of one group and kind MUST be installable at the
+  same time and MUST answer independently on `{api}/forms`, on
+  `{api}/form-definitions/…`, and on `{api}/support/forms/…`. A host MUST NOT
+  install two Definitions that agree on group, kind, and `definitionVersion` and
+  differ on `schemaDigest`: a definition version names one set of bytes, and the
+  support path resolves an exact identity from that version alone. A
+  `definitionVersion` from one contract combined with a `schemaDigest` from
+  another names no installed Definition and fails `form_unknown` (404) like any
+  other unknown identity. This is the required conformance check
+  `two-definition-versions-answer-independently`.
+- A resource RECORDS the exact FormRef it was created under. That ref is written
+  at create, carried forward unchanged by every update and import, and is the
+  only identity the resource is answered about. A `read`, `observe`, `apply`,
+  `import`, or `delete` naming any other exact ref addresses no resource and
+  fails `resource_not_found` (404) — the Form may well be installed; what is
+  absent is a resource of that name under that contract. A response MUST NOT
+  rewrite an older resource's recorded ref to a newer one. This is the required
+  conformance check `resource-answers-only-under-its-recorded-form-ref`.
+- A resource NAME stays unique within one space, group, and kind. The definition
+  version decides what a request is answered about, never where a resource
+  lives: a reference is `{apiVersion, kind, name}` and carries no definition
+  version, so two same-named resources of one kind under different contracts
+  would leave every reference to that name unresolvable. A create therefore still
+  conflicts with a name taken under another contract of the same kind.
+
 ## Lifecycle
 
 Endpoints under `/apis/forms.takoform.com/v1alpha3`, keyed by group and
@@ -188,6 +220,59 @@ standing for an array element (`/worker`, `/versions/*/workerVersion`,
 references inside it; the exact digest-bound BindingRef is the Definition's own
 `acceptedBindings` entry of that name.
 
+### What a relation requires of its target
+
+The rules of this section are decided by
+[decision 0022](../decisions/0022-relations-pin-the-target-contract.md).
+
+A group and a kind say WHICH resource a reference names. They say nothing about
+what that resource must still satisfy, so a target whose Definition later moved
+to an incompatible version would keep satisfying every reference to it. Every
+reference-shaped node in a `desiredSchema` therefore carries exactly one target
+contract, as an annotation on the reference itself — data the published Form
+Definition schema already admits, exactly like `x-takoform-binding`
+([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)):
+
+```json
+"x-takoform-target-formrefs": [
+  { "apiVersion": "edge.forms.takoform.com/v1alpha1", "kind": "WorkerBundle",
+    "definitionVersion": "0.1.0", "schemaDigest": "sha256:..." }
+]
+```
+
+when the relation depends on the target's exact desired contract, or
+
+```json
+"x-takoform-required-interface": {
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "name": "worker.runtime", "version": "1.0.0", "schemaDigest": "sha256:..."
+}
+```
+
+when it depends only on an Interface the target provides. A reference carrying
+both, or neither, is refused when relations are derived: a host that cannot say
+what a relation requires cannot verify it.
+
+Which one is correct is decided by the dependency, not by preference.
+`x-takoform-target-formrefs` states the requirement when the source — or the host
+acting for it — reads a member of the target's desired spec, or enforces a rule
+stated over the target Form itself: a `WorkerVersion`'s `/bundle`, whose
+`manifestDigest` a host resolves to learn what the version runs; a
+`WorkerDeployment`'s `/versions/*/workerVersion`, whose `handlers` and `/worker`
+relation decide what the deployment serves and owns; and a `WorkerDeployment`'s
+`/worker`, the one reference that WRITES to its target, because a deployment is
+what renders a Module Worker's readiness under
+[decision 0016](../decisions/0016-the-worker-aggregate-has-one-active-deployment.md).
+`x-takoform-required-interface` states it everywhere else, including every typed
+binding and every inward-activation attachment, because what those need is the
+behavior a contract fixes and any Form providing it would serve.
+
+A binding-list reference MUST require exactly the Interface its Binding
+Definition names as `targetInterface`. The Binding Definition stays the
+authority and the annotation is its projection onto the reference, so the two
+cannot become two sources of truth; a binding relation is verified against its
+Binding Definition first, in the order below, and against the annotation second.
+
 ### Resolution and UID pinning
 
 On `apply` and `import`, for every derived relation present in the materialized
@@ -198,31 +283,50 @@ spec, a host MUST, before any mutation
   `resource_not_found` (404) and the message MUST name the relation pointer.
   Cross-space references are unrepresentable — a reference carries no space.
 - verify that the resolved resource's Form has exactly the referenced group and
-  kind, failing `invalid_argument` (400) on mismatch. A well-formed spec cannot
-  reach this, because the schema pins both constants; a host that resolved by
-  name alone can, and must refuse rather than bind the wrong Form.
+  kind, failing `invalid_argument` (400) on mismatch. The resolved resource's
+  own RECORDED exact ref names that Form; a well-formed spec cannot reach this,
+  because the schema pins both constants, but a host that resolved by name alone
+  can, and must refuse rather than bind the wrong Form.
+- verify the target contract the reference annotates
+  ([decision 0022](../decisions/0022-relations-pin-the-target-contract.md)): the
+  target's recorded exact ref is one of the listed `x-takoform-target-formrefs`,
+  or the target Form's Definition declares the annotated
+  `x-takoform-required-interface` in `providedInterfaces` at exactly that
+  digest. A target that satisfies neither fails `invalid_argument` (400) — the
+  request is well formed and states something untrue about the resource it
+  points at — and the message MUST name the relation pointer and what was
+  required. These are the required conformance checks
+  `relation-target-form-ref-verified` and `relation-target-interface-verified`.
 - verify the binding contract when the relation is a binding (below).
 - record the resolution as
-  `{pointer, relation, targetAPIVersion, targetKind, targetName, targetUID, bindingRef?}`
+  `{pointer, relation, targetAPIVersion, targetKind, targetName, targetUID, targetFormRef, bindingRef?}`
   alongside the resource, where `pointer` is the concrete instance pointer and
   `relation` is the derived pointer it came from.
 
 A host MUST store the **target UID**, not only the name. A name is a label the
-client chose and can reuse; the UID is the identity of one incarnation.
+client chose and can reuse; the UID is the identity of one incarnation. It MUST
+also store the **target's exact FormRef**: the UID pins which incarnation the
+source is bound to, and the ref pins what contract that incarnation satisfies.
+This is the required conformance check `relation-pin-records-target-form-ref`.
 
 ### Incarnation change
 
 When a resource is read or observed and a stored relation's target now resolves
-to a *different* UID, or to nothing, the source reports `Ready=False` with
+to a *different* UID, to a different exact FormRef, or to nothing, the source
+reports `Ready=False` with
 
-- `ExternalChange` — the target name resolves to a different incarnation;
+- `ExternalChange` — the target name resolves to a different incarnation, or the
+  same incarnation under a different exact contract;
 - `DependencyMissing` — the target no longer exists;
 
-and a `hostReason` naming the relation pointer and both UIDs. A host MUST NOT
-re-bind the relation automatically: re-resolving the name would make a delete
-and re-create of the target invisible and silently point the source at a
-resource its author never named. The source stays pinned until it is re-applied,
-and re-reading it does not heal the condition.
+and a `hostReason` naming the relation pointer, both UIDs, and both exact
+FormRefs. A host MUST NOT re-bind the relation automatically: re-resolving the
+name would make a delete and re-create of the target invisible and silently
+point the source at a resource its author never named. The source stays pinned
+until it is re-applied, and re-reading it does not heal the condition. A moved
+CONTRACT is reported through this same condition rather than a parallel one: it
+is the same fact — the source is pinned to something that is no longer there —
+with the same remedy.
 
 ### Recovery
 

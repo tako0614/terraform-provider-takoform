@@ -30,10 +30,7 @@ func fallbackHost(t *testing.T) (*ReferenceHost, Contract) {
 
 func TestNextResourceMintsAndAdvancesIdentity(t *testing.T) {
 	host, contract := fallbackHost(t)
-	form := host.catalog.form(
-		contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef.APIVersion,
-		contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef.Kind,
-	)
+	form := host.catalog.exact(contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef)
 	if form == nil {
 		t.Fatalf("queue form is not installed")
 	}
@@ -80,9 +77,9 @@ func fenceRequest(t *testing.T, headers map[string]string) mutationFence {
 func TestMutationFences(t *testing.T) {
 	host, contract := fallbackHost(t)
 	queueRef := contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef
-	form := host.catalog.form(queueRef.APIVersion, queueRef.Kind)
+	form := host.catalog.exact(queueRef)
 	existing := &storedResource{
-		Group: queueRef.APIVersion, Kind: queueRef.Kind,
+		Ref:  queueRef,
 		Name: "queue-probe", Space: "conformance",
 		UID: "uid-7", Generation: 3, Revision: 5,
 	}
@@ -90,7 +87,7 @@ func TestMutationFences(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		form     *installedForm
+		form     *InstalledForm
 		resource string
 		headers  map[string]string
 		bodyGen  string
@@ -156,7 +153,7 @@ func TestMutationFences(t *testing.T) {
 func TestRelationInstancesCoverEveryReference(t *testing.T) {
 	host, contract := fallbackHost(t)
 	ref := contract.RunnerInput.WorkerVersion.Identity.FormRef
-	form := host.catalog.form(ref.APIVersion, ref.Kind)
+	form := host.catalog.exact(ref)
 	group := ref.APIVersion
 	spec := map[string]any{
 		"worker": map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
@@ -275,12 +272,12 @@ func TestDeleteOfBoundTargetFailsDependencyInUse(t *testing.T) {
 	kvRef := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef
 	versionRef := contract.RunnerInput.WorkerVersion.Identity.FormRef
 	host.storeResource(&storedResource{
-		Group: kvRef.APIVersion, Kind: kvRef.Kind,
+		Ref:  kvRef,
 		Name: "edge-kv-probe", Space: "conformance",
 		UID: "uid-1", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	host.storeResource(&storedResource{
-		Group: versionRef.APIVersion, Kind: versionRef.Kind,
+		Ref:  versionRef,
 		Name: "worker-version-probe", Space: "conformance",
 		UID: "uid-2", Generation: 1, Revision: 1,
 		Spec: map[string]any{
@@ -341,7 +338,7 @@ func TestPrepareFenceOnExistingResource(t *testing.T) {
 	host, contract := fallbackHost(t)
 	queueRef := contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef
 	host.storeResource(&storedResource{
-		Group: queueRef.APIVersion, Kind: queueRef.Kind,
+		Ref:  queueRef,
 		Name: "queue-probe", Space: "conformance",
 		UID: "uid-7", Generation: 3, Revision: 5,
 	})
@@ -422,7 +419,7 @@ func TestStaleRevisionDeleteRejected(t *testing.T) {
 	host, contract := fallbackHost(t)
 	kvRef := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef
 	host.storeResource(&storedResource{
-		Group: kvRef.APIVersion, Kind: kvRef.Kind,
+		Ref:  kvRef,
 		Name: "edge-kv-probe", Space: "conformance",
 		UID: "uid-1", Generation: 1, Revision: 4, Spec: map[string]any{},
 	})

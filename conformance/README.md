@@ -189,9 +189,15 @@ condition-reason vocabulary, and exact Edge Family probe identities
 (ModuleWorker, EdgeKVNamespace, AtLeastOnceQueue, WorkerBundle,
 WorkerVersion, WorkerDeployment, WorkerCronTrigger, QueueConsumer) with their
 registry package digests plus byte-pinned
-desired-negative fixtures. `self-test --contract conformance/portable-host-v3`
+desired-negative fixtures. It also pins a byte-digested SECOND Form Definition
+of the ModuleWorker line, so the lane can install two contracts of one group and
+kind at once; without it, "a host answers for the exact ref recorded in state"
+and "a host answers for the kind" are the same behavior and no check can tell
+them apart
+([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
+`self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 73-check matrix over real HTTP: exact discovery and
+drives the complete 84-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -208,7 +214,14 @@ under the same name — which a spec-identical re-apply repairs, re-pinning
 every relation while generation stands still and only the revision moves —
 and binding contracts verified against
 allowedTargetForms, the target Form's providedInterfaces, and the source
-role, import validated exactly like apply, cross-resource semantics the Forms declare in prose but only a host can
+role, the exact identity a host answers for — two definition versions of one
+group and kind installed at once and answering independently on availability,
+the Form Definition surface, and the support profile, a resource answered only
+under the exact ref it was created under and `resource_not_found` under any
+other, and a relation refused before mutation when its target does not satisfy
+the contract the reference annotates, whether that is an exact Form identity or
+a required Interface, with the stored pin recording the target's exact FormRef
+beside its uid — import validated exactly like apply, cross-resource semantics the Forms declare in prose but only a host can
 enforce (WorkerDeployment weights summing to 10000; a cron trigger or queue
 consumer refused with `unsupported_capability` until some WorkerVersion
 declares the matching handler), 202 Operation polling with

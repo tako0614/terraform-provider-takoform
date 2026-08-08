@@ -156,7 +156,7 @@ func TestArtifactManifestPerKindClosureIsHostEnforced(t *testing.T) {
 func TestBundleDesiredStateResolvesItsManifestBeforeMutation(t *testing.T) {
 	host, contract := fallbackHost(t)
 	bundleRef := contract.RunnerInput.WorkerBundle.Identity.FormRef
-	form := host.catalog.form(bundleRef.APIVersion, bundleRef.Kind)
+	form := host.catalog.exact(bundleRef)
 	if form == nil {
 		t.Fatal("the WorkerBundle form is not installed")
 	}
@@ -375,7 +375,7 @@ func TestCommittedManifestSurvivesUnrelatedAbandonedUpload(t *testing.T) {
 
 	bundleRef := contract.RunnerInput.WorkerBundle.Identity.FormRef
 	host.storeResource(&storedResource{
-		Group: bundleRef.APIVersion, Kind: bundleRef.Kind,
+		Ref:  bundleRef,
 		Name: "worker-bundle-probe", Space: contract.RunnerInput.Space,
 		UID: "uid-1", Generation: 1, Revision: 1,
 		Spec: map[string]any{"manifestDigest": referencedDigest},
@@ -425,7 +425,7 @@ func TestCommittedManifestSurvivesUnrelatedAbandonedUpload(t *testing.T) {
 	}
 
 	// And the resource that references the manifest still resolves it.
-	bundleForm := host.catalog.form(bundleRef.APIVersion, bundleRef.Kind)
+	bundleForm := host.catalog.exact(bundleRef)
 	if _, hostErr := host.validateDesiredSemantics(
 		referencePrimaryAuth, bundleForm, contract.RunnerInput.Space, "worker-bundle-probe",
 		map[string]any{"manifestDigest": referencedDigest},

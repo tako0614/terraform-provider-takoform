@@ -1,6 +1,7 @@
 package currentformmodel
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 )
@@ -54,18 +55,59 @@ const (
 	// resolves that name to the exact digest-bound BindingRef, which keeps one
 	// source of truth for the digest (decision 0014).
 	BindingAnnotationKey = "x-takoform-binding"
+
+	// TargetFormRefsAnnotationKey lists the exact Form identities a
+	// reference-shaped node accepts as its target. It is the annotation a
+	// relation carries when it depends on the target's exact DESIRED CONTRACT —
+	// when the source, or the host acting for it, reads a member of the target's
+	// desired spec, or enforces a rule stated over the target Form itself
+	// (decision 0022).
+	TargetFormRefsAnnotationKey = "x-takoform-target-formrefs"
+
+	// RequiredInterfaceAnnotationKey names the one exact Interface contract a
+	// reference-shaped node's target must provide. It is the annotation a
+	// relation carries when it depends only on an INTERFACE — when what the
+	// source needs is the behavior the contract fixes and any Form providing it
+	// would serve (decision 0022).
+	RequiredInterfaceAnnotationKey = "x-takoform-required-interface"
 )
+
+// TargetContractResolver resolves the exact identities a declared target
+// contract names.
+//
+// The authoring model deliberately holds no digest of its own: a schemaDigest
+// is derived from rendered bytes, so only the generation pipeline that renders
+// them can state it. Declaring the requirement here and resolving it there
+// keeps one source of truth for every digest, exactly as `acceptedBindings`
+// already does for a Binding contract (decision 0014).
+type TargetContractResolver interface {
+	// TargetFormRefs returns every exact Form identity this build renders for
+	// one target kind.
+	TargetFormRefs(targetKind string) ([]TargetFormRef, error)
+	// RequiredInterface returns the exact identity of one Interface contract.
+	RequiredInterface(name, version string) (RequiredInterface, error)
+}
 
 // DesiredSchema derives the Draft 2020-12 closed desired schema of a Form.
 // It never contains a "name" property: the v1alpha3 envelope owns
 // metadata.name (decision 0011).
-func (f Form) DesiredSchema() map[string]any {
+//
+// Every reference-shaped node it emits carries exactly one target-contract
+// annotation, resolved through resolver. A reference that stated only a group
+// and a kind would be satisfied by a target whose Definition later moved to an
+// incompatible version, because group and kind are all anyone ever checked
+// (decision 0022).
+func (f Form) DesiredSchema(resolver TargetContractResolver) (map[string]any, error) {
 	group := f.Family.APIVersion()
 	properties := map[string]any{}
 	var required []string
 	needsJSONMapDefs := false
 	for _, field := range f.Fields {
-		properties[field.Wire] = field.jsonSchema(group)
+		schema, err := field.jsonSchema(group, resolver)
+		if err != nil {
+			return nil, fmt.Errorf("form %s field %s: %w", f.Kind, field.Wire, err)
+		}
+		properties[field.Wire] = schema
 		if field.Required {
 			required = append(required, field.Wire)
 		}
@@ -88,7 +130,7 @@ func (f Form) DesiredSchema() map[string]any {
 	if needsJSONMapDefs {
 		schema["$defs"] = jsonMapValueDefinitions()
 	}
-	return schema
+	return schema, nil
 }
 
 func (f Field) usesJSONMap() bool {
@@ -103,8 +145,11 @@ func (f Field) usesJSONMap() bool {
 	return false
 }
 
-func (f Field) jsonSchema(group string) map[string]any {
-	schema := f.jsonSchemaShape(group)
+func (f Field) jsonSchema(group string, resolver TargetContractResolver) (map[string]any, error) {
+	schema, err := f.jsonSchemaShape(group, resolver)
+	if err != nil {
+		return nil, err
+	}
 	if f.Doc != "" {
 		schema["description"] = f.Doc
 	}
@@ -115,13 +160,13 @@ func (f Field) jsonSchema(group string) map[string]any {
 	if f.Default != nil {
 		schema["default"] = cloneValue(f.Default)
 	}
-	return schema
+	return schema, nil
 }
 
-func (f Field) jsonSchemaShape(group string) map[string]any {
+func (f Field) jsonSchemaShape(group string, resolver TargetContractResolver) (map[string]any, error) {
 	switch f.Kind {
 	case KindBoolean:
-		return map[string]any{"type": "boolean"}
+		return map[string]any{"type": "boolean"}, nil
 	case KindInteger:
 		schema := map[string]any{"type": "integer"}
 		if f.Min != nil {
@@ -130,7 +175,7 @@ func (f Field) jsonSchemaShape(group string) map[string]any {
 		if f.Max != nil {
 			schema["maximum"] = *f.Max
 		}
-		return schema
+		return schema, nil
 	case KindString:
 		schema := map[string]any{"type": "string"}
 		if f.Pattern != "" {
@@ -141,9 +186,9 @@ func (f Field) jsonSchemaShape(group string) map[string]any {
 		if f.MaxLength > 0 {
 			schema["maxLength"] = f.MaxLength
 		}
-		return schema
+		return schema, nil
 	case KindStringEnum:
-		return map[string]any{"type": "string", "enum": anySlice(f.Enum)}
+		return map[string]any{"type": "string", "enum": anySlice(f.Enum)}, nil
 	case KindStringSet:
 		items := map[string]any{"type": "string"}
 		if len(f.Enum) > 0 {
@@ -151,7 +196,7 @@ func (f Field) jsonSchemaShape(group string) map[string]any {
 		} else {
 			items["pattern"] = f.ItemPattern
 		}
-		return f.arraySchema(items)
+		return f.arraySchema(items), nil
 	case KindJSONMap:
 		// The reviewed typed-map escape: exact key policy, values bounded by
 		// the finite depth chain in $defs. formpackage's portable schema
@@ -161,12 +206,20 @@ func (f Field) jsonSchemaShape(group string) map[string]any {
 			"maxProperties":        jsonMapMaxKeys,
 			"propertyNames":        portableMapKeys(),
 			"additionalProperties": map[string]any{"$ref": "#/$defs/jsonValueDepth1"},
-		}
+		}, nil
 	case KindResourceRef:
-		return resourceRefSchema(group, f.TargetKind)
+		return f.resourceRefSchema(group, resolver)
 	case KindResourceRefList:
-		return f.arraySchema(resourceRefSchema(group, f.TargetKind))
+		reference, err := f.resourceRefSchema(group, resolver)
+		if err != nil {
+			return nil, err
+		}
+		return f.arraySchema(reference), nil
 	case KindBindingList:
+		reference, err := f.resourceRefSchema(group, resolver)
+		if err != nil {
+			return nil, err
+		}
 		schema := f.arraySchema(map[string]any{
 			"type":                 "object",
 			"additionalProperties": false,
@@ -177,7 +230,7 @@ func (f Field) jsonSchemaShape(group string) map[string]any {
 					"pattern":   PatternBindingName,
 					"maxLength": bindingNameMaxLength,
 				},
-				"resource": resourceRefSchema(group, f.TargetKind),
+				"resource": reference,
 			},
 		})
 		if f.MaxItems == 0 {
@@ -187,11 +240,15 @@ func (f Field) jsonSchemaShape(group string) map[string]any {
 		// a host that has only the desired schema still knows which Binding
 		// Definition governs each reference it finds.
 		schema[BindingAnnotationKey] = f.BindingType
-		return schema
+		return schema, nil
 	case KindObject:
-		return objectSchema(group, f.Fields)
+		return objectSchema(group, f.Fields, resolver)
 	case KindObjectList:
-		return f.arraySchema(objectSchema(group, f.Fields))
+		members, err := objectSchema(group, f.Fields, resolver)
+		if err != nil {
+			return nil, err
+		}
+		return f.arraySchema(members), nil
 	default:
 		panic(fmt.Sprintf("unknown field kind %q", f.Kind))
 	}
@@ -208,11 +265,15 @@ func (f Field) arraySchema(items map[string]any) map[string]any {
 	return schema
 }
 
-func objectSchema(group string, fields []Field) map[string]any {
+func objectSchema(group string, fields []Field, resolver TargetContractResolver) (map[string]any, error) {
 	properties := map[string]any{}
 	var required []string
 	for _, member := range fields {
-		properties[member.Wire] = member.jsonSchema(group)
+		schema, err := member.jsonSchema(group, resolver)
+		if err != nil {
+			return nil, fmt.Errorf("member %s: %w", member.Wire, err)
+		}
+		properties[member.Wire] = schema
 		if member.Required {
 			required = append(required, member.Wire)
 		}
@@ -226,21 +287,28 @@ func objectSchema(group string, fields []Field) map[string]any {
 	if len(required) > 0 {
 		schema["required"] = required
 	}
-	return schema
+	return schema, nil
 }
 
 // resourceRefSchema is the closed three-member cross-resource reference. The
 // group is pinned as a const alongside the kind: a reference that named only
 // {kind, name} could never address two Form Families at once, and a host
 // resolving it would have to guess which installed Form a bare kind meant.
-func resourceRefSchema(group, targetKind string) map[string]any {
-	return map[string]any{
+//
+// The node also carries exactly one target-contract annotation. Group and kind
+// say WHICH resource; they say nothing about what that resource must still
+// satisfy, so a target whose Definition moved to an incompatible version would
+// keep satisfying every reference to it. The annotation states the requirement
+// the source actually has, and a host verifies it before any mutation
+// (decision 0022).
+func (f Field) resourceRefSchema(group string, resolver TargetContractResolver) (map[string]any, error) {
+	node := map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
 		"required":             []string{"apiVersion", "kind", "name"},
 		"properties": map[string]any{
 			"apiVersion": map[string]any{"type": "string", "const": group},
-			"kind":       map[string]any{"type": "string", "const": targetKind},
+			"kind":       map[string]any{"type": "string", "const": f.TargetKind},
 			"name": map[string]any{
 				"type":      "string",
 				"minLength": 1,
@@ -249,6 +317,47 @@ func resourceRefSchema(group, targetKind string) map[string]any {
 			},
 		},
 	}
+	switch {
+	case resolver == nil:
+		return nil, errors.New("a reference-shaped field needs a target-contract resolver")
+	case f.Target.ExactForm && f.Target.Interface != nil:
+		return nil, errors.New("a reference states either an exact Form contract or an Interface, never both")
+	case f.Target.ExactForm:
+		refs, err := resolver.TargetFormRefs(f.TargetKind)
+		if err != nil {
+			return nil, err
+		}
+		if len(refs) == 0 {
+			return nil, fmt.Errorf("no exact Form identity is rendered for target kind %q", f.TargetKind)
+		}
+		encoded := make([]any, 0, len(refs))
+		for _, ref := range refs {
+			if ref.Kind != f.TargetKind {
+				return nil, fmt.Errorf("target Form identity %s is not of kind %q", ref.Kind, f.TargetKind)
+			}
+			encoded = append(encoded, map[string]any{
+				"apiVersion":        ref.APIVersion,
+				"kind":              ref.Kind,
+				"definitionVersion": ref.DefinitionVersion,
+				"schemaDigest":      ref.SchemaDigest,
+			})
+		}
+		node[TargetFormRefsAnnotationKey] = encoded
+	case f.Target.Interface != nil:
+		required, err := resolver.RequiredInterface(f.Target.Interface.Name, f.Target.Interface.Version)
+		if err != nil {
+			return nil, err
+		}
+		node[RequiredInterfaceAnnotationKey] = map[string]any{
+			"apiVersion":   required.APIVersion,
+			"name":         required.Name,
+			"version":      required.Version,
+			"schemaDigest": required.SchemaDigest,
+		}
+	default:
+		return nil, errors.New("a reference must state either an exact Form contract or a required Interface")
+	}
+	return node, nil
 }
 
 func portableMapKeys() map[string]any {

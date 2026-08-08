@@ -90,6 +90,7 @@ func copyCorpus(t *testing.T, destination string) {
 		"contract.json",
 		"fixtures/negative-module-worker-unexpected-property.json",
 		"fixtures/negative-queue-retention.json",
+		"fixtures/synthetic-module-worker-second-definition.json",
 	}
 	for _, entry := range entries {
 		raw, err := os.ReadFile(filepath.Join(source, filepath.FromSlash(entry)))

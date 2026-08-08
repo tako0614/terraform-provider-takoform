@@ -47,9 +47,27 @@ func runtimeHandlerVocabulary() []string {
 	return handlers
 }
 
+// requiresInterface states that a reference depends only on an exact Interface
+// its target provides: what the source needs is the behavior that contract
+// fixes, and any Form providing it would serve.
+func requiresInterface(name, version string) model.TargetContract {
+	return model.TargetContract{Interface: &model.InterfaceRefSource{Name: name, Version: version}}
+}
+
+// requiresExactForm states that a reference depends on the target's exact
+// desired contract — because the source, or the host acting for it, reads a
+// member of the target's desired spec or enforces a rule stated over the target
+// Form itself. Nothing weaker states that requirement (decision 0022).
+var requiresExactForm = model.TargetContract{ExactForm: true}
+
+// moduleWorkerRef renders the inward-activation reference every attachment
+// carries. What an attachment needs from the worker is the ES Module Worker
+// ABI — the handler its events invoke exists only because worker.runtime
+// defines it — so the reference requires that exact Interface and nothing more.
 func moduleWorkerRef(hcl, wire, doc string, required, immutable bool) model.Field {
 	return model.Field{
 		HCL: hcl, Wire: wire, Kind: model.KindResourceRef, TargetKind: "ModuleWorker",
+		Target:   requiresInterface(WorkerRuntimeInterfaceName, "1.0.0"),
 		Required: required, Immutable: immutable, Doc: doc,
 		Example: ref("ModuleWorker", "module-worker"),
 	}
@@ -131,10 +149,24 @@ var Forms = []model.Form{
 			{Name: "module-worker.service", Version: "1.0.0"},
 		},
 		Fields: []model.Field{
+			// The worker reference states an ABI requirement, not a Form one: what
+			// this version needs from the identity it belongs to is the runtime
+			// contract that decides which handlers exist at all and what signature
+			// each has. Any worker identity providing worker.runtime@1.0.0 serves
+			// this version, whatever else its Definition declares.
 			{HCL: "worker", Wire: "worker", Kind: model.KindResourceRef, TargetKind: "ModuleWorker", Required: true,
+				Target:  requiresInterface(WorkerRuntimeInterfaceName, "1.0.0"),
 				Doc:     "Module Worker identity this version belongs to.",
 				Example: ref("ModuleWorker", "module-worker")},
+			// The bundle reference is the opposite case. A Worker Bundle provides
+			// no Interface at all, and a host READS the bundle's desired state —
+			// its manifestDigest — to resolve the committed manifest, its main
+			// module, and the handlers that module exports. That is a dependency on
+			// the Worker Bundle Form's exact desired contract: a Definition that
+			// renamed or retyped manifestDigest would leave every version
+			// referencing it unable to say what it runs.
 			{HCL: "bundle", Wire: "bundle", Kind: model.KindResourceRef, TargetKind: "WorkerBundle", Required: true,
+				Target:  requiresExactForm,
 				Doc:     "Worker Bundle carrying the exact module bytes this version executes.",
 				Example: ref("WorkerBundle", "worker-bundle")},
 			// The handler enum is not written here twice: it is the closed
@@ -152,28 +184,42 @@ var Forms = []model.Form{
 				Doc: "Non-secret configuration values projected into the module environment. Sensitive material never enters portable state. " +
 					"Omitting it projects no variable.",
 				Example: map[string]any{"LOG_LEVEL": "info"}},
+			// Every binding reference states the Interface its Binding contract
+			// projects, and nothing more. A binding IS the projection of an
+			// Interface into the module environment, so the exact contract the
+			// target provides is the whole requirement; pinning the target's Form
+			// as well would refuse a different store that implements the same
+			// contract, for a reason the binding does not have. The named contract
+			// is the Binding Definition's own targetInterface, so the two cannot
+			// disagree — the catalog resolves one from the other and the host
+			// verifies they agree before it stores anything.
 			{HCL: "kv_bindings", Wire: "kvBindings", Kind: model.KindBindingList,
 				TargetKind: "EdgeKVNamespace", BindingType: "module-worker.edge-kv",
+				Target:  requiresInterface("edge.kv", "1.0.0"),
 				Default: []any{},
 				Doc:     "Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names. Omitting it declares no such binding.",
 				Example: []any{bindingInstance("CACHE", "EdgeKVNamespace", "edge-kv-namespace")}},
 			{HCL: "bucket_bindings", Wire: "bucketBindings", Kind: model.KindBindingList,
 				TargetKind: "ObjectBucket", BindingType: "module-worker.object-bucket",
+				Target:  requiresInterface("edge.objects", "1.0.0"),
 				Default: []any{},
 				Doc:     "Typed module-worker.object-bucket bindings projecting the edge.objects API. Omitting it declares no such binding.",
 				Example: []any{bindingInstance("MEDIA", "ObjectBucket", "object-bucket")}},
 			{HCL: "sqlite_bindings", Wire: "sqliteBindings", Kind: model.KindBindingList,
 				TargetKind: "SQLiteDatabase", BindingType: "module-worker.sqlite",
+				Target:  requiresInterface("edge.sql", "1.0.0"),
 				Default: []any{},
 				Doc:     "Typed module-worker.sqlite bindings projecting the edge.sql API. Omitting it declares no such binding.",
 				Example: []any{bindingInstance("DB", "SQLiteDatabase", "sqlite-database")}},
 			{HCL: "queue_producer_bindings", Wire: "queueProducerBindings", Kind: model.KindBindingList,
 				TargetKind: "AtLeastOnceQueue", BindingType: "module-worker.queue-producer",
+				Target:  requiresInterface("edge.queue", "1.0.0"),
 				Default: []any{},
 				Doc:     "Typed module-worker.queue-producer bindings projecting only send and sendBatch. Omitting it declares no such binding.",
 				Example: []any{bindingInstance("EVENTS", "AtLeastOnceQueue", "at-least-once-queue")}},
 			{HCL: "service_bindings", Wire: "serviceBindings", Kind: model.KindBindingList,
 				TargetKind: "ModuleWorker", BindingType: "module-worker.service",
+				Target:  requiresInterface("worker.service", "1.0.0"),
 				Default: []any{},
 				Doc:     "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker. Omitting it declares no such binding.",
 				Example: []any{bindingInstance("AUTH", "ModuleWorker", "auth-worker")}},
@@ -197,12 +243,29 @@ var Forms = []model.Form{
 			"is host-validated semantics because a schema cannot add weights. Rollback is re-weighting, " +
 			"never mutating a revision.",
 		Fields: []model.Field{
-			moduleWorkerRef("worker", "worker", "Module Worker identity whose traffic this deployment governs.", true, true),
+			// The one reference in the family that WRITES to its target. A
+			// deployment is the sole resource that makes a Module Worker Ready, and
+			// the aggregate rules of decision 0016 — one active deployment per
+			// worker incarnation, the attachment gate, readiness rendered onto the
+			// worker's own representation — are stated over the Module Worker Form
+			// itself, never over an Interface it provides to application code. So
+			// this reference depends on the target's exact Form, unlike every other
+			// worker reference in the family, which only invokes the ABI.
+			{HCL: "worker", Wire: "worker", Kind: model.KindResourceRef, TargetKind: "ModuleWorker",
+				Target:   requiresExactForm,
+				Required: true, Immutable: true,
+				Doc:     "Module Worker identity whose traffic this deployment governs.",
+				Example: ref("ModuleWorker", "module-worker")},
 			{HCL: "versions", Wire: "versions", Kind: model.KindObjectList, Required: true, MinItems: 1, MaxItems: 8,
 				Doc: "Active Worker Versions and their traffic weights in basis points. Weights must sum to exactly 10000.",
 				Fields: []model.Field{
+					// A host READS the weighted version's desired state: its /worker
+					// relation decides ownership, and its handlers decide what the
+					// deployment serves and therefore which attachments are admissible.
+					// That is a dependency on the Worker Version Form's exact contract.
 					{HCL: "worker_version", Wire: "workerVersion", Kind: model.KindResourceRef, TargetKind: "WorkerVersion", Required: true,
-						Doc: "Worker Version receiving this weight."},
+						Target: requiresExactForm,
+						Doc:    "Worker Version receiving this weight."},
 					{HCL: "weight", Wire: "weight", Kind: model.KindInteger, Required: true,
 						Min: model.I64(1), Max: model.I64(10000),
 						Doc: "Traffic share in basis points (1..10000)."},
@@ -350,7 +413,16 @@ var Forms = []model.Form{
 			"otherwise. The dead-letter copy is a new message there: new identity, new acceptance timestamp, " +
 			"and an attempt count starting again at 1 (decision 0020).",
 		Fields: []model.Field{
+			// Both queue references state the edge.queue contract and nothing more.
+			// What a consumer needs from the queue it drains is the delivery model
+			// — at-least-once, a stable message identity across redeliveries, no
+			// ordering — and what a dead-letter destination needs is the same
+			// contract's acceptance side. Neither reads a member of the queue's
+			// desired spec, so pinning the exact Form would refuse any other queue
+			// Form implementing the same contract for no requirement either
+			// reference actually has.
 			{HCL: "queue", Wire: "queue", Kind: model.KindResourceRef, TargetKind: "AtLeastOnceQueue",
+				Target:   requiresInterface("edge.queue", "1.0.0"),
 				Required: true, Immutable: true,
 				Doc:     "Queue this consumer drains. Changing it replaces the attachment.",
 				Example: ref("AtLeastOnceQueue", "at-least-once-queue")},
@@ -382,6 +454,7 @@ var Forms = []model.Form{
 			// The one field whose ABSENCE is the semantics: there is no queue that
 			// means "drop exhausted messages", so no default can express it.
 			{HCL: "dead_letter_queue", Wire: "deadLetterQueue", Kind: model.KindResourceRef, TargetKind: "AtLeastOnceQueue",
+				Target:            requiresInterface("edge.queue", "1.0.0"),
 				AbsenceIsSemantic: true,
 				Doc:               "Queue receiving messages that exhausted their retries. Without it, exhausted messages are dropped.",
 				Example:           ref("AtLeastOnceQueue", "dead-letters")},
@@ -763,12 +836,18 @@ func validateBindingContracts() error {
 
 // validateDerivedRelations proves the derivation reads back what the catalog
 // declared: every reference field appears in the relations derived from the
-// emitted desired schema, with the target group and kind the field pinned.
-// Relations are derived, never declared, so this is the only place the two
-// views are compared.
+// emitted desired schema, with the target group and kind the field pinned, and
+// with exactly one stated target contract that the declared target can actually
+// satisfy. Relations are derived, never declared, so this is the only place the
+// two views are compared.
 func validateDerivedRelations() error {
+	resolver := newTargetContractResolver()
 	for _, form := range Forms {
-		relations, err := model.DeriveRelations(form.DesiredSchema())
+		schema, err := form.DesiredSchema(resolver)
+		if err != nil {
+			return fmt.Errorf("form %s: %w", form.Kind, err)
+		}
+		relations, err := model.DeriveRelations(schema)
 		if err != nil {
 			return fmt.Errorf("form %s: %w", form.Kind, err)
 		}
@@ -779,11 +858,15 @@ func validateDerivedRelations() error {
 					form.Kind, relation.Pointer, relation.TargetAPIVersion,
 				)
 			}
-			if _, known := ByKind(relation.TargetKind); !known {
+			target, known := ByKind(relation.TargetKind)
+			if !known {
 				return fmt.Errorf(
 					"form %s relation %s targets kind %q, which is not a catalog Form",
 					form.Kind, relation.Pointer, relation.TargetKind,
 				)
+			}
+			if err := validateRelationTargetContract(form.Kind, relation, target); err != nil {
+				return err
 			}
 		}
 		if got, want := len(relations), declaredReferenceCount(form.Fields); got != want {
@@ -791,6 +874,69 @@ func validateDerivedRelations() error {
 		}
 	}
 	return nil
+}
+
+// validateRelationTargetContract proves one derived relation's stated
+// requirement is one the declared target can meet, and that a binding relation
+// requires exactly the Interface its Binding Definition projects.
+//
+// The last rule is what keeps the annotation from becoming a second source of
+// truth: the Binding Definition's targetInterface is the authority, the
+// annotation is its projection onto the reference, and a catalog whose two
+// spellings disagreed does not render at all (decision 0014).
+func validateRelationTargetContract(kind string, relation model.Relation, target model.Form) error {
+	switch {
+	case len(relation.TargetFormRefs) > 0:
+		for _, ref := range relation.TargetFormRefs {
+			if ref.Kind != target.Kind || ref.DefinitionVersion != target.DefinitionVersion {
+				return fmt.Errorf(
+					"form %s relation %s pins target identity %s, which is not the catalog's %s@%s",
+					kind, relation.Pointer, ref, target.Kind, target.DefinitionVersion,
+				)
+			}
+		}
+	case relation.RequiredInterface != nil:
+		provides := false
+		for _, provided := range target.ProvidedInterfaces {
+			if provided.Name == relation.RequiredInterface.Name &&
+				provided.Version == relation.RequiredInterface.Version {
+				provides = true
+				break
+			}
+		}
+		if !provides {
+			return fmt.Errorf(
+				"form %s relation %s requires interface %s@%s, which target Form %s does not provide",
+				kind, relation.Pointer, relation.RequiredInterface.Name,
+				relation.RequiredInterface.Version, target.Kind,
+			)
+		}
+	default:
+		return fmt.Errorf("form %s relation %s states no target contract", kind, relation.Pointer)
+	}
+	if !relation.IsBinding() {
+		return nil
+	}
+	definitions, err := BindingDefinitions()
+	if err != nil {
+		return err
+	}
+	for _, definition := range definitions {
+		if definition.Name != relation.Binding {
+			continue
+		}
+		if relation.RequiredInterface == nil ||
+			relation.RequiredInterface.Name != definition.TargetInterface.Name ||
+			relation.RequiredInterface.Version != definition.TargetInterface.Version {
+			return fmt.Errorf(
+				"form %s binding relation %s must require exactly binding %s's targetInterface %s@%s",
+				kind, relation.Pointer, definition.Name,
+				definition.TargetInterface.Name, definition.TargetInterface.Version,
+			)
+		}
+		return nil
+	}
+	return fmt.Errorf("form %s relation %s names unknown binding %q", kind, relation.Pointer, relation.Binding)
 }
 
 func declaredReferenceCount(fields []model.Field) int {

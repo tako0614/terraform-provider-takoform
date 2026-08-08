@@ -223,7 +223,13 @@
                 "kind",
                 "name"
               ],
-              "type": "object"
+              "type": "object",
+              "x-takoform-required-interface": {
+                "apiVersion": "interfaces.takoform.com/v1alpha1",
+                "name": "edge.objects",
+                "schemaDigest": "sha256:292668cf530eb7946f25d313740991b3efa0406f40d74ec12d788d2933d13f96",
+                "version": "1.0.0"
+              }
             }
           },
           "required": [
@@ -261,7 +267,15 @@
           "kind",
           "name"
         ],
-        "type": "object"
+        "type": "object",
+        "x-takoform-target-formrefs": [
+          {
+            "apiVersion": "edge.forms.takoform.com/v1alpha1",
+            "definitionVersion": "0.1.0",
+            "kind": "WorkerBundle",
+            "schemaDigest": "sha256:d7fd1bfc966a90b9f15ebfc6530c2465ee19b14fed3fef91c72502e799539f74"
+          }
+        ]
       },
       "handlers": {
         "description": "Module event handlers this version exports, from the closed vocabulary the worker.runtime@1.0.0 contract defines. A host rejects a handler that contract does not define, and rejects an attachment whose event kind is not declared here.",
@@ -312,7 +326,13 @@
                 "kind",
                 "name"
               ],
-              "type": "object"
+              "type": "object",
+              "x-takoform-required-interface": {
+                "apiVersion": "interfaces.takoform.com/v1alpha1",
+                "name": "edge.kv",
+                "schemaDigest": "sha256:58c8e9af97dabcd205422eca0b47fba51734503bc80a66867056dae28efe1cf8",
+                "version": "1.0.0"
+              }
             }
           },
           "required": [
@@ -360,7 +380,13 @@
                 "kind",
                 "name"
               ],
-              "type": "object"
+              "type": "object",
+              "x-takoform-required-interface": {
+                "apiVersion": "interfaces.takoform.com/v1alpha1",
+                "name": "edge.queue",
+                "schemaDigest": "sha256:e88be3a9bfb0eb202422483cfca8bf45ab74d60f96f8c4f3fe289f0f607510cf",
+                "version": "1.0.0"
+              }
             }
           },
           "required": [
@@ -418,7 +444,13 @@
                 "kind",
                 "name"
               ],
-              "type": "object"
+              "type": "object",
+              "x-takoform-required-interface": {
+                "apiVersion": "interfaces.takoform.com/v1alpha1",
+                "name": "worker.service",
+                "schemaDigest": "sha256:8beedb6fa4399836c24afa0a7adb17fbe13e8bc705b86441dc210e7614c95507",
+                "version": "1.0.0"
+              }
             }
           },
           "required": [
@@ -466,7 +498,13 @@
                 "kind",
                 "name"
               ],
-              "type": "object"
+              "type": "object",
+              "x-takoform-required-interface": {
+                "apiVersion": "interfaces.takoform.com/v1alpha1",
+                "name": "edge.sql",
+                "schemaDigest": "sha256:cd33793132cd91c20cdbe782db500e86fa7a8ad2e2281b95116337d697dcac1b",
+                "version": "1.0.0"
+              }
             }
           },
           "required": [
@@ -518,7 +556,13 @@
           "kind",
           "name"
         ],
-        "type": "object"
+        "type": "object",
+        "x-takoform-required-interface": {
+          "apiVersion": "interfaces.takoform.com/v1alpha1",
+          "name": "worker.runtime",
+          "schemaDigest": "sha256:06104adeefb967838766a90866f7229f12cfd1bceb31cd79c7b1826b15362c0f",
+          "version": "1.0.0"
+        }
       }
     },
     "required": [

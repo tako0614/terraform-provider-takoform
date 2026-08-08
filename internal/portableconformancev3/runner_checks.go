@@ -104,6 +104,22 @@ func (r *v3Runner) run() error {
 		// (spec/decisions/0017).
 		func() error { return r.checkOperationResumableAfterSettlement(queue) },
 		func() error { return r.checkExactFormRefFailsClosedOnUnknownDefinition(kv) },
+		// The exact identity a host answers for, and the contract a relation
+		// pins (spec/decisions/0022). The two definition versions of one Form
+		// line are installed throughout; these are the checks that can tell.
+		r.checkTwoDefinitionVersionsAnswerIndependently,
+		r.checkResourceAnswersOnlyUnderItsRecordedFormRef,
+		func() error {
+			worker, legacy, err := r.exactRefRelationFixture()
+			if err != nil {
+				return err
+			}
+			if err := r.checkRelationTargetFormRefVerified(worker, legacy); err != nil {
+				return err
+			}
+			return r.checkRelationTargetInterfaceVerified(legacy)
+		},
+		r.checkRelationPinRecordsTargetFormRef,
 		func() error { return r.checkAsyncCommitRevalidates(kv, version) },
 		func() error { return r.checkCrossSpace(kv) },
 		r.checkSupportProfiles,

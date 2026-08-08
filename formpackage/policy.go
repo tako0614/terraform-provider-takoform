@@ -113,7 +113,30 @@ func rejectForbiddenContent(value any, location string) error {
 	return nil
 }
 
+// reviewedAnnotationFields is the closed set of `x-takoform-*` JSON Schema
+// annotations this specification defines. It is an exemption from the
+// sensitive-name policy below, and a deliberately EXACT one.
+//
+// That policy exists to keep author-declared fields from carrying credentials,
+// operator authority, or commercial policy: an author who writes `target` is
+// almost always naming a backend the portable lane must not know about. These
+// four names are not author-declared at all — they are specification
+// vocabulary with fixed meanings, emitted by the authoring model and read by
+// every host — and one of them, `x-takoform-target-formrefs`, uses `target` in
+// its portable sense: the resource a relation points at. Listing the exact keys
+// rather than exempting the whole `x-takoform-` prefix keeps a future
+// annotation from smuggling a sensitive name in behind the namespace.
+var reviewedAnnotationFields = stringSet(
+	"x-takoform-fieldPolicy",
+	"x-takoform-binding",
+	"x-takoform-target-formrefs",
+	"x-takoform-required-interface",
+)
+
 func isForbiddenFieldName(value string) bool {
+	if _, reviewed := reviewedAnnotationFields[value]; reviewed {
+		return false
+	}
 	normalized := normalizeFieldName(value)
 	if _, forbidden := forbiddenNormalizedFields[normalized]; forbidden {
 		return true

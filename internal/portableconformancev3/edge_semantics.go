@@ -34,7 +34,7 @@ const queueRelationPointer = "/queue"
 // It is a property of the spec ALONE — no other resource has to resolve — so it
 // is reported as a desired-spec diagnostic and therefore reaches the advisory
 // `validate` surface, the binding `prepare` surface, and `apply` alike.
-func cronExpressionViolation(form *installedForm, spec map[string]any) string {
+func cronExpressionViolation(form *InstalledForm, spec map[string]any) string {
 	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerCronTriggerKind {
 		return ""
 	}
@@ -50,7 +50,7 @@ func cronExpressionViolation(form *installedForm, spec map[string]any) string {
 // deliberately redundant with the diagnostic: import and the asynchronous
 // commit re-derive every precondition, long after the diagnostics of the
 // accepting request were computed.
-func validateCronExpression(form *installedForm, spec map[string]any) *hostError {
+func validateCronExpression(form *InstalledForm, spec map[string]any) *hostError {
 	if violation := cronExpressionViolation(form, spec); violation != "" {
 		return stableError("invalid_argument", violation)
 	}
@@ -82,11 +82,11 @@ func (h *ReferenceHost) validateSingleQueueConsumer(
 	}
 	selfKey := resourceKey(space, edgeFormsGroup, queueConsumerKind, name)
 	for _, candidate := range h.sortedResources() {
-		if candidate.Space != space || candidate.Group != edgeFormsGroup ||
-			candidate.Kind != queueConsumerKind {
+		if candidate.Space != space || candidate.group() != edgeFormsGroup ||
+			candidate.kind() != queueConsumerKind {
 			continue
 		}
-		if resourceKey(candidate.Space, candidate.Group, candidate.Kind, candidate.Name) == selfKey {
+		if candidate.key() == selfKey {
 			continue
 		}
 		if relationTargetUID(candidate.Relations, queueRelationPointer) != queueUID {

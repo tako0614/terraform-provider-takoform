@@ -88,7 +88,7 @@ func TestDerivedRevisionPassTerminatesAndDoesNotChurn(t *testing.T) {
 		if resource.Revision != revision {
 			t.Fatalf(
 				"re-running the pass over a settled store moved %s %s from revision %d to %d",
-				resource.Kind, resource.Name, revision, resource.Revision,
+				resource.kind(), resource.Name, revision, resource.Revision,
 			)
 		}
 	}
@@ -99,7 +99,7 @@ func TestDerivedRevisionPassTerminatesAndDoesNotChurn(t *testing.T) {
 		if resource.Revision != revision {
 			t.Fatalf(
 				"an unrelated create moved %s %s from revision %d to %d",
-				resource.Kind, resource.Name, revision, resource.Revision,
+				resource.kind(), resource.Name, revision, resource.Revision,
 			)
 		}
 	}

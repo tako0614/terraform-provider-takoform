@@ -183,7 +183,7 @@ func TestOmittedAndWrittenDefaultsAreOneDesiredState(t *testing.T) {
 func TestSpecChangingApplyToFormWithoutUpdateIsRefused(t *testing.T) {
 	host, contract := fallbackHost(t)
 	ref := contract.RunnerInput.WorkerVersion.Identity.FormRef
-	form := host.catalog.form(ref.APIVersion, ref.Kind)
+	form := host.catalog.exact(ref)
 	if form.declaresUpdate() {
 		t.Fatal("this test needs a Form whose Definition omits update")
 	}
@@ -199,18 +199,18 @@ func TestSpecChangingApplyToFormWithoutUpdateIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	host.storeResource(&storedResource{
-		Group: ref.APIVersion, Kind: ref.Kind, Name: name, Space: space,
+		Ref: ref, Name: name, Space: space,
 		UID: "uid-1", Generation: 1, Revision: 1,
 		Spec: stored, SpecDigest: storedDigest,
 	})
 	// The referenced resources exist: this test is about the capability
 	// refusal, and an unresolvable relation would refuse first.
 	host.storeResource(&storedResource{
-		Group: group, Kind: "ModuleWorker", Name: "module-worker-probe", Space: space,
+		Ref: mustProbeRef(t, contract, "ModuleWorker"), Name: "module-worker-probe", Space: space,
 		UID: "uid-2", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	host.storeResource(&storedResource{
-		Group: group, Kind: "WorkerBundle", Name: "worker-bundle-probe", Space: space,
+		Ref: mustProbeRef(t, contract, "WorkerBundle"), Name: "worker-bundle-probe", Space: space,
 		UID: "uid-3", Generation: 1, Revision: 1,
 		Spec: map[string]any{"manifestDigest": formpackage.DigestBytes([]byte("bundle"))},
 	})
@@ -244,7 +244,7 @@ func TestSpecChangingApplyToFormWithoutUpdateIsRefused(t *testing.T) {
 // does not exist.
 func TestV1Alpha3HostAdvertisesNoRefresh(t *testing.T) {
 	host, contract := fallbackHost(t)
-	for key, form := range host.catalog.forms {
+	for key, form := range host.catalog.Forms {
 		operations := form.operations()
 		if len(operations) == 0 {
 			t.Fatalf("installed form %s advertises no operation at all", key)
@@ -259,7 +259,7 @@ func TestV1Alpha3HostAdvertisesNoRefresh(t *testing.T) {
 	defer server.Close()
 	ref := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef
 	host.storeResource(&storedResource{
-		Group: ref.APIVersion, Kind: ref.Kind, Name: "edge-kv-probe", Space: "conformance",
+		Ref: ref, Name: "edge-kv-probe", Space: "conformance",
 		UID: "uid-1", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	query := exactQueryValues("conformance", ref)
@@ -289,7 +289,7 @@ func TestV1Alpha3HostAdvertisesNoRefresh(t *testing.T) {
 // that type-asserts json.Number, and it must accept a value that arrived
 // through materialization rather than through the request body.
 func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
-	form := &installedForm{
+	form := &InstalledForm{
 		Ref: FormRef{APIVersion: edgeFormsGroup, Kind: "WorkerDeployment"},
 		DesiredSchema: map[string]any{
 			"type": "object", "additionalProperties": false,
@@ -334,7 +334,7 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 func TestHostMaterializationUsesTheSharedImplementation(t *testing.T) {
 	host, contract := fallbackHost(t)
 	ref := contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef
-	form := host.catalog.form(ref.APIVersion, ref.Kind)
+	form := host.catalog.exact(ref)
 	spec := map[string]any{"messageRetentionSeconds": json.Number("345600")}
 	fromHost, err := json.Marshal(form.materialize(spec))
 	if err != nil {

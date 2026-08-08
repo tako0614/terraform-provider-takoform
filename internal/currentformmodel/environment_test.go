@@ -17,6 +17,7 @@ func collidingForm(varsExample map[string]any) Form {
 				ProjectsEnvironmentNames: true, Doc: "Environment values.", Example: varsExample},
 			{HCL: "kv_bindings", Wire: "kvBindings", Kind: KindBindingList,
 				TargetKind: "EdgeKVNamespace", BindingType: "module-worker.edge-kv",
+				Target:  testInterfaceContract(),
 				Default: []any{}, Doc: "Typed bindings.",
 				Example: []any{map[string]any{
 					"name": "CACHE",

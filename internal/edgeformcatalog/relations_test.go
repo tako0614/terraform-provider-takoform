@@ -8,6 +8,18 @@ import (
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
+// desiredSchemaFor renders one catalog Form's desired schema with its
+// target-contract annotations resolved exactly as the generation pipeline
+// resolves them.
+func desiredSchemaFor(t *testing.T, form model.Form) map[string]any {
+	t.Helper()
+	schema, err := form.DesiredSchema(newTargetContractResolver())
+	if err != nil {
+		t.Fatalf("%s desired schema: %v", form.Kind, err)
+	}
+	return schema
+}
+
 // wantRelations is the complete cross-resource relation table of the Edge
 // Platform Family, written out by hand. Relations are DERIVED from each Form's
 // desired schema, so this table is the independent statement of what the
@@ -16,37 +28,45 @@ import (
 //
 // Every entry is "<pointer> -> <target kind>" with "*" standing for an array
 // element, plus the Binding contract when the reference is a typed binding and
-// "-" when it is a plain cross-resource reference.
+// "-" when it is a plain cross-resource reference, the requiredness, and the
+// TARGET CONTRACT the reference states: "exact-form" when the relation depends
+// on the target's exact desired contract, "iface:<name>@<version>" when it
+// depends only on an Interface the target provides (decision 0022).
+//
+// The target contract belongs in this table for the same reason the target kind
+// does: it is a normative statement about what each relation requires, and a
+// silent flip from one to the other would either refuse a legitimate target or
+// admit one whose contract no longer answers.
 var wantRelations = map[string][]string{
 	"ModuleWorker": nil,
 	"WorkerBundle": nil,
 	"WorkerVersion": {
-		"/bucketBindings/*/resource -> ObjectBucket [module-worker.object-bucket] optional",
-		"/bundle -> WorkerBundle [-] required",
-		"/kvBindings/*/resource -> EdgeKVNamespace [module-worker.edge-kv] optional",
-		"/queueProducerBindings/*/resource -> AtLeastOnceQueue [module-worker.queue-producer] optional",
-		"/serviceBindings/*/resource -> ModuleWorker [module-worker.service] optional",
-		"/sqliteBindings/*/resource -> SQLiteDatabase [module-worker.sqlite] optional",
-		"/worker -> ModuleWorker [-] required",
+		"/bucketBindings/*/resource -> ObjectBucket [module-worker.object-bucket] optional iface:edge.objects@1.0.0",
+		"/bundle -> WorkerBundle [-] required exact-form",
+		"/kvBindings/*/resource -> EdgeKVNamespace [module-worker.edge-kv] optional iface:edge.kv@1.0.0",
+		"/queueProducerBindings/*/resource -> AtLeastOnceQueue [module-worker.queue-producer] optional iface:edge.queue@1.0.0",
+		"/serviceBindings/*/resource -> ModuleWorker [module-worker.service] optional iface:worker.service@1.0.0",
+		"/sqliteBindings/*/resource -> SQLiteDatabase [module-worker.sqlite] optional iface:edge.sql@1.0.0",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
 	},
 	"WorkerDeployment": {
-		"/versions/*/workerVersion -> WorkerVersion [-] required",
-		"/worker -> ModuleWorker [-] required",
+		"/versions/*/workerVersion -> WorkerVersion [-] required exact-form",
+		"/worker -> ModuleWorker [-] required exact-form",
 	},
 	"WorkerCustomDomain": {
-		"/worker -> ModuleWorker [-] required",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
 	},
 	"WorkerCronTrigger": {
-		"/worker -> ModuleWorker [-] required",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
 	},
 	"EdgeKVNamespace":  nil,
 	"ObjectBucket":     nil,
 	"SQLiteDatabase":   nil,
 	"AtLeastOnceQueue": nil,
 	"QueueConsumer": {
-		"/deadLetterQueue -> AtLeastOnceQueue [-] optional",
-		"/queue -> AtLeastOnceQueue [-] required",
-		"/worker -> ModuleWorker [-] required",
+		"/deadLetterQueue -> AtLeastOnceQueue [-] optional iface:edge.queue@1.0.0",
+		"/queue -> AtLeastOnceQueue [-] required iface:edge.queue@1.0.0",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
 	},
 }
 
@@ -59,7 +79,14 @@ func renderRelation(relation model.Relation) string {
 	if relation.Required {
 		requiredness = "required"
 	}
-	return relation.Pointer + " -> " + relation.TargetKind + " [" + binding + "] " + requiredness
+	contract := "none"
+	switch {
+	case len(relation.TargetFormRefs) > 0:
+		contract = "exact-form"
+	case relation.RequiredInterface != nil:
+		contract = "iface:" + relation.RequiredInterface.Name + "@" + relation.RequiredInterface.Version
+	}
+	return relation.Pointer + " -> " + relation.TargetKind + " [" + binding + "] " + requiredness + " " + contract
 }
 
 // TestDerivedRelationsMatchTheCatalog proves the derivation over every Form:
@@ -75,7 +102,7 @@ func TestDerivedRelationsMatchTheCatalog(t *testing.T) {
 		if !listed {
 			t.Fatalf("Form %s has no relation-table entry", form.Kind)
 		}
-		relations, err := model.DeriveRelations(form.DesiredSchema())
+		relations, err := model.DeriveRelations(desiredSchemaFor(t, form))
 		if err != nil {
 			t.Fatalf("%s: %v", form.Kind, err)
 		}
@@ -106,7 +133,7 @@ func TestEveryDeclaredReferenceIsDerived(t *testing.T) {
 	t.Parallel()
 	totalDeclared, totalDerived, bindings := 0, 0, 0
 	for _, form := range Forms {
-		relations, err := model.DeriveRelations(form.DesiredSchema())
+		relations, err := model.DeriveRelations(desiredSchemaFor(t, form))
 		if err != nil {
 			t.Fatalf("%s: %v", form.Kind, err)
 		}

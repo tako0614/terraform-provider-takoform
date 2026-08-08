@@ -1,0 +1,23 @@
+{
+  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "kind": "ModuleWorker",
+  "definitionVersion": "0.2.0",
+  "title": "Module Worker (conformance-only second definition version)",
+  "description": "Conformance-only SECOND definition version of the Module Worker line. It exists so a lane can prove two contracts of one group and kind install and answer independently, and so a relation that requires an Interface has a live target of exactly the right group and kind that truthfully does not provide it. It differs from 0.1.0 in the two places it must: this definitionVersion, and the absence of providedInterfaces — so it fixes no ES Module Worker ABI at all, and a resource created under it is not a worker any inward activation may invoke. No host serves this Definition outside a conformance run.",
+  "role": "identity",
+  "desiredSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Conformance-only second definition version of the Module Worker line. It declares no portable desired field, exactly as version 0.1.0 does, so the two contracts differ in identity and in what they provide rather than in what an author writes.",
+    "properties": {},
+    "title": "Module Worker desired state",
+    "type": "object"
+  },
+  "lifecycleCapabilities": [
+    "create",
+    "read",
+    "delete",
+    "import",
+    "observe"
+  ]
+}

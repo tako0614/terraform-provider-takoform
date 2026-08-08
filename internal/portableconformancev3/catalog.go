@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
@@ -14,9 +15,38 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
 
-// installedForm is one exact FormRef the reference host serves, together
+// ExactFormKey is the WHOLE Form identity a host answers for: the namespaced
+// group, the kind, the definition version, and the digest of the definition
+// bytes. It is the catalog's key because a host answers for the exact ref
+// recorded in a client's state, never for a kind (decision 0022).
+//
+// The package digest is deliberately absent. It is distribution provenance and
+// never identity, so a host that installed the same FormRef from a different
+// legitimate package answers about the same Form (decision 0011).
+type ExactFormKey struct {
+	APIVersion        string
+	Kind              string
+	DefinitionVersion string
+	SchemaDigest      string
+}
+
+func exactFormKey(ref FormRef) ExactFormKey {
+	return ExactFormKey{
+		APIVersion:        ref.APIVersion,
+		Kind:              ref.Kind,
+		DefinitionVersion: ref.DefinitionVersion,
+		SchemaDigest:      ref.SchemaDigest,
+	}
+}
+
+// String renders the identity for a refusal message.
+func (key ExactFormKey) String() string {
+	return key.APIVersion + " " + key.Kind + "@" + key.DefinitionVersion + " " + key.SchemaDigest
+}
+
+// InstalledForm is one exact FormRef the reference host serves, together
 // with the desired-state contract it validates against.
-type installedForm struct {
+type InstalledForm struct {
 	Ref           FormRef
 	PackageDigest string
 	Role          string
@@ -39,7 +69,7 @@ type installedForm struct {
 
 // acceptedBinding resolves one accepted BindingRef by contract name. The
 // desired schema names the contract; the Definition carries its exact digest.
-func (form *installedForm) acceptedBinding(name string) (formpackage.BindingRef, bool) {
+func (form *InstalledForm) acceptedBinding(name string) (formpackage.BindingRef, bool) {
 	for _, ref := range form.AcceptedBindings {
 		if ref.Name == name {
 			return ref, true
@@ -50,7 +80,7 @@ func (form *installedForm) acceptedBinding(name string) (formpackage.BindingRef,
 
 // providesInterface reports whether this Form declares the exact Interface
 // contract a Binding requires of its target.
-func (form *installedForm) providesInterface(want formpackage.InterfaceRef) bool {
+func (form *InstalledForm) providesInterface(want formpackage.InterfaceRef) bool {
 	for _, provided := range form.ProvidedInterfaces {
 		if provided.Name == want.Name && provided.Version == want.Version &&
 			provided.SchemaDigest == want.SchemaDigest {
@@ -61,7 +91,7 @@ func (form *installedForm) providesInterface(want formpackage.InterfaceRef) bool
 }
 
 // deriveRelations computes and caches the Form's cross-resource relations.
-func (form *installedForm) deriveRelations() error {
+func (form *InstalledForm) deriveRelations() error {
 	relations, err := currentformmodel.DeriveRelations(form.DesiredSchema)
 	if err != nil {
 		return fmt.Errorf("takoform: derive %s relations: %w", form.Ref.Kind, err)
@@ -119,13 +149,13 @@ type bindingDefinitionDocument struct {
 // Definition declares. There is deliberately no fallback: a host that cannot
 // say which operations a Form supports must not guess a generous set, because
 // every guessed capability is a promise a client will hold it to.
-func (form *installedForm) operations() []string {
+func (form *InstalledForm) operations() []string {
 	return append([]string(nil), form.Lifecycle...)
 }
 
 // declaresUpdate reports whether the installed Definition permits a
 // spec-changing apply on an existing resource.
-func (form *installedForm) declaresUpdate() bool {
+func (form *InstalledForm) declaresUpdate() bool {
 	for _, operation := range form.Lifecycle {
 		if operation == "update" {
 			return true
@@ -139,7 +169,7 @@ func (form *installedForm) declaresUpdate() bool {
 // and echo, so the effective spec IS the wire spec: a client that omits a
 // defaulted field and a client that writes its default produce the same
 // specDigest and therefore the same generation.
-func (form *installedForm) materialize(spec map[string]any) map[string]any {
+func (form *InstalledForm) materialize(spec map[string]any) map[string]any {
 	return currentformmodel.MaterializeDefaults(form.DesiredSchema, spec)
 }
 
@@ -219,12 +249,101 @@ func runtimeHandlerVocabulary(document interfaceDefinitionDocument) []string {
 
 // Catalog is the reference host's installed set: Form definitions plus the
 // interface and binding contracts it can profile.
+//
+// Forms is keyed by the EXACT identity, not by group and kind. A catalog keyed
+// by kind can hold one contract per Form line at a time, so the day a Form's
+// definition version moves, every resource already recorded under the previous
+// one becomes unaddressable — and a host that answered such a request by kind
+// would answer it about a different contract, successfully, with nothing
+// downstream able to tell (decision 0022).
 type Catalog struct {
-	forms      map[string]*installedForm    // formKey(group, kind)
+	Forms map[ExactFormKey]*InstalledForm
+	// lines indexes group+kind+definitionVersion onto the one exact key that
+	// names it. It exists for the support surface, whose published path carries
+	// no schemaDigest segment; installing two definitions that agree on the
+	// version and differ on the digest is refused, so the index is exact.
+	lines      map[string]ExactFormKey
 	interfaces map[string]supportRef        // name@version
 	bindings   map[string]supportRef        // name@version
 	contracts  map[string]bindingContract   // name@version
 	abis       map[string]interfaceContract // name@version
+}
+
+func newCatalog() *Catalog {
+	return &Catalog{
+		Forms:      map[ExactFormKey]*InstalledForm{},
+		lines:      map[string]ExactFormKey{},
+		interfaces: map[string]supportRef{},
+		bindings:   map[string]supportRef{},
+		contracts:  map[string]bindingContract{},
+		abis:       map[string]interfaceContract{},
+	}
+}
+
+// install compiles one Form, derives its relations, and files it under its
+// exact identity.
+//
+// Two installs of the SAME exact key are a duplicate; two definitions that
+// agree on group, kind, and definitionVersion while differing on schemaDigest
+// are an identity conflict, because a definition version names one set of
+// definition bytes and a host holding two of them cannot say which one a
+// version-addressed request means.
+func (catalog *Catalog) install(form *InstalledForm) error {
+	key := exactFormKey(form.Ref)
+	if _, installed := catalog.Forms[key]; installed {
+		return fmt.Errorf("takoform: exact Form %s is already installed", key)
+	}
+	line := formLineKey(form.Ref.APIVersion, form.Ref.Kind, form.Ref.DefinitionVersion)
+	if existing, taken := catalog.lines[line]; taken {
+		return fmt.Errorf(
+			"takoform: %s %s definition version %s is already installed at digest %s",
+			form.Ref.APIVersion, form.Ref.Kind, form.Ref.DefinitionVersion, existing.SchemaDigest,
+		)
+	}
+	if err := form.compileDesiredSchema(); err != nil {
+		return err
+	}
+	if err := form.deriveRelations(); err != nil {
+		return err
+	}
+	catalog.Forms[key] = form
+	catalog.lines[line] = key
+	return nil
+}
+
+// exact resolves one installed Form by the WHOLE identity. Nothing in this
+// package resolves a Form any other way: a nil answer is `form_unknown`, never
+// a reason to look for the same kind under a different contract.
+func (catalog *Catalog) exact(ref FormRef) *InstalledForm {
+	return catalog.Forms[exactFormKey(ref)]
+}
+
+// line resolves the one exact identity a group, kind, and definition version
+// name. It serves the support surface's published path shape and nothing else.
+func (catalog *Catalog) line(group, kind, definitionVersion string) *InstalledForm {
+	key, known := catalog.lines[formLineKey(group, kind, definitionVersion)]
+	if !known {
+		return nil
+	}
+	return catalog.Forms[key]
+}
+
+// sortedForms lists every installed Form in one stable exact-identity order.
+func (catalog *Catalog) sortedForms() []*InstalledForm {
+	keys := make([]ExactFormKey, 0, len(catalog.Forms))
+	for key := range catalog.Forms {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i].String() < keys[j].String() })
+	out := make([]*InstalledForm, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, catalog.Forms[key])
+	}
+	return out
+}
+
+func formLineKey(group, kind, definitionVersion string) string {
+	return group + "\x00" + kind + "\x00" + definitionVersion
 }
 
 // interfaceContractByName resolves one installed Interface Definition.
@@ -241,8 +360,6 @@ func (catalog *Catalog) bindingContractByName(name, version string) (bindingCont
 	return contract, ok
 }
 
-func formKey(group, kind string) string { return group + "\x00" + kind }
-
 // baseLifecycleCapabilities is the closed v1alpha3 capability set of a Form
 // with nothing mutable to change. It carries no refresh: the lane has no such
 // operation.
@@ -252,10 +369,6 @@ func baseLifecycleCapabilities() []string {
 
 func lifecycleCapabilitiesWithUpdate() []string {
 	return []string{"create", "read", "update", "delete", "import", "observe"}
-}
-
-func (catalog *Catalog) form(group, kind string) *installedForm {
-	return catalog.forms[formKey(group, kind)]
 }
 
 type candidateSet struct {
@@ -301,13 +414,7 @@ type bindingCandidateSet struct {
 // identity comes from the generated registry (currentformregistry.V3Current),
 // so registry/candidate drift fails closed.
 func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
-	catalog := &Catalog{
-		forms:      map[string]*installedForm{},
-		interfaces: map[string]supportRef{},
-		bindings:   map[string]supportRef{},
-		contracts:  map[string]bindingContract{},
-		abis:       map[string]interfaceContract{},
-	}
+	catalog := newCatalog()
 	var set candidateSet
 	setPath := filepath.Join(repoRoot, "forms", "candidates", "edge", "v1alpha1", "candidate-set.json")
 	if err := decodeStrictFile(setPath, &set); err != nil {
@@ -345,7 +452,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 		if digest != candidate.FormRef.SchemaDigest {
 			return nil, fmt.Errorf("takoform: candidate %s definition digest drifted", candidate.Kind)
 		}
-		form := &installedForm{
+		form := &InstalledForm{
 			Ref:                candidate.FormRef,
 			PackageDigest:      candidate.PackageDigest,
 			Role:               definition.Role,
@@ -356,18 +463,17 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 			ProvidedInterfaces: definition.ProvidedInterfaces,
 			AcceptedBindings:   definition.AcceptedBindings,
 		}
-		if err := form.compileDesiredSchema(); err != nil {
+		if err := catalog.install(form); err != nil {
 			return nil, err
 		}
-		if err := form.deriveRelations(); err != nil {
-			return nil, err
-		}
-		catalog.forms[formKey(form.Ref.APIVersion, form.Ref.Kind)] = form
 	}
-	if len(catalog.forms) != len(registry.SupportedRefs()) {
+	if len(catalog.Forms) != len(registry.SupportedRefs()) {
 		return nil, errors.New("takoform: candidate set does not cover the generated v3 registry")
 	}
 	if err := catalog.installSyntheticSecondGroup(contract); err != nil {
+		return nil, err
+	}
+	if err := catalog.installSyntheticSecondDefinitionVersion(contract); err != nil {
 		return nil, err
 	}
 	var interfaces interfaceCandidateSet
@@ -461,12 +567,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 // tests can run without a repository checkout; SelfTest uses the real
 // LoadCatalog.
 func FallbackCatalog(contract Contract) (*Catalog, error) {
-	catalog := &Catalog{
-		forms:      map[string]*installedForm{},
-		interfaces: map[string]supportRef{},
-		bindings:   map[string]supportRef{},
-		contracts:  map[string]bindingContract{},
-	}
+	catalog := newCatalog()
 	group := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef.APIVersion
 	// The fallback Interface and Binding contracts are the ones the support
 	// probes name, so the in-memory catalog is internally consistent: the KV
@@ -484,13 +585,26 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 		Version:      contract.RunnerInput.SupportProbes.Binding.Version,
 		SchemaDigest: formpackage.DigestBytes([]byte("fallback-binding")),
 	}
+	// The fallback ModuleWorker provides the runtime ABI its Worker Version's
+	// /worker reference requires, so the in-memory catalog states the same
+	// dependency the real family does.
+	fallbackRuntimeRef := formpackage.InterfaceRef{
+		APIVersion:   "interfaces.takoform.com/v1alpha1",
+		Name:         contract.RunnerInput.SupportProbes.RuntimeContract.Name,
+		Version:      contract.RunnerInput.SupportProbes.RuntimeContract.Version,
+		SchemaDigest: contract.RunnerInput.SupportProbes.RuntimeContract.SchemaDigest,
+	}
 	fallbackBindingName := fallbackBindingRef.Name
 	closedName := map[string]any{
 		"type": "string", "minLength": 1, "maxLength": 63,
 		"pattern": "^[a-z][a-z0-9-]{0,62}$",
 	}
-	typedRef := func(kind string) map[string]any {
-		return map[string]any{
+	// Every fallback reference carries a target contract, exactly as a real
+	// Form Definition does: a reference stating only a group and a kind is
+	// refused at derivation, so an in-memory Form without one would not install
+	// at all (decision 0022).
+	typedRef := func(kind string, target map[string]any) map[string]any {
+		node := map[string]any{
 			"type": "object", "additionalProperties": false,
 			"required": []any{"apiVersion", "kind", "name"},
 			"properties": map[string]any{
@@ -499,8 +613,28 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 				"name":       closedName,
 			},
 		}
+		for key, value := range target {
+			node[key] = value
+		}
+		return node
 	}
-	bindingList := func(kind, binding string) map[string]any {
+	exactFormTarget := func(ref FormRef) map[string]any {
+		return map[string]any{currentformmodel.TargetFormRefsAnnotationKey: []any{map[string]any{
+			"apiVersion":        ref.APIVersion,
+			"kind":              ref.Kind,
+			"definitionVersion": ref.DefinitionVersion,
+			"schemaDigest":      ref.SchemaDigest,
+		}}}
+	}
+	interfaceTarget := func(ref formpackage.InterfaceRef) map[string]any {
+		return map[string]any{currentformmodel.RequiredInterfaceAnnotationKey: map[string]any{
+			"apiVersion":   ref.APIVersion,
+			"name":         ref.Name,
+			"version":      ref.Version,
+			"schemaDigest": ref.SchemaDigest,
+		}}
+	}
+	bindingList := func(kind, binding string, target map[string]any) map[string]any {
 		return map[string]any{
 			"type": "array", "uniqueItems": true,
 			"items": map[string]any{
@@ -508,7 +642,7 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 				"required": []any{"name", "resource"},
 				"properties": map[string]any{
 					"name":     map[string]any{"type": "string", "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"},
-					"resource": typedRef(kind),
+					"resource": typedRef(kind, target),
 				},
 			},
 			currentformmodel.BindingAnnotationKey: binding,
@@ -541,13 +675,18 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 			"type": "object", "additionalProperties": false,
 			"required": []any{"bundle", "handlers", "worker"},
 			"properties": map[string]any{
-				"bundle": typedRef("WorkerBundle"),
+				"bundle": typedRef(
+					"WorkerBundle",
+					exactFormTarget(contract.RunnerInput.WorkerBundle.Identity.FormRef),
+				),
 				"handlers": map[string]any{
 					"type": "array", "minItems": 1, "uniqueItems": true,
 					"items": map[string]any{"enum": []any{"fetch", "scheduled", "queue", "tail"}},
 				},
-				"kvBindings": bindingList("EdgeKVNamespace", fallbackBindingName),
-				"worker":     typedRef("ModuleWorker"),
+				"kvBindings": bindingList(
+					"EdgeKVNamespace", fallbackBindingName, interfaceTarget(fallbackInterfaceRef),
+				),
+				"worker": typedRef("ModuleWorker", interfaceTarget(fallbackRuntimeRef)),
 			},
 		}},
 	}
@@ -555,7 +694,7 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 	// mirror the real candidates, where update follows the presence of a
 	// mutable desired field. Only the queue has one.
 	for _, entry := range schemas {
-		form := &installedForm{
+		form := &InstalledForm{
 			Ref:           entry.probe.Identity.FormRef,
 			PackageDigest: entry.probe.Identity.PackageDigest,
 			Role:          entry.role,
@@ -569,16 +708,15 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 		if entry.probe.Identity.FormRef.Kind == contract.RunnerInput.EdgeKvNamespace.Identity.FormRef.Kind {
 			form.ProvidedInterfaces = []formpackage.InterfaceRef{fallbackInterfaceRef}
 		}
+		if entry.probe.Identity.FormRef.Kind == contract.RunnerInput.ModuleWorker.Identity.FormRef.Kind {
+			form.ProvidedInterfaces = []formpackage.InterfaceRef{fallbackRuntimeRef}
+		}
 		if entry.probe.Identity.FormRef.Kind == contract.RunnerInput.WorkerVersion.Identity.FormRef.Kind {
 			form.AcceptedBindings = []formpackage.BindingRef{fallbackBindingRef}
 		}
-		if err := form.compileDesiredSchema(); err != nil {
+		if err := catalog.install(form); err != nil {
 			return nil, err
 		}
-		if err := form.deriveRelations(); err != nil {
-			return nil, err
-		}
-		catalog.forms[formKey(form.Ref.APIVersion, form.Ref.Kind)] = form
 	}
 	catalog.contracts[fallbackBindingName+"@"+fallbackBindingRef.Version] = bindingContract{
 		Ref:                fallbackBindingRef,
@@ -587,6 +725,9 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 		AllowedTargetForms: []allowedTargetForm{{APIVersion: group, Kind: "EdgeKVNamespace"}},
 	}
 	if err := catalog.installSyntheticSecondGroup(contract); err != nil {
+		return nil, err
+	}
+	if err := catalog.installSyntheticSecondDefinitionVersion(contract); err != nil {
 		return nil, err
 	}
 	catalog.interfaces[fallbackInterfaceRef.Name+"@"+fallbackInterfaceRef.Version] = supportRef{
@@ -607,7 +748,7 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 // no package digest: it exists only to prove group-scoped identity.
 func (catalog *Catalog) installSyntheticSecondGroup(contract Contract) error {
 	ref := contract.RunnerInput.SyntheticSecondGroup
-	form := &installedForm{
+	return catalog.install(&InstalledForm{
 		Ref:         ref,
 		Role:        "identity",
 		Title:       "Synthetic second-group " + ref.Kind,
@@ -616,18 +757,47 @@ func (catalog *Catalog) installSyntheticSecondGroup(contract Contract) error {
 			"type": "object", "additionalProperties": false, "properties": map[string]any{},
 		},
 		Lifecycle: baseLifecycleCapabilities(),
-	}
-	if err := form.compileDesiredSchema(); err != nil {
-		return err
-	}
-	if err := form.deriveRelations(); err != nil {
-		return err
-	}
-	catalog.forms[formKey(ref.APIVersion, ref.Kind)] = form
-	return nil
+	})
 }
 
-func (form *installedForm) compileDesiredSchema() error {
+// installSyntheticSecondDefinitionVersion installs the corpus-pinned SECOND
+// definition version of one already-installed kind.
+//
+// It is corpus bytes rather than a Form built here, so the lane pins exactly
+// what a second contract of one Form line is: the whole Definition document is
+// digest-pinned, its schemaDigest is re-derived from those bytes, and the
+// Definition it must NOT equal is the first version's. A host that keyed its
+// catalog by group and kind cannot hold both at once, which is the property the
+// exact-identity checks fail closed on (decision 0022).
+//
+// The two versions differ in exactly two places, and both are load-bearing: the
+// definitionVersion, which makes it a second contract at all, and the
+// providedInterfaces, which the corpus states as `withheldInterface` so a
+// relation requiring that Interface has a live target that truthfully does not
+// satisfy it.
+func (catalog *Catalog) installSyntheticSecondDefinitionVersion(contract Contract) error {
+	probe := contract.RunnerInput.SyntheticSecondDefinitionVersion
+	definition := probe.Definition
+	if definition == nil {
+		return errors.New("takoform: the synthetic second definition version was not hydrated from the corpus")
+	}
+	existing := catalog.line(probe.FormRef.APIVersion, probe.FormRef.Kind, contract.RunnerInput.ModuleWorker.Identity.FormRef.DefinitionVersion)
+	if existing == nil {
+		return errors.New("takoform: the synthetic second definition version names a Form line this host has not installed")
+	}
+	return catalog.install(&InstalledForm{
+		Ref:                probe.FormRef,
+		Role:               definition.Role,
+		Title:              definition.Title,
+		Description:        definition.Description,
+		DesiredSchema:      definition.DesiredSchema,
+		Lifecycle:          definition.LifecycleCapabilities,
+		ProvidedInterfaces: definition.ProvidedInterfaces,
+		AcceptedBindings:   definition.AcceptedBindings,
+	})
+}
+
+func (form *InstalledForm) compileDesiredSchema() error {
 	if len(form.DesiredSchema) == 0 {
 		return fmt.Errorf("takoform: installed form %s has no desired schema", form.Ref.Kind)
 	}

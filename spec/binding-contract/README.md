@@ -78,11 +78,14 @@ A consumer resource declares instances as typed data. The wire shape is a
   the group is never "defaulted by the family", because a reference that omits
   it can address only one family and forces a host to guess which installed
   Form a bare kind means — and `name` is chosen by the author. After resolution
-  the host pins the target UID in host-owned records; desired state keeps the
-  name reference. A target deleted and re-created under the same name is a
-  different resource, and the source is NOT re-bound to it
+  the host pins the target UID *and the target's exact FormRef* in host-owned
+  records; desired state keeps the name reference. A target deleted and
+  re-created under the same name is a different resource, and the source is NOT
+  re-bound to it; neither is a target whose Form has since moved to a different
+  exact contract
   ([`../host-api/v1alpha3.md`](../host-api/v1alpha3.md),
-  [decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md)).
+  [decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md),
+  [decision 0022](../decisions/0022-relations-pin-the-target-contract.md)).
   Re-applying the source is what re-pins it.
 - Sensitive material never appears: a binding projects an API, not a
   credential. Sensitive-variable requirements are declared as named slots
@@ -116,6 +119,30 @@ relations of a Form from the `desiredSchema` it already serves, instead of a
 separate declared list the published Form Definition schema does not admit
 ([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)).
 
+The `resource` node INSIDE each instance carries a second annotation, stating
+what the target must satisfy
+([decision 0022](../decisions/0022-relations-pin-the-target-contract.md)). For a
+binding it is always `x-takoform-required-interface`, naming exactly the Binding
+Definition's own `targetInterface` at its exact digest:
+
+```json
+"resource": {
+  "…": "the closed {apiVersion, kind, name} reference",
+  "x-takoform-required-interface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "edge.kv", "version": "1.0.0", "schemaDigest": "sha256:..."
+  }
+}
+```
+
+A binding IS the projection of an Interface into the consumer's runtime, so the
+exact contract the target provides is the whole requirement; pinning the
+target's Form as well would refuse a different store implementing the same
+contract for a reason the binding does not have. The Binding Definition remains
+the authority for that Interface and the annotation is its projection onto the
+reference, so the two cannot disagree — a Form whose binding list annotated any
+other Interface does not render.
+
 ## Verification a host performs
 
 A conforming host verifies a declared binding before it mutates anything.
@@ -143,12 +170,22 @@ In order:
    target that provides none cannot be bound.
 6. **Same space.** Guaranteed by the wire: a reference carries no space member,
    so a cross-space binding is unrepresentable rather than refused.
+7. **The reference's own target contract.** The annotated
+   `x-takoform-required-interface` is verified last, against the target's
+   recorded exact ref and its Form's `providedInterfaces`
+   ([decision 0022](../decisions/0022-relations-pin-the-target-contract.md)).
+   For a binding it restates rule 5, because the annotation must be exactly the
+   Binding's `targetInterface`; the order above is the one clients were told, so
+   the binding-specific refusal is the one they get. Every NON-binding relation
+   in a Form is verified by this rule alone.
 
 Deleting a resource any live binding — or any other stored relation — references
 fails `dependency_in_use` (409). The required conformance checks
 `binding-contract-verified`, `relation-target-missing-rejected`,
-`relation-target-deletion-blocked`, `relation-incarnation-change-detected`, and
-`relation-reapply-repins` prove a laxer host fails the lane.
+`relation-target-deletion-blocked`, `relation-incarnation-change-detected`,
+`relation-reapply-repins`, `relation-target-form-ref-verified`,
+`relation-target-interface-verified`, and `relation-pin-records-target-form-ref`
+prove a laxer host fails the lane.
 
 ## Binding distribution
 

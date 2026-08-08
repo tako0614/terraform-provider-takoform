@@ -40,7 +40,13 @@
           "kind",
           "name"
         ],
-        "type": "object"
+        "type": "object",
+        "x-takoform-required-interface": {
+          "apiVersion": "interfaces.takoform.com/v1alpha1",
+          "name": "worker.runtime",
+          "schemaDigest": "sha256:06104adeefb967838766a90866f7229f12cfd1bceb31cd79c7b1826b15362c0f",
+          "version": "1.0.0"
+        }
       }
     },
     "required": [

@@ -108,8 +108,8 @@ func (h *ReferenceHost) activeDeployment(space, workerUID string) *storedResourc
 		return nil
 	}
 	for _, candidate := range h.sortedResources() {
-		if candidate.Space != space || candidate.Group != edgeFormsGroup ||
-			candidate.Kind != workerDeploymentKind {
+		if candidate.Space != space || candidate.group() != edgeFormsGroup ||
+			candidate.kind() != workerDeploymentKind {
 			continue
 		}
 		if relationTargetUID(candidate.Relations, workerRelationPointer) == workerUID {
@@ -191,25 +191,25 @@ type workerDependent struct {
 func (h *ReferenceHost) workerDependents(space, workerUID string) []workerDependent {
 	var out []workerDependent
 	for _, candidate := range h.sortedResources() {
-		if candidate.Space != space || candidate.Group != edgeFormsGroup {
+		if candidate.Space != space || candidate.group() != edgeFormsGroup {
 			continue
 		}
-		if handler, attachment := attachmentHandler[candidate.Kind]; attachment {
+		if handler, attachment := attachmentHandler[candidate.kind()]; attachment {
 			if relationTargetUID(candidate.Relations, workerRelationPointer) == workerUID {
 				out = append(out, workerDependent{
-					Kind: candidate.Kind, Name: candidate.Name, Handler: handler,
+					Kind: candidate.kind(), Name: candidate.Name, Handler: handler,
 					Detail: "attachment",
 				})
 			}
 			continue
 		}
-		if candidate.Kind != workerVersionKind {
+		if candidate.kind() != workerVersionKind {
 			continue
 		}
 		for _, relation := range candidate.Relations {
 			if relation.Relation == serviceBindingsRelation && relation.TargetUID == workerUID {
 				out = append(out, workerDependent{
-					Kind: candidate.Kind, Name: candidate.Name, Handler: fetchHandler,
+					Kind: candidate.kind(), Name: candidate.Name, Handler: fetchHandler,
 					Detail: "inbound service binding " + relation.Pointer,
 				})
 			}
@@ -222,7 +222,7 @@ func (h *ReferenceHost) workerDependents(space, workerUID string) []workerDepend
 // decision 0016 states. It runs on apply and on import alike, and is re-run at
 // async COMMIT time, exactly like relation resolution.
 func (h *ReferenceHost) validateWorkerAggregate(
-	form *installedForm,
+	form *InstalledForm,
 	space, name string,
 	spec map[string]any,
 	relations []storedRelation,
@@ -340,7 +340,7 @@ func (h *ReferenceHost) validateWorkerDeployment(
 	//    "which one serves" undefined, and no rule chosen after the fact — newest,
 	//    lowest name, highest weight — is a rule an author can predict.
 	if existing := h.activeDeployment(space, workerUID); existing != nil {
-		key := resourceKey(existing.Space, existing.Group, existing.Kind, existing.Name)
+		key := existing.key()
 		if key != selfKey {
 			return stableError(
 				"invalid_argument",
@@ -423,7 +423,7 @@ func (h *ReferenceHost) versionUnavailable(version *storedResource) (string, boo
 	if reason, hostReason, drifted := h.relationDrift(version); drifted {
 		return "it is not Ready (" + reason + ": " + hostReason + ")", false
 	}
-	key := resourceKey(version.Space, version.Group, version.Kind, version.Name)
+	key := version.key()
 	if h.deletionPending(key) {
 		return "an accepted delete operation is already removing it", false
 	}
@@ -451,7 +451,7 @@ func (h *ReferenceHost) deletionPending(key string) bool {
 // action into a fan-out of broken resources whose repair order the author has
 // to work out. Removing the dependents first is a decision the author states.
 func (h *ReferenceHost) deploymentDeleteBlocked(resource *storedResource) *hostError {
-	if resource.Group != edgeFormsGroup || resource.Kind != workerDeploymentKind {
+	if resource.group() != edgeFormsGroup || resource.kind() != workerDeploymentKind {
 		return nil
 	}
 	workerUID := relationTargetUID(resource.Relations, workerRelationPointer)
@@ -480,7 +480,7 @@ func (h *ReferenceHost) deploymentDeleteBlocked(resource *storedResource) *hostE
 // deployed versions export no `fetch` is deployed but cannot answer a request,
 // which is `UnsupportedCapability`.
 func (h *ReferenceHost) workerServiceUnavailable(resource *storedResource) (reason, hostReason string, unavailable bool) {
-	if resource.Group != edgeFormsGroup || resource.Kind != moduleWorkerKind {
+	if resource.group() != edgeFormsGroup || resource.kind() != moduleWorkerKind {
 		return "", "", false
 	}
 	deployment := h.activeDeployment(resource.Space, resource.UID)
@@ -512,22 +512,33 @@ func (h *ReferenceHost) workerServiceUnavailable(resource *storedResource) (reas
 // returns false when the lane's ModuleWorker Form declares no runtime contract
 // at all, which is only the minimal in-memory FallbackCatalog used by targeted
 // unit tests; the real LoadCatalog always installs it.
+// The catalog is keyed by the EXACT identity, so "the installed ModuleWorker
+// Form" is no longer a single thing to look up: one Form line may hold more
+// than one definition, and a host that picked whichever it found first would
+// advertise a vocabulary some of its installed contracts do not have. The
+// runtime ABI is therefore the one contract every installed Form providing
+// worker.runtime agrees on. Zero providers means this host implements no such
+// ABI; two DIFFERENT ones mean it cannot say which it implements, and both fail
+// closed rather than guess (decision 0022).
 func (h *ReferenceHost) runtimeContract() (interfaceContract, bool) {
-	worker := h.catalog.form(edgeFormsGroup, moduleWorkerKind)
-	if worker == nil {
-		return interfaceContract{}, false
-	}
-	for _, provided := range worker.ProvidedInterfaces {
-		if provided.Name != workerRuntimeInterface {
-			continue
+	var resolved interfaceContract
+	found := false
+	for _, form := range h.catalog.sortedForms() {
+		for _, provided := range form.ProvidedInterfaces {
+			if provided.Name != workerRuntimeInterface {
+				continue
+			}
+			contract, installed := h.catalog.interfaceContractByName(provided.Name, provided.Version)
+			if !installed || contract.Ref.SchemaDigest != provided.SchemaDigest {
+				return interfaceContract{}, false
+			}
+			if found && contract.Ref != resolved.Ref {
+				return interfaceContract{}, false
+			}
+			resolved, found = contract, true
 		}
-		contract, installed := h.catalog.interfaceContractByName(provided.Name, provided.Version)
-		if !installed || contract.Ref.SchemaDigest != provided.SchemaDigest {
-			return interfaceContract{}, false
-		}
-		return contract, true
 	}
-	return interfaceContract{}, false
+	return resolved, found
 }
 
 // declaredHandlerViolation reports why one Worker Version's declared handlers
@@ -552,7 +563,7 @@ func (h *ReferenceHost) runtimeContract() (interfaceContract, bool) {
 // is reported as a desired-spec diagnostic and therefore reaches the advisory
 // `validate` surface, the binding `prepare` surface, and `apply` alike. A client
 // learns the version is unrunnable while planning, not after a failed apply.
-func (h *ReferenceHost) declaredHandlerViolation(form *installedForm, spec map[string]any) string {
+func (h *ReferenceHost) declaredHandlerViolation(form *InstalledForm, spec map[string]any) string {
 	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
 		return ""
 	}
@@ -581,7 +592,7 @@ func (h *ReferenceHost) declaredHandlerViolation(form *installedForm, spec map[s
 // deliberately redundant with the diagnostic: import and the asynchronous commit
 // re-derive every precondition here, long after the diagnostics of the accepting
 // request were computed.
-func (h *ReferenceHost) validateDeclaredHandlers(form *installedForm, spec map[string]any) *hostError {
+func (h *ReferenceHost) validateDeclaredHandlers(form *InstalledForm, spec map[string]any) *hostError {
 	if violation := h.declaredHandlerViolation(form, spec); violation != "" {
 		return stableError("invalid_argument", violation)
 	}
@@ -616,7 +627,7 @@ func (h *ReferenceHost) validateDeclaredHandlers(form *installedForm, spec map[s
 // boundary is why the lane proves the refusal for a pinned bundle rather than
 // claiming to prove it for every possible one; see spec/host-api/v1alpha3.md.
 func (h *ReferenceHost) exportedHandlerViolation(
-	form *installedForm, space string, spec map[string]any, relations []storedRelation,
+	form *InstalledForm, space string, spec map[string]any, relations []storedRelation,
 ) *hostError {
 	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
 		return nil
@@ -720,7 +731,7 @@ func desiredSchemaEnum(schema map[string]any, property string) []string {
 // a sixth binding list is covered without a host edit. The two non-binding
 // sources are named, because nothing in the schema distinguishes a data map
 // that projects environment names from one that does not.
-func validateEnvironmentNamespace(form *installedForm, spec map[string]any) *hostError {
+func validateEnvironmentNamespace(form *InstalledForm, spec map[string]any) *hostError {
 	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
 		return nil
 	}

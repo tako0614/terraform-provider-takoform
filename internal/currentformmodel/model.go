@@ -110,6 +110,12 @@ type Field struct {
 	// TargetKind names the exact Form kind a KindResourceRef,
 	// KindResourceRefList, or KindBindingList points at.
 	TargetKind string
+	// Target states WHAT the referenced resource must still satisfy. Every
+	// reference-shaped field declares exactly one of the two requirements
+	// (decision 0022); a field that declared none would emit a reference
+	// satisfied by any target of the right group and kind, whatever contract
+	// that target's Definition has since moved to.
+	Target TargetContract
 	// BindingType names the Binding Definition a KindBindingList carries.
 	BindingType string
 	// Fields declares the closed members of KindObject and KindObjectList.
@@ -143,6 +149,29 @@ type InterfaceRefSource struct {
 	Name    string
 	Version string
 }
+
+// TargetContract declares which of the two portable requirements one
+// reference-shaped field states about the resource it points at. Exactly one
+// member is set (decision 0022).
+//
+// The choice is a statement about the DEPENDENCY, not about convenience.
+// ExactForm is correct when the source — or the host acting for it — reads a
+// member of the target's desired spec, or enforces a rule stated over the
+// target Form itself: those break the moment the target's Definition changes
+// shape, so nothing weaker than the exact contract states the requirement.
+// Interface is correct when what the source needs is behavior a contract fixes
+// and any Form providing it would serve: pinning the Form there would refuse a
+// perfectly good target for a reason the source does not actually have.
+type TargetContract struct {
+	// ExactForm requires the target to be one of the exact Form identities the
+	// build renders for the field's TargetKind.
+	ExactForm bool
+	// Interface names the exact Interface contract the target must provide.
+	Interface *InterfaceRefSource
+}
+
+// Declared reports whether this field states a target contract at all.
+func (t TargetContract) Declared() bool { return t.ExactForm || t.Interface != nil }
 
 // BindingRefSource names an exact Binding contract by name and version.
 type BindingRefSource struct {
@@ -350,6 +379,19 @@ func validateField(kind string, field Field) error {
 		}
 	}
 	switch field.Kind {
+	case KindResourceRef, KindResourceRefList, KindBindingList:
+		if err := validateTargetContract(kind, field); err != nil {
+			return err
+		}
+	default:
+		if field.Target.Declared() {
+			return fmt.Errorf(
+				"form %s field %s declares a target contract on kind %q; only a reference-shaped field points at another resource",
+				kind, field.Wire, field.Kind,
+			)
+		}
+	}
+	switch field.Kind {
 	case KindString:
 		if field.Pattern == "" && field.MaxLength == 0 {
 			return fmt.Errorf("form %s string field %s is unbounded; declare Pattern or MaxLength", kind, field.Wire)
@@ -393,6 +435,31 @@ func validateField(kind string, field Field) error {
 	case KindInteger, KindBoolean, KindJSONMap:
 	default:
 		return fmt.Errorf("form %s field %s has unknown field kind %q", kind, field.Wire, field.Kind)
+	}
+	return nil
+}
+
+// validateTargetContract proves one reference-shaped field states exactly one
+// requirement about its target. Both would be two sources of truth for one
+// dependency; neither would emit a reference that group and kind alone
+// satisfy, which is precisely the hole decision 0022 closes.
+func validateTargetContract(kind string, field Field) error {
+	switch {
+	case field.Target.ExactForm && field.Target.Interface != nil:
+		return fmt.Errorf(
+			"form %s reference field %s declares both an exact Form contract and a required Interface; "+
+				"a relation depends on one or the other",
+			kind, field.Wire,
+		)
+	case !field.Target.Declared():
+		return fmt.Errorf(
+			"form %s reference field %s declares no target contract; state the exact Form the relation "+
+				"depends on, or the Interface the target must provide (decision 0022)",
+			kind, field.Wire,
+		)
+	case field.Target.Interface != nil &&
+		(field.Target.Interface.Name == "" || field.Target.Interface.Version == ""):
+		return fmt.Errorf("form %s reference field %s names an incomplete required Interface", kind, field.Wire)
 	}
 	return nil
 }

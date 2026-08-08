@@ -187,7 +187,7 @@ func TestEveryOptionalFieldCarriesPortableMeaning(t *testing.T) {
 func TestDeclaredDefaultsReachTheDesiredSchema(t *testing.T) {
 	t.Parallel()
 	for _, form := range Forms {
-		properties, _ := form.DesiredSchema()["properties"].(map[string]any)
+		properties, _ := desiredSchemaFor(t, form)["properties"].(map[string]any)
 		for _, field := range form.Fields {
 			property, _ := properties[field.Wire].(map[string]any)
 			if property == nil {

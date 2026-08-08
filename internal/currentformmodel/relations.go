@@ -37,6 +37,45 @@ type Relation struct {
 	// its parent object. A relation that is not required may legitimately be
 	// absent from a valid desired spec; a required one is always present.
 	Required bool
+	// TargetFormRefs is the closed set of exact Form identities this relation
+	// accepts, or nil when the relation states an Interface requirement instead.
+	TargetFormRefs []TargetFormRef
+	// RequiredInterface is the exact Interface contract the target must
+	// provide, or nil when the relation pins exact Forms instead.
+	//
+	// Exactly one of the two is set: a reference that stated neither would be
+	// satisfied by any resource of the right group and kind, whatever contract
+	// its Definition has since moved to (decision 0022).
+	RequiredInterface *RequiredInterface
+}
+
+// TargetFormRef is one exact Form identity a relation accepts as its target.
+// It is the same four-member identity a FormRef carries everywhere else.
+type TargetFormRef struct {
+	APIVersion        string
+	Kind              string
+	DefinitionVersion string
+	SchemaDigest      string
+}
+
+// String renders the identity for a refusal message.
+func (t TargetFormRef) String() string {
+	return t.APIVersion + " " + t.Kind + "@" + t.DefinitionVersion + " " + t.SchemaDigest
+}
+
+// RequiredInterface is the exact Interface contract a relation's target must
+// provide. The digest is carried because "provides a KV interface" is worth
+// nothing until it says WHICH contract (decision 0010).
+type RequiredInterface struct {
+	APIVersion   string
+	Name         string
+	Version      string
+	SchemaDigest string
+}
+
+// String renders the contract for a refusal message.
+func (r RequiredInterface) String() string {
+	return r.Name + "@" + r.Version + " " + r.SchemaDigest
 }
 
 // IsBinding reports whether this relation is a typed capability binding.
@@ -84,12 +123,18 @@ func (w *relationWalker) walkAt(node map[string]any, pointer, binding string, re
 		if pointer == "" {
 			return fmt.Errorf("relation derivation found a reference at the desired-state root")
 		}
+		targetRefs, requiredInterface, err := targetContract(node, pointer)
+		if err != nil {
+			return err
+		}
 		w.out = append(w.out, Relation{
-			Pointer:          pointer,
-			TargetAPIVersion: group,
-			TargetKind:       kind,
-			Binding:          binding,
-			Required:         required,
+			Pointer:           pointer,
+			TargetAPIVersion:  group,
+			TargetKind:        kind,
+			Binding:           binding,
+			Required:          required,
+			TargetFormRefs:    targetRefs,
+			RequiredInterface: requiredInterface,
 		})
 		return nil
 	}
@@ -169,6 +214,77 @@ func referenceConstants(node map[string]any) (string, string, bool) {
 	return group, kind, true
 }
 
+// targetContract reads the one target-contract annotation a reference-shaped
+// node carries. A node carrying neither or both is refused: the annotation is
+// what a host verifies before it mutates anything, so a relation with no
+// stated requirement — or with two — has no answer to give (decision 0022).
+func targetContract(node map[string]any, pointer string) ([]TargetFormRef, *RequiredInterface, error) {
+	rawRefs, hasRefs := node[TargetFormRefsAnnotationKey]
+	rawInterface, hasInterface := node[RequiredInterfaceAnnotationKey]
+	switch {
+	case hasRefs && hasInterface:
+		return nil, nil, fmt.Errorf(
+			"reference %s carries both %s and %s; a relation depends on the target's exact Form or on an Interface, never both",
+			pointer, TargetFormRefsAnnotationKey, RequiredInterfaceAnnotationKey,
+		)
+	case hasRefs:
+		items, ok := rawRefs.([]any)
+		if !ok || len(items) == 0 {
+			return nil, nil, fmt.Errorf("reference %s carries an empty or malformed %s", pointer, TargetFormRefsAnnotationKey)
+		}
+		out := make([]TargetFormRef, 0, len(items))
+		for _, item := range items {
+			member, _ := item.(map[string]any)
+			ref := TargetFormRef{
+				APIVersion:        annotationString(member, "apiVersion"),
+				Kind:              annotationString(member, "kind"),
+				DefinitionVersion: annotationString(member, "definitionVersion"),
+				SchemaDigest:      annotationString(member, "schemaDigest"),
+			}
+			if ref.APIVersion == "" || ref.Kind == "" || ref.DefinitionVersion == "" || ref.SchemaDigest == "" {
+				return nil, nil, fmt.Errorf(
+					"reference %s lists an incomplete target Form identity; all four members are required",
+					pointer,
+				)
+			}
+			out = append(out, ref)
+		}
+		return out, nil, nil
+	case hasInterface:
+		member, ok := rawInterface.(map[string]any)
+		if !ok {
+			return nil, nil, fmt.Errorf("reference %s carries a malformed %s", pointer, RequiredInterfaceAnnotationKey)
+		}
+		required := RequiredInterface{
+			APIVersion:   annotationString(member, "apiVersion"),
+			Name:         annotationString(member, "name"),
+			Version:      annotationString(member, "version"),
+			SchemaDigest: annotationString(member, "schemaDigest"),
+		}
+		if required.APIVersion == "" || required.Name == "" ||
+			required.Version == "" || required.SchemaDigest == "" {
+			return nil, nil, fmt.Errorf(
+				"reference %s names an incomplete required Interface; all four members are required",
+				pointer,
+			)
+		}
+		return nil, &required, nil
+	default:
+		return nil, nil, fmt.Errorf(
+			"reference %s states no target contract; declare %s or %s so a host can verify what the "+
+				"relation requires before it mutates anything (decision 0022)",
+			pointer, TargetFormRefsAnnotationKey, RequiredInterfaceAnnotationKey,
+		)
+	}
+}
+
+// annotationString reads one string member of an annotation object, whether it
+// travelled through JSON decoding or was built in Go.
+func annotationString(node map[string]any, member string) string {
+	value, _ := node[member].(string)
+	return value
+}
+
 func constantString(node any) (string, bool) {
 	object, ok := node.(map[string]any)
 	if !ok {
@@ -218,6 +334,11 @@ type RelationInstance struct {
 	// Binding names the governing Binding Definition, empty for a plain
 	// reference.
 	Binding string
+	// TargetFormRefs and RequiredInterface are the one target contract the
+	// declaring reference states, carried through to the host so verification
+	// happens against the instance it is about (decision 0022).
+	TargetFormRefs    []TargetFormRef
+	RequiredInterface *RequiredInterface
 }
 
 // RelationInstances resolves every derived relation against one materialized
@@ -248,12 +369,14 @@ func descend(relation Relation, value any, tokens []string, pointer string) []Re
 			return nil
 		}
 		return []RelationInstance{{
-			Pointer:          pointer,
-			Relation:         relation.Pointer,
-			TargetAPIVersion: relation.TargetAPIVersion,
-			TargetKind:       relation.TargetKind,
-			TargetName:       name,
-			Binding:          relation.Binding,
+			Pointer:           pointer,
+			Relation:          relation.Pointer,
+			TargetAPIVersion:  relation.TargetAPIVersion,
+			TargetKind:        relation.TargetKind,
+			TargetName:        name,
+			Binding:           relation.Binding,
+			TargetFormRefs:    relation.TargetFormRefs,
+			RequiredInterface: relation.RequiredInterface,
 		}}
 	}
 	token, rest := tokens[0], tokens[1:]

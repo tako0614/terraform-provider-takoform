@@ -34,7 +34,13 @@
           "kind",
           "name"
         ],
-        "type": "object"
+        "type": "object",
+        "x-takoform-required-interface": {
+          "apiVersion": "interfaces.takoform.com/v1alpha1",
+          "name": "edge.queue",
+          "schemaDigest": "sha256:e88be3a9bfb0eb202422483cfca8bf45ab74d60f96f8c4f3fe289f0f607510cf",
+          "version": "1.0.0"
+        }
       },
       "maxBatchSize": {
         "description": "Largest number of messages delivered in one batch.",
@@ -84,7 +90,13 @@
           "kind",
           "name"
         ],
-        "type": "object"
+        "type": "object",
+        "x-takoform-required-interface": {
+          "apiVersion": "interfaces.takoform.com/v1alpha1",
+          "name": "edge.queue",
+          "schemaDigest": "sha256:e88be3a9bfb0eb202422483cfca8bf45ab74d60f96f8c4f3fe289f0f607510cf",
+          "version": "1.0.0"
+        }
       },
       "retryDelaySeconds": {
         "description": "Delay before a failed batch becomes deliverable again, in seconds.",
@@ -116,7 +128,13 @@
           "kind",
           "name"
         ],
-        "type": "object"
+        "type": "object",
+        "x-takoform-required-interface": {
+          "apiVersion": "interfaces.takoform.com/v1alpha1",
+          "name": "worker.runtime",
+          "schemaDigest": "sha256:06104adeefb967838766a90866f7229f12cfd1bceb31cd79c7b1826b15362c0f",
+          "version": "1.0.0"
+        }
       }
     },
     "required": [

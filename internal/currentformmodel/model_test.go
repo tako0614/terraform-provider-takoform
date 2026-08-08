@@ -20,6 +20,7 @@ func testForm() Form {
 				Example: map[string]any{"LOG_LEVEL": "info"}},
 			{HCL: "kv_bindings", Wire: "kvBindings", Kind: KindBindingList,
 				TargetKind: "EdgeKVNamespace", BindingType: "module-worker.edge-kv", Doc: "KV bindings.",
+				Target:  testInterfaceContract(),
 				Default: []any{},
 				Example: []any{map[string]any{"name": "CACHE", "resource": map[string]any{
 					"apiVersion": "edge.forms.takoform.com/v1alpha1",
@@ -94,7 +95,7 @@ func TestDesiredSchemaOmitsNameAndStaysClosed(t *testing.T) {
 	if err := form.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	schema := form.DesiredSchema()
+	schema := mustDesiredSchema(t, form)
 	if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema" || schema["type"] != "object" {
 		t.Fatalf("schema envelope = %v", schema)
 	}
@@ -137,7 +138,7 @@ func TestDesiredSchemaEmptyFormHasEmptyProperties(t *testing.T) {
 		Role: RoleIdentity, Title: "Example Identity", Description: "Identity with no fields.",
 		DefinitionVersion: "0.1.0",
 	}
-	schema := form.DesiredSchema()
+	schema := mustDesiredSchema(t, form)
 	if len(schema["properties"].(map[string]any)) != 0 {
 		t.Fatalf("properties = %v", schema["properties"])
 	}
