@@ -27,6 +27,16 @@ const (
 	// it (see CanonicalHostname). It admits no non-ASCII byte, so an
 	// internationalized name travels as its A-label.
 	PatternHostname = `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\.?$`
+	// PatternCanonicalHostname is PatternHostname less the spellings
+	// canonicalization removes: no trailing root dot. It is the grammar of a
+	// hostname a HOST produced rather than one an author wrote. Desired state
+	// admits the variant spellings because the host canonicalizes them
+	// (CanonicalHostname); an assigned value has already been through that, so
+	// admitting a trailing dot there would let a host publish a name its own
+	// canonical form forbids — and, where a Form also publishes a URL built
+	// from the hostname, would admit a pair whose two members cannot both be
+	// satisfied by one address.
+	PatternCanonicalHostname = `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
 	// PatternCanonicalSHA256 is the algorithm-prefixed lowercase digest used
 	// by every exact Takoform identity.
 	PatternCanonicalSHA256 = `^sha256:[0-9a-f]{64}$`
@@ -136,6 +146,49 @@ func (f Form) DesiredSchema(resolver TargetContractResolver) (map[string]any, er
 		schema["$defs"] = jsonMapValueDefinitions()
 	}
 	return schema, nil
+}
+
+// OutputSchema derives the Draft 2020-12 closed output contract of a Form: the
+// exact shape of the `status.outputs` document a host returns for it. A Form
+// that publishes no output returns nil, and its Definition carries no
+// outputSchema at all — which is what the published wire schema reads to decide
+// that `status.outputs` must then be OMITTED rather than empty
+// (spec/schemas/host-api-wire-v1alpha3.schema.json).
+//
+// Every declared output is required and the object is closed, in both
+// directions on purpose. Required, because an output a host may omit is an
+// output no consumer can use without a fallback, and the fallback would be that
+// consumer's private guess at what the value means. Closed, because an
+// undeclared member is a value the contract never described, and a client that
+// typed it would be typing one host's private extension as if it were portable.
+func (f Form) OutputSchema() (map[string]any, error) {
+	if len(f.Outputs) == 0 {
+		return nil, nil
+	}
+	properties := map[string]any{}
+	required := make([]string, 0, len(f.Outputs))
+	for _, output := range f.Outputs {
+		// Outputs declare no cross-resource reference, so no target-contract
+		// resolver is reachable from here; validateOutputs refuses the kinds
+		// that would need one.
+		schema, err := output.jsonSchema(f.Family.APIVersion(), nil)
+		if err != nil {
+			return nil, fmt.Errorf("form %s output %s: %w", f.Kind, output.Wire, err)
+		}
+		properties[output.Wire] = schema
+		required = append(required, output.Wire)
+	}
+	sort.Strings(required)
+	return map[string]any{
+		"$schema":              "https://json-schema.org/draft/2020-12/schema",
+		"type":                 "object",
+		"additionalProperties": false,
+		"title":                f.Title + " outputs",
+		"description": "Host-computed values this Form publishes in status.outputs. Every member is " +
+			"returned by a conforming host; the object is closed.",
+		"properties": properties,
+		"required":   required,
+	}, nil
 }
 
 func (f Field) usesJSONMap() bool {

@@ -72,7 +72,7 @@ The authored first-milestone members are:
 
 ```text
 Compute      ModuleWorker, WorkerBundle, WorkerVersion, WorkerDeployment,
-             WorkerCustomDomain, WorkerCronTrigger
+             WorkerCustomDomain, WorkerEndpoint, WorkerCronTrigger
 Data         EdgeKVNamespace, ObjectBucket, SQLiteDatabase
 Messaging    AtLeastOnceQueue, QueueConsumer
 ```
@@ -129,6 +129,21 @@ an oversight:
   no keyword relates one property's keys to a sibling array's element member —
   so a host refuses the collision before mutation and a client refuses it at
   plan time.
+- The family carries two inward activations for `fetch`, and they are two Forms
+  rather than one Form with a mode. `WorkerCustomDomain` states which name the
+  AUTHOR owns that reaches a worker; `WorkerEndpoint` states that the worker is
+  reachable at all, at an address the HOST assigns and publishes as outputs
+  ([decision 0024](decisions/0024-a-worker-is-reachable-at-a-host-assigned-address.md)).
+  The desired states are disjoint — one carries a hostname, the other carries
+  nothing but the worker — so a selector token between them would be a free
+  semantic token of exactly the kind this family forbids. A worker may have
+  both, and has at most one endpoint.
+- `WorkerEndpoint` is the family's first member to declare an `outputSchema`,
+  which makes its assigned address a typed contract rather than an untyped
+  document a consumer decodes
+  ([decision 0025](decisions/0025-declared-outputs-are-a-typed-contract.md)). A
+  Form declaring one publishes exactly its members; a Form declaring none
+  publishes no `status.outputs` at all.
 
 Semantics that differ from these shapes join other families instead of
 widening a member: `PostgresDatabase`, `FifoQueue`, `WasiFunction`,

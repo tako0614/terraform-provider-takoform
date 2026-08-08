@@ -38,7 +38,12 @@
       "revision_conflict",
       "generation_conflict"
     ],
-    "automaticallyRetryable": ["resource_busy", "backend_unavailable", "rate_limited", "deadline_exceeded"],
+    "automaticallyRetryable": [
+      "resource_busy",
+      "backend_unavailable",
+      "rate_limited",
+      "deadline_exceeded"
+    ],
     "httpStatusByCode": {
       "invalid_argument": 400,
       "unauthenticated": 401,
@@ -82,7 +87,13 @@
         },
         "packageDigest": "sha256:4275c46dd62569daff598238cd5a347bef6d098963b8e4a3d79ba65978b33678"
       },
-      "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
       "desired": {}
     },
     "edgeKvNamespace": {
@@ -96,7 +107,13 @@
         },
         "packageDigest": "sha256:790f567e482d49a6831f2f432270bf77b26b54a9eff1cc0e3095ccd9293291e3"
       },
-      "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
       "desired": {}
     },
     "atLeastOnceQueue": {
@@ -110,7 +127,14 @@
         },
         "packageDigest": "sha256:301130a2dacda683b7e4e8f94f88788439ee8ec12b1e69bcaa61c68af5830adf"
       },
-      "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
       "desired": {
         "messageRetentionSeconds": 345600
       }
@@ -126,14 +150,24 @@
         },
         "packageDigest": "sha256:5ef460b5819d58433d7cfd5204702b213754358f393a8c14175a79e193a32e96"
       },
-      "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
       "desired": {
         "bundle": {
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerBundle",
           "name": "worker-bundle-probe"
         },
-        "handlers": ["fetch", "scheduled", "queue"],
+        "handlers": [
+          "fetch",
+          "scheduled",
+          "queue"
+        ],
         "kvBindings": [
           {
             "name": "CACHE",
@@ -162,7 +196,13 @@
         },
         "packageDigest": "sha256:00f37d9f9c974eb71fded615de362d67953983b1888c14ad418d18b959c2c42c"
       },
-      "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
       "desired": {
         "manifestDigest": "sha256:03f3d2b81110eb7aaca249abdda2e3fd8b32431f7da46c85b4d87a63217812ea"
       },
@@ -180,7 +220,12 @@
         ]
       },
       "moduleSource": "export default {\n  async fetch() { return new Response(\"portable-host-v3 reference module\"); },\n  async scheduled() {},\n  async queue() {},\n  async tail() {},\n};\n",
-      "exportedHandlers": ["fetch", "scheduled", "queue", "tail"]
+      "exportedHandlers": [
+        "fetch",
+        "scheduled",
+        "queue",
+        "tail"
+      ]
     },
     "fetchOnlyBundle": {
       "name": "fetch-only-bundle-probe",
@@ -199,7 +244,9 @@
         ]
       },
       "moduleSource": "export default { async fetch() { return new Response(\"portable-host-v3 fetch-only module\"); } };\n",
-      "exportedHandlers": ["fetch"]
+      "exportedHandlers": [
+        "fetch"
+      ]
     },
     "workerDeployment": {
       "name": "worker-deployment-probe",
@@ -212,7 +259,14 @@
         },
         "packageDigest": "sha256:cd4814a7fc7f2ef36388c32487c18e16f07ed42de39a82b6b3f25c603be33b49"
       },
-      "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
       "desired": {
         "versions": [
           {
@@ -242,9 +296,66 @@
         },
         "packageDigest": "sha256:4636493c88ccf41f30aaad2d16a8f5d69cec79d797e50d5388395f3a274aa0aa"
       },
-      "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
       "desired": {
         "hostname": "app.portable-conformance.invalid",
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "ModuleWorker",
+          "name": "module-worker-probe"
+        }
+      }
+    },
+    "workerEndpoint": {
+      "name": "endpoint-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "WorkerEndpoint",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:190c0efdee8c52f07587a076fe25a0250dff9ea9728991e07e1a2145597c9af4"
+        },
+        "packageDigest": "sha256:30791102f5390014fc40abb457d651c7e04b2ef725915f0935d962b4d7bf2748"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "declaredOutputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Host-computed values this Form publishes in status.outputs. Every member is returned by a conforming host; the object is closed.",
+        "properties": {
+          "hostname": {
+            "description": "Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where DNS is case-insensitive and no trailing root dot. An author's hostname admits those spellings because a host canonicalizes what it is given; an assigned name has no earlier spelling to preserve. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable configuration never parses it, never asserts a suffix, and never reconstructs it from the resource name.",
+            "maxLength": 253,
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$",
+            "type": "string"
+          },
+          "url": {
+            "description": "Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + `/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and no port, so a consumer composes deeper paths onto this value rather than deriving an origin.",
+            "maxLength": 264,
+            "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+/$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hostname",
+          "url"
+        ],
+        "title": "Worker Endpoint outputs",
+        "type": "object"
+      },
+      "desired": {
         "worker": {
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "ModuleWorker",
@@ -263,7 +374,14 @@
         },
         "packageDigest": "sha256:fc0764a6fb318bee1532ad459563fa270e9856f081533819fafe0338088f2ce0"
       },
-      "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
       "desired": {
         "cron": "0 0 * * *",
         "worker": {
@@ -284,7 +402,14 @@
         },
         "packageDigest": "sha256:707f8a2aac9f68ac352987ed08cd6766f78b233bdee3bb6fadfb0c4b91b96006"
       },
-      "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "import",
+        "observe"
+      ],
       "desired": {
         "maxBatchSize": 10,
         "maxBatchTimeoutSeconds": 5,
@@ -337,7 +462,12 @@
         "name": "worker.runtime",
         "version": "1.0.0",
         "schemaDigest": "sha256:1db4c093befc3c8bb769361c26f26a582561c5ff0edae36a62f45143641a2152",
-        "handlers": ["fetch", "scheduled", "queue", "tail"],
+        "handlers": [
+          "fetch",
+          "scheduled",
+          "queue",
+          "tail"
+        ],
         "undefinedHandler": "alarm"
       },
       "dataInterfaces": [
@@ -469,6 +599,10 @@
     "resource-answers-only-under-its-recorded-form-ref",
     "relation-target-form-ref-verified",
     "relation-target-interface-verified",
-    "relation-pin-records-target-form-ref"
+    "relation-pin-records-target-form-ref",
+    "worker-endpoint-address-is-host-assigned",
+    "worker-endpoint-single-per-worker",
+    "worker-endpoint-follows-the-active-deployment",
+    "form-declared-outputs-are-exact"
   ]
 }

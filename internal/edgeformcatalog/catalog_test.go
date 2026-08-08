@@ -14,6 +14,7 @@ var orderedKinds = []string{
 	"WorkerVersion",
 	"WorkerDeployment",
 	"WorkerCustomDomain",
+	"WorkerEndpoint",
 	"WorkerCronTrigger",
 	"EdgeKVNamespace",
 	"ObjectBucket",
@@ -29,7 +30,7 @@ func TestCatalogValidates(t *testing.T) {
 	}
 }
 
-func TestCatalogIsExactElevenFormFamily(t *testing.T) {
+func TestCatalogIsExactTwelveFormFamily(t *testing.T) {
 	t.Parallel()
 	if len(Forms) != len(orderedKinds) {
 		t.Fatalf("family has %d forms, want %d", len(Forms), len(orderedKinds))
@@ -62,11 +63,14 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 		},
 		"WorkerDeployment":   {"versions", "worker"},
 		"WorkerCustomDomain": {"hostname", "worker"},
-		"WorkerCronTrigger":  {"cron", "worker"},
-		"EdgeKVNamespace":    {},
-		"ObjectBucket":       {},
-		"SQLiteDatabase":     {},
-		"AtLeastOnceQueue":   {"deliveryDelaySeconds", "messageRetentionSeconds"},
+		// Reachability is the whole request; the address is the answer, so the
+		// worker reference is the ONLY desired member (decision 0024).
+		"WorkerEndpoint":    {"worker"},
+		"WorkerCronTrigger": {"cron", "worker"},
+		"EdgeKVNamespace":   {},
+		"ObjectBucket":      {},
+		"SQLiteDatabase":    {},
+		"AtLeastOnceQueue":  {"deliveryDelaySeconds", "messageRetentionSeconds"},
 		"QueueConsumer": {
 			"deadLetterQueue", "maxBatchSize", "maxBatchTimeoutSeconds", "maxConcurrency",
 			"maxRetries", "queue", "retryDelaySeconds", "worker",
@@ -92,6 +96,7 @@ func TestRoleRules(t *testing.T) {
 		"WorkerVersion":      model.RoleRevision,
 		"WorkerDeployment":   model.RoleDeployment,
 		"WorkerCustomDomain": model.RoleAttachment,
+		"WorkerEndpoint":     model.RoleAttachment,
 		"WorkerCronTrigger":  model.RoleAttachment,
 		"EdgeKVNamespace":    model.RoleIdentity,
 		"ObjectBucket":       model.RoleIdentity,
@@ -134,6 +139,7 @@ func TestLifecycleCapabilityTable(t *testing.T) {
 		"WorkerVersion":      base,
 		"WorkerDeployment":   withUpdate,
 		"WorkerCustomDomain": base,
+		"WorkerEndpoint":     base,
 		"WorkerCronTrigger":  withUpdate,
 		"EdgeKVNamespace":    base,
 		"ObjectBucket":       base,
@@ -370,4 +376,46 @@ func TestNoVendorNamesInRenderedOutputs(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestAnAssignedHostnameIsCanonicalAndAgreesWithItsURL holds the two published
+// members of an assigned address to one grammar.
+//
+// The desired-state hostname grammar deliberately admits the spellings DNS
+// treats as one name, because a host canonicalizes what an author wrote. An
+// assigned value has no earlier spelling to preserve, so reusing that grammar
+// for an output would let a host publish "a.example." — a name its own
+// canonical form forbids — while the url member, which carries no optional
+// dot, could not be built from it. A contract whose two members cannot both be
+// satisfied by one address is not a contract a host can conform to.
+func TestAnAssignedHostnameIsCanonicalAndAgreesWithItsURL(t *testing.T) {
+	for _, form := range Forms {
+		hostname, hasHostname := outputPattern(form, "hostname")
+		if !hasHostname {
+			continue
+		}
+		if hostname != model.PatternCanonicalHostname {
+			t.Errorf("%s publishes an assigned hostname on the authored grammar %q; an assigned name is canonical", form.Kind, hostname)
+		}
+		url, hasURL := outputPattern(form, "url")
+		if !hasURL {
+			continue
+		}
+		// The url is exactly https:// + the hostname + /, so its pattern is the
+		// hostname's with the anchors moved outward. Comparing the strings says
+		// that in the one place a divergence could hide.
+		want := `^https://` + strings.TrimSuffix(strings.TrimPrefix(hostname, `^`), `$`) + `/$`
+		if url != want {
+			t.Errorf("%s url pattern %q does not admit exactly the hostnames its hostname pattern does; want %q", form.Kind, url, want)
+		}
+	}
+}
+
+func outputPattern(form model.Form, wire string) (string, bool) {
+	for _, output := range form.Outputs {
+		if output.Wire == wire {
+			return output.Pattern, output.Pattern != ""
+		}
+	}
+	return "", false
 }

@@ -8,6 +8,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -46,6 +47,39 @@ func (r *v3FormResource) writeV3State(
 	res *clientv3.Resource,
 	adoptHostSpec bool,
 ) diag.Diagnostics {
+	// Every caller of this entry point holds a representation the host answered
+	// with, so every declared output must be in it. The one write that does not
+	// is writeV3AcceptedState, which reaches the private form below.
+	return r.writeV3StateFrom(ctx, state, codec, space, values, res, adoptHostSpec, v3VerifiedRepresentation)
+}
+
+// v3ResponseKind distinguishes the two state writes an apply can produce. It is
+// a named type rather than a second bare bool because the two paths differ in
+// exactly one contractual way — whether the host answered with a representation
+// — and that difference decides whether a missing output is a null or a fault.
+type v3ResponseKind bool
+
+const (
+	// v3VerifiedRepresentation is a response the host answered with. A response
+	// carrying status carries every output its Form declares, so an omitted or
+	// wrongly-typed one is the host's fault and is reported.
+	v3VerifiedRepresentation v3ResponseKind = true
+	// v3AcceptedWithoutRepresentation is the recovery write of a mutation the
+	// host ACCEPTED but did not finish. There is no representation, so every
+	// output is legitimately null (spec/decisions/0017).
+	v3AcceptedWithoutRepresentation v3ResponseKind = false
+)
+
+func (r *v3FormResource) writeV3StateFrom(
+	ctx context.Context,
+	state *tfsdk.State,
+	codec v3FormCodec,
+	space string,
+	values v3Values,
+	res *clientv3.Resource,
+	adoptHostSpec bool,
+	response v3ResponseKind,
+) diag.Diagnostics {
 	var diags diag.Diagnostics
 	ref := codec.Ref
 	diags.Append(state.SetAttribute(ctx, path.Root("name"), types.StringValue(res.Metadata.Name))...)
@@ -55,6 +89,7 @@ func (r *v3FormResource) writeV3State(
 	diags.Append(state.SetAttribute(ctx, path.Root("revision"), types.StringValue(res.Metadata.Revision))...)
 	diags.Append(v3SetConditionsState(ctx, state, res)...)
 	diags.Append(state.SetAttribute(ctx, path.Root("outputs_json"), v3OutputsJSON(res, &diags))...)
+	diags.Append(v3SetOutputState(ctx, state, codec.Form, res, response)...)
 	diags.Append(setV3FormIdentityState(ctx, state, ref)...)
 	// A verified representation settles any earlier accepted-but-unfinished
 	// mutation: there is nothing left to resume.
@@ -144,7 +179,9 @@ func (r *v3FormResource) writeV3AcceptedState(
 			UID:   accepted.UID,
 		},
 	}
-	diags.Append(r.writeV3State(ctx, state, codec, space, values, partial, false)...)
+	diags.Append(r.writeV3StateFrom(
+		ctx, state, codec, space, values, partial, false, v3AcceptedWithoutRepresentation,
+	)...)
 	diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_id"), v3OptionalStateString(accepted.OperationID))...)
 	diags.AddWarning(
 		r.form.Kind+" was accepted by the host but did not complete",
@@ -179,8 +216,130 @@ func v3OptionalStateString(value string) types.String {
 	return types.StringValue(value)
 }
 
-// v3OutputsJSON serializes the typed status outputs deterministically;
+// v3SetOutputState writes the Form's declared outputs as typed state.
+//
+// It runs on EVERY state write, including the one an accepted-but-unfinished
+// mutation leaves behind, where the host returned no representation and every
+// output is therefore null. That completeness is the contract with the
+// framework: a Computed attribute the provider leaves unset after an apply
+// whose plan marked it unknown is "Provider produced inconsistent result after
+// apply", and it is unset precisely on the recovery paths nobody exercises by
+// hand (spec/decisions/0017).
+//
+// Null is right on that path and ONLY on that path. A response the host
+// answered with is required to carry every declared output with its declared
+// type, so converting a missing or wrongly-typed one into a quiet null would
+// hand the practitioner a resource whose whole purpose — an address, a URL —
+// reads as null in state and in every expression that consumes it, with the
+// host's fault nowhere on screen. On a verified representation the write
+// reports it instead, naming the output and what was wrong.
+//
+// The declarations come from the STATE ref's own codec, like every desired
+// field: a resource recorded under an earlier definition version publishes that
+// definition's outputs, never whatever this build's current Form declares.
+func v3SetOutputState(
+	ctx context.Context,
+	state *tfsdk.State,
+	form model.Form,
+	res *clientv3.Resource,
+	response v3ResponseKind,
+) diag.Diagnostics {
+	var diags diag.Diagnostics
+	var outputs map[string]any
+	if res.Status != nil {
+		outputs = res.Status.Outputs
+	}
+	for _, output := range form.Outputs {
+		raw, present := outputs[output.Wire]
+		if response == v3VerifiedRepresentation {
+			if problem := v3OutputViolation(output, raw, present, res.Status != nil); problem != "" {
+				diags.AddError(
+					"Host response does not satisfy the declared output "+output.Wire,
+					fmt.Sprintf(
+						"The %s Form declares the output %q, so every %s representation the host answers with "+
+							"carries it: %s. The provider does not record a null in place of a value the Form's "+
+							"outputSchema requires, because a null here reads as \"not assigned yet\" in every "+
+							"expression that consumes it. This is a fault in the host, not in the configuration.",
+						form.Kind, output.Wire, form.Kind, problem,
+					),
+				)
+			}
+		}
+		diags.Append(state.SetAttribute(
+			ctx, path.Root(output.AttributeName()), v3OutputValue(output, raw),
+		)...)
+	}
+	return diags
+}
+
+// v3OutputViolation reports why one declared output of a verified
+// representation is unusable, or "" when it is what the Form declares.
+//
+// Each branch is exactly the condition under which v3OutputValue would produce
+// a null from a value the host DID send, which is the case that must not pass
+// silently: the two are one rule, stated once as a projection and once as a
+// diagnostic.
+func v3OutputViolation(output model.Field, raw any, present, carriesStatus bool) string {
+	switch {
+	case !carriesStatus:
+		return "the response carries no status at all, so it carries no outputs"
+	case !present:
+		return "status.outputs omits it"
+	case raw == nil:
+		return "status.outputs carries it as null"
+	}
+	switch output.Kind {
+	case model.KindBoolean:
+		if _, ok := raw.(bool); !ok {
+			return fmt.Sprintf("it is declared boolean and the host returned %s", v3OutputTypeProse(raw))
+		}
+	case model.KindInteger:
+		if int64FromSpec(raw).IsNull() {
+			return fmt.Sprintf("it is declared integer and the host returned %s", v3OutputTypeProse(raw))
+		}
+	default:
+		// KindString and KindStringEnum. An empty string is a value the schema
+		// bounds, not a type error, so it is left to the host's outputSchema and
+		// to the conformance lane that enforces it.
+		if _, ok := raw.(string); !ok {
+			return fmt.Sprintf("it is declared string and the host returned %s", v3OutputTypeProse(raw))
+		}
+	}
+	return ""
+}
+
+// v3OutputTypeProse names what a host actually returned, in JSON's vocabulary
+// rather than Go's, because the practitioner is reading the host's response.
+func v3OutputTypeProse(raw any) string {
+	switch value := raw.(type) {
+	case string:
+		return fmt.Sprintf("the string %q", value)
+	case bool:
+		return fmt.Sprintf("the boolean %v", value)
+	case json.Number:
+		return "the number " + value.String()
+	case float64:
+		return fmt.Sprintf("the number %v", value)
+	case []any:
+		return "an array"
+	case map[string]any:
+		return "an object"
+	}
+	return fmt.Sprintf("%T", raw)
+}
+
+// v3OutputsJSON serializes the whole status outputs document deterministically;
 // an absent outputs document is the empty object.
+//
+// It carries EVERYTHING the host returned, including every value that also has
+// a typed attribute. Narrowing it to "the members no schema describes" was the
+// alternative, and it would silently break every existing configuration that
+// reads a now-typed key out of it: the expression would keep parsing, keep
+// evaluating, and start producing null. Keeping the document whole makes the
+// typed attributes a strictly additive surface — an author moves to `.url` when
+// they want to, not when a provider upgrade forces them to — and leaves
+// outputs_json doing the one job it is now for: reaching an output the Form's
+// outputSchema does not describe.
 func v3OutputsJSON(res *clientv3.Resource, diags *diag.Diagnostics) types.String {
 	if res.Status == nil || len(res.Status.Outputs) == 0 {
 		return types.StringValue("{}")

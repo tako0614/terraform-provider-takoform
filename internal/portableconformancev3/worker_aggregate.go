@@ -1,6 +1,8 @@
 package portableconformancev3
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +26,7 @@ const (
 	workerVersionKind      = "WorkerVersion"
 	workerDeploymentKind   = "WorkerDeployment"
 	workerCustomDomainKind = "WorkerCustomDomain"
+	workerEndpointKind     = "WorkerEndpoint"
 	workerCronTriggerKind  = "WorkerCronTrigger"
 	queueConsumerKind      = "QueueConsumer"
 
@@ -73,10 +76,18 @@ const (
 )
 
 // attachmentHandler maps each inward-activation Form to the module handler its
-// events invoke. A custom domain sends HTTP requests to `fetch`, a cron
-// trigger fires `scheduled`, and a queue consumer delivers batches to `queue`.
+// events invoke. A custom domain and a host-assigned endpoint both send HTTP
+// requests to `fetch`, a cron trigger fires `scheduled`, and a queue consumer
+// delivers batches to `queue`.
+//
+// A Worker Endpoint is in this map for the same reason the other three are, and
+// every consequence follows from being here rather than from an endpoint-shaped
+// special case: it is gated on the active deployment serving `fetch`, it is a
+// dependent that blocks a deployment change that would stop serving `fetch`,
+// and it blocks that deployment's deletion.
 var attachmentHandler = map[string]string{
 	workerCustomDomainKind: fetchHandler,
+	workerEndpointKind:     fetchHandler,
 	workerCronTriggerKind:  scheduledHandler,
 	queueConsumerKind:      queueHandler,
 }
@@ -274,6 +285,51 @@ func (h *ReferenceHost) validateWorkerAggregate(
 			// spelling this host stored.
 			return h.validateSingleHostnameClaim(caller.Tenant, space, name, spec)
 		}
+		if form.Ref.Kind == workerEndpointKind {
+			return h.validateSingleWorkerEndpoint(space, name, relations)
+		}
+	}
+	return nil
+}
+
+// validateSingleWorkerEndpoint refuses a second Worker Endpoint against one
+// worker INCARNATION (decision 0024).
+//
+// The rule is host-enforced rather than stated in the Form, because a desired
+// schema cannot see it: nothing in one endpoint's document mentions any other,
+// and the question "how many endpoints point at this worker" is a query over
+// the store. Putting it here is the only placement that cannot be bypassed —
+// the same reasoning, and the same placement, as the one-active-deployment rule
+// and the one-consumer-per-queue rule.
+//
+// It is `invalid_argument` (400) for the same reason those two are: the request
+// is well formed, and what is untrue is what it says about the worker it points
+// at. `dependency_in_use` would describe the wrong edge — nothing here is being
+// removed — and `unsupported_capability` would blame the host for a limit the
+// contract states, not one this host happens to have.
+func (h *ReferenceHost) validateSingleWorkerEndpoint(
+	space, name string,
+	relations []storedRelation,
+) *hostError {
+	workerUID := relationTargetUID(relations, workerRelationPointer)
+	if workerUID == "" {
+		return stableError("invalid_argument", "a WorkerEndpoint requires a target worker")
+	}
+	selfKey := resourceKey(space, edgeFormsGroup, workerEndpointKind, name)
+	for _, candidate := range h.sortedResources() {
+		if candidate.Space != space || candidate.group() != edgeFormsGroup ||
+			candidate.kind() != workerEndpointKind || candidate.key() == selfKey {
+			continue
+		}
+		if relationTargetUID(candidate.Relations, workerRelationPointer) != workerUID {
+			continue
+		}
+		return stableError(
+			"invalid_argument",
+			"ModuleWorker at uid "+workerUID+" already has the WorkerEndpoint "+candidate.Name+
+				"; a worker has at most one host-assigned endpoint, and two addresses for one service "+
+				"would leave neither of them canonical",
+		)
 	}
 	return nil
 }
@@ -431,6 +487,37 @@ func (h *ReferenceHost) validateWorkerDeployment(
 		)
 	}
 	return nil
+}
+
+// referenceEndpointHostname is the address THIS host assigns to one Worker
+// Endpoint incarnation.
+//
+// It is derived from the space and the resource UID and from nothing the author
+// wrote, which is the whole point: the Form's desired state carries no hostname,
+// so an address that could be reconstructed from the configuration would mean
+// the host had not assigned anything. Deriving it from the UID also makes it
+// stable for the life of one incarnation — re-weighting the deployment, reading,
+// observing, and re-applying all return the same address — while a delete and
+// re-create is a new incarnation and legitimately gets a new one.
+//
+// The shape below is this host's private detail and no portable rule. A
+// conforming client may rely on the value, on the https scheme, and on the `/`
+// path root; anything it inferred from the label or the apex would be a fact
+// about this host rather than about the Form (decision 0024).
+func referenceEndpointHostname(space, uid string) string {
+	sum := sha256.Sum256([]byte(space + "\x00" + uid))
+	return "e" + hex.EncodeToString(sum[:8]) + ".endpoints.portable-conformance.invalid"
+}
+
+// workerEndpointOutputs is the `status.outputs` document of one Worker
+// Endpoint: the assigned hostname and the one absolute HTTPS address a client
+// uses, which is exactly that hostname at the path root. There is no plaintext
+// form and no port; a host that could not assign an address at all would have
+// to refuse the endpoint with `unsupported_capability` (422) rather than answer
+// here with something it did not assign.
+func workerEndpointOutputs(resource *storedResource) map[string]any {
+	hostname := referenceEndpointHostname(resource.Space, resource.UID)
+	return map[string]any{"hostname": hostname, "url": "https://" + hostname + "/"}
 }
 
 // versionUnavailable reports why a Worker Version cannot be put into service.

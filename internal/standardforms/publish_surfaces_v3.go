@@ -251,12 +251,13 @@ description: |-
   and a configuration must not assert them.
 - ` + "`ready`" + ` — derived convenience: true when ` + "`conditions`" + ` carries the closed ` + "`Ready`" + ` condition with status
   ` + "`True`" + `. Read ` + "`conditions`" + ` for the reason it is not.
-- ` + "`outputs_json`" + ` — JSON-serialized ` + "`status.outputs`" + ` document (` + "`\"{}\"`" + ` when empty).
+- ` + "`outputs_json`" + ` — the WHOLE ` + "`status.outputs`" + ` document, JSON-serialized. ` + v3OutputsJSONDoc(form) + `
 - ` + "`form_api_version`" + `, ` + "`form_kind`" + `, ` + "`form_definition_version`" + `, ` + "`form_schema_digest`" + ` — the exact immutable FormRef this state is bound to; reads dispatch on it.
 - ` + "`form_package_digest`" + ` — audit-only package provenance; never part of resource identity, queries, or fences.
 - ` + "`relation_drift_reason`" + ` — internal recovery only: ` + "`ExternalChange`" + ` or ` + "`DependencyMissing`" + ` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes ` + recoveryDoc + `. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.
 - ` + "`pending_operation_id`" + ` — internal recovery only: the host operation id of a mutation the host accepted but that did not reach a terminal state before the operation deadline, null in steady state. A refresh consults it before it reads the resource, and it is cleared only once that operation settles. It is not resource identity and configurations must not depend on it.
 `)
+	builder.WriteString(v3OutputAttributeSection(form))
 	builder.WriteString(v3StateContinuitySection(form.Kind))
 	if len(form.ProvidedInterfaces) > 0 {
 		builder.WriteString("\n## Provided interfaces\n\n")
@@ -276,6 +277,53 @@ description: |-
 	if form.Kind == "WorkerBundle" {
 		builder.WriteString("\nAn imported bundle restores `manifest_digest` from the host and leaves\n`main_module` and `modules` null: those are local authoring facts the wire\nnever echoes. The resource is fully manageable afterwards — a configuration\nthat states the same `manifest_digest` plans empty, and adopting the local\nfiles that commit exactly that manifest is not a change either, because the\nbundle's identity is the digest.\n")
 	}
+	return builder.String()
+}
+
+// v3OutputsJSONDoc explains what `outputs_json` holds for one Form.
+//
+// The two sentences differ because the attribute means two different things. On
+// a Form with an output contract it is the unnarrowed document BESIDE the typed
+// attributes, which is the promise that an existing configuration decoding it
+// keeps working. On a Form with none it is the only way to see anything a host
+// returns at all — and, per the wire rule, a conforming host returns nothing,
+// so the honest documentation is that it is always `"{}"`.
+func v3OutputsJSONDoc(form model.Form) string {
+	if len(form.Outputs) == 0 {
+		return "This Form declares no `outputSchema`, so a conforming host omits `status.outputs` entirely and this\n" +
+			"  attribute is `\"{}\"`. It stays declared because a host may publish a value no contract describes, and\n" +
+			"  an undescribed value must still be reachable rather than silently dropped."
+	}
+	return "It is not narrowed by the typed output attributes below: every value that has a typed\n" +
+		"  attribute is still in this document under its wire name, so a configuration that reads\n" +
+		"  `jsondecode(...)[\"…\"]` keeps working unchanged. What it is now FOR is the other case — reaching an\n" +
+		"  output the Form's `outputSchema` does not describe."
+}
+
+// v3OutputAttributeSection documents the typed computed attributes derived from
+// a Form's outputSchema, and says plainly what they are and are not.
+//
+// A Form that publishes no output gets no section at all rather than an empty
+// one: `status.outputs` is omitted on the wire for such a Form, so a heading
+// promising outputs would describe a document that does not exist.
+func v3OutputAttributeSection(form model.Form) string {
+	if len(form.Outputs) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString("\n## Outputs\n\n")
+	builder.WriteString("This Form declares an `outputSchema`, so a conforming host returns exactly these\n" +
+		"values in `status.outputs` and the provider surfaces each one as a typed computed\n" +
+		"attribute. Read `" + form.ResourceType + ".example.<name>` rather than decoding\n" +
+		"`outputs_json`; the JSON document still carries every value under its wire name and\n" +
+		"stays the way to reach an output no schema describes.\n\n")
+	for _, output := range form.Outputs {
+		fmt.Fprintf(&builder, "- `%s` (%s, computed) — %s\n",
+			output.AttributeName(), v3DocType(output), output.Doc)
+	}
+	builder.WriteString("\nOutputs are never arguments: a configuration that sets one is rejected at validate\n" +
+		"time. They are host-computed state, so they can change without any desired attribute\n" +
+		"changing — a plan that touches this resource shows them as known-after-apply.\n")
 	return builder.String()
 }
 
@@ -397,9 +445,20 @@ provider "takoform" {
 		builder.WriteString("\n" + block)
 	}
 	builder.WriteString("}\n\n")
-	fmt.Fprintf(&builder, "output %q {\n  value = %s.example.outputs_json\n}\n",
-		strings.TrimPrefix(form.ResourceType, "takoform_")+"_outputs", form.ResourceType)
-	return builder.String()
+	prefix := strings.TrimPrefix(form.ResourceType, "takoform_")
+	// A Form that declares an outputSchema shows the typed attributes, because
+	// that is what an author should write. outputs_json still holds the same
+	// values and is what the example shows when a Form describes none.
+	if len(form.Outputs) == 0 {
+		fmt.Fprintf(&builder, "output %q {\n  value = %s.example.outputs_json\n}\n",
+			prefix+"_outputs", form.ResourceType)
+		return builder.String()
+	}
+	for _, output := range form.Outputs {
+		fmt.Fprintf(&builder, "output %q {\n  value = %s.example.%s\n}\n\n",
+			prefix+"_"+output.AttributeName(), form.ResourceType, output.AttributeName())
+	}
+	return strings.TrimRight(builder.String(), "\n") + "\n"
 }
 
 func v3BindingBlockHCL(field model.Field) string {

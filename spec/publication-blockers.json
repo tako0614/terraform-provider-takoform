@@ -95,7 +95,7 @@
       ],
       "status": "open",
       "issue": 108,
-      "rationale": "Requiring a verified custom domain before the first request makes the shortest path to a working worker longer than the path to abandoning it.",
+      "rationale": "The lane now states the contract: WorkerEndpoint asks for reachability and nothing else, the host assigns the address and publishes it as typed outputs, at most one exists per worker, and it invokes the active deployment's fetch handler. What it does not do is send a request. This lane drives desired state, so it proves that a host answers with a complete HTTPS address it assigned and keeps that address stable across a promotion; it cannot prove that anything is listening on it. The blocker closes on a real backend serving traffic at a host-assigned hostname, not on the Form existing.",
       "evidence": []
     },
     {

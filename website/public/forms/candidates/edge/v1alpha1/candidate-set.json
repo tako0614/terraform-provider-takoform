@@ -67,6 +67,18 @@
       "packageDigest": "sha256:4636493c88ccf41f30aaad2d16a8f5d69cec79d797e50d5388395f3a274aa0aa"
     },
     {
+      "kind": "WorkerEndpoint",
+      "role": "attachment",
+      "path": "forms/candidates/edge/v1alpha1/worker-endpoint",
+      "formRef": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
+        "kind": "WorkerEndpoint",
+        "definitionVersion": "0.1.0",
+        "schemaDigest": "sha256:190c0efdee8c52f07587a076fe25a0250dff9ea9728991e07e1a2145597c9af4"
+      },
+      "packageDigest": "sha256:4d7a28905e51d6e7afb8ad38d990d6151dfc65742fc4b70c0366634ccb7f6917"
+    },
+    {
       "kind": "WorkerCronTrigger",
       "role": "attachment",
       "path": "forms/candidates/edge/v1alpha1/worker-cron-trigger",

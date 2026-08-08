@@ -307,6 +307,51 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
+		Kind:   "WorkerEndpoint", Slug: "worker-endpoint", ResourceType: "takoform_worker_endpoint",
+		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
+		Title: "Worker Endpoint",
+		Description: "Makes one Module Worker reachable over HTTPS at an address the HOST assigns, with no " +
+			"customer-owned domain and no DNS of the author's. The desired state is the worker and nothing " +
+			"else: the author asks for reachability, and where that reachability lives is the host's decision, " +
+			"exactly as an account, a region, and a vendor subdomain are. Requests arriving at the address " +
+			"invoke the fetch handler of the worker's ACTIVE DEPLOYMENT, so promotion and rollback move what " +
+			"answers without the endpoint being re-applied and without its address changing. The scheme is " +
+			"https and the path root is `/`; TLS is not an option a host may decline, because an address that " +
+			"is only reachable in plaintext is a different promise from the one this Form makes. A worker has " +
+			"AT MOST ONE endpoint: two would be two addresses for one service with nothing saying which is " +
+			"canonical, and the second is refused. The assigned address is published as outputs — a portable " +
+			"author may rely on a value being returned, on its scheme being https, and on it routing to the " +
+			"active deployment, and on nothing about its SHAPE: which subdomain, which apex, and how long the " +
+			"label is are host detail no portable configuration may parse or reconstruct.",
+		Fields: []model.Field{
+			moduleWorkerRef("worker", "worker",
+				"Module Worker whose active deployment answers requests at the assigned address. Changing it replaces the endpoint.",
+				true, true),
+		},
+		// The two observable facts, and only those. `hostname` is what the host
+		// assigned; `url` is the one address a client uses. Both are published
+		// because either alone forces a consumer to reconstruct the other, and
+		// reconstruction is precisely the parsing of host detail this Form's
+		// portability boundary forbids.
+		Outputs: []model.Field{
+			{HCL: "hostname", Wire: "hostname", Kind: model.KindString,
+				Pattern: model.PatternCanonicalHostname, MaxLength: 253,
+				Doc: "Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where " +
+					"DNS is case-insensitive and no trailing root dot. An author's hostname admits those spellings " +
+					"because a host canonicalizes what it is given; an assigned name has no earlier spelling to " +
+					"preserve. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable " +
+					"configuration never parses it, never asserts a suffix, and never reconstructs it from the " +
+					"resource name."},
+			{HCL: "url", Wire: "url", Kind: model.KindString,
+				Pattern:   `^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+/$`,
+				MaxLength: 264,
+				Doc: "Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + " +
+					"`/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and " +
+					"no port, so a consumer composes deeper paths onto this value rather than deriving an origin."},
+		},
+	},
+	{
+		Family: Family,
 		Kind:   "WorkerCronTrigger", Slug: "worker-cron-trigger", ResourceType: "takoform_worker_cron_trigger",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Cron Trigger",

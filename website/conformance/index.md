@@ -187,7 +187,8 @@ v2.1 client lane. It pins the v1alpha3 discovery/API paths, the closed
 set, the uid/generation/revision identity rules, the closed portable
 condition-reason vocabulary, and exact Edge Family probe identities
 (ModuleWorker, EdgeKVNamespace, AtLeastOnceQueue, WorkerBundle,
-WorkerVersion, WorkerDeployment, WorkerCronTrigger, QueueConsumer) with their
+WorkerVersion, WorkerDeployment, WorkerCustomDomain, WorkerEndpoint,
+WorkerCronTrigger, QueueConsumer) with their
 registry package digests plus byte-pinned
 desired-negative fixtures. It also pins a byte-digested SECOND Form Definition
 of the ModuleWorker line, so the lane can install two contracts of one group and
@@ -197,7 +198,7 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 85-check matrix over real HTTP: exact discovery and
+drives the complete 89-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -224,7 +225,12 @@ a required Interface, with the stored pin recording the target's exact FormRef
 beside its uid — import validated exactly like apply, cross-resource semantics the Forms declare in prose but only a host can
 enforce (WorkerDeployment weights summing to 10000; a cron trigger or queue
 consumer refused with `unsupported_capability` until some WorkerVersion
-declares the matching handler), 202 Operation polling with
+declares the matching handler; a WorkerEndpoint answered with a complete HTTPS
+address the host assigned rather than the author, that address unchanged when
+the worker it serves is promoted to another version, and a second endpoint
+against one worker refused; and `status.outputs` present with exactly the
+declared members for the one Form that declares an outputSchema and omitted for
+every Form that declares none), 202 Operation polling with
 Retry-After plus terminal replay and cancel — with every fence, binding
 resolution, and blob requirement re-verified at commit time rather than at
 accept time, and the commit bound to the exact incarnation the mutation was

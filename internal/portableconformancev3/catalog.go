@@ -53,7 +53,11 @@ type InstalledForm struct {
 	Title         string
 	Description   string
 	DesiredSchema map[string]any
-	Lifecycle     []string
+	// OutputSchema is the Form's declared `status.outputs` contract, or nil when
+	// it publishes none. Its presence is what decides whether a response carries
+	// `status.outputs` at all, so a host reads it rather than deciding per kind.
+	OutputSchema map[string]any
+	Lifecycle    []string
 	// ProvidedInterfaces and AcceptedBindings are the exact digest-bound
 	// contracts the installed Definition declares. A binding is verified
 	// against them, never assumed.
@@ -461,6 +465,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 			Title:              definition.Title,
 			Description:        definition.Description,
 			DesiredSchema:      definition.DesiredSchema,
+			OutputSchema:       definition.OutputSchema,
 			Lifecycle:          definition.LifecycleCapabilities,
 			ProvidedInterfaces: definition.ProvidedInterfaces,
 			AcceptedBindings:   definition.AcceptedBindings,

@@ -58,12 +58,9 @@ const (
 // v3AttributeName maps one catalog field to its HCL attribute name. The
 // data-only JSON map surfaces as <field>_json because its values are
 // arbitrary bounded JSON, which HCL maps of strings cannot carry faithfully.
-func v3AttributeName(field model.Field) string {
-	if field.Kind == model.KindJSONMap {
-		return field.HCL + "_json"
-	}
-	return field.HCL
-}
+// The rule lives in the authoring model, so the model can refuse a Form whose
+// field or output would take an attribute name the envelope already owns.
+func v3AttributeName(field model.Field) string { return field.AttributeName() }
 
 func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attrs := v3CommonAttributes(r.form.DeclaresUpdate())
@@ -75,6 +72,25 @@ func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 		for _, field := range r.form.Fields {
 			attrs[v3AttributeName(field)] = v3FieldAttribute(r.form, field)
 		}
+	}
+	// The Form's declared outputs become typed computed attributes. They are
+	// added last and fail closed on any name already taken: an output silently
+	// overwriting a desired attribute or an envelope attribute would give one
+	// name two meanings, and whichever the resource wrote last would win.
+	for _, output := range r.form.Outputs {
+		name := v3AttributeName(output)
+		if _, taken := attrs[name]; taken {
+			resp.Diagnostics.AddError(
+				"Form output collides with an existing attribute",
+				fmt.Sprintf(
+					"The %s Form declares the output %q, which this resource already carries as an attribute. "+
+						"The provider refuses to serve a schema in which one name holds two facts. This is a provider bug.",
+					r.form.Kind, name,
+				),
+			)
+			return
+		}
+		attrs[name] = v3OutputAttribute(output)
 	}
 	description := r.form.Description +
 		" Role: " + string(r.form.Role) + " (Host API v1alpha3 lane)."
@@ -426,6 +442,62 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 			attribute.PlanModifiers = []planmodifier.String{stringplanmodifier.RequiresReplace()}
 		}
 		return attribute
+	}
+}
+
+// v3OutputAttribute maps one declared Form output to its framework attribute.
+//
+// Every output is plain Computed — never Optional+Computed, and never carrying
+// a framework Default. That is not a style choice, it is what the value IS: an
+// output is computed by the host and a configuration cannot write one, so
+// Optional would advertise an argument the provider must then refuse, and a
+// Default would put a value in the plan that no host produced. It is exactly
+// how `outputs_json`, `generation`, `revision`, and `ready` already behave, and
+// a typed output is the same fact under a name.
+//
+// There is deliberately no UseStateForUnknown plan modifier either. An output
+// is what the address, the URL, or the host-assigned name currently IS, and a
+// change to this resource can move it; holding the prior value known through
+// such a plan would show the operator a value the apply may replace, which is
+// the perpetual-diff failure in its other direction. Terraform already keeps
+// the prior value for a resource with no diff at all, so the cost is nothing.
+func v3OutputAttribute(output model.Field) schema.Attribute {
+	description := output.Doc + " Computed by the host; a configuration cannot set it."
+	switch output.Kind {
+	case model.KindBoolean:
+		return schema.BoolAttribute{Computed: true, Description: description}
+	case model.KindInteger:
+		return schema.Int64Attribute{Computed: true, Description: description}
+	default:
+		// KindString and KindStringEnum. Validators are deliberately absent:
+		// a validator runs against CONFIGURATION, and no configuration writes an
+		// output. The bound that matters is the Form's outputSchema, which the
+		// host is held to.
+		return schema.StringAttribute{Computed: true, Description: description}
+	}
+}
+
+// v3OutputValue projects one host output value onto its typed state value. An
+// output the host did not return is null rather than an invented zero: null is
+// how "the host has not answered this yet" reads in state, and it is the value
+// an interrupted apply legitimately leaves behind.
+func v3OutputValue(output model.Field, raw any) attr.Value {
+	switch output.Kind {
+	case model.KindBoolean:
+		if value, ok := raw.(bool); ok {
+			return types.BoolValue(value)
+		}
+		return types.BoolNull()
+	case model.KindInteger:
+		if raw == nil {
+			return types.Int64Null()
+		}
+		return int64FromSpec(raw)
+	default:
+		if text, ok := raw.(string); ok {
+			return types.StringValue(text)
+		}
+		return types.StringNull()
 	}
 }
 

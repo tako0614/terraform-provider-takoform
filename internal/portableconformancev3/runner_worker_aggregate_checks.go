@@ -191,6 +191,10 @@ func (r *v3Runner) checkAttachmentRequiresActiveDeployment() error {
 	// applies successfully once a deployment serves them.
 	probes := []probeTarget{
 		r.target(input.WorkerCustomDomain),
+		// The host-assigned endpoint is gated by the same rule and for the same
+		// reason: an address that resolves to a worker no deployment serves is an
+		// address that answers nothing (spec/decisions/0024).
+		r.target(input.WorkerEndpoint),
 		r.target(input.WorkerCronTrigger),
 		r.target(input.QueueConsumer),
 	}
