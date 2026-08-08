@@ -785,11 +785,28 @@ proving them means executing the module rather than driving the Host API:
   invocation in `scheduled` and `queue`;
 - the `globals` floor, and the loadable module media types.
 
+One further obligation is not merely unproven here but UNMEASURABLE anywhere
+today, and is listed rather than left implied:
+
+- the `tail` handler. The contract declares it, and no resource in this family
+  activates one: the three inward-activation attachments above are gated on
+  `fetch`, `scheduled`, and `queue`. No deployment a portable author can write
+  causes a host to invoke `tail`, so no conformance run can observe it. The
+  recommended remedy is to remove it from the ABI and re-add it with the
+  attachment that makes it observable; until then the runtime corpus carries it
+  as an explicitly unmeasured entry and blocker **V3-011** records the decision
+  ([decision 0023](../decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
+
 Those are stated normatively in the contract's own descriptions and proven by
 its behavior fixtures, which a runtime conformance run executes against a real
-isolate ([`../interface-contract/`](../interface-contract/README.md)). A host
-that passes this lane has not thereby proven it implements the ABI; it has
-proven it says which ABI it implements and holds desired state to it.
+isolate ([`../interface-contract/`](../interface-contract/README.md)). That run
+is [`../../conformance/runtime-abi-v1/`](../../conformance/runtime-abi-v1/contract.json),
+whose runner drives a worker deployed from its own byte-pinned bundle and a
+disposable adapter over the runtime's module loader; it is a separate corpus,
+runner, and command from this lane precisely because the subjects differ
+([decision 0023](../decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
+A host that passes this lane has not thereby proven it implements the ABI; it
+has proven it says which ABI it implements and holds desired state to it.
 
 The same split covers the four data-plane contracts —  `edge.kv`,
 `edge.objects`, `edge.sql`, and `edge.queue` — because this lane drives desired
