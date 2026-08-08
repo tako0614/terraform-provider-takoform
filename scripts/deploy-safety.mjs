@@ -19,6 +19,33 @@ const UUID =
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
+export // diagnostics renders what actually went wrong, whatever threw.
+//
+// The failure-handling obligation this entrypoint declares is raw diagnostics
+// and no blind retry, and the two are one requirement: an operator told only
+// that a step is indeterminate, with nothing said about why, has been left with
+// retrying as the only move available. A subprocess failure carries its output
+// on stdout/stderr, but a fence, a precondition read, or any ordinary assertion
+// throws an Error whose message is the whole diagnosis — printing only the two
+// subprocess members discards it and prints a blank line instead.
+function diagnostics(error) {
+  const parts = [];
+  const stdout = String(error?.stdout ?? "");
+  const stderr = String(error?.stderr ?? "");
+  if (stdout.trim().length > 0) parts.push(stdout.replace(/\n*$/, "\n"));
+  if (stderr.trim().length > 0) parts.push(stderr.replace(/\n*$/, "\n"));
+  const message = error instanceof Error ? error.message : String(error);
+  // A subprocess whose own output already carries the diagnosis does not need
+  // the wrapper's restatement of it.
+  if (message.trim().length > 0 && !stdout.includes(message) && !stderr.includes(message)) {
+    parts.push(`${message}\n`);
+  }
+  if (error instanceof Error && error.cause !== undefined) {
+    parts.push(`caused by: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}\n`);
+  }
+  return parts.length > 0 ? parts.join("") : "no diagnostic was produced by the failing step\n";
+}
+
 function sortPaths(left, right) {
   return left.path < right.path ? -1 : left.path > right.path ? 1 : 0;
 }
