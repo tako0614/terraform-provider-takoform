@@ -85,6 +85,27 @@ the bucket policy resources (`BucketCorsPolicy`, `BucketLifecyclePolicy`,
 exists only when its proposal, catalog declaration, and candidate package
 exist.
 
+`ModuleWorker` fixes the ES Module Worker ABI by identity, and states what that
+ABI is: the exact Interface contract `worker.runtime@1.0.0` in its
+`providedInterfaces`
+([decision 0019](decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
+That contract fixes the module's default-export shape, the `fetch`, `scheduled`,
+`queue`, and `tail` signatures and what each event carries, the `env` object,
+`ctx.waitUntil`, exception handling, request and response body streaming, the
+minimum Web API surface, and module loading. A host that supports `ModuleWorker`
+implements that contract at its exact digest, and advertises it there; a Worker
+Version is the code that fills it.
+
+Consequently **a runtime revision is a new exact Interface version, and — if it
+changes what a Form desires — a new Form version. It is never a date.**
+`WorkerVersion` therefore declares no `compatibilityDate` and no
+`compatibilityFlags`. A compatibility date is meaningful only against a registry
+that states which behavior each date changes; this project publishes none, so
+two conforming hosts could read the same date differently, which is exactly the
+incompleteness [`portability-boundary.md`](portability-boundary.md) forbids. The
+`handlers` vocabulary is the handler set the runtime contract defines, and a
+host refuses a handler that contract does not define before it mutates anything.
+
 Two authored first-milestone decisions are recorded here so neither is read as
 an oversight:
 

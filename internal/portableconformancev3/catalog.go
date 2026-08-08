@@ -151,13 +151,86 @@ type supportRef struct {
 	SchemaDigest string
 }
 
+// interfaceDefinitionDocument is the on-disk Interface Definition shape the
+// host installs. Only the members a host verifies are decoded; the runtime ABI
+// contract is the one that carries an operation set a host must hold a
+// declaration to (spec/decisions/0019).
+type interfaceDefinitionDocument struct {
+	APIVersion  string `json:"apiVersion"`
+	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Operations  []struct {
+		Name         string         `json:"name"`
+		Description  string         `json:"description"`
+		InputSchema  map[string]any `json:"inputSchema"`
+		OutputSchema map[string]any `json:"outputSchema"`
+		Errors       []string       `json:"errors"`
+		Idempotent   bool           `json:"idempotent"`
+	} `json:"operations"`
+	Semantics map[string]string `json:"semantics"`
+	Limits    map[string]any    `json:"limits"`
+	Fixtures  []struct {
+		Name  string `json:"name"`
+		Steps []struct {
+			Operation     string         `json:"operation"`
+			Input         map[string]any `json:"input"`
+			Expected      map[string]any `json:"expected"`
+			ExpectedError string         `json:"expectedError"`
+		} `json:"steps"`
+	} `json:"fixtures"`
+}
+
+// interfaceContract is one installed Interface Definition reduced to the facts
+// a host verifies. Handlers is the closed module-handler vocabulary the
+// runtime ABI publishes through its loadModule operation; it is empty for every
+// Interface that declares no such operation.
+type interfaceContract struct {
+	Ref      formpackage.InterfaceRef
+	Handlers []string
+}
+
+// runtimeHandlerVocabulary reads the handler set out of an installed Interface
+// Definition exactly where the contract states it: the item enum of the
+// loadModule operation's declaredHandlers property. A host learns which module
+// handlers the ABI defines from the contract itself, never from a list of its
+// own (spec/decisions/0019).
+func runtimeHandlerVocabulary(document interfaceDefinitionDocument) []string {
+	for _, operation := range document.Operations {
+		if operation.Name != runtimeHandlerOperation {
+			continue
+		}
+		properties, _ := operation.InputSchema["properties"].(map[string]any)
+		property, _ := properties[runtimeHandlerProperty].(map[string]any)
+		items, _ := property["items"].(map[string]any)
+		values, _ := items["enum"].([]any)
+		out := make([]string, 0, len(values))
+		for _, value := range values {
+			if text, ok := value.(string); ok {
+				out = append(out, text)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
 // Catalog is the reference host's installed set: Form definitions plus the
 // interface and binding contracts it can profile.
 type Catalog struct {
-	forms      map[string]*installedForm  // formKey(group, kind)
-	interfaces map[string]supportRef      // name@version
-	bindings   map[string]supportRef      // name@version
-	contracts  map[string]bindingContract // name@version
+	forms      map[string]*installedForm    // formKey(group, kind)
+	interfaces map[string]supportRef        // name@version
+	bindings   map[string]supportRef        // name@version
+	contracts  map[string]bindingContract   // name@version
+	abis       map[string]interfaceContract // name@version
+}
+
+// interfaceContractByName resolves one installed Interface Definition.
+func (catalog *Catalog) interfaceContractByName(name, version string) (interfaceContract, bool) {
+	contract, ok := catalog.abis[name+"@"+version]
+	return contract, ok
 }
 
 // bindingContractByName resolves the installed contract behind one accepted
@@ -233,6 +306,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 		interfaces: map[string]supportRef{},
 		bindings:   map[string]supportRef{},
 		contracts:  map[string]bindingContract{},
+		abis:       map[string]interfaceContract{},
 	}
 	var set candidateSet
 	setPath := filepath.Join(repoRoot, "forms", "candidates", "edge", "v1alpha1", "candidate-set.json")
@@ -303,6 +377,39 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 	}
 	for _, candidate := range interfaces.Interfaces {
 		catalog.interfaces[candidate.Name+"@"+candidate.Version] = supportRef(candidate)
+		// The Interface Definition is installed, not just its identity. A host
+		// that only knew the digest could advertise the runtime ABI it does not
+		// hold, and could not read the handler vocabulary the ABI defines, so it
+		// would have to keep a handler list of its own — a second source of
+		// truth the contract exists to remove (spec/decisions/0019).
+		var document interfaceDefinitionDocument
+		path := filepath.Join(repoRoot, "interfaces", "candidates", "v1alpha1", candidate.Name, "definition.json")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		digest, err := formpackage.DigestCanonicalJSON(raw)
+		if err != nil {
+			return nil, err
+		}
+		if digest != candidate.SchemaDigest {
+			return nil, fmt.Errorf("takoform: interface %s definition digest drifted", candidate.Name)
+		}
+		if err := formpackage.DecodeStrictIJSON(raw, &document); err != nil {
+			return nil, fmt.Errorf("takoform: interface %s definition: %w", candidate.Name, err)
+		}
+		if document.Name != candidate.Name || document.Version != candidate.Version {
+			return nil, fmt.Errorf("takoform: interface %s definition identity drifted", candidate.Name)
+		}
+		catalog.abis[candidate.Name+"@"+candidate.Version] = interfaceContract{
+			Ref: formpackage.InterfaceRef{
+				APIVersion:   document.APIVersion,
+				Name:         document.Name,
+				Version:      document.Version,
+				SchemaDigest: digest,
+			},
+			Handlers: runtimeHandlerVocabulary(document),
+		}
 	}
 	var bindings bindingCandidateSet
 	bindingsPath := filepath.Join(repoRoot, "bindings", "candidates", "v1alpha1", "candidate-set.json")
@@ -432,10 +539,9 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 		}},
 		{contract.RunnerInput.WorkerVersion, "revision", map[string]any{
 			"type": "object", "additionalProperties": false,
-			"required": []any{"bundle", "compatibilityDate", "handlers", "worker"},
+			"required": []any{"bundle", "handlers", "worker"},
 			"properties": map[string]any{
-				"bundle":            typedRef("WorkerBundle"),
-				"compatibilityDate": map[string]any{"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+				"bundle": typedRef("WorkerBundle"),
 				"handlers": map[string]any{
 					"type": "array", "minItems": 1, "uniqueItems": true,
 					"items": map[string]any{"enum": []any{"fetch", "scheduled", "queue", "tail"}},

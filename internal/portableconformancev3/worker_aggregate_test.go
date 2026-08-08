@@ -103,10 +103,9 @@ func (f *aggregateFixture) versionSpec(worker string, handlers ...string) map[st
 		declared = append(declared, handler)
 	}
 	return map[string]any{
-		"worker":            f.ref(moduleWorkerKind, worker),
-		"bundle":            f.ref("WorkerBundle", "worker-bundle-probe"),
-		"compatibilityDate": "2026-01-01",
-		"handlers":          declared,
+		"worker":   f.ref(moduleWorkerKind, worker),
+		"bundle":   f.ref("WorkerBundle", "worker-bundle-probe"),
+		"handlers": declared,
 	}
 }
 

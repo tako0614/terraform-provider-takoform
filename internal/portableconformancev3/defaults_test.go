@@ -190,10 +190,9 @@ func TestSpecChangingApplyToFormWithoutUpdateIsRefused(t *testing.T) {
 	const name, space = "worker-version-probe", "conformance"
 	group := ref.APIVersion
 	stored := map[string]any{
-		"worker":            map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
-		"bundle":            map[string]any{"apiVersion": group, "kind": "WorkerBundle", "name": "worker-bundle-probe"},
-		"compatibilityDate": "2026-01-01",
-		"handlers":          []any{"fetch"},
+		"worker":   map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
+		"bundle":   map[string]any{"apiVersion": group, "kind": "WorkerBundle", "name": "worker-bundle-probe"},
+		"handlers": []any{"fetch"},
 	}
 	storedDigest, err := specCanonicalDigest(stored)
 	if err != nil {
@@ -219,10 +218,9 @@ func TestSpecChangingApplyToFormWithoutUpdateIsRefused(t *testing.T) {
 	defer server.Close()
 
 	changed := map[string]any{
-		"worker":            map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
-		"bundle":            map[string]any{"apiVersion": group, "kind": "WorkerBundle", "name": "worker-bundle-probe"},
-		"compatibilityDate": "2026-02-01",
-		"handlers":          []any{"fetch"},
+		"worker":   map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
+		"bundle":   map[string]any{"apiVersion": group, "kind": "WorkerBundle", "name": "worker-bundle-probe"},
+		"handlers": []any{"fetch", "scheduled"},
 	}
 	review := hostPrepare(t, server, contract, ref, name, space, changed, "1")
 	status, raw := hostApply(t, server, contract, ref, name, space, changed, review, map[string]string{

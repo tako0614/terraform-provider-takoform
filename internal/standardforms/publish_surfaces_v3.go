@@ -58,6 +58,22 @@ func v3PublishedSurfaces() []publishedSurface {
 	return surfaces
 }
 
+// v3ProvidedInterfaceProse says which DIRECTION one provided contract runs in.
+// Most provided Interfaces are an operation surface the resource exposes to
+// other resources through a Binding. The runtime ABI is the other direction:
+// it is what a conforming host provides to the code the resource runs, and it
+// is what "this host runs module workers" is allowed to mean
+// (spec/decisions/0019).
+func v3ProvidedInterfaceProse(name string) string {
+	if name == edgeformcatalog.WorkerRuntimeInterfaceName {
+		return "the exact runtime ABI a conforming host provides to this resource's code: " +
+			"handler signatures, the binding environment, `ctx.waitUntil`, exception handling, " +
+			"body streaming, the minimum Web API surface, and module loading. " +
+			"A host supporting this Form implements that contract at its exact digest."
+	}
+	return "the exact Interface contract this Form's service exposes."
+}
+
 // v3RoleSemantics states the lifecycle meaning of each closed role.
 func v3RoleSemantics(role model.Role) string {
 	switch role {
@@ -253,7 +269,7 @@ description: |-
 	if len(form.ProvidedInterfaces) > 0 {
 		builder.WriteString("\n## Provided interfaces\n\n")
 		for _, provided := range form.ProvidedInterfaces {
-			fmt.Fprintf(&builder, "- `%s@%s` — the exact Interface contract this Form's service exposes.\n", provided.Name, provided.Version)
+			fmt.Fprintf(&builder, "- `%s@%s` — %s\n", provided.Name, provided.Version, v3ProvidedInterfaceProse(provided.Name))
 		}
 	}
 	if len(form.AcceptedBindings) > 0 {

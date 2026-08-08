@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 73-entry executed-check list every v3
+// requiredRunnerChecks is the closed 75-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -196,6 +196,9 @@ var requiredRunnerChecks = []string{
 	"upload-session-bound-to-its-creating-principal",
 	"artifact-digest-is-not-a-capability",
 	"manifest-reference-is-not-a-capability",
+	// The ES Module Worker ABI is an exact contract (spec/decisions/0019).
+	"module-worker-runtime-contract-advertised",
+	"undeclared-runtime-handler-rejected",
 }
 
 // FormRef is the exact four-field v1alpha3 Form identity.
@@ -253,11 +256,38 @@ type NameVersion struct {
 	Version string `json:"version"`
 }
 
+// RuntimeContractProbe pins the exact ES Module Worker runtime ABI the lane
+// requires a host to implement (spec/decisions/0019). Unlike the display-only
+// support probes, it carries the exact schemaDigest: the whole point of the
+// contract is that "this host runs module workers" means one exact set of
+// handler signatures, environment rules, exception behavior, and Web APIs, and
+// only the digest says which set. UndefinedHandler is a handler token the
+// contract does NOT define, used to prove a host refuses one.
+type RuntimeContractProbe struct {
+	Name             string   `json:"name"`
+	Version          string   `json:"version"`
+	SchemaDigest     string   `json:"schemaDigest"`
+	Handlers         []string `json:"handlers"`
+	UndefinedHandler string   `json:"undefinedHandler"`
+}
+
+// defines reports whether the pinned contract vocabulary carries one handler.
+func (probe RuntimeContractProbe) defines(handler string) bool {
+	for _, candidate := range probe.Handlers {
+		if candidate == handler {
+			return true
+		}
+	}
+	return false
+}
+
 // SupportProbes names the interface and binding support profiles the runner
-// must be able to read.
+// must be able to read, and pins the exact runtime ABI contract the ModuleWorker
+// Form must both provide and advertise.
 type SupportProbes struct {
-	Interface NameVersion `json:"interface"`
-	Binding   NameVersion `json:"binding"`
+	Interface       NameVersion          `json:"interface"`
+	Binding         NameVersion          `json:"binding"`
+	RuntimeContract RuntimeContractProbe `json:"runtimeContract"`
 }
 
 // RunnerInput is the pinned black-box input of one v3 conformance run.
@@ -435,6 +465,9 @@ func validateContract(contract Contract) error {
 		input.SupportProbes.Binding.Name == "" || input.SupportProbes.Binding.Version == "" {
 		return errors.New("portable host v3 support probes are incomplete")
 	}
+	if err := validateRuntimeContractProbe(input.SupportProbes.RuntimeContract); err != nil {
+		return err
+	}
 	if err := validateNegativeFixtureInventory(input); err != nil {
 		return err
 	}
@@ -513,8 +546,17 @@ func validateWorkerVersionProbe(input RunnerInput) error {
 		resource["name"] != input.EdgeKvNamespace.Name {
 		return errors.New("portable host v3 workerVersion kvBinding must reference the edgeKvNamespace probe")
 	}
-	if value, _ := desired["compatibilityDate"].(string); value == "" {
-		return errors.New("portable host v3 workerVersion probe must pin a compatibilityDate")
+	// A version pins no runtime selector at all: there is no compatibilityDate
+	// and no compatibilityFlags in this lane, because a date names no behavior
+	// without a registry saying what each date changes (spec/decisions/0019).
+	// The runtime is the exact contract the ModuleWorker Form provides.
+	for _, removed := range []string{"compatibilityDate", "compatibilityFlags"} {
+		if _, present := desired[removed]; present {
+			return fmt.Errorf(
+				"portable host v3 workerVersion probe carries %s; the runtime is fixed by the exact %s contract, not a token",
+				removed, input.SupportProbes.RuntimeContract.Name,
+			)
+		}
 	}
 	// The version probe is what the deployment probe weights, and the
 	// deployment is what every attachment probe is admitted against
@@ -531,6 +573,45 @@ func validateWorkerVersionProbe(input RunnerInput) error {
 				handler,
 			)
 		}
+	}
+	// Every handler the corpus sends must be one the pinned runtime contract
+	// defines, or the corpus itself would be asking a conforming host to accept
+	// something the ABI does not describe.
+	runtime := input.SupportProbes.RuntimeContract
+	for handler := range declared {
+		if !runtime.defines(handler) {
+			return fmt.Errorf(
+				"portable host v3 workerVersion probe declares handler %q, which the pinned %s contract does not define",
+				handler, runtime.Name,
+			)
+		}
+	}
+	return nil
+}
+
+// validateRuntimeContractProbe proves the corpus pins a usable runtime ABI: an
+// exact digest to hold a host to, a non-empty handler vocabulary, and one
+// handler token OUTSIDE that vocabulary to drive the refusal check with. Without
+// the last one the check could not exist, because the vocabulary and the Form's
+// enum are the same set by construction.
+func validateRuntimeContractProbe(probe RuntimeContractProbe) error {
+	if probe.Name == "" || probe.Version == "" || !formpackage.ValidDigest(probe.SchemaDigest) {
+		return errors.New("portable host v3 runtime contract probe must pin an exact name, version, and schemaDigest")
+	}
+	if len(probe.Handlers) == 0 {
+		return errors.New("portable host v3 runtime contract probe must pin the ABI handler vocabulary")
+	}
+	seen := map[string]bool{}
+	for _, handler := range probe.Handlers {
+		if handler == "" || seen[handler] {
+			return errors.New("portable host v3 runtime contract handler vocabulary is invalid")
+		}
+		seen[handler] = true
+	}
+	if probe.UndefinedHandler == "" || seen[probe.UndefinedHandler] {
+		return errors.New(
+			"portable host v3 runtime contract probe must pin an undefinedHandler the contract does not define",
+		)
 	}
 	return nil
 }

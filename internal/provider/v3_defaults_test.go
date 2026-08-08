@@ -191,12 +191,11 @@ func TestV3WorkerVersionOmittedDefaultsTravelAndReturn(t *testing.T) {
 
 	form, _ := edgeformcatalog.ByKind("WorkerVersion")
 	planValues := map[string]attr.Value{
-		"name":               types.StringValue("worker-version"),
-		"space":              types.StringValue("prod"),
-		"worker":             types.StringValue("module-worker"),
-		"bundle":             types.StringValue("worker-bundle"),
-		"compatibility_date": types.StringValue("2026-01-01"),
-		"handlers":           types.SetValueMust(types.StringType, []attr.Value{types.StringValue("fetch")}),
+		"name":     types.StringValue("worker-version"),
+		"space":    types.StringValue("prod"),
+		"worker":   types.StringValue("module-worker"),
+		"bundle":   types.StringValue("worker-bundle"),
+		"handlers": types.SetValueMust(types.StringType, []attr.Value{types.StringValue("fetch")}),
 	}
 	defaulted := map[string]attr.Value{}
 	for _, field := range form.Fields {
@@ -211,10 +210,9 @@ func TestV3WorkerVersionOmittedDefaultsTravelAndReturn(t *testing.T) {
 		planValues[name] = value
 		defaulted[name] = value
 	}
-	// compatibility_flags, vars_json, the five binding lists, and
-	// required_sensitive_vars.
-	if len(defaulted) != 8 {
-		t.Fatalf("WorkerVersion exercised %d defaulted attributes, want 8", len(defaulted))
+	// vars_json, the five binding lists, and required_sensitive_vars.
+	if len(defaulted) != 7 {
+		t.Fatalf("WorkerVersion exercised %d defaulted attributes, want 7", len(defaulted))
 	}
 
 	plan := v3PlanWith(t, ctx, schemaResponse, planValues)

@@ -6,27 +6,27 @@
     {
       "name": "module-worker.edge-kv",
       "version": "1.0.0",
-      "schemaDigest": "sha256:e5ae1b382e0abfd2306ff6eb79e170e8e638ccc2b816f8d27af019947363461a"
+      "schemaDigest": "sha256:ccca034705306047a3431d4d3d46f73ba311553b03d23a6e97a44a97b6a37295"
     },
     {
       "name": "module-worker.object-bucket",
       "version": "1.0.0",
-      "schemaDigest": "sha256:1e71e12cc53248d4f7c1e99fa9c1726d5cd7eaad0a876ffd3d109355218d43bc"
+      "schemaDigest": "sha256:06fdea4cd47cea8eba9a9589cb53f0b20dae8d83648fdaeff0144414f0becb07"
     },
     {
       "name": "module-worker.sqlite",
       "version": "1.0.0",
-      "schemaDigest": "sha256:39e32924cb119fc59a3adf1c3e3db2d78b23ec3adf13034ba973e3439e0250f6"
+      "schemaDigest": "sha256:1bef7b86f8f7b9903050ddbd5dbe163ba22b234163101682a2d25e6dba494a77"
     },
     {
       "name": "module-worker.queue-producer",
       "version": "1.0.0",
-      "schemaDigest": "sha256:58688098edfd77587d1e3f33a9adfc8bd082ab6c13cdc57720a52158757ae057"
+      "schemaDigest": "sha256:7a5736a9d724056cb8a37a2442f70894839e116a29d56353075f217a86b0b610"
     },
     {
       "name": "module-worker.service",
       "version": "1.0.0",
-      "schemaDigest": "sha256:9d7250946c1229919f44c0ba7665f925c7aa5f7b55e4af15f55317d01129dc5a"
+      "schemaDigest": "sha256:b6dd3222c8616c91dfc43383fe199bb0471bac3e169e0979bfeeee7a938be8ec"
     }
   ]
 }

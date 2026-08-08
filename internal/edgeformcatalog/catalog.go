@@ -7,7 +7,9 @@
 package edgeformcatalog
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
@@ -31,6 +33,19 @@ func bindingInstance(bindingName, kind, targetName string) map[string]any {
 	return map[string]any{"name": bindingName, "resource": ref(kind, targetName)}
 }
 
+// runtimeHandlerVocabulary is the WorkerVersion `handlers` enum, read out of
+// the worker.runtime contract instead of being spelled a second time. On a
+// broken contract it yields nil, which makes the string-set field unbounded and
+// fails Form.Validate — the catalog refuses to render rather than emitting a
+// Form whose handler set is not the ABI's.
+func runtimeHandlerVocabulary() []string {
+	handlers, err := RuntimeHandlers()
+	if err != nil {
+		return nil
+	}
+	return handlers
+}
+
 func moduleWorkerRef(hcl, wire, doc string, required, immutable bool) model.Field {
 	return model.Field{
 		HCL: hcl, Wire: wire, Kind: model.KindResourceRef, TargetKind: "ModuleWorker",
@@ -46,17 +61,32 @@ var Forms = []model.Form{
 		Kind:   "ModuleWorker", Slug: "module-worker", ResourceType: "takoform_module_worker",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Module Worker",
-		Description: "Long-lived logical identity of one ES Module Worker application. The Form fixes the " +
-			"ES module worker ABI by identity: handlers are exported module functions receiving typed " +
-			"events and a binding environment. Code, configuration, and bindings live on Worker Version " +
-			"revisions; traffic selection lives on Worker Deployments.",
-		// worker.service is provided by the IDENTITY, not by a revision: a
+		Description: "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES " +
+			"Module Worker ABI by identity, and states it exactly: the runtime contract " +
+			"worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, " +
+			"the fetch, scheduled, queue, and tail handler signatures, the binding environment, " +
+			"ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module " +
+			"loading. A host supporting this Form implements that exact digest; a runtime that behaves " +
+			"differently is a different contract version and a different Form version, never a compatibility " +
+			"date. Code, configuration, and bindings live on Worker Version revisions; traffic selection " +
+			"lives on Worker Deployments.",
+		// Two exact Interfaces, in two directions.
+		//
+		// worker.runtime is what the HOST provides to the code: it is the ABI
+		// this identity claims to fix, so a host that supports ModuleWorker
+		// implements it, and a Worker Version is the code that fills it.
+		//
+		// worker.service is what the identity provides to OTHER workers, and it
+		// is provided by the IDENTITY rather than a revision: a
 		// module-worker.service binding addresses another worker by logical
 		// identity and is served by whichever versions that worker's active
 		// deployment selects. Declaring it on a Worker Version would name a
 		// target no binding may point at, and would leave the binding's
 		// allowedTargetForms Form providing no Interface at all.
-		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "worker.service", Version: "1.0.0"}},
+		ProvidedInterfaces: []model.InterfaceRefSource{
+			{Name: WorkerRuntimeInterfaceName, Version: "1.0.0"},
+			{Name: "worker.service", Version: "1.0.0"},
+		},
 	},
 	{
 		Family: Family,
@@ -86,9 +116,12 @@ var Forms = []model.Form{
 		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
 		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Version",
-		Description: "Immutable executable snapshot of one Module Worker: a bundle, a runtime compatibility " +
-			"date, declared handlers, non-secret vars, and the typed capability bindings the code may use. " +
-			"A change is a new Worker Version; traffic moves only through Worker Deployments.",
+		Description: "Immutable executable snapshot of one Module Worker: a bundle, the handlers its module " +
+			"exports, non-secret vars, and the typed capability bindings the code may use. A change is a new " +
+			"Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is " +
+			"not a field of this Form: it is fixed by the worker.runtime@1.0.0 contract the Module Worker " +
+			"identity provides, so a version carries no compatibility date and no compatibility flag " +
+			"(decision 0019).",
 		AcceptedBindings: []model.BindingRefSource{
 			{Name: "module-worker.edge-kv", Version: "1.0.0"},
 			{Name: "module-worker.object-bucket", Version: "1.0.0"},
@@ -103,17 +136,14 @@ var Forms = []model.Form{
 			{HCL: "bundle", Wire: "bundle", Kind: model.KindResourceRef, TargetKind: "WorkerBundle", Required: true,
 				Doc:     "Worker Bundle carrying the exact module bytes this version executes.",
 				Example: ref("WorkerBundle", "worker-bundle")},
-			{HCL: "compatibility_date", Wire: "compatibilityDate", Kind: model.KindDateString, Required: true,
-				Doc:     "Runtime compatibility date fixing default runtime behavior for this version.",
-				Example: "2026-08-06", AltExample: "2026-01-01"},
-			{HCL: "compatibility_flags", Wire: "compatibilityFlags", Kind: model.KindStringSet,
-				Enum:    []string{"nodejs_compat"},
-				Default: []any{},
-				Doc:     "Closed runtime compatibility flags enabled for this version. Omitting it enables no flag.",
-				Example: []any{"nodejs_compat"}},
+			// The handler enum is not written here twice: it is the closed
+			// vocabulary the worker.runtime contract publishes, read back out of
+			// that contract so the Form and the ABI can never disagree.
 			{HCL: "handlers", Wire: "handlers", Kind: model.KindStringSet, Required: true, MinItems: 1,
-				Enum:    []string{"fetch", "scheduled", "queue", "tail"},
-				Doc:     "Module event handlers this version exports. A host rejects an attachment whose event kind is not declared here.",
+				Enum: runtimeHandlerVocabulary(),
+				Doc: "Module event handlers this version exports, from the closed vocabulary the " +
+					"worker.runtime@1.0.0 contract defines. A host rejects a handler that contract does not " +
+					"define, and rejects an attachment whose event kind is not declared here.",
 				Example: []any{"fetch"}},
 			{HCL: "vars", Wire: "vars", Kind: model.KindJSONMap,
 				Default:                  map[string]any{},
@@ -381,7 +411,91 @@ func Validate() error {
 	if err := validateEnvironmentNamespaces(); err != nil {
 		return err
 	}
+	if err := validateRuntimeContract(); err != nil {
+		return err
+	}
 	return validateAbsenceSemanticExemptions()
+}
+
+// validateRuntimeContract proves, at authoring time, the three facts that make
+// the ES Module Worker ABI an exact contract rather than a claim
+// ([decision 0019](../../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)):
+//
+//  1. the ModuleWorker identity — what a host implements — provides the runtime
+//     contract, so the exact digest travels in the Form Definition a host
+//     installs;
+//  2. the WorkerVersion `handlers` enum IS the contract's handler vocabulary,
+//     so the code side and the ABI side cannot drift apart;
+//  3. every handler in that vocabulary is a real operation of the contract, and
+//     every fixture step names an operation the contract declares.
+//
+// A Form that stated a runtime by a compatibility date could satisfy none of
+// these: a date names no operations, no digest, and no behavior.
+func validateRuntimeContract() error {
+	definition, err := interfaceDefinitionByName(WorkerRuntimeInterfaceName)
+	if err != nil {
+		return err
+	}
+	worker, known := ByKind("ModuleWorker")
+	if !known {
+		return fmt.Errorf("the family declares no ModuleWorker Form to own the %s contract", WorkerRuntimeInterfaceName)
+	}
+	provides := false
+	for _, provided := range worker.ProvidedInterfaces {
+		if provided.Name == WorkerRuntimeInterfaceName && provided.Version == definition.Version {
+			provides = true
+			break
+		}
+	}
+	if !provides {
+		return fmt.Errorf(
+			"form ModuleWorker does not provide %s@%s; the ABI it claims to fix would be unstated",
+			WorkerRuntimeInterfaceName, definition.Version,
+		)
+	}
+	handlers, err := runtimeHandlersOf(definition)
+	if err != nil {
+		return err
+	}
+	operations := map[string]struct{}{}
+	for _, operation := range definition.Operations {
+		operations[operation.Name] = struct{}{}
+	}
+	for _, handler := range handlers {
+		if _, declared := operations[handler]; !declared {
+			return fmt.Errorf(
+				"interface %s names handler %q in its %s vocabulary without declaring it as an operation",
+				WorkerRuntimeInterfaceName, handler, RuntimeHandlerProperty,
+			)
+		}
+	}
+	for _, fixture := range definition.Fixtures {
+		for _, step := range fixture.Steps {
+			if _, declared := operations[step.Operation]; !declared {
+				return fmt.Errorf(
+					"interface %s fixture %s exercises undeclared operation %q",
+					WorkerRuntimeInterfaceName, fixture.Name, step.Operation,
+				)
+			}
+		}
+	}
+	version, known := ByKind("WorkerVersion")
+	if !known {
+		return errors.New("the family declares no WorkerVersion Form to fill the runtime contract")
+	}
+	for _, field := range version.Fields {
+		if field.Wire != "handlers" {
+			continue
+		}
+		if !slices.Equal(field.Enum, handlers) {
+			return fmt.Errorf(
+				"form WorkerVersion handlers enum %v is not the %s handler vocabulary %v",
+				field.Enum, WorkerRuntimeInterfaceName, handlers,
+			)
+		}
+		return nil
+	}
+	return errors.New("form WorkerVersion declares no handlers field to hold the runtime contract vocabulary")
 }
 
 // validateEnvironmentNamespaces proves each Form's canonical Examples declare a

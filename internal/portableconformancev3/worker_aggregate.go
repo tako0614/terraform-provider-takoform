@@ -44,6 +44,20 @@ const (
 	scheduledHandler = "scheduled"
 	queueHandler     = "queue"
 
+	// The exact runtime ABI a ModuleWorker provides (spec/decisions/0019,
+	// spec/interface-contract/). A host reads the handler vocabulary out of the
+	// contract at this exact name rather than keeping a handler list of its
+	// own, so widening the enum is a contract change with a new digest and not
+	// a quiet host decision. The Interface name grammar admits no hyphen, which
+	// is why the contract is `worker.runtime` and only the BINDING namespace
+	// carries the hyphenated `module-worker.` prefix.
+	workerRuntimeInterface = "worker.runtime"
+	// runtimeHandlerOperation and runtimeHandlerProperty locate that
+	// vocabulary: the item enum of the loadModule operation's declaredHandlers
+	// property is the closed handler set of the ABI.
+	runtimeHandlerOperation = "loadModule"
+	runtimeHandlerProperty  = "declaredHandlers"
+
 	// varsProperty and sensitiveVarsProperty are the two Worker Version
 	// properties that project names into the module environment without being
 	// binding lists. The binding lists themselves are discovered from the
@@ -472,6 +486,107 @@ func (h *ReferenceHost) workerServiceUnavailable(resource *storedResource) (reas
 		"WorkerDeployment " + deployment.Name + " does not serve the fetch handler for ModuleWorker " +
 			resource.Name + " at uid " + resource.UID + "; " + detail,
 		true
+}
+
+// ---- runtime ABI ----
+
+// runtimeContract resolves the exact ES Module Worker runtime ABI this host
+// implements: the contract the installed ModuleWorker Form Definition declares
+// in providedInterfaces, held at the exact digest the host installed. It
+// returns false when the lane's ModuleWorker Form declares no runtime contract
+// at all, which is only the minimal in-memory FallbackCatalog used by targeted
+// unit tests; the real LoadCatalog always installs it.
+func (h *ReferenceHost) runtimeContract() (interfaceContract, bool) {
+	worker := h.catalog.form(edgeFormsGroup, moduleWorkerKind)
+	if worker == nil {
+		return interfaceContract{}, false
+	}
+	for _, provided := range worker.ProvidedInterfaces {
+		if provided.Name != workerRuntimeInterface {
+			continue
+		}
+		contract, installed := h.catalog.interfaceContractByName(provided.Name, provided.Version)
+		if !installed || contract.Ref.SchemaDigest != provided.SchemaDigest {
+			return interfaceContract{}, false
+		}
+		return contract, true
+	}
+	return interfaceContract{}, false
+}
+
+// declaredHandlerViolation reports why one Worker Version's declared handlers
+// are not the runtime ABI's, or "" when they are.
+//
+// `handlers` is the surface a host attaches inward activation to, and the ABI
+// is what says which handlers exist at all: fetch, scheduled, queue, and tail,
+// each with a fixed signature (spec/decisions/0019). Accepting anything else
+// would store a version claiming an entry point no conforming runtime can
+// invoke, and would let one host attach events to it while another could not —
+// the divergence the exact contract exists to close.
+//
+// The vocabulary is read out of the INSTALLED CONTRACT, never out of a list the
+// host keeps: a host that widened its handler set would have to publish a
+// different runtime contract at a different digest, which the
+// module-worker-runtime-contract-advertised check reads back. That is also why
+// the rule is not left to the Form's `handlers` enum: the enum is a structural
+// minimum derived from this contract, and a host whose installed schema drifted
+// laxer must still refuse (decision 0014).
+//
+// It is a property of the spec ALONE — no other resource has to resolve — so it
+// is reported as a desired-spec diagnostic and therefore reaches the advisory
+// `validate` surface, the binding `prepare` surface, and `apply` alike. A client
+// learns the version is unrunnable while planning, not after a failed apply.
+func (h *ReferenceHost) declaredHandlerViolation(form *installedForm, spec map[string]any) string {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+		return ""
+	}
+	contract, installed := h.runtimeContract()
+	if !installed || len(contract.Handlers) == 0 {
+		return ""
+	}
+	defined := map[string]bool{}
+	for _, handler := range contract.Handlers {
+		defined[handler] = true
+	}
+	declared, _ := spec["handlers"].([]any)
+	for _, item := range declared {
+		handler, _ := item.(string)
+		if defined[handler] {
+			continue
+		}
+		return "WorkerVersion declares handler " + strconv.Quote(handler) + ", which the runtime contract " +
+			contract.Ref.Name + "@" + contract.Ref.Version + " (" + contract.Ref.SchemaDigest + ") does not define; " +
+			"the ABI defines exactly " + strings.Join(contract.Handlers, ", ")
+	}
+	return ""
+}
+
+// validateDeclaredHandlers is the mutation-path form of the same rule. It is
+// deliberately redundant with the diagnostic: import and the asynchronous commit
+// re-derive every precondition here, long after the diagnostics of the accepting
+// request were computed.
+func (h *ReferenceHost) validateDeclaredHandlers(form *installedForm, spec map[string]any) *hostError {
+	if violation := h.declaredHandlerViolation(form, spec); violation != "" {
+		return stableError("invalid_argument", violation)
+	}
+	return nil
+}
+
+// desiredSchemaEnum reads the item enum of one top-level string-array property
+// of a desired schema. It is the profile's last resort when no runtime contract
+// is installed; it never overrides one.
+func desiredSchemaEnum(schema map[string]any, property string) []string {
+	properties, _ := schema["properties"].(map[string]any)
+	node, _ := properties[property].(map[string]any)
+	items, _ := node["items"].(map[string]any)
+	values, _ := items["enum"].([]any)
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if text, ok := value.(string); ok {
+			out = append(out, text)
+		}
+	}
+	return out
 }
 
 // ---- environment namespace ----

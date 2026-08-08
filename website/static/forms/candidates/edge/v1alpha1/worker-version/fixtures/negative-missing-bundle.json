@@ -9,10 +9,6 @@
       }
     }
   ],
-  "compatibilityDate": "2026-08-06",
-  "compatibilityFlags": [
-    "nodejs_compat"
-  ],
   "handlers": [
     "fetch"
   ],

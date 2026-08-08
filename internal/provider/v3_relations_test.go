@@ -170,11 +170,10 @@ func TestV3ReadOfBrokenRelationKeepsStateAndPlansReplacement(t *testing.T) {
 	ctx := context.Background()
 	schemaResponse := v3SchemaOf(t, resource)
 	configured := map[string]attr.Value{
-		"name":               types.StringValue("worker-version"),
-		"worker":             types.StringValue("module-worker"),
-		"bundle":             types.StringValue("worker-bundle"),
-		"compatibility_date": types.StringValue("2026-08-06"),
-		"handlers":           types.SetValueMust(types.StringType, []attr.Value{types.StringValue("fetch")}),
+		"name":     types.StringValue("worker-version"),
+		"worker":   types.StringValue("module-worker"),
+		"bundle":   types.StringValue("worker-bundle"),
+		"handlers": types.SetValueMust(types.StringType, []attr.Value{types.StringValue("fetch")}),
 	}
 	createResponse := frameworkresource.CreateResponse{
 		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},

@@ -22,3 +22,4 @@ record does not replace them.
 - [0016 — The Worker aggregate has one active deployment](0016-the-worker-aggregate-has-one-active-deployment.md)
 - [0017 — Provider state survives Form evolution and interruption](0017-provider-state-survives-form-evolution-and-interruption.md)
 - [0018 — The Host API is deployable behind ordinary infrastructure](0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)
+- [0019 — The Module Worker ABI is an exact contract, not a date](0019-the-module-worker-abi-is-an-exact-contract.md)

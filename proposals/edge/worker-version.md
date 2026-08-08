@@ -2,10 +2,10 @@
 
 ## Workload and consumer
 
-A team ships one executable snapshot of a worker: which bundle runs, under
-which runtime compatibility date and flags, which handlers it exports, its
-non-secret vars, and the typed capability bindings its code may use.
-Deployments select among versions; nothing ever edits a version in place.
+A team ships one executable snapshot of a worker: which bundle runs, which
+handlers it exports, its non-secret vars, and the typed capability bindings its
+code may use. Deployments select among versions; nothing ever edits a version in
+place.
 
 ## Role
 
@@ -13,18 +13,33 @@ Deployments select among versions; nothing ever edits a version in place.
 
 ## Observable semantics
 
-`compatibilityDate` fixes default runtime behavior; `compatibilityFlags` is a
-closed set (`nodejs_compat`). `handlers` closes the event surface a host may
-attach to. `vars` is a bounded data-only JSON map projected into the module
-environment. Each binding list projects one exact Binding contract —
-edge KV, object bucket, SQLite, queue producer, service — under a JavaScript
-identifier name. `requiredSensitiveVars` declares only the names of sealed
-values the host must supply; values never enter portable state.
+The runtime a version runs on is not a field of this Form. It is the exact
+`worker.runtime@1.0.0` contract the [ModuleWorker](module-worker.md) identity
+provides, so there is no `compatibilityDate` and no `compatibilityFlags`
+([decision 0019](../../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)):
+a date names no behavior without a registry saying what each date changes, and
+two hosts reading the same date could legitimately run different runtimes.
+
+`handlers` closes the event surface a host may attach to, and its vocabulary IS
+the handler set that contract defines — a host refuses a handler the contract
+does not define, before any mutation. `vars` is a bounded data-only JSON map
+projected into the module environment. Each binding list projects one exact
+Binding contract — edge KV, object bucket, SQLite, queue producer, service —
+under a JavaScript identifier name, and each of those contracts states the
+JavaScript surface it projects, not just the operations it grants.
+`requiredSensitiveVars` declares only the names of sealed values the host must
+supply; values never enter portable state.
 
 The field is named `requiredSensitiveVars`, not `secretRequirements`, because
 the Form Package data-only policy forbids the token `secret` in any field
 name (`formpackage` rejects the whole definition rather than the value), so
 the declaration states the same fact in permitted vocabulary.
+
+## Deferred: a runtime revision
+
+A future runtime revision is a new exact `worker.runtime` version, published at
+its own digest. If it changes what this Form desires it is also a new definition
+version of this Form. It is never a new value of a date field, and never a flag.
 
 ## Deferred: static assets
 
@@ -48,8 +63,11 @@ resolved at request time each break the immutable-snapshot shape.
 
 ## Provided Interfaces
 
-`worker.service@1.0.0` — the version answers worker-to-worker `fetch`
-invocations projected by `module-worker.service` bindings.
+None. Both of the worker's exact contracts — `worker.runtime@1.0.0` and
+`worker.service@1.0.0` — belong to the [ModuleWorker](module-worker.md)
+identity: a `module-worker.service` binding addresses a worker by logical
+identity, and the runtime ABI is what a host implements rather than what one
+snapshot ships.
 
 ## Accepted Bindings
 

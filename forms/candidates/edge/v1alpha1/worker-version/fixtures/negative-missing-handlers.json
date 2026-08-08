@@ -14,10 +14,6 @@
     "kind": "WorkerBundle",
     "name": "worker-bundle"
   },
-  "compatibilityDate": "2026-08-06",
-  "compatibilityFlags": [
-    "nodejs_compat"
-  ],
   "kvBindings": [
     {
       "name": "CACHE",

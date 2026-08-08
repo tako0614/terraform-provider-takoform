@@ -4,7 +4,7 @@
   "name": "module-worker.edge-kv",
   "version": "1.0.0",
   "title": "Module Worker edge KV binding",
-  "description": "Projects the complete edge.kv runtime API into a Worker Version under one JavaScript-identifier binding name. The binding grants capability and API together; no credential or endpoint ever reaches the consumer.",
+  "description": "Projects the complete edge.kv runtime API into a Worker Version under one JavaScript-identifier binding name. The binding grants capability and API together; no credential or endpoint ever reaches the consumer. Runtime surface: env.NAME is an object with the methods get(key), getWithMetadata(key), put(key, value, options?), delete(key), and list(options?). Keys and values are strings; options and results are the exact input and output documents of the matching edge.kv operation. Every method returns a promise. get resolves to null for an absent key rather than rejecting, which is how the interface's not_found outcome appears in JavaScript; every other error rejects with an Error whose name is the edge.kv error code. Reads are eventually consistent: a get after a put may resolve to the previous value until replication converges.",
   "sourceRole": "revision",
   "targetInterface": {
     "apiVersion": "interfaces.takoform.com/v1alpha1",

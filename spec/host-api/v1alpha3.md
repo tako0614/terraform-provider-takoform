@@ -581,6 +581,19 @@ A profile declares supported exact refs, closed capability subsets
 contracts, and numeric limits. Price, SKU, region, quota, and commercial
 policy MUST NOT appear; those remain Service Offering data outside this API.
 
+A host that supports the Edge Platform Family's `ModuleWorker` MUST advertise
+the ES Module Worker runtime ABI contract `worker.runtime@1.0.0` at the exact
+`schemaDigest` that Form's `providedInterfaces` names, and MUST advertise the
+`WorkerVersion` `handlers` enum as exactly the handler vocabulary that contract
+defines. It MUST NOT advertise a `compatibilityDate` range or a
+`compatibilityFlags` enum: runtime behavior is stated by implementing an exact
+contract, not by a token no registry interprets
+([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
+A `WorkerVersion` declaring a handler the runtime contract does not define MUST
+be refused before any mutation. These are the required conformance checks
+`module-worker-runtime-contract-advertised` and
+`undeclared-runtime-handler-rejected`.
+
 ## Errors
 
 The closed taxonomy extends v1alpha2 with `rate_limited` (429),

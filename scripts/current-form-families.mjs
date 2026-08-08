@@ -54,7 +54,17 @@ const forms = [
   ["AtLeastOnceQueue", "at-least-once-queue", "identity"],
   ["QueueConsumer", "queue-consumer", "attachment"],
 ];
-const interfaceNames = ["edge.kv", "edge.objects", "edge.sql", "edge.queue", "worker.service"];
+// The interface lane order MUST match edgeformcatalog.InterfaceDefinitions().
+// worker.runtime is the exact ES Module Worker runtime ABI the ModuleWorker
+// identity provides (spec/decisions/0019).
+const interfaceNames = [
+  "edge.kv",
+  "edge.objects",
+  "edge.sql",
+  "edge.queue",
+  "worker.service",
+  "worker.runtime",
+];
 const bindingNames = [
   "module-worker.edge-kv",
   "module-worker.object-bucket",
@@ -97,7 +107,7 @@ function main() {
         [stagedRegistryPath, registryPath],
       ]);
       process.stdout.write(
-        "wrote eleven Edge Platform Family Form candidates, five interface candidates, five binding candidates, and the provider v3 registry\n",
+        "wrote eleven Edge Platform Family Form candidates, six interface candidates, five binding candidates, and the provider v3 registry\n",
       );
     } finally {
       rmSync(stagingParent, { recursive: true, force: true });
