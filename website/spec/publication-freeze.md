@@ -62,11 +62,23 @@ evidence exists under [`project-lifecycle.md`](project-lifecycle.md), and a
 real host has implemented it end to end.
 
 Prose cannot stop a release, so the ledger is enforced rather than described.
-`bun run check` validates its shape on every change, and
-`bun run check:release-owner-gate` refuses while any blocker is open, naming
-each one. A blocker closes by recording the evidence that was actually
-produced: an entry marked closed with an empty evidence list fails the gate,
-so the freeze cannot be lifted by editing a status field.
+`bun run check` validates its shape on every change and, while any blocker is
+open, additionally requires the state the repository would not be in had the
+lane published: the family candidate set must still declare itself
+`unpublished`, and no family Form may hold a lifecycle record.
+
+A blocker closes by recording evidence that exists. An entry marked closed
+with an empty evidence list fails, and so does one naming a path that is not
+in the repository, so the freeze cannot be lifted by editing a status field or
+by inventing a filename. `bun run assert:publishable` is the assertion a future
+lane-publishing path calls; today it refuses and names every open blocker.
+
+The freeze is **scoped to this lane's own artifacts**. It is deliberately not
+wired into `check:release-owner-gate`, because that gate also serves the
+retained v1alpha1/v1alpha2 packages and the append-only security revocation
+path in [`trust/`](trust/). An urgent revocation for an already-published
+package must never wait on this lane's product readiness; freezing new
+publication and blocking a security withdrawal are opposite obligations.
 
 The first Forms proposed for Experimental publication are the Worker and edge
 KV vertical slice: `ModuleWorker`, `WorkerBundle`, `WorkerVersion`,

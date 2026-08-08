@@ -5,10 +5,18 @@
 //
 // spec/publication-freeze.md names the blockers that must close before this
 // lane publishes anything. Prose cannot stop a release, so the same facts live
-// here as data, and the release-owner gate reads them. A blocker closes by
-// naming its evidence, never by editing a status field alone.
+// here as data. A blocker closes by naming evidence that exists, never by
+// editing a status field alone.
+//
+// The freeze is scoped to this lane's own artifacts. It is deliberately NOT
+// wired into the shared release-owner gate: that gate also serves the retained
+// v1alpha1/v1alpha2 packages and the append-only security revocation path, and
+// an urgent revocation for an already-published package must never wait on this
+// lane's product readiness. What the check enforces instead is the state that
+// would exist if the lane had published: an unpublished candidate set and an
+// empty family lifecycle.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -27,7 +35,7 @@ function fail(message) {
  * blocker unenforceable: an unknown status, a closed blocker with no evidence,
  * a duplicate identity, or an entry that names no affected Form.
  */
-export function parseBlockerLedger(document) {
+export function parseBlockerLedger(document, repositoryRoot = null) {
   if (document === null || typeof document !== "object" || Array.isArray(document)) {
     fail(`${BLOCKER_LEDGER} must be a JSON object`);
   }
@@ -82,7 +90,22 @@ export function parseBlockerLedger(document) {
     }
     // A status field alone is a promise. Closing a blocker means naming what
     // was actually demonstrated, so the ledger cannot be closed by editing one
-    // word.
+    // word — nor by naming evidence that does not exist. An unchecked list
+    // would be the same unverified status edit wearing an array.
+    for (const [position, entry] of blocker.evidence.entries()) {
+      if (typeof entry !== "string" || entry.trim() !== entry || entry.length === 0) {
+        fail(`${blocker.id} evidence[${position}] must be a non-empty path or https URL with no surrounding whitespace`);
+      }
+      if (entry.startsWith("https://")) {
+        continue;
+      }
+      if (entry.startsWith("/") || entry.includes("..") || entry.includes("\\")) {
+        fail(`${blocker.id} evidence[${position}] must be a repository-relative path or an https URL, not ${JSON.stringify(entry)}`);
+      }
+      if (repositoryRoot !== null && !existsSync(path.join(repositoryRoot, entry))) {
+        fail(`${blocker.id} evidence[${position}] names ${JSON.stringify(entry)}, which does not exist; a blocker closes on evidence that can be read`);
+      }
+    }
     if (blocker.status === "closed" && blocker.evidence.length === 0) {
       fail(`${blocker.id} is closed but names no evidence; a blocker closes by evidence, not by editing its status`);
     }
@@ -97,7 +120,7 @@ export function parseBlockerLedger(document) {
 
 export function loadBlockerLedger(repositoryRoot) {
   const file = path.join(repositoryRoot, BLOCKER_LEDGER);
-  return parseBlockerLedger(JSON.parse(readFileSync(file, "utf8")));
+  return parseBlockerLedger(JSON.parse(readFileSync(file, "utf8")), repositoryRoot);
 }
 
 /** openBlockers returns every blocker that still forbids publication. */
@@ -123,6 +146,40 @@ export function assertPublicationAllowed(ledger) {
   );
 }
 
+/**
+ * assertLaneStillUnpublished is the half of the freeze with teeth today. A
+ * status field says what someone intended; these two files say what the
+ * repository actually did. While a blocker is open, the family candidate set
+ * must still declare itself unpublished and no family Form may hold a lifecycle
+ * record, because either would mean the lane published while frozen.
+ */
+export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
+  if (open.length === 0) {
+    return;
+  }
+  const candidateSet = JSON.parse(
+    readFileSync(path.join(repositoryRoot, "forms/candidates/edge/v1alpha1/candidate-set.json"), "utf8"),
+  );
+  if (candidateSet.publicationStatus !== "unpublished") {
+    fail(
+      `the family candidate set declares publicationStatus ${JSON.stringify(candidateSet.publicationStatus)} ` +
+        `while ${open.length} publication blocker${open.length === 1 ? " is" : "s are"} open`,
+    );
+  }
+  const lifecycle = JSON.parse(readFileSync(path.join(repositoryRoot, "forms/lifecycle.json"), "utf8"));
+  const familyPrefix = `${ledger.family.split("/")[0]}/`;
+  const published = (lifecycle.currentForms ?? []).filter((record) =>
+    String(record?.formRef?.apiVersion ?? "").startsWith(familyPrefix),
+  );
+  if (published.length > 0) {
+    const names = published.map((record) => `${record.formRef.kind}@${record.formRef.definitionVersion}`);
+    fail(
+      `${names.join(", ")} hold a lifecycle record while ${open.length} publication blocker` +
+        `${open.length === 1 ? " is" : "s are"} open; the ${ledger.lane} lane is frozen`,
+    );
+  }
+}
+
 function main() {
   const repositoryRoot = path.resolve(import.meta.dirname, "..");
   const mode = process.argv[2] ?? "--check";
@@ -136,6 +193,7 @@ function main() {
     fail(`usage: bun scripts/publication-blockers.mjs [--check|--assert-publishable]`);
   }
   const open = openBlockers(ledger);
+  assertLaneStillUnpublished(repositoryRoot, ledger, open);
   const byPriority = new Map();
   for (const blocker of open) {
     byPriority.set(blocker.priority, (byPriority.get(blocker.priority) ?? 0) + 1);

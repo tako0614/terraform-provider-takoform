@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -6,6 +7,7 @@ import {
   loadBlockerLedger,
   openBlockers,
   parseBlockerLedger,
+  assertLaneStillUnpublished,
 } from "./publication-blockers.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
@@ -95,5 +97,53 @@ describe("shapes that would make a blocker unenforceable", () => {
 
   test("an empty ledger is refused", () => {
     expect(() => parseBlockerLedger(ledger([]))).toThrow(/at least one blocker/);
+  });
+});
+
+describe("evidence must be real, not decorative", () => {
+  const bad = [null, "", "   ", " a ", "/etc/passwd", "../outside", "does/not/exist.json"];
+  for (const entry of bad) {
+    test(`${JSON.stringify(entry)} does not close a blocker`, () => {
+      expect(() =>
+        parseBlockerLedger(
+          ledger([blocker({ status: "closed", evidence: [entry] })]),
+          repositoryRoot,
+        ),
+      ).toThrow();
+    });
+  }
+
+  test("an existing repository path is accepted", () => {
+    const parsed = parseBlockerLedger(
+      ledger([blocker({ status: "closed", evidence: ["spec/publication-freeze.md"] })]),
+      repositoryRoot,
+    );
+    expect(() => assertPublicationAllowed(parsed)).not.toThrow();
+  });
+
+  test("an https URL is accepted without a filesystem read", () => {
+    const parsed = parseBlockerLedger(
+      ledger([blocker({ status: "closed", evidence: ["https://example.invalid/run/1"] })]),
+      repositoryRoot,
+    );
+    expect(openBlockers(parsed)).toHaveLength(0);
+  });
+});
+
+describe("the freeze stays scoped to this lane", () => {
+  // The shared owner gate also serves the retained packages and the append-only
+  // revocation path. An urgent revocation must never wait on this lane.
+  test("the release-owner gate does not assert publishability", () => {
+    const manifest = JSON.parse(
+      readFileSync(path.join(repositoryRoot, "package.json"), "utf8"),
+    );
+    expect(manifest.scripts["check:release-owner-gate"]).not.toContain("assert:publishable");
+  });
+
+  test("the lane's own artifacts are what the check enforces", () => {
+    const parsed = loadBlockerLedger(repositoryRoot);
+    expect(() =>
+      assertLaneStillUnpublished(repositoryRoot, parsed, openBlockers(parsed)),
+    ).not.toThrow();
   });
 });

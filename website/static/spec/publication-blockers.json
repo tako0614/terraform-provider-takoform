@@ -2,7 +2,7 @@
   "format": "takoform.publication-blockers@v1",
   "lane": "forms.takoform.com/v1alpha3",
   "family": "edge.forms.takoform.com/v1alpha1",
-  "policy": "While any blocker below is open, this repository must not publish a Form Package, an Interface or Binding Definition, a provider release that exposes the family resource types, or a lifecycle transition for any family Form. Closing a blocker requires the evidence it names, not a passing local gate.",
+  "policy": "While any blocker below is open, this repository must not publish a Form Package, an Interface or Binding Definition, a provider release that exposes the family resource types, or a lifecycle transition for any family Form. Closing a blocker requires the evidence it names, not a passing local gate. The freeze is scoped to this lane's artifacts: it never gates the retained v1alpha1/v1alpha2 packages, and it never gates the append-only security revocation path, because an urgent revocation for an already-published package must not wait on this lane's readiness.",
   "blockers": [
     {
       "id": "V3-001",
@@ -43,19 +43,19 @@
     },
     {
       "id": "V3-004",
-      "title": "Takosumi implements Host API v1alpha3",
+      "title": "An independent host implements Host API v1alpha3",
       "priority": "P0",
       "affectedForms": [
         "*"
       ],
       "status": "open",
       "issue": 105,
-      "rationale": "The only implementation of this lane is the disposable reference host inside this repository. A lane with one implementation has not shown that its contract is implementable by anyone else.",
+      "rationale": "The only implementation of this lane is the disposable reference host inside this repository. A lane with one implementation, written by the same people who wrote the contract, has not shown that its contract is implementable by anyone else.",
       "evidence": []
     },
     {
       "id": "V3-005",
-      "title": "A Cloud adapter materialises bundle, version and deployment",
+      "title": "A real backend materialises bundle, version and deployment",
       "priority": "P0",
       "affectedForms": [
         "WorkerBundle",
@@ -64,12 +64,12 @@
       ],
       "status": "open",
       "issue": 106,
-      "rationale": "Immutable revisions and weighted traffic are the Forms' whole value. Until a real backend performs them, the state machine is asserted rather than demonstrated.",
+      "rationale": "Immutable revisions and weighted traffic are these Forms' whole value. Until a real backend performs them, the state machine is asserted rather than demonstrated.",
       "evidence": []
     },
     {
       "id": "V3-006",
-      "title": "A Cloud adapter materialises the edge KV namespace and its typed binding",
+      "title": "A real backend materialises an edge KV namespace and its typed binding",
       "priority": "P0",
       "affectedForms": [
         "EdgeKVNamespace"
@@ -106,26 +106,26 @@
     },
     {
       "id": "V3-009",
-      "title": "A provider lifecycle runs end to end against a real host",
+      "title": "A provider lifecycle runs end to end against an independent host",
       "priority": "P0",
       "affectedForms": [
         "*"
       ],
       "status": "open",
       "issue": 110,
-      "rationale": "Create, roll out, promote, roll back, observe, recover from an interrupted apply, and destroy must be demonstrated as one sequence, because the failure modes worth catching only appear between the steps.",
+      "rationale": "Create, roll out, promote, roll back, observe, recover from an interrupted apply, and destroy must be demonstrated as one sequence against a host this repository does not own, because the failure modes worth catching only appear between the steps.",
       "evidence": []
     },
     {
       "id": "V3-010",
-      "title": "Destroy completes through the backend and leaves nothing orphaned",
+      "title": "Destroy completes through a real backend and leaves nothing orphaned",
       "priority": "P0",
       "affectedForms": [
         "*"
       ],
       "status": "open",
       "issue": 111,
-      "rationale": "A platform that cannot reliably delete what it created is not one anybody should adopt. An orphan scan finding nothing is the evidence.",
+      "rationale": "A platform that cannot reliably delete what it created is not one anybody should adopt. An orphan scan finding nothing, against a real backend, is the evidence.",
       "evidence": []
     }
   ]

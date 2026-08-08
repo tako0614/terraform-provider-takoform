@@ -30,7 +30,7 @@
     "check:publication-authority": "go run ./cmd/standard-form-conformance legacy-published-package-check",
     "check:publication-blockers": "bun scripts/publication-blockers.mjs --check",
     "assert:publishable": "bun scripts/publication-blockers.mjs --assert-publishable",
-    "check:release-owner-gate": "bun run check:tools && bun run format:check && bun run assert:publishable && bun run check:publication-authority && bun run check:public-snapshot && bun run lint && bun run typecheck && bun run test:portable && bun run build:portable"
+    "check:release-owner-gate": "bun run check:tools && bun run format:check && bun run check:publication-authority && bun run check:public-snapshot && bun run lint && bun run typecheck && bun run test:portable && bun run build:portable"
   },
   "devDependencies": {
     "vitepress": "^1.5.0",
