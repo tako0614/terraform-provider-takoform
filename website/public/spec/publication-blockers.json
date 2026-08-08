@@ -140,6 +140,7 @@
         "WorkerVersion"
       ],
       "status": "open",
+      "issue": 115,
       "rationale": "worker.runtime@1.0.0 declares a tail handler, and no resource in this family activates one: the three inward-activation attachments are WorkerCustomDomain (fetch), WorkerCronTrigger (scheduled) and QueueConsumer (queue). No deployment a portable author can write causes a host to invoke tail, so no conformance run can observe it and two hosts could implement it differently with nothing able to detect the divergence — the same defect as the runtime-selector field decision 0019 removed from WorkerVersion. The runtime corpus records it as explicitly unmeasured rather than silently unchecked. It closes by removing tail from the ABI's declaredHandlers vocabulary in a new exact Interface version, or by adding the Form that attaches a tail consumer; the removal changes Interface bytes and regenerates the Form chain, so it belongs to that regeneration (decision 0023).",
       "evidence": [
         "conformance/runtime-abi-v1/contract.json",
