@@ -92,7 +92,7 @@ func (h *ReferenceHost) advanceDerivedRevisions(space, mutated string) {
 		if candidate.Space != space {
 			continue
 		}
-		key := resourceKey(candidate.Space, candidate.Group, candidate.Kind, candidate.Name)
+		key := candidate.key()
 		if key == mutated {
 			continue
 		}

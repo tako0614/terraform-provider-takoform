@@ -88,11 +88,26 @@ lives in [`../host-api/v1alpha3.md`](../host-api/v1alpha3.md) and
    refreshed state — and MUST offer an apply: a spec-identical one for a Form
    that declares `update`, and a REPLACEMENT for a Form that declares none,
    since a host refuses every apply to an existing resource of such a Form.
+10. **An accepted mutation is bound to the incarnation it was accepted for.** A
+    host that answers `202` MUST record the target's exact Form identity and
+    `metadata.uid` beside the fence, and at commit time MUST resolve through
+    that record instead of re-deriving a target from the name the request
+    addressed. When the name is held by a different incarnation the operation
+    MUST terminate `uid_mismatch` (409); when nothing holds it,
+    `resource_not_found` (404). Neither commits anything. A name is reusable and
+    a re-created resource starts at revision 1, so the fence an accepted delete
+    was admitted under is satisfied by the very replacement that proves the
+    resource it was accepted for is gone. A create is fenced against the free
+    NAME rather than against an incarnation, so it pins none and its own fence
+    decides at commit. This is rule 4 — identity is pinned to what was actually
+    resolved, never re-derived from a name later — stated about the operation's
+    own target rather than about a relation's.
 
 Semantics a schema cannot state stay in the host under decision 0014, and are
 proven by the required conformance checks `relation-target-missing-rejected`,
 `relation-target-deletion-blocked`, `relation-incarnation-change-detected`,
-`relation-reapply-repins`, and `binding-contract-verified`.
+`relation-reapply-repins`, `binding-contract-verified`, and
+`async-commit-binds-the-accepted-identity`.
 
 ## Consequences
 
@@ -106,6 +121,10 @@ proven by the required conformance checks `relation-target-missing-rejected`,
 - The desired spec still carries the NAME. Desired state stays what an author
   wrote; the UID lives in host-owned records, so a spec is portable between
   hosts that issue different UIDs.
+- An operation id names a mutation to ONE resource for as long as it exists. A
+  host that stores accepted mutations keeps the target's exact ref and uid on the
+  operation record, which costs two fields and is the only thing standing between
+  a slow delete and a resource that took the same name afterwards.
 - A resource pinned to a replaced target is visibly broken and recoverable, not
   quietly wrong. The provider records the reported reason in a computed
   `relation_drift_reason` attribute so a plan can propose the repairing apply;

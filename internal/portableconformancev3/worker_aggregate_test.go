@@ -45,7 +45,7 @@ func (f *aggregateFixture) ref(kind, name string) map[string]any {
 // is kept exact.
 func (f *aggregateFixture) store(kind, name string, spec map[string]any) *storedResource {
 	f.t.Helper()
-	form := f.host.catalog.form(f.group, kind)
+	form := f.host.probeForm(kind)
 	if form == nil {
 		f.t.Fatalf("%s is not installed", kind)
 	}
@@ -60,7 +60,7 @@ func (f *aggregateFixture) store(kind, name string, spec map[string]any) *stored
 	}
 	f.host.uidCounter++
 	resource := &storedResource{
-		Group: f.group, Kind: kind, Name: name, Space: f.space,
+		Ref: form.Ref, Name: name, Space: f.space,
 		UID: "uid-" + strconv.Itoa(f.host.uidCounter), Generation: 1, Revision: 1,
 		Spec: materialized, SpecDigest: digest, Relations: relations,
 	}
@@ -71,7 +71,7 @@ func (f *aggregateFixture) store(kind, name string, spec map[string]any) *stored
 // validate runs the complete pre-mutation gauntlet for one desired spec.
 func (f *aggregateFixture) validate(kind, name string, spec map[string]any) *hostError {
 	f.t.Helper()
-	form := f.host.catalog.form(f.group, kind)
+	form := f.host.probeForm(kind)
 	if form == nil {
 		f.t.Fatalf("%s is not installed", kind)
 	}
@@ -252,7 +252,7 @@ func TestDeploymentRefusesUnavailableVersion(t *testing.T) {
 	f.host.operations["op_delete"] = &hostOperation{
 		ID: "op_delete",
 		DeleteTarget: resourceKey(
-			healthy.Space, healthy.Group, healthy.Kind, healthy.Name,
+			healthy.Space, healthy.group(), healthy.kind(), healthy.Name,
 		),
 	}
 	hostErr = f.validate(workerDeploymentKind, "other-deployment",

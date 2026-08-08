@@ -45,7 +45,15 @@
                 "kind",
                 "name"
               ],
-              "type": "object"
+              "type": "object",
+              "x-takoform-target-formrefs": [
+                {
+                  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+                  "definitionVersion": "0.1.0",
+                  "kind": "WorkerVersion",
+                  "schemaDigest": "sha256:d5e3d7950e01cd320b9fb8f99184ae008c530b959077062471f1fcefced3c912"
+                }
+              ]
             }
           },
           "required": [
@@ -83,7 +91,15 @@
           "kind",
           "name"
         ],
-        "type": "object"
+        "type": "object",
+        "x-takoform-target-formrefs": [
+          {
+            "apiVersion": "edge.forms.takoform.com/v1alpha1",
+            "definitionVersion": "0.1.0",
+            "kind": "ModuleWorker",
+            "schemaDigest": "sha256:99fa5f9c0c2fdffc54a70ec2faf3becb9d9598a880cbf8a4a3c29dd3a7c2c828"
+          }
+        ]
       }
     },
     "required": [

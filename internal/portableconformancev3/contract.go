@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 79-entry executed-check list every v3
+// requiredRunnerChecks is the closed 85-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -173,6 +173,7 @@ var requiredRunnerChecks = []string{
 	"space-id-grammar-enforced",
 	"concurrent-unrelated-mutation",
 	"async-commit-revalidates",
+	"async-commit-binds-the-accepted-identity",
 	"import-adopts-native-resource",
 	"import-validates-like-apply",
 	"deployment-weight-sum-enforced",
@@ -205,6 +206,14 @@ var requiredRunnerChecks = []string{
 	"edge-interface-contracts-advertised",
 	"cron-grammar-enforced",
 	"queue-single-consumer-enforced",
+	// A host answers for the exact ref recorded in state, and a relation pins
+	// the target's contract rather than its incarnation alone
+	// (spec/decisions/0022).
+	"two-definition-versions-answer-independently",
+	"resource-answers-only-under-its-recorded-form-ref",
+	"relation-target-form-ref-verified",
+	"relation-target-interface-verified",
+	"relation-pin-records-target-form-ref",
 }
 
 // FormRef is the exact four-field v1alpha3 Form identity.
@@ -363,23 +372,50 @@ type SupportProbes struct {
 	DataInterfaces  []InterfaceContractProbe `json:"dataInterfaces"`
 }
 
+// SyntheticDefinitionProbe pins a SECOND definition version of one kind the
+// corpus already installs, as exact bytes.
+//
+// The lane needs one for a property no single-version corpus can express: that
+// a host answers for the exact ref recorded in state rather than for a kind. A
+// second version invented at runtime would prove only that the host agrees with
+// whatever the runner made up; a byte-pinned Definition proves the host holds
+// two real contracts of one Form line at once and keeps them apart
+// (decision 0022).
+//
+// WithheldInterface names the Interface the FIRST definition version provides
+// and this one does not. It is what gives a required-interface relation a live
+// target of exactly the right group and kind that truthfully does not satisfy
+// the requirement — a target no other corpus resource can be.
+type SyntheticDefinitionProbe struct {
+	Name              string      `json:"name"`
+	FormRef           FormRef     `json:"formRef"`
+	Path              string      `json:"path"`
+	SHA256            string      `json:"sha256"`
+	WithheldInterface NameVersion `json:"withheldInterface"`
+
+	// Definition is hydrated from the byte-pinned corpus file, never decoded
+	// from the contract document.
+	Definition *formpackage.FormDefinition `json:"-"`
+}
+
 // RunnerInput is the pinned black-box input of one v3 conformance run.
 type RunnerInput struct {
-	Space                string            `json:"space"`
-	AlternateSpace       string            `json:"alternateSpace"`
-	ModuleWorker         ResourceProbe     `json:"moduleWorker"`
-	EdgeKvNamespace      ResourceProbe     `json:"edgeKvNamespace"`
-	AtLeastOnceQueue     ResourceProbe     `json:"atLeastOnceQueue"`
-	WorkerVersion        ResourceProbe     `json:"workerVersion"`
-	WorkerBundle         WorkerBundleProbe `json:"workerBundle"`
-	FetchOnlyBundle      ModuleBundleProbe `json:"fetchOnlyBundle"`
-	WorkerDeployment     ResourceProbe     `json:"workerDeployment"`
-	WorkerCustomDomain   ResourceProbe     `json:"workerCustomDomain"`
-	WorkerCronTrigger    ResourceProbe     `json:"workerCronTrigger"`
-	QueueConsumer        ResourceProbe     `json:"queueConsumer"`
-	SyntheticSecondGroup FormRef           `json:"syntheticSecondGroup"`
-	SupportProbes        SupportProbes     `json:"supportProbes"`
-	NegativeFixtures     []NegativeFixture `json:"negativeFixtures"`
+	Space                            string                   `json:"space"`
+	AlternateSpace                   string                   `json:"alternateSpace"`
+	ModuleWorker                     ResourceProbe            `json:"moduleWorker"`
+	EdgeKvNamespace                  ResourceProbe            `json:"edgeKvNamespace"`
+	AtLeastOnceQueue                 ResourceProbe            `json:"atLeastOnceQueue"`
+	WorkerVersion                    ResourceProbe            `json:"workerVersion"`
+	WorkerBundle                     WorkerBundleProbe        `json:"workerBundle"`
+	FetchOnlyBundle                  ModuleBundleProbe        `json:"fetchOnlyBundle"`
+	WorkerDeployment                 ResourceProbe            `json:"workerDeployment"`
+	WorkerCustomDomain               ResourceProbe            `json:"workerCustomDomain"`
+	WorkerCronTrigger                ResourceProbe            `json:"workerCronTrigger"`
+	QueueConsumer                    ResourceProbe            `json:"queueConsumer"`
+	SyntheticSecondGroup             FormRef                  `json:"syntheticSecondGroup"`
+	SyntheticSecondDefinitionVersion SyntheticDefinitionProbe `json:"syntheticSecondDefinitionVersion"`
+	SupportProbes                    SupportProbes            `json:"supportProbes"`
+	NegativeFixtures                 []NegativeFixture        `json:"negativeFixtures"`
 }
 
 // IdentityContract carries the normative uid/generation/revision semantics
@@ -454,6 +490,9 @@ func Verify(root string) (Contract, error) {
 	}
 	contract.root = root
 	if err := hydrateNegativeFixtures(root, &contract); err != nil {
+		return Contract{}, err
+	}
+	if err := hydrateSyntheticDefinition(root, &contract); err != nil {
 		return Contract{}, err
 	}
 	if err := validateContract(contract); err != nil {
@@ -550,12 +589,70 @@ func validateContract(contract Contract) error {
 		!formpackage.ValidDigest(synthetic.SchemaDigest) {
 		return errors.New("portable host v3 synthetic second-group FormRef is invalid")
 	}
+	if err := validateSyntheticDefinitionProbe(input); err != nil {
+		return err
+	}
 	if input.SupportProbes.Interface.Name == "" || input.SupportProbes.Interface.Version == "" ||
 		input.SupportProbes.Binding.Name == "" || input.SupportProbes.Binding.Version == "" {
 		return errors.New("portable host v3 support probes are incomplete")
 	}
 	if err := validateNegativeFixtureInventory(input); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validateSyntheticDefinitionProbe proves the second definition version is a
+// second contract of a Form line the corpus already installs, and that it
+// really withholds an Interface the first version provides.
+//
+// Both halves are load-bearing. A probe that named a different kind would prove
+// nothing about one Form line holding two contracts; a probe whose withheld
+// Interface the first version never provided would give the required-interface
+// check a refusal it would have got anyway.
+func validateSyntheticDefinitionProbe(input RunnerInput) error {
+	probe := input.SyntheticSecondDefinitionVersion
+	first := input.ModuleWorker.Identity.FormRef
+	if probe.Name == "" {
+		return errors.New("portable host v3 synthetic second definition version must be named")
+	}
+	refRaw, err := json.Marshal(probe.FormRef)
+	if err != nil {
+		return fmt.Errorf("portable host v3 synthetic second definition version FormRef: %w", err)
+	}
+	if _, err := formpackage.ValidateFormRef(refRaw); err != nil {
+		return fmt.Errorf("portable host v3 synthetic second definition version FormRef: %w", err)
+	}
+	if probe.FormRef.APIVersion != first.APIVersion || probe.FormRef.Kind != first.Kind {
+		return errors.New(
+			"portable host v3 synthetic second definition version must be a second contract of the ModuleWorker line",
+		)
+	}
+	if probe.FormRef.DefinitionVersion == first.DefinitionVersion ||
+		probe.FormRef.SchemaDigest == first.SchemaDigest {
+		return errors.New(
+			"portable host v3 synthetic second definition version is not distinguishable from the installed one",
+		)
+	}
+	if probe.WithheldInterface.Name == "" || probe.WithheldInterface.Version == "" {
+		return errors.New("portable host v3 synthetic second definition version must name the Interface it withholds")
+	}
+	if probe.WithheldInterface.Name != input.SupportProbes.RuntimeContract.Name ||
+		probe.WithheldInterface.Version != input.SupportProbes.RuntimeContract.Version {
+		return errors.New(
+			"portable host v3 synthetic second definition version must withhold the pinned runtime ABI contract, " +
+				"which is the one an inward-activation relation requires",
+		)
+	}
+	if probe.Definition == nil {
+		return errors.New("portable host v3 synthetic second definition version was not hydrated")
+	}
+	for _, provided := range probe.Definition.ProvidedInterfaces {
+		if provided.Name == probe.WithheldInterface.Name && provided.Version == probe.WithheldInterface.Version {
+			return errors.New(
+				"portable host v3 synthetic second definition version provides the Interface it claims to withhold",
+			)
+		}
 	}
 	return nil
 }
@@ -1019,51 +1116,91 @@ func nestedName(desired map[string]any, member string) string {
 // hydrateNegativeFixtures loads fixture inputs from the corpus, verifying
 // path containment and exact byte digests before strict decoding.
 func hydrateNegativeFixtures(root string, contract *Contract) error {
-	realRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return err
-	}
-	absoluteRoot, err := filepath.Abs(realRoot)
-	if err != nil {
-		return err
-	}
 	for index := range contract.RunnerInput.NegativeFixtures {
 		fixture := &contract.RunnerInput.NegativeFixtures[index]
-		if filepath.IsAbs(fixture.Path) || filepath.ToSlash(filepath.Clean(fixture.Path)) != fixture.Path {
-			return fmt.Errorf("portable host v3 fixture %q path is not a clean relative path", fixture.Name)
-		}
-		source := filepath.Join(root, filepath.FromSlash(fixture.Path))
-		realSource, err := filepath.EvalSymlinks(source)
-		if err != nil {
-			return fmt.Errorf("portable host v3 fixture %q: %w", fixture.Name, err)
-		}
-		absoluteSource, err := filepath.Abs(realSource)
+		raw, err := readPinnedCorpusFile(root, fixture.Name, fixture.Path, fixture.SHA256)
 		if err != nil {
 			return err
-		}
-		relative, err := filepath.Rel(absoluteRoot, absoluteSource)
-		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return fmt.Errorf("portable host v3 fixture %q escapes the conformance corpus", fixture.Name)
-		}
-		info, err := os.Stat(absoluteSource)
-		if err != nil {
-			return err
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("portable host v3 fixture %q is not a regular file", fixture.Name)
-		}
-		raw, err := os.ReadFile(absoluteSource)
-		if err != nil {
-			return err
-		}
-		if formpackage.DigestBytes(raw) != fixture.SHA256 {
-			return fmt.Errorf("portable host v3 fixture %q byte digest drifted", fixture.Name)
 		}
 		if err := formpackage.DecodeStrictIJSON(raw, &fixture.Input); err != nil {
 			return fmt.Errorf("portable host v3 fixture %q: %w", fixture.Name, err)
 		}
 	}
 	return nil
+}
+
+// hydrateSyntheticDefinition loads the byte-pinned second Form Definition and
+// re-derives its schemaDigest from the bytes. The corpus states the identity
+// and the bytes; agreement between them is proved here rather than assumed, so
+// a Definition edited without re-pinning fails the lane instead of installing a
+// different contract under the pinned identity.
+func hydrateSyntheticDefinition(root string, contract *Contract) error {
+	probe := &contract.RunnerInput.SyntheticSecondDefinitionVersion
+	raw, err := readPinnedCorpusFile(root, probe.Name, probe.Path, probe.SHA256)
+	if err != nil {
+		return err
+	}
+	definition, err := formpackage.ValidateDefinition(raw)
+	if err != nil {
+		return fmt.Errorf("portable host v3 synthetic definition %q: %w", probe.Name, err)
+	}
+	digest, err := formpackage.DigestCanonicalJSON(raw)
+	if err != nil {
+		return err
+	}
+	if digest != probe.FormRef.SchemaDigest {
+		return fmt.Errorf("portable host v3 synthetic definition %q schemaDigest drifted from its bytes", probe.Name)
+	}
+	if definition.APIVersion != probe.FormRef.APIVersion || definition.Kind != probe.FormRef.Kind ||
+		definition.DefinitionVersion != probe.FormRef.DefinitionVersion {
+		return fmt.Errorf("portable host v3 synthetic definition %q identity differs from its pinned FormRef", probe.Name)
+	}
+	probe.Definition = &definition
+	return nil
+}
+
+// readPinnedCorpusFile reads one corpus file, proving path containment and the
+// exact byte digest the contract pinned.
+func readPinnedCorpusFile(root, name, path, sha256Digest string) ([]byte, error) {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, err
+	}
+	absoluteRoot, err := filepath.Abs(realRoot)
+	if err != nil {
+		return nil, err
+	}
+	if filepath.IsAbs(path) || filepath.ToSlash(filepath.Clean(path)) != path {
+		return nil, fmt.Errorf("portable host v3 fixture %q path is not a clean relative path", name)
+	}
+	source := filepath.Join(root, filepath.FromSlash(path))
+	realSource, err := filepath.EvalSymlinks(source)
+	if err != nil {
+		return nil, fmt.Errorf("portable host v3 fixture %q: %w", name, err)
+	}
+	absoluteSource, err := filepath.Abs(realSource)
+	if err != nil {
+		return nil, err
+	}
+	relative, err := filepath.Rel(absoluteRoot, absoluteSource)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("portable host v3 fixture %q escapes the conformance corpus", name)
+	}
+	info, err := os.Stat(absoluteSource)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("portable host v3 fixture %q is not a regular file", name)
+	}
+	raw, err := os.ReadFile(absoluteSource)
+	if err != nil {
+		return nil, err
+	}
+	if formpackage.DigestBytes(raw) != sha256Digest {
+		return nil, fmt.Errorf("portable host v3 fixture %q byte digest drifted", name)
+	}
+	return raw, nil
 }
 
 func decodeStrictFile(path string, value any) error {

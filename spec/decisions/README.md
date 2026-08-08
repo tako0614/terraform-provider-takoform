@@ -24,3 +24,5 @@ record does not replace them.
 - [0018 — The Host API is deployable behind ordinary infrastructure](0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)
 - [0019 — The Module Worker ABI is an exact contract, not a date](0019-the-module-worker-abi-is-an-exact-contract.md)
 - [0020 — The edge Interfaces state their data and delivery model](0020-the-edge-interfaces-state-their-data-and-delivery-model.md)
+- [0021 — Third-party Forms and contract distribution](0021-third-party-forms-and-contract-distribution.md)
+- [0022 — A host answers for an exact Form, and a relation pins its target's contract](0022-relations-pin-the-target-contract.md)

@@ -3,6 +3,7 @@ package portableconformancev3
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
@@ -26,6 +27,14 @@ type storedRelation struct {
 	TargetKind       string
 	TargetName       string
 	TargetUID        string
+	// TargetRef is the exact FormRef the resolved target was recorded under.
+	//
+	// The UID pins WHICH incarnation the source is bound to; this pins WHAT
+	// CONTRACT that incarnation satisfies. Without it a target whose Form moved
+	// to an incompatible definition version would keep satisfying every
+	// reference to it, because group and kind are all anyone ever checked
+	// (decision 0022).
+	TargetRef FormRef
 	// BindingRef is the exact digest-bound Binding contract this relation is
 	// governed by, absent for a plain cross-resource reference.
 	BindingRef *formpackage.BindingRef
@@ -36,7 +45,7 @@ type storedRelation struct {
 // returns the records to store. It runs before any mutation on the apply and
 // import paths alike, and is re-run at async commit time.
 func (h *ReferenceHost) resolveRelations(
-	form *installedForm,
+	form *InstalledForm,
 	space string,
 	spec map[string]any,
 ) ([]storedRelation, *hostError) {
@@ -52,11 +61,10 @@ func (h *ReferenceHost) resolveRelations(
 			)
 		}
 		// The reference pins an exact group and kind, so a host must resolve to
-		// a resource of exactly that Form. A host that indexed resources by name
-		// alone would land here holding the wrong Form; refusing is the only
-		// safe answer, because the stored relation is what every later
-		// dependency and drift decision is made from.
-		targetForm := h.catalog.form(target.Group, target.Kind)
+		// a resource of exactly that Form. The target's OWN recorded ref names
+		// that Form: it is the contract the target was applied under, and the
+		// only one this host may answer about it (decision 0022).
+		targetForm := h.catalog.exact(target.Ref)
 		if targetForm == nil ||
 			targetForm.Ref.APIVersion != instance.TargetAPIVersion ||
 			targetForm.Ref.Kind != instance.TargetKind {
@@ -73,7 +81,14 @@ func (h *ReferenceHost) resolveRelations(
 			TargetKind:       instance.TargetKind,
 			TargetName:       instance.TargetName,
 			TargetUID:        target.UID,
+			TargetRef:        target.Ref,
 		}
+		// A binding relation is held to its Binding Definition first, in the
+		// published order of decision 0015 rule 8, and the annotated requirement
+		// second. The order matters only for which message a caller gets — the
+		// catalog refuses to render a binding list whose annotation differs from
+		// its contract's targetInterface, so the two can never disagree about the
+		// verdict — and the published order is the one clients were told.
 		if instance.Binding != "" {
 			ref, hostErr := h.verifyBindingContract(form, targetForm, instance)
 			if hostErr != nil {
@@ -81,9 +96,80 @@ func (h *ReferenceHost) resolveRelations(
 			}
 			record.BindingRef = &ref
 		}
+		// The annotated requirement is verified BEFORE anything is stored, for
+		// the same reason the binding contract is: a relation that resolved to a
+		// target satisfying a different contract is not a relation this host can
+		// keep, and every later dependency and drift decision is made from the
+		// record above.
+		if hostErr := verifyTargetContract(instance, target, targetForm); hostErr != nil {
+			return nil, hostErr
+		}
 		out = append(out, record)
 	}
 	return out, nil
+}
+
+// verifyTargetContract proves the resolved target still satisfies what the
+// declaring reference stated about it (decision 0022).
+//
+// The two annotations are alternatives and both are checked against the
+// target's OWN recorded identity, never against whatever the catalog currently
+// holds for that kind. An exact-Form relation is satisfied only by a target
+// recorded under one of the listed identities; an Interface relation is
+// satisfied by any target whose Form declares that exact contract in
+// providedInterfaces. A relation that stated neither is refused rather than
+// admitted, because there would be nothing to verify — and the derivation that
+// produced it already refuses, so reaching this branch means a Form Definition
+// changed underneath a running host.
+//
+// The refusal is `invalid_argument` and names the pointer and what was
+// required: the request is well formed and states something untrue about the
+// resource it points at, which is exactly the class of refusal the binding
+// rules already use for a target the client chose.
+func verifyTargetContract(
+	instance currentformmodel.RelationInstance,
+	target *storedResource,
+	targetForm *InstalledForm,
+) *hostError {
+	identity := instance.TargetKind + " " + instance.TargetName +
+		" (recorded as " + exactFormKey(target.Ref).String() + ")"
+	switch {
+	case len(instance.TargetFormRefs) > 0:
+		accepted := make([]string, 0, len(instance.TargetFormRefs))
+		for _, want := range instance.TargetFormRefs {
+			if want.APIVersion == target.Ref.APIVersion && want.Kind == target.Ref.Kind &&
+				want.DefinitionVersion == target.Ref.DefinitionVersion &&
+				want.SchemaDigest == target.Ref.SchemaDigest {
+				return nil
+			}
+			accepted = append(accepted, want.String())
+		}
+		return stableError(
+			"invalid_argument",
+			"relation "+instance.Pointer+" requires its target to be one of ["+
+				strings.Join(accepted, ", ")+"], but "+identity+" is not",
+		)
+	case instance.RequiredInterface != nil:
+		want := formpackage.InterfaceRef{
+			APIVersion:   instance.RequiredInterface.APIVersion,
+			Name:         instance.RequiredInterface.Name,
+			Version:      instance.RequiredInterface.Version,
+			SchemaDigest: instance.RequiredInterface.SchemaDigest,
+		}
+		if targetForm.providesInterface(want) {
+			return nil
+		}
+		return stableError(
+			"invalid_argument",
+			"relation "+instance.Pointer+" requires its target to provide interface "+
+				instance.RequiredInterface.String()+", which "+identity+" does not",
+		)
+	default:
+		return stableError(
+			"invalid_argument",
+			"relation "+instance.Pointer+" states no target contract; a host cannot verify what it requires",
+		)
+	}
 }
 
 // verifyBindingContract proves every rule of spec/binding-contract/README.md
@@ -91,8 +177,8 @@ func (h *ReferenceHost) resolveRelations(
 // desired spec validated: a schema states the shape of a reference, never
 // whether the contract behind it can be honored.
 func (h *ReferenceHost) verifyBindingContract(
-	form *installedForm,
-	targetForm *installedForm,
+	form *InstalledForm,
+	targetForm *InstalledForm,
 	instance currentformmodel.RelationInstance,
 ) (formpackage.BindingRef, *hostError) {
 	// 1. The declaring Form Definition must accept this Binding contract.
@@ -208,7 +294,7 @@ func relationTargetUID(relations []storedRelation, pointer string) string {
 // by a different resource, and a holder of the old incarnation must not look
 // like a holder of the new one.
 func (h *ReferenceHost) indexRelations(resource *storedResource) {
-	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
+	key := resource.key()
 	for _, relation := range resource.Relations {
 		holders := h.relationHolders[relation.TargetUID]
 		if holders == nil {
@@ -220,7 +306,7 @@ func (h *ReferenceHost) indexRelations(resource *storedResource) {
 }
 
 func (h *ReferenceHost) unindexRelations(resource *storedResource) {
-	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
+	key := resource.key()
 	for _, relation := range resource.Relations {
 		holders := h.relationHolders[relation.TargetUID]
 		delete(holders, key)
@@ -243,7 +329,7 @@ func (h *ReferenceHost) dependencyInUse(resource *storedResource) *hostError {
 	if hostErr := h.deploymentDeleteBlocked(resource); hostErr != nil {
 		return hostErr
 	}
-	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
+	key := resource.key()
 	holders := make([]string, 0, len(h.relationHolders[resource.UID]))
 	for holder := range h.relationHolders[resource.UID] {
 		if holder == key {
@@ -259,7 +345,7 @@ func (h *ReferenceHost) dependencyInUse(resource *storedResource) *hostError {
 	first := h.resources[holders[0]]
 	detail := ""
 	if first != nil {
-		detail = " held by " + first.Kind + " " + first.Name
+		detail = " held by " + first.kind() + " " + first.Name
 	}
 	return stableError(
 		"dependency_in_use",
@@ -268,12 +354,20 @@ func (h *ReferenceHost) dependencyInUse(resource *storedResource) *hostError {
 }
 
 // relationDrift reports the first stored relation whose target no longer
-// resolves to the UID this resource was bound to.
+// matches what this resource was bound to — a different UID, or the same name
+// under a different exact contract.
 //
 // A host MUST NOT quietly re-resolve the name: re-binding would make a
 // delete-and-recreate of a target invisible, and the source would start
 // pointing at a resource its author never named. The source reports the change
 // and stays bound to nothing until it is re-applied.
+//
+// The recorded target FormRef travels in the same report rather than in a
+// parallel one. A target whose contract moved is the same class of fact as a
+// target whose incarnation moved — the source is pinned to something that is no
+// longer there — so it is `ExternalChange` with the same remedy, and a client
+// that already renders relation drift renders this without learning anything
+// new (decision 0022).
 func (h *ReferenceHost) relationDrift(resource *storedResource) (reason, hostReason string, drifted bool) {
 	for _, relation := range resource.Relations {
 		current := h.resources[resourceKey(
@@ -288,7 +382,15 @@ func (h *ReferenceHost) relationDrift(resource *storedResource) (reason, hostRea
 		if current.UID != relation.TargetUID {
 			return "ExternalChange",
 				"relation " + relation.Pointer + " target " + identity + " changed incarnation from uid " +
-					relation.TargetUID + " to uid " + current.UID +
+					relation.TargetUID + " (formRef " + exactFormKey(relation.TargetRef).String() +
+					") to uid " + current.UID + " (formRef " + exactFormKey(current.Ref).String() +
+					"); the host does not re-bind automatically, re-apply this resource", true
+		}
+		if current.Ref != relation.TargetRef {
+			return "ExternalChange",
+				"relation " + relation.Pointer + " target " + identity + " uid " + relation.TargetUID +
+					" changed contract from formRef " + exactFormKey(relation.TargetRef).String() +
+					" to formRef " + exactFormKey(current.Ref).String() +
 					"; the host does not re-bind automatically, re-apply this resource", true
 		}
 	}

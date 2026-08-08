@@ -45,7 +45,7 @@ func TestOptionalFieldWithoutMeaningIsRejected(t *testing.T) {
 	}
 	semantic := semanticForm(Field{
 		HCL: "dead_letter_queue", Wire: "deadLetterQueue", Kind: KindResourceRef,
-		TargetKind: "AtLeastOnceQueue", AbsenceIsSemantic: true,
+		TargetKind: "AtLeastOnceQueue", Target: testInterfaceContract(), AbsenceIsSemantic: true,
 		Doc: "Queue receiving exhausted messages. Without it, exhausted messages are dropped.",
 	})
 	if err := semantic.Validate(); err != nil {
@@ -59,7 +59,7 @@ func TestAbsenceIsSemanticRequiresStatedBehavior(t *testing.T) {
 	t.Parallel()
 	form := semanticForm(Field{
 		HCL: "dead_letter_queue", Wire: "deadLetterQueue", Kind: KindResourceRef,
-		TargetKind: "AtLeastOnceQueue", AbsenceIsSemantic: true,
+		TargetKind: "AtLeastOnceQueue", Target: testInterfaceContract(), AbsenceIsSemantic: true,
 		Doc: "Queue receiving messages that exhausted their retries.",
 	})
 	err := form.Validate()
@@ -201,7 +201,7 @@ func materializeForm() Form {
 // the feature: the two spellings are one desired state.
 func TestOmittedAndWrittenDefaultsProduceOneEffectiveSpec(t *testing.T) {
 	t.Parallel()
-	schema := materializeForm().DesiredSchema()
+	schema := mustDesiredSchema(t, materializeForm())
 	omitted := MaterializeDefaults(schema, map[string]any{})
 	written := MaterializeDefaults(schema, map[string]any{
 		"retentionSeconds": json.Number("300"),
@@ -228,7 +228,7 @@ func TestOmittedAndWrittenDefaultsProduceOneEffectiveSpec(t *testing.T) {
 // every caller depends on.
 func TestMaterializationNeverOverwritesAndIsIdempotent(t *testing.T) {
 	t.Parallel()
-	schema := materializeForm().DesiredSchema()
+	schema := mustDesiredSchema(t, materializeForm())
 	written := map[string]any{"retentionSeconds": json.Number("600")}
 	once := MaterializeDefaults(schema, written)
 	if once["retentionSeconds"] != json.Number("600") {
@@ -254,7 +254,7 @@ func TestMaterializationNeverOverwritesAndIsIdempotent(t *testing.T) {
 // json.Number.
 func TestMaterializedNumbersAreJSONNumber(t *testing.T) {
 	t.Parallel()
-	schema := materializeForm().DesiredSchema()
+	schema := mustDesiredSchema(t, materializeForm())
 	materialized := MaterializeDefaults(schema, nil)
 	number, ok := materialized["retentionSeconds"].(json.Number)
 	if !ok {
@@ -284,7 +284,7 @@ func TestMaterializedNumbersAreJSONNumber(t *testing.T) {
 // the Definition through the spec it was handed.
 func TestMaterializedValuesAreDeepCopies(t *testing.T) {
 	t.Parallel()
-	schema := materializeForm().DesiredSchema()
+	schema := mustDesiredSchema(t, materializeForm())
 	first := MaterializeDefaults(schema, nil)
 	vars, ok := first["vars"].(map[string]any)
 	if !ok {

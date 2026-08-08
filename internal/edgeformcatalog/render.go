@@ -121,24 +121,107 @@ func BindingRefFor(name, version string) (formpackage.BindingRef, error) {
 	return formpackage.BindingRef{}, fmt.Errorf("binding %q is not in the catalog", name)
 }
 
+// targetContractResolver resolves the exact identities a reference-shaped
+// field's declared target contract names (decision 0022).
+//
+// A required Interface resolves straight out of the interface catalog. An exact
+// Form identity is the digest of the TARGET's rendered Definition, so resolving
+// one renders that Definition first, memoizes it, and reuses it wherever the
+// same Form is rendered again. The reference graph is a DAG by construction —
+// a Form whose contract another Form pins may not pin that Form back — and the
+// in-progress set turns any future cycle into a refusal instead of a hang.
+type targetContractResolver struct {
+	rendered   map[string]RenderedForm
+	refs       map[string]currentformmodel.TargetFormRef
+	inProgress map[string]bool
+}
+
+func newTargetContractResolver() *targetContractResolver {
+	return &targetContractResolver{
+		rendered:   map[string]RenderedForm{},
+		refs:       map[string]currentformmodel.TargetFormRef{},
+		inProgress: map[string]bool{},
+	}
+}
+
+// TargetFormRefs returns the exact identity this build renders for one kind.
+// The family declares one definition version per Form, so the accepted set is
+// exactly one identity; the annotation is a LIST because a Form line that
+// carried two live definition versions would accept either.
+func (r *targetContractResolver) TargetFormRefs(targetKind string) ([]currentformmodel.TargetFormRef, error) {
+	if ref, known := r.refs[targetKind]; known {
+		return []currentformmodel.TargetFormRef{ref}, nil
+	}
+	if r.inProgress[targetKind] {
+		return nil, fmt.Errorf("exact-Form target cycle through %s", targetKind)
+	}
+	form, known := ByKind(targetKind)
+	if !known {
+		return nil, fmt.Errorf("exact-Form target %q is not a catalog Form", targetKind)
+	}
+	r.inProgress[targetKind] = true
+	rendered, err := r.renderedForm(form)
+	delete(r.inProgress, targetKind)
+	if err != nil {
+		return nil, err
+	}
+	digest, err := formpackage.DigestCanonicalJSON([]byte(rendered.DefinitionJSON))
+	if err != nil {
+		return nil, err
+	}
+	ref := currentformmodel.TargetFormRef{
+		APIVersion:        Family.APIVersion(),
+		Kind:              targetKind,
+		DefinitionVersion: form.DefinitionVersion,
+		SchemaDigest:      digest,
+	}
+	r.refs[targetKind] = ref
+	return []currentformmodel.TargetFormRef{ref}, nil
+}
+
+// RequiredInterface resolves one exact Interface contract out of the catalog,
+// which is where its digest already lives.
+func (r *targetContractResolver) RequiredInterface(name, version string) (currentformmodel.RequiredInterface, error) {
+	ref, err := InterfaceRefFor(name, version)
+	if err != nil {
+		return currentformmodel.RequiredInterface{}, err
+	}
+	return currentformmodel.RequiredInterface{
+		APIVersion: ref.APIVersion, Name: ref.Name, Version: ref.Version, SchemaDigest: ref.SchemaDigest,
+	}, nil
+}
+
+func (r *targetContractResolver) renderedForm(form currentformmodel.Form) (RenderedForm, error) {
+	if cached, known := r.rendered[form.Kind]; known {
+		return cached, nil
+	}
+	rendered, err := renderForm(form, r)
+	if err != nil {
+		return RenderedForm{}, fmt.Errorf("%s: %w", form.Kind, err)
+	}
+	r.rendered[form.Kind] = rendered
+	return rendered, nil
+}
+
 // RenderForms renders every catalog Form to its exact Form Definition bytes
 // and derived fixture documents.
 func RenderForms() ([]RenderedForm, error) {
 	if err := Validate(); err != nil {
 		return nil, err
 	}
+	resolver := newTargetContractResolver()
 	out := make([]RenderedForm, 0, len(Forms))
 	for _, form := range Forms {
-		rendered, err := renderForm(form)
+		rendered, err := resolver.renderedForm(form)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", form.Kind, err)
+			return nil, err
 		}
 		out = append(out, rendered)
 	}
 	return out, nil
 }
 
-func renderForm(form currentformmodel.Form) (RenderedForm, error) {
+func renderForm(form currentformmodel.Form, resolver currentformmodel.TargetContractResolver) (RenderedForm, error) {
 	fixtures := map[string]map[string]any{
 		"desired.json": form.CanonicalDesired(),
 	}
@@ -163,6 +246,10 @@ func renderForm(form currentformmodel.Form) (RenderedForm, error) {
 	if err != nil {
 		return RenderedForm{}, err
 	}
+	desiredSchema, err := form.DesiredSchema(resolver)
+	if err != nil {
+		return RenderedForm{}, err
+	}
 	definition := formpackage.FormDefinition{
 		APIVersion:            Family.APIVersion(),
 		Kind:                  form.Kind,
@@ -170,7 +257,7 @@ func renderForm(form currentformmodel.Form) (RenderedForm, error) {
 		Title:                 form.Title,
 		Description:           form.Description,
 		Role:                  string(form.Role),
-		DesiredSchema:         form.DesiredSchema(),
+		DesiredSchema:         desiredSchema,
 		ImmutableFields:       form.ImmutableFields(),
 		LifecycleCapabilities: form.LifecycleCapabilities(),
 		ProvidedInterfaces:    provided,

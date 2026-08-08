@@ -94,17 +94,25 @@ type hostError struct {
 func stableError(code, message string) *hostError { return &hostError{Code: code, Message: message} }
 
 type storedResource struct {
-	Group, Kind, Name, Space string
-	UID                      string
-	Generation               int64
-	Revision                 int64
-	Spec                     map[string]any
-	SpecDigest               string
-	StatusTouches            int64
-	Imported                 bool
-	PackageDigest            string
+	// Ref is the EXACT Form identity this resource was created under, and the
+	// only identity it is ever answered about. A stored resource that carried
+	// only a group and a kind would be served under whichever definition version
+	// a request happened to name, which is the substitution decision 0022 closes:
+	// the response would describe the resource under a contract it was never
+	// applied under, successfully, with nothing downstream able to detect it.
+	Ref           FormRef
+	Name          string
+	Space         string
+	UID           string
+	Generation    int64
+	Revision      int64
+	Spec          map[string]any
+	SpecDigest    string
+	StatusTouches int64
+	Imported      bool
+	PackageDigest string
 	// Relations is the resolved cross-resource reference set of this exact
-	// stored spec, pinned by target UID.
+	// stored spec, pinned by target UID and by the target's exact FormRef.
 	Relations []storedRelation
 	// DerivedRendering is the exact derived part of the representation this
 	// resource was last serving — the conditions this host renders from OTHER
@@ -112,6 +120,21 @@ type storedResource struct {
 	// so a mutation elsewhere that changes it must move the revision
 	// (derived_rendering.go).
 	DerivedRendering string
+}
+
+// group and kind are the two members of the recorded exact ref that address a
+// resource in the store. A resource NAME is unique within one space, group, and
+// kind — a reference is `{apiVersion, kind, name}` and carries no definition
+// version, so a host holding two same-named resources of one kind under
+// different contracts could not resolve a reference to either (decision 0015).
+// The definition version and digest therefore decide what a request is ANSWERED
+// about, never where the resource is stored.
+func (resource *storedResource) group() string { return resource.Ref.APIVersion }
+func (resource *storedResource) kind() string  { return resource.Ref.Kind }
+
+// key is this resource's store key.
+func (resource *storedResource) key() string {
+	return resourceKey(resource.Space, resource.group(), resource.kind(), resource.Name)
 }
 
 type recordedReplay struct {
@@ -169,6 +192,11 @@ type hostOperation struct {
 	// "being deleted" observable to the aggregate rules without a marker on the
 	// resource that a cancel would have to unwind.
 	DeleteTarget string
+	// Accepted is the exact incarnation this operation was accepted against. A
+	// 202 is an acceptance of a mutation to ONE resource, so the identity that
+	// mutation may land on is recorded here rather than resolved again from a
+	// name at commit time (acceptedTarget).
+	Accepted     acceptedTarget
 	commit       func() (map[string]any, *hostError)
 	terminalBody []byte
 }
@@ -434,7 +462,7 @@ func (h *ReferenceHost) handleDiscovery(w http.ResponseWriter, request *http.Req
 // exactQueryForm resolves the closed exact-FormRef query vocabulary. The
 // packageDigest deliberately has no query key: audit evidence never enters
 // identity, so an unknown key (including packageDigest) fails closed.
-func (h *ReferenceHost) exactQueryForm(query url.Values) (*installedForm, string, *hostError) {
+func (h *ReferenceHost) exactQueryForm(query url.Values) (*InstalledForm, string, *hostError) {
 	allowed := map[string]bool{
 		"space": true, "group": true, "kind": true,
 		"definitionVersion": true, "schemaDigest": true,
@@ -448,10 +476,17 @@ func (h *ReferenceHost) exactQueryForm(query url.Values) (*installedForm, string
 	if !validSpaceID(space) {
 		return nil, "", stableError("invalid_argument", "exactly one valid space is required")
 	}
-	form := h.catalog.form(query.Get("group"), query.Get("kind"))
-	if form == nil ||
-		query.Get("definitionVersion") != form.Ref.DefinitionVersion ||
-		query.Get("schemaDigest") != form.Ref.SchemaDigest {
+	// The query is answered about the WHOLE identity or not at all: the four
+	// members are one key, and a host that resolved the group and kind first
+	// would be one `if` away from answering about a contract it was not asked
+	// about (decision 0022).
+	form := h.catalog.exact(FormRef{
+		APIVersion:        query.Get("group"),
+		Kind:              query.Get("kind"),
+		DefinitionVersion: query.Get("definitionVersion"),
+		SchemaDigest:      query.Get("schemaDigest"),
+	})
+	if form == nil {
 		return nil, "", stableError("form_unknown", "exact Form is unknown")
 	}
 	return form, space, nil
@@ -497,7 +532,7 @@ func (h *ReferenceHost) handleFormDefinition(w http.ResponseWriter, request *htt
 	h.writeJSON(w, http.StatusOK, "", response)
 }
 
-func (h *ReferenceHost) identityJSON(form *installedForm) map[string]any {
+func (h *ReferenceHost) identityJSON(form *InstalledForm) map[string]any {
 	identity := map[string]any{"formRef": refJSON(form.Ref)}
 	if form.PackageDigest != "" {
 		identity["packageDigest"] = form.PackageDigest
@@ -563,12 +598,12 @@ func (h *ReferenceHost) readBody(request *http.Request) ([]byte, *hostError) {
 
 // resolveResourceWire enforces the request-side identity contract shared by
 // validate, prepare, apply, and import bodies.
-func (h *ReferenceHost) resolveResourceWire(body *resourceWire) (*installedForm, *hostError) {
+func (h *ReferenceHost) resolveResourceWire(body *resourceWire) (*InstalledForm, *hostError) {
 	if body.Form == nil {
 		return nil, stableError("invalid_argument", "an exact FormRef is required")
 	}
-	form := h.catalog.form(body.Form.FormRef.APIVersion, body.Form.FormRef.Kind)
-	if form == nil || form.Ref != body.Form.FormRef {
+	form := h.catalog.exact(body.Form.FormRef)
+	if form == nil {
 		return nil, stableError("form_unknown", "exact Form is unknown")
 	}
 	if body.APIVersion != form.Ref.APIVersion || body.Kind != form.Ref.Kind {
@@ -619,7 +654,7 @@ func isSpaceBoundaryRune(candidate rune) bool {
 	return unicode.IsSpace(candidate) || candidate == '\uFEFF'
 }
 
-func (h *ReferenceHost) specDiagnostics(form *installedForm, spec map[string]any) ([]map[string]any, *hostError) {
+func (h *ReferenceHost) specDiagnostics(form *InstalledForm, spec map[string]any) ([]map[string]any, *hostError) {
 	if spec == nil {
 		spec = map[string]any{}
 	}
@@ -765,7 +800,7 @@ func (h *ReferenceHost) handlePrepare(w http.ResponseWriter, request *http.Reque
 	// generation are bound into the digest so a later apply at any other
 	// generation cannot reuse it. A create binds the create markers.
 	fence := request.Header.Get(expectedGenerationHeader)
-	current := h.resources[resourceKey(body.Metadata.Space, form.Ref.APIVersion, form.Ref.Kind, body.Metadata.Name)]
+	current := h.resourceUnderExactRef(body.Metadata.Space, form.Ref, body.Metadata.Name)
 	uid, generation := prepareCreateUID, prepareCreateGeneration
 	if current != nil {
 		if fence == "" {
@@ -842,7 +877,7 @@ func specOrEmpty(spec map[string]any) map[string]any {
 // the mutation was accepted from, long after that request is gone.
 func (h *ReferenceHost) validateDesiredSemantics(
 	caller hostAuthContext,
-	form *installedForm,
+	form *InstalledForm,
 	space, name string,
 	spec map[string]any,
 ) ([]storedRelation, *hostError) {
@@ -884,7 +919,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 // weight half of the deployment integrity rule; the ownership, uniqueness, and
 // availability halves need resolved relations and live in
 // validateWorkerDeployment.
-func validateDeploymentWeightSum(form *installedForm, spec map[string]any) *hostError {
+func validateDeploymentWeightSum(form *InstalledForm, spec map[string]any) *hostError {
 	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerDeploymentKind {
 		return nil
 	}
@@ -919,22 +954,84 @@ func validateDeploymentWeightSum(form *installedForm, spec map[string]any) *host
 // async path evaluates them again at commit time, so they are captured as
 // values instead of read from a request that is long gone.
 type mutationFence struct {
+	IfMatch     string
 	IfNoneMatch string
 	Generation  string
 }
 
 func mutationFenceOf(request *http.Request) mutationFence {
 	return mutationFence{
+		IfMatch:     request.Header.Get("If-Match"),
 		IfNoneMatch: request.Header.Get("If-None-Match"),
 		Generation:  request.Header.Get(expectedGenerationHeader),
 	}
+}
+
+// acceptedTarget is the exact resource incarnation ONE accepted mutation was
+// admitted against, recorded on the Operation at accept time: the store key it
+// was addressed through, the exact FormRef it is recorded under, the host-issued
+// uid of that one incarnation, and the fence the acceptance was granted under.
+//
+// A commit closure resolves through this record and never re-derives a target
+// from the name it was addressed by. The store key carries only space, group,
+// kind, and name, because a name is unique per kind and a reference carries no
+// definition version; a resource removed out of band and re-created under the
+// same name therefore sits at exactly the same key — under the same contract or
+// under another definition version of it, with a new uid, and at revision 1,
+// which is a revision fence the original was very likely accepted under. Any
+// commit that re-derived its target from that key would delete or rewrite a
+// resource the operation was never accepted for, under a different exact
+// FormRef and a different uid, reporting success. That is the substitution
+// decision 0015 closed for relations — identity is pinned to what was actually
+// resolved, never re-derived from a name later — stated about the operation's
+// own target.
+//
+// A mutation accepted against no incarnation carries the zero value: a create
+// is fenced against the free NAME rather than against an incarnation, so it has
+// nothing to pin and its own fence decides at commit.
+type acceptedTarget struct {
+	Key   string
+	Ref   FormRef
+	UID   string
+	Fence mutationFence
+}
+
+// acceptedIncarnation re-resolves the incarnation an accepted operation was
+// admitted against, and refuses to hand back anything else.
+//
+// The two refusals name what actually happened, out of the closed taxonomy: the
+// name is held by another incarnation — a different uid, whether or not it is
+// recorded under another contract — so the incarnation this operation was
+// accepted for moved (`uid_mismatch`, 409); or nothing holds the name at all
+// (`resource_not_found`, 404). Neither is retryable, because no amount of
+// waiting turns one incarnation back into another.
+func (h *ReferenceHost) acceptedIncarnation(target acceptedTarget) (*storedResource, *hostError) {
+	if target.Key == "" {
+		return nil, nil
+	}
+	current := h.resources[target.Key]
+	if current == nil {
+		return nil, stableError(
+			"resource_not_found",
+			"the resource this operation was accepted for is absent",
+		)
+	}
+	if current.UID != target.UID || current.Ref != target.Ref {
+		return nil, stableError(
+			"uid_mismatch",
+			"the resource this operation was accepted for ("+target.UID+" under "+
+				target.Ref.DefinitionVersion+"/"+target.Ref.SchemaDigest+") is gone; the name is now held by "+
+				current.UID+" under "+current.Ref.DefinitionVersion+"/"+current.Ref.SchemaDigest,
+		)
+	}
+	return current, nil
 }
 
 // mutationFences resolves the apply/import precondition surface. It returns
 // the existing resource (nil on create intent) or a stable error.
 func (h *ReferenceHost) mutationFences(
 	fences mutationFence,
-	form *installedForm,
+	form *InstalledForm,
 	space, name string,
 	bodyExpectedGeneration, expectedUID string,
 ) (existing *storedResource, create bool, hostErr *hostError) {
@@ -943,7 +1040,16 @@ func (h *ReferenceHost) mutationFences(
 		return nil, false, stableError("invalid_argument", "If-None-Match only supports *")
 	}
 	headerGeneration := fences.Generation
-	current := h.resources[resourceKey(space, form.Ref.APIVersion, form.Ref.Kind, name)]
+	// The store key is per space, group, kind, and name; the RECORDED ref then
+	// decides whether this request addresses the resource at all. A create fence
+	// still sees a name that is taken under another contract, because a name is
+	// unique per kind — but an update, an observe, or a delete under a ref the
+	// resource was not applied under addresses nothing (decision 0022).
+	occupant := h.resources[resourceKey(space, form.Ref.APIVersion, form.Ref.Kind, name)]
+	current := occupant
+	if current != nil && current.Ref != form.Ref {
+		current = nil
+	}
 	if ifNoneMatch == "*" {
 		if headerGeneration != "" || bodyExpectedGeneration != "" {
 			return nil, false, stableError("invalid_argument", "create must not carry a generation fence")
@@ -951,7 +1057,10 @@ func (h *ReferenceHost) mutationFences(
 		if expectedUID != "" {
 			return nil, false, stableError("uid_mismatch", "create cannot pin an expected uid")
 		}
-		if current != nil {
+		// A create is fenced against the NAME, not against the ref: a resource
+		// name is unique within one space, group, and kind, because a reference
+		// carries no definition version and could not choose between two.
+		if occupant != nil {
 			return nil, false, stableError("generation_conflict", "resource already exists under If-None-Match: *")
 		}
 		return nil, true, nil
@@ -1090,12 +1199,31 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 		return next, create, nil
 	}
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
-		h.acceptOperation(w, request, raw, space, "", func() (map[string]any, *hostError) {
-			next, _, hostErr := applyOnce()
-			if hostErr != nil {
-				return nil, hostErr
+		// The incarnation this apply is accepted against, pinned HERE, while the
+		// request that resolved it still exists. An apply fenced on
+		// If-None-Match: * was accepted against a free NAME and pins nothing — its
+		// fence is the name, and applyOnce re-evaluates it. An update was accepted
+		// against exactly one incarnation, and rewriting any other would be the
+		// same substitution the delete path refuses: the generation fence a
+		// replacement satisfies says nothing about which resource it belongs to.
+		accepted := acceptedTarget{Fence: fences}
+		if fences.IfNoneMatch != "*" {
+			if current := h.resourceUnderExactRef(space, form.Ref, name); current != nil {
+				accepted = acceptedTarget{Key: current.key(), Ref: current.Ref, UID: current.UID, Fence: fences}
 			}
-			return map[string]any{"resource": h.renderResource(next)}, nil
+		}
+		h.acceptOperation(w, request, raw, space, &hostOperation{
+			Accepted: accepted,
+			commit: func() (map[string]any, *hostError) {
+				if _, hostErr := h.acceptedIncarnation(accepted); hostErr != nil {
+					return nil, hostErr
+				}
+				next, _, hostErr := applyOnce()
+				if hostErr != nil {
+					return nil, hostErr
+				}
+				return map[string]any{"resource": h.renderResource(next)}, nil
+			},
 		})
 		return
 	}
@@ -1158,7 +1286,7 @@ func (h *ReferenceHost) requireReferencedBundleManifest(caller hostAuthContext, 
 // generation advanced only on canonical spec change, revision advanced on
 // every representation change.
 func (h *ReferenceHost) nextResource(
-	form *installedForm,
+	form *InstalledForm,
 	existing *storedResource,
 	create bool,
 	space, name string,
@@ -1169,7 +1297,10 @@ func (h *ReferenceHost) nextResource(
 	if create {
 		h.uidCounter++
 		return &storedResource{
-			Group: form.Ref.APIVersion, Kind: form.Ref.Kind, Name: name, Space: space,
+			// The exact ref is recorded at CREATE and never rewritten. An update
+			// copies it forward with the rest of the record, so the contract a
+			// resource was applied under stays the contract it is answered about.
+			Ref: form.Ref, Name: name, Space: space,
 			UID:        "uid-" + strconv.Itoa(h.uidCounter),
 			Generation: 1, Revision: 1,
 			Spec: specOrEmpty(spec), SpecDigest: specDigest,
@@ -1195,7 +1326,7 @@ func (h *ReferenceHost) nextResource(
 // derived-rendering rule is applied: every resource the new state renders
 // differently advances its revision (derived_rendering.go).
 func (h *ReferenceHost) storeResource(resource *storedResource) {
-	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
+	key := resource.key()
 	previous := h.resources[key]
 	if previous != nil {
 		h.unindexRelations(previous)
@@ -1231,9 +1362,13 @@ func (h *ReferenceHost) removeResource(key string) {
 	h.advanceDerivedRevisions(existing.Space, key)
 }
 
+// renderResource serves one resource under the exact ref it RECORDS, never
+// under the ref of whatever definition of that kind the catalog happens to hold
+// most recently. Rewriting an older resource's ref to a newer one would be the
+// host asserting, in a response, that two contracts are the same
+// (decision 0022).
 func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any {
-	form := h.catalog.form(resource.Group, resource.Kind)
-	reference := map[string]any{"formRef": refJSON(form.Ref)}
+	reference := map[string]any{"formRef": refJSON(resource.Ref)}
 	if resource.PackageDigest != "" {
 		reference["packageDigest"] = resource.PackageDigest
 	}
@@ -1245,8 +1380,8 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 		status["observed"] = map[string]any{"statusTouches": resource.StatusTouches}
 	}
 	return map[string]any{
-		"apiVersion": resource.Group,
-		"kind":       resource.Kind,
+		"apiVersion": resource.group(),
+		"kind":       resource.kind(),
 		"form":       reference,
 		"metadata": map[string]any{
 			"name":       resource.Name,
@@ -1278,12 +1413,25 @@ func (h *ReferenceHost) exactCurrentResource(
 		h.writeError(w, "invalid_argument", "path and exact query identities differ")
 		return nil, false
 	}
-	resource := h.resources[resourceKey(space, group, kind, name)]
+	resource := h.resourceUnderExactRef(space, form.Ref, name)
 	if resource == nil {
 		h.writeError(w, "resource_not_found", "resource is absent")
 		return nil, false
 	}
 	return resource, true
+}
+
+// resourceUnderExactRef resolves one resource ADDRESSED BY the exact ref the
+// request named. A resource stored under a different exact ref is absent from
+// this query, not a near miss to be served anyway: state records one contract
+// per resource, and answering under another would reinterpret it as something
+// it was never applied under (decision 0022, decision 0017 rule 4).
+func (h *ReferenceHost) resourceUnderExactRef(space string, ref FormRef, name string) *storedResource {
+	resource := h.resources[resourceKey(space, ref.APIVersion, ref.Kind, name)]
+	if resource == nil || resource.Ref != ref {
+		return nil
+	}
+	return resource
 }
 
 func (h *ReferenceHost) handleRead(w http.ResponseWriter, request *http.Request, group, kind, name string) {
@@ -1437,12 +1585,12 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 	if !ok {
 		return
 	}
-	ifMatch := request.Header.Get("If-Match")
-	if ifMatch == "" {
+	fences := mutationFenceOf(request)
+	if fences.IfMatch == "" {
 		h.writeError(w, "invalid_argument", "delete requires the If-Match revision fence")
 		return
 	}
-	if ifMatch != quotedRevision(resource.Revision) {
+	if fences.IfMatch != quotedRevision(resource.Revision) {
 		h.writeError(w, "revision_conflict", "delete revision fence is stale")
 		return
 	}
@@ -1457,28 +1605,38 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 			return
 		}
 	}
-	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
+	// What this delete was accepted for: one incarnation, addressed under one
+	// exact contract, at one revision.
+	accepted := acceptedTarget{Key: resource.key(), Ref: resource.Ref, UID: resource.UID, Fence: fences}
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
-		h.acceptOperation(w, request, raw, request.URL.Query().Get("space"), key, func() (map[string]any, *hostError) {
-			// The revision fence and the live-binding scan are re-derived at
-			// COMMIT time: an accepted delete must not remove a resource that
-			// has since been re-bound or re-revised.
-			current := h.resources[key]
-			if current == nil {
-				return nil, stableError("resource_not_found", "resource is absent")
-			}
-			if ifMatch != quotedRevision(current.Revision) {
-				return nil, stableError("revision_conflict", "delete revision fence is stale")
-			}
-			if hostErr := h.dependencyInUse(current); hostErr != nil {
-				return nil, hostErr
-			}
-			h.removeResource(key)
-			return map[string]any{"deleted": true}, nil
+		h.acceptOperation(w, request, raw, request.URL.Query().Get("space"), &hostOperation{
+			DeleteTarget: accepted.Key,
+			Accepted:     accepted,
+			commit: func() (map[string]any, *hostError) {
+				// Identity first, then the fence, then the live-binding scan. The
+				// order is the point: a revision fence cannot stand in for an
+				// identity, because a replacement created under ANY contract starts
+				// at revision 1 and satisfies the fence the original was accepted
+				// under. Only after the incarnation is proved to be the one this
+				// delete was accepted for does "has it been re-revised or re-bound
+				// since" mean anything.
+				current, hostErr := h.acceptedIncarnation(accepted)
+				if hostErr != nil {
+					return nil, hostErr
+				}
+				if accepted.Fence.IfMatch != quotedRevision(current.Revision) {
+					return nil, stableError("revision_conflict", "delete revision fence is stale")
+				}
+				if hostErr := h.dependencyInUse(current); hostErr != nil {
+					return nil, hostErr
+				}
+				h.removeResource(accepted.Key)
+				return map[string]any{"deleted": true}, nil
+			},
 		})
 		return
 	}
-	h.removeResource(key)
+	h.removeResource(accepted.Key)
 	h.writeRaw(w, http.StatusNoContent, "", nil)
 	h.recordReplay(request, raw, request.URL.Query().Get("space"), http.StatusNoContent, "", nil)
 }
@@ -1486,22 +1644,23 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 // acceptOperation registers a deferred mutation and answers 202 with a
 // pending Operation envelope. The mutation runs when polling exhausts the
 // deterministic wait; cancel before that point abandons it.
+//
+// The caller states what the operation was accepted AGAINST — the incarnation
+// it may land on and what it is removing — because only the caller still holds
+// the request that resolved it. This function owns the rest: the id, the owner
+// the mutation was accepted from, and the polling bookkeeping.
 func (h *ReferenceHost) acceptOperation(
 	w http.ResponseWriter,
 	request *http.Request,
 	raw []byte,
-	space, deleteTarget string,
-	commit func() (map[string]any, *hostError),
+	space string,
+	operation *hostOperation,
 ) {
 	h.opCounter++
 	owner, _ := hostRequestAuth(request)
-	operation := &hostOperation{
-		ID:             "op_" + strconv.Itoa(h.opCounter),
-		Owner:          owner,
-		PollsRemaining: asyncOperationPolls,
-		DeleteTarget:   deleteTarget,
-		commit:         commit,
-	}
+	operation.ID = "op_" + strconv.Itoa(h.opCounter)
+	operation.Owner = owner
+	operation.PollsRemaining = asyncOperationPolls
 	h.operations[operation.ID] = operation
 	response := encodeJSONBody(map[string]any{"operation": h.renderOperation(operation)})
 	h.writeRaw(w, http.StatusAccepted, "", response)
@@ -2008,19 +2167,22 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 	}
 	switch {
 	case len(parts) == 2 && parts[1] == "forms":
-		profiles := make([]map[string]any, 0, len(h.catalog.forms))
-		keys := make([]string, 0, len(h.catalog.forms))
-		for key := range h.catalog.forms {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			profiles = append(profiles, h.formSupportProfile(h.catalog.forms[key]))
+		// Every installed identity gets its own profile. Two definition versions
+		// of one line are two entries, because a profile states what a host
+		// supports for one exact Form.
+		installed := h.catalog.sortedForms()
+		profiles := make([]map[string]any, 0, len(installed))
+		for _, form := range installed {
+			profiles = append(profiles, h.formSupportProfile(form))
 		}
 		h.writeJSON(w, http.StatusOK, "", map[string]any{"profiles": profiles})
 	case len(parts) == 6 && parts[1] == "forms":
-		form := h.catalog.form(groupOf(parts[2], parts[3]), parts[4])
-		if form == nil || form.Ref.DefinitionVersion != parts[5] {
+		// The published path carries the definition version and no digest, so the
+		// exact identity is resolved through the line index — which refuses to
+		// hold two definitions that agree on the version and differ on the bytes.
+		// The profile then answers about that one identity and echoes it.
+		form := h.catalog.line(groupOf(parts[2], parts[3]), parts[4], parts[5])
+		if form == nil {
 			h.writeError(w, "form_unknown", "exact Form line is unknown")
 			return
 		}
@@ -2065,7 +2227,7 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 // formSupportProfile declares capability subsets, inclusive ranges, and
 // numeric limits only. Price, SKU, region, quota, and commercial policy
 // never appear in this surface.
-func (h *ReferenceHost) formSupportProfile(form *installedForm) map[string]any {
+func (h *ReferenceHost) formSupportProfile(form *InstalledForm) map[string]any {
 	profile := map[string]any{
 		"apiVersion": supportAPIVersion,
 		"kind":       "FormSupport",

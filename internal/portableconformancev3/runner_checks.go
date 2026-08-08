@@ -104,7 +104,24 @@ func (r *v3Runner) run() error {
 		// (spec/decisions/0017).
 		func() error { return r.checkOperationResumableAfterSettlement(queue) },
 		func() error { return r.checkExactFormRefFailsClosedOnUnknownDefinition(kv) },
+		// The exact identity a host answers for, and the contract a relation
+		// pins (spec/decisions/0022). The two definition versions of one Form
+		// line are installed throughout; these are the checks that can tell.
+		r.checkTwoDefinitionVersionsAnswerIndependently,
+		r.checkResourceAnswersOnlyUnderItsRecordedFormRef,
+		func() error {
+			worker, legacy, err := r.exactRefRelationFixture()
+			if err != nil {
+				return err
+			}
+			if err := r.checkRelationTargetFormRefVerified(worker, legacy); err != nil {
+				return err
+			}
+			return r.checkRelationTargetInterfaceVerified(legacy)
+		},
+		r.checkRelationPinRecordsTargetFormRef,
 		func() error { return r.checkAsyncCommitRevalidates(kv, version) },
+		r.checkAsyncCommitBindsAcceptedIdentity,
 		func() error { return r.checkCrossSpace(kv) },
 		r.checkSupportProfiles,
 		r.checkRuntimeContractAdvertised,
@@ -2495,11 +2512,8 @@ func (r *v3Runner) checkAsyncCommitRevalidates(kv, version probeTarget) error {
 	if err != nil {
 		return err
 	}
-	if terminal.Result != nil || terminal.Error == nil {
-		return fmt.Errorf("terminal operation must carry exactly the error: %+v", terminal)
-	}
-	if terminal.Error["code"] != "resource_not_found" {
-		return fmt.Errorf("terminal operation error = %v, want resource_not_found", terminal.Error["code"])
+	if err := requireTerminalOperationError(terminal, "resource_not_found"); err != nil {
+		return err
 	}
 	if err := r.expectResourceAbsent(pending); err != nil {
 		return fmt.Errorf("a revalidated-away operation still committed: %w", err)
@@ -2553,17 +2567,222 @@ func (r *v3Runner) checkAsyncCommitRevalidates(kv, version probeTarget) error {
 	if err != nil {
 		return err
 	}
-	if terminalDelete.Result != nil || terminalDelete.Error == nil ||
-		terminalDelete.Error["code"] != "dependency_in_use" {
-		return fmt.Errorf(
-			"terminal delete operation = %+v, want a dependency_in_use error",
-			terminalDelete,
-		)
+	if err := requireTerminalOperationError(terminalDelete, "dependency_in_use"); err != nil {
+		return fmt.Errorf("an accepted delete whose target acquired a holder: %w", err)
 	}
 	if _, _, err := r.read(held); err != nil {
 		return fmt.Errorf("an accepted delete removed a resource that acquired a holder: %w", err)
 	}
 	r.complete("async-commit-revalidates")
+	return nil
+}
+
+// acceptedDeleteRun is one accepted-then-undermined delete: the resource it was
+// accepted for, the incarnation that holds the name when the operation commits
+// (absent when the name was left free), and the terminal Operation.
+type acceptedDeleteRun struct {
+	Created     wireResource
+	Replacement wireResource
+	Terminal    wireOperation
+}
+
+// acceptDeleteAndReplace accepts an async delete of one resource, removes that
+// resource out of band while the operation is still pending, and optionally lets
+// `replacement` re-create the same name before the operation is polled to its
+// terminal state.
+//
+// The replacement is held to the two facts that make the scenario a substitution
+// rather than a stale fence: it is a different incarnation, and it sits at the
+// same revision the accepted delete was fenced at. A conforming host cannot
+// answer this with a revision check.
+func (r *v3Runner) acceptDeleteAndReplace(
+	subject probeTarget,
+	replacement *probeTarget,
+	keyPrefix string,
+) (acceptedDeleteRun, error) {
+	run := acceptedDeleteRun{}
+	created, _, err := r.applyResource(subject, applyOptions{
+		Create: true, IdempotencyKey: keyPrefix + "-create",
+	}, http.StatusCreated)
+	if err != nil {
+		return run, err
+	}
+	run.Created = created
+	acceptedDelete, err := r.deleteResource(
+		subject, created.Metadata.Revision, keyPrefix+"-async-delete",
+		map[string]string{ErrorProbeHeader: ProbeAsync},
+	)
+	if err != nil {
+		return run, err
+	}
+	if acceptedDelete.Status != http.StatusAccepted {
+		return run, fmt.Errorf(
+			"async delete HTTP %d, want 202; body=%s",
+			acceptedDelete.Status, strings.TrimSpace(string(acceptedDelete.Body)),
+		)
+	}
+	var envelope struct {
+		Operation wireOperation `json:"operation"`
+	}
+	if err := decodeStrictResponse(acceptedDelete, &envelope); err != nil {
+		return run, err
+	}
+	if envelope.Operation.Done {
+		return run, errors.New("the 202 delete was already terminal, so nothing could move underneath it")
+	}
+	// The resource leaves out of band, exactly as a backend deletion the host did
+	// not perform: relation protection is bypassed, the accepted operation is not.
+	removed, err := r.deleteResource(
+		subject, created.Metadata.Revision, keyPrefix+"-external-delete",
+		map[string]string{ErrorProbeHeader: ProbeExternalChange},
+	)
+	if err != nil {
+		return run, err
+	}
+	if removed.Status != http.StatusNoContent {
+		return run, fmt.Errorf(
+			"out-of-band delete HTTP %d, want 204; body=%s",
+			removed.Status, strings.TrimSpace(string(removed.Body)),
+		)
+	}
+	if replacement != nil {
+		recreated, _, err := r.applyResource(*replacement, applyOptions{
+			Create: true, IdempotencyKey: keyPrefix + "-recreate",
+		}, http.StatusCreated)
+		if err != nil {
+			return run, fmt.Errorf("the replacement incarnation could not be created: %w", err)
+		}
+		if recreated.Metadata.UID == created.Metadata.UID {
+			return run, errors.New("the replacement reused the removed resource's uid, so no incarnation changed")
+		}
+		if recreated.Metadata.Revision != created.Metadata.Revision {
+			return run, fmt.Errorf(
+				"the replacement is at revision %s while the accepted delete was fenced at %s; unless the two "+
+					"coincide this proves only that a revision fence holds",
+				recreated.Metadata.Revision, created.Metadata.Revision,
+			)
+		}
+		run.Replacement = recreated
+	}
+	terminal, err := r.pollOperation(envelope.Operation.ID)
+	if err != nil {
+		return run, err
+	}
+	run.Terminal = terminal
+	return run, nil
+}
+
+// requireTerminalOperationError holds one terminal Operation to exactly one
+// stable error code, and to the retryability that code carries: neither identity
+// failure is automatically retryable, because no amount of waiting turns one
+// incarnation back into another.
+func requireTerminalOperationError(operation wireOperation, code string) error {
+	if operation.Result != nil || operation.Error == nil {
+		return fmt.Errorf("terminal operation must carry exactly the error: %+v", operation)
+	}
+	if operation.Error["code"] != code {
+		return fmt.Errorf("terminal operation error = %v, want %s", operation.Error["code"], code)
+	}
+	if retryable, _ := operation.Error["retryable"].(bool); retryable {
+		return fmt.Errorf("%s was reported as automatically retryable", code)
+	}
+	return nil
+}
+
+// checkAsyncCommitBindsAcceptedIdentity proves the identity half of the same
+// commitment: a 202 accepts a mutation to ONE resource, so the commit is bound
+// to the incarnation it was accepted for and never re-derived from the name that
+// addressed it.
+//
+// A name is reusable and a fresh resource starts at revision 1, so a target
+// removed out of band and re-created under the same name presents a NEW
+// incarnation at the very revision the accepted delete was fenced at. A host
+// that re-resolved its target by name at commit time would find the
+// replacement, see the fence satisfied, delete a resource under a different uid
+// — here under a different exact contract as well — and report success. That is
+// the substitution decision 0015 closed for relations, stated about the
+// operation's own target.
+//
+// The three cases are the three things that can be behind the name when the
+// operation commits: another contract's incarnation, another incarnation of the
+// same contract, and nothing at all. The first two are `uid_mismatch`, the third
+// `resource_not_found`, and in neither of the first two may the replacement be
+// touched.
+func (r *v3Runner) checkAsyncCommitBindsAcceptedIdentity() error {
+	// The replacement returns under the OTHER definition version, so it differs
+	// from the accepted resource in both halves of its identity — its uid and its
+	// exact FormRef — while occupying exactly the same name.
+	contractMoved := r.target(r.contract.RunnerInput.ModuleWorker)
+	contractMoved.Name = "accepted-identity-contract"
+	otherContract := r.syntheticDefinitionTarget(contractMoved.Name)
+	run, err := r.acceptDeleteAndReplace(contractMoved, &otherContract, "key-accepted-identity-contract")
+	if err != nil {
+		return err
+	}
+	if err := requireTerminalOperationError(run.Terminal, "uid_mismatch"); err != nil {
+		return fmt.Errorf(
+			"a delete accepted for %s under %s settled against a replacement under %s: %w",
+			run.Created.Metadata.UID, contractMoved.Ref.DefinitionVersion,
+			otherContract.Ref.DefinitionVersion, err,
+		)
+	}
+	survivor, err := r.readRaw(otherContract)
+	if err != nil {
+		return fmt.Errorf(
+			"the accepted delete removed the replacement it was never accepted for: %w", err,
+		)
+	}
+	if survivor.Metadata.UID != run.Replacement.Metadata.UID || survivor.Form.FormRef != otherContract.Ref {
+		return fmt.Errorf(
+			"the surviving resource is %+v, want the replacement %s under %+v",
+			survivor.Metadata, run.Replacement.Metadata.UID, otherContract.Ref,
+		)
+	}
+
+	// The uid alone is enough to make it a different resource: the replacement
+	// comes back under the SAME exact contract, so a host that compared only the
+	// recorded FormRef still has to refuse.
+	incarnationMoved := r.target(r.contract.RunnerInput.ModuleWorker)
+	incarnationMoved.Name = "accepted-identity-incarnation"
+	sameContract := incarnationMoved
+	sameRun, err := r.acceptDeleteAndReplace(
+		incarnationMoved, &sameContract, "key-accepted-identity-incarnation",
+	)
+	if err != nil {
+		return err
+	}
+	if err := requireTerminalOperationError(sameRun.Terminal, "uid_mismatch"); err != nil {
+		return fmt.Errorf(
+			"a delete accepted for %s settled against %s, a later incarnation of the same name: %w",
+			sameRun.Created.Metadata.UID, sameRun.Replacement.Metadata.UID, err,
+		)
+	}
+	kept, err := r.readRaw(sameContract)
+	if err != nil {
+		return fmt.Errorf("the accepted delete removed a later incarnation of the same name: %w", err)
+	}
+	if kept.Metadata.UID != sameRun.Replacement.Metadata.UID {
+		return fmt.Errorf(
+			"the name is held by %s, want the replacement %s",
+			kept.Metadata.UID, sameRun.Replacement.Metadata.UID,
+		)
+	}
+
+	// Nothing holds the name at all, which is the other closed answer: the
+	// resource the operation was accepted for is simply gone.
+	vanished := r.target(r.contract.RunnerInput.ModuleWorker)
+	vanished.Name = "accepted-identity-vanished"
+	goneRun, err := r.acceptDeleteAndReplace(vanished, nil, "key-accepted-identity-vanished")
+	if err != nil {
+		return err
+	}
+	if err := requireTerminalOperationError(goneRun.Terminal, "resource_not_found"); err != nil {
+		return fmt.Errorf("a delete whose target vanished before commit: %w", err)
+	}
+	if err := r.expectResourceAbsent(vanished); err != nil {
+		return fmt.Errorf("the vanished resource reappeared: %w", err)
+	}
+	r.complete("async-commit-binds-the-accepted-identity")
 	return nil
 }
 

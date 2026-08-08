@@ -17,19 +17,19 @@ func relationFixture(t *testing.T) (*ReferenceHost, Contract, *storedResource, *
 	host, contract := fallbackHost(t)
 	group := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef.APIVersion
 	host.storeResource(&storedResource{
-		Group: group, Kind: "ModuleWorker", Name: "module-worker-probe", Space: "conformance",
+		Ref: mustProbeRef(t, contract, "ModuleWorker"), Name: "module-worker-probe", Space: "conformance",
 		UID: "uid-worker", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	host.storeResource(&storedResource{
-		Group: group, Kind: "WorkerBundle", Name: "worker-bundle-probe", Space: "conformance",
+		Ref: mustProbeRef(t, contract, "WorkerBundle"), Name: "worker-bundle-probe", Space: "conformance",
 		UID: "uid-bundle", Generation: 1, Revision: 1,
 		Spec: map[string]any{"manifestDigest": formpackage.DigestBytes([]byte("bundle"))},
 	})
 	host.storeResource(&storedResource{
-		Group: group, Kind: "EdgeKVNamespace", Name: "edge-kv-probe", Space: "conformance",
+		Ref: mustProbeRef(t, contract, "EdgeKVNamespace"), Name: "edge-kv-probe", Space: "conformance",
 		UID: "uid-kv", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
-	versionForm := host.catalog.form(group, "WorkerVersion")
+	versionForm := host.probeForm("WorkerVersion")
 	spec := relationVersionSpec(group, "edge-kv-probe")
 	relations, hostErr := host.resolveRelations(versionForm, "conformance", spec)
 	if hostErr != nil {
@@ -40,7 +40,7 @@ func relationFixture(t *testing.T) (*ReferenceHost, Contract, *storedResource, *
 		t.Fatal(err)
 	}
 	version := &storedResource{
-		Group: group, Kind: "WorkerVersion", Name: "worker-version-probe", Space: "conformance",
+		Ref: mustProbeRef(t, contract, "WorkerVersion"), Name: "worker-version-probe", Space: "conformance",
 		UID: "uid-version", Generation: 1, Revision: 1,
 		Spec: spec, SpecDigest: digest, Relations: relations,
 	}
@@ -99,7 +99,7 @@ func TestResolvedRelationsStoreTheTargetUID(t *testing.T) {
 // binding does, and releasing the holder releases the target.
 func TestReverseIndexBlocksEveryRelationKind(t *testing.T) {
 	host, _, _, version := relationFixture(t)
-	group := version.Group
+	group := version.group()
 	for _, target := range []struct {
 		kind, name string
 	}{
@@ -120,7 +120,7 @@ func TestReverseIndexBlocksEveryRelationKind(t *testing.T) {
 		t.Fatalf("the holder is not a target but reported %+v", hostErr)
 	}
 	// Releasing the holder releases every target it pinned.
-	host.removeResource(resourceKey("conformance", group, version.Kind, version.Name))
+	host.removeResource(resourceKey("conformance", group, version.kind(), version.Name))
 	for _, name := range []string{"edge-kv-probe", "module-worker-probe", "worker-bundle-probe"} {
 		for _, kind := range []string{"EdgeKVNamespace", "ModuleWorker", "WorkerBundle"} {
 			stored := host.resources[resourceKey("conformance", group, kind, name)]
@@ -160,7 +160,7 @@ func TestRecreatedTargetIsNotRebound(t *testing.T) {
 	}
 
 	// The target vanishes: the source reports the missing dependency.
-	key := resourceKey("conformance", kv.Group, kv.Kind, kv.Name)
+	key := resourceKey("conformance", kv.group(), kv.kind(), kv.Name)
 	host.removeResource(key)
 	if condition := read(); condition.Status != "False" || condition.Reason != "DependencyMissing" {
 		t.Fatalf("source of a vanished target reports %s/%s", condition.Status, condition.Reason)
@@ -168,7 +168,7 @@ func TestRecreatedTargetIsNotRebound(t *testing.T) {
 
 	// The same NAME comes back on a different incarnation.
 	host.storeResource(&storedResource{
-		Group: kv.Group, Kind: kv.Kind, Name: kv.Name, Space: kv.Space,
+		Ref: kv.Ref, Name: kv.Name, Space: kv.Space,
 		UID: "uid-kv-second", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	condition := read()
@@ -181,7 +181,7 @@ func TestRecreatedTargetIsNotRebound(t *testing.T) {
 		}
 	}
 	// Reading did not re-bind: the stored relation still pins the old uid.
-	stored := host.resources[resourceKey("conformance", version.Group, version.Kind, version.Name)]
+	stored := host.resources[resourceKey("conformance", version.group(), version.kind(), version.Name)]
 	for _, relation := range stored.Relations {
 		if relation.Pointer == "/kvBindings/0/resource" && relation.TargetUID != "uid-kv" {
 			t.Fatalf("a read re-bound the relation to uid %q", relation.TargetUID)
@@ -201,13 +201,13 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 	group := "edge.forms.takoform.com/v1alpha1"
 	cases := []struct {
 		name    string
-		break_  func(host *ReferenceHost, source, target *installedForm)
+		break_  func(host *ReferenceHost, source, target *InstalledForm)
 		code    string
 		message string
 	}{
 		{
 			name: "source Definition does not accept the binding",
-			break_: func(_ *ReferenceHost, source, _ *installedForm) {
+			break_: func(_ *ReferenceHost, source, _ *InstalledForm) {
 				source.AcceptedBindings = nil
 			},
 			code:    "invalid_argument",
@@ -215,7 +215,7 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 		},
 		{
 			name: "host has not installed the binding contract",
-			break_: func(host *ReferenceHost, _, _ *installedForm) {
+			break_: func(host *ReferenceHost, _, _ *InstalledForm) {
 				host.catalog.contracts = map[string]bindingContract{}
 			},
 			code:    "unsupported_capability",
@@ -223,7 +223,7 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 		},
 		{
 			name: "the installed contract is a different digest",
-			break_: func(host *ReferenceHost, source, _ *installedForm) {
+			break_: func(host *ReferenceHost, source, _ *InstalledForm) {
 				ref := source.AcceptedBindings[0]
 				contract := host.catalog.contracts[ref.Name+"@"+ref.Version]
 				contract.Ref.SchemaDigest = formpackage.DigestBytes([]byte("other-binding"))
@@ -234,7 +234,7 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 		},
 		{
 			name: "source role is not the binding sourceRole",
-			break_: func(_ *ReferenceHost, source, _ *installedForm) {
+			break_: func(_ *ReferenceHost, source, _ *InstalledForm) {
 				source.Role = "identity"
 			},
 			code:    "invalid_argument",
@@ -242,7 +242,7 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 		},
 		{
 			name: "target Form is not an allowed target",
-			break_: func(host *ReferenceHost, source, _ *installedForm) {
+			break_: func(host *ReferenceHost, source, _ *InstalledForm) {
 				ref := source.AcceptedBindings[0]
 				contract := host.catalog.contracts[ref.Name+"@"+ref.Version]
 				contract.AllowedTargetForms = []allowedTargetForm{{APIVersion: group, Kind: "ObjectBucket"}}
@@ -253,7 +253,7 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 		},
 		{
 			name: "target Form does not provide the required Interface",
-			break_: func(_ *ReferenceHost, _, target *installedForm) {
+			break_: func(_ *ReferenceHost, _, target *InstalledForm) {
 				target.ProvidedInterfaces = nil
 			},
 			code:    "invalid_argument",
@@ -263,8 +263,8 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			host, _, _, _ := relationFixture(t)
-			source := host.catalog.form(group, "WorkerVersion")
-			target := host.catalog.form(group, "EdgeKVNamespace")
+			source := host.probeForm("WorkerVersion")
+			target := host.probeForm("EdgeKVNamespace")
 			testCase.break_(host, source, target)
 			spec := relationVersionSpec(group, "edge-kv-probe")
 			_, hostErr := host.resolveRelations(source, "conformance", spec)
@@ -280,7 +280,7 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 	// The unbroken catalog accepts the same spec, so every case above failed
 	// for the rule it broke and nothing else.
 	host, _, _, _ := relationFixture(t)
-	source := host.catalog.form(group, "WorkerVersion")
+	source := host.probeForm("WorkerVersion")
 	if _, hostErr := host.resolveRelations(source, "conformance", relationVersionSpec(group, "edge-kv-probe")); hostErr != nil {
 		t.Fatalf("the intact binding contract was refused: %+v", hostErr)
 	}
@@ -307,13 +307,13 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	workerReference := map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"}
 	storeWorker := func(uid string) {
 		host.storeResource(&storedResource{
-			Group: group, Kind: "ModuleWorker", Name: "module-worker-probe", Space: space,
+			Ref: mustProbeRef(t, contract, "ModuleWorker"), Name: "module-worker-probe", Space: space,
 			UID: uid, Generation: 1, Revision: 1, Spec: map[string]any{},
 		})
 	}
 	storeVersion := func(name, workerUID string) {
 		host.storeResource(&storedResource{
-			Group: group, Kind: "WorkerVersion", Name: name, Space: space,
+			Ref: mustProbeRef(t, contract, "WorkerVersion"), Name: name, Space: space,
 			UID: "uid-" + name, Generation: 1, Revision: 1,
 			Spec: map[string]any{"worker": workerReference, "handlers": []any{"fetch", "queue"}},
 			Relations: []storedRelation{{
@@ -325,7 +325,7 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	}
 	storeDeployment := func(name, workerUID, version string) {
 		host.storeResource(&storedResource{
-			Group: group, Kind: "WorkerDeployment", Name: name, Space: space,
+			Ref: mustProbeRef(t, contract, "WorkerDeployment"), Name: name, Space: space,
 			UID: "uid-" + name, Generation: 1, Revision: 1,
 			Spec: map[string]any{"worker": workerReference, "versions": []any{}},
 			Relations: []storedRelation{
@@ -344,7 +344,7 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	}
 	storeWorker("uid-worker-first")
 	host.storeResource(&storedResource{
-		Group: group, Kind: "AtLeastOnceQueue", Name: "queue-probe", Space: space,
+		Ref: mustProbeRef(t, contract, "AtLeastOnceQueue"), Name: "queue-probe", Space: space,
 		UID: "uid-queue", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	storeVersion("stale-version", "uid-worker-first")
@@ -354,7 +354,7 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	// gone, and so does the version it weights.
 	storeWorker("uid-worker-second")
 
-	consumer := host.catalog.form(group, "QueueConsumer")
+	consumer := host.probeForm("QueueConsumer")
 	spec := consumer.materialize(map[string]any{
 		"worker": workerReference,
 		"queue":  map[string]any{"apiVersion": group, "kind": "AtLeastOnceQueue", "name": "queue-probe"},
@@ -381,8 +381,8 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 // a NON-binding reference, which the superseded binding-only scan never saw.
 func TestRelationTargetMustExistBeforeMutation(t *testing.T) {
 	host, _, _, version := relationFixture(t)
-	group := version.Group
-	source := host.catalog.form(group, "WorkerVersion")
+	group := version.group()
+	source := host.probeForm("WorkerVersion")
 	spec := relationVersionSpec(group, "edge-kv-probe")
 	spec["worker"] = map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "absent-worker"}
 	_, hostErr := host.resolveRelations(source, "conformance", spec)
