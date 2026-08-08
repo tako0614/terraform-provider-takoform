@@ -720,25 +720,21 @@ func validateRuntimeContractProbe(probe RuntimeContractProbe) error {
 	return nil
 }
 
-// familyDataInterfaceCount is how many data-plane Interface contracts the Edge
-// Platform Family declares: edge.kv, edge.objects, edge.sql, and edge.queue.
-// The corpus must pin all four, because a corpus free to pin none would make
-// `edge-interface-contracts-advertised` a check that passes without asking a
-// host anything.
-const familyDataInterfaceCount = 4
+// familyDataInterfaceNames are the data-plane Interface contracts the Edge
+// Platform Family declares. The corpus must pin exactly these, by name: a
+// cardinality test would accept two versions of one contract in place of two
+// others, and the runner would then record
+// `edge-interface-contracts-advertised` having never asked the host about the
+// contracts it skipped.
+var familyDataInterfaceNames = []string{"edge.kv", "edge.objects", "edge.sql", "edge.queue"}
 
 // validateDataInterfaceProbes proves the corpus pins a usable data-plane
 // contract set: every entry names an exact contract at an exact digest, no
 // entry repeats, and none of them is the runtime ABI, which has its own probe
 // and its own check.
 func validateDataInterfaceProbes(probes SupportProbes) error {
-	if len(probes.DataInterfaces) < familyDataInterfaceCount {
-		return fmt.Errorf(
-			"portable host v3 must pin all %d data-plane Interface contracts; the corpus pins %d",
-			familyDataInterfaceCount, len(probes.DataInterfaces),
-		)
-	}
 	seen := map[string]bool{}
+	pinned := map[string]bool{}
 	for _, probe := range probes.DataInterfaces {
 		if probe.Name == "" || probe.Version == "" || !formpackage.ValidDigest(probe.SchemaDigest) {
 			return errors.New(
@@ -756,6 +752,15 @@ func validateDataInterfaceProbes(probes SupportProbes) error {
 			return fmt.Errorf("portable host v3 data-plane Interface probe %s is pinned twice", key)
 		}
 		seen[key] = true
+		pinned[probe.Name] = true
+	}
+	for _, name := range familyDataInterfaceNames {
+		if !pinned[name] {
+			return fmt.Errorf(
+				"portable host v3 must pin the %s data-plane Interface contract; without it the lane records edge-interface-contracts-advertised without ever asking a host about %s",
+				name, name,
+			)
+		}
 	}
 	return nil
 }
