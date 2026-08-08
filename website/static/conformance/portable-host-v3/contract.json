@@ -264,7 +264,28 @@
         "packageDigest": "sha256:30791102f5390014fc40abb457d651c7e04b2ef725915f0935d962b4d7bf2748"
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
-      "declaredOutputs": ["hostname", "url"],
+      "declaredOutputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Host-computed values this Form publishes in status.outputs. Every member is returned by a conforming host; the object is closed.",
+        "properties": {
+          "hostname": {
+            "description": "Dotted DNS hostname the host assigned to this endpoint. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable configuration never parses it, never asserts a suffix, and never reconstructs it from the resource name.",
+            "maxLength": 253,
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$",
+            "type": "string"
+          },
+          "url": {
+            "description": "Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + `/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and no port, so a consumer composes deeper paths onto this value rather than deriving an origin.",
+            "maxLength": 264,
+            "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+/$",
+            "type": "string"
+          }
+        },
+        "required": ["hostname", "url"],
+        "title": "Worker Endpoint outputs",
+        "type": "object"
+      },
       "desired": {
         "worker": {
           "apiVersion": "edge.forms.takoform.com/v1alpha1",

@@ -68,7 +68,16 @@ are normative; the operative text lives in
    host makes, and a configuration that parses the hostname, asserts a suffix,
    or reconstructs the value from the resource name has written a fact about one
    host into a portable document. The conformance lane holds hosts to the three
-   guarantees and deliberately asserts nothing about the shape.
+   guarantees and deliberately asserts nothing about the shape — including the
+   shape it might be tempted to forbid. That the address is the HOST'S is proved
+   by the endpoint's desired state carrying no address at all: a host that
+   answers with one has answered with something no request supplied, whatever
+   it looks like. A host that allocates `endpoint-probe.tenant.example`
+   conforms, and a lane that failed it would be enforcing its own taste in
+   labels. What the lane does assert about the value follows from the third
+   guarantee rather than from any shape: two endpoints on two workers publish
+   two DIFFERENT addresses, because one address at one path root cannot invoke
+   the active deployments of two workers.
 
 4. **It invokes the active deployment.** The endpoint is an inward activation
    for `fetch`, gated exactly as the other three attachments are: every version
@@ -142,7 +151,7 @@ alongside the other three attachments.
   lane, because a black-box runner cannot take a capability away from the host
   under test. What the lane does close is the failure that branch exists to
   prevent: a host that accepts the endpoint and then publishes an incomplete,
-  plaintext, or unassigned address fails a required check.
+  plaintext, or shared address fails a required check.
 
 ## Rejected alternatives
 

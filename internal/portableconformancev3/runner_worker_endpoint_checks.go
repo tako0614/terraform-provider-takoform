@@ -16,6 +16,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // checkWorkerEndpointAddressIsHostAssigned proves the one thing this Form
@@ -23,11 +25,26 @@ import (
 // domain, naming a hostname, or choosing anything but the worker.
 //
 // What it asserts is exactly what a portable author may rely on — that a value
-// comes back, that it is HTTPS, and that the two published members agree — and
-// deliberately nothing about the SHAPE of the address. Asserting a suffix, a
-// label length, or a subdomain layout here would write one host's private
-// naming into the lane, and every other host would fail a check about a
-// decision the contract leaves to it.
+// comes back, that it is HTTPS, that the path root is `/`, that the two
+// published members agree, and that the address does not move under a read —
+// and deliberately nothing about the SHAPE of the address. Not a suffix, not a
+// label length, not a subdomain layout, and NOT whether the label resembles the
+// resource name: rule 3 of decision 0024 leaves every one of those to the host,
+// so a host allocating `endpoint-probe.tenant.example` is conforming and must
+// pass here. The third guarantee — that the address routes to the worker's
+// ACTIVE DEPLOYMENT — is proved in
+// checkWorkerEndpointFollowsTheActiveDeployment, which is where the state to
+// observe it exists.
+//
+// "The host, not the request, chose this" is a real property and it is proved
+// by CONSTRUCTION rather than by reading the returned string. The corpus's
+// endpoint probe carries no address at all — the loader refuses a probe whose
+// desired state is anything but the worker reference — so there is nothing for
+// a host to echo, and the check below re-asserts that the host did not write
+// one into the stored spec either. No inspection of the value could add to
+// that: a hostname derived from the resource name is the host's allocation
+// algorithm, not the author's request, and banning it would fail a conforming
+// host over a decision the contract hands it.
 //
 // A host that cannot assign an address at all must refuse the endpoint with
 // `unsupported_capability` (422). That branch is not driven here, because a
@@ -58,16 +75,6 @@ func (r *v3Runner) checkWorkerEndpointAddressIsHostAssigned() error {
 	hostname, url, err := endpointAddress(created, "the created WorkerEndpoint")
 	if err != nil {
 		return err
-	}
-	// Nothing in the request could have produced this address. The corpus
-	// desired state carries no hostname at all, so the only way the runner could
-	// predict it is if the host had derived it from the resource name — which is
-	// exactly the "assigned" claim being false.
-	if strings.Contains(hostname, endpoint.Name) {
-		return fmt.Errorf(
-			"assigned hostname %q is the resource name %q with decoration; a host-assigned address is the host's to choose, not a rendering of what the author wrote",
-			hostname, endpoint.Name,
-		)
 	}
 	// A read answers the same address. An endpoint whose address moved between
 	// the apply response and the next read would be unusable: every consumer of
@@ -158,6 +165,28 @@ func (r *v3Runner) checkWorkerEndpointFollowsTheActiveDeployment() error {
 	if err != nil {
 		return err
 	}
+	// Two endpoints on two workers publish two addresses. That is not an
+	// assertion about the SHAPE of either — it follows from what an endpoint
+	// promises, because one address at one path root cannot invoke the active
+	// deployments of two different workers, so a host answering both with the
+	// same value has made the guarantee false for one of them. It is the
+	// assertion a host whose "assignment" is a constant fails, and the only
+	// address property worth stating that does not fence the host's allocation
+	// algorithm.
+	corpusEndpoint, _, err := r.read(r.target(input.WorkerEndpoint))
+	if err != nil {
+		return fmt.Errorf("reading the endpoint on the corpus worker: %w", err)
+	}
+	other, _, err := endpointAddress(corpusEndpoint, "the endpoint on the corpus worker")
+	if err != nil {
+		return err
+	}
+	if other == before {
+		return fmt.Errorf(
+			"the endpoints of two different workers were both assigned %q; one address cannot route to two workers' active deployments",
+			before,
+		)
+	}
 
 	// Deleting what serves the address is refused while the address is live.
 	current, _, err := r.read(deployment)
@@ -225,8 +254,8 @@ func (r *v3Runner) checkWorkerEndpointFollowsTheActiveDeployment() error {
 
 // checkFormDeclaredOutputsAreExact proves the published wire rule that nothing
 // proved before: `status.outputs` is present exactly for a Form whose
-// Definition declares an outputSchema, carries exactly that schema's members,
-// and is OMITTED for every other Form
+// Definition declares an outputSchema, VALIDATES against that schema, carries
+// exactly its members, and is OMITTED for every other Form
 // (spec/schemas/host-api-wire-v1alpha3.schema.json).
 //
 // Both halves matter and they fail different hosts. A host that returned an
@@ -236,7 +265,15 @@ func (r *v3Runner) checkWorkerEndpointFollowsTheActiveDeployment() error {
 // value the contract cannot type, which is exactly the untyped blob the typed
 // attribute surface exists to replace (spec/decisions/0025).
 //
-// The member set comes from the corpus rather than from the host, because the
+// Each value is measured against the DECLARED schema rather than against an
+// assumption about its type. The wire rule is "validates against the installed
+// Definition's outputSchema", and only that rule fails a host answering
+// `hostname: "not a hostname"` with a matching `url` — a document a member-name
+// comparison, or a non-empty-string test, accepts. It is also the only reading
+// under which the integer and boolean outputs the authoring model permits pass:
+// a hard-coded string test would reject the first Form that declared one.
+//
+// The contract comes from the corpus rather than from the host, because the
 // published form-definition response carries no outputSchema and its bytes are
 // immutable: asking the host what it declared and then checking that it
 // returned it would be asking the host to grade itself.
@@ -267,8 +304,10 @@ func (r *v3Runner) checkFormDeclaredOutputsAreExact() error {
 			}
 		}
 		sort.Strings(returned)
-		want := append([]string(nil), probe.DeclaredOutputs...)
-		sort.Strings(want)
+		want, schema, err := probe.outputContract()
+		if err != nil {
+			return err
+		}
 		if len(want) == 0 {
 			if resource.Status != nil && resource.Status.Outputs != nil {
 				return fmt.Errorf(
@@ -285,11 +324,11 @@ func (r *v3Runner) checkFormDeclaredOutputsAreExact() error {
 				"%s outputs = %v, want exactly the declared %v", target.Ref.Kind, returned, want,
 			)
 		}
-		for _, name := range want {
-			text, ok := resource.Status.Outputs[name].(string)
-			if !ok || strings.TrimSpace(text) == "" {
-				return fmt.Errorf("%s output %q is not a non-empty string", target.Ref.Kind, name)
-			}
+		if err := validateDeclaredOutputs(schema, resource.Status.Outputs); err != nil {
+			return fmt.Errorf(
+				"%s published %v, which does not validate against the outputSchema its Form declares: %w",
+				target.Ref.Kind, resource.Status.Outputs, err,
+			)
 		}
 	}
 	// Both sides have to have been exercised, or the check is vacuous in one
@@ -306,10 +345,25 @@ func (r *v3Runner) checkFormDeclaredOutputsAreExact() error {
 	return nil
 }
 
+// validateDeclaredOutputs holds one returned outputs document to the Form's own
+// declared contract: the types, the anchored patterns, and the bounds the
+// Form's authors wrote, rather than anything the runner assumed about them.
+func validateDeclaredOutputs(schema *jsonschema.Schema, outputs map[string]any) error {
+	document, err := jsonSchemaDocument(outputs)
+	if err != nil {
+		return fmt.Errorf("the outputs document is not encodable JSON: %w", err)
+	}
+	return schema.Validate(document)
+}
+
 // endpointAddress reads and holds one Worker Endpoint's published address to
-// everything the Form fixes: both members present, the scheme https, the path
-// root `/`, and the URL being exactly the hostname it reports. The last one is
-// what stops a host from publishing two addresses under one resource.
+// the one thing no schema can state: `url` is exactly `https://` + the
+// `hostname` this same document reports + `/`. A JSON Schema bounds each member
+// on its own, so a host could satisfy both patterns while publishing an address
+// whose two halves name different origins — which is a client holding one
+// resource that answers at two addresses, with nothing saying which is real.
+// The per-member types, patterns, and bounds are the declared outputSchema's to
+// enforce, and checkFormDeclaredOutputsAreExact enforces them there.
 func endpointAddress(resource wireResource, subject string) (hostname, address string, err error) {
 	if resource.Status == nil || len(resource.Status.Outputs) == 0 {
 		return "", "", fmt.Errorf("%s published no status.outputs; the assigned address is the Form's whole answer", subject)

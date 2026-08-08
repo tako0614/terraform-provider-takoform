@@ -68,13 +68,20 @@ rules below are normative; the operative text lives in
    computed value has. An output is one closed scalar, so a consumer reads a
    typed value rather than a document it must decode again.
 
-3. **A host returns exactly the declared members, or none at all.** For a Form
-   declaring an `outputSchema`, `status.outputs` is present and carries exactly
-   those members. For a Form declaring none, `status.outputs` is OMITTED — not
-   an empty object. This is the published wire rule, now enforced: it is the
-   required conformance check `form-declared-outputs-are-exact`, which drives
-   both halves, because a host that returned an empty document everywhere would
-   pass a check that only looked at the Form declaring outputs.
+3. **A host returns exactly the declared members, or none at all, and each one
+   validates.** For a Form declaring an `outputSchema`, `status.outputs` is
+   present, carries exactly those members, and VALIDATES against that schema —
+   the type, the anchored pattern, and the bounds the Form declares. For a Form
+   declaring none, `status.outputs` is OMITTED — not an empty object. This is
+   the published wire rule, now enforced: it is the required conformance check
+   `form-declared-outputs-are-exact`, which drives both halves, because a host
+   that returned an empty document everywhere would pass a check that only
+   looked at the Form declaring outputs. The lane measures each value against
+   the declared schema rather than against an assumption about it, because a
+   check that only asked whether a non-empty string came back would accept
+   `hostname: "not a hostname"` and reject the first integer output rule 2
+   permits — a required check no incorrect host can fail and no correct host can
+   pass, in one place.
 
 4. **The provider generates one typed computed attribute per declared output.**
    It is derived from the declarations the `outputSchema` is rendered from, so
@@ -102,7 +109,14 @@ rules below are normative; the operative text lives in
    [0017](0017-provider-state-survives-form-evolution-and-interruption.md)).
    Outputs are re-read from the host on every refresh and never carried forward
    from prior state: a stale address would be reported as current with no plan
-   able to correct it, because no desired attribute changed.
+   able to correct it, because no desired attribute changed. Null belongs to
+   that path and to no other. A response carrying `status` carries every
+   declared output with its declared type (rule 3), so on an ordinary create,
+   update, or refresh a missing or wrongly-typed one FAILS the write with a
+   diagnostic naming the output and what was wrong. Recording it as a null
+   instead would leave the practitioner holding an address-shaped hole — no
+   endpoint, no error, and every expression reading it evaluating to null — with
+   the host's fault nowhere on screen.
 
 7. **The outputs a state ref declares are the recorded ref's, not this build's.**
    Output attributes are decoded through the same per-exact-FormRef codec every
@@ -140,7 +154,14 @@ exist.
   form-definition response is a closed object carrying identity, display name,
   description, and `desiredSchema`, and its bytes are immutable, so a client
   learns a Form's output contract from the Form Package it installs and the
-  conformance corpus pins the member set it holds a host to. Serving the output
+  conformance corpus pins the WHOLE declared schema it holds a host to — the
+  contract rather than its member names, because that is what the wire rule says
+  a host's outputs validate against. The corpus carries it rather than the
+  runner deriving it from the pinned Form identity, because the corpus is the
+  digest-pinned artifact a host is measured against: a runner compiling its own
+  copy of the catalog could hold two hosts to two contracts under one corpus
+  digest. A repository test compares the pinned bytes against the installed
+  Definition at the exact FormRef, so the two cannot drift. Serving the output
   contract over the API is a future schema generation, not a change to this one.
 - Nothing about the retained v1alpha2 lane changes. Its Forms derive their
   output schemas from a different catalog, and its resource carries a different

@@ -13,9 +13,11 @@ package provider
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -225,6 +227,122 @@ func TestV3TypedOutputsAreWrittenOnAnInterruptedApply(t *testing.T) {
 			t.Errorf("%s is still unknown after apply; the framework rejects an unset computed attribute", name)
 		}
 	}
+	// And the null is not reported as the host's fault, because it is not one.
+	// This is the whole distinction: no representation came back, so there is no
+	// declared output to have been missing from it.
+	if summary := v3OutputFaultSummary(createResponse.Diagnostics.Errors()); summary != "" {
+		t.Fatalf("the accepted-but-unfinished path reported %q; a null output is correct there", summary)
+	}
+}
+
+// TestV3AMalformedDeclaredOutputFailsTheWrite is the other side of that
+// distinction (spec/decisions/0025 rule 6).
+//
+// A response carrying `status` carries every output the Form declares, with the
+// declared type. Recording a violation as a null would leave the practitioner
+// with `takoform_worker_endpoint.x.url == null` — no address, no error, and
+// nothing naming the host that owed them one — while every expression consuming
+// it silently evaluates to null too.
+func TestV3AMalformedDeclaredOutputFailsTheWrite(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		outputs map[string]any
+		want    string
+	}{
+		{
+			name:    "the declared member is omitted",
+			outputs: map[string]any{"url": v3TestEndpointURL},
+			want:    "status.outputs omits it",
+		},
+		{
+			name:    "the whole outputs document is absent",
+			outputs: nil,
+			want:    "status.outputs omits it",
+		},
+		{
+			name:    "the declared member has the wrong type",
+			outputs: map[string]any{"hostname": 8443, "url": v3TestEndpointURL},
+			want:    "declared string and the host returned the number 8443",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			host := newV3FakeHost(t)
+			host.assignedOutputs = test.outputs
+			resource := v3TestFormResource(t, "WorkerEndpoint", newV3TestProviderData(t, host))
+			ctx := context.Background()
+			schemaResponse := v3SchemaOf(t, resource)
+			plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+				"name":   types.StringValue("worker-endpoint"),
+				"worker": types.StringValue("module-worker"),
+			})
+			createResponse := frameworkresource.CreateResponse{
+				State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+			}
+			resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
+			if !createResponse.Diagnostics.HasError() {
+				t.Fatal("a create whose response violated the Form's output contract succeeded")
+			}
+			summary := v3OutputFaultSummary(createResponse.Diagnostics.Errors())
+			if summary != "Host response does not satisfy the declared output hostname" {
+				t.Fatalf("diagnostic summary = %q, want one naming the missing output", summary)
+			}
+			if detail := v3OutputFaultDetail(createResponse.Diagnostics.Errors()); !strings.Contains(detail, test.want) {
+				t.Fatalf("diagnostic detail = %q, want it to say %q", detail, test.want)
+			}
+		})
+	}
+}
+
+// TestV3AMalformedDeclaredOutputFailsARefresh proves a refresh is held to the
+// same rule. An address the host stops publishing is not drift a plan can
+// converge — no desired attribute changed — so a quiet null would be permanent.
+func TestV3AMalformedDeclaredOutputFailsARefresh(t *testing.T) {
+	host := newV3FakeHost(t)
+	host.assignedOutputs = v3EndpointOutputs()
+	resource := v3TestFormResource(t, "WorkerEndpoint", newV3TestProviderData(t, host))
+	ctx := context.Background()
+	schemaResponse := v3SchemaOf(t, resource)
+	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"name":   types.StringValue("worker-endpoint"),
+		"worker": types.StringValue("module-worker"),
+	})
+	createResponse := frameworkresource.CreateResponse{
+		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
+	}
+	resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
+	if createResponse.Diagnostics.HasError() {
+		t.Fatalf("create: %v", createResponse.Diagnostics)
+	}
+	host.reassignOutputs("WorkerEndpoint", "worker-endpoint", map[string]any{"url": v3TestEndpointURL})
+	readResponse := frameworkresource.ReadResponse{State: createResponse.State}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: createResponse.State}, &readResponse)
+	if !readResponse.Diagnostics.HasError() {
+		t.Fatal("a refresh whose response dropped a declared output succeeded")
+	}
+	if summary := v3OutputFaultSummary(readResponse.Diagnostics.Errors()); summary == "" {
+		t.Fatalf("refresh diagnostics = %v, want one naming the dropped output", readResponse.Diagnostics)
+	}
+}
+
+// v3OutputFaultSummary returns the summary of the declared-output diagnostic,
+// or "" when no diagnostic reported one.
+func v3OutputFaultSummary(errors []diag.Diagnostic) string {
+	for _, diagnostic := range errors {
+		if strings.HasPrefix(diagnostic.Summary(), "Host response does not satisfy the declared output") {
+			return diagnostic.Summary()
+		}
+	}
+	return ""
+}
+
+// v3OutputFaultDetail returns the detail of the declared-output diagnostic.
+func v3OutputFaultDetail(errors []diag.Diagnostic) string {
+	for _, diagnostic := range errors {
+		if strings.HasPrefix(diagnostic.Summary(), "Host response does not satisfy the declared output") {
+			return diagnostic.Detail()
+		}
+	}
+	return ""
 }
 
 // TestV3FormsWithoutOutputsDeclareNoOutputAttributes is the negative side. A

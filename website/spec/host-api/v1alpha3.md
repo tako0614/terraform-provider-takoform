@@ -499,7 +499,14 @@ in the same class as an account, a region, and a vendor subdomain
   The SHAPE of the address — which label, which subdomain, which apex, how long,
   whether it resembles the resource name — is host detail, so a configuration
   MUST NOT parse the hostname, assert a suffix, or reconstruct either value from
-  anything else it knows.
+  anything else it knows. Nothing measures the shape either: an address that
+  resembles the resource name is conforming, because the endpoint's desired
+  state carries no address for a host to have echoed.
+- Two endpoints on two workers carry two DIFFERENT addresses. It follows from
+  the third guarantee rather than from any rule about the shape: one address at
+  one path root cannot invoke the active deployments of two workers, so a host
+  answering both with the same value has made the guarantee false for one of
+  them.
 - The endpoint holds no version reference, so promotion and rollback move what
   answers without the endpoint being re-applied and without its address
   changing. "Active deployment" is the one this document already defines.
@@ -631,7 +638,13 @@ already states through `x-takoform-requiredWhen` and `x-takoform-omittedWhen`:
 
 This is the required conformance check `form-declared-outputs-are-exact`, driven
 across a Form that declares outputs and Forms that declare none, because a host
-returning an empty document everywhere would satisfy only the first half.
+returning an empty document everywhere would satisfy only the first half. Each
+returned value is measured against the declared schema — its type, its anchored
+pattern, its bounds — rather than against an assumption about it: a check that
+only asked for a non-empty string would accept `hostname: "not a hostname"` and
+reject an integer output the authoring model permits. The conformance corpus
+pins the whole declared schema for that reason, since no wire surface serves
+one.
 
 An output is not desired state. It carries no default, no immutability, and no
 cross-resource reference: those describe what an author asks for, and an output
@@ -646,7 +659,11 @@ so a client learns a Form's output contract from the Form Package it installs.
 
 The Terraform and OpenTofu provider projects each declared output as a typed
 computed attribute, and retains `outputs_json` — carrying the WHOLE document,
-unnarrowed — as the way to reach an output no schema describes.
+unnarrowed — as the way to reach an output no schema describes. It writes null
+for a declared output only where no representation exists — the state an
+accepted-but-unfinished mutation leaves behind — and fails an ordinary create,
+update, or refresh whose response omits a declared output or returns it with the
+wrong type, naming the output and what was wrong.
 
 ## Long-running operations
 

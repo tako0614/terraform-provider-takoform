@@ -6,6 +6,7 @@
 package portableconformancev3
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,7 +17,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
@@ -248,18 +252,140 @@ type ResourceProbe struct {
 	Identity              InstalledFormReference `json:"identity"`
 	LifecycleCapabilities []string               `json:"lifecycleCapabilities"`
 	Desired               map[string]any         `json:"desired"`
-	// DeclaredOutputs is the exact member set this Form's `outputSchema`
-	// declares, or empty when it declares none.
+	// DeclaredOutputSchema is this Form's `outputSchema` — the WHOLE closed
+	// Draft 2020-12 contract its Definition declares — or absent when it
+	// declares none.
 	//
 	// It is corpus data because the lane cannot read it from the host: the
 	// published form-definition response is a closed object carrying identity,
 	// display name, description, and desiredSchema, and its bytes are immutable
 	// (decision 0014), so there is no wire surface that serves an outputSchema.
-	// Pinning the member set here is what lets the runner hold `status.outputs`
-	// to the rule the published wire schema states — required for a Form that
-	// declares an output contract, omitted for one that does not — instead of
-	// accepting whatever a host happens to return.
-	DeclaredOutputs []string `json:"declaredOutputs,omitempty"`
+	//
+	// It carries the schema rather than the member names for the reason the wire
+	// rule is stated the way it is: `status.outputs` VALIDATES against the
+	// installed Definition's outputSchema, so a runner holding only the names
+	// could check that a member came back and nothing about what came back —
+	// which admits `hostname: "not a hostname"` and rejects the integer and
+	// boolean outputs the authoring model permits.
+	//
+	// And it is pinned in the corpus rather than derived inside the runner from
+	// the Form identity, because the corpus is the digest-pinned artifact a host
+	// is measured against. A runner that compiled its own copy of the catalog
+	// could hold two hosts to two different contracts under one corpus digest,
+	// and the evidence a host publishes would no longer say what it was held to.
+	// Corpus and Form cannot drift apart: TestCorpusPinsTheFormsOwnOutputSchema
+	// compares these bytes against the installed Definition at the exact pinned
+	// FormRef.
+	DeclaredOutputSchema map[string]any `json:"declaredOutputSchema,omitempty"`
+}
+
+// declaresOutputs reports whether this probe's Form publishes an output
+// contract at all. A Form that declares none must OMIT `status.outputs`, not
+// return an empty document.
+func (probe ResourceProbe) declaresOutputs() bool { return len(probe.DeclaredOutputSchema) > 0 }
+
+// outputContract compiles the pinned `outputSchema` and returns the exact
+// member set it declares alongside it.
+//
+// The member list is DERIVED from the schema's `required` rather than pinned
+// beside it: two statements of one fact could disagree, and the schema is the
+// one the wire rule names.
+func (probe ResourceProbe) outputContract() ([]string, *jsonschema.Schema, error) {
+	if !probe.declaresOutputs() {
+		return nil, nil, nil
+	}
+	kind := probe.Identity.FormRef.Kind
+	members, err := declaredOutputMembers(probe.DeclaredOutputSchema)
+	if err != nil {
+		return nil, nil, fmt.Errorf("portable host v3 %s probe declaredOutputSchema: %w", kind, err)
+	}
+	compiled, err := compileOutputSchema(kind, probe.DeclaredOutputSchema)
+	if err != nil {
+		return nil, nil, err
+	}
+	return members, compiled, nil
+}
+
+// declaredOutputMembers reads the exact member set out of one output contract,
+// refusing a schema that is not the closed, wholly-required object the
+// authoring model produces (decision 0025 rule 1).
+//
+// The refusal matters more than it looks: a corpus that pinned a schema with
+// `additionalProperties` open, or with a member missing from `required`, would
+// pin a contract that no host could fail — the exact toothless shape the check
+// exists to close.
+func declaredOutputMembers(schema map[string]any) ([]string, error) {
+	if kind, _ := schema["type"].(string); kind != "object" {
+		return nil, errors.New("an output contract is an object schema")
+	}
+	if closed, ok := schema["additionalProperties"].(bool); !ok || closed {
+		return nil, errors.New("an output contract is closed: additionalProperties must be false")
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	if len(properties) == 0 {
+		return nil, errors.New("an output contract declares at least one member")
+	}
+	// `required` arrives as []any from the corpus bytes and as []string from a
+	// schema rendered in process; both are the same statement.
+	var required []string
+	switch entries := schema["required"].(type) {
+	case []any:
+		required = anyStringSlice(entries)
+	case []string:
+		required = entries
+	}
+	members := make([]string, 0, len(properties))
+	seen := map[string]bool{}
+	for _, name := range required {
+		if name == "" || seen[name] {
+			return nil, errors.New("required lists an empty or duplicated member")
+		}
+		if _, declared := properties[name]; !declared {
+			return nil, fmt.Errorf("required names %q, which properties does not declare", name)
+		}
+		seen[name] = true
+		members = append(members, name)
+	}
+	for name := range properties {
+		if !seen[name] {
+			return nil, fmt.Errorf(
+				"member %q is declared but not required; every declared output is returned, so a host could omit it and still pass",
+				name,
+			)
+		}
+	}
+	sort.Strings(members)
+	return members, nil
+}
+
+// compileOutputSchema compiles one pinned output contract for validation.
+func compileOutputSchema(kind string, schema map[string]any) (*jsonschema.Schema, error) {
+	document, err := jsonSchemaDocument(schema)
+	if err != nil {
+		return nil, fmt.Errorf("portable host v3 %s output schema: %w", kind, err)
+	}
+	compiler := jsonschema.NewCompiler()
+	compiler.DefaultDraft(jsonschema.Draft2020)
+	compiler.AssertFormat()
+	id := "https://forms.takoform.com/portable-host-v3/" + kind + ".outputs.schema.json"
+	if err := compiler.AddResource(id, document); err != nil {
+		return nil, fmt.Errorf("portable host v3 %s output schema: %w", kind, err)
+	}
+	compiled, err := compiler.Compile(id)
+	if err != nil {
+		return nil, fmt.Errorf("portable host v3 %s output schema: %w", kind, err)
+	}
+	return compiled, nil
+}
+
+// jsonSchemaDocument re-encodes a decoded JSON value into the form the schema
+// library validates against, so numbers keep their exact literal.
+func jsonSchemaDocument(value any) (any, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	return jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 }
 
 // WorkerBundleProbe carries what the WorkerBundle probe needs beyond its
@@ -700,12 +826,11 @@ func validateProbe(label string, probe ResourceProbe, kind string) error {
 	if probe.Desired == nil {
 		return fmt.Errorf("portable host v3 %s probe desired must be present", label)
 	}
-	seen := map[string]bool{}
-	for _, output := range probe.DeclaredOutputs {
-		if output == "" || seen[output] {
-			return fmt.Errorf("portable host v3 %s probe declaredOutputs is invalid", label)
-		}
-		seen[output] = true
+	// The pinned output contract is compiled at LOAD time. A corpus whose output
+	// schema does not compile, or that pins a schema no host could fail, must
+	// stop the run before it starts rather than pass every host it measures.
+	if _, _, err := probe.outputContract(); err != nil {
+		return fmt.Errorf("portable host v3 %s probe: %w", label, err)
 	}
 	return validateProbeCapabilities(label, probe.LifecycleCapabilities)
 }
@@ -1096,9 +1221,13 @@ func validateCrossResourceProbes(input RunnerInput) error {
 				"a probe carrying an address of its own could not prove the host assigned one",
 		)
 	}
-	if !reflect.DeepEqual(endpoint.DeclaredOutputs, []string{"hostname", "url"}) {
+	members, _, err := endpoint.outputContract()
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(members, []string{"hostname", "url"}) {
 		return errors.New(
-			"portable host v3 workerEndpoint probe must pin the exact outputs its Form declares, [hostname url]",
+			"portable host v3 workerEndpoint probe must pin the output contract its Form declares, [hostname url]",
 		)
 	}
 	if nestedName(input.WorkerCronTrigger.Desired, "worker") != input.ModuleWorker.Name {
