@@ -22,6 +22,7 @@ import {
   createHardenedGitEnvironment,
   createPublicationManifest,
   createPublicationManifestFromEntries,
+  diagnostics,
   inspectUncommittedPublicationPaths,
   parseCurrentProductionDeployment,
   pinnedWranglerInvocation,
@@ -405,4 +406,63 @@ test("pinned Wrangler uses an absolute Node executable and bypasses PATH and its
       "node",
     ),
   ).toThrow("absolute Node");
+});
+
+describe("a blocked deploy says what went wrong", () => {
+  // The failure-handling obligation is raw diagnostics AND no blind retry.
+  // They are one requirement: an operator told only that a step is
+  // indeterminate has been left with retrying as the only move.
+  test("an ordinary Error's message reaches the operator", () => {
+    expect(diagnostics(new Error("production status is aaa/bbb"))).toContain(
+      "production status is aaa/bbb",
+    );
+  });
+
+  test("a subprocess failure keeps its own output", () => {
+    const failure = Object.assign(new Error("command failed"), {
+      stdout: "uploading\n",
+      stderr: "Error 10007: version not found\n",
+    });
+    const rendered = diagnostics(failure);
+    expect(rendered).toContain("Error 10007: version not found");
+    expect(rendered).toContain("uploading");
+  });
+
+  // Asserted against a real failure rather than a hand-built one: execFileSync
+  // quotes the captured stderr INSIDE its message, so a containment test
+  // written the other way round prints the same stderr twice.
+  test("a real subprocess failure prints its stderr once, with the command", () => {
+    let failure;
+    try {
+      // The stderr text is assembled at runtime so it is NOT a substring of
+      // the command line the message also quotes; otherwise the count below
+      // would measure the test's own echo argument.
+      execFileSync("/bin/sh", ["-c", "echo \"zone $((400 + 3))\" >&2; exit 7"], {
+        encoding: "utf8",
+        stdio: "pipe",
+      });
+    } catch (error) {
+      failure = error;
+    }
+    const rendered = diagnostics(failure);
+    expect(rendered.match(/zone 403/g)).toHaveLength(1);
+    expect(rendered).toContain("/bin/sh");
+  });
+
+  test("a subprocess that already printed the message does not print it twice", () => {
+    const failure = Object.assign(new Error("boom"), { stdout: "", stderr: "boom\n" });
+    expect(diagnostics(failure).match(/boom/g)).toHaveLength(1);
+  });
+
+  test("a step that produced nothing says so rather than printing a blank line", () => {
+    expect(diagnostics(Object.assign(new Error(""), { stdout: "", stderr: "" }))).toBe(
+      "no diagnostic was produced by the failing step\n",
+    );
+  });
+
+  test("a cause is not swallowed", () => {
+    expect(
+      diagnostics(new Error("fence failed", { cause: new Error("zone 403") })),
+    ).toContain("zone 403");
+  });
 });

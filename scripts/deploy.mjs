@@ -37,6 +37,7 @@ import {
   createPinnedWranglerInstallation,
   createPublicationManifest,
   createPublicationManifestFromEntries,
+  diagnostics,
   inspectUncommittedPublicationPaths,
   parseCurrentProductionDeployment,
   pinnedWranglerInvocation,
@@ -568,7 +569,7 @@ try {
     ),
   );
 } catch (error) {
-  process.stderr.write(`${error.stdout ?? ""}${error.stderr ?? ""}\n`);
+  process.stderr.write(diagnostics(error));
   die("the public authority gate failed before publication; production is unchanged");
 }
 
@@ -600,7 +601,7 @@ try {
     ),
   );
 } catch (error) {
-  process.stderr.write(`${error.stdout ?? ""}${error.stderr ?? ""}\n`);
+  process.stderr.write(diagnostics(error));
   die("the public snapshot gate failed before publication; production is unchanged");
 }
 
@@ -682,7 +683,7 @@ try {
     createPublicationManifest(publicationRepo, VERIFIED_SNAPSHOT_PATHS),
   );
 } catch (error) {
-  process.stderr.write(`${error.stdout ?? ""}${error.stderr ?? ""}\n`);
+  process.stderr.write(diagnostics(error));
   die(
     "the website fresh-build gate failed before publication; production is unchanged",
   );
@@ -1329,7 +1330,7 @@ try {
     },
   );
 } catch (error) {
-  process.stderr.write(`${error.stdout ?? ""}${error.stderr ?? ""}\n`);
+  process.stderr.write(diagnostics(error));
   die(
     `version staging or its post-upload fence failed. Production remains at ${previous.deploymentId}/${previous.versionId}. ` +
       `${uploadedVersion ? `Dormant uploaded version ${uploadedVersion} may remain. ` : ""}` +
@@ -1408,7 +1409,7 @@ try {
   } catch {
     // Preserve the primary error and fail closed on unreadable authority.
   }
-  process.stderr.write(`${error.stdout ?? ""}${error.stderr ?? ""}\n`);
+  process.stderr.write(diagnostics(error));
   die(
     `version deployment is indeterminate. Previous ${previous.deploymentId}/${previous.versionId}; uploaded ${uploadedVersion}; observed ${observed}. Do not retry or roll back blindly.`,
   );

@@ -19,6 +19,39 @@ const UUID =
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
+// diagnostics renders what actually went wrong, whatever threw.
+//
+// The failure-handling obligation this entrypoint declares is raw diagnostics
+// and no blind retry, and the two are one requirement: an operator told only
+// that a step is indeterminate, with nothing said about why, has been left with
+// retrying as the only move available. A subprocess failure carries its output
+// on stdout/stderr, but a fence, a precondition read, or any ordinary assertion
+// throws an Error whose message is the whole diagnosis — printing only the two
+// subprocess members discards it and prints a blank line instead.
+export function diagnostics(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const captured = [String(error?.stdout ?? ""), String(error?.stderr ?? "")].filter(
+    (stream) => stream.trim().length > 0,
+  );
+  const parts = [];
+  // execFileSync builds its message from the command AND the captured stderr,
+  // so the message is usually the superset: printing both would show the same
+  // stderr twice, once bare and once quoted inside "Command failed: ...".
+  // Whichever text contains the other is the one worth printing.
+  if (message.trim().length > 0 && captured.every((stream) => message.includes(stream.trim()))) {
+    parts.push(`${message.replace(/\n*$/, "")}\n`);
+  } else {
+    parts.push(...captured.map((stream) => stream.replace(/\n*$/, "\n")));
+    if (message.trim().length > 0 && !captured.some((stream) => stream.includes(message))) {
+      parts.push(`${message}\n`);
+    }
+  }
+  if (error instanceof Error && error.cause !== undefined) {
+    parts.push(`caused by: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}\n`);
+  }
+  return parts.length > 0 ? parts.join("") : "no diagnostic was produced by the failing step\n";
+}
+
 function sortPaths(left, right) {
   return left.path < right.path ? -1 : left.path > right.path ? 1 : 0;
 }
