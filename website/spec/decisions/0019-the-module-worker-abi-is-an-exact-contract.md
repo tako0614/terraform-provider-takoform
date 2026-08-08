@@ -130,7 +130,7 @@ decision 0014.
 
 ### Conformance
 
-Two required checks join the v1alpha3 runner list:
+Three required checks join the v1alpha3 runner list:
 
 - `module-worker-runtime-contract-advertised` — the host serves the runtime
   contract's support profile at the exact pinned `schemaDigest` and supports the
@@ -141,10 +141,36 @@ Two required checks join the v1alpha3 runner list:
   the runtime contract does not define is refused at both pre-mutation gates
   (`validate` and `prepare`) and stores nothing, while a version declaring only
   defined handlers is still accepted.
+- `declared-handler-not-exported-rejected` — a `WorkerVersion` declaring a
+  handler the ABI *does* define, against a bundle whose main module does not
+  export it, is refused before any mutation and stores nothing, while a version
+  declaring only exported handlers is still accepted. `loadModule` fails such a
+  version with `handler_not_exported` before traffic arrives, so a host that
+  stored it would go on gating attachments against a handler that does not
+  exist. Unlike the check above, this one is not decidable from the spec: it
+  reads the bundle relation, the committed manifest, and the module's content
+  address, so it lives on the mutation path beside the other Worker aggregate
+  rules.
 
 `support-profiles-present` additionally now fails a host that advertises a
 `compatibilityDate` range or a `compatibilityFlags` enum, or whose `handlers`
 enum is not exactly the contract's vocabulary.
+
+The corpus states what each pinned module exports, because a check pairing a
+declaration with a bundle that cannot answer it would fail exactly the hosts
+that implement the contract — a required check no correct host can pass is worse
+than a missing one. `conformance/portable-host-v3` therefore carries two
+bundles: the probe bundle, whose module exports the whole vocabulary and which
+every positive control is driven against, and one fetch-only bundle that exists
+so the refusal above can be driven at all. Loading the corpus fails if either
+stops being what the lane needs it to be.
+
+The lane is a Host API runner, so it proves what a host advertises and what it
+refuses, never what an isolate does. [`../host-api/v1alpha3.md`](../host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation)
+states the split explicitly: handler signatures, streaming bodies, the exact
+`env` property set, `waitUntil`, exception outcomes, the `globals` floor, and
+`handler_not_exported` for arbitrary bytes remain obligations proven by the
+contract's behavior fixtures against a real runtime.
 
 ## Consequences
 

@@ -76,8 +76,10 @@ func (r *v3Runner) run() error {
 		r.checkDeploymentIntegrity,
 		r.checkHandlerGatedAttachments,
 		// The ABI closes the handler surface those attachments are gated on
-		// (spec/decisions/0019).
+		// (spec/decisions/0019): first by vocabulary, then by what the code a
+		// version actually runs exports.
 		r.checkUndeclaredRuntimeHandlerRejected,
+		r.checkDeclaredHandlerNotExportedRejected,
 		r.checkBindingNameCollision,
 		r.checkDeploymentChangePreservesDependents,
 		r.checkDeploymentDeleteBlockedByDependent,

@@ -9,6 +9,11 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
+// The runner reads what each pinned module exports out of the corpus, exactly
+// as it reads every other pinned fact. It is what lets a black-box check pair a
+// declaration with a bundle that can answer it — and the corpus, not the runner,
+// is what proves the pairing is coherent (see validateWorkerVersionProbe).
+
 // runner_runtime_abi_checks.go proves the two facts that make the ES Module
 // Worker ABI a contract rather than a claim (spec/decisions/0019).
 //
@@ -119,6 +124,14 @@ func (r *v3Runner) checkRuntimeContractAdvertised() error {
 // never apply. Nothing is stored either way, and a version declaring only
 // handlers the contract DOES define must still be accepted, or a host could
 // pass this check by refusing every version.
+//
+// That positive control declares the WHOLE vocabulary, so it is coherent only
+// against a bundle whose module exports the whole vocabulary — otherwise the
+// same contract that closes the handler surface would require a conforming host
+// to refuse it (`handler_not_exported`), and no correct host could ever complete
+// this check. The corpus proves the pinned bundle exports it; the paired
+// `declared-handler-not-exported-rejected` proves the other direction against
+// the bundle that deliberately exports less.
 func (r *v3Runner) checkUndeclaredRuntimeHandlerRejected() error {
 	input := r.contract.RunnerInput
 	runtime := input.SupportProbes.RuntimeContract
@@ -154,5 +167,87 @@ func (r *v3Runner) checkUndeclaredRuntimeHandlerRejected() error {
 		return err
 	}
 	r.complete("undeclared-runtime-handler-rejected")
+	return nil
+}
+
+// checkDeclaredHandlerNotExportedRejected proves the other half of the
+// `loadModule` contract: a handler the ABI DOES define, declared by a version
+// whose module does not export it, is refused before anything is stored.
+//
+// The two are different failures. `undeclared-runtime-handler-rejected` is
+// about vocabulary — a token no runtime knows — and is decidable from the spec
+// alone. This one is about CODE: `fetch` is a perfectly good handler, and
+// declaring it is fine, but declaring `scheduled` against a module whose default
+// export has no `scheduled` property is a version that fails
+// `handler_not_exported` before any traffic arrives. Storing it would leave the
+// attachment gate admitting a cron trigger against a handler that does not
+// exist, which is exactly the divergence the exact contract closes.
+//
+// The check is self-contained: it uploads and commits its own bundle, creates
+// its own worker, and depends on no state another check left behind.
+func (r *v3Runner) checkDeclaredHandlerNotExportedRejected() error {
+	input := r.contract.RunnerInput
+	runtime := input.SupportProbes.RuntimeContract
+	pinned := input.FetchOnlyBundle
+	missing := pinned.unexportedHandler(runtime)
+	if missing == "" {
+		return errors.New("the corpus fetch-only bundle exports every handler; nothing can be driven unexported")
+	}
+
+	manifestDigest, err := r.uploadAndCommitManifest(pinned.Manifest, map[string][]byte{
+		formpackage.DigestBytes([]byte(pinned.ModuleSource)): []byte(pinned.ModuleSource),
+	}, "key-fetch-only-artifact")
+	if err != nil {
+		return fmt.Errorf("committing the fetch-only bundle manifest: %w", err)
+	}
+	if manifestDigest != pinned.ManifestDigest {
+		return fmt.Errorf(
+			"the host committed the fetch-only manifest as %s; the corpus pins %s",
+			manifestDigest, pinned.ManifestDigest,
+		)
+	}
+	// The bundle is the workerBundle probe's Form line under its own name: one
+	// Form, two immutable revisions of code.
+	bundle := r.target(input.WorkerBundle.ResourceProbe)
+	bundle.Name = pinned.Name
+	bundle.Spec = map[string]any{"manifestDigest": manifestDigest}
+	if _, _, err := r.applyResource(bundle, applyOptions{
+		Create: true, IdempotencyKey: "key-fetch-only-bundle",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("the fetch-only WorkerBundle: %w", err)
+	}
+	worker := r.target(input.ModuleWorker)
+	worker.Name = "fetch-only-worker"
+	if _, _, err := r.applyResource(worker, applyOptions{
+		Create: true, IdempotencyKey: "key-fetch-only-worker",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("the fetch-only worker: %w", err)
+	}
+
+	offender := r.workerVersionOfBundle(
+		"fetch-only-version", worker.Name, bundle.Name,
+		append(append([]string(nil), pinned.ExportedHandlers...), missing)...,
+	)
+	if err := r.refuseCreate(
+		offender, "invalid_argument", "key-unexported-handler",
+		"a WorkerVersion declaring handler "+missing+", which its bundle's main module does not export",
+	); err != nil {
+		return err
+	}
+
+	// The same version declaring only what that module DOES export is accepted,
+	// so a host cannot pass by refusing every version bound to this bundle.
+	accepted := r.workerVersionOfBundle(
+		"fetch-only-version", worker.Name, bundle.Name, pinned.ExportedHandlers...,
+	)
+	if _, _, err := r.applyResource(accepted, applyOptions{
+		Create: true, IdempotencyKey: "key-exported-handlers-only",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("a WorkerVersion declaring only handlers its module exports: %w", err)
+	}
+	if err := r.deleteExisting(accepted, "key-exported-handlers-only-delete"); err != nil {
+		return err
+	}
+	r.complete("declared-handler-not-exported-rejected")
 	return nil
 }

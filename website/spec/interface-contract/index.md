@@ -76,6 +76,19 @@ a new value of some field. A Form MUST NOT state a runtime by a version token,
 date, or flag whose meaning depends on a registry the specification does not
 publish.
 
+A runtime contract is verified in two places, and neither substitutes for the
+other. The Host API conformance lane drives desired state, so it proves what a
+host SAYS and what it REFUSES: the exact advertised digest, the closed handler
+vocabulary, and that a Worker Version declaring a handler the ABI does not
+define — or one the module it references does not export — is refused before
+anything is stored. Everything the contract fixes about invocation is proven by
+its behavior fixtures against a real isolate: handler signatures, streaming
+bodies, `env`'s exact property set, `waitUntil`, exception outcomes, and the
+`globals` floor. The exact split for `worker.runtime@1.0.0` is written down in
+[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation),
+because a reader deciding whether a passing conformance report means "this host
+runs my code correctly" is entitled to know which half it covers.
+
 ## Behavior fixtures
 
 Shape validation alone cannot distinguish a KV store from a queue, so an

@@ -21,6 +21,13 @@ func aggregateHostname(label string) string {
 // workerVersionOf builds one Worker Version target of a named worker, with no
 // typed binding: the declared default of every binding list is the empty list,
 // so stating it needs no binding target to exist.
+//
+// The bundle is the corpus workerBundle probe, whose module exports the whole
+// runtime vocabulary, so any handler set the ABI defines is coherent against it.
+// A caller needing a version bound to different code says so explicitly with
+// workerVersionOfBundle: the runtime contract fails a declared handler the
+// referenced module does not export, so which bundle a version names is never
+// incidental.
 func (r *v3Runner) workerVersionOf(name, worker string, handlers ...string) probeTarget {
 	version := r.target(r.contract.RunnerInput.WorkerVersion)
 	version.Name = name
@@ -32,6 +39,16 @@ func (r *v3Runner) workerVersionOf(name, worker string, handlers ...string) prob
 		declared = append(declared, handler)
 	}
 	version.Spec["handlers"] = declared
+	return version
+}
+
+// workerVersionOfBundle builds the same target against a NAMED WorkerBundle
+// other than the corpus probe's.
+func (r *v3Runner) workerVersionOfBundle(name, worker, bundle string, handlers ...string) probeTarget {
+	version := r.workerVersionOf(name, worker, handlers...)
+	version.Spec["bundle"] = exactReference(
+		r.target(r.contract.RunnerInput.WorkerBundle.ResourceProbe), bundle,
+	)
 	return version
 }
 

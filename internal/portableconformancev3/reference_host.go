@@ -201,16 +201,21 @@ type ReferenceHost struct {
 	// (spec/decisions/0018).
 	blobTenants     map[string]map[string]bool
 	manifestTenants map[string]map[string]bool
-	uidCounter      int
-	opCounter       int
-	uploadCounter   int
-	requestCounter  int
+	// moduleExports maps one module BLOB digest to the handlers that module's
+	// default export exposes. See exportedHandlerViolation for why a reference
+	// host that runs no JavaScript can still hold the contract's
+	// handler_not_exported rule, and for exactly how far that reaches.
+	moduleExports  map[string][]string
+	uidCounter     int
+	opCounter      int
+	uploadCounter  int
+	requestCounter int
 }
 
 // NewReferenceHost constructs the deterministic reference host over the
 // verified contract and an installed catalog.
 func NewReferenceHost(contract Contract, catalog *Catalog) *ReferenceHost {
-	return &ReferenceHost{
+	host := &ReferenceHost{
 		contract:        contract,
 		catalog:         catalog,
 		resources:       map[string]*storedResource{},
@@ -223,7 +228,24 @@ func NewReferenceHost(contract Contract, catalog *Catalog) *ReferenceHost {
 		operations:      map[string]*hostOperation{},
 		blobTenants:     map[string]map[string]bool{},
 		manifestTenants: map[string]map[string]bool{},
+		moduleExports:   map[string][]string{},
 	}
+	input := contract.RunnerInput
+	host.declareModuleExports(input.WorkerBundle.ModuleSource, input.WorkerBundle.ExportedHandlers)
+	host.declareModuleExports(input.FetchOnlyBundle.ModuleSource, input.FetchOnlyBundle.ExportedHandlers)
+	return host
+}
+
+// declareModuleExports records what one module's default export exposes, keyed
+// by the content address of its bytes. Keying on the DIGEST rather than on a
+// bundle or a resource name is what makes the fact a property of the code: the
+// same bytes uploaded again, under any manifest, by any tenant, export the same
+// handlers.
+func (h *ReferenceHost) declareModuleExports(moduleSource string, handlers []string) {
+	if moduleSource == "" || len(handlers) == 0 {
+		return
+	}
+	h.moduleExports[formpackage.DigestBytes([]byte(moduleSource))] = append([]string(nil), handlers...)
 }
 
 // holdsBlob and holdsManifest answer the ONE authorization question the

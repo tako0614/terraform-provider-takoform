@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
@@ -31,6 +32,10 @@ const (
 	// relation pointer and the instance pointer, because no array stands
 	// between the spec root and the reference.
 	workerRelationPointer = "/worker"
+	// bundleRelationPointer is the concrete instance pointer of the `/bundle`
+	// reference a Worker Version declares: the ONE edge from a version to the
+	// immutable code it runs.
+	bundleRelationPointer = "/bundle"
 	// deploymentVersionsRelation is the DERIVED relation pointer of a
 	// deployment's weighted versions; concrete instances carry array indices,
 	// which is why lookups match on Relation rather than Pointer.
@@ -229,6 +234,9 @@ func (h *ReferenceHost) validateWorkerAggregate(
 	case workerDeploymentKind:
 		return h.validateWorkerDeployment(space, name, relations)
 	case workerVersionKind:
+		if hostErr := h.exportedHandlerViolation(form, space, spec, relations); hostErr != nil {
+			return hostErr
+		}
 		return h.validateInboundServiceBindings(space, relations)
 	}
 	if handler, attachment := attachmentHandler[form.Ref.Kind]; attachment {
@@ -570,6 +578,104 @@ func (h *ReferenceHost) validateDeclaredHandlers(form *installedForm, spec map[s
 		return stableError("invalid_argument", violation)
 	}
 	return nil
+}
+
+// exportedHandlerViolation refuses a Worker Version declaring a handler the
+// module it actually runs does not export.
+//
+// The `worker.runtime` contract is explicit that this fails the VERSION rather
+// than a request: `loadModule` answers `handler_not_exported` before any traffic
+// arrives, so a stored version in this state is code that can never serve, and
+// the attachment gate would go on admitting a cron trigger or a queue consumer
+// against a handler that does not exist. The refusal is `invalid_argument`
+// because, exactly like the deployment-integrity rules, the request is well
+// formed and states something untrue about what will run.
+//
+// It is a CROSS-RESOURCE rule, not a spec-shape one: the answer lives in the
+// version's `/bundle` relation, in the manifest that bundle's digest addresses,
+// and in the bytes of that manifest's main module. It therefore runs where
+// every other relation-reading rule runs — before any mutation on apply and on
+// import alike, and again when a 202 commits — and not on the advisory
+// `validate` surface, which resolves nothing.
+//
+// What a module exports is a fact about JavaScript, and this reference host
+// executes none: it holds the map from a module's content address to the
+// handlers that module's default export exposes, declared by the corpus that
+// pinned those exact bytes. A real host derives the same fact by loading the
+// module into an isolate, which is the only general way to know it. A module
+// whose bytes this host was never told about is therefore NOT refused — the
+// reference host answers only about code it knows, and never guesses. That
+// boundary is why the lane proves the refusal for a pinned bundle rather than
+// claiming to prove it for every possible one; see spec/host-api/v1alpha3.md.
+func (h *ReferenceHost) exportedHandlerViolation(
+	form *installedForm, space string, spec map[string]any, relations []storedRelation,
+) *hostError {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+		return nil
+	}
+	exported, known := h.bundleModuleExports(space, relations)
+	if !known {
+		return nil
+	}
+	exports := map[string]bool{}
+	for _, handler := range exported {
+		exports[handler] = true
+	}
+	for _, item := range anyStringSlice(spec["handlers"]) {
+		if exports[item] {
+			continue
+		}
+		return stableError("invalid_argument",
+			"WorkerVersion declares handler "+strconv.Quote(item)+
+				", which the main module of the WorkerBundle it references does not export; "+
+				"that module exports exactly "+strings.Join(exported, ", ")+
+				", and the runtime contract fails a declared handler the module does not export "+
+				"(handler_not_exported) before any traffic arrives")
+	}
+	return nil
+}
+
+// bundleModuleExports resolves what the main module of the bundle one Worker
+// Version references exports, and reports whether this host knows at all.
+//
+// Every step is a fact the host already holds: the relation the apply just
+// resolved pins the bundle INCARNATION, the bundle's desired state is the
+// manifest digest, the committed manifest names its main module, and that
+// module entry carries the content address of the bytes. Nothing is read from
+// the version's spec but the relation it produced, so a renamed or replaced
+// bundle is a different answer rather than the same one.
+func (h *ReferenceHost) bundleModuleExports(space string, relations []storedRelation) ([]string, bool) {
+	bundleUID := relationTargetUID(relations, bundleRelationPointer)
+	if bundleUID == "" {
+		return nil, false
+	}
+	var bundle *storedResource
+	for _, relation := range relations {
+		if relation.Pointer != bundleRelationPointer {
+			continue
+		}
+		bundle = h.resources[resourceKey(space, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
+	}
+	if bundle == nil || bundle.UID != bundleUID {
+		return nil, false
+	}
+	manifestDigest, _ := bundle.Spec["manifestDigest"].(string)
+	raw := h.manifests[manifestDigest]
+	if raw == nil {
+		return nil, false
+	}
+	var manifest artifactManifest
+	if err := formpackage.DecodeStrictIJSON(raw, &manifest); err != nil {
+		return nil, false
+	}
+	for _, module := range manifest.Modules {
+		if module.Name != manifest.MainModule {
+			continue
+		}
+		exported, known := h.moduleExports[module.Digest]
+		return exported, known
+	}
+	return nil, false
 }
 
 // desiredSchemaEnum reads the item enum of one top-level string-array property

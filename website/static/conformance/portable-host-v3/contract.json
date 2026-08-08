@@ -164,7 +164,7 @@
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
       "desired": {
-        "manifestDigest": "sha256:ef71ba11ebdfe3177bffc285b1100025f02a44bd3589e35fe487084d080446e1"
+        "manifestDigest": "sha256:03f3d2b81110eb7aaca249abdda2e3fd8b32431f7da46c85b4d87a63217812ea"
       },
       "manifest": {
         "apiVersion": "artifacts.takoform.com/v1alpha1",
@@ -172,14 +172,34 @@
         "mainModule": "index.js",
         "modules": [
           {
-            "digest": "sha256:8624fd492ece196a5048414afd598275b811beafc00aab602bfb59978f880765",
+            "digest": "sha256:57a43167e47c24ced0b05c0dca370d86d583f0335cc5877645dfd9c386073fbb",
             "mediaType": "application/javascript+module",
             "name": "index.js",
-            "size": 96
+            "size": 162
           }
         ]
       },
-      "moduleSource": "export default { async fetch() { return new Response(\"portable-host-v3 reference module\"); } };\n"
+      "moduleSource": "export default {\n  async fetch() { return new Response(\"portable-host-v3 reference module\"); },\n  async scheduled() {},\n  async queue() {},\n  async tail() {},\n};\n",
+      "exportedHandlers": ["fetch", "scheduled", "queue", "tail"]
+    },
+    "fetchOnlyBundle": {
+      "name": "fetch-only-bundle-probe",
+      "manifestDigest": "sha256:e0dcee65e62d1f28f94d8300fb0ddf04e521d1335ff3f170faea9b5daa5a12ef",
+      "manifest": {
+        "apiVersion": "artifacts.takoform.com/v1alpha1",
+        "kind": "WorkerBundle",
+        "mainModule": "fetch-only.js",
+        "modules": [
+          {
+            "digest": "sha256:1177bca649fad698e4a3f47ccc52fcae05490ee0be84ff133fe0db659d56ee03",
+            "mediaType": "application/javascript+module",
+            "name": "fetch-only.js",
+            "size": 97
+          }
+        ]
+      },
+      "moduleSource": "export default { async fetch() { return new Response(\"portable-host-v3 fetch-only module\"); } };\n",
+      "exportedHandlers": ["fetch"]
     },
     "workerDeployment": {
       "name": "worker-deployment-probe",
@@ -398,6 +418,7 @@
     "artifact-digest-is-not-a-capability",
     "manifest-reference-is-not-a-capability",
     "module-worker-runtime-contract-advertised",
-    "undeclared-runtime-handler-rejected"
+    "undeclared-runtime-handler-rejected",
+    "declared-handler-not-exported-rejected"
   ]
 }
