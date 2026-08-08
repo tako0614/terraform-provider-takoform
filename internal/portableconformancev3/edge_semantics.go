@@ -1,6 +1,8 @@
 package portableconformancev3
 
 import (
+	"strings"
+
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
@@ -17,6 +19,183 @@ import (
 // reference a Queue Consumer declares: the one edge from a consumer to the
 // queue it drains.
 const queueRelationPointer = "/queue"
+
+// deadLetterRelationPointer is the optional edge from a consumer to the queue
+// that receives the messages the consumer exhausted.
+const deadLetterRelationPointer = "/deadLetterQueue"
+
+// canonicalizeEdgeSpec rewrites the family's canonical spellings into one
+// desired spec, at the host's single materialization entry point, before the
+// spec is validated, digested, stored, or echoed.
+//
+// Today that is one field. `WorkerCustomDomain.hostname` is a DNS name, and
+// DNS says "API.Example.com", "api.example.com." and "api.example.com" are
+// one name. A host comparing the written bytes sees three, so two attachments
+// could claim one hostname and both be stored. Canonicalizing HERE rather than
+// at the comparison is what makes the claim decidable at all: the stored value
+// is the identity, so uniqueness is an equality test on stored specs and a
+// re-apply under any other spelling moves nothing (spec/decisions/0026).
+func canonicalizeEdgeSpec(form *InstalledForm, spec map[string]any) map[string]any {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerCustomDomainKind {
+		return spec
+	}
+	written, present := spec["hostname"].(string)
+	if !present {
+		return spec
+	}
+	canonical := currentformmodel.CanonicalHostname(written)
+	if canonical == written {
+		return spec
+	}
+	out := make(map[string]any, len(spec))
+	for key, value := range spec {
+		out[key] = value
+	}
+	out["hostname"] = canonical
+	return out
+}
+
+// validateSingleHostnameClaim refuses a second Worker Custom Domain claiming a
+// hostname another attachment already serves.
+//
+// A hostname is not a label inside this host's namespace; it is a name in
+// DNS, and exactly one thing answers it. Two attachments claiming it would
+// leave the host with two answers and no rule choosing between them, which is
+// the incompleteness decision 0008 forbids — and, unlike a name collision,
+// neither resource is wrong on its own, so no desired-state schema can see it.
+//
+// The comparison is on the CANONICAL hostname, which is the only spelling that
+// reaches the store (canonicalizeEdgeSpec), so a host cannot be defeated by
+// case or by a trailing dot.
+//
+// The scope is the CALLER'S TENANT, and both halves of that are the rule.
+//
+// It spans every space of that tenant, because spaces partition one tenant's
+// resources and DNS does not partition with them: two spaces claiming one
+// hostname is the same collision as two resources in one space.
+//
+// It stops at the tenant, because what one tenant may claim is a question about
+// who controls the name — authority this contract does not pretend to answer —
+// so a hostname another tenant serves is none of this scan's business. That
+// boundary has to be passed IN. Every other cross-resource rule in this file is
+// decided on a host-issued uid, which already names one resource inside one
+// boundary; a hostname is a name DNS owns, so the comparison carries no
+// boundary of its own and a scan over the store key alone would silently
+// enforce the rule host-wide (spec/decisions/0026).
+func (h *ReferenceHost) validateSingleHostnameClaim(
+	tenant, space, name string,
+	spec map[string]any,
+) *hostError {
+	hostname, _ := spec["hostname"].(string)
+	if hostname == "" {
+		return stableError("invalid_argument", "a WorkerCustomDomain requires a hostname")
+	}
+	selfKey := resourceKey(space, edgeFormsGroup, workerCustomDomainKind, name)
+	for _, candidate := range h.sortedResources() {
+		if candidate.Tenant != tenant {
+			continue
+		}
+		if candidate.group() != edgeFormsGroup || candidate.kind() != workerCustomDomainKind {
+			continue
+		}
+		if candidate.key() == selfKey {
+			continue
+		}
+		claimed, _ := candidate.Spec["hostname"].(string)
+		if claimed != hostname {
+			continue
+		}
+		return stableError(
+			"invalid_argument",
+			"hostname "+quoteText(hostname)+" is already served by WorkerCustomDomain "+candidate.Name+
+				" in space "+quoteText(candidate.Space)+
+				"; one DNS hostname has one answer, and the comparison is on the canonical spelling",
+		)
+	}
+	return nil
+}
+
+// validateDeadLetterAcyclic refuses a dead-letter destination that leads back
+// to the queue the messages came from.
+//
+// `edge.queue` says a message that exhausts its retries moves to the
+// dead-letter queue as a NEW message, with a new identity and its attempt
+// count starting again at 1 (decision 0020). If that destination drains back
+// to the origin, the platform has built a loop that never terminates: the
+// copy exhausts its retries, is dead-lettered onward, and arrives where it
+// started with a fresh attempt count, forever. maxRetries bounds one message's
+// deliveries; nothing bounds a cycle.
+//
+// The graph is over QUEUES, not consumers: the edge Q -> D exists when the
+// consumer of Q declares D as its dead-letter destination. Because a queue has
+// at most one consumer, a queue has at most one outgoing edge, so the walk from
+// the proposed destination is a single path. It terminates on ANY graph shape
+// for two independent reasons: `seen` admits each queue UID once, and the
+// number of stored consumers is finite and never grows during the walk. A
+// pre-existing cycle a laxer state left behind therefore ends the walk instead
+// of running it forever.
+//
+// The successor map is built from every stored consumer and is deliberately
+// given no space or tenant filter of its own. Its keys are queue UIDs, and a uid
+// names ONE queue incarnation: a consumer that drains a queue outside this
+// walk's reach contributes edges between uids the walk can never arrive at, so
+// those edges are a disconnected component rather than a leak. Narrowing the
+// scan would not make the answer more correct — it would only hide the fact that
+// a cycle is decided on resolved identity, which is the whole of decision 0026.
+// The hostname claim is the one rule here that cannot borrow that property,
+// because it compares a name rather than a uid.
+func (h *ReferenceHost) validateDeadLetterAcyclic(
+	space, name string,
+	relations []storedRelation,
+) *hostError {
+	origin := relationTargetUID(relations, queueRelationPointer)
+	destination := relationTargetUID(relations, deadLetterRelationPointer)
+	if destination == "" {
+		return nil
+	}
+	if destination == origin {
+		return stableError(
+			"invalid_argument",
+			"the dead-letter queue resolves to the same AtLeastOnceQueue at uid "+origin+
+				" this consumer drains; an exhausted message would be delivered back where it came from",
+		)
+	}
+	// The consumer under test supersedes whatever it previously declared, so
+	// its own stored edge is replaced rather than walked.
+	selfKey := resourceKey(space, edgeFormsGroup, queueConsumerKind, name)
+	successor := map[string]string{origin: destination}
+	for _, candidate := range h.sortedResources() {
+		if candidate.group() != edgeFormsGroup || candidate.kind() != queueConsumerKind ||
+			candidate.key() == selfKey {
+			continue
+		}
+		from := relationTargetUID(candidate.Relations, queueRelationPointer)
+		to := relationTargetUID(candidate.Relations, deadLetterRelationPointer)
+		if from == "" || to == "" {
+			continue
+		}
+		if _, taken := successor[from]; !taken {
+			successor[from] = to
+		}
+	}
+	seen := map[string]bool{origin: true}
+	path := []string{origin}
+	for at := destination; at != ""; at = successor[at] {
+		if at == origin {
+			return stableError(
+				"invalid_argument",
+				"the dead-letter queue closes a cycle "+strings.Join(append(path, origin), " -> ")+
+					"; an exhausted message would circulate forever instead of coming to rest",
+			)
+		}
+		if seen[at] {
+			return nil
+		}
+		seen[at] = true
+		path = append(path, at)
+	}
+	return nil
+}
 
 // cronExpressionViolation reports why one Worker Cron Trigger's expression is
 // not a schedule, or "" when it is.
@@ -71,7 +250,10 @@ func validateCronExpression(form *InstalledForm, spec map[string]any) *hostError
 //
 // The lookup is by the queue's UID, never by the name a consumer's spec spells:
 // a name can be reused, and a consumer still pinned to a deleted queue is not a
-// consumer of the queue that exists now.
+// consumer of the queue that exists now. That is also what scopes the rule: a
+// uid names one queue incarnation, so the space filter below narrows the scan
+// without deciding it, and no tenant filter belongs here at all — two consumers
+// of ONE queue are two consumers of one queue whoever applied them.
 func (h *ReferenceHost) validateSingleQueueConsumer(
 	space, name string,
 	relations []storedRelation,

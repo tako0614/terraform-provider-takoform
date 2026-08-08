@@ -232,7 +232,17 @@ func (h *ReferenceHost) workerDependents(space, workerUID string) []workerDepend
 // validateWorkerAggregate is the one pre-mutation entry point for every rule
 // decision 0016 states. It runs on apply and on import alike, and is re-run at
 // async COMMIT time, exactly like relation resolution.
+//
+// The caller travels with the space and the name because the rules below are
+// not all scoped the same way. Every aggregate rule is decided on a host-issued
+// UID — one deployment per worker INCARNATION, one consumer per queue
+// INCARNATION — and a UID names one resource inside one boundary, so those
+// scans cannot reach past it. The hostname claim is the exception: it compares
+// a name DNS owns rather than a uid this host issued, so nothing in the
+// comparison carries a boundary and the boundary has to be supplied
+// (spec/decisions/0026).
 func (h *ReferenceHost) validateWorkerAggregate(
+	caller hostAuthContext,
 	form *InstalledForm,
 	space, name string,
 	spec map[string]any,
@@ -260,11 +270,20 @@ func (h *ReferenceHost) validateWorkerAggregate(
 		); hostErr != nil {
 			return hostErr
 		}
-		// A queue consumer carries one more cardinality rule, and it is about the
-		// QUEUE rather than the worker: edge.queue states that a queue has at most
-		// one consumer (decision 0020).
-		if form.Ref.Kind == queueConsumerKind {
-			return h.validateSingleQueueConsumer(space, name, relations)
+		// Two attachments carry a further rule that is about what they CLAIM
+		// rather than about the worker they activate (decisions 0020 and 0026).
+		switch form.Ref.Kind {
+		case queueConsumerKind:
+			// A queue has at most one consumer, and a consumer's dead-letter
+			// destination must lead somewhere a message can come to rest.
+			if hostErr := h.validateSingleQueueConsumer(space, name, relations); hostErr != nil {
+				return hostErr
+			}
+			return h.validateDeadLetterAcyclic(space, name, relations)
+		case workerCustomDomainKind:
+			// One DNS hostname has one answer, per tenant, on the canonical
+			// spelling this host stored.
+			return h.validateSingleHostnameClaim(caller.Tenant, space, name, spec)
 		}
 		if form.Ref.Kind == workerEndpointKind {
 			return h.validateSingleWorkerEndpoint(space, name, relations)

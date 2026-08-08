@@ -287,12 +287,20 @@ var Forms = []model.Form{
 		Title: "Worker Custom Domain",
 		Description: "Attaches one DNS hostname to a Module Worker so its active deployment serves that " +
 			"hostname over HTTPS. Inward activation is an attachment, never a binding; deleting the " +
-			"attachment detaches the hostname and never deletes the worker.",
+			"attachment detaches the hostname and never deletes the worker. A hostname is a name in DNS " +
+			"rather than a label in this host's namespace, so it is CANONICALIZED before it is compared " +
+			"and before it is stored — trailing root dot removed, ASCII letters lowercased — and one " +
+			"canonical hostname is served by AT MOST ONE attachment per tenant, across every space. " +
+			"A second attachment claiming a hostname a live one already serves is refused before any " +
+			"mutation; releasing the holder makes the claim representable (decision 0026).",
 		Fields: []model.Field{
 			moduleWorkerRef("worker", "worker", "Module Worker served on this hostname.", true, true),
 			{HCL: "hostname", Wire: "hostname", Kind: model.KindString, Required: true, Immutable: true,
 				Pattern: model.PatternHostname, MaxLength: 253,
-				Doc:     "Dotted DNS hostname this attachment serves. Changing it replaces the attachment.",
+				Doc: "Dotted DNS hostname this attachment serves. Changing it replaces the attachment. The pattern " +
+					"admits the spellings DNS treats as one name — an uppercase letter, a trailing root dot — because " +
+					"a host canonicalizes rather than refusing them; it admits no non-ASCII byte, so an " +
+					"internationalized name travels as its A-label.",
 				Example: "app.portable-conformance.invalid", AltExample: "alt.portable-conformance.invalid",
 				CounterExample: "not a hostname"},
 		},
@@ -327,10 +335,13 @@ var Forms = []model.Form{
 		// portability boundary forbids.
 		Outputs: []model.Field{
 			{HCL: "hostname", Wire: "hostname", Kind: model.KindString,
-				Pattern: model.PatternHostname, MaxLength: 253,
-				Doc: "Dotted DNS hostname the host assigned to this endpoint. Its VALUE is portable to read and " +
-					"pass on; its SHAPE is host detail, so a portable configuration never parses it, never asserts a " +
-					"suffix, and never reconstructs it from the resource name."},
+				Pattern: model.PatternCanonicalHostname, MaxLength: 253,
+				Doc: "Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where " +
+					"DNS is case-insensitive and no trailing root dot. An author's hostname admits those spellings " +
+					"because a host canonicalizes what it is given; an assigned name has no earlier spelling to " +
+					"preserve. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable " +
+					"configuration never parses it, never asserts a suffix, and never reconstructs it from the " +
+					"resource name."},
 			{HCL: "url", Wire: "url", Kind: model.KindString,
 				Pattern:   `^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+/$`,
 				MaxLength: 264,
@@ -453,7 +464,11 @@ var Forms = []model.Form{
 			"delivery does not count toward it — so a message is delivered at most 1 + maxRetries times, and a " +
 			"message that exhausts them moves to dead_letter_queue when one is declared and is dropped " +
 			"otherwise. The dead-letter copy is a new message there: new identity, new acceptance timestamp, " +
-			"and an attempt count starting again at 1 (decision 0020).",
+			"and an attempt count starting again at 1 (decision 0020). Because that transfer resets the " +
+			"attempt count, dead_letter_queue MUST NOT lead back: a destination resolving to the queue this " +
+			"consumer drains, or closing a cycle of any length through the dead-letter graph, is refused " +
+			"before any mutation, because an exhausted message would circulate forever instead of coming to " +
+			"rest (decision 0026).",
 		Fields: []model.Field{
 			// Both queue references state the edge.queue contract and nothing more.
 			// What a consumer needs from the queue it drains is the delivery model
@@ -498,8 +513,10 @@ var Forms = []model.Form{
 			{HCL: "dead_letter_queue", Wire: "deadLetterQueue", Kind: model.KindResourceRef, TargetKind: "AtLeastOnceQueue",
 				Target:            requiresInterface("edge.queue", "1.0.0"),
 				AbsenceIsSemantic: true,
-				Doc:               "Queue receiving messages that exhausted their retries. Without it, exhausted messages are dropped.",
-				Example:           ref("AtLeastOnceQueue", "dead-letters")},
+				Doc: "Queue receiving messages that exhausted their retries. Without it, exhausted messages are dropped. " +
+					"It must not resolve to the queue this consumer drains, or close a cycle through other consumers' " +
+					"dead-letter destinations; a host refuses either before any mutation.",
+				Example: ref("AtLeastOnceQueue", "dead-letters")},
 			{HCL: "max_concurrency", Wire: "maxConcurrency", Kind: model.KindInteger,
 				Required: true,
 				Min:      model.I64(1), Max: model.I64(250),

@@ -168,13 +168,15 @@ func (form *InstalledForm) declaresUpdate() bool {
 	return false
 }
 
-// materialize is the host's single entry-point application of the Form's
-// declared portable defaults. It runs before validation, digesting, storage,
-// and echo, so the effective spec IS the wire spec: a client that omits a
-// defaulted field and a client that writes its default produce the same
-// specDigest and therefore the same generation.
+// materialize is the host's single entry-point normalization of one desired
+// spec: the Form's declared portable defaults, then the family's canonical
+// spellings. It runs before validation, digesting, storage, and echo, so the
+// effective spec IS the wire spec: a client that omits a defaulted field and a
+// client that writes its default produce the same specDigest and therefore the
+// same generation, and so do two clients that spell one hostname two ways
+// (spec/decisions/0026).
 func (form *InstalledForm) materialize(spec map[string]any) map[string]any {
-	return currentformmodel.MaterializeDefaults(form.DesiredSchema, spec)
+	return canonicalizeEdgeSpec(form, currentformmodel.MaterializeDefaults(form.DesiredSchema, spec))
 }
 
 // supportRef is one interface or binding contract the host declares support

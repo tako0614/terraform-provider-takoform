@@ -41,9 +41,20 @@ func (f *aggregateFixture) ref(kind, name string) map[string]any {
 }
 
 // store installs one resource exactly the way an accepted apply would: the spec
-// is materialized, every relation is resolved and pinned, and the reverse index
-// is kept exact.
+// is materialized, every relation is resolved and pinned, the creating tenant is
+// recorded, and the reverse index is kept exact.
 func (f *aggregateFixture) store(kind, name string, spec map[string]any) *storedResource {
+	f.t.Helper()
+	return f.storeAs(referencePrimaryAuth, kind, name, spec)
+}
+
+// storeAs is store under another authenticated caller, so a rule scoped to the
+// tenant can be driven from both sides of that boundary.
+func (f *aggregateFixture) storeAs(
+	caller hostAuthContext,
+	kind, name string,
+	spec map[string]any,
+) *storedResource {
 	f.t.Helper()
 	form := f.host.probeForm(kind)
 	if form == nil {
@@ -60,7 +71,7 @@ func (f *aggregateFixture) store(kind, name string, spec map[string]any) *stored
 	}
 	f.host.uidCounter++
 	resource := &storedResource{
-		Ref: form.Ref, Name: name, Space: f.space,
+		Ref: form.Ref, Name: name, Tenant: caller.Tenant, Space: f.space,
 		UID: "uid-" + strconv.Itoa(f.host.uidCounter), Generation: 1, Revision: 1,
 		Spec: materialized, SpecDigest: digest, Relations: relations,
 	}
@@ -68,14 +79,35 @@ func (f *aggregateFixture) store(kind, name string, spec map[string]any) *stored
 	return resource
 }
 
+// inSpace returns the same fixture pointed at another space of the same host,
+// so a rule that spans spaces can be driven with real resources on both sides
+// rather than with a store written by hand.
+func (f *aggregateFixture) inSpace(space string) *aggregateFixture {
+	elsewhere := *f
+	elsewhere.space = space
+	return &elsewhere
+}
+
 // validate runs the complete pre-mutation gauntlet for one desired spec.
 func (f *aggregateFixture) validate(kind, name string, spec map[string]any) *hostError {
+	f.t.Helper()
+	return f.validateAs(referencePrimaryAuth, kind, name, spec)
+}
+
+// validateAs runs the same gauntlet as another authenticated caller. The caller
+// decides two of the rules it contains: which tenant's artifacts a bundle may
+// reference, and which tenant's hostname claims a custom domain collides with.
+func (f *aggregateFixture) validateAs(
+	caller hostAuthContext,
+	kind, name string,
+	spec map[string]any,
+) *hostError {
 	f.t.Helper()
 	form := f.host.probeForm(kind)
 	if form == nil {
 		f.t.Fatalf("%s is not installed", kind)
 	}
-	_, hostErr := f.host.validateDesiredSemantics(referencePrimaryAuth, form, f.space, name, form.materialize(spec))
+	_, hostErr := f.host.validateDesiredSemantics(caller, form, f.space, name, form.materialize(spec))
 	return hostErr
 }
 

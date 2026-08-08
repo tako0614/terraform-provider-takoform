@@ -38,7 +38,7 @@
         "x-takoform-required-interface": {
           "apiVersion": "interfaces.takoform.com/v1alpha1",
           "name": "worker.runtime",
-          "schemaDigest": "sha256:06104adeefb967838766a90866f7229f12cfd1bceb31cd79c7b1826b15362c0f",
+          "schemaDigest": "sha256:1db4c093befc3c8bb769361c26f26a582561c5ff0edae36a62f45143641a2152",
           "version": "1.0.0"
         }
       }
@@ -55,7 +55,7 @@
     "description": "Host-computed values this Form publishes in status.outputs. Every member is returned by a conforming host; the object is closed.",
     "properties": {
       "hostname": {
-        "description": "Dotted DNS hostname the host assigned to this endpoint. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable configuration never parses it, never asserts a suffix, and never reconstructs it from the resource name.",
+        "description": "Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where DNS is case-insensitive and no trailing root dot. An author's hostname admits those spellings because a host canonicalizes what it is given; an assigned name has no earlier spelling to preserve. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable configuration never parses it, never asserts a suffix, and never reconstructs it from the resource name.",
         "maxLength": 253,
         "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$",
         "type": "string"

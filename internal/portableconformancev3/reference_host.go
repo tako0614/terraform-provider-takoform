@@ -16,6 +16,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 const (
@@ -77,13 +78,19 @@ const (
 
 var artifactPathPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$`)
 
-var artifactModuleMediaTypes = map[string]bool{
-	"application/javascript+module": true,
-	"application/wasm":              true,
-	"text/plain":                    true,
-	"application/octet-stream":      true,
-	"application/source-map+json":   true,
-}
+// artifactModuleMediaTypes is what a WorkerBundle manifest admits. It is
+// DERIVED from the lane's single media-type statement rather than listed here,
+// so this host cannot commit a bundle the runtime contract could not load, nor
+// refuse one the published manifest schema admits (spec/decisions/0012, 0014,
+// and 0019). The loadable/auxiliary split the same statement carries is what
+// makes `mainModule` and the source-map rule below decidable.
+var artifactModuleMediaTypes = func() map[string]bool {
+	admitted := map[string]bool{}
+	for _, mediaType := range currentformmodel.BundleModuleMediaTypes() {
+		admitted[mediaType] = true
+	}
+	return admitted
+}()
 
 // hostError is one closed stable error outcome.
 type hostError struct {
@@ -100,8 +107,23 @@ type storedResource struct {
 	// a request happened to name, which is the substitution decision 0022 closes:
 	// the response would describe the resource under a contract it was never
 	// applied under, successfully, with nothing downstream able to detect it.
-	Ref           FormRef
-	Name          string
+	Ref  FormRef
+	Name string
+	// Tenant is the authenticated tenant this resource was CREATED by, recorded
+	// once and carried forward by every later update.
+	//
+	// It is not part of the resource's address and never travels on the wire: a
+	// reference carries `{apiVersion, kind, name}` and a request carries a space,
+	// so nothing a client writes names a tenant. It exists because one rule in
+	// this lane is decided across spaces — a hostname claim is unique per TENANT
+	// (spec/decisions/0026) — and a scan that answered it from the store key
+	// alone would answer it about every tenant this host serves, refusing a name
+	// the contract says another tenant may claim.
+	//
+	// An update by another principal of another tenant does not re-file the
+	// resource: the record belongs to whoever created it, so the claim it holds
+	// keeps answering under one tenant for its whole life.
+	Tenant        string
 	Space         string
 	UID           string
 	Generation    int64
@@ -210,6 +232,17 @@ type ReferenceHost struct {
 	contract Contract
 	catalog  *Catalog
 
+	// resources is keyed by space, group, kind, and name — the resource's
+	// ADDRESS, which carries no tenant, because nothing a client sends names one.
+	// This disposable host therefore serves both of its configured tenants out of
+	// one map, and each record remembers the tenant that created it
+	// (storedResource.Tenant) rather than being filed under it. That is enough
+	// for every rule the lane states, because a rule is either decided on a
+	// host-issued uid — which names one record — or scoped by an explicit tenant
+	// (validateSingleHostnameClaim). It is NOT a claim that this host isolates
+	// tenants on the resource plane: two tenants naming one resource in one space
+	// address one record here, which a real host partitions and the corpus never
+	// drives.
 	resources map[string]*storedResource
 	// relationHolders is the reverse index: target uid -> holder resource keys.
 	relationHolders map[string]map[string]struct{}
@@ -316,9 +349,16 @@ type hostAuthContext struct {
 	Principal string
 }
 
-// referencePrimaryAuth is the identity referencePrimaryToken authenticates as.
-// It is named once so ownership and holding facts can be stated in one place.
-var referencePrimaryAuth = hostAuthContext{Tenant: "reference-tenant", Principal: "reference-primary"}
+// The three identities this host authenticates, named once so every ownership,
+// holding, and claim fact can be stated in one place: two principals of one
+// tenant, and one principal of another. The pair inside one tenant is what
+// separates a PRINCIPAL rule from a TENANT rule; the second tenant is what
+// separates a tenant rule from a host-wide one.
+var (
+	referencePrimaryAuth     = hostAuthContext{Tenant: "reference-tenant", Principal: "reference-primary"}
+	referenceAlternateAuth   = hostAuthContext{Tenant: "reference-tenant", Principal: "reference-alternate"}
+	referenceOtherTenantAuth = hostAuthContext{Tenant: "reference-other-tenant", Principal: "reference-primary"}
+)
 
 func hostRequestAuth(request *http.Request) (hostAuthContext, bool) {
 	const prefix = "Bearer "
@@ -330,9 +370,9 @@ func hostRequestAuth(request *http.Request) (hostAuthContext, bool) {
 	case referencePrimaryToken:
 		return referencePrimaryAuth, true
 	case referenceAlternateToken:
-		return hostAuthContext{Tenant: "reference-tenant", Principal: "reference-alternate"}, true
+		return referenceAlternateAuth, true
 	case referenceAlternateTenantToken:
-		return hostAuthContext{Tenant: "reference-other-tenant", Principal: "reference-primary"}, true
+		return referenceOtherTenantAuth, true
 	default:
 		return hostAuthContext{}, false
 	}
@@ -870,11 +910,13 @@ func specOrEmpty(spec map[string]any) map[string]any {
 // resource's UID, so a deployment's worker version, a version's bundle, and an
 // attachment's worker are protected exactly as a typed binding is.
 //
-// The caller is carried in because one of these rules is an AUTHORIZATION rule:
-// resolving a referenced artifact manifest asks the same per-tenant holding
-// question the artifact read surfaces ask (spec/decisions/0018). It is a value
-// rather than a request so the async commit path re-derives it from the caller
-// the mutation was accepted from, long after that request is gone.
+// The caller is carried in because two of these rules are decided per TENANT.
+// Resolving a referenced artifact manifest asks the same per-tenant holding
+// question the artifact read surfaces ask (spec/decisions/0018), and a hostname
+// claim is unique per tenant across every space of that tenant
+// (spec/decisions/0026). It is a value rather than a request so the async commit
+// path re-derives both from the caller the mutation was accepted from, long
+// after that request is gone.
 func (h *ReferenceHost) validateDesiredSemantics(
 	caller hostAuthContext,
 	form *InstalledForm,
@@ -907,7 +949,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	// The Worker aggregate rules read the relations this apply just resolved,
 	// never the names in the spec: every one of them is a statement about one
 	// worker INCARNATION (spec/decisions/0016).
-	if hostErr := h.validateWorkerAggregate(form, space, name, spec, relations); hostErr != nil {
+	if hostErr := h.validateWorkerAggregate(caller, form, space, name, spec, relations); hostErr != nil {
 		return nil, hostErr
 	}
 	return relations, nil
@@ -1193,7 +1235,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 				"prepared review does not bind this exact resource at its current generation",
 			)
 		}
-		next := h.nextResource(form, existing, create, space, name, body.Spec, specDigest, false)
+		next := h.nextResource(form, existing, create, caller.Tenant, space, name, body.Spec, specDigest, false)
 		repinRelations(next, existing, relations)
 		h.storeResource(next)
 		return next, create, nil
@@ -1285,11 +1327,17 @@ func (h *ReferenceHost) requireReferencedBundleManifest(caller hostAuthContext, 
 // nextResource computes the post-mutation identity: uid minted on create,
 // generation advanced only on canonical spec change, revision advanced on
 // every representation change.
+//
+// The creating tenant is recorded exactly like the exact ref: written once, at
+// create, and copied forward by every update. Both answer the same class of
+// question — under whose contract, and inside whose boundary, is this resource
+// answered about — and neither is re-derived later from the request that
+// happens to be in flight.
 func (h *ReferenceHost) nextResource(
 	form *InstalledForm,
 	existing *storedResource,
 	create bool,
-	space, name string,
+	tenant, space, name string,
 	spec map[string]any,
 	specDigest string,
 	imported bool,
@@ -1300,7 +1348,7 @@ func (h *ReferenceHost) nextResource(
 			// The exact ref is recorded at CREATE and never rewritten. An update
 			// copies it forward with the rest of the record, so the contract a
 			// resource was applied under stays the contract it is answered about.
-			Ref: form.Ref, Name: name, Space: space,
+			Ref: form.Ref, Name: name, Tenant: tenant, Space: space,
 			UID:        "uid-" + strconv.Itoa(h.uidCounter),
 			Generation: 1, Revision: 1,
 			Spec: specOrEmpty(spec), SpecDigest: specDigest,
@@ -1575,7 +1623,9 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 		h.writeHostError(w, hostErr)
 		return
 	}
-	next := h.nextResource(form, existing, create, body.Metadata.Space, name, body.Spec, specDigest, true)
+	next := h.nextResource(
+		form, existing, create, importer.Tenant, body.Metadata.Space, name, body.Spec, specDigest, true,
+	)
 	repinRelations(next, existing, relations)
 	h.storeResource(next)
 	status := http.StatusOK
@@ -1832,6 +1882,7 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 		return stableError("artifact_invalid", "manifest kind is not a closed artifact kind")
 	}
 	names := map[string]bool{}
+	loadable := map[string]bool{}
 	moduleBytes := int64(0)
 	for _, module := range manifest.Modules {
 		if !artifactPathPattern.MatchString(module.Name) || len(module.Name) > 240 {
@@ -1844,6 +1895,7 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 		if !artifactModuleMediaTypes[module.MediaType] {
 			return stableError("artifact_invalid", "module mediaType is not closed")
 		}
+		loadable[module.Name] = currentformmodel.ModuleMediaTypeLoadable(module.MediaType)
 		if err := validateArtifactSize(module.Size); err != nil {
 			return err
 		}
@@ -1853,8 +1905,23 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 		size, _ := strconv.ParseInt(module.Size.String(), 10, 64)
 		moduleBytes += size
 	}
-	if manifest.Kind == "WorkerBundle" && !names[manifest.MainModule] {
-		return stableError("artifact_invalid", "mainModule must name one declared module")
+	if manifest.Kind == "WorkerBundle" {
+		if !names[manifest.MainModule] {
+			return stableError("artifact_invalid", "mainModule must name one declared module")
+		}
+		// An AUXILIARY module — today, source-map evidence about another
+		// module — may sit in the bundle and is never imported, so it can
+		// never be the module the runtime instantiates first. The published
+		// manifest schema admits it in `modules` alongside loadable code and
+		// cannot tell the two apart, so this is a host rule proved by a
+		// required conformance check (spec/decisions/0012, 0014, and 0019).
+		if !loadable[manifest.MainModule] {
+			return stableError(
+				"artifact_invalid",
+				"mainModule "+quoteText(manifest.MainModule)+
+					" names a module the runtime never imports; mainModule must be a loadable module",
+			)
+		}
 	}
 	// A source map is evidence about another module. "<module>.map" is the
 	// portable naming rule, so a source map whose target module is not

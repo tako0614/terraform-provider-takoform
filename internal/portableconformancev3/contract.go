@@ -194,6 +194,7 @@ var requiredRunnerChecks = []string{
 	"artifact-manifest-reject-list",
 	"artifact-commit-binds-declared-size",
 	"artifact-manifest-kind-exclusive",
+	"bundle-main-module-is-loadable",
 	"artifact-retention-while-referenced",
 	// Operability behind ordinary infrastructure (spec/decisions/0018).
 	"namespaced-group-travels-as-two-path-segments",
@@ -210,6 +211,11 @@ var requiredRunnerChecks = []string{
 	"edge-interface-contracts-advertised",
 	"cron-grammar-enforced",
 	"queue-single-consumer-enforced",
+	// An attachment's claim is decided on canonical, resolved identity
+	// (spec/decisions/0026).
+	"custom-domain-hostname-canonicalized",
+	"custom-domain-hostname-claim-unique",
+	"dead-letter-cycle-rejected",
 	// A host answers for the exact ref recorded in state, and a relation pins
 	// the target's contract rather than its incarnation alone
 	// (spec/decisions/0022).

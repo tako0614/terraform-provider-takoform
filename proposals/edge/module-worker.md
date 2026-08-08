@@ -23,7 +23,8 @@ handler must exist; the `fetch`, `scheduled`, `queue`, and `tail` signatures and
 what each event carries; the `env` object (every declared binding, var, and
 sensitive-variable slot, and nothing else portable); `ctx.waitUntil`; exception
 handling; request and response body streaming; the minimum Web API surface; and
-which module media types load and how a WASM module is instantiated. An instance
+which module media types load, which a bundle merely carries without ever
+importing them, and how a WASM module is instantiated. An instance
 is stateless between events; durable state lives behind bindings.
 
 There is no compatibility date and no compatibility flag. A date selects

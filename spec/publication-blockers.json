@@ -36,10 +36,17 @@
         "WorkerBundle",
         "WorkerVersion"
       ],
-      "status": "open",
+      "status": "closed",
       "issue": 104,
       "rationale": "The runtime ABI and the artifact manifest each state a media-type set, and they disagree. A bundle can therefore be accepted by one and unusable by the other.",
-      "evidence": []
+      "evidence": [
+        "internal/currentformmodel/artifact_media.go",
+        "spec/artifact_media_types_test.go",
+        "spec/artifact-transport/README.md",
+        "spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md",
+        "internal/portableconformancev3/artifact_media_test.go",
+        "internal/portableconformancev3/runner_attachment_claim_checks.go"
+      ]
     },
     {
       "id": "V3-004",

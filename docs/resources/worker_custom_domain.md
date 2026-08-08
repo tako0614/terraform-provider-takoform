@@ -7,7 +7,7 @@ description: |-
 
 # takoform_worker_custom_domain
 
-Attaches one DNS hostname to a Module Worker so its active deployment serves that hostname over HTTPS. Inward activation is an attachment, never a binding; deleting the attachment detaches the hostname and never deletes the worker.
+Attaches one DNS hostname to a Module Worker so its active deployment serves that hostname over HTTPS. Inward activation is an attachment, never a binding; deleting the attachment detaches the hostname and never deletes the worker. A hostname is a name in DNS rather than a label in this host's namespace, so it is CANONICALIZED before it is compared and before it is stored — trailing root dot removed, ASCII letters lowercased — and one canonical hostname is served by AT MOST ONE attachment per tenant, across every space. A second attachment claiming a hostname a live one already serves is refused before any mutation; releasing the holder makes the claim representable (decision 0026).
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
@@ -20,7 +20,7 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 
 - `name` (String, required, forces replacement) — Portable resource name (`metadata.name`).
 - `worker` (String, required, forces replacement) — Module Worker served on this hostname. Set the name of the target `ModuleWorker` resource.
-- `hostname` (String, required, forces replacement) — Dotted DNS hostname this attachment serves. Changing it replaces the attachment.
+- `hostname` (String, required, forces replacement) — Dotted DNS hostname this attachment serves. Changing it replaces the attachment. The pattern admits the spellings DNS treats as one name — an uppercase letter, a trailing root dot — because a host canonicalizes rather than refusing them; it admits no non-ASCII byte, so an internationalized name travels as its A-label.
 - `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.
 - `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.
 

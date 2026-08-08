@@ -51,7 +51,10 @@ None.
 
 Attaching to a worker whose versions do not declare the `queue` handler must
 fail closed. A dead-letter queue must be a distinct queue; hosts must reject
-self-dead-lettering. Deleting the referenced queue or worker while attached
+self-dead-lettering — and a cycle of any length through the dead-letter graph,
+because the transfer resets the attempt count and nothing else bounds the loop
+([decision 0026](../../spec/decisions/0026-attachment-claims-are-canonical-and-acyclic.md)).
+Deleting the referenced queue or worker while attached
 must fail with `dependency_in_use`.
 
 ## Prior art

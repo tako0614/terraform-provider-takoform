@@ -29,3 +29,4 @@ record does not replace them.
 - [0023 — The runtime ABI is measured separately from the control plane](0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)
 - [0024 — A worker is reachable at an address the host assigns](0024-a-worker-is-reachable-at-a-host-assigned-address.md)
 - [0025 — A Form's declared outputs are a typed contract, not a JSON blob](0025-declared-outputs-are-a-typed-contract.md)
+- [0026 — An attachment's claim is decided on canonical, resolved identity](0026-attachment-claims-are-canonical-and-acyclic.md)
