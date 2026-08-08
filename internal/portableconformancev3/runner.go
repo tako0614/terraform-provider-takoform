@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
@@ -787,22 +788,71 @@ func (r *v3Runner) read(target probeTarget) (wireResource, wireResponse, error) 
 // relation checks need a read that reports the condition instead of rejecting
 // it.
 func (r *v3Runner) readRaw(target probeTarget) (wireResource, error) {
+	resource, _, err := r.readRawResponse(target)
+	return resource, err
+}
+
+// readRawResponse is readRaw with the transport response, so a caller can hold
+// the host to the ETag that accompanied the exact representation it just read.
+func (r *v3Runner) readRawResponse(target probeTarget) (wireResource, wireResponse, error) {
 	response, err := r.request(
 		http.MethodGet,
 		r.resourceURL(target.Ref, target.Name, "", r.exactQuery(target.Space, target.Ref)),
 		nil, nil,
 	)
 	if err != nil {
-		return wireResource{}, err
+		return wireResource{}, wireResponse{}, err
 	}
 	resource, err := decodeResource(response, http.StatusOK)
 	if err != nil {
-		return wireResource{}, err
+		return wireResource{}, wireResponse{}, err
 	}
 	if err := verifyClosedConditionReasons(resource); err != nil {
-		return wireResource{}, err
+		return wireResource{}, wireResponse{}, err
 	}
-	return resource, nil
+	return resource, response, nil
+}
+
+// requireRevisionAdvanced holds one representation change to the identity rule
+// of decision 0011: the revision moves FORWARD, the generation does not move at
+// all, and the strong ETag served with the new representation is the new
+// revision. Anything less makes the ETag a validator that says "unchanged"
+// about a change.
+func requireRevisionAdvanced(before, after wireResource, response wireResponse, subject string) error {
+	if after.Metadata.Generation != before.Metadata.Generation {
+		return fmt.Errorf(
+			"%s moved generation %s -> %s; no desired spec changed",
+			subject, before.Metadata.Generation, after.Metadata.Generation,
+		)
+	}
+	beforeRevision, err := parseRevision(before.Metadata.Revision)
+	if err != nil {
+		return fmt.Errorf("%s: %w", subject, err)
+	}
+	afterRevision, err := parseRevision(after.Metadata.Revision)
+	if err != nil {
+		return fmt.Errorf("%s: %w", subject, err)
+	}
+	if afterRevision <= beforeRevision {
+		return fmt.Errorf(
+			"%s left revision at %s while the representation changed; want a revision greater than %s",
+			subject, after.Metadata.Revision, before.Metadata.Revision,
+		)
+	}
+	if err := verifyRevisionETag(response, after.Metadata.Revision); err != nil {
+		return fmt.Errorf("%s: %w", subject, err)
+	}
+	return nil
+}
+
+// parseRevision reads one canonical decimal revision. The wire type is a
+// string, but the ordering the identity contract states is numeric.
+func parseRevision(revision string) (int64, error) {
+	value, err := strconv.ParseInt(revision, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("revision %q is not a canonical decimal string", revision)
+	}
+	return value, nil
 }
 
 // readyCondition returns the Ready condition, or the zero value when absent.

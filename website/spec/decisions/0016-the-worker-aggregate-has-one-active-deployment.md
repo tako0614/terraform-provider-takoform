@@ -103,6 +103,21 @@ and [`../form-families.md`](../form-families.md).
    that projects nothing is a declared capability no host can keep, and the
    first Forms should be simple to reason about.
 
+9. **A rendering computed from other resources moves the revision.** Rule 7
+   makes one resource's representation depend on another's, so a host that
+   renders any part of a representation from OTHER resources MUST advance that
+   resource's `metadata.revision` when the rendering changes, and MUST NOT move
+   its `metadata.generation` — no desired spec changed. This is the general form
+   of the rule decision 0011 states for a resource's own status, and it governs
+   the relation drift of decision 0015 (rule 7 there) as much as the worker
+   readiness of rule 7 here: a deleted or replaced target changes what every
+   source pinned to it renders. After an accepted mutation a host MUST recompute
+   the rendering of every resource that mutation can affect and advance only
+   those that actually changed, in one bounded pass — an idempotent re-apply
+   must move nothing anywhere, and the recomputation must not cascade, which it
+   cannot, because a rendering is a function of stored specs, relations, and
+   UIDs and never of a revision.
+
 Rules 3, 4, and 8 are three views of one fact — an activated worker is what its
 deployment selects — so a host that implements any of them in terms of stored
 versions rather than the deployment has implemented none of them.
@@ -117,9 +132,18 @@ The rules are proven by the required conformance checks
 `deployment-single-active-per-worker`, `deployment-version-ownership`,
 `deployment-version-duplicate-rejected`, `attachment-requires-active-deployment`,
 `deployment-change-preserves-dependents`,
-`deployment-delete-blocked-by-dependent`, and
+`deployment-delete-blocked-by-dependent`,
+`deployment-delete-blocked-by-inbound-binding`,
+`dependent-revision-advances-with-rendering`, and
 `binding-name-collision-rejected`, alongside the existing
 `deployment-weight-sum-enforced` and `handler-gated-attachments`.
+
+The fourth dependent of rule 5 is proved on its own rather than only alongside
+the three attachment Forms. A host that guards a custom domain, a cron trigger,
+and a queue consumer and forgets the inbound service binding passes every
+attachment case, so proving the three together would leave the one edge that has
+no Form of its own — a `serviceBindings` entry inside another worker's version —
+unfalsified.
 
 ## Consequences
 
@@ -127,6 +151,11 @@ The rules are proven by the required conformance checks
   existence of a record. That is the honest reading of an identity Form whose
   whole purpose is to be addressed, and it makes "the worker is up" answerable
   from one resource instead of by inspecting the aggregate.
+- Because that condition is rendered from another resource, a deployment
+  mutation now moves the worker's revision and therefore its ETag (rule 9). A
+  host keeps enough of the representation it last served to answer "did this
+  change", which is the same bookkeeping the relation re-pin of decision 0015
+  already required, generalized.
 - Two workers cannot service-bind to each other from scratch. Each needs the
   other serving `fetch` before its own version can be applied, so a mutually
   calling pair is built one direction at a time, or the second direction is

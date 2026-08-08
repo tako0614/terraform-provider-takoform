@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 64-entry executed-check list every v3
+// requiredRunnerChecks is the closed 66-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -182,6 +182,8 @@ var requiredRunnerChecks = []string{
 	"binding-name-collision-rejected",
 	"deployment-change-preserves-dependents",
 	"deployment-delete-blocked-by-dependent",
+	"deployment-delete-blocked-by-inbound-binding",
+	"dependent-revision-advances-with-rendering",
 	"artifact-manifest-reject-list",
 	"artifact-commit-binds-declared-size",
 	"artifact-manifest-kind-exclusive",

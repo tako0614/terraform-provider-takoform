@@ -106,6 +106,12 @@ type storedResource struct {
 	// Relations is the resolved cross-resource reference set of this exact
 	// stored spec, pinned by target UID.
 	Relations []storedRelation
+	// DerivedRendering is the exact derived part of the representation this
+	// resource was last serving — the conditions this host renders from OTHER
+	// resources. It is what the revision of that representation was issued for,
+	// so a mutation elsewhere that changes it must move the revision
+	// (derived_rendering.go).
+	DerivedRendering string
 }
 
 type recordedReplay struct {
@@ -1059,21 +1065,45 @@ func (h *ReferenceHost) nextResource(
 // storeResource installs one resource and keeps the UID reverse index exact:
 // whatever the previous incarnation of this key held is unindexed first, so a
 // stale relation can never keep a target undeletable.
+//
+// It is also one of the two places the store changes at all, so it is where the
+// derived-rendering rule is applied: every resource the new state renders
+// differently advances its revision (derived_rendering.go).
 func (h *ReferenceHost) storeResource(resource *storedResource) {
 	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
-	if previous := h.resources[key]; previous != nil {
+	previous := h.resources[key]
+	if previous != nil {
 		h.unindexRelations(previous)
 	}
 	h.resources[key] = resource
 	h.indexRelations(resource)
+	// The stored resource's own derived rendering is settled against the
+	// POST-mutation store. A resource born here has no earlier representation to
+	// differ from, so its first rendering simply IS revision 1; an existing one
+	// moves its revision only when this mutation has not moved it already,
+	// exactly like a relation re-pin — one representation change is one revision.
+	if rendered := h.derivedRendering(resource); rendered != resource.DerivedRendering {
+		if previous != nil &&
+			resource.Generation == previous.Generation && resource.Revision == previous.Revision {
+			resource.Revision++
+		}
+		resource.DerivedRendering = rendered
+	}
+	h.advanceDerivedRevisions(resource.Space, key)
 }
 
-// removeResource deletes one resource and its reverse-index entries.
+// removeResource deletes one resource and its reverse-index entries, and
+// advances the revision of everything the removal renders differently — the
+// out-of-band probe delete included, because a source whose target vanished is
+// exactly the case that must not keep serving its old ETag.
 func (h *ReferenceHost) removeResource(key string) {
-	if existing := h.resources[key]; existing != nil {
-		h.unindexRelations(existing)
+	existing := h.resources[key]
+	if existing == nil {
+		return
 	}
+	h.unindexRelations(existing)
 	delete(h.resources, key)
+	h.advanceDerivedRevisions(existing.Space, key)
 }
 
 func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any {
@@ -1082,29 +1112,9 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 	if resource.PackageDigest != "" {
 		reference["packageDigest"] = resource.PackageDigest
 	}
-	ready := map[string]any{
-		"type":               "Ready",
-		"status":             "True",
-		"reason":             "Available",
-		"lastTransitionTime": fixedTransitionTime,
-	}
-	// A stored relation whose target moved is reported, never repaired. The
-	// reason stays inside the closed portable vocabulary; the pointer and both
-	// uids travel in the free-form hostReason.
-	if reason, hostReason, drifted := h.relationDrift(resource); drifted {
-		ready["status"] = "False"
-		ready["reason"] = reason
-		ready["hostReason"] = hostReason
-	} else if reason, hostReason, unavailable := h.workerServiceUnavailable(resource); unavailable {
-		// A Module Worker's readiness is a claim about SERVICE, and what serves
-		// is whatever its active deployment selects (spec/decisions/0016).
-		ready["status"] = "False"
-		ready["reason"] = reason
-		ready["hostReason"] = hostReason
-	}
 	status := map[string]any{
 		"observedGeneration": strconv.FormatInt(resource.Generation, 10),
-		"conditions":         []map[string]any{ready},
+		"conditions":         h.derivedConditions(resource),
 	}
 	if resource.StatusTouches > 0 {
 		status["observed"] = map[string]any{"statusTouches": resource.StatusTouches}
@@ -1196,7 +1206,10 @@ func (h *ReferenceHost) handleObserve(
 	}
 	if request.Header.Get(ErrorProbeHeader) == ProbeTouchStatus {
 		// A host-side status touch: the representation changes, so the
-		// revision advances while the desired generation does not.
+		// revision advances while the desired generation does not. It touches
+		// nothing else — a status counter is not an input to any other
+		// resource's rendering — so this path needs no derived-rendering pass
+		// (derived_rendering.go).
 		resource.StatusTouches++
 		resource.Revision++
 	}

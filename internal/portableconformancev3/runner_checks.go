@@ -69,6 +69,10 @@ func (r *v3Runner) run() error {
 		r.checkBindingNameCollision,
 		r.checkDeploymentChangePreservesDependents,
 		r.checkDeploymentDeleteBlockedByDependent,
+		// Readiness rendered from the deployment is the second half of the
+		// aggregate: what a worker SERVES changes when its deployment changes, so
+		// the representation the host hands out changes with it.
+		r.checkDependentRevisionAdvancesWithRendering,
 		r.checkRelationReapplyRepins,
 		func() error { return r.checkRelationDeletionProtection(version, bundle) },
 		func() error { return r.checkImportFlows(kv, version) },

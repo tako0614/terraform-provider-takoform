@@ -40,6 +40,21 @@ discovery path; a v1alpha2 client can never select this lane accidentally.
   status, conditions, and outputs — changes. The strong ETag is the quoted
   revision; `If-Match` fences on it and a stale value fails
   `revision_conflict` (412).
+- A host that renders any part of a representation from OTHER resources MUST
+  advance that resource's `metadata.revision` when the rendering changes, and
+  MUST NOT move its `metadata.generation`: no desired spec changed. This lane
+  has two such renderings — relation drift and Worker readiness — so creating,
+  re-weighting, or deleting a `WorkerDeployment` moves the revision of the
+  `ModuleWorker` whose readiness follows it, and a target that is deleted or
+  replaced moves the revision of every source pinned to it. Serving the changed
+  representation under the old revision would make the ETag a validator that
+  reports "unchanged" about a change, and `If-Match` a fence on a
+  representation the client never saw. After an accepted mutation a host
+  recomputes the rendering of every resource that mutation can affect and
+  advances only those that actually changed, so an idempotent re-apply moves
+  nothing anywhere. This is a required conformance check
+  (`dependent-revision-advances-with-rendering`), and it is decided by
+  [decision 0016](../decisions/0016-the-worker-aggregate-has-one-active-deployment.md).
 - `status.observedGeneration` names the desired generation the status
   reflects; `status.conditions` uses the closed types `Ready`, `Reconciling`,
   `Degraded`, `Drifted`, `Blocked`, `Deleting` with closed portable reasons
@@ -302,6 +317,12 @@ Both false cases carry a `hostReason` naming the worker and what is missing. A
 time with `unsupported_capability` (422), rather than stored and reported
 not-Ready: a stored binding that projects nothing is a declared capability no
 host can keep.
+
+The worker is not addressed by any of the mutations that move it between these
+three states, so this is a representation rendered from another resource: a host
+MUST advance the worker's `metadata.revision`, and MUST NOT move its
+`metadata.generation`, when a deployment change flips the condition (see
+[Resource identity](#resource-identity)).
 
 ### The environment namespace is single
 

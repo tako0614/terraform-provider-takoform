@@ -378,6 +378,8 @@
     "binding-name-collision-rejected",
     "deployment-change-preserves-dependents",
     "deployment-delete-blocked-by-dependent",
+    "deployment-delete-blocked-by-inbound-binding",
+    "dependent-revision-advances-with-rendering",
     "artifact-manifest-reject-list",
     "artifact-commit-binds-declared-size",
     "artifact-manifest-kind-exclusive",

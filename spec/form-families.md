@@ -60,7 +60,9 @@ revision, and refused when the deployment is absent or does not serve the
 handler the attachment invokes; a deployment change that would leave a live
 attachment or inbound binding unserved is refused, as is deleting the deployment
 while one lives; and the identity reports itself Ready only while its deployment
-actually serves.
+actually serves. Because that last one is a representation rendered from another
+resource, a deployment change also moves the identity's revision and therefore
+its ETag, while leaving its generation alone.
 
 ## Edge Platform Family
 

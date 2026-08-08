@@ -565,5 +565,56 @@ func (r *v3Runner) checkDeploymentDeleteBlockedByDependent() error {
 		return errors.New("no attachment probes were available to block the deployment delete")
 	}
 	r.complete("deployment-delete-blocked-by-dependent")
+
+	// The FOURTH dependent, on its own. Every attachment above was released, so
+	// nothing but the inbound `module-worker.service` binding can block this
+	// delete: a host that guards the three attachment Forms and forgets the
+	// inbound edge passes every case above and fails only here, which is exactly
+	// why the fourth is proved in isolation rather than alongside them.
+	//
+	// The caller is a SECOND worker's version, because a service binding names a
+	// worker IDENTITY and is only representable while that worker serves fetch
+	// (spec/decisions/0016) — which is the state the deployment under test
+	// provides, and the state its deletion would take away.
+	moduleWorker := r.target(input.ModuleWorker)
+	callerWorker := moduleWorker
+	callerWorker.Name = "inbound-delete-caller-worker"
+	if _, _, err := r.applyResource(callerWorker, applyOptions{
+		Create: true, IdempotencyKey: "key-inbound-delete-caller-worker",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("inbound-binding caller worker: %w", err)
+	}
+	caller := r.workerVersionOf("inbound-delete-caller-version", callerWorker.Name, fetchHandler)
+	caller.Spec["serviceBindings"] = []any{map[string]any{
+		"name":     "UPSTREAM",
+		"resource": exactReference(moduleWorker, moduleWorker.Name),
+	}}
+	if _, _, err := r.applyResource(caller, applyOptions{
+		Create: true, IdempotencyKey: "key-inbound-delete-caller",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("inbound service binding to the serving worker: %w", err)
+	}
+	current, _, err := r.read(deployment)
+	if err != nil {
+		return err
+	}
+	blocked, err := r.deleteResource(
+		deployment, current.Metadata.Revision, "key-deployment-blocked-inbound-binding", nil,
+	)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(blocked, "dependency_in_use"); err != nil {
+		return fmt.Errorf("deleting a deployment a live inbound service binding needs: %w", err)
+	}
+	if _, _, err := r.read(deployment); err != nil {
+		return fmt.Errorf("a refused deployment delete removed it: %w", err)
+	}
+	// Released again, so the deployment stays deletable by the relation checks
+	// that follow.
+	if err := r.deleteExisting(caller, "key-inbound-delete-caller-release"); err != nil {
+		return err
+	}
+	r.complete("deployment-delete-blocked-by-inbound-binding")
 	return nil
 }
