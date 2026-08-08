@@ -197,7 +197,7 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 84-check matrix over real HTTP: exact discovery and
+drives the complete 85-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -227,7 +227,12 @@ consumer refused with `unsupported_capability` until some WorkerVersion
 declares the matching handler), 202 Operation polling with
 Retry-After plus terminal replay and cancel — with every fence, binding
 resolution, and blob requirement re-verified at commit time rather than at
-accept time — the content-addressed artifact
+accept time, and the commit bound to the exact incarnation the mutation was
+accepted for, so a target removed out of band and re-created under the same
+name — under the same contract or under the other definition version, at the
+same revision — terminates the operation `uid_mismatch` and survives it, while
+one that simply vanished terminates it `resource_not_found` — the
+content-addressed artifact
 upload/commit flow feeding a WorkerBundle apply including its manifest reject
 list and commit-time size binding, the closed SpaceID grammar, support
 profiles free of

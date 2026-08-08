@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 84-entry executed-check list every v3
+// requiredRunnerChecks is the closed 85-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -173,6 +173,7 @@ var requiredRunnerChecks = []string{
 	"space-id-grammar-enforced",
 	"concurrent-unrelated-mutation",
 	"async-commit-revalidates",
+	"async-commit-binds-the-accepted-identity",
 	"import-adopts-native-resource",
 	"import-validates-like-apply",
 	"deployment-weight-sum-enforced",

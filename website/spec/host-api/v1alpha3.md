@@ -372,8 +372,9 @@ a Worker Bundle a Worker Version executes, a Worker Version a Worker Deployment
 weights, a Module Worker an attachment activates, a queue a consumer drains, and
 a dead-letter queue are all live dependencies. A resource that references itself
 does not block its own deletion. An accepted (202) delete re-runs the scan at
-commit time, so a resource that acquired a holder while the operation was
-pending survives.
+commit time against the incarnation it was accepted for, so a resource that
+acquired a holder while the operation was pending survives, and a resource that
+merely took the deleted one's name is never touched.
 
 ### Binding verification
 
@@ -588,6 +589,22 @@ exactly one of `result` or `error`. Cancel is honored only for safely stoppable
 operations; an already-terminal operation replays its terminal state.
 `operation_not_found` (404) and `operation_cancelled` (409) are the closed
 outcomes; `deadline_exceeded` (504) reports a host-side deadline.
+
+A `202` accepts a mutation to **one resource**, and the commit is bound to that
+one ([decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md)).
+A host records the target's exact `formRef` and `metadata.uid` beside the fence
+the mutation was accepted under, and at commit time resolves through that record
+rather than re-deriving a target from the name the request addressed. A name is
+unique per kind and reusable, and a re-created resource starts at revision 1, so
+a target removed out of band and re-created — under the same contract or under
+another definition version of it — presents a NEW incarnation behind the same
+address that satisfies the fence the original was accepted under. When the name
+is held by a different incarnation the operation terminates `uid_mismatch` (409);
+when nothing holds it, `resource_not_found` (404). Neither commits anything, and
+neither is retryable: no wait turns one incarnation back into another. A create
+is fenced against the free name rather than against an incarnation, so it pins
+none and `If-None-Match: *` decides at commit as it always did. This is the
+required conformance check `async-commit-binds-the-accepted-identity`.
 
 An operation id is a resumption handle, **not a capability**. A host records the
 authenticated tenant and principal that the mutation was accepted from, and

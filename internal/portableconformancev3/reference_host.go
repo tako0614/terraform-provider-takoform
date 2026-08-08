@@ -192,6 +192,11 @@ type hostOperation struct {
 	// "being deleted" observable to the aggregate rules without a marker on the
 	// resource that a cancel would have to unwind.
 	DeleteTarget string
+	// Accepted is the exact incarnation this operation was accepted against. A
+	// 202 is an acceptance of a mutation to ONE resource, so the identity that
+	// mutation may land on is recorded here rather than resolved again from a
+	// name at commit time (acceptedTarget).
+	Accepted     acceptedTarget
 	commit       func() (map[string]any, *hostError)
 	terminalBody []byte
 }
@@ -949,15 +954,77 @@ func validateDeploymentWeightSum(form *InstalledForm, spec map[string]any) *host
 // async path evaluates them again at commit time, so they are captured as
 // values instead of read from a request that is long gone.
 type mutationFence struct {
+	IfMatch     string
 	IfNoneMatch string
 	Generation  string
 }
 
 func mutationFenceOf(request *http.Request) mutationFence {
 	return mutationFence{
+		IfMatch:     request.Header.Get("If-Match"),
 		IfNoneMatch: request.Header.Get("If-None-Match"),
 		Generation:  request.Header.Get(expectedGenerationHeader),
 	}
+}
+
+// acceptedTarget is the exact resource incarnation ONE accepted mutation was
+// admitted against, recorded on the Operation at accept time: the store key it
+// was addressed through, the exact FormRef it is recorded under, the host-issued
+// uid of that one incarnation, and the fence the acceptance was granted under.
+//
+// A commit closure resolves through this record and never re-derives a target
+// from the name it was addressed by. The store key carries only space, group,
+// kind, and name, because a name is unique per kind and a reference carries no
+// definition version; a resource removed out of band and re-created under the
+// same name therefore sits at exactly the same key — under the same contract or
+// under another definition version of it, with a new uid, and at revision 1,
+// which is a revision fence the original was very likely accepted under. Any
+// commit that re-derived its target from that key would delete or rewrite a
+// resource the operation was never accepted for, under a different exact
+// FormRef and a different uid, reporting success. That is the substitution
+// decision 0015 closed for relations — identity is pinned to what was actually
+// resolved, never re-derived from a name later — stated about the operation's
+// own target.
+//
+// A mutation accepted against no incarnation carries the zero value: a create
+// is fenced against the free NAME rather than against an incarnation, so it has
+// nothing to pin and its own fence decides at commit.
+type acceptedTarget struct {
+	Key   string
+	Ref   FormRef
+	UID   string
+	Fence mutationFence
+}
+
+// acceptedIncarnation re-resolves the incarnation an accepted operation was
+// admitted against, and refuses to hand back anything else.
+//
+// The two refusals name what actually happened, out of the closed taxonomy: the
+// name is held by another incarnation — a different uid, whether or not it is
+// recorded under another contract — so the incarnation this operation was
+// accepted for moved (`uid_mismatch`, 409); or nothing holds the name at all
+// (`resource_not_found`, 404). Neither is retryable, because no amount of
+// waiting turns one incarnation back into another.
+func (h *ReferenceHost) acceptedIncarnation(target acceptedTarget) (*storedResource, *hostError) {
+	if target.Key == "" {
+		return nil, nil
+	}
+	current := h.resources[target.Key]
+	if current == nil {
+		return nil, stableError(
+			"resource_not_found",
+			"the resource this operation was accepted for is absent",
+		)
+	}
+	if current.UID != target.UID || current.Ref != target.Ref {
+		return nil, stableError(
+			"uid_mismatch",
+			"the resource this operation was accepted for ("+target.UID+" under "+
+				target.Ref.DefinitionVersion+"/"+target.Ref.SchemaDigest+") is gone; the name is now held by "+
+				current.UID+" under "+current.Ref.DefinitionVersion+"/"+current.Ref.SchemaDigest,
+		)
+	}
+	return current, nil
 }
 
 // mutationFences resolves the apply/import precondition surface. It returns
@@ -1132,12 +1199,31 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 		return next, create, nil
 	}
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
-		h.acceptOperation(w, request, raw, space, "", func() (map[string]any, *hostError) {
-			next, _, hostErr := applyOnce()
-			if hostErr != nil {
-				return nil, hostErr
+		// The incarnation this apply is accepted against, pinned HERE, while the
+		// request that resolved it still exists. An apply fenced on
+		// If-None-Match: * was accepted against a free NAME and pins nothing — its
+		// fence is the name, and applyOnce re-evaluates it. An update was accepted
+		// against exactly one incarnation, and rewriting any other would be the
+		// same substitution the delete path refuses: the generation fence a
+		// replacement satisfies says nothing about which resource it belongs to.
+		accepted := acceptedTarget{Fence: fences}
+		if fences.IfNoneMatch != "*" {
+			if current := h.resourceUnderExactRef(space, form.Ref, name); current != nil {
+				accepted = acceptedTarget{Key: current.key(), Ref: current.Ref, UID: current.UID, Fence: fences}
 			}
-			return map[string]any{"resource": h.renderResource(next)}, nil
+		}
+		h.acceptOperation(w, request, raw, space, &hostOperation{
+			Accepted: accepted,
+			commit: func() (map[string]any, *hostError) {
+				if _, hostErr := h.acceptedIncarnation(accepted); hostErr != nil {
+					return nil, hostErr
+				}
+				next, _, hostErr := applyOnce()
+				if hostErr != nil {
+					return nil, hostErr
+				}
+				return map[string]any{"resource": h.renderResource(next)}, nil
+			},
 		})
 		return
 	}
@@ -1499,12 +1585,12 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 	if !ok {
 		return
 	}
-	ifMatch := request.Header.Get("If-Match")
-	if ifMatch == "" {
+	fences := mutationFenceOf(request)
+	if fences.IfMatch == "" {
 		h.writeError(w, "invalid_argument", "delete requires the If-Match revision fence")
 		return
 	}
-	if ifMatch != quotedRevision(resource.Revision) {
+	if fences.IfMatch != quotedRevision(resource.Revision) {
 		h.writeError(w, "revision_conflict", "delete revision fence is stale")
 		return
 	}
@@ -1519,28 +1605,38 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 			return
 		}
 	}
-	key := resource.key()
+	// What this delete was accepted for: one incarnation, addressed under one
+	// exact contract, at one revision.
+	accepted := acceptedTarget{Key: resource.key(), Ref: resource.Ref, UID: resource.UID, Fence: fences}
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
-		h.acceptOperation(w, request, raw, request.URL.Query().Get("space"), key, func() (map[string]any, *hostError) {
-			// The revision fence and the live-binding scan are re-derived at
-			// COMMIT time: an accepted delete must not remove a resource that
-			// has since been re-bound or re-revised.
-			current := h.resources[key]
-			if current == nil {
-				return nil, stableError("resource_not_found", "resource is absent")
-			}
-			if ifMatch != quotedRevision(current.Revision) {
-				return nil, stableError("revision_conflict", "delete revision fence is stale")
-			}
-			if hostErr := h.dependencyInUse(current); hostErr != nil {
-				return nil, hostErr
-			}
-			h.removeResource(key)
-			return map[string]any{"deleted": true}, nil
+		h.acceptOperation(w, request, raw, request.URL.Query().Get("space"), &hostOperation{
+			DeleteTarget: accepted.Key,
+			Accepted:     accepted,
+			commit: func() (map[string]any, *hostError) {
+				// Identity first, then the fence, then the live-binding scan. The
+				// order is the point: a revision fence cannot stand in for an
+				// identity, because a replacement created under ANY contract starts
+				// at revision 1 and satisfies the fence the original was accepted
+				// under. Only after the incarnation is proved to be the one this
+				// delete was accepted for does "has it been re-revised or re-bound
+				// since" mean anything.
+				current, hostErr := h.acceptedIncarnation(accepted)
+				if hostErr != nil {
+					return nil, hostErr
+				}
+				if accepted.Fence.IfMatch != quotedRevision(current.Revision) {
+					return nil, stableError("revision_conflict", "delete revision fence is stale")
+				}
+				if hostErr := h.dependencyInUse(current); hostErr != nil {
+					return nil, hostErr
+				}
+				h.removeResource(accepted.Key)
+				return map[string]any{"deleted": true}, nil
+			},
 		})
 		return
 	}
-	h.removeResource(key)
+	h.removeResource(accepted.Key)
 	h.writeRaw(w, http.StatusNoContent, "", nil)
 	h.recordReplay(request, raw, request.URL.Query().Get("space"), http.StatusNoContent, "", nil)
 }
@@ -1548,22 +1644,23 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 // acceptOperation registers a deferred mutation and answers 202 with a
 // pending Operation envelope. The mutation runs when polling exhausts the
 // deterministic wait; cancel before that point abandons it.
+//
+// The caller states what the operation was accepted AGAINST — the incarnation
+// it may land on and what it is removing — because only the caller still holds
+// the request that resolved it. This function owns the rest: the id, the owner
+// the mutation was accepted from, and the polling bookkeeping.
 func (h *ReferenceHost) acceptOperation(
 	w http.ResponseWriter,
 	request *http.Request,
 	raw []byte,
-	space, deleteTarget string,
-	commit func() (map[string]any, *hostError),
+	space string,
+	operation *hostOperation,
 ) {
 	h.opCounter++
 	owner, _ := hostRequestAuth(request)
-	operation := &hostOperation{
-		ID:             "op_" + strconv.Itoa(h.opCounter),
-		Owner:          owner,
-		PollsRemaining: asyncOperationPolls,
-		DeleteTarget:   deleteTarget,
-		commit:         commit,
-	}
+	operation.ID = "op_" + strconv.Itoa(h.opCounter)
+	operation.Owner = owner
+	operation.PollsRemaining = asyncOperationPolls
 	h.operations[operation.ID] = operation
 	response := encodeJSONBody(map[string]any{"operation": h.renderOperation(operation)})
 	h.writeRaw(w, http.StatusAccepted, "", response)

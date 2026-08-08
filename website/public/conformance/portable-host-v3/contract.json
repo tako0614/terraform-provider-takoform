@@ -432,6 +432,7 @@
     "space-id-grammar-enforced",
     "concurrent-unrelated-mutation",
     "async-commit-revalidates",
+    "async-commit-binds-the-accepted-identity",
     "import-adopts-native-resource",
     "import-validates-like-apply",
     "deployment-weight-sum-enforced",

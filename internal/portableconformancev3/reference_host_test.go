@@ -413,6 +413,124 @@ func TestPrepareFenceOnExistingResource(t *testing.T) {
 	}
 }
 
+// TestAcceptedApplyBindsTheIncarnationItWasAcceptedFor proves the apply half of
+// the accepted-identity rule over real HTTP. The delete half is proved by the
+// required conformance check `async-commit-binds-the-accepted-identity`; an
+// accepted UPDATE has no such check because a client cannot mint a prepared
+// review for an incarnation that does not exist yet, so the substitution is
+// only reachable from out-of-band replacement.
+//
+// The replacement here keeps the removed resource's name, contract, spec,
+// generation, and revision, and differs in exactly one thing: its uid. Every
+// fence the operation was accepted under therefore still passes, which is the
+// point — an identity is not a fence, and the answer must say what actually
+// happened rather than blaming the prepared review.
+func TestAcceptedApplyBindsTheIncarnationItWasAcceptedFor(t *testing.T) {
+	host, contract := fallbackHost(t)
+	queueRef := contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef
+	spec := map[string]any{
+		"messageRetentionSeconds": json.Number("345600"),
+		"deliveryDelaySeconds":    json.Number("0"),
+	}
+	specDigest, err := specCanonicalDigest(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := &storedResource{
+		Ref:  queueRef,
+		Name: "queue-probe", Space: "conformance",
+		UID: "uid-7", Generation: 3, Revision: 5,
+		Spec: spec, SpecDigest: specDigest,
+	}
+	host.storeResource(accepted)
+	server := httptest.NewServer(host)
+	defer server.Close()
+
+	document := map[string]any{
+		"apiVersion": queueRef.APIVersion,
+		"kind":       queueRef.Kind,
+		"form":       map[string]any{"formRef": refJSON(queueRef)},
+		"metadata":   map[string]any{"name": "queue-probe", "space": "conformance"},
+		"spec":       spec,
+	}
+	body, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepareStatus, prepareBody := hostRequest(t, server, http.MethodPost,
+		contract.APIPath+"/resources/prepare",
+		map[string]string{expectedGenerationHeader: "3"}, body)
+	if prepareStatus != http.StatusOK {
+		t.Fatalf("prepare = %d %s, want 200", prepareStatus, strings.TrimSpace(string(prepareBody)))
+	}
+	var prepared struct {
+		Review struct {
+			PrepareDigest string `json:"prepareDigest"`
+		} `json:"review"`
+	}
+	if err := json.Unmarshal(prepareBody, &prepared); err != nil {
+		t.Fatal(err)
+	}
+	document["review"] = map[string]any{"prepareDigest": prepared.Review.PrepareDigest}
+	applyBody, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyStatus, applyResponse := hostRequest(t, server, http.MethodPut,
+		contract.APIPath+"/resources/"+groupSegments(queueRef.APIVersion)+"/"+queueRef.Kind+"/queue-probe",
+		map[string]string{
+			expectedGenerationHeader: "3",
+			"Idempotency-Key":        "key-accepted-apply",
+			ErrorProbeHeader:         ProbeAsync,
+		}, applyBody)
+	if applyStatus != http.StatusAccepted {
+		t.Fatalf("async apply = %d %s, want 202", applyStatus, strings.TrimSpace(string(applyResponse)))
+	}
+	var envelope struct {
+		Operation struct {
+			ID string `json:"id"`
+		} `json:"operation"`
+	}
+	if err := json.Unmarshal(applyResponse, &envelope); err != nil {
+		t.Fatal(err)
+	}
+
+	// The incarnation is replaced out of band while the operation is pending.
+	replacement := *accepted
+	replacement.UID = "uid-9"
+	host.removeResource(accepted.key())
+	host.storeResource(&replacement)
+
+	var terminal struct {
+		Done  bool `json:"done"`
+		Error struct {
+			Code      string `json:"code"`
+			Retryable bool   `json:"retryable"`
+		} `json:"error"`
+		Result map[string]any `json:"result"`
+	}
+	for poll := 0; poll < asyncOperationPolls; poll++ {
+		status, pollBody := hostRequest(t, server, http.MethodGet,
+			contract.APIPath+"/operations/"+url.PathEscape(envelope.Operation.ID), nil, nil)
+		if status != http.StatusOK {
+			t.Fatalf("operation poll = %d %s, want 200", status, strings.TrimSpace(string(pollBody)))
+		}
+		if err := json.Unmarshal(pollBody, &terminal); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !terminal.Done || terminal.Result != nil || terminal.Error.Code != "uid_mismatch" {
+		t.Fatalf("terminal operation = %+v, want a uid_mismatch error", terminal)
+	}
+	if terminal.Error.Retryable {
+		t.Fatalf("uid_mismatch was reported as automatically retryable")
+	}
+	current := host.resources[replacement.key()]
+	if current == nil || current.UID != "uid-9" || current.Generation != 3 || current.Revision != 5 {
+		t.Fatalf("the accepted apply rewrote the replacement it was never accepted for: %+v", current)
+	}
+}
+
 // TestStaleRevisionDeleteRejected proves the If-Match revision fence over
 // real HTTP.
 func TestStaleRevisionDeleteRejected(t *testing.T) {
