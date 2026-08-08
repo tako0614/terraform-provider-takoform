@@ -220,7 +220,11 @@ func TestProvidedInterfaceAssignments(t *testing.T) {
 		"ObjectBucket":     "edge.objects",
 		"SQLiteDatabase":   "edge.sql",
 		"AtLeastOnceQueue": "edge.queue",
-		"WorkerVersion":    "worker.service",
+		// worker.service belongs to the worker IDENTITY: the
+		// module-worker.service binding lists ModuleWorker in its
+		// allowedTargetForms, and a host verifies that the resolved target's
+		// Form provides the binding's targetInterface.
+		"ModuleWorker": "worker.service",
 	}
 	for _, form := range Forms {
 		wantInterface, expects := want[form.Kind]

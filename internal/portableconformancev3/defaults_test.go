@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
@@ -187,9 +188,10 @@ func TestSpecChangingApplyToFormWithoutUpdateIsRefused(t *testing.T) {
 		t.Fatal("this test needs a Form whose Definition omits update")
 	}
 	const name, space = "worker-version-probe", "conformance"
+	group := ref.APIVersion
 	stored := map[string]any{
-		"worker":            map[string]any{"kind": "ModuleWorker", "name": "module-worker-probe"},
-		"bundle":            map[string]any{"kind": "WorkerBundle", "name": "worker-bundle-probe"},
+		"worker":            map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
+		"bundle":            map[string]any{"apiVersion": group, "kind": "WorkerBundle", "name": "worker-bundle-probe"},
 		"compatibilityDate": "2026-01-01",
 		"handlers":          []any{"fetch"},
 	}
@@ -202,12 +204,23 @@ func TestSpecChangingApplyToFormWithoutUpdateIsRefused(t *testing.T) {
 		UID: "uid-1", Generation: 1, Revision: 1,
 		Spec: stored, SpecDigest: storedDigest,
 	})
+	// The referenced resources exist: this test is about the capability
+	// refusal, and an unresolvable relation would refuse first.
+	host.storeResource(&storedResource{
+		Group: group, Kind: "ModuleWorker", Name: "module-worker-probe", Space: space,
+		UID: "uid-2", Generation: 1, Revision: 1, Spec: map[string]any{},
+	})
+	host.storeResource(&storedResource{
+		Group: group, Kind: "WorkerBundle", Name: "worker-bundle-probe", Space: space,
+		UID: "uid-3", Generation: 1, Revision: 1,
+		Spec: map[string]any{"manifestDigest": formpackage.DigestBytes([]byte("bundle"))},
+	})
 	server := httptest.NewServer(host)
 	defer server.Close()
 
 	changed := map[string]any{
-		"worker":            map[string]any{"kind": "ModuleWorker", "name": "module-worker-probe"},
-		"bundle":            map[string]any{"kind": "WorkerBundle", "name": "worker-bundle-probe"},
+		"worker":            map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
+		"bundle":            map[string]any{"apiVersion": group, "kind": "WorkerBundle", "name": "worker-bundle-probe"},
 		"compatibilityDate": "2026-02-01",
 		"handlers":          []any{"fetch"},
 	}

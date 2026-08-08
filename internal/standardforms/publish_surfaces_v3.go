@@ -223,8 +223,10 @@ description: |-
 		builder.WriteString("- `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.\n")
 	}
 	generationDoc := "increments only when the portable desired spec changes. Updates fence on it."
+	recoveryDoc := "an in-place re-apply of the same desired state, which is all a host needs to re-resolve and re-pin every reference"
 	if !form.DeclaresUpdate() {
 		generationDoc = "increments only when the portable desired spec changes; this Form declares no update capability — every desired attribute forces replacement instead."
+		recoveryDoc = "replacing this resource, because this Form declares no in-place update and a host refuses every apply to the existing one"
 	}
 	builder.WriteString(`
 ## Read-only attributes
@@ -236,6 +238,7 @@ description: |-
 - ` + "`outputs_json`" + ` — JSON-serialized ` + "`status.outputs`" + ` document (` + "`\"{}\"`" + ` when empty).
 - ` + "`form_api_version`" + `, ` + "`form_kind`" + `, ` + "`form_definition_version`" + `, ` + "`form_schema_digest`" + ` — the exact immutable FormRef this state is bound to; reads dispatch on it.
 - ` + "`form_package_digest`" + ` — audit-only package provenance; never part of resource identity, queries, or fences.
+- ` + "`relation_drift_reason`" + ` — internal recovery only: ` + "`ExternalChange`" + ` or ` + "`DependencyMissing`" + ` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes ` + recoveryDoc + `. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.
 `)
 	if len(form.ProvidedInterfaces) > 0 {
 		builder.WriteString("\n## Provided interfaces\n\n")
@@ -378,6 +381,7 @@ func v3GenericResourceDoc() string {
 		"- `revision` — representation revision; increments whenever the representation changes — a spec-changing update, new status, or new outputs. Deletes fence on it via `If-Match`.\n" +
 		"- `ready` — true when the closed `Ready` condition reports `True`.\n" +
 		"- `outputs_json` — JSON-serialized `status.outputs` document (`\"{}\"` when empty).\n" +
+		"- `relation_drift_reason` — internal recovery only: `ExternalChange` or `DependencyMissing` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes an in-place re-apply, which is all a host needs to re-resolve and re-pin every reference. A Form whose Definition omits `update` refuses that apply, naming the missing capability; replace the resource instead. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.\n" +
 		"\n" +
 		"State records the four FormRef fields and no package digest: the distribution\n" +
 		"a host installed is audit evidence, never resource identity.\n" +

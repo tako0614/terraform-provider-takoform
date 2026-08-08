@@ -66,6 +66,12 @@ type v3FakeHost struct {
 	// which FormRef a read or delete actually queried.
 	resourceQueries []string
 
+	// relationDriftReason makes every rendered resource report Ready=False with
+	// that portable reason and a hostReason naming a relation pointer and both
+	// uids, the way a host reports a reference whose target moved out of band.
+	// Clearing it is how a test spells "the apply re-pinned the relation".
+	relationDriftReason string
+
 	// apply202 makes the next create return 202 with a polled Operation.
 	apply202 bool
 	// apply202Pending makes the next create return 202 with an Operation that
@@ -128,12 +134,19 @@ func (h *v3FakeHost) discoveryDoc() map[string]any {
 func (h *v3FakeHost) resourceKey(kind, name string) string { return kind + "/" + name }
 
 func (h *v3FakeHost) wireResource(record *v3HostRecord, name string) map[string]any {
+	ready := map[string]any{
+		"type": "Ready", "status": "True", "reason": "Available",
+		"lastTransitionTime": "2026-08-06T00:00:00Z",
+	}
+	if h.relationDriftReason != "" {
+		ready["status"] = "False"
+		ready["reason"] = h.relationDriftReason
+		ready["hostReason"] = "relation /worker target " + record.apiVersion +
+			" ModuleWorker module-worker changed incarnation from uid uid-9 to uid uid-10"
+	}
 	status := map[string]any{
 		"observedGeneration": strconv.Itoa(record.generation),
-		"conditions": []map[string]any{{
-			"type": "Ready", "status": "True", "reason": "Available",
-			"lastTransitionTime": "2026-08-06T00:00:00Z",
-		}},
+		"conditions":         []map[string]any{ready},
 	}
 	if len(record.outputs) > 0 {
 		status["outputs"] = record.outputs

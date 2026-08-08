@@ -20,6 +20,10 @@
         "additionalProperties": false,
         "description": "Module Worker whose scheduled handler this trigger invokes.",
         "properties": {
+          "apiVersion": {
+            "const": "edge.forms.takoform.com/v1alpha1",
+            "type": "string"
+          },
           "kind": {
             "const": "ModuleWorker",
             "type": "string"
@@ -32,6 +36,7 @@
           }
         },
         "required": [
+          "apiVersion",
           "kind",
           "name"
         ],

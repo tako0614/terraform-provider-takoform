@@ -7,7 +7,8 @@ import (
 
 func testForm() Form {
 	return Form{
-		Kind: "ExampleRevision", Slug: "example-revision", ResourceType: "takoform_example_revision",
+		Family: Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"},
+		Kind:   "ExampleRevision", Slug: "example-revision", ResourceType: "takoform_example_revision",
 		Role: RoleRevision, Title: "Example Revision", Description: "Test form.",
 		DefinitionVersion: "0.1.0",
 		Fields: []Field{
@@ -20,7 +21,11 @@ func testForm() Form {
 			{HCL: "kv_bindings", Wire: "kvBindings", Kind: KindBindingList,
 				TargetKind: "EdgeKVNamespace", BindingType: "module-worker.edge-kv", Doc: "KV bindings.",
 				Default: []any{},
-				Example: []any{map[string]any{"name": "CACHE", "resource": map[string]any{"kind": "EdgeKVNamespace", "name": "cache"}}}},
+				Example: []any{map[string]any{"name": "CACHE", "resource": map[string]any{
+					"apiVersion": "edge.forms.takoform.com/v1alpha1",
+					"kind":       "EdgeKVNamespace",
+					"name":       "cache",
+				}}}},
 			{HCL: "retention_seconds", Wire: "retentionSeconds", Kind: KindInteger,
 				Min: I64(60), Max: I64(600), Default: 300, Doc: "Retention bound."},
 		},

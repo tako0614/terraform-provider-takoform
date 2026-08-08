@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
@@ -307,11 +308,135 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 		resp.State.RemoveResource(ctx)
 		return
 	}
+	v3ReportRelationCondition(
+		r.form.Kind, space, values.Name.ValueString(), res, r.form.DeclaresUpdate(), &resp.Diagnostics,
+	)
 	// Only a Form that declares update can converge an out-of-band change in
 	// place, so only there does adopting the host's spec produce a plan the
 	// next apply can satisfy. For a Form without update every desired attribute
 	// forces replacement, and the recorded configuration is preserved.
 	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, ref, space, values, res, r.form.DeclaresUpdate())...)
+}
+
+// v3RelationConditionReasons are the two portable reasons a host uses when a
+// stored cross-resource relation no longer resolves to the resource it was
+// bound to. Both mean the same thing to a client: this resource is pinned to an
+// incarnation that is gone, and only a re-apply can re-resolve the reference.
+var v3RelationConditionReasons = map[string]string{
+	"ExternalChange":    "a referenced resource was replaced by a different incarnation with the same name",
+	"DependencyMissing": "a referenced resource no longer exists",
+}
+
+// v3RelationDrift reports the relation-drift condition the host published, if
+// any: the exact portable reason and the prose summary of what it means.
+func v3RelationDrift(res *clientv3.Resource) (reason, summary, hostReason string, drifted bool) {
+	condition := clientv3.ResourceCondition(res, "Ready")
+	if condition == nil || condition.Status != "False" {
+		return "", "", "", false
+	}
+	summary, tracked := v3RelationConditionReasons[condition.Reason]
+	if !tracked {
+		return "", "", "", false
+	}
+	return condition.Reason, summary, condition.HostReason, true
+}
+
+// v3RelationDriftState projects that condition onto the recovery attribute:
+// the portable reason while a relation is broken, null once it resolves again.
+func v3RelationDriftState(res *clientv3.Resource) types.String {
+	reason, _, _, drifted := v3RelationDrift(res)
+	if !drifted {
+		return types.StringNull()
+	}
+	return types.StringValue(reason)
+}
+
+// v3ReportRelationCondition WARNS about a relation the host reports as broken,
+// and never fails the read.
+//
+// Failing here would take the remedy away. A read is Terraform's refresh, and
+// the plan that repairs the resource is computed from the refreshed state, so
+// an error aborts the very plan that would fix it. Skipping refresh is no
+// escape either: for a revision Form the host refuses every apply to an
+// existing resource, so the resource would stay pinned to a dead target until
+// someone edited state by hand. The warning keeps the resource in state, and
+// the recorded relation_drift_reason lets the next plan propose the apply that
+// re-resolves the reference (v3PlanRelationRecovery).
+func v3ReportRelationCondition(
+	kind, space, name string,
+	res *clientv3.Resource,
+	declaresUpdate bool,
+	diags *diag.Diagnostics,
+) {
+	reason, summary, hostReason, drifted := v3RelationDrift(res)
+	if !drifted {
+		return
+	}
+	remedy := "replacing this resource, because its Form declares no in-place update"
+	if declaresUpdate {
+		remedy = "re-applying this resource in place"
+	}
+	detail := fmt.Sprintf(
+		"The host reports %s/%s as not ready with reason %s: %s. It stays pinned to the incarnation it was applied against, because the host never re-binds a reference by name.",
+		space, name, reason, summary,
+	)
+	if hostReason != "" {
+		detail += " The host names the relation pointer and both uids: " + hostReason + "."
+	}
+	detail += " The next plan proposes " + remedy +
+		", and that apply re-resolves the reference against the resource that exists now." +
+		" A target that no longer exists must be re-created first, or this resource removed with it."
+	diags.AddWarning(kind+" references a resource that changed out of band", detail)
+}
+
+// ModifyPlan carries the two plan-time facts of the v3 lane: a relation the
+// host reports as broken is planned into an apply that can repair it, and a
+// worker bundle's identity follows its bytes.
+func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	v3PlanRelationRecovery(ctx, req.State, r.form.DeclaresUpdate(), resp)
+	if r.form.Kind == workerBundleKind {
+		r.modifyWorkerBundlePlan(ctx, req, resp)
+	}
+}
+
+// v3PlanRelationRecovery turns a recorded relation break into a plan Terraform
+// can act on.
+//
+// Clearing the recorded reason in the plan is what makes the plan non-empty:
+// Terraform treats a planned state identical to prior state as a no-op and
+// never calls apply, so a replacement marker on its own would be dropped
+// silently. Clearing it is also the honest prediction, because a successful
+// apply is exactly what clears it.
+//
+// Which apply is proposed follows the Form's own capability. A Form that
+// declares update recovers in place — the host re-resolves and re-pins every
+// relation on any accepted apply, so a spec-identical apply is the whole
+// remedy. A Form that declares none has no in-place apply at all: the host
+// refuses every apply to the existing resource, so the only reachable remedy
+// is replacement.
+func v3PlanRelationRecovery(
+	ctx context.Context,
+	state tfsdk.State,
+	declaresUpdate bool,
+	resp *resource.ModifyPlanResponse,
+) {
+	// A create resolves every relation for the first time and a destroy needs
+	// no repair; only an existing resource can carry a stale pin.
+	if state.Raw.IsNull() || resp.Plan.Raw.IsNull() {
+		return
+	}
+	var recorded types.String
+	resp.Diagnostics.Append(state.GetAttribute(ctx, path.Root(v3RelationDriftAttribute), &recorded)...)
+	if resp.Diagnostics.HasError() || recorded.IsNull() || recorded.IsUnknown() {
+		return
+	}
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(v3RelationDriftAttribute), types.StringNull())...)
+	if resp.Diagnostics.HasError() || declaresUpdate {
+		return
+	}
+	if !resp.RequiresReplace.Contains(path.Root(v3RelationDriftAttribute)) {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root(v3RelationDriftAttribute))
+	}
 }
 
 func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

@@ -51,17 +51,26 @@ const (
 	bindingListMaxItems = 64
 	// bindingNameMaxLength bounds one binding instance name.
 	bindingNameMaxLength = 64
+
+	// BindingAnnotationKey names the Binding contract a binding-list property
+	// carries. It is a JSON Schema annotation on the property itself, so the
+	// desired schema a host already serves states which Binding Definition
+	// governs each declared list. The Form Definition's acceptedBindings
+	// resolves that name to the exact digest-bound BindingRef, which keeps one
+	// source of truth for the digest (decision 0014).
+	BindingAnnotationKey = "x-takoform-binding"
 )
 
 // DesiredSchema derives the Draft 2020-12 closed desired schema of a Form.
 // It never contains a "name" property: the v1alpha3 envelope owns
 // metadata.name (decision 0011).
 func (f Form) DesiredSchema() map[string]any {
+	group := f.Family.APIVersion()
 	properties := map[string]any{}
 	var required []string
 	needsJSONMapDefs := false
 	for _, field := range f.Fields {
-		properties[field.Wire] = field.jsonSchema()
+		properties[field.Wire] = field.jsonSchema(group)
 		if field.Required {
 			required = append(required, field.Wire)
 		}
@@ -99,8 +108,8 @@ func (f Field) usesJSONMap() bool {
 	return false
 }
 
-func (f Field) jsonSchema() map[string]any {
-	schema := f.jsonSchemaShape()
+func (f Field) jsonSchema(group string) map[string]any {
+	schema := f.jsonSchemaShape(group)
 	if f.Doc != "" {
 		schema["description"] = f.Doc
 	}
@@ -114,7 +123,7 @@ func (f Field) jsonSchema() map[string]any {
 	return schema
 }
 
-func (f Field) jsonSchemaShape() map[string]any {
+func (f Field) jsonSchemaShape(group string) map[string]any {
 	switch f.Kind {
 	case KindBoolean:
 		return map[string]any{"type": "boolean"}
@@ -161,9 +170,9 @@ func (f Field) jsonSchemaShape() map[string]any {
 			"additionalProperties": map[string]any{"$ref": "#/$defs/jsonValueDepth1"},
 		}
 	case KindResourceRef:
-		return resourceRefSchema(f.TargetKind)
+		return resourceRefSchema(group, f.TargetKind)
 	case KindResourceRefList:
-		return f.arraySchema(resourceRefSchema(f.TargetKind))
+		return f.arraySchema(resourceRefSchema(group, f.TargetKind))
 	case KindBindingList:
 		schema := f.arraySchema(map[string]any{
 			"type":                 "object",
@@ -175,17 +184,21 @@ func (f Field) jsonSchemaShape() map[string]any {
 					"pattern":   PatternBindingName,
 					"maxLength": bindingNameMaxLength,
 				},
-				"resource": resourceRefSchema(f.TargetKind),
+				"resource": resourceRefSchema(group, f.TargetKind),
 			},
 		})
 		if f.MaxItems == 0 {
 			schema["maxItems"] = bindingListMaxItems
 		}
+		// The Binding contract this list carries is stated on the property, so
+		// a host that has only the desired schema still knows which Binding
+		// Definition governs each reference it finds.
+		schema[BindingAnnotationKey] = f.BindingType
 		return schema
 	case KindObject:
-		return objectSchema(f.Fields)
+		return objectSchema(group, f.Fields)
 	case KindObjectList:
-		return f.arraySchema(objectSchema(f.Fields))
+		return f.arraySchema(objectSchema(group, f.Fields))
 	default:
 		panic(fmt.Sprintf("unknown field kind %q", f.Kind))
 	}
@@ -202,11 +215,11 @@ func (f Field) arraySchema(items map[string]any) map[string]any {
 	return schema
 }
 
-func objectSchema(fields []Field) map[string]any {
+func objectSchema(group string, fields []Field) map[string]any {
 	properties := map[string]any{}
 	var required []string
 	for _, member := range fields {
-		properties[member.Wire] = member.jsonSchema()
+		properties[member.Wire] = member.jsonSchema(group)
 		if member.Required {
 			required = append(required, member.Wire)
 		}
@@ -223,13 +236,18 @@ func objectSchema(fields []Field) map[string]any {
 	return schema
 }
 
-func resourceRefSchema(targetKind string) map[string]any {
+// resourceRefSchema is the closed three-member cross-resource reference. The
+// group is pinned as a const alongside the kind: a reference that named only
+// {kind, name} could never address two Form Families at once, and a host
+// resolving it would have to guess which installed Form a bare kind meant.
+func resourceRefSchema(group, targetKind string) map[string]any {
 	return map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
-		"required":             []string{"kind", "name"},
+		"required":             []string{"apiVersion", "kind", "name"},
 		"properties": map[string]any{
-			"kind": map[string]any{"type": "string", "const": targetKind},
+			"apiVersion": map[string]any{"type": "string", "const": group},
+			"kind":       map[string]any{"type": "string", "const": targetKind},
 			"name": map[string]any{
 				"type":      "string",
 				"minLength": 1,

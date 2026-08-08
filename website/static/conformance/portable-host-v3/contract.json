@@ -78,9 +78,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "ModuleWorker",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:397eff0678043e02731bb49a4f740022fdea781a0f7c3a1e3764ab5c9e415b79"
+          "schemaDigest": "sha256:0a59a32673c52a2d1eae30049931c3e925b87bb44cfa73c7c76227a944148044"
         },
-        "packageDigest": "sha256:f96506e71e927703a420b5a2317d2e600981f5eb0b3b1605ec7cc45545d48ee5"
+        "packageDigest": "sha256:a3ae17610a156bf6ba169f773cb881701dd6f9ff3fffb53a58e9a4a1ab2e52ca"
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
       "desired": {}
@@ -122,13 +122,14 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerVersion",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:b1c8f03c21d4a835484f5db55bff07c379880da9e01c461b13294f224613fac3"
+          "schemaDigest": "sha256:2408d78fa812a2d565d9964c68ffd59f034cc57cf23d6fb9db3a468477ee553c"
         },
-        "packageDigest": "sha256:98655bc4fab4d3c1176705c67b52e37fdb5b83315d18e991b59b58b095d7b418"
+        "packageDigest": "sha256:4a090527f0a1189dd4a873dd8198964e51189aa2a45f8c39ff9e6ae4d51a15e7"
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
       "desired": {
         "bundle": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerBundle",
           "name": "worker-bundle-probe"
         },
@@ -138,12 +139,14 @@
           {
             "name": "CACHE",
             "resource": {
+              "apiVersion": "edge.forms.takoform.com/v1alpha1",
               "kind": "EdgeKVNamespace",
               "name": "edge-kv-probe"
             }
           }
         ],
         "worker": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
@@ -186,9 +189,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerDeployment",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:9dc5da8cefbda497c650376628c0de3059b3007bea66f7bfb6c45603d2b036f8"
+          "schemaDigest": "sha256:0575c008f1143c9fafbe6859c6a5cff8bedb73b8118ef5d36dcaaed024afb6c1"
         },
-        "packageDigest": "sha256:6cb5cea136516a04735e0c3d2ab770efa0f12da5a74bbb9aab571cacf86e908f"
+        "packageDigest": "sha256:2bb11082714fd2f3ff28c4e293208111fa3c86c05abe2fc73e01a71d4253db10"
       },
       "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
       "desired": {
@@ -196,12 +199,14 @@
           {
             "weight": 10000,
             "workerVersion": {
+              "apiVersion": "edge.forms.takoform.com/v1alpha1",
               "kind": "WorkerVersion",
               "name": "worker-version-probe"
             }
           }
         ],
         "worker": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
@@ -214,14 +219,15 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerCronTrigger",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:ba57cb5c0d046c219a4eb453c5ef9005cae668b1467eafa2a85b9c84d65eeb0c"
+          "schemaDigest": "sha256:3df385ba2b76a1476ef7af87c473883ecee2604f9941de17e6c7f700ecaec627"
         },
-        "packageDigest": "sha256:302857a1414f69d57549c4086b72d61ac924226dd4904b240a40146bd4df4f5c"
+        "packageDigest": "sha256:4101105ad93c696e5bd946ea2a575d8157ed1cc72dc8b0c82bddf27da590684d"
       },
       "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
       "desired": {
         "cron": "0 0 * * *",
         "worker": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
@@ -234,9 +240,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "QueueConsumer",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:eaa278a78a7549e38d5b51b261097e190b9bf7c113ac1883cbb0530607459f2c"
+          "schemaDigest": "sha256:d4d447d2c9b3a05055401d871917f2c3d267a4c6107a574f81f67c9f47c47e06"
         },
-        "packageDigest": "sha256:2b6335f97d0bb5e5366eae0ef8ebd2dd733e127291269c41ee00f5b68a8e7754"
+        "packageDigest": "sha256:3618a72137bd3a88d821ab14dbf54f4cf2abeeee59fa5fa772dfa9c845d0ac0c"
       },
       "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
       "desired": {
@@ -245,11 +251,13 @@
         "maxConcurrency": 4,
         "maxRetries": 3,
         "queue": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "AtLeastOnceQueue",
           "name": "queue-probe"
         },
         "retryDelaySeconds": 60,
         "worker": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
@@ -316,6 +324,11 @@
     "no-update-spec-change-rejected",
     "binding-target-missing-404-before-mutation",
     "dependency-in-use-on-bound-target-delete",
+    "relation-target-missing-rejected",
+    "relation-target-deletion-blocked",
+    "relation-incarnation-change-detected",
+    "relation-reapply-repins",
+    "binding-contract-verified",
     "async-operation-flow",
     "operation-replay-terminal",
     "operation-cancel",

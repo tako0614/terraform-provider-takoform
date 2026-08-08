@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 func fallbackHost(t *testing.T) (*ReferenceHost, Contract) {
@@ -146,20 +148,43 @@ func TestMutationFences(t *testing.T) {
 	}
 }
 
-func TestBindingReferencesScan(t *testing.T) {
+// TestRelationInstancesCoverEveryReference is the regression guard for the
+// defect this lane had: recognizing a reference by the literal member name
+// "resource" found typed bindings only, so worker, bundle, deployment version,
+// and dead-letter references were never resolved at all. The derived relations
+// find every one of them.
+func TestRelationInstancesCoverEveryReference(t *testing.T) {
+	host, contract := fallbackHost(t)
+	ref := contract.RunnerInput.WorkerVersion.Identity.FormRef
+	form := host.catalog.form(ref.APIVersion, ref.Kind)
+	group := ref.APIVersion
 	spec := map[string]any{
-		"worker": map[string]any{"kind": "ModuleWorker", "name": "module-worker-probe"},
-		"bundle": map[string]any{"kind": "WorkerBundle", "name": "worker-bundle-probe"},
+		"worker": map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
+		"bundle": map[string]any{"apiVersion": group, "kind": "WorkerBundle", "name": "worker-bundle-probe"},
 		"kvBindings": []any{
 			map[string]any{
 				"name":     "CACHE",
-				"resource": map[string]any{"kind": "EdgeKVNamespace", "name": "edge-kv-probe"},
+				"resource": map[string]any{"apiVersion": group, "kind": "EdgeKVNamespace", "name": "edge-kv-probe"},
 			},
 		},
 	}
-	references := bindingReferences(spec)
-	if len(references) != 1 || references[0] != [2]string{"EdgeKVNamespace", "edge-kv-probe"} {
-		t.Fatalf("bindingReferences = %v, want exactly the kvBinding target", references)
+	instances := currentformmodel.RelationInstances(form.Relations, spec)
+	got := map[string]string{}
+	for _, instance := range instances {
+		got[instance.Pointer] = instance.TargetKind + "/" + instance.TargetName
+	}
+	want := map[string]string{
+		"/bundle":                "WorkerBundle/worker-bundle-probe",
+		"/kvBindings/0/resource": "EdgeKVNamespace/edge-kv-probe",
+		"/worker":                "ModuleWorker/module-worker-probe",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("relation instances = %v, want %v", got, want)
+	}
+	for _, instance := range instances {
+		if (instance.Binding != "") != (instance.Pointer == "/kvBindings/0/resource") {
+			t.Fatalf("relation %s binding = %q", instance.Pointer, instance.Binding)
+		}
 	}
 }
 
@@ -260,10 +285,20 @@ func TestDeleteOfBoundTargetFailsDependencyInUse(t *testing.T) {
 		UID: "uid-2", Generation: 1, Revision: 1,
 		Spec: map[string]any{
 			"kvBindings": []any{map[string]any{
-				"name":     "CACHE",
-				"resource": map[string]any{"kind": "EdgeKVNamespace", "name": "edge-kv-probe"},
+				"name": "CACHE",
+				"resource": map[string]any{
+					"apiVersion": kvRef.APIVersion, "kind": "EdgeKVNamespace", "name": "edge-kv-probe",
+				},
 			}},
 		},
+		// The stored relation pins the target UID, which is what the reverse
+		// index is keyed by. A holder that stored only the name would not
+		// protect this target at all.
+		Relations: []storedRelation{{
+			Pointer: "/kvBindings/0/resource", Relation: "/kvBindings/*/resource",
+			TargetAPIVersion: kvRef.APIVersion, TargetKind: kvRef.Kind,
+			TargetName: "edge-kv-probe", TargetUID: "uid-1",
+		}},
 	})
 	server := httptest.NewServer(host)
 	defer server.Close()
@@ -287,7 +322,7 @@ func TestDeleteOfBoundTargetFailsDependencyInUse(t *testing.T) {
 		t.Fatalf("bound target vanished after rejected delete: HTTP %d", readStatus)
 	}
 	// After the holder is gone the same fenced delete succeeds.
-	delete(host.resources, resourceKey("conformance", versionRef.APIVersion, versionRef.Kind, "worker-version-probe"))
+	host.removeResource(resourceKey("conformance", versionRef.APIVersion, versionRef.Kind, "worker-version-probe"))
 	deleteStatus, _ := hostRequest(t, server, http.MethodDelete, target, map[string]string{
 		"If-Match":        `"1"`,
 		"Idempotency-Key": "key-unbound-delete",

@@ -18,3 +18,4 @@ record does not replace them.
 - [0012 — Artifacts use content-addressed upload](0012-artifacts-use-content-addressed-upload.md)
 - [0013 — The v1alpha3 lane ships in provider v2.1](0013-v1alpha3-lane-ships-in-provider-v2-1.md)
 - [0014 — Published schemas are structural minima; closure lives in code and conformance](0014-published-schemas-are-structural-minima.md)
+- [0015 — Cross-resource references are UID-pinned relations](0015-cross-resource-references-are-uid-pinned-relations.md)

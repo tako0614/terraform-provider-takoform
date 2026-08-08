@@ -42,6 +42,7 @@ all force replacement, so existing state is never rebound to another identity.
 - `revision` — representation revision; increments whenever the representation changes — a spec-changing update, new status, or new outputs. Deletes fence on it via `If-Match`.
 - `ready` — true when the closed `Ready` condition reports `True`.
 - `outputs_json` — JSON-serialized `status.outputs` document (`"{}"` when empty).
+- `relation_drift_reason` — internal recovery only: `ExternalChange` or `DependencyMissing` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes an in-place re-apply, which is all a host needs to re-resolve and re-pin every reference. A Form whose Definition omits `update` refuses that apply, naming the missing capability; replace the resource instead. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.
 
 State records the four FormRef fields and no package digest: the distribution
 a host installed is audit evidence, never resource identity.

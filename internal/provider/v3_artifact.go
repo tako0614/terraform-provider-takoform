@@ -340,12 +340,12 @@ func readWorkerBundleModule(module *v3BundleModule) error {
 	return nil
 }
 
-// ModifyPlan implements plan-time byte identity for worker bundles. A bundle
-// IS its manifest digest, so changed bytes at an UNCHANGED content_file path
-// must surface as a real diff on manifest_digest. When prior state exists and
-// the planned modules are wholly known, each file is re-read, the artifact
-// manifest is rebuilt, and its canonical digest is written into the plan
-// whenever the configuration did not pin one itself.
+// modifyWorkerBundlePlan implements plan-time byte identity for worker
+// bundles. A bundle IS its manifest digest, so changed bytes at an UNCHANGED
+// content_file path must surface as a real diff on manifest_digest. When prior
+// state exists and the planned modules are wholly known, each file is re-read,
+// the artifact manifest is rebuilt, and its canonical digest is written into
+// the plan whenever the configuration did not pin one itself.
 //
 // Replacement then follows the DIGEST, not the authoring attributes: identical
 // bytes authored a different way (a manifest_digest reference replaced by the
@@ -353,10 +353,7 @@ func readWorkerBundleModule(module *v3BundleModule) error {
 // attribute-level replacement those authoring attributes carry is withdrawn.
 // An unreadable content_file leaves the computed values unknown instead of
 // erroring the plan.
-func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
-	if r.form.Kind != workerBundleKind {
-		return
-	}
+func (r *v3FormResource) modifyWorkerBundlePlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	// A create resolves its bytes at apply time and a destroy has no planned
 	// modules; only an existing resource can carry stale byte identity.
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {

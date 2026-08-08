@@ -53,7 +53,7 @@ func (f Form) NegativeCases() ([]NegativeCase, error) {
 		appendCase("missing-"+fixtureToken(field.HCL), desired)
 	}
 	for _, field := range f.Fields {
-		counter, ok := field.counterExample()
+		counter, ok := field.counterExample(f.Family.APIVersion())
 		if !ok {
 			continue
 		}
@@ -67,8 +67,12 @@ func (f Form) NegativeCases() ([]NegativeCase, error) {
 		}
 		desired := f.CanonicalDesired()
 		desired[field.Wire] = []any{map[string]any{
-			"name":     "1binding",
-			"resource": map[string]any{"kind": field.TargetKind, "name": "example-target"},
+			"name": "1binding",
+			"resource": map[string]any{
+				"apiVersion": f.Family.APIVersion(),
+				"kind":       field.TargetKind,
+				"name":       "example-target",
+			},
 		}}
 		appendCase(fixtureToken(field.HCL)+"-binding-name", desired)
 	}
@@ -89,7 +93,7 @@ func (f Form) NegativeCases() ([]NegativeCase, error) {
 // counterExample returns the value this field's constraint must reject. A
 // declared CounterExample wins; otherwise one is derived from the constraint
 // the field already states so a stated constraint cannot ship unproven.
-func (f Field) counterExample() (any, bool) {
+func (f Field) counterExample(group string) (any, bool) {
 	if f.CounterExample != nil {
 		return f.CounterExample, true
 	}
@@ -109,9 +113,9 @@ func (f Field) counterExample() (any, bool) {
 	case KindJSONMap:
 		return map[string]any{"1 invalid key": "value"}, true
 	case KindResourceRef:
-		return map[string]any{"kind": f.TargetKind, "name": "Not A Resource Name"}, true
+		return counterExampleReference(group, f.TargetKind), true
 	case KindResourceRefList:
-		return []any{map[string]any{"kind": f.TargetKind, "name": "Not A Resource Name"}}, true
+		return []any{counterExampleReference(group, f.TargetKind)}, true
 	case KindStringSet:
 		if len(f.Enum) > 0 {
 			return []any{"not-a-declared-choice"}, true
@@ -119,6 +123,17 @@ func (f Field) counterExample() (any, bool) {
 		return []any{"not an item"}, true
 	default:
 		return nil, false
+	}
+}
+
+// counterExampleReference is a well-formed reference whose NAME violates the
+// portable resource-name grammar. The group and kind stay exact so the fixture
+// proves the one constraint it names.
+func counterExampleReference(group, targetKind string) map[string]any {
+	return map[string]any{
+		"apiVersion": group,
+		"kind":       targetKind,
+		"name":       "Not A Resource Name",
 	}
 }
 

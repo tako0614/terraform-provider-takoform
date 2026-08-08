@@ -5,51 +5,51 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "WorkerDeployment",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:9dc5da8cefbda497c650376628c0de3059b3007bea66f7bfb6c45603d2b036f8"
+    "schemaDigest": "sha256:0575c008f1143c9fafbe6859c6a5cff8bedb73b8118ef5d36dcaaed024afb6c1"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4202,
-      "digest": "sha256:e06c3c859da52bd78804db25000a88ceea6f9ffc3a6cd563048abab9ce45ff8d"
+      "size": 4530,
+      "digest": "sha256:0a5694cbf756a0fe4d20c5e25ce5efe8a20e44d8d13e78fb324d98dbe085db1a"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 233,
-      "digest": "sha256:44ebb6db7611d78510c1737748b8f05247c6f336b3ab876bdeb8a46552e9807a"
+      "size": 345,
+      "digest": "sha256:de0a0c6048b77a9cded54b17794e456b9989d56b677a614c0cfedff55c174658"
     },
     {
       "path": "fixtures/negative-missing-versions.json",
       "mediaType": "application/json",
-      "size": 78,
-      "digest": "sha256:632350b7beefce1119cd513b2047a35703b10f0c6bcad4e0fecee1f8dc6ec0ba"
+      "size": 132,
+      "digest": "sha256:aec0e1645cb138283ee93c2a056767820506a098cf33faf5f0c9dbefc12b4d5a"
     },
     {
       "path": "fixtures/negative-missing-worker.json",
       "mediaType": "application/json",
-      "size": 158,
-      "digest": "sha256:b00a2b7b9c4f863c658a33b1afe4d10a0102cbe774e4f48f81db38677e9836b6"
+      "size": 216,
+      "digest": "sha256:907832fd5b7998154d5bdc68bb46dc1ee522a9cfd462b029fc67536d429c14de"
     },
     {
       "path": "fixtures/negative-unexpected-property.json",
       "mediaType": "application/json",
-      "size": 263,
-      "digest": "sha256:c4912a6abc07041d7284e4d0f416870012572a42689920fa69d605f562f33eec"
+      "size": 375,
+      "digest": "sha256:bf5d01312288c3532c0b1c11ca9710b59fda4303cfdd29ad185c7229baf49fd8"
     },
     {
       "path": "fixtures/negative-versions.json",
       "mediaType": "application/json",
-      "size": 229,
-      "digest": "sha256:e7ad992324e89801fee92360e2835e4991fde58ba85f4d177d32fa9adadc9aad"
+      "size": 341,
+      "digest": "sha256:412bd61f6273e269ecbb2a78b4063416113ce4bf03120386938e41844745e80e"
     },
     {
       "path": "fixtures/negative-worker.json",
       "mediaType": "application/json",
-      "size": 239,
-      "digest": "sha256:c756f4e9e2f1f256fe7e62c8096c5795b1ecde1ffbdfd4318160c8a830a67083"
+      "size": 351,
+      "digest": "sha256:ed7636eff24a00c4bcd0a70cebc280a536bdf8e8120b25e23897c409513b346a"
     }
   ]
 }

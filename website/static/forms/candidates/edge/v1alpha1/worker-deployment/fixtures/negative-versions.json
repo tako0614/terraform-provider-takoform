@@ -3,12 +3,14 @@
     {
       "weight": 0,
       "workerVersion": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerVersion",
         "name": "worker-version"
       }
     }
   ],
   "worker": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "ModuleWorker",
     "name": "module-worker"
   }

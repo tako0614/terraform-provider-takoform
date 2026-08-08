@@ -5,33 +5,33 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "WorkerCronTrigger",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:ba57cb5c0d046c219a4eb453c5ef9005cae668b1467eafa2a85b9c84d65eeb0c"
+    "schemaDigest": "sha256:3df385ba2b76a1476ef7af87c473883ecee2604f9941de17e6c7f700ecaec627"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4091,
-      "digest": "sha256:a2bd322d175f3117c7f40e8faad7d944513363f24fbdf68b0c98841f79e54835"
+      "size": 4240,
+      "digest": "sha256:19e32713857fd723acf458e7aed917fb27d206c57ddd497e7d30a321f8a02ce0"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 101,
-      "digest": "sha256:398607b23b52d4c69f68934b83a28394d09f3e6268e5f23a566b87f256e22455"
+      "size": 155,
+      "digest": "sha256:6cca7802342cbc505bdd2d6dea37bdcc5669bf55970acb6d9bd9ea664b4bc4e0"
     },
     {
       "path": "fixtures/negative-cron.json",
       "mediaType": "application/json",
-      "size": 99,
-      "digest": "sha256:f69a1cb1d2d618869aba87e2e5f8f2427eb95aab116256fd5ae4eefc2ebc2ab2"
+      "size": 153,
+      "digest": "sha256:dbabe35ea20c9de96911af07153720f91d5858be1ba3d0f0b7b836e72f6bd281"
     },
     {
       "path": "fixtures/negative-missing-cron.json",
       "mediaType": "application/json",
-      "size": 78,
-      "digest": "sha256:632350b7beefce1119cd513b2047a35703b10f0c6bcad4e0fecee1f8dc6ec0ba"
+      "size": 132,
+      "digest": "sha256:aec0e1645cb138283ee93c2a056767820506a098cf33faf5f0c9dbefc12b4d5a"
     },
     {
       "path": "fixtures/negative-missing-worker.json",
@@ -42,14 +42,14 @@
     {
       "path": "fixtures/negative-unexpected-property.json",
       "mediaType": "application/json",
-      "size": 131,
-      "digest": "sha256:403042493b1e1633fff87dd5b58db42c492fba0745b55eb7149baddcd23a6a31"
+      "size": 185,
+      "digest": "sha256:7ee25156ccbb59925520d14319872f4a22f6d89d1b9f274cb0cda550ff33b2ca"
     },
     {
       "path": "fixtures/negative-worker.json",
       "mediaType": "application/json",
-      "size": 107,
-      "digest": "sha256:85574a7af59642c995fb1901c58cf91e0fd3b3b104422eaacee5f6cddb77609c"
+      "size": 161,
+      "digest": "sha256:7fb6fed54a52807745546b312d99b091897a4072a5889c10375dbcbe66871666"
     }
   ]
 }
