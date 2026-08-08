@@ -35,9 +35,10 @@ type v3GenericResource struct {
 }
 
 var (
-	_ resource.Resource               = (*v3GenericResource)(nil)
-	_ resource.ResourceWithConfigure  = (*v3GenericResource)(nil)
-	_ resource.ResourceWithModifyPlan = (*v3GenericResource)(nil)
+	_ resource.Resource                = (*v3GenericResource)(nil)
+	_ resource.ResourceWithConfigure   = (*v3GenericResource)(nil)
+	_ resource.ResourceWithImportState = (*v3GenericResource)(nil)
+	_ resource.ResourceWithModifyPlan  = (*v3GenericResource)(nil)
 )
 
 // NewV3GenericResource constructs the generic exact-FormRef resource.
@@ -156,16 +157,17 @@ func (r *v3GenericResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 }
 
 type v3GenericValues struct {
-	Identity      v3StateIdentity
-	Name          types.String
-	Space         types.String
-	SpecJSON      types.String
-	UID           types.String
-	Generation    types.String
-	Revision      types.String
-	CreateTimeout types.String
-	UpdateTimeout types.String
-	DeleteTimeout types.String
+	Identity           v3StateIdentity
+	Name               types.String
+	Space              types.String
+	SpecJSON           types.String
+	UID                types.String
+	Generation         types.String
+	Revision           types.String
+	PendingOperationID types.String
+	CreateTimeout      types.String
+	UpdateTimeout      types.String
+	DeleteTimeout      types.String
 }
 
 func v3GenericValuesFrom(ctx context.Context, getter v3AttributeGetter) (v3GenericValues, diag.Diagnostics) {
@@ -181,6 +183,7 @@ func v3GenericValuesFrom(ctx context.Context, getter v3AttributeGetter) (v3Gener
 	diags.Append(getter.GetAttribute(ctx, path.Root("uid"), &values.UID)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("generation"), &values.Generation)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("revision"), &values.Revision)...)
+	diags.Append(getter.GetAttribute(ctx, path.Root("pending_operation_id"), &values.PendingOperationID)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("create_timeout"), &values.CreateTimeout)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("update_timeout"), &values.UpdateTimeout)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("delete_timeout"), &values.DeleteTimeout)...)
@@ -370,24 +373,33 @@ func (r *v3GenericResource) Read(ctx context.Context, req resource.ReadRequest, 
 	if !ok {
 		return
 	}
+	// The carrier records pending_operation_id on the same accepted-create path
+	// the typed resources do, so it resumes by the same rule: an accepted
+	// mutation is consulted before the resource is read.
+	resume := v3ResumePendingOperation(
+		ctx, r.data.clientV3, "takoform_resource", v3PendingRequest{
+			OperationID: v3StateStringValue(values.PendingOperationID),
+			Ref:         ref,
+			Space:       space,
+			Name:        values.Name.ValueString(),
+			StateUID:    v3StateStringValue(values.UID),
+		}, &resp.Diagnostics)
+	if resume.Stop {
+		return
+	}
 	res, err := r.data.clientV3.GetResource(ctx, space, ref, values.Name.ValueString())
 	if err != nil {
 		if errors.Is(err, clientv3.ErrNotFound) {
+			if !resume.RemoveOnAbsent {
+				return
+			}
 			resp.State.RemoveResource(ctx)
 			return
 		}
 		resp.Diagnostics.AddError("Failed to read takoform_resource", err.Error())
 		return
 	}
-	if !values.UID.IsNull() && !values.UID.IsUnknown() && values.UID.ValueString() != res.Metadata.UID {
-		resp.Diagnostics.AddWarning(
-			"takoform_resource was replaced out of band",
-			fmt.Sprintf(
-				"State records uid %s but the host now serves uid %s for %s/%s. The old resource no longer exists; the next plan will propose recreating it.",
-				values.UID.ValueString(), res.Metadata.UID, space, values.Name.ValueString(),
-			),
-		)
-		resp.State.RemoveResource(ctx)
+	if !v3RequireStateUID("takoform_resource", space, values.Name.ValueString(), v3StateStringValue(values.UID), res, &resp.Diagnostics) {
 		return
 	}
 	// The generic carrier exposes an in-place update for every Form it can
@@ -407,6 +419,51 @@ func (r *v3GenericResource) Read(ctx context.Context, req resource.ReadRequest, 
 		values.SpecJSON = types.StringValue(text)
 	}
 	resp.Diagnostics.Append(r.writeState(ctx, &resp.State, ref, space, values, res)...)
+	if resume.KeepMarker {
+		resp.Diagnostics.Append(resp.State.SetAttribute(
+			ctx, path.Root("pending_operation_id"), values.PendingOperationID)...)
+	}
+}
+
+// ImportState adopts one existing resource through the generic carrier.
+//
+// The carrier's identity is five values, four of which are the exact FormRef
+// it cannot guess, so only the canonical JSON form is accepted:
+// {"space":…,"apiVersion":…,"kind":…,"definitionVersion":…,"schemaDigest":…,"name":…}.
+// The `NAME` and `SPACE/NAME` short forms that the typed resources keep have no
+// meaning here — there is no default create ref to resolve them against, and
+// inventing one would bind state to a Form the resource may not be.
+//
+// Nothing about the carrier's trust model changes: the provider still fetches
+// no Definition and compiles no schema. The import writes exactly the identity
+// the operator stated, and the following read is what verifies it against the
+// host.
+func (r *v3GenericResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	if !r.assertConfigured(&resp.Diagnostics) {
+		return
+	}
+	identity, err := v3ParseImportID(req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid import ID", err.Error())
+		return
+	}
+	if !identity.HasFormRef {
+		resp.Diagnostics.AddError(
+			"Import ID does not name an exact FormRef",
+			"takoform_resource carries any Form by exact reference, so an import must state one. Use the JSON "+
+				"identity form: "+V3ImportIDSyntax+". The NAME and SPACE/NAME short forms are accepted only by the "+
+				"typed family resources, which have a default create ref to resolve them against.",
+		)
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("form_api_version"), types.StringValue(identity.Ref.APIVersion))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("form_kind"), types.StringValue(identity.Ref.Kind))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("form_definition_version"), types.StringValue(identity.Ref.DefinitionVersion))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("form_schema_digest"), types.StringValue(identity.Ref.SchemaDigest))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(identity.Name))...)
+	if identity.Space != "" {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("space"), types.StringValue(identity.Space))...)
+	}
 }
 
 func (r *v3GenericResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

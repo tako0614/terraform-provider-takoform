@@ -40,13 +40,14 @@ func setV3FormIdentityState(ctx context.Context, state *tfsdk.State, ref current
 func (r *v3FormResource) writeV3State(
 	ctx context.Context,
 	state *tfsdk.State,
-	ref currentformregistry.V3Ref,
+	codec v3FormCodec,
 	space string,
 	values v3Values,
 	res *clientv3.Resource,
 	adoptHostSpec bool,
 ) diag.Diagnostics {
 	var diags diag.Diagnostics
+	ref := codec.Ref
 	diags.Append(state.SetAttribute(ctx, path.Root("name"), types.StringValue(res.Metadata.Name))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("space"), types.StringValue(space))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("uid"), types.StringValue(res.Metadata.UID))...)
@@ -71,15 +72,39 @@ func (r *v3FormResource) writeV3State(
 		diags.Append(r.writeWorkerBundleState(ctx, state, values, res)...)
 		return diags
 	}
-	for _, field := range r.form.Fields {
+	// The state ref's OWN codec decides which fields exist and how they decode:
+	// state written under an earlier definition version is read back through
+	// that definition's declarations, never through the current schema's
+	// (spec/decisions/0017).
+	for _, field := range codec.Form.Fields {
 		name := v3AttributeName(field)
-		value := values.Fields[name]
+		value, carried := values.Fields[name]
+		if !carried {
+			diags.Append(v3CodecFieldMissingError(codec, name))
+			continue
+		}
 		if adoptHostSpec || value == nil || value.IsUnknown() {
 			value = v3FieldValueFromSpec(ctx, field, res.Spec[field.Wire], &diags)
 		}
 		diags.Append(state.SetAttribute(ctx, path.Root(name), value)...)
 	}
 	return diags
+}
+
+// v3CodecFieldMissingError is the fail-closed diagnostic for a codec that
+// declares a field this build's compiled resource schema has no attribute for.
+// It can only happen when an exact ref's field set was registered against a
+// schema that cannot represent it, and the honest answer is to refuse rather
+// than to write a partial spec that silently drops desired state.
+func v3CodecFieldMissingError(codec v3FormCodec, attribute string) diag.Diagnostic {
+	return diag.NewErrorDiagnostic(
+		"Form codec declares a field this provider build cannot carry",
+		fmt.Sprintf(
+			"The codec for %s declares %q, which this provider's compiled %s schema does not carry. "+
+				"The provider refuses to encode or decode a partial spec. This is a provider bug.",
+			codec.Ref.ExactKey(), attribute, codec.Ref.Kind,
+		),
+	)
 }
 
 // writeV3AcceptedState records the identity of a mutation the host ACCEPTED
@@ -100,7 +125,7 @@ func (r *v3FormResource) writeV3State(
 func (r *v3FormResource) writeV3AcceptedState(
 	ctx context.Context,
 	state *tfsdk.State,
-	ref currentformregistry.V3Ref,
+	codec v3FormCodec,
 	space string,
 	values v3Values,
 	err error,
@@ -111,15 +136,15 @@ func (r *v3FormResource) writeV3AcceptedState(
 		return
 	}
 	partial := &clientv3.Resource{
-		APIVersion: ref.APIVersion,
-		Kind:       ref.Kind,
+		APIVersion: codec.Ref.APIVersion,
+		Kind:       codec.Ref.Kind,
 		Metadata: clientv3.Metadata{
 			Name:  values.Name.ValueString(),
 			Space: space,
 			UID:   accepted.UID,
 		},
 	}
-	diags.Append(r.writeV3State(ctx, state, ref, space, values, partial, false)...)
+	diags.Append(r.writeV3State(ctx, state, codec, space, values, partial, false)...)
 	diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_id"), v3OptionalStateString(accepted.OperationID))...)
 	diags.AddWarning(
 		r.form.Kind+" was accepted by the host but did not complete",
@@ -170,15 +195,19 @@ func v3OutputsJSON(res *clientv3.Resource, diags *diag.Diagnostics) types.String
 
 // v3Values is the generically-read plan or state of one v3-lane resource.
 type v3Values struct {
-	Name          types.String
-	Space         types.String
-	UID           types.String
-	Generation    types.String
-	Revision      types.String
-	Identity      v3StateIdentity
-	CreateTimeout types.String
-	UpdateTimeout types.String
-	DeleteTimeout types.String
+	Name       types.String
+	Space      types.String
+	UID        types.String
+	Generation types.String
+	Revision   types.String
+	Identity   v3StateIdentity
+	// PendingOperationID is the recovery record of a mutation the host accepted
+	// but that produced no verified representation. A read consults it before it
+	// reads the resource (v3ResumePendingOperation).
+	PendingOperationID types.String
+	CreateTimeout      types.String
+	UpdateTimeout      types.String
+	DeleteTimeout      types.String
 	// Fields is keyed by the HCL attribute name (v3AttributeName).
 	Fields map[string]attr.Value
 }
@@ -206,6 +235,17 @@ func (identity v3StateIdentity) formRef() (v3FormRefValue, bool) {
 		DefinitionVersion: identity.DefinitionVersion.ValueString(),
 		SchemaDigest:      identity.SchemaDigest.ValueString(),
 	}, true
+}
+
+// exactKey is the registry lookup key of one recorded identity: the WHOLE
+// four-member tuple, never a group+kind prefix of it.
+func (value v3FormRefValue) exactKey() currentformregistry.ExactFormKey {
+	return currentformregistry.ExactFormKey{
+		APIVersion:        value.APIVersion,
+		Kind:              value.Kind,
+		DefinitionVersion: value.DefinitionVersion,
+		SchemaDigest:      value.SchemaDigest,
+	}
 }
 
 type v3AttributeGetter interface {
@@ -265,6 +305,7 @@ func v3CommonValuesFrom(ctx context.Context, getter v3AttributeGetter, hasUpdate
 	diags.Append(getter.GetAttribute(ctx, path.Root("form_kind"), &values.Identity.Kind)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("form_definition_version"), &values.Identity.DefinitionVersion)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("form_schema_digest"), &values.Identity.SchemaDigest)...)
+	diags.Append(getter.GetAttribute(ctx, path.Root("pending_operation_id"), &values.PendingOperationID)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("create_timeout"), &values.CreateTimeout)...)
 	if hasUpdate {
 		diags.Append(getter.GetAttribute(ctx, path.Root("update_timeout"), &values.UpdateTimeout)...)

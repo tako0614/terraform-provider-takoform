@@ -239,7 +239,9 @@ description: |-
 - ` + "`form_api_version`" + `, ` + "`form_kind`" + `, ` + "`form_definition_version`" + `, ` + "`form_schema_digest`" + ` — the exact immutable FormRef this state is bound to; reads dispatch on it.
 - ` + "`form_package_digest`" + ` — audit-only package provenance; never part of resource identity, queries, or fences.
 - ` + "`relation_drift_reason`" + ` — internal recovery only: ` + "`ExternalChange`" + ` or ` + "`DependencyMissing`" + ` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes ` + recoveryDoc + `. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.
+- ` + "`pending_operation_id`" + ` — internal recovery only: the host operation id of a mutation the host accepted but that did not reach a terminal state before the operation deadline, null in steady state. A refresh consults it before it reads the resource, and it is cleared only once that operation settles. It is not resource identity and configurations must not depend on it.
 `)
+	builder.WriteString(v3StateContinuitySection(form.Kind))
 	if len(form.ProvidedInterfaces) > 0 {
 		builder.WriteString("\n## Provided interfaces\n\n")
 		for _, provided := range form.ProvidedInterfaces {
@@ -254,10 +256,63 @@ description: |-
 		builder.WriteString("\nOutward capability use is a typed binding held by this revision; inward\nactivation (routes, domains, cron, queue consumption) is a separate\nattachment resource. The two are never merged.\n")
 	}
 	builder.WriteString("\n## Import\n\n```console\nterraform import " + form.ResourceType + ".example NAME\nterraform import " + form.ResourceType + ".example SPACE/NAME\n```\n")
+	builder.WriteString(v3ImportIdentitySection(form.ResourceType, form.Kind))
 	if form.Kind == "WorkerBundle" {
 		builder.WriteString("\nAn imported bundle restores `manifest_digest` from the host and leaves\n`main_module` and `modules` null: those are local authoring facts the wire\nnever echoes. The resource is fully manageable afterwards — a configuration\nthat states the same `manifest_digest` plans empty, and adopting the local\nfiles that commit exactly that manifest is not a change either, because the\nbundle's identity is the digest.\n")
 	}
 	return builder.String()
+}
+
+// v3StateContinuitySection documents what a refresh does when the world moved
+// underneath the recorded state: a Form line that advanced, a replaced
+// incarnation, or a mutation the host accepted and has not finished. All three
+// are decided in spec/decisions/0017, and all three share one principle — a
+// refresh never silently changes which resource, or which contract, state names.
+func v3StateContinuitySection(kind string) string {
+	return `
+## State continuity
+
+- **Reads dispatch on the recorded FormRef.** ` + "`" + kind + "`" + ` state is addressed under the
+  exact ` + "`form_*`" + ` identity it records, not under this build's default create ref, so a
+  resource created before the Form line advanced stays addressable as itself. An identity
+  this provider build carries no codec for is a hard error naming that identity and the
+  ones the build does carry; the provider never substitutes another exact FormRef, because
+  a substituted query's "not found" is indistinguishable from deletion.
+- **A changed ` + "`uid`" + ` is an error, and state is kept.** When the host serves a different
+  ` + "`uid`" + ` under the recorded name, the resource this state was applied against is gone and
+  something re-used its name. The provider reports a hard error naming both uids and keeps
+  the resource in state. It does not re-bind — that would adopt a resource you never
+  applied — and it does not remove state, which would make the next apply fail against the
+  resource that does exist, with no plan left to repair it. Resolve it by importing the new
+  incarnation explicitly, restoring the prior one, or deleting the host-side replacement.
+- **An unfinished mutation is resumed, not re-created.** When ` + "`pending_operation_id`" + ` is
+  set, a refresh asks the host about that operation before it reads the resource. While the
+  operation is still running the resource may legitimately not exist yet, so its absence is
+  not treated as deletion and the marker survives; a terminal success is verified against
+  the exact identity and settles state; a terminal failure or an expired operation record
+  defers to an exact read of the resource, which decides. Refresh again once the host
+  settles.
+`
+}
+
+// v3ImportIdentitySection documents the exact-identity import form. Both short
+// forms resolve to the default create FormRef, which is right for almost every
+// import and wrong for exactly one case: a resource created under an EARLIER
+// definition version of this Form. Seeding the default there would bind state to
+// a contract the resource was never applied under, so the canonical JSON form
+// exists to name the identity outright (spec/decisions/0017).
+func v3ImportIdentitySection(resourceType, kind string) string {
+	return "\nBoth short forms bind state to this provider build's default create\n" +
+		"FormRef. To adopt a resource created under an EARLIER definition version of\n" +
+		"this Form, name the exact identity instead. The import ID is then one JSON\n" +
+		"object — not a delimiter-joined string, because a SpaceID is opaque UTF-8\n" +
+		"whose only forbidden character is `/`, so no separator can escape it safely:\n" +
+		"\n```console\nterraform import " + resourceType + ".example \\\n" +
+		"  '{\"space\":\"prod\",\"apiVersion\":\"" + edgeformcatalog.Family.APIVersion() + "\",\"kind\":\"" + kind + "\",\"definitionVersion\":\"0.1.0\",\"schemaDigest\":\"sha256:…\",\"name\":\"…\"}'\n```\n" +
+		"\n`space` is optional and falls back to the provider default; the four FormRef\n" +
+		"members are all-or-nothing. An identity this provider build carries no codec\n" +
+		"for is refused, naming the identities it does carry — it is never silently\n" +
+		"rebound to the default.\n"
 }
 
 // v3ExampleHCL renders one family resource example configuration.
@@ -357,8 +412,9 @@ func v3GenericResourceDoc() string {
 		"price, or implementation. See the [complete example](../../examples/resources/takoform_resource/resource.tf).\n" +
 		"\n" +
 		"Prefer a typed resource where one exists: the Edge Platform Family resources\n" +
-		"carry per-field validation, a typed plan, and import support. This carrier\n" +
-		"trades all three for reach.\n" +
+		"carry per-field validation, a typed plan, and short import IDs. This carrier\n" +
+		"trades all three for reach — it imports too, but only through the exact\n" +
+		"identity it cannot infer.\n" +
 		"\n" +
 		"## Arguments\n" +
 		"\n" +
@@ -382,6 +438,7 @@ func v3GenericResourceDoc() string {
 		"- `ready` — true when the closed `Ready` condition reports `True`.\n" +
 		"- `outputs_json` — JSON-serialized `status.outputs` document (`\"{}\"` when empty).\n" +
 		"- `relation_drift_reason` — internal recovery only: `ExternalChange` or `DependencyMissing` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes an in-place re-apply, which is all a host needs to re-resolve and re-pin every reference. A Form whose Definition omits `update` refuses that apply, naming the missing capability; replace the resource instead. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.\n" +
+		"- `pending_operation_id` — internal recovery only: the host operation id of a mutation the host accepted but that did not reach a terminal state before the operation deadline, null in steady state. A refresh consults it before it reads the resource, and it is cleared only once that operation settles. It is not resource identity and configurations must not depend on it.\n" +
 		"\n" +
 		"State records the four FormRef fields and no package digest: the distribution\n" +
 		"a host installed is audit evidence, never resource identity.\n" +
@@ -397,9 +454,23 @@ func v3GenericResourceDoc() string {
 		"Reads compare `spec_json` semantically rather than textually: your formatting\n" +
 		"survives while the parsed document still equals the host's `spec`, and a real\n" +
 		"out-of-band change adopts the host's canonical serialization so the next plan\n" +
-		"shows the drift. When the host serves a different `uid` for the same name, the\n" +
-		"provider warns that the resource was replaced out of band and removes it from\n" +
-		"state so the next plan proposes re-creating it.\n" +
+		"shows the drift.\n" +
+		"\n" +
+		"## State continuity\n" +
+		"\n" +
+		"- **A changed `uid` is an error, and state is kept.** When the host serves a different\n" +
+		"  `uid` under the recorded name, the resource this state was applied against is gone and\n" +
+		"  something re-used its name. The provider reports a hard error naming both uids and keeps\n" +
+		"  the resource in state. It does not re-bind — that would adopt a resource you never\n" +
+		"  applied — and it does not remove state, which would make the next apply fail against the\n" +
+		"  resource that does exist, with no plan left to repair it. Resolve it by importing the new\n" +
+		"  incarnation explicitly, restoring the prior one, or deleting the host-side replacement.\n" +
+		"- **An unfinished mutation is resumed, not re-created.** When `pending_operation_id` is\n" +
+		"  set, a refresh asks the host about that operation before it reads the resource. While the\n" +
+		"  operation is still running the resource may legitimately not exist yet, so its absence is\n" +
+		"  not treated as deletion and the marker survives; a terminal success is verified against\n" +
+		"  the exact identity and settles state; a terminal failure or an expired operation record\n" +
+		"  defers to an exact read of the resource, which decides.\n" +
 		"\n" +
 		"## Write the Form's defaults explicitly\n" +
 		"\n" +
@@ -416,13 +487,24 @@ func v3GenericResourceDoc() string {
 		"\n" +
 		"## Import\n" +
 		"\n" +
-		"`terraform import` is not supported for `takoform_resource`. An import ID\n" +
-		"carries only `NAME` or `SPACE/NAME`, which cannot supply the four exact FormRef\n" +
-		"fields this carrier requires, and the provider will not guess them. Adopt an\n" +
-		"existing resource through the typed family resource for its Form where one\n" +
-		"exists; otherwise the resource must be created through this provider, because\n" +
-		"create fences on `If-None-Match: *` and fails instead of silently adopting an\n" +
-		"existing host resource.\n"
+		"The import ID is one JSON object naming the exact identity. It is not a\n" +
+		"delimiter-joined string, because a SpaceID is opaque UTF-8 whose only forbidden\n" +
+		"character is `/`, so no separator can escape it safely:\n" +
+		"\n" +
+		"```console\n" +
+		"terraform import takoform_resource.example \\\n" +
+		"  '{\"space\":\"prod\",\"apiVersion\":\"forms.example.com/v1alpha1\",\"kind\":\"ExampleWidget\",\"definitionVersion\":\"1.0.0\",\"schemaDigest\":\"sha256:…\",\"name\":\"example-widget\"}'\n" +
+		"```\n" +
+		"\n" +
+		"`space` is optional and falls back to the provider default; every other member\n" +
+		"is required. The `NAME` and `SPACE/NAME` short forms the typed family resources\n" +
+		"accept are refused here: this carrier has no default create ref to resolve them\n" +
+		"against, and guessing one would bind state to a Form the resource may not be.\n" +
+		"\n" +
+		"Import writes exactly the identity you state and nothing else; the refresh that\n" +
+		"follows is what verifies it against the host, and `spec_json` is adopted from\n" +
+		"the host's materialized spec there. Nothing about the carrier's trust model\n" +
+		"changes: no Form Definition is fetched and no schema is compiled.\n"
 }
 
 // v3GenericExampleHCL renders the generic carrier's example. The exact

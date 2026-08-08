@@ -78,6 +78,11 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkImportFlows(kv, version) },
 		func() error { return r.checkDeleteFences(version, kv) },
 		func() error { return r.checkOperations(kv) },
+		// State continuity: what a client that persists an operation id and
+		// dispatches on the exact FormRef in its state depends on the host for
+		// (spec/decisions/0017).
+		func() error { return r.checkOperationResumableAfterSettlement(queue) },
+		func() error { return r.checkExactFormRefFailsClosedOnUnknownDefinition(kv) },
 		func() error { return r.checkAsyncCommitRevalidates(kv, version) },
 		func() error { return r.checkCrossSpace(kv) },
 		r.checkSupportProfiles,

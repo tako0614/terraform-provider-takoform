@@ -134,6 +134,47 @@ func (c *Client) getOperation(ctx context.Context, id string) (*Operation, time.
 	return &operation, parseRetryAfter(headers.Get("Retry-After")), nil
 }
 
+// IsOperationNotFound reports the closed `operation_not_found` outcome: the
+// host no longer holds a record for that id. The lane permits an operation
+// record to expire, so a client resuming a persisted id must be able to tell
+// "the host forgot this operation" apart from every other failure and fall
+// back to reading the resource itself.
+func IsOperationNotFound(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) &&
+		apiErr.StatusCode == http.StatusNotFound &&
+		apiErr.Code == "operation_not_found"
+}
+
+// OperationResultResource decodes and VERIFIES the resource a terminal,
+// successful operation carries. The identity contract is the same one every
+// direct response is held to: a result naming another FormRef, name, or space,
+// or one missing host-owned identity, is refused rather than adopted. A caller
+// resuming a persisted operation id has no other way to know that the result it
+// is about to write into state describes the resource it asked about.
+func OperationResultResource(operation *Operation, ref FormRef, name, space string) (*Resource, error) {
+	if operation == nil || !operation.Done {
+		return nil, errors.New("takoform: operation has no terminal result")
+	}
+	if operation.Error != nil {
+		return nil, fmt.Errorf("takoform: operation %s terminated with %s", operation.ID, operation.Error.Code)
+	}
+	if len(operation.Result) == 0 {
+		return nil, errors.New("takoform: terminal operation carries no result")
+	}
+	var envelope struct {
+		Resource Resource `json:"resource"`
+	}
+	if err := decodeBody(operation.Result, "operation "+operation.ID+" result", &envelope); err != nil {
+		return nil, fmt.Errorf("takoform: terminal operation result is not a resource envelope: %w", err)
+	}
+	out := envelope.Resource
+	if err := verifyResourceResponse(ref, name, space, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // CancelOperation requests cancellation. Cancel is honored only for safely
 // stoppable operations; an already-terminal operation replays its terminal
 // state.

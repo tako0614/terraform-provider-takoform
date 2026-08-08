@@ -225,8 +225,8 @@ type bindingCandidateSet struct {
 
 // LoadCatalog reads the real Edge Family candidate definitions and the
 // interface/binding candidate sets from a repository root. The install set
-// identity comes from the generated registry (currentformregistry.V3All), so
-// registry/candidate drift fails closed.
+// identity comes from the generated registry (currentformregistry.V3Current),
+// so registry/candidate drift fails closed.
 func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 	catalog := &Catalog{
 		forms:      map[string]*installedForm{},
@@ -239,9 +239,14 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 	if err := decodeStrictFile(setPath, &set); err != nil {
 		return nil, err
 	}
-	registry := currentformregistry.V3All()
+	registry := currentformregistry.V3Current()
 	for _, candidate := range set.Forms {
-		registered, ok := registry[candidate.FormRef.APIVersion+"/"+candidate.Kind]
+		registered, ok := registry.Lookup(currentformregistry.ExactFormKey{
+			APIVersion:        candidate.FormRef.APIVersion,
+			Kind:              candidate.Kind,
+			DefinitionVersion: candidate.FormRef.DefinitionVersion,
+			SchemaDigest:      candidate.FormRef.SchemaDigest,
+		})
 		if !ok {
 			return nil, fmt.Errorf("takoform: candidate %s is not in the generated v3 registry", candidate.Kind)
 		}
@@ -285,7 +290,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 		}
 		catalog.forms[formKey(form.Ref.APIVersion, form.Ref.Kind)] = form
 	}
-	if len(catalog.forms) != len(registry) {
+	if len(catalog.forms) != len(registry.SupportedRefs()) {
 		return nil, errors.New("takoform: candidate set does not cover the generated v3 registry")
 	}
 	if err := catalog.installSyntheticSecondGroup(contract); err != nil {

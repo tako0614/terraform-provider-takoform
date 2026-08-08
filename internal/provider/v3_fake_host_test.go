@@ -76,23 +76,50 @@ type v3FakeHost struct {
 	apply202 bool
 	// apply202Pending makes the next create return 202 with an Operation that
 	// never reaches a terminal state: the host accepted the mutation and is
-	// still working when the caller's deadline expires.
+	// still working when the caller's deadline expires. The resource is stored
+	// immediately, so a read during the window finds it.
 	apply202Pending bool
+	// apply202Uncommitted is the same acceptance on a host that does NOT create
+	// the resource until its operation commits: while the operation is pending a
+	// GET is a truthful 404. This is the host shape a client's "404 means
+	// deleted" rule is actually wrong on, and the only one that can falsify
+	// pending-operation resumption.
+	apply202Uncommitted bool
+	// deferredCommits holds the record one uncommitted operation will store when
+	// the test commits it, keyed by operation id.
+	deferredCommits map[string]*v3DeferredCommit
 	// operationResults maps operation id to its terminal result body.
 	operationResults map[string]map[string]any
+	// operationErrors maps operation id to its terminal error code.
+	operationErrors map[string]string
 	// pendingOperations maps operation id to the target uid it discloses while
 	// staying non-terminal forever.
 	pendingOperations map[string]string
+	// forgottenOperations are ids the host answers operation_not_found for even
+	// though a client recorded them: the lane permits an operation record to
+	// expire.
+	forgottenOperations map[string]bool
+}
+
+// v3DeferredCommit is one accepted-but-uncommitted mutation: the record the
+// host will store, and the key it will store it under.
+type v3DeferredCommit struct {
+	key    string
+	name   string
+	record *v3HostRecord
 }
 
 func newV3FakeHost(t *testing.T) *v3FakeHost {
 	t.Helper()
 	host := &v3FakeHost{
-		t:                 t,
-		resources:         map[string]*v3HostRecord{},
-		blobs:             map[string][]byte{},
-		operationResults:  map[string]map[string]any{},
-		pendingOperations: map[string]string{},
+		t:                   t,
+		resources:           map[string]*v3HostRecord{},
+		blobs:               map[string][]byte{},
+		deferredCommits:     map[string]*v3DeferredCommit{},
+		operationResults:    map[string]map[string]any{},
+		operationErrors:     map[string]string{},
+		pendingOperations:   map[string]string{},
+		forgottenOperations: map[string]bool{},
 	}
 	host.server = httptest.NewServer(http.HandlerFunc(host.serve))
 	t.Cleanup(host.server.Close)
@@ -215,31 +242,124 @@ func (h *v3FakeHost) serve(w http.ResponseWriter, r *http.Request) {
 		h.events = append(h.events, "commit")
 		h.writeJSON(w, http.StatusOK, map[string]any{"manifestDigest": digest})
 	case strings.HasPrefix(escaped, v3TestAPIRoot+"/operations/") && r.Method == http.MethodGet:
-		id := strings.TrimPrefix(escaped, v3TestAPIRoot+"/operations/")
-		if uid, pending := h.pendingOperations[id]; pending {
-			body := map[string]any{
-				"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
-				"id": id, "done": false,
-			}
-			if uid != "" {
-				body["target"] = map[string]any{"uid": uid}
-			}
-			w.Header().Set("Retry-After", "0")
-			h.writeJSON(w, http.StatusOK, body)
-			return
-		}
-		result, ok := h.operationResults[id]
-		if !ok {
-			h.writeStableError(w, http.StatusNotFound, "operation_not_found")
-			return
-		}
-		h.writeJSON(w, http.StatusOK, map[string]any{
-			"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
-			"id": id, "done": true, "result": result,
-		})
+		h.serveOperation(w, strings.TrimPrefix(escaped, v3TestAPIRoot+"/operations/"))
 	default:
 		h.t.Errorf("unexpected fake host request %s %s", r.Method, escaped)
 		http.Error(w, "unexpected request", http.StatusInternalServerError)
+	}
+}
+
+func (h *v3FakeHost) serveOperation(w http.ResponseWriter, id string) {
+	if h.forgottenOperations[id] {
+		h.writeStableError(w, http.StatusNotFound, "operation_not_found")
+		return
+	}
+	if uid, pending := h.pendingOperations[id]; pending {
+		body := map[string]any{
+			"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
+			"id": id, "done": false,
+		}
+		if uid != "" {
+			body["target"] = map[string]any{"uid": uid}
+		}
+		w.Header().Set("Retry-After", "0")
+		h.writeJSON(w, http.StatusOK, body)
+		return
+	}
+	if code, failed := h.operationErrors[id]; failed {
+		h.writeJSON(w, http.StatusOK, map[string]any{
+			"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
+			"id": id, "done": true,
+			"error": map[string]any{"code": code, "message": "fake host " + code, "retryable": false},
+		})
+		return
+	}
+	result, ok := h.operationResults[id]
+	if !ok {
+		h.writeStableError(w, http.StatusNotFound, "operation_not_found")
+		return
+	}
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
+		"id": id, "done": true, "result": result,
+	})
+}
+
+// commitDeferredOperation stores the record an uncommitted operation was
+// holding and makes the operation terminal-successful, the way a host that
+// creates the resource only at commit time settles.
+func (h *v3FakeHost) commitDeferredOperation(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	deferred, held := h.deferredCommits[id]
+	if !held {
+		h.t.Fatalf("no deferred commit is registered for operation %q", id)
+	}
+	h.resources[deferred.key] = deferred.record
+	delete(h.pendingOperations, id)
+	delete(h.deferredCommits, id)
+	h.operationResults[id] = map[string]any{"resource": h.wireResource(deferred.record, deferred.name)}
+}
+
+// failDeferredOperation makes an uncommitted operation terminal-failed and
+// commits nothing, the way a host reports a mutation it accepted and could not
+// complete.
+func (h *v3FakeHost) failDeferredOperation(id, code string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, held := h.deferredCommits[id]; !held {
+		h.t.Fatalf("no deferred commit is registered for operation %q", id)
+	}
+	delete(h.pendingOperations, id)
+	delete(h.deferredCommits, id)
+	h.operationErrors[id] = code
+}
+
+// settlePendingOperation makes one still-running operation terminal-successful
+// against the record the host already holds.
+func (h *v3FakeHost) settlePendingOperation(id, kind, name string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	record, held := h.resources[h.resourceKey(kind, name)]
+	if !held {
+		h.t.Fatalf("no record exists for %s/%s", kind, name)
+	}
+	delete(h.pendingOperations, id)
+	h.operationResults[id] = map[string]any{"resource": h.wireResource(record, name)}
+}
+
+// replaceIncarnation gives an existing record a new uid, the way a resource
+// deleted and re-created out of band reuses its name.
+func (h *v3FakeHost) replaceIncarnation(kind, name, uid string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	record, held := h.resources[h.resourceKey(kind, name)]
+	if !held {
+		h.t.Fatalf("no record exists for %s/%s", kind, name)
+	}
+	record.uid = uid
+	record.revision++
+}
+
+// forgetOperation drops one operation record, the expiry the lane permits.
+func (h *v3FakeHost) forgetOperation(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.forgottenOperations[id] = true
+}
+
+// storeResource installs one record out of band, the way a host that finished
+// an operation the client never saw holds the resource.
+func (h *v3FakeHost) storeResource(kind, name, space, group, uid string, spec map[string]any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.resources[h.resourceKey(kind, name)] = &v3HostRecord{
+		uid: uid, generation: 1, revision: 1,
+		apiVersion: group, kind: kind, space: space, spec: spec,
+		form: map[string]any{"formRef": map[string]any{
+			"apiVersion": group, "kind": kind,
+			"definitionVersion": "0.1.0", "schemaDigest": "",
+		}},
 	}
 }
 
@@ -414,6 +534,23 @@ func (h *v3FakeHost) serveApply(w http.ResponseWriter, r *http.Request, group, k
 			generation: 1, revision: 1,
 			apiVersion: group, kind: kind, form: form, space: space, spec: spec,
 		}
+		if h.apply202Uncommitted {
+			// The resource does NOT exist yet: it is created when the operation
+			// commits. A GET in this window is a truthful resource_not_found.
+			h.apply202Uncommitted = false
+			id := "op_apply_uncommitted"
+			h.deferredCommits[id] = &v3DeferredCommit{key: key, name: name, record: record}
+			h.pendingOperations[id] = record.uid
+			w.Header().Set("Retry-After", "0")
+			h.writeJSON(w, http.StatusAccepted, map[string]any{
+				"operation": map[string]any{
+					"apiVersion": clientv3.OperationAPIVersion, "kind": clientv3.OperationKind,
+					"id": id, "done": false,
+					"target": map[string]any{"uid": record.uid},
+				},
+			})
+			return
+		}
 		h.resources[key] = record
 		if h.apply202Pending {
 			h.apply202Pending = false
@@ -458,6 +595,9 @@ func (h *v3FakeHost) serveApply(w http.ResponseWriter, r *http.Request, group, k
 	record.generation++
 	record.revision++
 	record.spec = spec
+	// A conforming host answers under the exact identity it was ASKED about, so
+	// an update dispatched on an earlier definition version echoes that one.
+	record.form = form
 	w.Header().Set("ETag", `"`+strconv.Itoa(record.revision)+`"`)
 	h.writeJSON(w, http.StatusOK, h.wireResource(record, name))
 }
@@ -497,5 +637,5 @@ func v3TestFormResource(t *testing.T, kind string, data *providerData) *v3FormRe
 	if !ok {
 		t.Fatalf("%s is not a declared family Form", kind)
 	}
-	return &v3FormResource{form: form, data: data}
+	return &v3FormResource{form: form, data: data, codecs: v3Codecs()}
 }

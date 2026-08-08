@@ -115,6 +115,36 @@ Schema compatibility checks are conservative. When tooling cannot prove that a
 change is compatible, the change MUST be treated as breaking or remain a
 Proposal until the proof is improved.
 
+### What a Form version change costs a client
+
+A client that persists state binds each resource to the exact FormRef it was
+applied under, and it addresses that resource under that identity for the rest of
+its life ([decision 0017](decisions/0017-provider-state-survives-form-evolution-and-interruption.md)).
+A Form line that advances therefore leaves state behind at the older identity,
+and a client MUST be able to keep serving it.
+
+The provider carries one **codec** per supported exact FormRef — the field set
+that definition declared, used both to decode the state written under it and to
+encode the spec sent for it. Which codec a definition needs follows directly from
+the compatibility rules above:
+
+- an **additive minor** MAY share one codec with the definitions before it, because
+  every previously valid desired document remains valid with the same portable
+  meaning, and the added properties are simply absent from an older spec;
+- a **breaking major** MUST have its own codec, because a removed, retyped, or
+  re-meant property cannot be encoded or decoded by the other definition's
+  declarations.
+
+A client that holds no codec for an identity recorded in its state MUST fail
+closed, naming that identity and the identities it does carry. It MUST NOT read,
+update, or delete the resource under a different exact FormRef: substituting one
+reinterprets state written against one contract as another, and the substituted
+query's `resource_not_found` is then indistinguishable from deletion. Removing an
+exact FormRef from a client's supported set is therefore a compatibility change
+in that client, governed by its own versioning — for the Terraform/OpenTofu
+provider, by "Provider versions are independent" above, which already forbids
+silently reinterpreting persisted state as a different FormRef within a major.
+
 ### Existing identities
 
 An occupied FormRef MUST never be reused for different bytes. An existing kind

@@ -42,13 +42,12 @@ const (
 type v3FormResource struct {
 	form model.Form
 	data *providerData
-	// supportedRefs overrides the exact-FormRef set that state dispatch accepts.
-	// It is empty in every production construction (NewV3FormResource), where
-	// currentformregistry is the sole authority. It exists so the lane can be
-	// driven with several FormRefs of one Kind — the multi-FormRef case the
-	// generated one-entry-per-(group,kind) registry map cannot express yet —
-	// without introducing a mutable package-level seam.
-	supportedRefs []currentformregistry.V3Ref
+	// codecs is the exact-FormRef dispatch table: the registry of identities
+	// this resource can serve together with the per-ref codec that decodes
+	// state written under each one. Production constructions carry the build's
+	// own table (v3Codecs); it is a real dependency, not an override, so the
+	// same code path serves one definition version and several.
+	codecs *v3CodecTable
 }
 
 var (
@@ -60,7 +59,7 @@ var (
 
 // NewV3FormResource returns a constructor for one declared family Form.
 func NewV3FormResource(form model.Form) func() resource.Resource {
-	return func() resource.Resource { return &v3FormResource{form: form} }
+	return func() resource.Resource { return &v3FormResource{form: form, codecs: v3Codecs()} }
 }
 
 // newV3FormResources lists every v3-lane resource constructor: the typed
@@ -120,61 +119,51 @@ func assertV3Lane(data *providerData, resourceType string, diags *diag.Diagnosti
 	return true
 }
 
-// v3DefaultRef is the recommended create target of this Form's kind.
-func (r *v3FormResource) v3DefaultRef(diags *diag.Diagnostics) (currentformregistry.V3Ref, bool) {
-	ref, err := currentformregistry.V3ForKind(edgeformcatalog.Family.APIVersion(), r.form.Kind)
+// codecTable is the exact-FormRef dispatch table this resource serves. A
+// resource constructed without one falls back to the build's own table, so a
+// direct struct literal is never silently registry-less.
+func (r *v3FormResource) codecTable() *v3CodecTable {
+	if r.codecs != nil {
+		return r.codecs
+	}
+	return v3Codecs()
+}
+
+// v3DefaultCodec is the recommended create target of this Form's kind together
+// with the codec that encodes a spec for it. Only Create uses it: an existing
+// resource dispatches on the identity recorded in state.
+func (r *v3FormResource) v3DefaultCodec(diags *diag.Diagnostics) (v3FormCodec, bool) {
+	codec, err := r.codecTable().defaultCreate(r.form.Kind)
 	if err != nil {
 		diags.AddError(r.form.Kind+" FormRef missing",
 			"This provider build has no exact candidate "+r.form.Kind+" FormRef: "+err.Error()+" This is a provider bug.")
-		return currentformregistry.V3Ref{}, false
+		return v3FormCodec{}, false
 	}
-	return ref, true
+	return codec, true
 }
 
-// v3SupportedRefs is every exact FormRef this build can read, observe, update,
-// and delete.
-func (r *v3FormResource) v3SupportedRefs() []currentformregistry.V3Ref {
-	if len(r.supportedRefs) > 0 {
-		return r.supportedRefs
-	}
-	return currentformregistry.V3SupportedFormRefs()
-}
-
-// v3StateRef resolves the exact FormRef recorded in state against the
-// supported multi-FormRef registry. Membership — not equality with the
-// current default create target — decides dispatch, so a future Form line
-// bump keeps existing state readable. An unknown identity fails closed with
-// both identities named; the provider never queries a different exact FormRef
-// and interprets a 404 as deletion.
-func (r *v3FormResource) v3StateRef(identity v3StateIdentity, diags *diag.Diagnostics) (currentformregistry.V3Ref, bool) {
+// v3StateCodec resolves the exact FormRef recorded in state against the
+// supported multi-FormRef registry, and returns the codec that decodes state
+// written under it. Membership — not equality with the current default create
+// target — decides dispatch, so a Form line bump keeps existing state
+// readable. An identity this build cannot decode fails closed naming the state
+// ref and every ref of that kind the build knows; the provider never queries a
+// different exact FormRef and interprets a 404 as deletion.
+func (r *v3FormResource) v3StateCodec(identity v3StateIdentity, diags *diag.Diagnostics) (v3FormCodec, bool) {
 	got, ok := identity.formRef()
 	if !ok {
 		diags.AddError(
 			"State has no exact v1alpha3 Form identity",
 			"The v1alpha3 resource lane fails closed on state without a complete exact FormRef. Retained v2-lane state is never transformed in place; perform an explicit create/import migration.",
 		)
-		return currentformregistry.V3Ref{}, false
+		return v3FormCodec{}, false
 	}
-	for _, candidate := range r.v3SupportedRefs() {
-		if candidate.APIVersion == got.APIVersion &&
-			candidate.Kind == got.Kind &&
-			candidate.DefinitionVersion == got.DefinitionVersion &&
-			candidate.SchemaDigest == got.SchemaDigest {
-			return candidate, true
-		}
+	table := r.codecTable()
+	if codec, supported := table.forStateKey(got.exactKey()); supported {
+		return codec, true
 	}
-	defaultRef, _ := currentformregistry.V3ForKind(edgeformcatalog.Family.APIVersion(), r.form.Kind)
-	diags.AddError(
-		"State Form identity is not supported by this provider",
-		fmt.Sprintf(
-			"State is bound to %s/%s@%s schema=%s; this provider supports %s/%s@%s schema=%s for kind %s. "+
-				"Pin the provider version that wrote the state or perform an explicit create/import migration.",
-			got.APIVersion, got.Kind, got.DefinitionVersion, got.SchemaDigest,
-			defaultRef.APIVersion, defaultRef.Kind, defaultRef.DefinitionVersion, defaultRef.SchemaDigest,
-			r.form.Kind,
-		),
-	)
-	return currentformregistry.V3Ref{}, false
+	diags.Append(v3UnsupportedStateRefError(r.form.Kind, got, table.knownRefsForKind(r.form.Kind)))
+	return v3FormCodec{}, false
 }
 
 func clientFormRef(ref currentformregistry.V3Ref) clientv3.FormRef {
@@ -208,7 +197,7 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	ref, ok := r.v3DefaultRef(&resp.Diagnostics)
+	codec, ok := r.v3DefaultCodec(&resp.Diagnostics)
 	if !ok {
 		return
 	}
@@ -232,7 +221,7 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		spec = bundle.Spec()
 	} else {
 		var specDiags diag.Diagnostics
-		spec, specDiags = r.v3SpecFromValues(ctx, values)
+		spec, specDiags = r.v3SpecFromValues(ctx, codec, values)
 		resp.Diagnostics.Append(specDiags...)
 		if resp.Diagnostics.HasError() {
 			return
@@ -254,18 +243,18 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		spec = map[string]any{"manifestDigest": committed}
 		values.Fields["manifest_digest"] = types.StringValue(committed)
 	}
-	res, err := r.data.clientV3.ApplyResource(opCtx, v3RequestResource(ref, values.Name.ValueString(), space, spec), clientv3.Fence{})
+	res, err := r.data.clientV3.ApplyResource(opCtx, v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec), clientv3.Fence{})
 	if err != nil {
 		// A create the host ACCEPTED can still fail here — most visibly when its
 		// long-running Operation outlives create_timeout. Terraform commits the
 		// state a failed Create leaves behind, so returning without writing state
 		// orphans a resource the host owns and the next plan creates a duplicate.
 		// Record the identity that is known before surfacing the failure.
-		r.writeV3AcceptedState(ctx, &resp.State, ref, space, values, err, &resp.Diagnostics)
+		r.writeV3AcceptedState(ctx, &resp.State, codec, space, values, err, &resp.Diagnostics)
 		resp.Diagnostics.AddError("Failed to create "+r.form.Kind, err.Error())
 		return
 	}
-	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, ref, space, values, res, false)...)
+	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, codec, space, values, res, false)...)
 }
 
 func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -277,7 +266,7 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	ref, ok := r.v3StateRef(values.Identity, &resp.Diagnostics)
+	codec, ok := r.v3StateCodec(values.Identity, &resp.Diagnostics)
 	if !ok {
 		return
 	}
@@ -285,27 +274,38 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if !ok {
 		return
 	}
-	res, err := r.data.clientV3.GetResource(ctx, space, clientFormRef(ref), values.Name.ValueString())
+	// An accepted-but-unfinished mutation is consulted BEFORE the resource is
+	// read: on a host where the resource does not exist until the operation
+	// commits, a 404 during that window is not deletion.
+	resume := v3ResumePendingOperation(
+		ctx, r.data.clientV3, r.form.Kind, v3PendingRequest{
+			OperationID: v3StateStringValue(values.PendingOperationID),
+			Ref:         clientFormRef(codec.Ref),
+			Space:       space,
+			Name:        values.Name.ValueString(),
+			StateUID:    v3StateStringValue(values.UID),
+		}, &resp.Diagnostics)
+	if resume.Stop {
+		return
+	}
+	res, err := r.data.clientV3.GetResource(ctx, space, clientFormRef(codec.Ref), values.Name.ValueString())
 	if err != nil {
 		if errors.Is(err, clientv3.ErrNotFound) {
+			if !resume.RemoveOnAbsent {
+				// The host accepted a mutation that has not committed. Absence is
+				// the pending window, not a deletion, so state stays exactly as it
+				// is and the recorded operation id survives for the next read.
+				return
+			}
 			resp.State.RemoveResource(ctx)
 			return
 		}
 		resp.Diagnostics.AddError("Failed to read "+r.form.Kind, err.Error())
 		return
 	}
-	if !values.UID.IsNull() && !values.UID.IsUnknown() && values.UID.ValueString() != res.Metadata.UID {
-		// A same-named resource with a different UID is a different resource
-		// (delete + recreate happened out of band). Removing state makes the
-		// replacement visible in the next plan instead of silently rebinding.
-		resp.Diagnostics.AddWarning(
-			r.form.Kind+" was replaced out of band",
-			fmt.Sprintf(
-				"State records uid %s but the host now serves uid %s for %s/%s. The old resource no longer exists; the next plan will propose recreating it.",
-				values.UID.ValueString(), res.Metadata.UID, space, values.Name.ValueString(),
-			),
-		)
-		resp.State.RemoveResource(ctx)
+	if !v3RequireStateUID(r.form.Kind, space, values.Name.ValueString(), v3StateStringValue(values.UID), res, &resp.Diagnostics) {
+		// State is DELIBERATELY kept: the resource is still under management and
+		// the operator must choose which incarnation it names.
 		return
 	}
 	v3ReportRelationCondition(
@@ -315,7 +315,14 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// place, so only there does adopting the host's spec produce a plan the
 	// next apply can satisfy. For a Form without update every desired attribute
 	// forces replacement, and the recorded configuration is preserved.
-	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, ref, space, values, res, r.form.DeclaresUpdate())...)
+	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, codec, space, values, res, r.form.DeclaresUpdate())...)
+	// A read that settled a representation while the accepted operation is
+	// still running keeps the marker: the operation has not committed, so there
+	// is still something to resume.
+	if resume.KeepMarker {
+		resp.Diagnostics.Append(resp.State.SetAttribute(
+			ctx, path.Root("pending_operation_id"), values.PendingOperationID)...)
+	}
 }
 
 // v3RelationConditionReasons are the two portable reasons a host uses when a
@@ -458,7 +465,7 @@ func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	ref, ok := r.v3StateRef(stateValues.Identity, &resp.Diagnostics)
+	codec, ok := r.v3StateCodec(stateValues.Identity, &resp.Diagnostics)
 	if !ok {
 		return
 	}
@@ -466,7 +473,10 @@ func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if !ok {
 		return
 	}
-	spec, specDiags := r.v3SpecFromValues(ctx, values)
+	// The spec travels under the identity recorded in STATE, encoded by that
+	// ref's own field set: an update is a mutation of the resource that exists,
+	// never a silent migration onto the current create default.
+	spec, specDiags := r.v3SpecFromValues(ctx, codec, values)
 	resp.Diagnostics.Append(specDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -481,12 +491,12 @@ func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 	opCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	res, err := r.data.clientV3.ApplyResource(opCtx, v3RequestResource(ref, values.Name.ValueString(), space, spec), fence)
+	res, err := r.data.clientV3.ApplyResource(opCtx, v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec), fence)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to update "+r.form.Kind, err.Error())
 		return
 	}
-	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, ref, space, values, res, false)...)
+	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, codec, space, values, res, false)...)
 }
 
 // updateProviderSideTimeouts handles the one in-place update a Form without
@@ -503,7 +513,11 @@ func (r *v3FormResource) updateProviderSideTimeouts(ctx context.Context, req res
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !r.v3DesiredSpecUnchanged(ctx, planValues, stateValues, &resp.Diagnostics) {
+	codec, ok := r.v3StateCodec(stateValues.Identity, &resp.Diagnostics)
+	if !ok {
+		return
+	}
+	if !r.v3DesiredSpecUnchanged(ctx, codec, planValues, stateValues, &resp.Diagnostics) {
 		if !resp.Diagnostics.HasError() {
 			resp.Diagnostics.AddError(
 				r.form.Kind+" declares no update capability",
@@ -538,7 +552,7 @@ func (r *v3FormResource) updateProviderSideTimeouts(ctx context.Context, req res
 // manifest digest, because that digest IS its desired state: local files that
 // commit the manifest already in state are the same bundle, not a change.
 // Every other Form compares the projected wire spec.
-func (r *v3FormResource) v3DesiredSpecUnchanged(ctx context.Context, plan, state v3Values, diags *diag.Diagnostics) bool {
+func (r *v3FormResource) v3DesiredSpecUnchanged(ctx context.Context, codec v3FormCodec, plan, state v3Values, diags *diag.Diagnostics) bool {
 	if !plan.Name.Equal(state.Name) || !plan.Space.Equal(state.Space) {
 		return false
 	}
@@ -555,9 +569,9 @@ func (r *v3FormResource) v3DesiredSpecUnchanged(ctx context.Context, plan, state
 		recorded, ok := v3PlanKnownString(state.Fields["manifest_digest"])
 		return ok && planned.Digest == recorded
 	}
-	plannedSpec, planDiags := r.v3SpecFromValues(ctx, plan)
+	plannedSpec, planDiags := r.v3SpecFromValues(ctx, codec, plan)
 	diags.Append(planDiags...)
-	stateSpec, stateDiags := r.v3SpecFromValues(ctx, state)
+	stateSpec, stateDiags := r.v3SpecFromValues(ctx, codec, state)
 	diags.Append(stateDiags...)
 	if diags.HasError() {
 		return false
@@ -574,7 +588,7 @@ func (r *v3FormResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	ref, ok := r.v3StateRef(values.Identity, &resp.Diagnostics)
+	codec, ok := r.v3StateCodec(values.Identity, &resp.Diagnostics)
 	if !ok {
 		return
 	}
@@ -588,30 +602,68 @@ func (r *v3FormResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 	opCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	err := r.data.clientV3.DeleteResource(opCtx, space, clientFormRef(ref), values.Name.ValueString(), values.Revision.ValueString())
+	err := r.data.clientV3.DeleteResource(opCtx, space, clientFormRef(codec.Ref), values.Name.ValueString(), values.Revision.ValueString())
 	if err != nil && !errors.Is(err, clientv3.ErrNotFound) {
 		resp.Diagnostics.AddError("Failed to delete "+r.form.Kind, err.Error())
 	}
 }
 
+// ImportState adopts one existing resource into state under an EXACT identity.
+//
+// Three forms are accepted (v3ParseImportID): the canonical JSON object, which
+// names the exact FormRef and therefore the incarnation an older definition
+// version created; and the short `NAME` / `SPACE/NAME` forms, which resolve to
+// the default create ref. The short forms stay because they are what almost
+// every import is, and the JSON form exists because a delimiter-joined string
+// cannot carry a SpaceID safely — a SpaceID is opaque UTF-8 that may contain
+// any character but `/`, so no separator choice both escapes it and stays
+// readable.
 func (r *v3FormResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	if !r.assertV3Configured(&resp.Diagnostics) {
 		return
 	}
-	ref, ok := r.v3DefaultRef(&resp.Diagnostics)
-	if !ok {
-		return
-	}
-	space, name, err := splitImportID(req.ID)
+	identity, err := v3ParseImportID(req.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid import ID", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(name))...)
-	if space != "" {
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("space"), types.StringValue(space))...)
+	codec, ok := r.v3ImportCodec(identity, &resp.Diagnostics)
+	if !ok {
+		return
 	}
-	resp.Diagnostics.Append(setV3FormIdentityState(ctx, &resp.State, ref)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(identity.Name))...)
+	if identity.Space != "" {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("space"), types.StringValue(identity.Space))...)
+	}
+	resp.Diagnostics.Append(setV3FormIdentityState(ctx, &resp.State, codec.Ref)...)
+}
+
+// v3ImportCodec resolves the codec one import names: the exact recorded
+// identity when the canonical JSON form supplied one, the default create ref
+// otherwise. An exact identity this build cannot decode fails closed — the
+// import must not silently rebind the resource onto the current definition
+// version, which is exactly the bug the short forms had.
+func (r *v3FormResource) v3ImportCodec(identity v3ImportIdentity, diags *diag.Diagnostics) (v3FormCodec, bool) {
+	if !identity.HasFormRef {
+		return r.v3DefaultCodec(diags)
+	}
+	if identity.Ref.Kind != r.form.Kind {
+		diags.AddError(
+			"Import ID names another Form kind",
+			fmt.Sprintf(
+				"The import identity names kind %q, but this resource type carries %q.",
+				identity.Ref.Kind, r.form.Kind,
+			),
+		)
+		return v3FormCodec{}, false
+	}
+	table := r.codecTable()
+	codec, supported := table.forStateKey(identity.Ref.exactKey())
+	if !supported {
+		diags.Append(v3UnsupportedImportRefError(identity.Ref, table.knownRefsForKind(r.form.Kind)))
+		return v3FormCodec{}, false
+	}
+	return codec, true
 }
 
 // v3EffectiveSpace resolves and validates the effective SpaceID like the v2
