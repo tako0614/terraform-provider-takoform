@@ -52,10 +52,13 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 		// its committed artifact manifest: the manifest, not the Form, describes
 		// the modules (spec/artifact-transport, decision 0014).
 		"WorkerBundle": {"manifestDigest"},
+		// No compatibilityDate and no compatibilityFlags: the runtime is fixed by
+		// the exact worker.runtime contract the Module Worker identity provides,
+		// not by a token this project has no behavior registry to interpret
+		// (decision 0019).
 		"WorkerVersion": {
-			"bucketBindings", "bundle", "compatibilityDate", "compatibilityFlags",
-			"handlers", "kvBindings", "queueProducerBindings", "requiredSensitiveVars",
-			"serviceBindings", "sqliteBindings", "vars", "worker",
+			"bucketBindings", "bundle", "handlers", "kvBindings", "queueProducerBindings",
+			"requiredSensitiveVars", "serviceBindings", "sqliteBindings", "vars", "worker",
 		},
 		"WorkerDeployment":   {"versions", "worker"},
 		"WorkerCustomDomain": {"hostname", "worker"},
@@ -215,27 +218,125 @@ func TestOnlyWorkerVersionAcceptsBindings(t *testing.T) {
 
 func TestProvidedInterfaceAssignments(t *testing.T) {
 	t.Parallel()
-	want := map[string]string{
-		"EdgeKVNamespace":  "edge.kv",
-		"ObjectBucket":     "edge.objects",
-		"SQLiteDatabase":   "edge.sql",
-		"AtLeastOnceQueue": "edge.queue",
-		// worker.service belongs to the worker IDENTITY: the
+	want := map[string][]string{
+		"EdgeKVNamespace":  {"edge.kv"},
+		"ObjectBucket":     {"edge.objects"},
+		"SQLiteDatabase":   {"edge.sql"},
+		"AtLeastOnceQueue": {"edge.queue"},
+		// The worker identity carries both directions of its exact contracts.
+		// worker.runtime is the ES Module Worker ABI the Form claims to fix, so
+		// a host that supports ModuleWorker implements it at that exact digest
+		// (decision 0019). worker.service belongs to the IDENTITY too: the
 		// module-worker.service binding lists ModuleWorker in its
 		// allowedTargetForms, and a host verifies that the resolved target's
 		// Form provides the binding's targetInterface.
-		"ModuleWorker": "worker.service",
+		"ModuleWorker": {"worker.runtime", "worker.service"},
 	}
 	for _, form := range Forms {
-		wantInterface, expects := want[form.Kind]
+		wantInterfaces, expects := want[form.Kind]
 		if !expects {
 			if len(form.ProvidedInterfaces) != 0 {
 				t.Errorf("%s unexpectedly provides interfaces", form.Kind)
 			}
 			continue
 		}
-		if len(form.ProvidedInterfaces) != 1 || form.ProvidedInterfaces[0].Name != wantInterface {
-			t.Errorf("%s provides %v, want %s", form.Kind, form.ProvidedInterfaces, wantInterface)
+		got := make([]string, 0, len(form.ProvidedInterfaces))
+		for _, provided := range form.ProvidedInterfaces {
+			got = append(got, provided.Name)
+		}
+		if !slices.Equal(got, wantInterfaces) {
+			t.Errorf("%s provides %v, want %v", form.Kind, got, wantInterfaces)
+		}
+	}
+}
+
+// TestModuleWorkerABIIsAnExactContract proves the ABI is stated as data rather
+// than claimed in prose: the identity provides the runtime contract, the
+// contract declares each handler it names as a real operation, and the
+// WorkerVersion `handlers` enum is that vocabulary and nothing else. It is the
+// authoring-time half of decision 0019; the host-side half is the required
+// conformance check.
+func TestModuleWorkerABIIsAnExactContract(t *testing.T) {
+	t.Parallel()
+	handlers, err := RuntimeHandlers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(handlers, []string{"fetch", "scheduled", "queue", "tail"}) {
+		t.Fatalf("runtime handler vocabulary = %v", handlers)
+	}
+	definition, err := interfaceDefinitionByName(WorkerRuntimeInterfaceName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operations := make([]string, 0, len(definition.Operations))
+	for _, operation := range definition.Operations {
+		operations = append(operations, operation.Name)
+	}
+	slices.Sort(operations)
+	want := []string{
+		"environment", "fetch", "globals", "loadModule",
+		"queue", "scheduled", "tail", "waitUntil",
+	}
+	if !slices.Equal(operations, want) {
+		t.Fatalf("worker.runtime operations = %v, want %v", operations, want)
+	}
+	if definition.Semantics.Consistency != "read_after_write" ||
+		definition.Semantics.Delivery != "at_least_once" ||
+		definition.Semantics.Ordering != "none" {
+		t.Fatalf("worker.runtime semantics = %+v", definition.Semantics)
+	}
+	if len(definition.Fixtures) == 0 {
+		t.Fatal("the runtime ABI must prove what is provable with fixtures")
+	}
+	version, known := ByKind("WorkerVersion")
+	if !known {
+		t.Fatal("WorkerVersion is missing from the catalog")
+	}
+	for _, field := range version.Fields {
+		if field.Wire != "handlers" {
+			continue
+		}
+		if !slices.Equal(field.Enum, handlers) {
+			t.Fatalf("WorkerVersion handlers enum = %v, want the ABI vocabulary %v", field.Enum, handlers)
+		}
+		return
+	}
+	t.Fatal("WorkerVersion declares no handlers field")
+}
+
+// TestNoRuntimeSelectorTokensRemain proves the removal is complete in the bytes
+// that ship: no Form, Interface, or Binding Definition of the family names a
+// compatibility date or flag. A date is only meaningful against a registry that
+// says which behavior each date changes, and this project has none, so the
+// field promised portability it could not deliver (decision 0019).
+func TestNoRuntimeSelectorTokensRemain(t *testing.T) {
+	t.Parallel()
+	forms, err := RenderForms()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := make([]string, 0, len(forms)+16)
+	for _, form := range forms {
+		rendered = append(rendered, form.DefinitionJSON)
+	}
+	interfaces, err := RenderInterfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := RenderBindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, contract := range append(interfaces, bindings...) {
+		rendered = append(rendered, contract.DefinitionJSON)
+	}
+	for _, text := range rendered {
+		lowered := strings.ToLower(text)
+		for _, token := range []string{"compatibilitydate", "compatibility_date", "compatibilityflags", "compatibility_flags", "nodejs_compat"} {
+			if strings.Contains(lowered, token) {
+				t.Fatalf("rendered output still carries the runtime selector token %q", token)
+			}
 		}
 	}
 }

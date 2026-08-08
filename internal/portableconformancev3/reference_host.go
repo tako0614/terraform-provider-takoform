@@ -201,16 +201,21 @@ type ReferenceHost struct {
 	// (spec/decisions/0018).
 	blobTenants     map[string]map[string]bool
 	manifestTenants map[string]map[string]bool
-	uidCounter      int
-	opCounter       int
-	uploadCounter   int
-	requestCounter  int
+	// moduleExports maps one module BLOB digest to the handlers that module's
+	// default export exposes. See exportedHandlerViolation for why a reference
+	// host that runs no JavaScript can still hold the contract's
+	// handler_not_exported rule, and for exactly how far that reaches.
+	moduleExports  map[string][]string
+	uidCounter     int
+	opCounter      int
+	uploadCounter  int
+	requestCounter int
 }
 
 // NewReferenceHost constructs the deterministic reference host over the
 // verified contract and an installed catalog.
 func NewReferenceHost(contract Contract, catalog *Catalog) *ReferenceHost {
-	return &ReferenceHost{
+	host := &ReferenceHost{
 		contract:        contract,
 		catalog:         catalog,
 		resources:       map[string]*storedResource{},
@@ -223,7 +228,24 @@ func NewReferenceHost(contract Contract, catalog *Catalog) *ReferenceHost {
 		operations:      map[string]*hostOperation{},
 		blobTenants:     map[string]map[string]bool{},
 		manifestTenants: map[string]map[string]bool{},
+		moduleExports:   map[string][]string{},
 	}
+	input := contract.RunnerInput
+	host.declareModuleExports(input.WorkerBundle.ModuleSource, input.WorkerBundle.ExportedHandlers)
+	host.declareModuleExports(input.FetchOnlyBundle.ModuleSource, input.FetchOnlyBundle.ExportedHandlers)
+	return host
+}
+
+// declareModuleExports records what one module's default export exposes, keyed
+// by the content address of its bytes. Keying on the DIGEST rather than on a
+// bundle or a resource name is what makes the fact a property of the code: the
+// same bytes uploaded again, under any manifest, by any tenant, export the same
+// handlers.
+func (h *ReferenceHost) declareModuleExports(moduleSource string, handlers []string) {
+	if moduleSource == "" || len(handlers) == 0 {
+		return
+	}
+	h.moduleExports[formpackage.DigestBytes([]byte(moduleSource))] = append([]string(nil), handlers...)
 }
 
 // holdsBlob and holdsManifest answer the ONE authorization question the
@@ -615,6 +637,13 @@ func (h *ReferenceHost) specDiagnostics(form *installedForm, spec map[string]any
 			"message":  "desired spec violates the installed Form Definition: " + err.Error(),
 		}}, nil
 	}
+	// Schema validity is never sufficient (spec/conformance.md, decision 0014).
+	// The runtime ABI closes the handler surface, and it does so from the exact
+	// contract the host installed rather than from the Form's enum, so a host
+	// whose installed schema drifted laxer still refuses (decision 0019).
+	if violation := h.declaredHandlerViolation(form, spec); violation != "" {
+		return []map[string]any{{"severity": "error", "message": violation}}, nil
+	}
 	return []map[string]any{}, nil
 }
 
@@ -817,6 +846,9 @@ func (h *ReferenceHost) validateDesiredSemantics(
 		return nil, hostErr
 	}
 	if hostErr := validateEnvironmentNamespace(form, spec); hostErr != nil {
+		return nil, hostErr
+	}
+	if hostErr := h.validateDeclaredHandlers(form, spec); hostErr != nil {
 		return nil, hostErr
 	}
 	relations, hostErr := h.resolveRelations(form, space, spec)
@@ -2031,17 +2063,19 @@ func (h *ReferenceHost) formSupportProfile(form *installedForm) map[string]any {
 		"formRef":    refJSON(form.Ref),
 		"operations": form.operations(),
 	}
-	if form.Ref.Kind == "WorkerVersion" {
-		profile["supportedEnums"] = map[string]any{
-			"compatibilityFlags": []string{"nodejs_compat"},
-			"handlers":           []string{"fetch", "scheduled", "queue", "tail"},
+	if form.Ref.Kind == workerVersionKind {
+		// The handler enum is the runtime ABI's vocabulary, read from the
+		// installed contract. There is no compatibilityDate range and no
+		// compatibilityFlags enum: a date is only meaningful against a registry
+		// stating which behavior each date changes, this lane has none, and a
+		// profile advertising one would promise portability it could not deliver
+		// (spec/decisions/0019). Runtime behavior is advertised by implementing
+		// the exact contract, which the interface support profile states.
+		handlers := desiredSchemaEnum(form.DesiredSchema, "handlers")
+		if contract, installed := h.runtimeContract(); installed {
+			handlers = contract.Handlers
 		}
-		profile["supportedRanges"] = map[string]any{
-			"compatibilityDate": map[string]any{
-				"minimum": "2024-01-01",
-				"maximum": "2026-08-06",
-			},
-		}
+		profile["supportedEnums"] = map[string]any{"handlers": handlers}
 		profile["limits"] = map[string]any{"maximumBundleBytes": maximumBundleBytes}
 	}
 	return profile

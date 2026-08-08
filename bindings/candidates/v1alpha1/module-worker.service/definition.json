@@ -4,7 +4,7 @@
   "name": "module-worker.service",
   "version": "1.0.0",
   "title": "Module Worker service binding",
-  "description": "Projects the worker.service fetch operation into a Worker Version, addressing another Module Worker by logical identity without any network endpoint.",
+  "description": "Projects the worker.service fetch operation into a Worker Version, addressing another Module Worker by logical identity without any network endpoint. Runtime surface: env.NAME.fetch(request) takes a Request (or a URL string with an optional init object, exactly like the global fetch) and returns a Promise<Response>. Request and response bodies STREAM in both directions; neither side is buffered before the call is made. The call is dispatched to whichever Worker Versions the target's active Worker Deployment selects, and never leaves the host, so no DNS name, URL, or credential is involved and the request host name carries no routing meaning. An UNCAUGHT exception in the callee's fetch handler is the callee's host-generated 500 response: this promise RESOLVES with that response rather than rejecting, so a caller distinguishes callee failure by status, not by catch. The promise rejects only when the call could not be made at all, with an Error named backend_unavailable. A response reflects every effect the callee completed before responding.",
   "sourceRole": "revision",
   "targetInterface": {
     "apiVersion": "interfaces.takoform.com/v1alpha1",

@@ -103,10 +103,9 @@ func (f *aggregateFixture) versionSpec(worker string, handlers ...string) map[st
 		declared = append(declared, handler)
 	}
 	return map[string]any{
-		"worker":            f.ref(moduleWorkerKind, worker),
-		"bundle":            f.ref("WorkerBundle", "worker-bundle-probe"),
-		"compatibilityDate": "2026-01-01",
-		"handlers":          declared,
+		"worker":   f.ref(moduleWorkerKind, worker),
+		"bundle":   f.ref("WorkerBundle", "worker-bundle-probe"),
+		"handlers": declared,
 	}
 }
 
@@ -524,4 +523,95 @@ func TestEnvironmentNamespaceIsSingle(t *testing.T) {
 		}
 		f.requireAccepted(hostErr, testCase.name)
 	}
+}
+
+// commitPinnedBundle plants one corpus-pinned artifact manifest on the host
+// exactly as an accepted commit would, and installs the WorkerBundle resource
+// that references it. It is the state every rule about what a version RUNS is
+// decided against: the resource carries only a digest, and the manifest behind
+// that digest is what names the module.
+func (f *aggregateFixture) commitPinnedBundle(name string, manifest map[string]any, wantDigest string) {
+	f.t.Helper()
+	digest, raw := canonicalManifestDigest(f.t, manifest)
+	if wantDigest != "" && digest != wantDigest {
+		f.t.Fatalf("pinned manifest of %s canonicalizes to %s, want %s", name, digest, wantDigest)
+	}
+	f.host.manifests[digest] = raw
+	f.host.grantManifest(referencePrimaryAuth.Tenant, digest)
+	f.store("WorkerBundle", name, map[string]any{"manifestDigest": digest})
+}
+
+// versionSpecOfBundle builds a Worker Version desired spec bound to a NAMED
+// bundle rather than the corpus probe's.
+func (f *aggregateFixture) versionSpecOfBundle(worker, bundle string, handlers ...string) map[string]any {
+	spec := f.versionSpec(worker, handlers...)
+	spec["bundle"] = f.ref("WorkerBundle", bundle)
+	return spec
+}
+
+// TestDeclaredHandlerMustBeExportedByTheReferencedModule proves the second half
+// of the ES Module Worker ABI's handler rule (spec/decisions/0019): the ABI says
+// which handlers EXIST, and the module a version references says which of them
+// that version may declare.
+//
+// `loadModule` fails a declared-but-unexported handler with
+// `handler_not_exported` before any traffic arrives, so storing such a version
+// would leave the attachment gate admitting a cron trigger or a queue consumer
+// against a handler that does not exist. The refusal therefore has to happen
+// where the bundle relation is resolvable, and it must NOT refuse a version
+// declaring only what the module does export — a host that refused everything
+// would satisfy the rule while implementing nothing.
+func TestDeclaredHandlerMustBeExportedByTheReferencedModule(t *testing.T) {
+	f := newAggregateFixture(t)
+	input := f.host.contract.RunnerInput
+	f.store(moduleWorkerKind, "worker", map[string]any{})
+	f.commitPinnedBundle(
+		input.FetchOnlyBundle.Name, input.FetchOnlyBundle.Manifest, input.FetchOnlyBundle.ManifestDigest,
+	)
+
+	f.requireCode(
+		f.validate(workerVersionKind, "version", f.versionSpecOfBundle(
+			"worker", input.FetchOnlyBundle.Name, fetchHandler, scheduledHandler,
+		)),
+		"invalid_argument", "a version declaring a handler its module does not export",
+	)
+	f.requireAccepted(
+		f.validate(workerVersionKind, "version", f.versionSpecOfBundle(
+			"worker", input.FetchOnlyBundle.Name, fetchHandler,
+		)),
+		"a version declaring only what its module exports",
+	)
+
+	// The corpus probe bundle is the one the lane's positive controls are driven
+	// against, and one of them declares the WHOLE vocabulary. If its module did
+	// not export all of it, that control would be a version this very rule must
+	// refuse, and no conforming host could complete the check that carries it.
+	f.commitPinnedBundle(
+		input.WorkerBundle.Name, input.WorkerBundle.Manifest, input.WorkerBundle.Desired["manifestDigest"].(string),
+	)
+	f.requireAccepted(
+		f.validate(workerVersionKind, "full-version", f.versionSpecOfBundle(
+			"worker", input.WorkerBundle.Name, input.SupportProbes.RuntimeContract.Handlers...,
+		)),
+		"a version declaring the whole runtime vocabulary against the corpus bundle",
+	)
+}
+
+// TestUnknownModuleBytesAreNotGuessedAbout states the exact reach of the rule
+// above in the reference host. What a module exports is a fact about
+// JavaScript, and this host executes none: it answers only about modules whose
+// bytes the corpus pinned. Code it was never told about is accepted rather than
+// refused, because refusing would be a guess — a real host answers by loading
+// the module. The lane proves the refusal for pinned bundles and documents the
+// rest as a host obligation (spec/host-api/v1alpha3.md).
+func TestUnknownModuleBytesAreNotGuessedAbout(t *testing.T) {
+	f := newAggregateFixture(t)
+	f.store(moduleWorkerKind, "worker", map[string]any{})
+	f.commitPinnedBundle("unknown-bundle", workerBundleUnitManifest(), "")
+	f.requireAccepted(
+		f.validate(workerVersionKind, "version", f.versionSpecOfBundle(
+			"worker", "unknown-bundle", fetchHandler, scheduledHandler, queueHandler,
+		)),
+		"a version bound to a module this host was never told about",
+	)
 }

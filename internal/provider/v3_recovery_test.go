@@ -282,12 +282,11 @@ func TestV3JSONObjectAttributesRejectTheLiteralNull(t *testing.T) {
 			t.Fatal("WorkerVersion no longer declares vars_json")
 		}
 		plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-			"name":               types.StringValue("worker-version"),
-			"worker":             types.StringValue("module-worker"),
-			"bundle":             types.StringValue("worker-bundle"),
-			"compatibility_date": types.StringValue("2026-08-06"),
-			"handlers":           types.SetValueMust(types.StringType, []attr.Value{types.StringValue("fetch")}),
-			"vars_json":          types.StringValue("null"),
+			"name":      types.StringValue("worker-version"),
+			"worker":    types.StringValue("module-worker"),
+			"bundle":    types.StringValue("worker-bundle"),
+			"handlers":  types.SetValueMust(types.StringType, []attr.Value{types.StringValue("fetch")}),
+			"vars_json": types.StringValue("null"),
 		})
 		createResponse := frameworkresource.CreateResponse{
 			State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},

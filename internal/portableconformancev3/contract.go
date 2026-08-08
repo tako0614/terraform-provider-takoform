@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 73-entry executed-check list every v3
+// requiredRunnerChecks is the closed 76-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -196,6 +196,10 @@ var requiredRunnerChecks = []string{
 	"upload-session-bound-to-its-creating-principal",
 	"artifact-digest-is-not-a-capability",
 	"manifest-reference-is-not-a-capability",
+	// The ES Module Worker ABI is an exact contract (spec/decisions/0019).
+	"module-worker-runtime-contract-advertised",
+	"undeclared-runtime-handler-rejected",
+	"declared-handler-not-exported-rejected",
 }
 
 // FormRef is the exact four-field v1alpha3 Form identity.
@@ -230,10 +234,38 @@ type ResourceProbe struct {
 // module source bytes the runner uploads: the runner commits the manifest
 // through the artifact API and drives the resource with the digest the host
 // returned.
+//
+// ExportedHandlers is what the default export of ModuleSource actually exposes
+// as callable own properties. The `worker.runtime` contract fails a version
+// whose declared handler the module does not export (`handler_not_exported`),
+// so a corpus that did not say what its own module exports could not tell a
+// coherent Worker Version from one no conforming host may store — and every
+// check driving such a version would fail exactly the hosts that enforce the
+// contract. It is corpus data rather than manifest data because the published
+// artifact-manifest schema is closed and admits no such member
+// (spec/schemas/artifact-manifest-v1alpha1.schema.json).
 type WorkerBundleProbe struct {
 	ResourceProbe
-	ModuleSource string         `json:"moduleSource"`
-	Manifest     map[string]any `json:"manifest"`
+	ModuleSource     string         `json:"moduleSource"`
+	Manifest         map[string]any `json:"manifest"`
+	ExportedHandlers []string       `json:"exportedHandlers"`
+}
+
+// ModuleBundleProbe pins one ADDITIONAL Worker Bundle the lane drives. Its Form
+// identity, lifecycle capabilities, and desired shape are the workerBundle
+// probe's — one Form line, stated once — so only the resource name, the module
+// bytes, the manifest addressing them, and what that module exports differ.
+//
+// The lane needs a second bundle for exactly one reason: proving a host refuses
+// a declared-but-unexported handler requires a module that exports LESS than
+// the vocabulary, while every other check needs one that exports enough. One
+// bundle cannot be both.
+type ModuleBundleProbe struct {
+	Name             string         `json:"name"`
+	ManifestDigest   string         `json:"manifestDigest"`
+	Manifest         map[string]any `json:"manifest"`
+	ModuleSource     string         `json:"moduleSource"`
+	ExportedHandlers []string       `json:"exportedHandlers"`
 }
 
 // NegativeFixture is exact desired-request evidence hydrated from a byte-
@@ -253,11 +285,63 @@ type NameVersion struct {
 	Version string `json:"version"`
 }
 
+// RuntimeContractProbe pins the exact ES Module Worker runtime ABI the lane
+// requires a host to implement (spec/decisions/0019). Unlike the display-only
+// support probes, it carries the exact schemaDigest: the whole point of the
+// contract is that "this host runs module workers" means one exact set of
+// handler signatures, environment rules, exception behavior, and Web APIs, and
+// only the digest says which set. UndefinedHandler is a handler token the
+// contract does NOT define, used to prove a host refuses one.
+type RuntimeContractProbe struct {
+	Name             string   `json:"name"`
+	Version          string   `json:"version"`
+	SchemaDigest     string   `json:"schemaDigest"`
+	Handlers         []string `json:"handlers"`
+	UndefinedHandler string   `json:"undefinedHandler"`
+}
+
+// defines reports whether the pinned contract vocabulary carries one handler.
+func (probe RuntimeContractProbe) defines(handler string) bool {
+	for _, candidate := range probe.Handlers {
+		if candidate == handler {
+			return true
+		}
+	}
+	return false
+}
+
+// exports reports whether the pinned module's default export exposes one
+// handler.
+func (probe ModuleBundleProbe) exports(handler string) bool {
+	for _, candidate := range probe.ExportedHandlers {
+		if candidate == handler {
+			return true
+		}
+	}
+	return false
+}
+
+// unexportedHandler names the first handler the pinned runtime vocabulary
+// defines that this module does NOT export — the one a Worker Version can
+// legally declare and no conforming host may store against this bundle. The
+// corpus proves one exists, so the empty string is unreachable from a verified
+// contract.
+func (probe ModuleBundleProbe) unexportedHandler(runtime RuntimeContractProbe) string {
+	for _, handler := range runtime.Handlers {
+		if !probe.exports(handler) {
+			return handler
+		}
+	}
+	return ""
+}
+
 // SupportProbes names the interface and binding support profiles the runner
-// must be able to read.
+// must be able to read, and pins the exact runtime ABI contract the ModuleWorker
+// Form must both provide and advertise.
 type SupportProbes struct {
-	Interface NameVersion `json:"interface"`
-	Binding   NameVersion `json:"binding"`
+	Interface       NameVersion          `json:"interface"`
+	Binding         NameVersion          `json:"binding"`
+	RuntimeContract RuntimeContractProbe `json:"runtimeContract"`
 }
 
 // RunnerInput is the pinned black-box input of one v3 conformance run.
@@ -269,6 +353,7 @@ type RunnerInput struct {
 	AtLeastOnceQueue     ResourceProbe     `json:"atLeastOnceQueue"`
 	WorkerVersion        ResourceProbe     `json:"workerVersion"`
 	WorkerBundle         WorkerBundleProbe `json:"workerBundle"`
+	FetchOnlyBundle      ModuleBundleProbe `json:"fetchOnlyBundle"`
 	WorkerDeployment     ResourceProbe     `json:"workerDeployment"`
 	WorkerCustomDomain   ResourceProbe     `json:"workerCustomDomain"`
 	WorkerCronTrigger    ResourceProbe     `json:"workerCronTrigger"`
@@ -414,10 +499,22 @@ func validateContract(contract Contract) error {
 	if len(input.AtLeastOnceQueue.Desired) == 0 {
 		return errors.New("portable host v3 queue probe desired must not be empty")
 	}
-	if err := validateWorkerVersionProbe(input); err != nil {
+	// The runtime contract is verified first, and the bundles before the version:
+	// what a version may declare is decided by the ABI vocabulary and by what the
+	// module it references exports, so neither answer may come from an unverified
+	// source.
+	if err := validateRuntimeContractProbe(input.SupportProbes.RuntimeContract); err != nil {
 		return err
 	}
-	if err := validateWorkerBundleProbe(input.WorkerBundle); err != nil {
+	if err := validateWorkerBundleProbe(input.WorkerBundle, input.SupportProbes.RuntimeContract); err != nil {
+		return err
+	}
+	if err := validateFetchOnlyBundleProbe(
+		input.FetchOnlyBundle, input.WorkerBundle, input.SupportProbes.RuntimeContract,
+	); err != nil {
+		return err
+	}
+	if err := validateWorkerVersionProbe(input); err != nil {
 		return err
 	}
 	if err := validateCrossResourceProbes(input); err != nil {
@@ -513,8 +610,17 @@ func validateWorkerVersionProbe(input RunnerInput) error {
 		resource["name"] != input.EdgeKvNamespace.Name {
 		return errors.New("portable host v3 workerVersion kvBinding must reference the edgeKvNamespace probe")
 	}
-	if value, _ := desired["compatibilityDate"].(string); value == "" {
-		return errors.New("portable host v3 workerVersion probe must pin a compatibilityDate")
+	// A version pins no runtime selector at all: there is no compatibilityDate
+	// and no compatibilityFlags in this lane, because a date names no behavior
+	// without a registry saying what each date changes (spec/decisions/0019).
+	// The runtime is the exact contract the ModuleWorker Form provides.
+	for _, removed := range []string{"compatibilityDate", "compatibilityFlags"} {
+		if _, present := desired[removed]; present {
+			return fmt.Errorf(
+				"portable host v3 workerVersion probe carries %s; the runtime is fixed by the exact %s contract, not a token",
+				removed, input.SupportProbes.RuntimeContract.Name,
+			)
+		}
 	}
 	// The version probe is what the deployment probe weights, and the
 	// deployment is what every attachment probe is admitted against
@@ -532,6 +638,63 @@ func validateWorkerVersionProbe(input RunnerInput) error {
 			)
 		}
 	}
+	// Every handler the corpus sends must be one the pinned runtime contract
+	// defines, or the corpus itself would be asking a conforming host to accept
+	// something the ABI does not describe.
+	runtime := input.SupportProbes.RuntimeContract
+	for handler := range declared {
+		if !runtime.defines(handler) {
+			return fmt.Errorf(
+				"portable host v3 workerVersion probe declares handler %q, which the pinned %s contract does not define",
+				handler, runtime.Name,
+			)
+		}
+	}
+	// And every handler it declares must be one the bundle it references
+	// actually exports. `loadModule` fails a declared-but-unexported handler
+	// with handler_not_exported before any traffic arrives, so a version pairing
+	// a declaration with a module that cannot answer it is a version NO
+	// conforming host may store — and a check driving it would fail exactly the
+	// hosts that implement the contract.
+	exported := map[string]bool{}
+	for _, handler := range input.WorkerBundle.ExportedHandlers {
+		exported[handler] = true
+	}
+	for handler := range declared {
+		if !exported[handler] {
+			return fmt.Errorf(
+				"portable host v3 workerVersion probe declares handler %q, which the module of bundle %q does not export",
+				handler, input.WorkerBundle.Name,
+			)
+		}
+	}
+	return nil
+}
+
+// validateRuntimeContractProbe proves the corpus pins a usable runtime ABI: an
+// exact digest to hold a host to, a non-empty handler vocabulary, and one
+// handler token OUTSIDE that vocabulary to drive the refusal check with. Without
+// the last one the check could not exist, because the vocabulary and the Form's
+// enum are the same set by construction.
+func validateRuntimeContractProbe(probe RuntimeContractProbe) error {
+	if probe.Name == "" || probe.Version == "" || !formpackage.ValidDigest(probe.SchemaDigest) {
+		return errors.New("portable host v3 runtime contract probe must pin an exact name, version, and schemaDigest")
+	}
+	if len(probe.Handlers) == 0 {
+		return errors.New("portable host v3 runtime contract probe must pin the ABI handler vocabulary")
+	}
+	seen := map[string]bool{}
+	for _, handler := range probe.Handlers {
+		if handler == "" || seen[handler] {
+			return errors.New("portable host v3 runtime contract handler vocabulary is invalid")
+		}
+		seen[handler] = true
+	}
+	if probe.UndefinedHandler == "" || seen[probe.UndefinedHandler] {
+		return errors.New(
+			"portable host v3 runtime contract probe must pin an undefinedHandler the contract does not define",
+		)
+	}
 	return nil
 }
 
@@ -546,46 +709,89 @@ func anyStringSlice(value any) []string {
 	return out
 }
 
-// validateWorkerBundleProbe proves the corpus states one bundle, once. The
-// desired state is exactly a manifest digest; the pinned manifest is the
-// document that digest addresses, and the module it declares is the pinned
-// moduleSource bytes. Recomputing the digest here is what makes the corpus
-// self-verifying: a manifest edited without re-deriving the digest, or a digest
-// copied from another bundle, fails to load rather than silently driving a run
-// against a resource nothing uploaded.
-func validateWorkerBundleProbe(probe WorkerBundleProbe) error {
-	if probe.ModuleSource == "" {
-		return errors.New("portable host v3 workerBundle probe moduleSource is empty")
+// validatePinnedModuleBundle proves one pinned bundle is internally exact and
+// returns the identity its manifest addresses. The pinned manifest declares
+// exactly the one module the pinned moduleSource bytes are, and its digest and
+// size are RE-DERIVED here rather than trusted: that is what makes the corpus
+// self-verifying, so a manifest edited without re-deriving the digest, or a
+// digest copied from another bundle, fails to load rather than silently driving
+// a run against a resource nothing uploaded.
+//
+// exportedHandlers is held to the pinned ABI vocabulary for the same reason the
+// version probe's declarations are: a module claiming to export something the
+// contract does not define describes a runtime no host implements.
+func validatePinnedModuleBundle(
+	label string, moduleSource string, manifestValue map[string]any,
+	exportedHandlers []string, runtime RuntimeContractProbe,
+) (string, error) {
+	if moduleSource == "" {
+		return "", fmt.Errorf("portable host v3 %s probe moduleSource is empty", label)
 	}
-	if probe.Manifest["apiVersion"] != artifactAPIVersion || probe.Manifest["kind"] != "WorkerBundle" {
-		return errors.New("portable host v3 workerBundle probe manifest identity is invalid")
+	if manifestValue["apiVersion"] != artifactAPIVersion || manifestValue["kind"] != "WorkerBundle" {
+		return "", fmt.Errorf("portable host v3 %s probe manifest identity is invalid", label)
 	}
-	if _, present := probe.Manifest["files"]; present {
-		return errors.New("portable host v3 workerBundle probe manifest must not carry files")
+	if _, present := manifestValue["files"]; present {
+		return "", fmt.Errorf("portable host v3 %s probe manifest must not carry files", label)
 	}
-	modules, _ := probe.Manifest["modules"].([]any)
+	modules, _ := manifestValue["modules"].([]any)
 	if len(modules) != 1 {
-		return errors.New("portable host v3 workerBundle probe manifest must declare exactly one module")
+		return "", fmt.Errorf("portable host v3 %s probe manifest must declare exactly one module", label)
 	}
 	module, _ := modules[0].(map[string]any)
 	if module == nil {
-		return errors.New("portable host v3 workerBundle probe module is invalid")
+		return "", fmt.Errorf("portable host v3 %s probe module is invalid", label)
 	}
-	mainModule, _ := probe.Manifest["mainModule"].(string)
+	mainModule, _ := manifestValue["mainModule"].(string)
 	if name, _ := module["name"].(string); mainModule == "" || name != mainModule {
-		return errors.New("portable host v3 workerBundle mainModule must name its one module")
+		return "", fmt.Errorf("portable host v3 %s mainModule must name its one module", label)
 	}
 	digest, _ := module["digest"].(string)
-	if digest != formpackage.DigestBytes([]byte(probe.ModuleSource)) {
-		return errors.New("portable host v3 workerBundle module digest does not match moduleSource bytes")
+	if digest != formpackage.DigestBytes([]byte(moduleSource)) {
+		return "", fmt.Errorf("portable host v3 %s module digest does not match moduleSource bytes", label)
 	}
 	size, ok := module["size"].(json.Number)
-	if !ok || size.String() != fmt.Sprintf("%d", len(probe.ModuleSource)) {
-		return errors.New("portable host v3 workerBundle module size does not match moduleSource bytes")
+	if !ok || size.String() != fmt.Sprintf("%d", len(moduleSource)) {
+		return "", fmt.Errorf("portable host v3 %s module size does not match moduleSource bytes", label)
 	}
-	manifestDigest, err := canonicalDigestOfValue(probe.Manifest)
+	if len(exportedHandlers) == 0 {
+		return "", fmt.Errorf("portable host v3 %s probe must state what its module exports", label)
+	}
+	seen := map[string]bool{}
+	for _, handler := range exportedHandlers {
+		if seen[handler] {
+			return "", fmt.Errorf("portable host v3 %s probe exportedHandlers repeats %q", label, handler)
+		}
+		seen[handler] = true
+		if !runtime.defines(handler) {
+			return "", fmt.Errorf(
+				"portable host v3 %s probe claims to export handler %q, which the pinned %s contract does not define",
+				label, handler, runtime.Name,
+			)
+		}
+	}
+	manifestDigest, err := canonicalDigestOfValue(manifestValue)
 	if err != nil {
-		return fmt.Errorf("portable host v3 workerBundle probe manifest: %w", err)
+		return "", fmt.Errorf("portable host v3 %s probe manifest: %w", label, err)
+	}
+	return manifestDigest, nil
+}
+
+// validateWorkerBundleProbe proves the corpus states one bundle, once, and that
+// it is the bundle the rest of the corpus can actually be driven against. The
+// desired state is exactly the manifest digest the pinned manifest addresses.
+//
+// Its module must export the WHOLE pinned vocabulary, because the positive
+// control of `undeclared-runtime-handler-rejected` is a Worker Version
+// declaring exactly that vocabulary against this bundle. A module exporting
+// less would make that control a version a conforming host MUST refuse, so the
+// check could never be completed by a host that implements the contract — a
+// required check no correct host can pass is worse than a missing one.
+func validateWorkerBundleProbe(probe WorkerBundleProbe, runtime RuntimeContractProbe) error {
+	manifestDigest, err := validatePinnedModuleBundle(
+		"workerBundle", probe.ModuleSource, probe.Manifest, probe.ExportedHandlers, runtime,
+	)
+	if err != nil {
+		return err
 	}
 	if len(probe.Desired) != 1 || probe.Desired["manifestDigest"] != manifestDigest {
 		return fmt.Errorf(
@@ -593,7 +799,60 @@ func validateWorkerBundleProbe(probe WorkerBundleProbe) error {
 			manifestDigest,
 		)
 	}
+	exported := map[string]bool{}
+	for _, handler := range probe.ExportedHandlers {
+		exported[handler] = true
+	}
+	for _, handler := range runtime.Handlers {
+		if !exported[handler] {
+			return fmt.Errorf(
+				"portable host v3 workerBundle module does not export %q; the lane's positive controls declare the whole %s vocabulary against it",
+				handler, runtime.Name,
+			)
+		}
+	}
 	return nil
+}
+
+// validateFetchOnlyBundleProbe proves the corpus carries a bundle that exports
+// STRICTLY LESS than the vocabulary, which is the only way the lane can drive a
+// declared-but-unexported handler at all. It borrows the workerBundle probe's
+// Form identity and desired shape, so only its name, bytes, manifest, and
+// exports are stated here — and its name must differ, or the two would be one
+// resource.
+func validateFetchOnlyBundleProbe(probe ModuleBundleProbe, bundle WorkerBundleProbe, runtime RuntimeContractProbe) error {
+	if !resourceNamePattern.MatchString(probe.Name) {
+		return errors.New("portable host v3 fetchOnlyBundle probe name is invalid")
+	}
+	if probe.Name == bundle.Name {
+		return errors.New("portable host v3 fetchOnlyBundle probe must name a resource of its own")
+	}
+	manifestDigest, err := validatePinnedModuleBundle(
+		"fetchOnlyBundle", probe.ModuleSource, probe.Manifest, probe.ExportedHandlers, runtime,
+	)
+	if err != nil {
+		return err
+	}
+	if probe.ManifestDigest != manifestDigest {
+		return fmt.Errorf(
+			"portable host v3 fetchOnlyBundle probe manifestDigest must be exactly %s",
+			manifestDigest,
+		)
+	}
+	exported := map[string]bool{}
+	for _, handler := range probe.ExportedHandlers {
+		exported[handler] = true
+	}
+	for _, handler := range runtime.Handlers {
+		if !exported[handler] {
+			return nil
+		}
+	}
+	return fmt.Errorf(
+		"portable host v3 fetchOnlyBundle module exports the whole %s vocabulary; "+
+			"the lane needs one handler it does NOT export to drive handler_not_exported",
+		runtime.Name,
+	)
 }
 
 // canonicalDigestOfValue is the RFC 8785 identity of one decoded JSON

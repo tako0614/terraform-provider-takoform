@@ -175,3 +175,94 @@ func TestVerifyRejectsTamperedFixtureBytes(t *testing.T) {
 		t.Fatalf("expected fixture digest drift, got %v", err)
 	}
 }
+
+// TestVerifyRejectsABundleThatDoesNotExportTheVocabulary is the corpus half of
+// the ES Module Worker ABI's handler rule.
+//
+// The lane's positive control for `undeclared-runtime-handler-rejected` is a
+// Worker Version declaring the WHOLE handler vocabulary, driven against the
+// workerBundle probe. If that bundle's module exported less, the same contract
+// that closes the handler surface would require a conforming host to refuse the
+// control (`handler_not_exported`), so the required check could be completed
+// only by a host that does NOT implement the contract. A required check no
+// correct host can pass is worse than a missing one, so the corpus refuses to
+// load rather than shipping the incoherence.
+func TestVerifyRejectsABundleThatDoesNotExportTheVocabulary(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		probe string
+		want  string
+	}{
+		{"the corpus bundle exports less than the vocabulary", "workerBundle", "does not export"},
+		{"the fetch-only bundle exports all of it", "fetchOnlyBundle", "exports the whole"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			root := t.TempDir()
+			copyCorpus(t, root)
+			repinCorpus(t, root, func(input map[string]json.RawMessage) {
+				bundle := map[string]json.RawMessage{}
+				if err := json.Unmarshal(input[testCase.probe], &bundle); err != nil {
+					t.Fatal(err)
+				}
+				exported := []byte(`["fetch"]`)
+				if testCase.probe == "fetchOnlyBundle" {
+					exported = []byte(`["fetch","scheduled","queue","tail"]`)
+				}
+				bundle["exportedHandlers"] = exported
+				drifted, err := json.Marshal(bundle)
+				if err != nil {
+					t.Fatal(err)
+				}
+				input[testCase.probe] = drifted
+			})
+			if _, err := Verify(root); err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("expected %q, got %v", testCase.want, err)
+			}
+		})
+	}
+}
+
+// repinCorpus rewrites one copied corpus's runnerInput and re-pins the manifest
+// digest over the result, so a test reaches the rule it is about rather than
+// the byte-digest gate in front of it.
+func repinCorpus(t *testing.T, root string, mutate func(input map[string]json.RawMessage)) {
+	t.Helper()
+	contractPath := filepath.Join(root, "contract.json")
+	raw, err := os.ReadFile(contractPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	var input map[string]json.RawMessage
+	if err := json.Unmarshal(document["runnerInput"], &input); err != nil {
+		t.Fatal(err)
+	}
+	mutate(input)
+	drifted, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document["runnerInput"] = drifted
+	updated, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(contractPath, updated, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(updated)
+	manifestRaw, err := json.Marshal(map[string]string{
+		"format":   ManifestFormat,
+		"contract": "contract.json",
+		"sha256":   hex.EncodeToString(digest[:]),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "manifest.json"), manifestRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

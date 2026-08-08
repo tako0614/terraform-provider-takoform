@@ -14,9 +14,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "ModuleWorker",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:0a59a32673c52a2d1eae30049931c3e925b87bb44cfa73c7c76227a944148044"
+        "schemaDigest": "sha256:cbe2b60608d9ebdbbcc22e097f776c6c1eedaaeed59ba80a3967cdce4652a27b"
       },
-      "packageDigest": "sha256:a3ae17610a156bf6ba169f773cb881701dd6f9ff3fffb53a58e9a4a1ab2e52ca"
+      "packageDigest": "sha256:834035635ae7aad061671437541e9add0454dc11aff7e3cc6e1134d2f0747331"
     },
     {
       "kind": "WorkerBundle",
@@ -38,9 +38,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerVersion",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:2408d78fa812a2d565d9964c68ffd59f034cc57cf23d6fb9db3a468477ee553c"
+        "schemaDigest": "sha256:ed257c07584aa62083a20587ab008dd89c6c65f2f9ea4a67df385d57704d244f"
       },
-      "packageDigest": "sha256:4a090527f0a1189dd4a873dd8198964e51189aa2a45f8c39ff9e6ae4d51a15e7"
+      "packageDigest": "sha256:d4935fd3e391f626dca262db01a55d04c12e34e31eee14154ac8e0cb5e864c77"
     },
     {
       "kind": "WorkerDeployment",

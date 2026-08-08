@@ -53,13 +53,31 @@ type bindingSpec struct {
 	operations  []string // empty projects every interface operation
 }
 
+// Every binding description states the JAVASCRIPT SURFACE the binding projects,
+// not only which Interface operations it grants. A binding that names
+// operations without saying what the caller actually calls leaves the consumer
+// guessing the method names, the argument types, the return types, and what a
+// failure looks like — which is the same incompleteness decision 0008 forbids
+// in a Form. The Binding Definition meta-schema admits `runtimeProjection`
+// (operations and access modes) and a `description`, so the projection prose
+// lives in the description, per decision 0014's placement rule.
+//
+// The `env` object these names land in, and the rule that nothing else portable
+// appears there, are fixed by the worker.runtime contract (decision 0019).
 var bindingSpecs = []bindingSpec{
 	{
 		name:  "module-worker.edge-kv",
 		title: "Module Worker edge KV binding",
 		description: "Projects the complete edge.kv runtime API into a Worker Version under one " +
 			"JavaScript-identifier binding name. The binding grants capability and API together; " +
-			"no credential or endpoint ever reaches the consumer.",
+			"no credential or endpoint ever reaches the consumer. " +
+			"Runtime surface: env.NAME is an object with the methods get(key), getWithMetadata(key), " +
+			"put(key, value, options?), delete(key), and list(options?). Keys and values are strings; " +
+			"options and results are the exact input and output documents of the matching edge.kv " +
+			"operation. Every method returns a promise. get resolves to null for an absent key rather " +
+			"than rejecting, which is how the interface's not_found outcome appears in JavaScript; every " +
+			"other error rejects with an Error whose name is the edge.kv error code. Reads are eventually " +
+			"consistent: a get after a put may resolve to the previous value until replication converges.",
 		iface:      "edge.kv",
 		targetKind: "EdgeKVNamespace",
 	},
@@ -67,7 +85,15 @@ var bindingSpecs = []bindingSpec{
 		name:  "module-worker.object-bucket",
 		title: "Module Worker object bucket binding",
 		description: "Projects the complete edge.objects runtime API into a Worker Version under one " +
-			"JavaScript-identifier binding name, without exposing credentials or endpoints.",
+			"JavaScript-identifier binding name, without exposing credentials or endpoints. " +
+			"Runtime surface: env.NAME is an object with the methods get(key), head(key), " +
+			"put(key, body, options?), delete(key), and list(options?), each returning a promise. " +
+			"Object bodies STREAM: put accepts a ReadableStream, an ArrayBuffer, or a string, and get " +
+			"resolves to an object whose body is a ReadableStream the handler may consume incrementally " +
+			"— a conforming host never requires the whole object in memory. get and head resolve to null " +
+			"for an absent key; a failed conditional put rejects with an Error named precondition_failed, " +
+			"and every other error rejects with an Error named for its edge.objects code. A get or head " +
+			"after a successful put observes that put.",
 		iface:      "edge.objects",
 		targetKind: "ObjectBucket",
 	},
@@ -75,7 +101,14 @@ var bindingSpecs = []bindingSpec{
 		name:  "module-worker.sqlite",
 		title: "Module Worker SQLite binding",
 		description: "Projects the complete edge.sql runtime API into a Worker Version under one " +
-			"JavaScript-identifier binding name, without exposing credentials or connection material.",
+			"JavaScript-identifier binding name, without exposing credentials or connection material. " +
+			"Runtime surface: env.NAME is an object with the methods execute(sql, params?), " +
+			"query(sql, params?), and transaction(statements), each returning a promise. params is an " +
+			"array of boolean, null, number, or string bound positionally; query resolves to the rows " +
+			"document of edge.sql, execute to its write result, and transaction to the ordered result " +
+			"list. Statements apply atomically under serializable isolation, so a rejected transaction " +
+			"has applied nothing. Errors reject with an Error whose name is the edge.sql error code; " +
+			"busy is the retryable one, and a caller that means to retry must re-run the whole call.",
 		iface:      "edge.sql",
 		targetKind: "SQLiteDatabase",
 	},
@@ -83,7 +116,14 @@ var bindingSpecs = []bindingSpec{
 		name:  "module-worker.queue-producer",
 		title: "Module Worker queue producer binding",
 		description: "Projects only the submission half of edge.queue (send, sendBatch) into a Worker " +
-			"Version. Consumption is never a binding: it is the QueueConsumer attachment resource.",
+			"Version. Consumption is never a binding: it is the QueueConsumer attachment resource. " +
+			"Runtime surface: env.NAME is an object with exactly the methods send(body, options?) and " +
+			"sendBatch(messages), each returning a promise that resolves to the message identity or " +
+			"identities the host assigned. There is no receive, no acknowledge, and no peek: those names " +
+			"do not exist on this binding, because the consuming half arrives as the module's queue " +
+			"handler instead. A resolved send means accepted, not delivered — delivery is at-least-once " +
+			"and unordered, so the consumer may see duplicates. Errors reject with an Error named for " +
+			"the edge.queue code.",
 		iface:      "edge.queue",
 		targetKind: "AtLeastOnceQueue",
 		operations: []string{"send", "sendBatch"},
@@ -92,7 +132,17 @@ var bindingSpecs = []bindingSpec{
 		name:  "module-worker.service",
 		title: "Module Worker service binding",
 		description: "Projects the worker.service fetch operation into a Worker Version, addressing " +
-			"another Module Worker by logical identity without any network endpoint.",
+			"another Module Worker by logical identity without any network endpoint. " +
+			"Runtime surface: env.NAME.fetch(request) takes a Request (or a URL string with an optional " +
+			"init object, exactly like the global fetch) and returns a Promise<Response>. Request and " +
+			"response bodies STREAM in both directions; neither side is buffered before the call is made. " +
+			"The call is dispatched to whichever Worker Versions the target's active Worker Deployment " +
+			"selects, and never leaves the host, so no DNS name, URL, or credential is involved and the " +
+			"request host name carries no routing meaning. An UNCAUGHT exception in the callee's fetch " +
+			"handler is the callee's host-generated 500 response: this promise RESOLVES with that " +
+			"response rather than rejecting, so a caller distinguishes callee failure by status, not by " +
+			"catch. The promise rejects only when the call could not be made at all, with an Error named " +
+			"backend_unavailable. A response reflects every effect the callee completed before responding.",
 		iface:      "worker.service",
 		targetKind: "ModuleWorker",
 	},

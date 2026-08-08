@@ -105,7 +105,7 @@ func TestMalformedDefaultsAreRejected(t *testing.T) {
 			name: "set item outside the declared enum",
 			field: Field{
 				HCL: "flags", Wire: "flags", Kind: KindStringSet,
-				Enum: []string{"nodejs_compat"}, Default: []any{"python_compat"}, Doc: "Flags.",
+				Enum: []string{"declared_flag"}, Default: []any{"undeclared_flag"}, Doc: "Flags.",
 			},
 			want: "outside the declared enum",
 		},
@@ -188,7 +188,7 @@ func materializeForm() Form {
 		},
 		Field{
 			HCL: "flags", Wire: "flags", Kind: KindStringSet,
-			Enum: []string{"nodejs_compat"}, Default: []any{}, Doc: "Flags.",
+			Enum: []string{"declared_flag"}, Default: []any{}, Doc: "Flags.",
 		},
 		Field{
 			HCL: "vars", Wire: "vars", Kind: KindJSONMap,

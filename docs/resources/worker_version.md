@@ -7,7 +7,7 @@ description: |-
 
 # takoform_worker_version
 
-Immutable executable snapshot of one Module Worker: a bundle, a runtime compatibility date, declared handlers, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments.
+Immutable executable snapshot of one Module Worker: a bundle, the handlers its module exports, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is not a field of this Form: it is fixed by the worker.runtime@1.0.0 contract the Module Worker identity provides, so a version carries no compatibility date and no compatibility flag (decision 0019).
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
@@ -21,9 +21,7 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 - `name` (String, required, forces replacement) — Portable resource name (`metadata.name`).
 - `worker` (String, required, forces replacement) — Module Worker identity this version belongs to. Set the name of the target `ModuleWorker` resource.
 - `bundle` (String, required, forces replacement) — Worker Bundle carrying the exact module bytes this version executes. Set the name of the target `WorkerBundle` resource.
-- `compatibility_date` (String, required, forces replacement) — Runtime compatibility date fixing default runtime behavior for this version.
-- `compatibility_flags` (Set of String, optional, forces replacement) — Closed runtime compatibility flags enabled for this version. Omitting it enables no flag. One of `nodejs_compat`. Defaults to the empty list `[]`.
-- `handlers` (Set of String, required, forces replacement) — Module event handlers this version exports. A host rejects an attachment whose event kind is not declared here. One of `fetch`, `scheduled`, `queue`, `tail`.
+- `handlers` (Set of String, required, forces replacement) — Module event handlers this version exports, from the closed vocabulary the worker.runtime@1.0.0 contract defines. A host rejects a handler that contract does not define, and rejects an attachment whose event kind is not declared here. One of `fetch`, `scheduled`, `queue`, `tail`.
 - `vars_json` (String, optional, forces replacement) — Non-secret configuration values projected into the module environment. Sensitive material never enters portable state. Omitting it projects no variable. Authored as one JSON object string (for example `jsonencode({...})`); the provider sends the parsed object. Defaults to the empty object `{}`.
 - `kv_bindings` (List of Object, optional, forces replacement) — Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `EdgeKVNamespace` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `bucket_bindings` (List of Object, optional, forces replacement) — Typed module-worker.object-bucket bindings projecting the edge.objects API. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `ObjectBucket` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.

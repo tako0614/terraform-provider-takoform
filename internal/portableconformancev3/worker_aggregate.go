@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
@@ -31,6 +32,10 @@ const (
 	// relation pointer and the instance pointer, because no array stands
 	// between the spec root and the reference.
 	workerRelationPointer = "/worker"
+	// bundleRelationPointer is the concrete instance pointer of the `/bundle`
+	// reference a Worker Version declares: the ONE edge from a version to the
+	// immutable code it runs.
+	bundleRelationPointer = "/bundle"
 	// deploymentVersionsRelation is the DERIVED relation pointer of a
 	// deployment's weighted versions; concrete instances carry array indices,
 	// which is why lookups match on Relation rather than Pointer.
@@ -43,6 +48,20 @@ const (
 	fetchHandler     = "fetch"
 	scheduledHandler = "scheduled"
 	queueHandler     = "queue"
+
+	// The exact runtime ABI a ModuleWorker provides (spec/decisions/0019,
+	// spec/interface-contract/). A host reads the handler vocabulary out of the
+	// contract at this exact name rather than keeping a handler list of its
+	// own, so widening the enum is a contract change with a new digest and not
+	// a quiet host decision. The Interface name grammar admits no hyphen, which
+	// is why the contract is `worker.runtime` and only the BINDING namespace
+	// carries the hyphenated `module-worker.` prefix.
+	workerRuntimeInterface = "worker.runtime"
+	// runtimeHandlerOperation and runtimeHandlerProperty locate that
+	// vocabulary: the item enum of the loadModule operation's declaredHandlers
+	// property is the closed handler set of the ABI.
+	runtimeHandlerOperation = "loadModule"
+	runtimeHandlerProperty  = "declaredHandlers"
 
 	// varsProperty and sensitiveVarsProperty are the two Worker Version
 	// properties that project names into the module environment without being
@@ -215,6 +234,9 @@ func (h *ReferenceHost) validateWorkerAggregate(
 	case workerDeploymentKind:
 		return h.validateWorkerDeployment(space, name, relations)
 	case workerVersionKind:
+		if hostErr := h.exportedHandlerViolation(form, space, spec, relations); hostErr != nil {
+			return hostErr
+		}
 		return h.validateInboundServiceBindings(space, relations)
 	}
 	if handler, attachment := attachmentHandler[form.Ref.Kind]; attachment {
@@ -472,6 +494,205 @@ func (h *ReferenceHost) workerServiceUnavailable(resource *storedResource) (reas
 		"WorkerDeployment " + deployment.Name + " does not serve the fetch handler for ModuleWorker " +
 			resource.Name + " at uid " + resource.UID + "; " + detail,
 		true
+}
+
+// ---- runtime ABI ----
+
+// runtimeContract resolves the exact ES Module Worker runtime ABI this host
+// implements: the contract the installed ModuleWorker Form Definition declares
+// in providedInterfaces, held at the exact digest the host installed. It
+// returns false when the lane's ModuleWorker Form declares no runtime contract
+// at all, which is only the minimal in-memory FallbackCatalog used by targeted
+// unit tests; the real LoadCatalog always installs it.
+func (h *ReferenceHost) runtimeContract() (interfaceContract, bool) {
+	worker := h.catalog.form(edgeFormsGroup, moduleWorkerKind)
+	if worker == nil {
+		return interfaceContract{}, false
+	}
+	for _, provided := range worker.ProvidedInterfaces {
+		if provided.Name != workerRuntimeInterface {
+			continue
+		}
+		contract, installed := h.catalog.interfaceContractByName(provided.Name, provided.Version)
+		if !installed || contract.Ref.SchemaDigest != provided.SchemaDigest {
+			return interfaceContract{}, false
+		}
+		return contract, true
+	}
+	return interfaceContract{}, false
+}
+
+// declaredHandlerViolation reports why one Worker Version's declared handlers
+// are not the runtime ABI's, or "" when they are.
+//
+// `handlers` is the surface a host attaches inward activation to, and the ABI
+// is what says which handlers exist at all: fetch, scheduled, queue, and tail,
+// each with a fixed signature (spec/decisions/0019). Accepting anything else
+// would store a version claiming an entry point no conforming runtime can
+// invoke, and would let one host attach events to it while another could not —
+// the divergence the exact contract exists to close.
+//
+// The vocabulary is read out of the INSTALLED CONTRACT, never out of a list the
+// host keeps: a host that widened its handler set would have to publish a
+// different runtime contract at a different digest, which the
+// module-worker-runtime-contract-advertised check reads back. That is also why
+// the rule is not left to the Form's `handlers` enum: the enum is a structural
+// minimum derived from this contract, and a host whose installed schema drifted
+// laxer must still refuse (decision 0014).
+//
+// It is a property of the spec ALONE — no other resource has to resolve — so it
+// is reported as a desired-spec diagnostic and therefore reaches the advisory
+// `validate` surface, the binding `prepare` surface, and `apply` alike. A client
+// learns the version is unrunnable while planning, not after a failed apply.
+func (h *ReferenceHost) declaredHandlerViolation(form *installedForm, spec map[string]any) string {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+		return ""
+	}
+	contract, installed := h.runtimeContract()
+	if !installed || len(contract.Handlers) == 0 {
+		return ""
+	}
+	defined := map[string]bool{}
+	for _, handler := range contract.Handlers {
+		defined[handler] = true
+	}
+	declared, _ := spec["handlers"].([]any)
+	for _, item := range declared {
+		handler, _ := item.(string)
+		if defined[handler] {
+			continue
+		}
+		return "WorkerVersion declares handler " + strconv.Quote(handler) + ", which the runtime contract " +
+			contract.Ref.Name + "@" + contract.Ref.Version + " (" + contract.Ref.SchemaDigest + ") does not define; " +
+			"the ABI defines exactly " + strings.Join(contract.Handlers, ", ")
+	}
+	return ""
+}
+
+// validateDeclaredHandlers is the mutation-path form of the same rule. It is
+// deliberately redundant with the diagnostic: import and the asynchronous commit
+// re-derive every precondition here, long after the diagnostics of the accepting
+// request were computed.
+func (h *ReferenceHost) validateDeclaredHandlers(form *installedForm, spec map[string]any) *hostError {
+	if violation := h.declaredHandlerViolation(form, spec); violation != "" {
+		return stableError("invalid_argument", violation)
+	}
+	return nil
+}
+
+// exportedHandlerViolation refuses a Worker Version declaring a handler the
+// module it actually runs does not export.
+//
+// The `worker.runtime` contract is explicit that this fails the VERSION rather
+// than a request: `loadModule` answers `handler_not_exported` before any traffic
+// arrives, so a stored version in this state is code that can never serve, and
+// the attachment gate would go on admitting a cron trigger or a queue consumer
+// against a handler that does not exist. The refusal is `invalid_argument`
+// because, exactly like the deployment-integrity rules, the request is well
+// formed and states something untrue about what will run.
+//
+// It is a CROSS-RESOURCE rule, not a spec-shape one: the answer lives in the
+// version's `/bundle` relation, in the manifest that bundle's digest addresses,
+// and in the bytes of that manifest's main module. It therefore runs where
+// every other relation-reading rule runs — before any mutation on apply and on
+// import alike, and again when a 202 commits — and not on the advisory
+// `validate` surface, which resolves nothing.
+//
+// What a module exports is a fact about JavaScript, and this reference host
+// executes none: it holds the map from a module's content address to the
+// handlers that module's default export exposes, declared by the corpus that
+// pinned those exact bytes. A real host derives the same fact by loading the
+// module into an isolate, which is the only general way to know it. A module
+// whose bytes this host was never told about is therefore NOT refused — the
+// reference host answers only about code it knows, and never guesses. That
+// boundary is why the lane proves the refusal for a pinned bundle rather than
+// claiming to prove it for every possible one; see spec/host-api/v1alpha3.md.
+func (h *ReferenceHost) exportedHandlerViolation(
+	form *installedForm, space string, spec map[string]any, relations []storedRelation,
+) *hostError {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+		return nil
+	}
+	exported, known := h.bundleModuleExports(space, relations)
+	if !known {
+		return nil
+	}
+	exports := map[string]bool{}
+	for _, handler := range exported {
+		exports[handler] = true
+	}
+	for _, item := range anyStringSlice(spec["handlers"]) {
+		if exports[item] {
+			continue
+		}
+		return stableError("invalid_argument",
+			"WorkerVersion declares handler "+strconv.Quote(item)+
+				", which the main module of the WorkerBundle it references does not export; "+
+				"that module exports exactly "+strings.Join(exported, ", ")+
+				", and the runtime contract fails a declared handler the module does not export "+
+				"(handler_not_exported) before any traffic arrives")
+	}
+	return nil
+}
+
+// bundleModuleExports resolves what the main module of the bundle one Worker
+// Version references exports, and reports whether this host knows at all.
+//
+// Every step is a fact the host already holds: the relation the apply just
+// resolved pins the bundle INCARNATION, the bundle's desired state is the
+// manifest digest, the committed manifest names its main module, and that
+// module entry carries the content address of the bytes. Nothing is read from
+// the version's spec but the relation it produced, so a renamed or replaced
+// bundle is a different answer rather than the same one.
+func (h *ReferenceHost) bundleModuleExports(space string, relations []storedRelation) ([]string, bool) {
+	bundleUID := relationTargetUID(relations, bundleRelationPointer)
+	if bundleUID == "" {
+		return nil, false
+	}
+	var bundle *storedResource
+	for _, relation := range relations {
+		if relation.Pointer != bundleRelationPointer {
+			continue
+		}
+		bundle = h.resources[resourceKey(space, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
+	}
+	if bundle == nil || bundle.UID != bundleUID {
+		return nil, false
+	}
+	manifestDigest, _ := bundle.Spec["manifestDigest"].(string)
+	raw := h.manifests[manifestDigest]
+	if raw == nil {
+		return nil, false
+	}
+	var manifest artifactManifest
+	if err := formpackage.DecodeStrictIJSON(raw, &manifest); err != nil {
+		return nil, false
+	}
+	for _, module := range manifest.Modules {
+		if module.Name != manifest.MainModule {
+			continue
+		}
+		exported, known := h.moduleExports[module.Digest]
+		return exported, known
+	}
+	return nil, false
+}
+
+// desiredSchemaEnum reads the item enum of one top-level string-array property
+// of a desired schema. It is the profile's last resort when no runtime contract
+// is installed; it never overrides one.
+func desiredSchemaEnum(schema map[string]any, property string) []string {
+	properties, _ := schema["properties"].(map[string]any)
+	node, _ := properties[property].(map[string]any)
+	items, _ := node["items"].(map[string]any)
+	values, _ := items["enum"].([]any)
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if text, ok := value.(string); ok {
+			out = append(out, text)
+		}
+	}
+	return out
 }
 
 // ---- environment namespace ----

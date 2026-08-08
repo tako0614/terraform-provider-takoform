@@ -17,8 +17,6 @@ resource "takoform_worker_version" "example" {
   name                    = "worker-version"
   worker                  = "module-worker"
   bundle                  = "worker-bundle"
-  compatibility_date      = "2026-08-06"
-  compatibility_flags     = ["nodejs_compat"]
   handlers                = ["fetch"]
   vars_json               = jsonencode({ "LOG_LEVEL" = "info" })
   required_sensitive_vars = ["API_SIGNING_TOKEN_NAME"]

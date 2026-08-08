@@ -55,8 +55,8 @@ func TestProjectsEnvironmentNamesIsBoundedToNameCarryingKinds(t *testing.T) {
 		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
 		Role: RoleRevision, Title: "Worker Version", DefinitionVersion: "0.1.0",
 		Fields: []Field{{
-			HCL: "compatibility_date", Wire: "compatibilityDate", Kind: KindDateString,
-			Required: true, Doc: "Runtime compatibility date.", Example: "2026-08-06",
+			HCL: "activation_date", Wire: "activationDate", Kind: KindDateString,
+			Required: true, Doc: "A calendar date, which names nothing in a runtime environment.", Example: "2026-08-06",
 			ProjectsEnvironmentNames: true,
 		}},
 	}

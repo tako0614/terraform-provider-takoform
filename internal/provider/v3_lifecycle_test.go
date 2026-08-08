@@ -630,11 +630,10 @@ func TestV3WorkerVersionBindingBlocksUseResourceWireKey(t *testing.T) {
 
 	bindingType := v3BindingObjectType()
 	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-		"name":               types.StringValue("worker-version"),
-		"worker":             types.StringValue("module-worker"),
-		"bundle":             types.StringValue("worker-bundle"),
-		"compatibility_date": types.StringValue("2026-08-06"),
-		"handlers":           types.SetValueMust(types.StringType, []attr.Value{types.StringValue("fetch")}),
+		"name":     types.StringValue("worker-version"),
+		"worker":   types.StringValue("module-worker"),
+		"bundle":   types.StringValue("worker-bundle"),
+		"handlers": types.SetValueMust(types.StringType, []attr.Value{types.StringValue("fetch")}),
 		"kv_bindings": types.ListValueMust(bindingType, []attr.Value{
 			types.ObjectValueMust(bindingType.AttrTypes, map[string]attr.Value{
 				"name":        types.StringValue("CACHE"),

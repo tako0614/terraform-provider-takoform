@@ -38,6 +38,19 @@ A Binding Definition fixes, as data only:
   time, described against the target Interface's operations, including
   which operations the binding exposes (`accessModes` when the binding
   supports restricted modes);
+- `description`: the concrete surface the consumer's code actually calls. A
+  list of operation names is not a runtime API — it does not say what the
+  caller writes, what it passes, what it gets back, what a callee failure looks
+  like, or whether a body streams. Every Binding Definition in the Edge Platform
+  Family therefore states its projection in prose: `module-worker.service`
+  projects `env.NAME.fetch(request) -> Promise<Response>`, streaming in both
+  directions, resolving (not rejecting) with the callee's host-generated 500
+  when the callee's handler throws, and rejecting only when the call could not
+  be made; the KV, bucket, SQLite, and queue-producer bindings state their
+  method names, argument and result types, and how each interface error code
+  appears in JavaScript. The meta-schema's `runtimeProjection` admits operation
+  names only, so this belongs in `description`
+  ([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md));
 - `bindingNameGrammar`: the grammar for instance names declared by the
   consumer. Worker-family bindings use the JavaScript identifier grammar
   `^[A-Za-z_$][A-Za-z0-9_$]*$`; `.` and `-` are invalid there;
@@ -75,6 +88,11 @@ A consumer resource declares instances as typed data. The wire shape is a
   credential. Sensitive-variable requirements are declared as named slots
   (`requiredSensitiveVars` on a worker version) and satisfied by
   host/operator-owned bindings.
+- The object these names land in is fixed by the consumer's runtime ABI, not by
+  the Binding: for the worker family, `worker.runtime@1.0.0` states that `env`
+  carries exactly the declared binding names, vars keys, and sensitive-variable
+  slots, and nothing else portable
+  ([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 - Cross-space targets are unrepresentable, as in the retained lanes.
 
 ## Which Binding a list carries

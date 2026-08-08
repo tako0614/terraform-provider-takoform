@@ -75,6 +75,11 @@ func (r *v3Runner) run() error {
 		r.checkDeploymentWeightSum,
 		r.checkDeploymentIntegrity,
 		r.checkHandlerGatedAttachments,
+		// The ABI closes the handler surface those attachments are gated on
+		// (spec/decisions/0019): first by vocabulary, then by what the code a
+		// version actually runs exports.
+		r.checkUndeclaredRuntimeHandlerRejected,
+		r.checkDeclaredHandlerNotExportedRejected,
 		r.checkBindingNameCollision,
 		r.checkDeploymentChangePreservesDependents,
 		r.checkDeploymentDeleteBlockedByDependent,
@@ -96,6 +101,7 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkAsyncCommitRevalidates(kv, version) },
 		func() error { return r.checkCrossSpace(kv) },
 		r.checkSupportProfiles,
+		r.checkRuntimeContractAdvertised,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -2035,7 +2041,10 @@ func (r *v3Runner) checkNoUpdateSpecChangeRejected(target probeTarget) error {
 	}
 	changed := target
 	changed.Spec = cloneJSONMap(target.Spec)
-	changed.Spec["compatibilityFlags"] = []any{"nodejs_compat"}
+	// Any portable spec change will do; `vars` is chosen because it is optional,
+	// defaulted, and touches no relation, so the refusal is unambiguously about
+	// the missing update capability and not about a dangling reference.
+	changed.Spec["vars"] = map[string]any{"LOG_LEVEL": "debug"}
 	response, err := r.apply(changed, applyOptions{
 		ExpectedGeneration: before.Metadata.Generation,
 		IdempotencyKey:     "key-no-update-spec-change",
@@ -2622,7 +2631,7 @@ func (r *v3Runner) checkSupportProfiles() error {
 	if workerVersionProfile == nil {
 		return errors.New("support profiles omit the WorkerVersion line")
 	}
-	if err := verifyWorkerVersionProfile(workerVersionProfile); err != nil {
+	if err := verifyWorkerVersionProfile(workerVersionProfile, r.contract.RunnerInput.SupportProbes.RuntimeContract); err != nil {
 		return err
 	}
 	version := r.contract.RunnerInput.WorkerVersion.Identity.FormRef
@@ -2642,7 +2651,7 @@ func (r *v3Runner) checkSupportProfiles() error {
 	if err := decodeStrictResponse(oneResponse, &one); err != nil {
 		return err
 	}
-	if err := verifyWorkerVersionProfile(one); err != nil {
+	if err := verifyWorkerVersionProfile(one, r.contract.RunnerInput.SupportProbes.RuntimeContract); err != nil {
 		return err
 	}
 	probes := r.contract.RunnerInput.SupportProbes
@@ -2682,38 +2691,44 @@ func (r *v3Runner) checkSupportProfiles() error {
 	return nil
 }
 
-func verifyWorkerVersionProfile(profile map[string]any) error {
+// verifyWorkerVersionProfile holds a host's WorkerVersion support profile to
+// the runtime ABI contract rather than to a runtime selector.
+//
+// The advertised handler enum must be EXACTLY the handler vocabulary the pinned
+// worker.runtime contract defines: a host that supports more handlers than the
+// ABI describes, or fewer, is not implementing that contract. And the profile
+// must carry no compatibility date or flag at all — those were removed from the
+// lane because a date is meaningless without a registry stating which behavior
+// each date changes, so a profile that still advertises one is advertising
+// portability it cannot deliver (spec/decisions/0019).
+func verifyWorkerVersionProfile(profile map[string]any, runtime RuntimeContractProbe) error {
 	enums, _ := profile["supportedEnums"].(map[string]any)
 	if enums == nil {
 		return errors.New("WorkerVersion profile omitted supportedEnums")
 	}
-	if !stringSliceEquals(enums["compatibilityFlags"], []string{"nodejs_compat"}) {
-		return fmt.Errorf("WorkerVersion supportedEnums.compatibilityFlags = %v", enums["compatibilityFlags"])
+	if !stringSliceEquals(enums["handlers"], runtime.Handlers) {
+		return fmt.Errorf(
+			"WorkerVersion supportedEnums.handlers = %v, want the %s@%s vocabulary %v",
+			enums["handlers"], runtime.Name, runtime.Version, runtime.Handlers,
+		)
 	}
-	if !stringSliceEquals(enums["handlers"], []string{"fetch", "scheduled", "queue", "tail"}) {
-		return fmt.Errorf("WorkerVersion supportedEnums.handlers = %v", enums["handlers"])
+	if _, present := enums["compatibilityFlags"]; present {
+		return errors.New(
+			"WorkerVersion supportedEnums advertises compatibilityFlags; the lane has no compatibility flag",
+		)
 	}
 	ranges, _ := profile["supportedRanges"].(map[string]any)
-	compatibilityDate, _ := rangesMember(ranges, "compatibilityDate")
-	if compatibilityDate["minimum"] != "2024-01-01" || compatibilityDate["maximum"] != "2026-08-06" {
-		return fmt.Errorf("WorkerVersion supportedRanges.compatibilityDate = %v", compatibilityDate)
+	if _, present := ranges["compatibilityDate"]; present {
+		return errors.New(
+			"WorkerVersion supportedRanges advertises a compatibilityDate range; the runtime is the exact " +
+				runtime.Name + " contract, not a date",
+		)
 	}
 	limits, _ := profile["limits"].(map[string]any)
 	if limits == nil || fmt.Sprintf("%v", limits["maximumBundleBytes"]) != "10485760" {
 		return fmt.Errorf("WorkerVersion limits = %v", limits)
 	}
 	return nil
-}
-
-func rangesMember(ranges map[string]any, name string) (map[string]any, bool) {
-	if ranges == nil {
-		return map[string]any{}, false
-	}
-	member, ok := ranges[name].(map[string]any)
-	if !ok {
-		return map[string]any{}, false
-	}
-	return member, true
 }
 
 func stringSliceEquals(value any, want []string) bool {

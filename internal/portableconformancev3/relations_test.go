@@ -50,10 +50,9 @@ func relationFixture(t *testing.T) (*ReferenceHost, Contract, *storedResource, *
 
 func relationVersionSpec(group, kvName string) map[string]any {
 	return map[string]any{
-		"worker":            map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
-		"bundle":            map[string]any{"apiVersion": group, "kind": "WorkerBundle", "name": "worker-bundle-probe"},
-		"compatibilityDate": "2026-01-01",
-		"handlers":          []any{"fetch"},
+		"worker":   map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"},
+		"bundle":   map[string]any{"apiVersion": group, "kind": "WorkerBundle", "name": "worker-bundle-probe"},
+		"handlers": []any{"fetch"},
 		"kvBindings": []any{map[string]any{
 			"name":     "CACHE",
 			"resource": map[string]any{"apiVersion": group, "kind": "EdgeKVNamespace", "name": kvName},

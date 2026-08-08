@@ -581,6 +581,73 @@ A profile declares supported exact refs, closed capability subsets
 contracts, and numeric limits. Price, SKU, region, quota, and commercial
 policy MUST NOT appear; those remain Service Offering data outside this API.
 
+A host that supports the Edge Platform Family's `ModuleWorker` MUST advertise
+the ES Module Worker runtime ABI contract `worker.runtime@1.0.0` at the exact
+`schemaDigest` that Form's `providedInterfaces` names, and MUST advertise the
+`WorkerVersion` `handlers` enum as exactly the handler vocabulary that contract
+defines. It MUST NOT advertise a `compatibilityDate` range or a
+`compatibilityFlags` enum: runtime behavior is stated by implementing an exact
+contract, not by a token no registry interprets
+([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
+A `WorkerVersion` declaring a handler the runtime contract does not define MUST
+be refused before any mutation, and so MUST a `WorkerVersion` declaring a
+handler the main module of the `WorkerBundle` it references does not export:
+`loadModule` fails that version with `handler_not_exported` before any traffic
+arrives, so storing it would leave the attachment gate above admitting a cron
+trigger or a queue consumer against a handler that does not exist. The first is
+decidable from the spec alone and is refused on `validate`, `prepare`, and
+`apply` alike; the second needs the bundle relation, the committed manifest, and
+the module bytes, so it is refused before any mutation on `apply` and `import`
+alike and re-raised when a 202 commits — `invalid_argument` (400) in both cases,
+because the request is well formed and states something untrue about what will
+run. These are the required conformance checks
+`module-worker-runtime-contract-advertised`,
+`undeclared-runtime-handler-rejected`, and
+`declared-handler-not-exported-rejected`.
+
+### What the lane proves, and what stays a host obligation
+
+`worker.runtime@1.0.0` fixes far more than a black-box lifecycle runner can
+observe, so the split is stated rather than implied.
+
+Proven by required checks:
+
+- the host advertises the runtime contract at the EXACT pinned `schemaDigest`,
+  and supports the exact `ModuleWorker` Form line that provides it;
+- the `WorkerVersion` `handlers` enum it advertises is exactly that contract's
+  vocabulary, and it advertises no `compatibilityDate` range or
+  `compatibilityFlags` enum;
+- a version declaring a handler outside the vocabulary is refused, and one
+  declaring only defined handlers is still accepted;
+- a version declaring a handler its referenced module does not export is
+  refused against a corpus-pinned bundle, and one declaring only exported
+  handlers is still accepted;
+- every inward-activation attachment is gated on the handler its events invoke,
+  in both directions.
+
+Obligations a conforming host MUST meet that this lane does NOT prove, because
+proving them means executing the module rather than driving the Host API:
+
+- the default export's shape, the three-argument handler signatures, and that a
+  returned promise is awaited;
+- `handler_not_exported` for an ARBITRARY module — the lane drives bundles whose
+  exports the corpus pinned, so what it proves is that a host refuses the
+  version when it knows, not that it derives the export set from any bytes an
+  author uploads;
+- request and response bodies streaming rather than buffering;
+- `env` carrying exactly the declared names and nothing else portable;
+- `ctx.waitUntil` holding the isolate open, and a rejected task never changing
+  an already-sent response;
+- an uncaught throw becoming a host-generated 500 in `fetch` and a failed
+  invocation in `scheduled` and `queue`;
+- the `globals` floor, and the loadable module media types.
+
+Those are stated normatively in the contract's own descriptions and proven by
+its behavior fixtures, which a runtime conformance run executes against a real
+isolate ([`../interface-contract/`](../interface-contract/README.md)). A host
+that passes this lane has not thereby proven it implements the ABI; it has
+proven it says which ABI it implements and holds desired state to it.
+
 ## Errors
 
 The closed taxonomy extends v1alpha2 with `rate_limited` (429),

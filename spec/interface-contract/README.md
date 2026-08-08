@@ -19,7 +19,10 @@ The retained projection contract remains documented in
 ```
 
 - `name` uses the dotted grammar `^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*$`
-  (max 128).
+  (max 128). Segments are lowercase alphanumeric; a hyphen is invalid here, so
+  an Interface name never mirrors a hyphenated Binding name such as
+  `module-worker.service`. The Edge Platform Family's worker-scoped contracts
+  are therefore `worker.service` and `worker.runtime`.
 - `version` is SemVer.
 - `schemaDigest` is the RFC 8785 canonical digest of the Interface
   Definition bytes. Two definitions with different canonical bytes are
@@ -49,6 +52,42 @@ the schema, and the schema wins per [`../conformance.md`](../conformance.md)):
 A definition MUST NOT contain executable code, credentials, endpoints,
 prices, or host identities; the Form Package data-only policy applies
 unchanged.
+
+Rules that are behavioral rather than structural — what an uncaught exception
+does, whether a body streams, what keeps an isolate alive — are stated as
+normative sentences in the definition's own `description` and per-operation
+`description`, and proven by fixtures wherever a fixture can prove them. That is
+the placement rule of
+[decision 0014](../decisions/0014-published-schemas-are-structural-minima.md):
+the published meta-schema is a structural minimum, so a contract expresses
+everything it can within what that schema already admits rather than minting a
+new identity for each new kind of rule. `worker.runtime@1.0.0` is the worked
+example
+([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
+
+## Runtime ABIs are Interfaces too
+
+An Interface is not only a capability a resource offers outward. The exact
+runtime a host provides to code it runs is the same kind of contract, and is
+declared the same way: `ModuleWorker` lists `worker.runtime@1.0.0` in its
+`providedInterfaces`, a host that supports that Form implements the contract at
+that exact digest, and a runtime revision is a new contract version rather than
+a new value of some field. A Form MUST NOT state a runtime by a version token,
+date, or flag whose meaning depends on a registry the specification does not
+publish.
+
+A runtime contract is verified in two places, and neither substitutes for the
+other. The Host API conformance lane drives desired state, so it proves what a
+host SAYS and what it REFUSES: the exact advertised digest, the closed handler
+vocabulary, and that a Worker Version declaring a handler the ABI does not
+define — or one the module it references does not export — is refused before
+anything is stored. Everything the contract fixes about invocation is proven by
+its behavior fixtures against a real isolate: handler signatures, streaming
+bodies, `env`'s exact property set, `waitUntil`, exception outcomes, and the
+`globals` floor. The exact split for `worker.runtime@1.0.0` is written down in
+[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation),
+because a reader deciding whether a passing conformance report means "this host
+runs my code correctly" is entitled to know which half it covers.
 
 ## Behavior fixtures
 
