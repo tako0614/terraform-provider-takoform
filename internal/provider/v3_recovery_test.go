@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
+	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
@@ -76,7 +77,8 @@ func TestV3CreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
 
 	// The recorded identity must be enough to re-read the resource. The next
 	// plan therefore reconciles the existing resource instead of creating a
-	// duplicate, and the settled read clears the recovery marker.
+	// duplicate. While the operation is still running the marker SURVIVES the
+	// read: nothing has committed, so there is still something to resume.
 	readResponse := frameworkresource.ReadResponse{State: createResponse.State}
 	resource.Read(ctx, frameworkresource.ReadRequest{State: createResponse.State}, &readResponse)
 	if readResponse.Diagnostics.HasError() {
@@ -88,7 +90,19 @@ func TestV3CreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
 	if got := v3StateString(t, ctx, readResponse.State, "revision").ValueString(); got != "1" {
 		t.Fatalf("re-read state revision = %q, want the host revision 1", got)
 	}
-	if pending := v3StateString(t, ctx, readResponse.State, "pending_operation_id"); !pending.IsNull() {
+	if got := v3StateString(t, ctx, readResponse.State, "pending_operation_id").ValueString(); got != "op_apply_pending" {
+		t.Fatalf("a read taken while the operation still runs dropped the marker: %q", got)
+	}
+
+	// Once the operation reaches a terminal success the next read settles and
+	// clears the marker: there is nothing left to resume.
+	host.settlePendingOperation("op_apply_pending", "ModuleWorker", "module-worker")
+	settledResponse := frameworkresource.ReadResponse{State: readResponse.State}
+	resource.Read(ctx, frameworkresource.ReadRequest{State: readResponse.State}, &settledResponse)
+	if settledResponse.Diagnostics.HasError() {
+		t.Fatalf("settled read: %v", settledResponse.Diagnostics)
+	}
+	if pending := v3StateString(t, ctx, settledResponse.State, "pending_operation_id"); !pending.IsNull() {
 		t.Fatalf("a settled read left the recovery marker behind: %q", pending.ValueString())
 	}
 }
@@ -137,6 +151,39 @@ func TestV3GenericCreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T
 	}
 }
 
+// v3PriorModuleWorkerRef is a SECOND exact identity of one Kind: the same
+// group, an earlier definition version, different bytes. It is what a Form line
+// that has advanced leaves behind in existing state.
+var v3PriorModuleWorkerRef = currentformregistry.V3Ref{
+	APIVersion:        "edge.forms.takoform.com/v1alpha1",
+	Kind:              "ModuleWorker",
+	DefinitionVersion: "0.0.9",
+	SchemaDigest:      "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	PackageDigest:     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+}
+
+// v3ResourceWithSecondDefinitionVersion registers one synthetic second exact
+// identity of a kind into the REAL registry and returns a resource dispatching
+// on the resulting table. There is no test-only override left: the production
+// path and this one differ only in how many identities the registry holds.
+func v3ResourceWithSecondDefinitionVersion(
+	t *testing.T,
+	kind string,
+	data *providerData,
+	second currentformregistry.V3Ref,
+	codec model.Form,
+	asDefaultCreate bool,
+) *v3FormResource {
+	t.Helper()
+	resource := v3TestFormResource(t, kind, data)
+	table, err := resource.codecTable().withCodec(second, codec, asDefaultCreate)
+	if err != nil {
+		t.Fatalf("register the second definition version: %v", err)
+	}
+	resource.codecs = table
+	return resource
+}
+
 // TestV3ReadAndDeleteDispatchOnTheStateFormRef records state under a SECOND
 // exact FormRef of the same Kind and proves read and delete query that
 // identity, not the current create default. Membership — not equality with the
@@ -149,16 +196,11 @@ func TestV3ReadAndDeleteDispatchOnTheStateFormRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A second exact FormRef for the same Kind, in another namespaced group.
-	priorRef := currentformregistry.V3Ref{
-		APIVersion:        "prior-edge.forms.takoform.com/v1alpha1",
-		Kind:              defaultRef.Kind,
-		DefinitionVersion: "0.0.9",
-		SchemaDigest:      "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-		PackageDigest:     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-	}
-	resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
-	resource.supportedRefs = []currentformregistry.V3Ref{defaultRef, priorRef}
+	priorRef := v3PriorModuleWorkerRef
+	priorForm, _ := edgeformcatalog.ByKind("ModuleWorker")
+	resource := v3ResourceWithSecondDefinitionVersion(
+		t, "ModuleWorker", newV3TestProviderData(t, host), priorRef, priorForm, false,
+	)
 	schemaResponse := v3SchemaOf(t, resource)
 
 	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
@@ -182,7 +224,6 @@ func TestV3ReadAndDeleteDispatchOnTheStateFormRef(t *testing.T) {
 	// provider build would carry it.
 	priorState := tfsdk.State{Schema: schemaResponse.Schema, Raw: createResponse.State.Raw}
 	for name, value := range map[string]string{
-		"form_api_version":        priorRef.APIVersion,
 		"form_definition_version": priorRef.DefinitionVersion,
 		"form_schema_digest":      priorRef.SchemaDigest,
 	} {
@@ -202,8 +243,17 @@ func TestV3ReadAndDeleteDispatchOnTheStateFormRef(t *testing.T) {
 	}
 	// The read must project the state FormRef back, not silently rebind to the
 	// default create target.
-	if got := v3StateString(t, ctx, readResponse.State, "form_api_version").ValueString(); got != priorRef.APIVersion {
-		t.Fatalf("read rebound state to %q, want the recorded %q", got, priorRef.APIVersion)
+	for name, want := range map[string]string{
+		"form_definition_version": priorRef.DefinitionVersion,
+		"form_schema_digest":      priorRef.SchemaDigest,
+		"form_package_digest":     priorRef.PackageDigest,
+	} {
+		if got := v3StateString(t, ctx, readResponse.State, name).ValueString(); got != want {
+			t.Fatalf("read rebound state %s to %q, want the recorded %q", name, got, want)
+		}
+	}
+	if got := v3StateString(t, ctx, readResponse.State, "form_schema_digest").ValueString(); got == defaultRef.SchemaDigest {
+		t.Fatal("read rebound state to the default create identity")
 	}
 
 	deleteResponse := frameworkresource.DeleteResponse{}

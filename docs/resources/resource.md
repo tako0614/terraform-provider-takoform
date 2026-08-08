@@ -18,8 +18,9 @@ operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](../../examples/resources/takoform_resource/resource.tf).
 
 Prefer a typed resource where one exists: the Edge Platform Family resources
-carry per-field validation, a typed plan, and import support. This carrier
-trades all three for reach.
+carry per-field validation, a typed plan, and short import IDs. This carrier
+trades all three for reach — it imports too, but only through the exact
+identity it cannot infer.
 
 ## Arguments
 
@@ -43,6 +44,7 @@ all force replacement, so existing state is never rebound to another identity.
 - `ready` — true when the closed `Ready` condition reports `True`.
 - `outputs_json` — JSON-serialized `status.outputs` document (`"{}"` when empty).
 - `relation_drift_reason` — internal recovery only: `ExternalChange` or `DependencyMissing` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes an in-place re-apply, which is all a host needs to re-resolve and re-pin every reference. A Form whose Definition omits `update` refuses that apply, naming the missing capability; replace the resource instead. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.
+- `pending_operation_id` — internal recovery only: the host operation id of a mutation the host accepted but that did not reach a terminal state before the operation deadline, null in steady state. A refresh consults it before it reads the resource, and it is cleared only once that operation settles. It is not resource identity and configurations must not depend on it.
 
 State records the four FormRef fields and no package digest: the distribution
 a host installed is audit evidence, never resource identity.
@@ -58,9 +60,23 @@ The provider neither fetches nor compiles the Form's desired schema:
 Reads compare `spec_json` semantically rather than textually: your formatting
 survives while the parsed document still equals the host's `spec`, and a real
 out-of-band change adopts the host's canonical serialization so the next plan
-shows the drift. When the host serves a different `uid` for the same name, the
-provider warns that the resource was replaced out of band and removes it from
-state so the next plan proposes re-creating it.
+shows the drift.
+
+## State continuity
+
+- **A changed `uid` is an error, and state is kept.** When the host serves a different
+  `uid` under the recorded name, the resource this state was applied against is gone and
+  something re-used its name. The provider reports a hard error naming both uids and keeps
+  the resource in state. It does not re-bind — that would adopt a resource you never
+  applied — and it does not remove state, which would make the next apply fail against the
+  resource that does exist, with no plan left to repair it. Resolve it by importing the new
+  incarnation explicitly, restoring the prior one, or deleting the host-side replacement.
+- **An unfinished mutation is resumed, not re-created.** When `pending_operation_id` is
+  set, a refresh asks the host about that operation before it reads the resource. While the
+  operation is still running the resource may legitimately not exist yet, so its absence is
+  not treated as deletion and the marker survives; a terminal success is verified against
+  the exact identity and settles state; a terminal failure or an expired operation record
+  defers to an exact read of the resource, which decides.
 
 ## Write the Form's defaults explicitly
 
@@ -77,10 +93,21 @@ host will materialize and the second plan is empty.
 
 ## Import
 
-`terraform import` is not supported for `takoform_resource`. An import ID
-carries only `NAME` or `SPACE/NAME`, which cannot supply the four exact FormRef
-fields this carrier requires, and the provider will not guess them. Adopt an
-existing resource through the typed family resource for its Form where one
-exists; otherwise the resource must be created through this provider, because
-create fences on `If-None-Match: *` and fails instead of silently adopting an
-existing host resource.
+The import ID is one JSON object naming the exact identity. It is not a
+delimiter-joined string, because a SpaceID is opaque UTF-8 whose only forbidden
+character is `/`, so no separator can escape it safely:
+
+```console
+terraform import takoform_resource.example \
+  '{"space":"prod","apiVersion":"forms.example.com/v1alpha1","kind":"ExampleWidget","definitionVersion":"1.0.0","schemaDigest":"sha256:…","name":"example-widget"}'
+```
+
+`space` is optional and falls back to the provider default; every other member
+is required. The `NAME` and `SPACE/NAME` short forms the typed family resources
+accept are refused here: this carrier has no default create ref to resolve them
+against, and guessing one would bind state to a Form the resource may not be.
+
+Import writes exactly the identity you state and nothing else; the refresh that
+follows is what verifies it against the host, and `spec_json` is adopted from
+the host's materialized spec there. Nothing about the carrier's trust model
+changes: no Form Definition is fetched and no schema is compiled.

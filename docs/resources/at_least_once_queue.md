@@ -34,6 +34,30 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 - `form_api_version`, `form_kind`, `form_definition_version`, `form_schema_digest` — the exact immutable FormRef this state is bound to; reads dispatch on it.
 - `form_package_digest` — audit-only package provenance; never part of resource identity, queries, or fences.
 - `relation_drift_reason` — internal recovery only: `ExternalChange` or `DependencyMissing` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes an in-place re-apply of the same desired state, which is all a host needs to re-resolve and re-pin every reference. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.
+- `pending_operation_id` — internal recovery only: the host operation id of a mutation the host accepted but that did not reach a terminal state before the operation deadline, null in steady state. A refresh consults it before it reads the resource, and it is cleared only once that operation settles. It is not resource identity and configurations must not depend on it.
+
+## State continuity
+
+- **Reads dispatch on the recorded FormRef.** `AtLeastOnceQueue` state is addressed under the
+  exact `form_*` identity it records, not under this build's default create ref, so a
+  resource created before the Form line advanced stays addressable as itself. An identity
+  this provider build carries no codec for is a hard error naming that identity and the
+  ones the build does carry; the provider never substitutes another exact FormRef, because
+  a substituted query's "not found" is indistinguishable from deletion.
+- **A changed `uid` is an error, and state is kept.** When the host serves a different
+  `uid` under the recorded name, the resource this state was applied against is gone and
+  something re-used its name. The provider reports a hard error naming both uids and keeps
+  the resource in state. It does not re-bind — that would adopt a resource you never
+  applied — and it does not remove state, which would make the next apply fail against the
+  resource that does exist, with no plan left to repair it. Resolve it by importing the new
+  incarnation explicitly, restoring the prior one, or deleting the host-side replacement.
+- **An unfinished mutation is resumed, not re-created.** When `pending_operation_id` is
+  set, a refresh asks the host about that operation before it reads the resource. While the
+  operation is still running the resource may legitimately not exist yet, so its absence is
+  not treated as deletion and the marker survives; a terminal success is verified against
+  the exact identity and settles state; a terminal failure or an expired operation record
+  defers to an exact read of the resource, which decides. Refresh again once the host
+  settles.
 
 ## Provided interfaces
 
@@ -45,3 +69,19 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 terraform import takoform_at_least_once_queue.example NAME
 terraform import takoform_at_least_once_queue.example SPACE/NAME
 ```
+
+Both short forms bind state to this provider build's default create
+FormRef. To adopt a resource created under an EARLIER definition version of
+this Form, name the exact identity instead. The import ID is then one JSON
+object — not a delimiter-joined string, because a SpaceID is opaque UTF-8
+whose only forbidden character is `/`, so no separator can escape it safely:
+
+```console
+terraform import takoform_at_least_once_queue.example \
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1alpha1","kind":"AtLeastOnceQueue","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+```
+
+`space` is optional and falls back to the provider default; the four FormRef
+members are all-or-nothing. An identity this provider build carries no codec
+for is refused, naming the identities it does carry — it is never silently
+rebound to the default.

@@ -563,10 +563,17 @@ func v3NestedMemberAttribute(member model.Field) schema.Attribute {
 	}
 }
 
-// v3SpecFromValues projects planned values onto the portable wire spec. Only
-// declared fields travel, and an unknown plan value never becomes desired
-// state.
-func (r *v3FormResource) v3SpecFromValues(ctx context.Context, values v3Values) (map[string]any, diag.Diagnostics) {
+// v3SpecFromValues projects planned values onto the portable wire spec for one
+// exact FormRef. Only the fields THAT ref's codec declares travel, and an
+// unknown plan value never becomes desired state. Encoding through the codec is
+// what keeps an update to a resource created under an older definition version
+// a mutation of that contract rather than a migration onto the current one
+// (spec/decisions/0017).
+func (r *v3FormResource) v3SpecFromValues(
+	ctx context.Context,
+	codec v3FormCodec,
+	values v3Values,
+) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	if values.Name.IsUnknown() || values.Name.IsNull() {
 		diags.AddAttributeError(
@@ -576,10 +583,14 @@ func (r *v3FormResource) v3SpecFromValues(ctx context.Context, values v3Values) 
 		)
 	}
 	spec := map[string]any{}
-	for _, field := range r.form.Fields {
+	for _, field := range codec.Form.Fields {
 		name := v3AttributeName(field)
-		value, ok := values.Fields[name]
-		if !ok || value == nil || value.IsNull() {
+		value, carried := values.Fields[name]
+		if !carried {
+			diags.Append(v3CodecFieldMissingError(codec, name))
+			continue
+		}
+		if value == nil || value.IsNull() {
 			continue
 		}
 		if value.IsUnknown() {
@@ -590,7 +601,7 @@ func (r *v3FormResource) v3SpecFromValues(ctx context.Context, values v3Values) 
 			)
 			continue
 		}
-		wire, fieldDiags := v3FieldToWire(ctx, r.form.Family.APIVersion(), field, name, value)
+		wire, fieldDiags := v3FieldToWire(ctx, codec.Form.Family.APIVersion(), field, name, value)
 		diags.Append(fieldDiags...)
 		if fieldDiags.HasError() {
 			continue

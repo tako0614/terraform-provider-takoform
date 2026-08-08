@@ -64,6 +64,18 @@ discovery path; a v1alpha2 client can never select this lane accidentally.
   responses); it never enters queries, fences, or state identity, and a host
   that installed the same FormRef from a different legitimate package MUST
   read and delete the same resources.
+- An exact FormRef query is answered about the WHOLE identity or not at all. A
+  host MUST fail `form_unknown` (404) when the `definitionVersion` or
+  `schemaDigest` it was given names a definition it does not have, on
+  `{api}/forms`, on `{api}/form-definitions/…`, and on every resource route —
+  it MUST NOT fall back to matching the group and kind. A client dispatches on
+  the exact FormRef recorded in its state precisely so that a resource created
+  under an earlier definition version stays addressable as itself
+  ([decision 0017](../decisions/0017-provider-state-survives-form-evolution-and-interruption.md)),
+  and a host that matched by kind would answer every such request about a
+  different contract, successfully, with nothing downstream able to detect it.
+  This is the required conformance check
+  `exact-form-ref-fails-closed-on-unknown-definition`.
 
 ## Lifecycle
 
@@ -194,6 +206,17 @@ The remedy is an apply, and it MUST stay reachable
   apply at all: a host refuses every apply to the existing resource, so its only
   recovery is REPLACEMENT, and a client MUST plan one. A `DependencyMissing`
   target must exist again before either apply can succeed.
+
+A client sees the same fact — an incarnation changed — in two places, and the two
+answers differ because the remedies do. A relation whose TARGET moved is a
+warning with a proposed apply: the resource itself is still the one state names,
+and an accepted apply re-pins the reference. A resource whose OWN `metadata.uid`
+no longer matches what state records is an error the operator must resolve, and a
+client MUST keep the resource in state while reporting it: no apply converts one
+incarnation into another, and dropping the resource would make the next apply
+fence on `If-None-Match: *` against the resource that does exist, with no plan
+left that repairs anything
+([decision 0017](../decisions/0017-provider-state-survives-form-evolution-and-interruption.md)).
 
 ### Dependency protection
 
@@ -392,14 +415,29 @@ with full jitter, under an overall deadline. The contract guarantees only
 that an operation ID is stable, that the host keeps it addressable at
 `GET {api}/operations/{id}` while the operation record exists (afterwards the
 closed outcome is `operation_not_found`), and that a terminal operation
-replays its terminal state instead of re-executing. A
-client can resume across its own restart only if it persists the ID first; no
-shipped Takoform client persists one today, so a restart during a long
-operation currently means re-reading the resource, not resuming the
-operation. A terminal Operation carries exactly one of `result` or `error`. Cancel is honored only for safely stoppable
+replays its terminal state instead of re-executing. A terminal Operation carries
+exactly one of `result` or `error`. Cancel is honored only for safely stoppable
 operations; an already-terminal operation replays its terminal state.
 `operation_not_found` (404) and `operation_cancelled` (409) are the closed
 outcomes; `deadline_exceeded` (504) reports a host-side deadline.
+
+"While the record exists" is a retention window, not an ordering: a host MUST NOT
+drop a terminal operation merely because the system moved on. As long as the
+record is retained, the ID stays addressable and its terminal state replays
+byte-identically after the resource it names has been mutated again and after
+other operations have been accepted and settled. This is the required
+conformance check `operation-resumable-after-settlement`, and it is what makes a
+persisted operation ID a usable handle rather than one whose value depends on
+timing.
+
+A client that persists the ID resumes from it
+([decision 0017](../decisions/0017-provider-state-survives-form-evolution-and-interruption.md)):
+the Terraform/OpenTofu provider records it as `pending_operation_id` and consults
+it BEFORE it reads the resource, because on a host that commits the resource only
+when the operation commits, a `resource_not_found` during that window means "not
+yet", not "deleted". A terminal success is verified against the exact identity
+before anything is adopted, and an expired record defers to an exact resource
+read rather than being read as failure.
 
 ## Artifacts
 
