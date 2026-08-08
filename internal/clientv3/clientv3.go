@@ -7,19 +7,22 @@
 // Host Support Profiles. It never selects a backend and never manages
 // credentials.
 //
-// # Path encoding of namespaced groups
+// # Namespaced groups travel as two ordinary path segments
 //
 // v1alpha3 Form groups are namespaced apiVersions such as
 // "edge.forms.takoform.com/v1alpha1", which contain a slash. Wherever a URL
-// path template names a {group} segment (form-definitions, resources,
-// support/forms), this client encodes the FULL apiVersion as ONE path
-// segment using url.PathEscape, so the slash becomes %2F:
+// path template names a group, this client sends the group NAME and the group
+// VERSION as two separate, ordinary path segments:
 //
-//	/apis/forms.takoform.com/v1alpha3/resources/edge.forms.takoform.com%2Fv1alpha1/Worker/app
+//	/apis/forms.takoform.com/v1alpha3/resources/edge.forms.takoform.com/v1alpha1/ModuleWorker/app
 //
-// The reference host implements the same convention: the {group} segment is
-// the percent-decoded exact apiVersion, never split across two segments.
-// Query parameters carry the group under the key "group" (not "apiVersion").
+// No path segment this client builds ever percent-encodes a slash. Proxies,
+// gateways, and web frameworks disagree about whether %2F inside a path
+// segment is passed through, decoded, rejected, or normalized, so a lane that
+// required it could not be deployed behind ordinary infrastructure
+// (spec/decisions/0018). The exact FormRef apiVersion string is unchanged
+// everywhere else: request bodies, responses, and the "group" query key still
+// carry "edge.forms.takoform.com/v1alpha1" verbatim.
 //
 // The retained v1alpha2 client in internal/client is frozen; this lane
 // shares its proven mechanics (strict I-JSON decoding, same-origin endpoint
@@ -230,6 +233,17 @@ func (c *Client) validAdvertisedEndpoint(raw, expectedPath string) (string, erro
 	if advertised.User != nil || advertised.Fragment != "" || advertised.RawQuery != "" {
 		return "", errors.New("endpoint must not contain userinfo, query, or fragment")
 	}
+	// The advertised path is compared in its ESCAPED form and must carry no
+	// percent-encoding at all. Every segment of a v1alpha3 path is an ordinary
+	// segment, so a host advertising an escaped one — most of all a
+	// percent-encoded slash — is describing a shape this lane does not have and
+	// that intermediaries would not agree on (spec/decisions/0018). Comparing the
+	// decoded path instead would let "%2Fv1alpha3" pass as "/v1alpha3".
+	if strings.Contains(advertised.EscapedPath(), "%") {
+		return "", errors.New(
+			"endpoint path must not percent-encode any character; v1alpha3 paths are ordinary segments",
+		)
+	}
 	if advertised.EscapedPath() != expectedPath {
 		return "", fmt.Errorf("endpoint path must be %s", expectedPath)
 	}
@@ -300,9 +314,19 @@ func (c *Client) requireReady() error {
 	return nil
 }
 
-// escapeGroupSegment encodes a namespaced Form group as one URL path
-// segment; the slash inside the apiVersion becomes %2F (see package comment).
-func escapeGroupSegment(group string) string { return url.PathEscape(group) }
+// groupPathSegments renders a namespaced Form group as the TWO ordinary path
+// segments the lane's URL templates declare — {formGroup}/{formVersion} — so
+// the slash inside the apiVersion is a real path separator and never a
+// percent-encoded character inside one segment (see package comment and
+// spec/decisions/0018). A group carrying no version separator cannot reach
+// here: ValidateFormRef rejects it before any URL is built.
+func groupPathSegments(group string) string {
+	name, version, split := strings.Cut(group, "/")
+	if !split {
+		return url.PathEscape(group)
+	}
+	return url.PathEscape(name) + "/" + url.PathEscape(version)
+}
 
 // exactFormQuery carries the exact FormRef and Space on read/lifecycle URLs.
 // The group travels under the query key "group"; the packageDigest is
@@ -321,7 +345,7 @@ func (c *Client) resourceURL(ref FormRef, name, suffix string, query url.Values)
 	u := fmt.Sprintf(
 		"%s/resources/%s/%s/%s",
 		c.apiBase,
-		escapeGroupSegment(ref.APIVersion),
+		groupPathSegments(ref.APIVersion),
 		url.PathEscape(ref.Kind),
 		url.PathEscape(name),
 	)

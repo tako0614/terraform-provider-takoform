@@ -74,7 +74,7 @@ func (c *Client) GetFormSupport(ctx context.Context, ref FormRef) (map[string]an
 	fullURL := fmt.Sprintf(
 		"%s/support/forms/%s/%s/%s",
 		c.apiBase,
-		escapeGroupSegment(ref.APIVersion),
+		groupPathSegments(ref.APIVersion),
 		url.PathEscape(ref.Kind),
 		url.PathEscape(ref.DefinitionVersion),
 	)

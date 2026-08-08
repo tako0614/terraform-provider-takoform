@@ -3,13 +3,15 @@ package provider
 // v3_fake_host_test.go is an in-package fake Host API v1alpha3 host: just
 // enough of discovery, form availability, prepare/apply/read/delete, one
 // 202-Operation path, and the content-addressed artifact upload to drive the
-// v3-lane resources end to end. Conventions: namespaced groups travel as one
-// %2F-escaped path segment, uids are "uid-N", generations and revisions are
+// v3-lane resources end to end. Conventions: a namespaced group travels as TWO
+// ordinary path segments and no segment percent-encodes a slash
+// (spec/decisions/0018), uids are "uid-N", generations and revisions are
 // canonical decimal strings, and the strong ETag is the quoted revision.
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -363,9 +365,15 @@ func (h *v3FakeHost) storeResource(kind, name, space, group, uid string, spec ma
 	}
 }
 
+// unescapeSegment decodes one ordinary path segment. It deliberately refuses a
+// percent-encoded slash: no v1alpha3 path carries one, and a fake host that
+// decoded it would let a client regression pass unnoticed
+// (spec/decisions/0018).
 func unescapeSegment(segment string) (string, error) {
-	unescaped := strings.ReplaceAll(segment, "%2F", "/")
-	return strings.ReplaceAll(unescaped, "%2f", "/"), nil
+	if strings.Contains(segment, "%2F") || strings.Contains(segment, "%2f") {
+		return "", errors.New("path segments must not percent-encode a slash")
+	}
+	return url.PathUnescape(segment)
 }
 
 func (h *v3FakeHost) serveForms(w http.ResponseWriter, r *http.Request) {
@@ -441,19 +449,26 @@ func (h *v3FakeHost) serveUploadStart(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusCreated, map[string]any{"uploadId": "up_1", "missingBlobs": missing})
 }
 
+// serveResource routes /resources/{formGroup}/{formVersion}/{kind}/{name}. The
+// namespaced group travels as TWO ordinary path segments, so nothing here has
+// to decode a percent-encoded slash (spec/decisions/0018).
 func (h *v3FakeHost) serveResource(w http.ResponseWriter, r *http.Request, remainder string) {
 	segments := strings.Split(remainder, "/")
-	if len(segments) < 3 {
+	if len(segments) < 4 {
 		h.t.Errorf("unexpected resource path %q", remainder)
 		http.NotFound(w, r)
 		return
 	}
-	group, _ := unescapeSegment(segments[0])
-	kind := segments[1]
-	name := segments[2]
-	if !strings.Contains(segments[0], "%2F") && !strings.Contains(segments[0], "%2f") {
-		h.t.Errorf("namespaced group must travel as one %%2F-escaped segment, got %q", segments[0])
+	for _, segment := range segments {
+		if _, err := unescapeSegment(segment); err != nil {
+			h.t.Errorf("resource path segment %q: %v", segment, err)
+		}
 	}
+	groupName, _ := unescapeSegment(segments[0])
+	groupVersion, _ := unescapeSegment(segments[1])
+	group := groupName + "/" + groupVersion
+	kind := segments[2]
+	name := segments[3]
 	key := h.resourceKey(kind, name)
 	switch r.Method {
 	case http.MethodPut:

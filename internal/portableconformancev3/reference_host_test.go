@@ -309,7 +309,7 @@ func TestDeleteOfBoundTargetFailsDependencyInUse(t *testing.T) {
 	query.Set("definitionVersion", kvRef.DefinitionVersion)
 	query.Set("schemaDigest", kvRef.SchemaDigest)
 	target := contract.APIPath + "/resources/" +
-		url.PathEscape(kvRef.APIVersion) + "/" + kvRef.Kind + "/edge-kv-probe?" + query.Encode()
+		groupSegments(kvRef.APIVersion) + "/" + kvRef.Kind + "/edge-kv-probe?" + query.Encode()
 	status, body := hostRequest(t, server, http.MethodDelete, target, map[string]string{
 		"If-Match":        `"1"`,
 		"Idempotency-Key": "key-bound-delete",
@@ -435,7 +435,7 @@ func TestStaleRevisionDeleteRejected(t *testing.T) {
 	query.Set("definitionVersion", kvRef.DefinitionVersion)
 	query.Set("schemaDigest", kvRef.SchemaDigest)
 	target := contract.APIPath + "/resources/" +
-		url.PathEscape(kvRef.APIVersion) + "/" + kvRef.Kind + "/edge-kv-probe?" + query.Encode()
+		groupSegments(kvRef.APIVersion) + "/" + kvRef.Kind + "/edge-kv-probe?" + query.Encode()
 	status, body := hostRequest(t, server, http.MethodDelete, target, map[string]string{
 		"If-Match":        `"3"`,
 		"Idempotency-Key": "key-stale-delete",

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -42,6 +43,14 @@ const (
 	// `terraform plan` so a slow host cannot stall planning; apply performs
 	// the authoritative review under defaultResourceAPITimeout.
 	planPreviewTimeout = 30 * time.Second
+
+	// discoveryTimeout bounds ONE lane negotiation. It is deliberately short and
+	// deliberately separate from defaultResourceAPITimeout: discovery is a single
+	// small read of a static document, while a resource operation may legitimately
+	// take minutes. Sharing the long timeout meant an unresponsive lane held the
+	// whole provider — and therefore the OTHER lane's resources — for twelve
+	// minutes before anything could run (spec/decisions/0018).
+	discoveryTimeout = 15 * time.Second
 )
 
 // Ensure takoformProvider satisfies the provider.Provider interface.
@@ -185,8 +194,7 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 	// Each resource asserts its own lane and surfaces the recorded per-lane
 	// error, so a v2-only host still runs v2 resources while v3 resources
 	// explain exactly why they cannot.
-	v2Client, v2Err := configureClient(ctx, endpoint, token, httpClient)
-	v3Client, v3Err := configureClientV3(ctx, endpoint, token, httpClient)
+	v2Client, v3Client, v2Err, v3Err := negotiateLanes(ctx, endpoint, token, httpClient, discoveryTimeout)
 	if v2Err != nil && v3Err != nil {
 		resp.Diagnostics.AddError(
 			"Takoform configuration failed",
@@ -236,6 +244,52 @@ func (p *takoformProvider) DataSources(_ context.Context) []func() datasource.Da
 	return []func() datasource.DataSource{
 		NewInterfaceDataSource,
 	}
+}
+
+// negotiateLanes discovers both Host API lanes CONCURRENTLY, each under its own
+// short deadline.
+//
+// The two properties this exists for:
+//
+//   - Independence. One lane's outcome never gates the other's. A lane that
+//     hangs, refuses, or answers a document this build rejects leaves the other
+//     lane's client fully usable, and each resource type reports its own lane's
+//     recorded error (spec/decisions/0018).
+//   - A short, dedicated deadline. `timeout` bounds discovery only, through the
+//     request context rather than the shared HTTP client, so the negotiated
+//     clients keep the long resource-operation timeout for the work that
+//     legitimately needs it. Serial negotiation under the long timeout made a
+//     single unresponsive lane cost the provider both lanes and twelve minutes.
+//
+// The returned errors are per lane; the caller decides that BOTH failing is
+// fatal.
+func negotiateLanes(
+	ctx context.Context,
+	endpoint, token string,
+	httpClient *http.Client,
+	timeout time.Duration,
+) (*client.Client, *clientv3.Client, error, error) {
+	discoveryCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	var (
+		wait     sync.WaitGroup
+		v2Client *client.Client
+		v3Client *clientv3.Client
+		v2Err    error
+		v3Err    error
+	)
+	wait.Add(2)
+	go func() {
+		defer wait.Done()
+		v2Client, v2Err = configureClient(discoveryCtx, endpoint, token, httpClient)
+	}()
+	go func() {
+		defer wait.Done()
+		v3Client, v3Err = configureClientV3(discoveryCtx, endpoint, token, httpClient)
+	}()
+	wait.Wait()
+	return v2Client, v3Client, v2Err, v3Err
 }
 
 // configureClient builds the client, discovers the versioned Service Form API,

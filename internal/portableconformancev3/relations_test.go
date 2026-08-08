@@ -360,7 +360,7 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 		"worker": workerReference,
 		"queue":  map[string]any{"apiVersion": group, "kind": "AtLeastOnceQueue", "name": "queue-probe"},
 	})
-	_, hostErr := host.validateDesiredSemantics(consumer, space, "queue-consumer-probe", spec)
+	_, hostErr := host.validateDesiredSemantics(referencePrimaryAuth, consumer, space, "queue-consumer-probe", spec)
 	if hostErr == nil || hostErr.Code != "unsupported_capability" {
 		t.Fatalf("a stale deployment of the previous worker opened the gate: %+v", hostErr)
 	}
@@ -371,7 +371,9 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	// A deployment of the CURRENT incarnation is what the gate is asking for.
 	storeVersion("current-version", "uid-worker-second")
 	storeDeployment("current-deployment", "uid-worker-second", "current-version")
-	if _, hostErr := host.validateDesiredSemantics(consumer, space, "queue-consumer-probe", spec); hostErr != nil {
+	if _, hostErr := host.validateDesiredSemantics(
+		referencePrimaryAuth, consumer, space, "queue-consumer-probe", spec,
+	); hostErr != nil {
 		t.Fatalf("a deployment of the current worker was refused: %+v", hostErr)
 	}
 }

@@ -84,10 +84,22 @@ host and proved by a required conformance check rather than by the schema
 A bundle-shaped revision resource carries the manifest digest as its whole
 desired state; the manifest, not the resource, describes the bytes. Before any
 mutation — apply and import alike — a host MUST resolve the referenced
-manifest and fail closed when the digest names no committed manifest
-(`artifact_missing`, 404), when the stored document does not canonicalize to
-the referenced digest, when its `kind` is not the kind the Form requires, or
-when it violates any rule above (`artifact_invalid`, 400).
+manifest and fail closed when the digest names no committed manifest the
+caller's tenant holds (`artifact_missing`, 404), when the stored document does
+not canonicalize to the referenced digest, when its `kind` is not the kind the
+Form requires, or when it violates any rule above (`artifact_invalid`, 400).
+
+Resolving a manifest on behalf of a request is subject to the same per-tenant
+holding rule as reading one
+([decision 0018](../decisions/0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)):
+a digest is a name for bytes and entitles nobody to them, whether it is read
+from `GET {api}/artifacts/{manifestDigest}` or used as desired state. A manifest
+another tenant committed is therefore answered exactly as an uncommitted digest
+is — the same `artifact_missing`, indistinguishable from "no such manifest" — and
+that answer is re-derived when an accepted `202` commits, not only when the
+mutation was accepted. Holding is the tenant's, not one principal's, so the
+ordinary pipeline in which one principal uploads a bundle and another references
+it is unaffected.
 
 A committed manifest and its blobs MUST stay readable while any resource
 references the manifest: abandoning an unrelated upload session, or

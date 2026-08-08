@@ -44,6 +44,9 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkGenerationFences(queue) },
 		func() error { return r.checkPrepareFences(queue) },
 		func() error { return r.checkReadETags(kv, queue) },
+		// The lane's URL shape is proved against a resource that exists, so the
+		// split path is shown ADDRESSING something rather than merely routing.
+		func() error { return r.checkNamespacedGroupPathSegments(kv) },
 		func() error { return r.checkConditionReasonsClosed(kv, mw, queue) },
 		func() error { return r.checkSpaceIDGrammar(kv) },
 		func() error { return r.checkConcurrentUnrelatedMutation(kv, queue) },
@@ -55,6 +58,12 @@ func (r *v3Runner) run() error {
 		r.checkArtifactRejectList,
 		r.checkArtifactManifestKindExclusive,
 		func() error { return r.checkArtifactRetentionWhileReferenced(bundle) },
+		// Ownership of the artifact surface: an upload id is a handle, and a
+		// content address is a name rather than an entitlement
+		// (spec/decisions/0018).
+		r.checkUploadSessionOwnership,
+		r.checkArtifactDigestIsNotACapability,
+		func() error { return r.checkManifestReferenceIsNotACapability(bundle) },
 		func() error { return r.checkWorkerVersionFlow(version, kv) },
 		func() error { return r.checkBindingContractVerified(version) },
 		func() error { return r.checkRelationIncarnationChange(version, kv) },
@@ -78,6 +87,7 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkImportFlows(kv, version) },
 		func() error { return r.checkDeleteFences(version, kv) },
 		func() error { return r.checkOperations(kv) },
+		func() error { return r.checkOperationOwnership(kv) },
 		// State continuity: what a client that persists an operation id and
 		// dispatches on the exact FormRef in its state depends on the host for
 		// (spec/decisions/0017).
@@ -1236,52 +1246,14 @@ func (r *v3Runner) checkArtifacts(bundle probeTarget) error {
 }
 
 // uploadAndCommitManifest drives one complete upload — start, the blobs the
-// host reports missing, commit — and returns the committed manifest digest.
+// host reports missing, commit — as the primary caller, and returns the
+// committed manifest digest.
 func (r *v3Runner) uploadAndCommitManifest(
 	manifest map[string]any,
 	blobs map[string][]byte,
 	keyPrefix string,
 ) (string, error) {
-	uploadID, missing, err := r.startArtifactUpload(manifest, keyPrefix+"-start")
-	if err != nil {
-		return "", err
-	}
-	for _, digest := range missing {
-		blob, staged := blobs[digest]
-		if !staged {
-			return "", fmt.Errorf("host requires blob %s which this check did not stage", digest)
-		}
-		uploaded, err := r.request(
-			http.MethodPut,
-			r.apiBase+"/artifacts/uploads/"+url.PathEscape(uploadID)+"/blobs/"+url.PathEscape(digest),
-			map[string]string{"Content-Type": "application/octet-stream"}, blob,
-		)
-		if err != nil {
-			return "", err
-		}
-		if uploaded.Status != http.StatusCreated && uploaded.Status != http.StatusNoContent {
-			return "", fmt.Errorf("blob upload HTTP %d", uploaded.Status)
-		}
-	}
-	commit, err := r.commitArtifact(uploadID, keyPrefix+"-commit")
-	if err != nil {
-		return "", err
-	}
-	if commit.Status != http.StatusOK && commit.Status != http.StatusCreated {
-		return "", fmt.Errorf(
-			"artifact commit HTTP %d; body=%s", commit.Status, strings.TrimSpace(string(commit.Body)),
-		)
-	}
-	var result struct {
-		ManifestDigest string `json:"manifestDigest"`
-	}
-	if err := decodeStrictResponse(commit, &result); err != nil {
-		return "", err
-	}
-	if !formpackage.ValidDigest(result.ManifestDigest) {
-		return "", errors.New("artifact commit returned an invalid manifestDigest")
-	}
-	return result.ManifestDigest, nil
+	return r.uploadAndCommitManifestAs(r.token, manifest, blobs, keyPrefix)
 }
 
 // checkArtifactManifestKindExclusive proves the per-kind closure the published
@@ -2656,7 +2628,7 @@ func (r *v3Runner) checkSupportProfiles() error {
 	version := r.contract.RunnerInput.WorkerVersion.Identity.FormRef
 	oneURL := fmt.Sprintf(
 		"%s/support/forms/%s/%s/%s",
-		r.apiBase, escapeGroup(version.APIVersion),
+		r.apiBase, groupSegments(version.APIVersion),
 		url.PathEscape(version.Kind), url.PathEscape(version.DefinitionVersion),
 	)
 	oneResponse, err := r.request(http.MethodGet, oneURL, nil, nil)

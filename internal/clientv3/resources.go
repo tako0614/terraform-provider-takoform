@@ -98,7 +98,7 @@ func (c *Client) GetFormDefinition(ctx context.Context, space string, ref FormRe
 	fullURL := fmt.Sprintf(
 		"%s/form-definitions/%s/%s?%s",
 		c.apiBase,
-		escapeGroupSegment(ref.APIVersion),
+		groupPathSegments(ref.APIVersion),
 		ref.Kind,
 		exactFormQuery(space, ref).Encode(),
 	)

@@ -3,7 +3,6 @@ package clientv3
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"testing"
 )
 
@@ -43,8 +42,8 @@ func TestListFormSupport(t *testing.T) {
 	}
 }
 
-func TestGetFormSupportUsesEscapedGroupSegment(t *testing.T) {
-	wantPath := APIRootPath + "/support/forms/" + url.PathEscape(testGroup) + "/" + testKind + "/1.0.0"
+func TestGetFormSupportSplitsTheGroupIntoTwoPathSegments(t *testing.T) {
+	wantPath := APIRootPath + "/support/forms/" + groupPathSegments(testGroup) + "/" + testKind + "/1.0.0"
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
 		if r.Method == http.MethodGet && r.URL.EscapedPath() == wantPath {
 			writeJSON(t, w, http.StatusOK, wireSupportProfile())

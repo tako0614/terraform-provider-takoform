@@ -66,7 +66,7 @@ func TestApplyResourceCreateHappyPath(t *testing.T) {
 			}
 			handlePrepare(t, w, r)
 			return true
-		case r.Method == http.MethodPut && r.URL.EscapedPath() == escapedResourcePath("app", ""):
+		case r.Method == http.MethodPut && r.URL.EscapedPath() == splitGroupResourcePath("app", ""):
 			sawPut = true
 			if r.Header.Get("If-None-Match") != "*" {
 				t.Errorf("create apply must send If-None-Match: *, got %q", r.Header.Get("If-None-Match"))
@@ -210,7 +210,7 @@ func TestApplyResourceStaleGenerationConflict(t *testing.T) {
 func TestGetResourceCapturesRevisionETag(t *testing.T) {
 	spec := map[string]any{"image": "example"}
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
-		if r.Method == http.MethodGet && r.URL.EscapedPath() == escapedResourcePath("app", "") {
+		if r.Method == http.MethodGet && r.URL.EscapedPath() == splitGroupResourcePath("app", "") {
 			if r.URL.Query().Get("group") != testGroup {
 				t.Errorf("read query must carry group, got %v", r.URL.Query())
 			}
@@ -243,7 +243,7 @@ func TestGetResourceNotFound(t *testing.T) {
 func TestObserveResourceFenceMismatchRejected(t *testing.T) {
 	spec := map[string]any{"image": "example"}
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
-		if r.Method == http.MethodPost && r.URL.EscapedPath() == escapedResourcePath("app", "observe") {
+		if r.Method == http.MethodPost && r.URL.EscapedPath() == splitGroupResourcePath("app", "observe") {
 			if r.Header.Get(expectedGenerationHeader) != "4" {
 				t.Errorf("observe must fence on Takoform-Expected-Generation, got %q",
 					r.Header.Get(expectedGenerationHeader))
@@ -267,7 +267,7 @@ func TestObserveResourceFenceMismatchRejected(t *testing.T) {
 func TestObserveResourceHonorsFence(t *testing.T) {
 	spec := map[string]any{"image": "example"}
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
-		if r.Method == http.MethodPost && r.URL.EscapedPath() == escapedResourcePath("app", "observe") {
+		if r.Method == http.MethodPost && r.URL.EscapedPath() == splitGroupResourcePath("app", "observe") {
 			writeJSON(t, w, http.StatusOK, map[string]any{
 				"resource": wireResource("app", "uid-1", "4", "21", spec),
 			})
@@ -286,7 +286,7 @@ func TestObserveResourceHonorsFence(t *testing.T) {
 
 func TestDeleteResourceRevisionFence(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
-		if r.Method == http.MethodDelete && r.URL.EscapedPath() == escapedResourcePath("app", "") {
+		if r.Method == http.MethodDelete && r.URL.EscapedPath() == splitGroupResourcePath("app", "") {
 			if r.Header.Get("If-Match") != `"9"` {
 				t.Errorf("delete must fence with If-Match on the quoted revision, got %q", r.Header.Get("If-Match"))
 			}

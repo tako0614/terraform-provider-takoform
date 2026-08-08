@@ -66,10 +66,11 @@ func stageUpload(t *testing.T, host *ReferenceHost, id string, manifest map[stri
 		t.Fatal(err)
 	}
 	host.uploads[id] = &artifactUpload{
-		ID: id, ManifestRaw: raw, Manifest: decoded, ManifestDigest: digest,
+		ID: id, Owner: referencePrimaryAuth, ManifestRaw: raw, Manifest: decoded, ManifestDigest: digest,
 	}
 	for blobDigest, body := range blobs {
 		host.blobs[blobDigest] = []byte(body)
+		host.grantBlob(referencePrimaryAuth.Tenant, blobDigest)
 	}
 	return digest
 }
@@ -160,27 +161,51 @@ func TestBundleDesiredStateResolvesItsManifestBeforeMutation(t *testing.T) {
 		t.Fatal("the WorkerBundle form is not installed")
 	}
 
-	committed, raw := canonicalManifestDigest(t, workerBundleUnitManifest())
-	host.manifests[committed] = raw
+	// commit plants one manifest the way a commit does: the bytes are stored
+	// once, and the committing tenant HOLDS the address (spec/decisions/0018).
+	commit := func(manifest map[string]any) string {
+		digest, raw := canonicalManifestDigest(t, manifest)
+		host.manifests[digest] = raw
+		host.grantManifest(referencePrimaryAuth.Tenant, digest)
+		return digest
+	}
+
+	committed := commit(workerBundleUnitManifest())
 	host.blobs[formpackage.DigestBytes([]byte(artifactModuleSource))] = []byte(artifactModuleSource)
+	host.grantBlob(referencePrimaryAuth.Tenant, formpackage.DigestBytes([]byte(artifactModuleSource)))
 
 	assetBody := "<!doctype html>\n"
-	assetManifest := map[string]any{
+	assetDigest := commit(map[string]any{
 		"apiVersion": artifactAPIVersion,
 		"kind":       "StaticAssetBundle",
 		"files":      []any{assetFileEntry(assetBody)},
-	}
-	assetDigest, assetRaw := canonicalManifestDigest(t, assetManifest)
-	host.manifests[assetDigest] = assetRaw
+	})
 
-	tampered, tamperedRaw := canonicalManifestDigest(t, map[string]any{
+	tampered := commit(map[string]any{
 		"apiVersion": artifactAPIVersion,
 		"kind":       "WorkerBundle",
 		"mainModule": "index.js",
 		"modules":    workerBundleUnitManifest()["modules"],
 		"files":      []any{assetFileEntry(assetBody)},
 	})
-	host.manifests[tampered] = tamperedRaw
+
+	// One committed manifest this tenant does NOT hold. Resolution is an
+	// authorization question, so a valid, committed, correctly shaped
+	// WorkerBundle manifest belonging to someone else must be answered exactly
+	// as a digest nobody ever committed is.
+	foreign, foreignRaw := canonicalManifestDigest(t, map[string]any{
+		"apiVersion": artifactAPIVersion,
+		"kind":       "WorkerBundle",
+		"mainModule": "foreign.js",
+		"modules": []any{map[string]any{
+			"name":      "foreign.js",
+			"mediaType": "application/javascript+module",
+			"size":      len(artifactModuleSource),
+			"digest":    formpackage.DigestBytes([]byte(artifactModuleSource)),
+		}},
+	})
+	host.manifests[foreign] = foreignRaw
+	host.grantManifest("reference-other-tenant", foreign)
 
 	cases := []struct {
 		name string
@@ -193,13 +218,16 @@ func TestBundleDesiredStateResolvesItsManifestBeforeMutation(t *testing.T) {
 			map[string]any{"manifestDigest": formpackage.DigestBytes([]byte("never-committed"))},
 			"artifact_missing",
 		},
+		{"another tenant's committed manifest", map[string]any{"manifestDigest": foreign}, "artifact_missing"},
 		{"manifest of another kind", map[string]any{"manifestDigest": assetDigest}, "artifact_invalid"},
 		{"manifest carrying files", map[string]any{"manifestDigest": tampered}, "artifact_invalid"},
 		{"digest grammar violation", map[string]any{"manifestDigest": "sha256:nope"}, "artifact_invalid"},
 		{"absent digest", map[string]any{}, "artifact_invalid"},
 	}
 	for _, testCase := range cases {
-		_, hostErr := host.validateDesiredSemantics(form, contract.RunnerInput.Space, "worker-bundle-probe", testCase.spec)
+		_, hostErr := host.validateDesiredSemantics(
+			referencePrimaryAuth, form, contract.RunnerInput.Space, "worker-bundle-probe", testCase.spec,
+		)
 		switch {
 		case testCase.code == "" && hostErr != nil:
 			t.Errorf("%s: hostErr = %+v, want acceptance", testCase.name, hostErr)
@@ -207,8 +235,121 @@ func TestBundleDesiredStateResolvesItsManifestBeforeMutation(t *testing.T) {
 			t.Errorf("%s: hostErr = %+v, want %s", testCase.name, hostErr, testCase.code)
 		}
 	}
+	// The two refusals a stranger can tell apart are the disclosure: an
+	// uncommitted digest and another tenant's committed digest answer the same
+	// code and the same message.
+	_, unknownErr := host.validateDesiredSemantics(
+		referencePrimaryAuth, form, contract.RunnerInput.Space, "worker-bundle-probe",
+		map[string]any{"manifestDigest": formpackage.DigestBytes([]byte("never-committed"))},
+	)
+	_, foreignErr := host.validateDesiredSemantics(
+		referencePrimaryAuth, form, contract.RunnerInput.Space, "worker-bundle-probe",
+		map[string]any{"manifestDigest": foreign},
+	)
+	if unknownErr == nil || foreignErr == nil || *unknownErr != *foreignErr {
+		t.Fatalf("an unknown digest and a foreign digest are distinguishable: %+v vs %+v", unknownErr, foreignErr)
+	}
 	if host.manifests[tampered] == nil {
 		t.Fatal("the gate deleted a stored manifest; resolution is read-only")
+	}
+}
+
+// TestForeignManifestReferenceFailsOnTheAsyncCommitPath proves the holding rule
+// survives the one path where the request that carried the caller is gone by
+// the time the mutation lands. A 202 re-derives every precondition at commit
+// time, so it must re-derive this one against the tenant the mutation was
+// ACCEPTED from — not against whoever happens to poll, and not against the byte
+// store.
+func TestForeignManifestReferenceFailsOnTheAsyncCommitPath(t *testing.T) {
+	host, contract := fallbackHost(t)
+	server := httptest.NewServer(host)
+	defer server.Close()
+
+	digest, raw := canonicalManifestDigest(t, workerBundleUnitManifest())
+	blob := formpackage.DigestBytes([]byte(artifactModuleSource))
+	host.manifests[digest] = raw
+	host.blobs[blob] = []byte(artifactModuleSource)
+	host.grantManifest(referencePrimaryAuth.Tenant, digest)
+	host.grantBlob(referencePrimaryAuth.Tenant, blob)
+
+	bundleRef := contract.RunnerInput.WorkerBundle.Identity.FormRef
+	const name = "worker-bundle-async-probe"
+	foreign := map[string]string{"Authorization": "Bearer " + referenceAlternateTenantToken}
+	document := map[string]any{
+		"apiVersion": bundleRef.APIVersion,
+		"kind":       bundleRef.Kind,
+		"form":       map[string]any{"formRef": refJSON(bundleRef)},
+		"metadata":   map[string]any{"name": name, "space": contract.RunnerInput.Space},
+		"spec":       map[string]any{"manifestDigest": digest},
+	}
+	body, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepareHeaders := map[string]string{"Content-Type": "application/json"}
+	for key, value := range foreign {
+		prepareHeaders[key] = value
+	}
+	prepareStatus, prepareBody := hostRequest(t, server, http.MethodPost,
+		contract.APIPath+"/resources/prepare", prepareHeaders, body)
+	if prepareStatus != http.StatusOK {
+		t.Fatalf("prepare = %d %s, want 200", prepareStatus, strings.TrimSpace(string(prepareBody)))
+	}
+	var prepared struct {
+		Resource json.RawMessage `json:"resource"`
+		Review   struct {
+			PrepareDigest string `json:"prepareDigest"`
+			SpecDigest    string `json:"specDigest"`
+		} `json:"review"`
+	}
+	if err := formpackage.DecodeStrictIJSON(prepareBody, &prepared); err != nil {
+		t.Fatal(err)
+	}
+
+	document["review"] = map[string]any{"prepareDigest": prepared.Review.PrepareDigest}
+	applyBody, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyHeaders := map[string]string{
+		"Content-Type":    "application/json",
+		"If-None-Match":   "*",
+		"Idempotency-Key": "key-async-foreign-reference",
+		ErrorProbeHeader:  ProbeAsync,
+	}
+	for key, value := range foreign {
+		applyHeaders[key] = value
+	}
+	applyStatus, acceptedBody := hostRequest(t, server, http.MethodPut,
+		contract.APIPath+"/resources/"+bundleRef.APIVersion+"/"+bundleRef.Kind+"/"+name,
+		applyHeaders, applyBody)
+	if applyStatus != http.StatusAccepted {
+		t.Fatalf("async apply = %d %s, want 202", applyStatus, strings.TrimSpace(string(acceptedBody)))
+	}
+	var accepted struct {
+		Operation wireOperation `json:"operation"`
+	}
+	if err := formpackage.DecodeStrictIJSON(acceptedBody, &accepted); err != nil {
+		t.Fatal(err)
+	}
+
+	var terminal wireOperation
+	for poll := 0; poll < asyncOperationPolls; poll++ {
+		status, pollBody := hostRequest(t, server, http.MethodGet,
+			contract.APIPath+"/operations/"+url.PathEscape(accepted.Operation.ID), foreign, nil)
+		if status != http.StatusOK {
+			t.Fatalf("operation poll = %d %s, want 200", status, strings.TrimSpace(string(pollBody)))
+		}
+		terminal = wireOperation{}
+		if err := formpackage.DecodeStrictIJSON(pollBody, &terminal); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !terminal.Done || terminal.Result != nil || terminal.Error["code"] != "artifact_missing" {
+		t.Fatalf("async commit referencing an unheld manifest settled as %+v, want artifact_missing", terminal)
+	}
+	if host.resources[resourceKey(contract.RunnerInput.Space, bundleRef.APIVersion, bundleRef.Kind, name)] != nil {
+		t.Fatal("a refused async commit stored the resource")
 	}
 }
 
@@ -227,6 +368,10 @@ func TestCommittedManifestSurvivesUnrelatedAbandonedUpload(t *testing.T) {
 	referencedBlob := formpackage.DigestBytes([]byte(artifactModuleSource))
 	host.manifests[referencedDigest] = referencedRaw
 	host.blobs[referencedBlob] = []byte(artifactModuleSource)
+	// A committed artifact is HELD by the tenant that committed it; the read
+	// surfaces answer that tenant and nobody else (spec/decisions/0018).
+	host.grantManifest(referencePrimaryAuth.Tenant, referencedDigest)
+	host.grantBlob(referencePrimaryAuth.Tenant, referencedBlob)
 
 	bundleRef := contract.RunnerInput.WorkerBundle.Identity.FormRef
 	host.storeResource(&storedResource{
@@ -282,7 +427,8 @@ func TestCommittedManifestSurvivesUnrelatedAbandonedUpload(t *testing.T) {
 	// And the resource that references the manifest still resolves it.
 	bundleForm := host.catalog.form(bundleRef.APIVersion, bundleRef.Kind)
 	if _, hostErr := host.validateDesiredSemantics(
-		bundleForm, contract.RunnerInput.Space, "worker-bundle-probe", map[string]any{"manifestDigest": referencedDigest},
+		referencePrimaryAuth, bundleForm, contract.RunnerInput.Space, "worker-bundle-probe",
+		map[string]any{"manifestDigest": referencedDigest},
 	); hostErr != nil {
 		t.Fatalf("the referenced manifest stopped resolving: %+v", hostErr)
 	}

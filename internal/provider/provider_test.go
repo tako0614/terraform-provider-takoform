@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -355,10 +356,12 @@ func TestProviderConfigureRejectsUnknownAuthorityConfigurationBeforeEnvironmentF
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			requests := 0
+			// Configure negotiates both lanes CONCURRENTLY (spec/decisions/0018),
+			// so the two discovery requests arrive on different goroutines.
+			var requests atomic.Int64
 			handler := discoveryHandler(t, true)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requests++
+				requests.Add(1)
 				handler(w, r)
 			}))
 			defer server.Close()
@@ -397,8 +400,8 @@ func TestProviderConfigureRejectsUnknownAuthorityConfigurationBeforeEnvironmentF
 			if !found {
 				t.Errorf("diagnostics = %#v, want %q", response.Diagnostics, test.wantSummary)
 			}
-			if requests != 0 {
-				t.Errorf("unknown provider %s made %d discovery requests", test.name, requests)
+			if got := requests.Load(); got != 0 {
+				t.Errorf("unknown provider %s made %d discovery requests", test.name, got)
 			}
 			if response.ResourceData != nil || response.DataSourceData != nil {
 				t.Error("unknown provider authority configuration produced configured provider data")

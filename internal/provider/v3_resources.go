@@ -124,9 +124,11 @@ func v3CommonAttributes(hasUpdate bool) map[string]schema.Attribute {
 			Computed:    true,
 			Description: "Canonical decimal representation revision; increments whenever the full representation changes. Deletes fence on it via If-Match.",
 		},
+		"conditions": v3ConditionsAttribute(),
 		"ready": schema.BoolAttribute{
-			Computed:    true,
-			Description: "True when the host reports the closed Ready condition with status True.",
+			Computed: true,
+			Description: "Derived convenience: true when `conditions` carries the closed Ready condition with " +
+				"status True. Read `conditions` for the reason a resource is not ready.",
 		},
 		"outputs_json": schema.StringAttribute{
 			Computed:    true,

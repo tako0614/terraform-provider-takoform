@@ -385,6 +385,11 @@
     "artifact-manifest-reject-list",
     "artifact-commit-binds-declared-size",
     "artifact-manifest-kind-exclusive",
-    "artifact-retention-while-referenced"
+    "artifact-retention-while-referenced",
+    "namespaced-group-travels-as-two-path-segments",
+    "operation-bound-to-its-creating-principal",
+    "upload-session-bound-to-its-creating-principal",
+    "artifact-digest-is-not-a-capability",
+    "manifest-reference-is-not-a-capability"
   ]
 }

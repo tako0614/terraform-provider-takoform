@@ -129,9 +129,11 @@ func (r *v3GenericResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Computed:    true,
 				Description: "Canonical decimal representation revision; deletes fence on it via If-Match.",
 			},
+			"conditions": v3ConditionsAttribute(),
 			"ready": schema.BoolAttribute{
-				Computed:    true,
-				Description: "True when the host reports the closed Ready condition with status True.",
+				Computed: true,
+				Description: "Derived convenience: true when `conditions` carries the closed Ready condition " +
+					"with status True. Read `conditions` for the reason a resource is not ready.",
 			},
 			"outputs_json": schema.StringAttribute{
 				Computed:    true,
@@ -514,7 +516,7 @@ func (r *v3GenericResource) writeState(
 	diags.Append(state.SetAttribute(ctx, path.Root("uid"), types.StringValue(res.Metadata.UID))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("generation"), types.StringValue(res.Metadata.Generation))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("revision"), types.StringValue(res.Metadata.Revision))...)
-	diags.Append(state.SetAttribute(ctx, path.Root("ready"), types.BoolValue(clientv3.ResourceReady(res)))...)
+	diags.Append(v3SetConditionsState(ctx, state, res)...)
 	diags.Append(state.SetAttribute(ctx, path.Root("outputs_json"), v3OutputsJSON(res, &diags))...)
 	// A verified representation settles any earlier accepted-but-unfinished
 	// mutation: there is nothing left to resume.

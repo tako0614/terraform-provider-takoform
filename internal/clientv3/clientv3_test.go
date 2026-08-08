@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -26,10 +25,11 @@ var testRef = FormRef{
 	SchemaDigest:      testSchemaDigest,
 }
 
-// escapedResourcePath returns the URL path of one resource with the
-// namespaced group encoded as a single %2F segment (package convention).
-func escapedResourcePath(name, suffix string) string {
-	p := APIRootPath + "/resources/" + url.PathEscape(testGroup) + "/" + testKind + "/" + name
+// splitGroupResourcePath returns the URL path of one resource with the
+// namespaced group carried as its two ordinary segments (package convention,
+// spec/decisions/0018).
+func splitGroupResourcePath(name, suffix string) string {
+	p := APIRootPath + "/resources/" + groupPathSegments(testGroup) + "/" + testKind + "/" + name
 	if suffix != "" {
 		p += "/" + suffix
 	}
@@ -214,6 +214,48 @@ func TestDiscoverRejectsMissingRequiredFeature(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "features.operations") {
 		t.Fatalf("expected missing-feature rejection, got %v", err)
+	}
+}
+
+// TestDiscoverRejectsPercentEncodedEndpointPaths proves the client refuses a
+// discovery document whose advertised endpoints are not the lane's ordinary
+// path shape. The escaped form is compared, so a host advertising
+// "%2Fv1alpha3" cannot pass as "/v1alpha3" — the exact substitution a decoded
+// comparison would accept and an intermediary would then disagree about
+// (spec/decisions/0018).
+func TestDiscoverRejectsPercentEncodedEndpointPaths(t *testing.T) {
+	encodedAPIRoot := "/apis/forms.takoform.com%2Fv1alpha3"
+	for _, test := range []struct {
+		name     string
+		mutate   func(doc map[string]any, origin string)
+		wantPart string
+	}{
+		{
+			name: "the required api endpoint",
+			mutate: func(doc map[string]any, origin string) {
+				doc["endpoints"].(map[string]string)["api"] = origin + encodedAPIRoot
+			},
+			wantPart: "invalid discovery API endpoint",
+		},
+		{
+			name: "an optional endpoint",
+			mutate: func(doc map[string]any, origin string) {
+				doc["endpoints"] = map[string]string{
+					"api":       origin + APIRootPath,
+					"artifacts": origin + encodedAPIRoot + "/artifacts",
+				}
+			},
+			wantPart: "invalid discovery artifacts endpoint",
+		},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			err := discoverWithDoc(t, test.mutate)
+			if err == nil || !strings.Contains(err.Error(), test.wantPart) ||
+				!strings.Contains(err.Error(), "must not percent-encode") {
+				t.Fatalf("expected a percent-encoded path rejection, got %v", err)
+			}
+		})
 	}
 }
 
