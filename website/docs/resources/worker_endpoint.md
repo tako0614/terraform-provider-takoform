@@ -54,7 +54,7 @@ attribute. Read `takoform_worker_endpoint.example.<name>` rather than decoding
 `outputs_json`; the JSON document still carries every value under its wire name and
 stays the way to reach an output no schema describes.
 
-- `hostname` (String, computed) — Dotted DNS hostname the host assigned to this endpoint. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable configuration never parses it, never asserts a suffix, and never reconstructs it from the resource name.
+- `hostname` (String, computed) — Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where DNS is case-insensitive and no trailing root dot. An author's hostname admits those spellings because a host canonicalizes what it is given; an assigned name has no earlier spelling to preserve. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable configuration never parses it, never asserts a suffix, and never reconstructs it from the resource name.
 - `url` (String, computed) — Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + `/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and no port, so a consumer composes deeper paths onto this value rather than deriving an origin.
 
 Outputs are never arguments: a configuration that sets one is rejected at validate

@@ -61,6 +61,17 @@ are normative; the operative text lives in
    is no port and no deeper path: a consumer composes onto `url` rather than
    reconstructing an origin.
 
+   The published `hostname` is in CANONICAL form — lowercase where DNS is
+   case-insensitive, and no trailing root dot
+   ([decision 0026](0026-attachment-claims-are-canonical-and-acyclic.md)). A
+   hostname an author writes admits those spellings because a host canonicalizes
+   what it is given; an assigned name has no earlier spelling to preserve, so it
+   is published as the canonical one. The two members are then held to one
+   grammar rather than to two: were the assigned hostname to admit the trailing
+   dot, `a.example.` would satisfy `hostname` while no `url` could be built from
+   it, and a contract whose two members cannot both be satisfied by one address
+   is not one a host can conform to.
+
 3. **A portable author may rely on exactly three things**: that a value comes
    back, that it is HTTPS, and that it routes to the worker's ACTIVE DEPLOYMENT.
    The SHAPE of the address is host detail. Which label, which subdomain, which

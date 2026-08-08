@@ -39,7 +39,9 @@ func TestNextResourceMintsAndAdvancesIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created := host.nextResource(form, nil, true, "conformance", "queue-probe", firstSpec, firstDigest, false)
+	created := host.nextResource(
+		form, nil, true, referencePrimaryAuth.Tenant, "conformance", "queue-probe", firstSpec, firstDigest, false,
+	)
 	if created.UID != "uid-1" || created.Generation != 1 || created.Revision != 1 {
 		t.Fatalf("create identity = %+v", created)
 	}
@@ -49,17 +51,23 @@ func TestNextResourceMintsAndAdvancesIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := host.nextResource(form, created, false, "conformance", "queue-probe", secondSpec, secondDigest, false)
+	updated := host.nextResource(
+		form, created, false, referencePrimaryAuth.Tenant, "conformance", "queue-probe", secondSpec, secondDigest, false,
+	)
 	if updated.UID != created.UID || updated.Generation != 2 || updated.Revision != 2 {
 		t.Fatalf("spec-change identity = %+v", updated)
 	}
 	// A byte-identical spec advances neither generation nor revision.
-	unchanged := host.nextResource(form, updated, false, "conformance", "queue-probe", secondSpec, secondDigest, false)
+	unchanged := host.nextResource(
+		form, updated, false, referencePrimaryAuth.Tenant, "conformance", "queue-probe", secondSpec, secondDigest, false,
+	)
 	if unchanged.Generation != 2 || unchanged.Revision != 2 {
 		t.Fatalf("identical-spec identity = %+v", unchanged)
 	}
 	// Delete followed by re-create mints a NEW uid for the same name.
-	recreated := host.nextResource(form, nil, true, "conformance", "queue-probe", firstSpec, firstDigest, false)
+	recreated := host.nextResource(
+		form, nil, true, referencePrimaryAuth.Tenant, "conformance", "queue-probe", firstSpec, firstDigest, false,
+	)
 	if recreated.UID == created.UID {
 		t.Fatalf("re-create returned the deleted uid %q", recreated.UID)
 	}

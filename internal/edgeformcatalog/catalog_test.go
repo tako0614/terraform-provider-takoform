@@ -377,3 +377,45 @@ func TestNoVendorNamesInRenderedOutputs(t *testing.T) {
 		}
 	}
 }
+
+// TestAnAssignedHostnameIsCanonicalAndAgreesWithItsURL holds the two published
+// members of an assigned address to one grammar.
+//
+// The desired-state hostname grammar deliberately admits the spellings DNS
+// treats as one name, because a host canonicalizes what an author wrote. An
+// assigned value has no earlier spelling to preserve, so reusing that grammar
+// for an output would let a host publish "a.example." — a name its own
+// canonical form forbids — while the url member, which carries no optional
+// dot, could not be built from it. A contract whose two members cannot both be
+// satisfied by one address is not a contract a host can conform to.
+func TestAnAssignedHostnameIsCanonicalAndAgreesWithItsURL(t *testing.T) {
+	for _, form := range Forms {
+		hostname, hasHostname := outputPattern(form, "hostname")
+		if !hasHostname {
+			continue
+		}
+		if hostname != model.PatternCanonicalHostname {
+			t.Errorf("%s publishes an assigned hostname on the authored grammar %q; an assigned name is canonical", form.Kind, hostname)
+		}
+		url, hasURL := outputPattern(form, "url")
+		if !hasURL {
+			continue
+		}
+		// The url is exactly https:// + the hostname + /, so its pattern is the
+		// hostname's with the anchors moved outward. Comparing the strings says
+		// that in the one place a divergence could hide.
+		want := `^https://` + strings.TrimSuffix(strings.TrimPrefix(hostname, `^`), `$`) + `/$`
+		if url != want {
+			t.Errorf("%s url pattern %q does not admit exactly the hostnames its hostname pattern does; want %q", form.Kind, url, want)
+		}
+	}
+}
+
+func outputPattern(form model.Form, wire string) (string, bool) {
+	for _, output := range form.Outputs {
+		if output.Wire == wire {
+			return output.Pattern, output.Pattern != ""
+		}
+	}
+	return "", false
+}

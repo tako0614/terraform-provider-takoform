@@ -81,7 +81,10 @@ func TestEnvironmentPropertyNamesFailClosedOnACollision(t *testing.T) {
 
 func TestLoadableMediaTypesAreClosed(t *testing.T) {
 	if IsLoadableMediaType("text/html") || IsLoadableMediaType("application/javascript") {
-		t.Fatalf("the loadable media-type set must be exactly the ABI's five")
+		t.Fatalf("the loadable media-type set must be exactly the ABI's importable set")
+	}
+	if IsLoadableMediaType("application/source-map+json") {
+		t.Fatalf("an auxiliary media type is carried, never loaded")
 	}
 	for _, mediaType := range LoadableMediaTypes {
 		if !IsLoadableMediaType(mediaType) {

@@ -1,6 +1,10 @@
 package edgeformcatalog
 
-import "fmt"
+import (
+	"fmt"
+
+	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
+)
 
 // The six exact Interface contracts of the Edge Platform Family (decision
 // 0010). An Interface Definition fixes operations with typed input/output
@@ -31,6 +35,14 @@ const (
 	// RuntimeHandlerProperty is the property of that operation's input schema
 	// whose item enum IS the handler vocabulary.
 	RuntimeHandlerProperty = "declaredHandlers"
+
+	// RuntimeLoadableProperty is the property of the loadModule input schema
+	// whose item mediaType enum IS the set of module media types the module
+	// graph may import — and therefore the set mainModule may name.
+	RuntimeLoadableProperty = "modules"
+	// RuntimeAuxiliaryProperty is the property whose item mediaType enum IS
+	// the set a bundle may carry without ever importing it.
+	RuntimeAuxiliaryProperty = "auxiliaryModules"
 )
 
 // InterfaceDefinition mirrors interface-definition-v1alpha1.schema.json.
@@ -330,6 +342,57 @@ func runtimeHandlersOf(definition InterfaceDefinition) ([]string, error) {
 			text, ok := value.(string)
 			if !ok {
 				return nil, fmt.Errorf("interface %s handler vocabulary carries a non-string member", definition.Name)
+			}
+			out = append(out, text)
+		}
+		return out, nil
+	}
+	return nil, fmt.Errorf("interface %s declares no %s operation", definition.Name, RuntimeHandlerOperation)
+}
+
+// RuntimeLoadableMediaTypes reads the importable module media types back out
+// of the runtime contract, the way a conforming host must: from the mediaType
+// enum of the loadModule operation's `modules` items. Nothing else in the
+// definition states that set.
+func RuntimeLoadableMediaTypes() ([]string, error) {
+	return runtimeMediaTypesOf(RuntimeLoadableProperty)
+}
+
+// RuntimeAuxiliaryMediaTypes reads the carry-only module media types back out
+// of the same operation's `auxiliaryModules` items.
+func RuntimeAuxiliaryMediaTypes() ([]string, error) {
+	return runtimeMediaTypesOf(RuntimeAuxiliaryProperty)
+}
+
+func runtimeMediaTypesOf(property string) ([]string, error) {
+	definition, err := interfaceDefinitionByName(WorkerRuntimeInterfaceName)
+	if err != nil {
+		return nil, err
+	}
+	for _, operation := range definition.Operations {
+		if operation.Name != RuntimeHandlerOperation {
+			continue
+		}
+		properties, _ := operation.InputSchema["properties"].(map[string]any)
+		list, _ := properties[property].(map[string]any)
+		items, _ := list["items"].(map[string]any)
+		itemProperties, _ := items["properties"].(map[string]any)
+		mediaType, _ := itemProperties["mediaType"].(map[string]any)
+		values, _ := mediaType["enum"].([]any)
+		if len(values) == 0 {
+			return nil, fmt.Errorf(
+				"interface %s operation %s declares no %s media-type set",
+				definition.Name, RuntimeHandlerOperation, property,
+			)
+		}
+		out := make([]string, 0, len(values))
+		for _, value := range values {
+			text, ok := value.(string)
+			if !ok {
+				return nil, fmt.Errorf(
+					"interface %s %s media-type set carries a non-string member",
+					definition.Name, property,
+				)
 			}
 			out = append(out, text)
 		}
@@ -1217,14 +1280,24 @@ func workerServiceInterface() InterfaceDefinition {
 // can never disagree.
 var runtimeHandlerNames = []any{"fetch", "scheduled", "queue", "tail"}
 
-// runtimeModuleMediaTypes is the closed set of module media types a conforming
-// runtime loads out of a Worker Bundle.
-var runtimeModuleMediaTypes = []any{
-	"application/javascript+module",
-	"application/json",
-	"application/octet-stream",
-	"application/wasm",
-	"text/plain",
+// runtimeLoadableMediaTypes and runtimeAuxiliaryMediaTypes are the ABI's two
+// module classes, read out of the lane's single media-type statement
+// (internal/currentformmodel/artifact_media.go) rather than spelled a second
+// time here. Their union is exactly what the published artifact-manifest
+// schema admits, so a bundle a host commits is a bundle this runtime can load.
+var (
+	runtimeLoadableMediaTypes  = enumValues(model.LoadableModuleMediaTypes())
+	runtimeAuxiliaryMediaTypes = enumValues(model.AuxiliaryModuleMediaTypes())
+)
+
+// enumValues renders one closed string set as the []any a JSON Schema enum
+// takes.
+func enumValues(values []string) []any {
+	out := make([]any, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	return out
 }
 
 // runtimeGlobals is the portable minimum Web platform surface. It is
@@ -1322,17 +1395,17 @@ func workerRuntimeInterface() InterfaceDefinition {
 		Operations: []InterfaceOperation{
 			{
 				Name: RuntimeHandlerOperation,
-				Description: "Loads one Worker Bundle into a fresh isolate before the first invocation. mainModule names " +
-					"the ES module whose default export carries the handlers; modules lists the whole bundle. Exactly " +
-					"these media types load: application/javascript+module as an ES module; application/json, default " +
-					"export the parsed document; text/plain, default export the decoded UTF-8 text; " +
-					"application/octet-stream, default export an ArrayBuffer; and application/wasm, whose default export " +
-					"is a COMPILED WebAssembly.Module, never an instance — the runtime compiles it once per isolate and " +
-					"the JavaScript module instantiates it with new WebAssembly.Instance(module, imports), so imports " +
-					"stay the application's choice. exportedHandlers is the subset of the vocabulary the default export " +
-					"exposes as callable own properties; a declared handler the module does not export fails with " +
-					"handler_not_exported before any traffic arrives. The declaredHandlers enum IS this ABI's handler " +
-					"vocabulary: a Worker Version declaring anything outside it is refused.",
+				Description: "Loads one Worker Bundle into a fresh isolate. mainModule names the ES module whose default " +
+					"export carries the handlers, and MUST name one entry of modules. modules is the IMPORTABLE " +
+					"module graph; exactly these load: application/javascript+module as an ES module; text/plain as " +
+					"decoded UTF-8 text; application/octet-stream as an ArrayBuffer; and application/wasm as a " +
+					"COMPILED WebAssembly.Module, never an instance, so imports stay the application's choice. " +
+					"auxiliaryModules is what the bundle CARRIES without linking: source-map evidence. Its presence " +
+					"is not an error, it is never mainModule, and resolving an import to one fails " +
+					"unsupported_media_type. This ABI version loads no application/json. exportedHandlers is the " +
+					"subset of the vocabulary the default export exposes as callable own properties; a declared " +
+					"handler the module does not export fails handler_not_exported before traffic arrives. The " +
+					"declaredHandlers enum IS this ABI's handler vocabulary: anything outside it is refused.",
 				InputSchema: operationObject([]string{"declaredHandlers", "mainModule", "modules"}, map[string]any{
 					"mainModule":           stringSchema(1, 1024),
 					RuntimeHandlerProperty: handlerSet(len(runtimeHandlerNames)),
@@ -1344,7 +1417,19 @@ func workerRuntimeInterface() InterfaceDefinition {
 							"required":             []string{"mediaType", "name"},
 							"properties": map[string]any{
 								"name":      stringSchema(1, 1024),
-								"mediaType": map[string]any{"type": "string", "enum": runtimeModuleMediaTypes},
+								"mediaType": map[string]any{"type": "string", "enum": runtimeLoadableMediaTypes},
+							},
+						},
+					},
+					"auxiliaryModules": map[string]any{
+						"type": "array", "maxItems": 512, "uniqueItems": true,
+						"items": map[string]any{
+							"type":                 "object",
+							"additionalProperties": false,
+							"required":             []string{"mediaType", "name"},
+							"properties": map[string]any{
+								"name":      stringSchema(1, 1024),
+								"mediaType": map[string]any{"type": "string", "enum": runtimeAuxiliaryMediaTypes},
 							},
 						},
 					},
@@ -1524,6 +1609,31 @@ func workerRuntimeInterface() InterfaceDefinition {
 						"modules":              []any{map[string]any{"name": "fetch-only.js", "mediaType": "application/javascript+module"}},
 						RuntimeHandlerProperty: []any{"fetch", "scheduled"},
 					}, ExpectedError: "handler_not_exported"},
+				},
+			},
+			{
+				// An auxiliary module rides along and is never linked. Both
+				// halves are stated, because a runtime that merely tolerated
+				// the source map and a runtime that imported it would be
+				// indistinguishable from the first step alone.
+				Name: "auxiliary-module-is-carried-never-loaded",
+				Steps: []InterfaceFixtureStep{
+					{Operation: RuntimeHandlerOperation, Input: map[string]any{
+						"mainModule":            "index.js",
+						RuntimeLoadableProperty: []any{map[string]any{"name": "index.js", "mediaType": "application/javascript+module"}},
+						RuntimeAuxiliaryProperty: []any{
+							map[string]any{"name": "index.js.map", "mediaType": "application/source-map+json"},
+						},
+						RuntimeHandlerProperty: []any{"fetch"},
+					}, Expected: map[string]any{"exportedHandlers": []any{"fetch", "scheduled", "queue", "tail"}}},
+					{Operation: RuntimeHandlerOperation, Input: map[string]any{
+						"mainModule":            "index.js.map",
+						RuntimeLoadableProperty: []any{map[string]any{"name": "index.js", "mediaType": "application/javascript+module"}},
+						RuntimeAuxiliaryProperty: []any{
+							map[string]any{"name": "index.js.map", "mediaType": "application/source-map+json"},
+						},
+						RuntimeHandlerProperty: []any{"fetch"},
+					}, ExpectedError: "unsupported_media_type"},
 				},
 			},
 			{

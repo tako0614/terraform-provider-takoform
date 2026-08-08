@@ -14,6 +14,8 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 // HandlerVocabulary is the closed handler vocabulary of the ABI: the
@@ -22,14 +24,16 @@ import (
 var HandlerVocabulary = []string{"fetch", "scheduled", "queue", "tail"}
 
 // LoadableMediaTypes is the closed set of module media types
-// `worker.runtime@1.0.0` loads. Anything else fails `unsupported_media_type`.
-var LoadableMediaTypes = []string{
-	"application/javascript+module",
-	"application/json",
-	"application/octet-stream",
-	"application/wasm",
-	"text/plain",
-}
+// `worker.runtime@1.0.0` loads. Anything else fails `unsupported_media_type` —
+// including a media type a bundle may legitimately CARRY, such as source-map
+// evidence, which the graph never imports.
+//
+// It is read out of the lane's single media-type statement
+// (internal/currentformmodel/artifact_media.go) rather than spelled a second
+// time here, for the reason that statement exists: a runtime measured against
+// a set the artifact manifest does not admit is measured for loading modules
+// no conforming bundle can carry.
+var LoadableMediaTypes = currentformmodel.LoadableModuleMediaTypes()
 
 // The closed loadModule error vocabulary.
 const (

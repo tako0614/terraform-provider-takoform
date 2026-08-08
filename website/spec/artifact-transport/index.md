@@ -52,6 +52,7 @@ A host MUST reject, before commit:
 - size or digest mismatches between manifest and received bytes;
 - file-count or total-size overruns of the host's published limits;
 - a `WorkerBundle` whose `mainModule` is not listed in `modules`;
+- a `WorkerBundle` whose `mainModule` names an auxiliary module;
 - a source map whose target module is absent;
 - archive bombs — archives are transport only and never semantic identity.
 
@@ -61,6 +62,42 @@ never uploaded uses `artifact_missing` (404).
 Every rule above is re-verified at commit, because commit is the step that
 mints an immutable identity. A host MUST NOT rely on having checked the
 manifest only when the upload started.
+
+## Module media types: loadable and auxiliary
+
+A `WorkerBundle` manifest admits exactly five module media types, and they
+divide into two classes by what the module graph does with them:
+
+| Class | Media type | The importing module receives |
+| --- | --- | --- |
+| loadable | `application/javascript+module` | an ES module |
+| loadable | `text/plain` | the decoded UTF-8 text |
+| loadable | `application/octet-stream` | an `ArrayBuffer` |
+| loadable | `application/wasm` | a compiled `WebAssembly.Module`, never an instance |
+| auxiliary | `application/source-map+json` | nothing: it is never imported |
+
+**Loadable** is the set the module graph may import, and it is exactly the set
+`worker.runtime@1.0.0`'s `loadModule` operation states
+([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
+**Auxiliary** is what a bundle may carry without ever linking it: today, source-map
+evidence about another module. A host MUST refuse an auxiliary module as a
+bundle's `mainModule` (`artifact_invalid`, 400), a runtime MUST fail an import
+resolving to one (`unsupported_media_type`), and neither may treat the module's
+mere presence in `modules` as an error — carrying it is the whole point.
+
+`application/json` is not supported in this ABI version. The published manifest
+enum never admitted it, so a runtime that loaded one would promise a module no
+conforming bundle can carry.
+
+The published manifest schema states the union and cannot state the split:
+its `modules[].mediaType` enum lists all five, and nothing in JSON Schema
+relates `mainModule` to the media type of the module it names. The split is
+therefore enforced by the host, by the authoring client, and by the required
+conformance check `bundle-main-module-is-loadable`
+([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)).
+The set has one source of truth, `internal/currentformmodel`, which the runtime
+contract, the host validator, and the provider's authoring allowlist all read;
+a drift gate holds it to the published enum.
 
 ## Per-kind exclusivity
 
