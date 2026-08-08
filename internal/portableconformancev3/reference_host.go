@@ -148,8 +148,13 @@ type hostOperation struct {
 	ID             string
 	Done           bool
 	PollsRemaining int
-	commit         func() (map[string]any, *hostError)
-	terminalBody   []byte
+	// DeleteTarget is the resource key an accepted-but-unfinished DELETE is
+	// removing, empty for every other accepted mutation. It is what makes
+	// "being deleted" observable to the aggregate rules without a marker on the
+	// resource that a cancel would have to unwind.
+	DeleteTarget string
+	commit       func() (map[string]any, *hostError)
+	terminalBody []byte
 }
 
 // ReferenceHost is a deliberately small, deterministic v1alpha3 host used to
@@ -725,10 +730,15 @@ func specOrEmpty(spec map[string]any) map[string]any {
 // attachment's worker are protected exactly as a typed binding is.
 func (h *ReferenceHost) validateDesiredSemantics(
 	form *installedForm,
-	space string,
+	space, name string,
 	spec map[string]any,
 ) ([]storedRelation, *hostError) {
+	// Two pure spec-shape rules first: neither needs another resource, so
+	// neither should depend on one resolving.
 	if hostErr := validateDeploymentWeightSum(form, spec); hostErr != nil {
+		return nil, hostErr
+	}
+	if hostErr := validateEnvironmentNamespace(form, spec); hostErr != nil {
 		return nil, hostErr
 	}
 	relations, hostErr := h.resolveRelations(form, space, spec)
@@ -740,19 +750,23 @@ func (h *ReferenceHost) validateDesiredSemantics(
 			return nil, hostErr
 		}
 	}
-	// The handler gate reads the relations this apply just resolved, never the
-	// names in the spec: the gate is a statement about one worker INCARNATION.
-	if hostErr := h.requireDeclaredHandler(form, space, spec, relations); hostErr != nil {
+	// The Worker aggregate rules read the relations this apply just resolved,
+	// never the names in the spec: every one of them is a statement about one
+	// worker INCARNATION (spec/decisions/0016).
+	if hostErr := h.validateWorkerAggregate(form, space, name, spec, relations); hostErr != nil {
 		return nil, hostErr
 	}
 	return relations, nil
 }
 
-// validateDeploymentWeightSum enforces the one WorkerDeployment rule the
-// Form description calls host-validated: traffic weights are basis points and
-// must sum to exactly 10000, because a JSON Schema cannot add numbers.
+// validateDeploymentWeightSum enforces the WorkerDeployment rule the Form
+// description calls host-validated: traffic weights are basis points and must
+// sum to exactly 10000, because a JSON Schema cannot add numbers. It is the
+// weight half of the deployment integrity rule; the ownership, uniqueness, and
+// availability halves need resolved relations and live in
+// validateWorkerDeployment.
 func validateDeploymentWeightSum(form *installedForm, spec map[string]any) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != "WorkerDeployment" {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerDeploymentKind {
 		return nil
 	}
 	versions, _ := spec["versions"].([]any)
@@ -780,64 +794,6 @@ func validateDeploymentWeightSum(form *installedForm, spec map[string]any) *host
 		)
 	}
 	return nil
-}
-
-// requireDeclaredHandler gates the two cross-resource attachments: a
-// WorkerCronTrigger invokes the scheduled handler and a QueueConsumer invokes
-// the queue handler, so attaching one to a worker whose code declares no such
-// handler is an unsupported capability, not a valid desired state. Declared
-// handlers are resolved from ANY stored WorkerVersion of that worker in the
-// same space and group; a stored WorkerDeployment is not required.
-//
-// Candidates are selected by the worker UID both sides RESOLVED to, never by
-// the worker name their specs happen to spell. A name can be reused: after a
-// ModuleWorker is replaced out of band, a stale WorkerVersion still pinned to
-// the deleted worker describes code the new incarnation does not run, and
-// admitting an attachment on its word would activate a handler that does not
-// exist. The attachment's own freshly resolved `/worker` relation is the
-// incarnation under test, and only versions pinned to that same incarnation
-// can answer for it.
-func (h *ReferenceHost) requireDeclaredHandler(
-	form *installedForm,
-	space string,
-	spec map[string]any,
-	relations []storedRelation,
-) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup {
-		return nil
-	}
-	var handler string
-	switch form.Ref.Kind {
-	case "WorkerCronTrigger":
-		handler = "scheduled"
-	case "QueueConsumer":
-		handler = "queue"
-	default:
-		return nil
-	}
-	worker := nestedName(spec, "worker")
-	workerUID := relationTargetUID(relations, "/worker")
-	if worker == "" || workerUID == "" {
-		return stableError("invalid_argument", form.Ref.Kind+" requires a target worker")
-	}
-	for _, candidate := range h.resources {
-		if candidate.Space != space || candidate.Group != form.Ref.APIVersion ||
-			candidate.Kind != "WorkerVersion" ||
-			relationTargetUID(candidate.Relations, "/worker") != workerUID {
-			continue
-		}
-		handlers, _ := candidate.Spec["handlers"].([]any)
-		for _, declared := range handlers {
-			if name, _ := declared.(string); name == handler {
-				return nil
-			}
-		}
-	}
-	return stableError(
-		"unsupported_capability",
-		"no stored WorkerVersion of worker "+worker+" at uid "+workerUID+
-			" declares the "+handler+" handler",
-	)
 }
 
 // mutationFence carries the exact precondition headers of one mutation. The
@@ -960,7 +916,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 	// poll time, so an accepted operation re-derives every precondition
 	// against the store as it is when the mutation actually lands.
 	applyOnce := func() (*storedResource, bool, *hostError) {
-		relations, hostErr := h.validateDesiredSemantics(form, space, body.Spec)
+		relations, hostErr := h.validateDesiredSemantics(form, space, name, body.Spec)
 		if hostErr != nil {
 			return nil, false, hostErr
 		}
@@ -1010,7 +966,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 		return next, create, nil
 	}
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
-		h.acceptOperation(w, request, raw, space, func() (map[string]any, *hostError) {
+		h.acceptOperation(w, request, raw, space, "", func() (map[string]any, *hostError) {
 			next, _, hostErr := applyOnce()
 			if hostErr != nil {
 				return nil, hostErr
@@ -1136,6 +1092,12 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 	// reason stays inside the closed portable vocabulary; the pointer and both
 	// uids travel in the free-form hostReason.
 	if reason, hostReason, drifted := h.relationDrift(resource); drifted {
+		ready["status"] = "False"
+		ready["reason"] = reason
+		ready["hostReason"] = hostReason
+	} else if reason, hostReason, unavailable := h.workerServiceUnavailable(resource); unavailable {
+		// A Module Worker's readiness is a claim about SERVICE, and what serves
+		// is whatever its active deployment selects (spec/decisions/0016).
 		ready["status"] = "False"
 		ready["reason"] = reason
 		ready["hostReason"] = hostReason
@@ -1289,7 +1251,7 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 	// Adoption is a mutation, so it passes the SAME cross-resource gauntlet
 	// as apply: an import may not mint a resource whose typed bindings, bundle
 	// bytes, deployment weights, or handler gates a fresh apply would reject.
-	relations, hostErr := h.validateDesiredSemantics(form, body.Metadata.Space, body.Spec)
+	relations, hostErr := h.validateDesiredSemantics(form, body.Metadata.Space, name, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
@@ -1357,7 +1319,7 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 	}
 	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
-		h.acceptOperation(w, request, raw, request.URL.Query().Get("space"), func() (map[string]any, *hostError) {
+		h.acceptOperation(w, request, raw, request.URL.Query().Get("space"), key, func() (map[string]any, *hostError) {
 			// The revision fence and the live-binding scan are re-derived at
 			// COMMIT time: an accepted delete must not remove a resource that
 			// has since been re-bound or re-revised.
@@ -1388,13 +1350,14 @@ func (h *ReferenceHost) acceptOperation(
 	w http.ResponseWriter,
 	request *http.Request,
 	raw []byte,
-	space string,
+	space, deleteTarget string,
 	commit func() (map[string]any, *hostError),
 ) {
 	h.opCounter++
 	operation := &hostOperation{
 		ID:             "op_" + strconv.Itoa(h.opCounter),
 		PollsRemaining: asyncOperationPolls,
+		DeleteTarget:   deleteTarget,
 		commit:         commit,
 	}
 	h.operations[operation.ID] = operation

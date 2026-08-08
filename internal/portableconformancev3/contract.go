@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 57-entry executed-check list every v3
+// requiredRunnerChecks is the closed 64-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -174,7 +174,14 @@ var requiredRunnerChecks = []string{
 	"import-adopts-native-resource",
 	"import-validates-like-apply",
 	"deployment-weight-sum-enforced",
+	"deployment-single-active-per-worker",
+	"deployment-version-ownership",
+	"deployment-version-duplicate-rejected",
+	"attachment-requires-active-deployment",
 	"handler-gated-attachments",
+	"binding-name-collision-rejected",
+	"deployment-change-preserves-dependents",
+	"deployment-delete-blocked-by-dependent",
 	"artifact-manifest-reject-list",
 	"artifact-commit-binds-declared-size",
 	"artifact-manifest-kind-exclusive",
@@ -253,6 +260,7 @@ type RunnerInput struct {
 	WorkerVersion        ResourceProbe     `json:"workerVersion"`
 	WorkerBundle         WorkerBundleProbe `json:"workerBundle"`
 	WorkerDeployment     ResourceProbe     `json:"workerDeployment"`
+	WorkerCustomDomain   ResourceProbe     `json:"workerCustomDomain"`
 	WorkerCronTrigger    ResourceProbe     `json:"workerCronTrigger"`
 	QueueConsumer        ResourceProbe     `json:"queueConsumer"`
 	SyntheticSecondGroup FormRef           `json:"syntheticSecondGroup"`
@@ -384,6 +392,7 @@ func validateContract(contract Contract) error {
 		{"workerVersion", input.WorkerVersion, "WorkerVersion"},
 		{"workerBundle", input.WorkerBundle.ResourceProbe, "WorkerBundle"},
 		{"workerDeployment", input.WorkerDeployment, "WorkerDeployment"},
+		{"workerCustomDomain", input.WorkerCustomDomain, "WorkerCustomDomain"},
 		{"workerCronTrigger", input.WorkerCronTrigger, "WorkerCronTrigger"},
 		{"queueConsumer", input.QueueConsumer, "QueueConsumer"},
 	}
@@ -497,7 +506,34 @@ func validateWorkerVersionProbe(input RunnerInput) error {
 	if value, _ := desired["compatibilityDate"].(string); value == "" {
 		return errors.New("portable host v3 workerVersion probe must pin a compatibilityDate")
 	}
+	// The version probe is what the deployment probe weights, and the
+	// deployment is what every attachment probe is admitted against
+	// (spec/decisions/0016). A corpus whose version declared fewer handlers than
+	// its attachments invoke could never drive the lane at all.
+	declared := map[string]bool{}
+	for _, handler := range anyStringSlice(desired["handlers"]) {
+		declared[handler] = true
+	}
+	for _, handler := range []string{fetchHandler, scheduledHandler, queueHandler} {
+		if !declared[handler] {
+			return fmt.Errorf(
+				"portable host v3 workerVersion probe must declare the %s handler its attachment probes invoke",
+				handler,
+			)
+		}
+	}
 	return nil
+}
+
+// anyStringSlice reads a decoded JSON string array.
+func anyStringSlice(value any) []string {
+	items, _ := value.([]any)
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		text, _ := item.(string)
+		out = append(out, text)
+	}
+	return out
 }
 
 // validateWorkerBundleProbe proves the corpus states one bundle, once. The
@@ -561,9 +597,9 @@ func canonicalDigestOfValue(value any) (string, error) {
 	return formpackage.DigestCanonicalJSON(raw)
 }
 
-// validateCrossResourceProbes pins the three probes whose portable rules are
-// cross-resource semantics a schema cannot express: the deployment weight
-// sum, and the two handler-gated attachments.
+// validateCrossResourceProbes pins the probes whose portable rules are
+// cross-resource semantics a schema cannot express: the deployment weight sum,
+// and the three attachments gated on the worker's active deployment.
 func validateCrossResourceProbes(input RunnerInput) error {
 	deployment := input.WorkerDeployment.Desired
 	if nestedName(deployment, "worker") != input.ModuleWorker.Name {
@@ -580,6 +616,12 @@ func validateCrossResourceProbes(input RunnerInput) error {
 	weight, ok := entry["weight"].(json.Number)
 	if !ok || weight.String() != "10000" {
 		return errors.New("portable host v3 workerDeployment probe must declare the exact 10000 basis-point sum")
+	}
+	if nestedName(input.WorkerCustomDomain.Desired, "worker") != input.ModuleWorker.Name {
+		return errors.New("portable host v3 workerCustomDomain probe must reference the moduleWorker probe")
+	}
+	if hostname, _ := input.WorkerCustomDomain.Desired["hostname"].(string); hostname == "" {
+		return errors.New("portable host v3 workerCustomDomain probe must pin a hostname")
 	}
 	if nestedName(input.WorkerCronTrigger.Desired, "worker") != input.ModuleWorker.Name {
 		return errors.New("portable host v3 workerCronTrigger probe must reference the moduleWorker probe")

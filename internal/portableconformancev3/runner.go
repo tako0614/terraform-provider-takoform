@@ -255,6 +255,13 @@ type probeTarget struct {
 	Spec          map[string]any
 	// Lifecycle is the exact capability set the corpus pins for this Form.
 	Lifecycle []string
+	// ReadyOptional marks a probe whose Ready condition legitimately depends on
+	// other resources, so a generic lifecycle assertion must not demand
+	// Ready=True. A Module Worker is the one such probe: its readiness is a
+	// claim about SERVICE, and nothing serves until its deployment does
+	// (spec/decisions/0016). Every check that cares asserts the exact condition
+	// itself rather than leaning on the generic one.
+	ReadyOptional bool
 }
 
 // target builds one probe target with its desired spec already materialized
@@ -270,6 +277,7 @@ func (r *v3Runner) target(probe ResourceProbe) probeTarget {
 		Space:         r.contract.RunnerInput.Space,
 		Spec:          r.materialize(probe.Identity.FormRef, probe.Desired),
 		Lifecycle:     append([]string(nil), probe.LifecycleCapabilities...),
+		ReadyOptional: probe.Identity.FormRef.Kind == moduleWorkerKind,
 	}
 }
 
@@ -290,7 +298,7 @@ func (r *v3Runner) loadDesiredSchemas() error {
 	probes := []ResourceProbe{
 		input.ModuleWorker, input.EdgeKvNamespace, input.AtLeastOnceQueue,
 		input.WorkerVersion, input.WorkerBundle.ResourceProbe, input.WorkerDeployment,
-		input.WorkerCronTrigger, input.QueueConsumer,
+		input.WorkerCustomDomain, input.WorkerCronTrigger, input.QueueConsumer,
 	}
 	r.desiredSchemas = map[string]map[string]any{}
 	for _, probe := range probes {
@@ -516,8 +524,15 @@ func verifyResourceIdentity(got wireResource, target probeTarget) error {
 	}
 	ready := false
 	for _, condition := range got.Status.Conditions {
-		if condition.Type == "Ready" && condition.Status == "True" {
-			ready = condition.Reason != "" && condition.LastTransitionTime != ""
+		if condition.Type != "Ready" {
+			continue
+		}
+		complete := condition.Reason != "" && condition.LastTransitionTime != ""
+		// A probe whose readiness depends on other resources may legitimately
+		// answer Ready=False; the condition must still be COMPLETE, and the
+		// check that owns that state asserts its exact reason.
+		if condition.Status == "True" || (target.ReadyOptional && condition.Status == "False") {
+			ready = complete
 		}
 	}
 	if !ready {
