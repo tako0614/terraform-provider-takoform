@@ -29,13 +29,69 @@ const (
 // customDomainClaiming builds one Worker Custom Domain of the deployed gate
 // worker under a given name and hostname.
 func (r *v3Runner) customDomainClaiming(name, hostname string) probeTarget {
+	return r.customDomainClaimingIn("", name, "gate-worker", hostname)
+}
+
+// customDomainClaimingIn is the same target in a named space, of a named
+// worker. A reference carries no space, so the worker it names is resolved
+// inside the space the attachment itself is applied to — which is what makes a
+// claim in a second space a claim on a DIFFERENT aggregate, and what makes the
+// hostname the only thing the two have in common.
+func (r *v3Runner) customDomainClaimingIn(space, name, worker, hostname string) probeTarget {
 	input := r.contract.RunnerInput
 	domain := r.target(input.WorkerCustomDomain)
 	domain.Name = name
+	if space != "" {
+		domain.Space = space
+	}
 	domain.Spec = cloneJSONMap(domain.Spec)
-	domain.Spec["worker"] = exactReference(r.target(input.ModuleWorker), "gate-worker")
+	domain.Spec["worker"] = exactReference(r.target(input.ModuleWorker), worker)
 	domain.Spec["hostname"] = hostname
 	return domain
+}
+
+// claimFixtureElsewhere builds a COMPLETE worker aggregate in the runner's
+// second space — its own bundle, worker, version, and the deployment that
+// serves fetch — and returns the custom domain target that would claim a
+// hostname there, followed by everything it stands on in the order those must
+// be removed.
+//
+// Nothing here is shared with the first space except the committed artifact,
+// which is content-addressed and held by the tenant rather than by a space. The
+// point of building the whole aggregate rather than reusing the first space's
+// is that the attachment gate must have nothing to say about the claim: when
+// the host refuses the domain below, the only thing left for it to be refusing
+// is the hostname.
+func (r *v3Runner) claimFixtureElsewhere(hostname string) (probeTarget, []probeTarget, error) {
+	input := r.contract.RunnerInput
+	space := input.AlternateSpace
+	if r.artifactManifestDigest == "" {
+		return probeTarget{}, nil, errors.New(
+			"the second space's bundle needs the committed manifest digest; " +
+				"this check runs after the artifact sequence",
+		)
+	}
+	elsewhere := func(target probeTarget) probeTarget {
+		target.Space = space
+		return target
+	}
+
+	bundle := elsewhere(r.target(input.WorkerBundle.ResourceProbe))
+	bundle.Name = "claim-far-bundle"
+	bundle.Spec = map[string]any{"manifestDigest": r.artifactManifestDigest}
+	worker := elsewhere(r.target(input.ModuleWorker))
+	worker.Name = "claim-far-worker"
+	version := elsewhere(r.workerVersionOfBundle("claim-far-version", worker.Name, bundle.Name, fetchHandler))
+	deployment := elsewhere(r.deploymentOf("claim-far-deployment", worker.Name, version.Name))
+	for _, target := range []probeTarget{bundle, worker, version, deployment} {
+		if _, _, err := r.applyResource(target, applyOptions{
+			Create: true, IdempotencyKey: "key-" + target.Name,
+		}, http.StatusCreated); err != nil {
+			return probeTarget{}, nil, fmt.Errorf("the second space's %s: %w", target.Name, err)
+		}
+	}
+	domain := r.customDomainClaimingIn(space, "claim-far-domain", worker.Name, hostname)
+	return domain, []probeTarget{deployment, version, worker, bundle}, nil
 }
 
 // prepareExpectingRewrite posts one prepare whose spec the host is expected to
@@ -166,7 +222,8 @@ func (r *v3Runner) checkCustomDomainHostnameCanonicalized() error {
 	return nil
 }
 
-// checkCustomDomainHostnameClaimUnique proves one hostname has one answer.
+// checkCustomDomainHostnameClaimUnique proves one hostname has one answer
+// across every space of one tenant.
 //
 // It is a rule over the STORE, so no desired-state schema can see it: the
 // second attachment's document is perfectly valid, and what makes it wrong is
@@ -174,11 +231,21 @@ func (r *v3Runner) checkCustomDomainHostnameCanonicalized() error {
 // hostname would leave the host with two answers to one request and no rule
 // choosing between them.
 //
-// Both directions are driven, so a host cannot pass by refusing every second
-// custom domain: the colliding claim is refused while the first is live and
-// accepted once it is gone. The colliding claim is written in a DIFFERENT
-// spelling from the one the store holds, so a host comparing the written bytes
-// admits it and fails here.
+// The SPACE is the half of the rule a same-space collision cannot prove. Spaces
+// partition one tenant's resources and DNS does not partition with them, so a
+// host that enforced uniqueness inside one space would pass a same-space corpus
+// and still route one DNS name two ways — which is why the collision below is
+// driven from a second space, against its own worker, its own version and its
+// own deployment, while the first space's holder is live. It is driven in both
+// directions, so the rule cannot be a one-way scan: the second space is refused
+// while the first space holds the name, and the first space is refused while the
+// second space holds it.
+//
+// Both verdicts are driven too, so a host cannot pass by refusing every second
+// custom domain: each colliding claim is refused while a holder is live and
+// accepted once that holder is gone. The colliding claim is written in a
+// DIFFERENT spelling from the one the store holds, so a host comparing the
+// written bytes admits it and fails here.
 func (r *v3Runner) checkCustomDomainHostnameClaimUnique() error {
 	colliding := r.customDomainClaiming("claim-collision-domain", canonicalClaimHostname)
 	if err := r.refuseCreate(
@@ -208,14 +275,51 @@ func (r *v3Runner) checkCustomDomainHostnameClaimUnique() error {
 	if err := r.expectResourceAbsent(restated); err != nil {
 		return fmt.Errorf("%s mutated state: %w", subject, err)
 	}
+
+	// A SECOND SPACE of the same tenant, with an aggregate of its own, claiming
+	// the name the first space serves. A host whose uniqueness rule is per space
+	// stores this one and answers one hostname two ways.
+	far, foundation, err := r.claimFixtureElsewhere(canonicalClaimHostname)
+	if err != nil {
+		return err
+	}
+	if err := r.refuseCreate(
+		far, "invalid_argument", "key-claim-far-collision",
+		"a WorkerCustomDomain in a second space claiming a hostname the tenant already serves",
+	); err != nil {
+		return err
+	}
+
 	// Releasing the holder makes the claim representable, so the refusal was
-	// about the hostname rather than about the resource.
+	// about the hostname rather than about the resource or about the space.
 	if err := r.deleteExisting(
 		r.customDomainClaiming("canonical-domain", canonicalClaimHostname),
 		"key-canonical-domain-delete",
 	); err != nil {
 		return err
 	}
+	if _, _, err := r.applyResource(far, applyOptions{
+		Create: true, IdempotencyKey: "key-claim-far-accepted",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("the second space's claim once the first space released it: %w", err)
+	}
+	// The same refusal in the other direction: the space that now holds the name
+	// is the second one, and the first space is the one that may not take it.
+	if err := r.refuseCreate(
+		colliding, "invalid_argument", "key-claim-collision-reverse",
+		"a WorkerCustomDomain claiming a hostname another SPACE of the tenant serves",
+	); err != nil {
+		return err
+	}
+	if err := r.deleteExisting(far, "key-claim-far-delete"); err != nil {
+		return err
+	}
+	for _, target := range foundation {
+		if err := r.deleteExisting(target, "key-"+target.Name+"-delete"); err != nil {
+			return err
+		}
+	}
+
 	if _, _, err := r.applyResource(colliding, applyOptions{
 		Create: true, IdempotencyKey: "key-claim-collision-accepted",
 	}, http.StatusCreated); err != nil {
@@ -236,11 +340,19 @@ func (r *v3Runner) checkCustomDomainHostnameClaimUnique() error {
 // origin therefore builds a loop nothing terminates: maxRetries bounds one
 // message's deliveries and nothing bounds the cycle.
 //
-// Three shapes are driven. A destination resolving to the consumer's own queue
-// is the one-hop cycle. A -> B -> A is the shape a host that only compared the
-// two references in ONE document would admit, and it is what makes this a graph
-// rule rather than a field rule. An acyclic destination is accepted, so a host
-// cannot pass by refusing every dead-letter queue.
+// Four shapes are driven, and each one closes a rule a host could otherwise
+// hold in a cheaper way than the decision states.
+//
+// A destination resolving to the consumer's own queue is the one-hop cycle, the
+// only shape a FIELD comparison inside one document can see. A -> B -> A adds
+// the store: a host that compared the proposed destination against nothing but
+// the applied document admits it. A -> B -> C -> A is what separates a graph
+// WALK from an immediate back-edge test — the consumer being applied drains C
+// and points at A, and the consumer of A points at B, so nothing one hop from
+// the destination refers back to C, and a host that inspected only the
+// destination's own consumer stores the infinite circulation. A -> B -> C -> D
+// is accepted, so a host cannot pass by refusing every dead-letter queue, nor
+// by refusing chains once they are longer than the shapes above.
 func (r *v3Runner) checkDeadLetterCycleRejected() error {
 	input := r.contract.RunnerInput
 	queueOf := func(name, key string) (probeTarget, error) {
@@ -298,24 +410,51 @@ func (r *v3Runner) checkDeadLetterCycleRejected() error {
 	}
 
 	// The same consumer with an acyclic destination is accepted, so the refusal
-	// was about the cycle rather than about dead-lettering.
+	// was about the cycle rather than about dead-lettering. The chain is now
+	// A -> B -> C.
 	third, err := queueOf("dead-letter-queue-c", "key-dead-letter-queue-c")
 	if err != nil {
 		return err
 	}
-	acyclic := consumerOf("dead-letter-back", second, third)
-	if _, _, err := r.applyResource(acyclic, applyOptions{
+	onward := consumerOf("dead-letter-back", second, third)
+	if _, _, err := r.applyResource(onward, applyOptions{
 		Create: true, IdempotencyKey: "key-dead-letter-acyclic",
 	}, http.StatusCreated); err != nil {
 		return fmt.Errorf("a consumer dead-lettering to a queue that closes no cycle: %w", err)
 	}
 
-	for _, consumer := range []probeTarget{acyclic, forward} {
+	// Three hops: C's consumer would dead-letter to A, closing A -> B -> C -> A.
+	// Nothing one hop from the destination points back at C — the consumer of A
+	// dead-letters to B — so only a host that WALKS the graph refuses this, and a
+	// host that inspects the destination's consumer for a back edge stores it.
+	if err := r.refuseCreate(
+		consumerOf("dead-letter-close", third, first),
+		"invalid_argument", "key-dead-letter-close",
+		"a QueueConsumer closing a three-queue dead-letter cycle",
+	); err != nil {
+		return err
+	}
+
+	// The same consumer one hop further out closes nothing and is accepted: the
+	// rule forbids the loop, not the length of the chain, so a host that refuses
+	// every deep dead-letter graph fails here.
+	fourth, err := queueOf("dead-letter-queue-d", "key-dead-letter-queue-d")
+	if err != nil {
+		return err
+	}
+	acyclic := consumerOf("dead-letter-close", third, fourth)
+	if _, _, err := r.applyResource(acyclic, applyOptions{
+		Create: true, IdempotencyKey: "key-dead-letter-long-chain",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("a consumer extending an acyclic dead-letter chain to four queues: %w", err)
+	}
+
+	for _, consumer := range []probeTarget{acyclic, onward, forward} {
 		if err := r.deleteExisting(consumer, "key-"+consumer.Name+"-delete"); err != nil {
 			return err
 		}
 	}
-	for _, queue := range []probeTarget{third, second, first} {
+	for _, queue := range []probeTarget{fourth, third, second, first} {
 		if err := r.deleteExisting(queue, "key-"+queue.Name+"-delete"); err != nil {
 			return err
 		}

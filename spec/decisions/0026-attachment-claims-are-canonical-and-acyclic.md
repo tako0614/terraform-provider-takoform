@@ -83,6 +83,24 @@ tenant either: what one tenant may claim is a question about who controls the
 name, which is authority a Form cannot answer and this contract does not
 pretend to.
 
+The tenant is the **authenticated tenant of the request**, and it has to be,
+because nothing in the document names one: a reference carries
+`{apiVersion, kind, name}`, metadata carries a space, and neither is a boundary.
+A host compares the proposed hostname against the live claims of that tenant in
+every one of its spaces and against no others — including at commit, where the
+tenant is the one the accepted mutation was admitted from rather than whoever
+polls the operation.
+
+That the scope must be SUPPLIED is what separates this rule from every other
+cross-resource rule in the lane. One deployment per worker, one consumer per
+queue, and the dead-letter walk below are all decided on a host-issued uid, and
+a uid already names one resource inside one boundary, so those scans cannot
+reach past it however the store is arranged. A hostname is a name DNS owns: the
+comparison carries no boundary of its own, so a host that answered it out of an
+unpartitioned store would enforce the rule host-wide and refuse a name this
+decision says another tenant may hold — while naming, in the refusal, a resource
+the caller may not read.
+
 ### 3. A dead-letter destination never leads back
 
 A `QueueConsumer` whose `deadLetterQueue` resolves to the UID of the queue it
@@ -97,6 +115,14 @@ to the origin. **The walk terminates on any graph shape** for two independent
 reasons: it admits each queue UID at most once, and the number of stored
 consumers is finite and does not grow while it runs. A cycle a laxer earlier
 state left behind therefore ends the walk instead of running it forever.
+
+"Any length" is the load-bearing half. A host that asked only whether the
+DESTINATION's consumer points back at the origin refuses the self-reference and
+`A -> B -> A` and admits `A -> B -> C -> A`, which is the same infinite
+circulation reached one hop later — and it is the shape an author actually
+builds, one consumer at a time. Nothing short of following the path decides
+this, so the required check drives a three-queue cycle: a corpus that stopped at
+two would be passed by the one-hop test.
 
 ### The error code
 
@@ -142,7 +168,19 @@ cycle, so the author can act on it without a second request.
   `custom-domain-hostname-canonicalized`, `custom-domain-hostname-claim-unique`,
   and `dead-letter-cycle-rejected`. Each drives a configuration a laxer host
   accepts and proves nothing was stored, and each also drives the accepting case
-  so a host cannot pass by refusing everything.
+  so a host cannot pass by refusing everything. Two of them drive the SCOPE of
+  the rule and not only the rule: the claim check builds a second space with its
+  own worker, version and deployment and collides from there while the first
+  space's holder is live, in both directions, so a host enforcing uniqueness
+  inside one space fails; the cycle check closes a three-queue cycle, so a host
+  testing the destination for an immediate back edge fails.
+- The corpus proves the SPACE half of the claim scope and deliberately does not
+  measure the tenant half. Requiring a host to ACCEPT a hostname another tenant
+  already serves would decide who controls that name, which is the authority
+  this decision has just declined to take — a host may well refuse for reasons
+  of its own, and still be conforming. The boundary is therefore stated here and
+  held by each host's own tests, which is the same split the lane already uses
+  for what a host knows about code it never ran (decision 0019).
 
 ## Rejected alternatives
 

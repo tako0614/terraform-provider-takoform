@@ -68,18 +68,33 @@ func canonicalizeEdgeSpec(form *InstalledForm, spec map[string]any) map[string]a
 // reaches the store (canonicalizeEdgeSpec), so a host cannot be defeated by
 // case or by a trailing dot.
 //
-// The scan spans every space, because the rule is per TENANT: spaces partition
-// one tenant's resources, and DNS does not partition with them, so two spaces
-// claiming one hostname is the same collision as two resources in one space.
-// This reference host's resource store IS one tenant's, so scanning it whole
-// is that per-tenant scan.
-func (h *ReferenceHost) validateSingleHostnameClaim(space, name string, spec map[string]any) *hostError {
+// The scope is the CALLER'S TENANT, and both halves of that are the rule.
+//
+// It spans every space of that tenant, because spaces partition one tenant's
+// resources and DNS does not partition with them: two spaces claiming one
+// hostname is the same collision as two resources in one space.
+//
+// It stops at the tenant, because what one tenant may claim is a question about
+// who controls the name — authority this contract does not pretend to answer —
+// so a hostname another tenant serves is none of this scan's business. That
+// boundary has to be passed IN. Every other cross-resource rule in this file is
+// decided on a host-issued uid, which already names one resource inside one
+// boundary; a hostname is a name DNS owns, so the comparison carries no
+// boundary of its own and a scan over the store key alone would silently
+// enforce the rule host-wide (spec/decisions/0026).
+func (h *ReferenceHost) validateSingleHostnameClaim(
+	tenant, space, name string,
+	spec map[string]any,
+) *hostError {
 	hostname, _ := spec["hostname"].(string)
 	if hostname == "" {
 		return stableError("invalid_argument", "a WorkerCustomDomain requires a hostname")
 	}
 	selfKey := resourceKey(space, edgeFormsGroup, workerCustomDomainKind, name)
 	for _, candidate := range h.sortedResources() {
+		if candidate.Tenant != tenant {
+			continue
+		}
 		if candidate.group() != edgeFormsGroup || candidate.kind() != workerCustomDomainKind {
 			continue
 		}
@@ -119,6 +134,16 @@ func (h *ReferenceHost) validateSingleHostnameClaim(space, name string, spec map
 // number of stored consumers is finite and never grows during the walk. A
 // pre-existing cycle a laxer state left behind therefore ends the walk instead
 // of running it forever.
+//
+// The successor map is built from every stored consumer and is deliberately
+// given no space or tenant filter of its own. Its keys are queue UIDs, and a uid
+// names ONE queue incarnation: a consumer that drains a queue outside this
+// walk's reach contributes edges between uids the walk can never arrive at, so
+// those edges are a disconnected component rather than a leak. Narrowing the
+// scan would not make the answer more correct — it would only hide the fact that
+// a cycle is decided on resolved identity, which is the whole of decision 0026.
+// The hostname claim is the one rule here that cannot borrow that property,
+// because it compares a name rather than a uid.
 func (h *ReferenceHost) validateDeadLetterAcyclic(
 	space, name string,
 	relations []storedRelation,
@@ -225,7 +250,10 @@ func validateCronExpression(form *InstalledForm, spec map[string]any) *hostError
 //
 // The lookup is by the queue's UID, never by the name a consumer's spec spells:
 // a name can be reused, and a consumer still pinned to a deleted queue is not a
-// consumer of the queue that exists now.
+// consumer of the queue that exists now. That is also what scopes the rule: a
+// uid names one queue incarnation, so the space filter below narrows the scan
+// without deciding it, and no tenant filter belongs here at all — two consumers
+// of ONE queue are two consumers of one queue whoever applied them.
 func (h *ReferenceHost) validateSingleQueueConsumer(
 	space, name string,
 	relations []storedRelation,

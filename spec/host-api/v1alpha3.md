@@ -502,9 +502,14 @@ The canonical hostname is then unique **per tenant**: a second
 space or in any other space of the same tenant — fails `invalid_argument` (400),
 and releasing the holder makes the claim representable. Spaces partition one
 tenant's resources; DNS does not partition with them, and one hostname has one
+answer. The tenant is the AUTHENTICATED tenant of the request, because no
+reference and no metadata field names one, and at commit it is the tenant the
+accepted mutation was admitted from. A hostname a DIFFERENT tenant serves is
+outside the comparison: who controls a name is authority this contract does not
 answer. These are the required conformance checks
 `custom-domain-hostname-canonicalized` and
-`custom-domain-hostname-claim-unique`.
+`custom-domain-hostname-claim-unique`; the second collides from a second space
+of the tenant, against an aggregate of its own, in both directions.
 
 A `QueueConsumer`'s `deadLetterQueue` MUST NOT lead back to the queue the
 consumer drains. A destination resolving to the same queue UID is refused, and
@@ -515,8 +520,11 @@ its attempt count starting again at 1, so a cycle is a loop `maxRetries` cannot
 bound — the platform would build an infinite redelivery for the author. Because
 a queue has at most one consumer it has at most one outgoing edge, so a host
 follows a single path; the walk admits each queue UID once, so it terminates on
-any graph shape, including a cycle a laxer state left behind. This is the
-required conformance check `dead-letter-cycle-rejected`.
+any graph shape, including a cycle a laxer state left behind. Any length means
+any: a host that asks only whether the destination's own consumer points back
+admits `A -> B -> C -> A`, so the required conformance check
+`dead-letter-cycle-rejected` closes a three-queue cycle and accepts a
+four-queue chain.
 
 ### Reverse validation and deletion
 

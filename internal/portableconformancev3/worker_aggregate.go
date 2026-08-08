@@ -221,7 +221,17 @@ func (h *ReferenceHost) workerDependents(space, workerUID string) []workerDepend
 // validateWorkerAggregate is the one pre-mutation entry point for every rule
 // decision 0016 states. It runs on apply and on import alike, and is re-run at
 // async COMMIT time, exactly like relation resolution.
+//
+// The caller travels with the space and the name because the rules below are
+// not all scoped the same way. Every aggregate rule is decided on a host-issued
+// UID — one deployment per worker INCARNATION, one consumer per queue
+// INCARNATION — and a UID names one resource inside one boundary, so those
+// scans cannot reach past it. The hostname claim is the exception: it compares
+// a name DNS owns rather than a uid this host issued, so nothing in the
+// comparison carries a boundary and the boundary has to be supplied
+// (spec/decisions/0026).
 func (h *ReferenceHost) validateWorkerAggregate(
+	caller hostAuthContext,
 	form *InstalledForm,
 	space, name string,
 	spec map[string]any,
@@ -262,7 +272,7 @@ func (h *ReferenceHost) validateWorkerAggregate(
 		case workerCustomDomainKind:
 			// One DNS hostname has one answer, per tenant, on the canonical
 			// spelling this host stored.
-			return h.validateSingleHostnameClaim(space, name, spec)
+			return h.validateSingleHostnameClaim(caller.Tenant, space, name, spec)
 		}
 	}
 	return nil
