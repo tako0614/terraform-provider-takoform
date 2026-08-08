@@ -54,11 +54,31 @@ data the published schema already admits — for example a JSON Schema
 ## Publication blockers
 
 A blocker is an invariant that is cheap to fix now and expensive to fix after
-publication. They are tracked as issues labelled
-`v1alpha3-publication-blocker`. The freeze lifts for a given Form only when
-every blocker that touches it is closed, its evidence exists under
-[`project-lifecycle.md`](project-lifecycle.md), and a real host has
-implemented it end to end.
+publication. The machine authority is
+[`publication-blockers.json`](publication-blockers.json); each entry is also
+tracked as an issue labelled `v1alpha3-publication-blocker`. The freeze lifts
+for a given Form only when every blocker that touches it is closed, its
+evidence exists under [`project-lifecycle.md`](project-lifecycle.md), and a
+real host has implemented it end to end.
+
+Prose cannot stop a release, so the ledger is enforced rather than described.
+`bun run check` validates its shape on every change and, while any blocker is
+open, additionally requires the state the repository would not be in had the
+lane published: the family candidate set must still declare itself
+`unpublished`, and no family Form may hold a lifecycle record.
+
+A blocker closes by recording evidence that exists. An entry marked closed
+with an empty evidence list fails, and so does one naming a path that is not
+in the repository, so the freeze cannot be lifted by editing a status field or
+by inventing a filename. `bun run assert:publishable` is the assertion a future
+lane-publishing path calls; today it refuses and names every open blocker.
+
+The freeze is **scoped to this lane's own artifacts**. It is deliberately not
+wired into `check:release-owner-gate`, because that gate also serves the
+retained v1alpha1/v1alpha2 packages and the append-only security revocation
+path in [`trust/`](trust/). An urgent revocation for an already-published
+package must never wait on this lane's product readiness; freezing new
+publication and blocking a security withdrawal are opposite obligations.
 
 The first Forms proposed for Experimental publication are the Worker and edge
 KV vertical slice: `ModuleWorker`, `WorkerBundle`, `WorkerVersion`,
