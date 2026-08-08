@@ -86,6 +86,9 @@ Role rules are wire-enforced: an update to a `revision`-role resource fails
 
 ## Cross-resource relations
 
+The rules of this section are decided by
+[decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md).
+
 A **relation** is one reference from a resource's desired spec to another
 resource. Its wire shape is the closed three-member object
 
@@ -117,7 +120,8 @@ references inside it; the exact digest-bound BindingRef is the Definition's own
 ### Resolution and UID pinning
 
 On `apply` and `import`, for every derived relation present in the materialized
-spec, a host MUST, before any mutation:
+spec, a host MUST, before any mutation
+([decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md)):
 
 - resolve `(space, apiVersion, kind, name)` to a stored resource. Absent fails
   `resource_not_found` (404) and the message MUST name the relation pointer.
@@ -148,6 +152,31 @@ re-bind the relation automatically: re-resolving the name would make a delete
 and re-create of the target invisible and silently point the source at a
 resource its author never named. The source stays pinned until it is re-applied,
 and re-reading it does not heal the condition.
+
+### Recovery
+
+The remedy is an apply, and it MUST stay reachable
+([decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md)).
+
+- **What the host reports.** The condition above, on `read` and `observe`, for as
+  long as the stored relation does not resolve to its pinned UID. Reporting it
+  is not an error outcome: the resource is still readable, still deletable, and
+  still carries its desired spec.
+- **What re-pins.** Every ACCEPTED mutation re-resolves every relation and stores
+  the UIDs it resolved to, including a `apply` whose spec is byte-identical to
+  the stored one. Re-pinning is host-owned bookkeeping, not desired state: it
+  MUST NOT move `metadata.generation`, and it moves `metadata.revision` exactly
+  when it changes the representation the host serves — which it does, because
+  the Ready condition stops reporting the drift. A second identical apply then
+  moves nothing at all.
+- **What a client must do.** Report the break without failing the read, and offer
+  an apply. A client that fails its refresh on this condition removes its own
+  remedy, because the plan that repairs the resource is computed from the
+  refreshed state. A Form that declares `update` recovers with a spec-identical
+  apply. A Form that declares none — every `revision`-role Form — has no such
+  apply at all: a host refuses every apply to the existing resource, so its only
+  recovery is REPLACEMENT, and a client MUST plan one. A `DependencyMissing`
+  target must exist again before either apply can succeed.
 
 ### Dependency protection
 

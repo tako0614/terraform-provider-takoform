@@ -740,7 +740,9 @@ func (h *ReferenceHost) validateDesiredSemantics(
 			return nil, hostErr
 		}
 	}
-	if hostErr := h.requireDeclaredHandler(form, space, spec); hostErr != nil {
+	// The handler gate reads the relations this apply just resolved, never the
+	// names in the spec: the gate is a statement about one worker INCARNATION.
+	if hostErr := h.requireDeclaredHandler(form, space, spec, relations); hostErr != nil {
 		return nil, hostErr
 	}
 	return relations, nil
@@ -786,10 +788,20 @@ func validateDeploymentWeightSum(form *installedForm, spec map[string]any) *host
 // handler is an unsupported capability, not a valid desired state. Declared
 // handlers are resolved from ANY stored WorkerVersion of that worker in the
 // same space and group; a stored WorkerDeployment is not required.
+//
+// Candidates are selected by the worker UID both sides RESOLVED to, never by
+// the worker name their specs happen to spell. A name can be reused: after a
+// ModuleWorker is replaced out of band, a stale WorkerVersion still pinned to
+// the deleted worker describes code the new incarnation does not run, and
+// admitting an attachment on its word would activate a handler that does not
+// exist. The attachment's own freshly resolved `/worker` relation is the
+// incarnation under test, and only versions pinned to that same incarnation
+// can answer for it.
 func (h *ReferenceHost) requireDeclaredHandler(
 	form *installedForm,
 	space string,
 	spec map[string]any,
+	relations []storedRelation,
 ) *hostError {
 	if form.Ref.APIVersion != edgeFormsGroup {
 		return nil
@@ -804,12 +816,14 @@ func (h *ReferenceHost) requireDeclaredHandler(
 		return nil
 	}
 	worker := nestedName(spec, "worker")
-	if worker == "" {
+	workerUID := relationTargetUID(relations, "/worker")
+	if worker == "" || workerUID == "" {
 		return stableError("invalid_argument", form.Ref.Kind+" requires a target worker")
 	}
 	for _, candidate := range h.resources {
 		if candidate.Space != space || candidate.Group != form.Ref.APIVersion ||
-			candidate.Kind != "WorkerVersion" || nestedName(candidate.Spec, "worker") != worker {
+			candidate.Kind != "WorkerVersion" ||
+			relationTargetUID(candidate.Relations, "/worker") != workerUID {
 			continue
 		}
 		handlers, _ := candidate.Spec["handlers"].([]any)
@@ -821,7 +835,8 @@ func (h *ReferenceHost) requireDeclaredHandler(
 	}
 	return stableError(
 		"unsupported_capability",
-		"no deployed WorkerVersion of worker "+worker+" declares the "+handler+" handler",
+		"no stored WorkerVersion of worker "+worker+" at uid "+workerUID+
+			" declares the "+handler+" handler",
 	)
 }
 
@@ -990,7 +1005,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 			)
 		}
 		next := h.nextResource(form, existing, create, space, name, body.Spec, specDigest, false)
-		next.Relations = relations
+		repinRelations(next, existing, relations)
 		h.storeResource(next)
 		return next, create, nil
 	}
@@ -1287,7 +1302,7 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 		return
 	}
 	next := h.nextResource(form, existing, create, body.Metadata.Space, name, body.Spec, specDigest, true)
-	next.Relations = relations
+	repinRelations(next, existing, relations)
 	h.storeResource(next)
 	status := http.StatusOK
 	if create {

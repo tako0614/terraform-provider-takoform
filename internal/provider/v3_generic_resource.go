@@ -35,8 +35,9 @@ type v3GenericResource struct {
 }
 
 var (
-	_ resource.Resource              = (*v3GenericResource)(nil)
-	_ resource.ResourceWithConfigure = (*v3GenericResource)(nil)
+	_ resource.Resource               = (*v3GenericResource)(nil)
+	_ resource.ResourceWithConfigure  = (*v3GenericResource)(nil)
+	_ resource.ResourceWithModifyPlan = (*v3GenericResource)(nil)
 )
 
 // NewV3GenericResource constructs the generic exact-FormRef resource.
@@ -112,7 +113,8 @@ func (r *v3GenericResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "Desired spec as one JSON object; omitted means the empty spec.",
 				Validators:  []validator.String{v3JSONObjectValidator{}},
 			},
-			"pending_operation_id": v3PendingOperationIDAttribute(),
+			"pending_operation_id":   v3PendingOperationIDAttribute(),
+			v3RelationDriftAttribute: v3RelationDriftReasonAttribute(),
 			"uid": schema.StringAttribute{
 				Computed:      true,
 				Description:   "Host-issued immutable resource identity.",
@@ -313,6 +315,14 @@ func (r *v3GenericResource) writeAcceptedState(
 	)
 }
 
+// ModifyPlan makes a broken relation recoverable through the generic carrier
+// too. The carrier always exposes an in-place update, so the proposed remedy
+// is a re-apply of the same desired spec: a host re-resolves and re-pins every
+// relation on any accepted apply.
+func (r *v3GenericResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	v3PlanRelationRecovery(ctx, req.State, true, resp)
+}
+
 func (r *v3GenericResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.assertConfigured(&resp.Diagnostics) {
 		return
@@ -380,10 +390,11 @@ func (r *v3GenericResource) Read(ctx context.Context, req resource.ReadRequest, 
 		resp.State.RemoveResource(ctx)
 		return
 	}
-	v3ReportRelationCondition(ref.Kind, space, values.Name.ValueString(), res, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	// The generic carrier exposes an in-place update for every Form it can
+	// carry, so a broken relation is reported as an in-place remedy; a Form
+	// whose Definition omits update refuses that apply at the host, naming the
+	// missing capability.
+	v3ReportRelationCondition(ref.Kind, space, values.Name.ValueString(), res, true, &resp.Diagnostics)
 	// spec_json keeps the author's formatting while it is semantically equal
 	// to the host's current spec; a real out-of-band change adopts the host's
 	// canonical serialization so the next plan shows the drift.
@@ -451,6 +462,7 @@ func (r *v3GenericResource) writeState(
 	// A verified representation settles any earlier accepted-but-unfinished
 	// mutation: there is nothing left to resume.
 	diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_id"), types.StringNull())...)
+	diags.Append(state.SetAttribute(ctx, path.Root(v3RelationDriftAttribute), v3RelationDriftState(res))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("create_timeout"), values.CreateTimeout)...)
 	diags.Append(state.SetAttribute(ctx, path.Root("update_timeout"), values.UpdateTimeout)...)
 	diags.Append(state.SetAttribute(ctx, path.Root("delete_timeout"), values.DeleteTimeout)...)

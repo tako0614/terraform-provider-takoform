@@ -158,7 +158,8 @@ func v3CommonAttributes(hasUpdate bool) map[string]schema.Attribute {
 				"It is distribution provenance, never resource identity, and never enters queries or fences.",
 			PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 		},
-		"pending_operation_id": v3PendingOperationIDAttribute(),
+		"pending_operation_id":   v3PendingOperationIDAttribute(),
+		v3RelationDriftAttribute: v3RelationDriftReasonAttribute(),
 		"create_timeout": schema.StringAttribute{
 			Optional:    true,
 			Description: "Overall create deadline as a Go duration (default \"20m\").",
@@ -197,6 +198,34 @@ func v3PendingOperationIDAttribute() schema.StringAttribute {
 		Description: "Internal recovery only. Host operation id of a mutation the host accepted but that did not " +
 			"reach a terminal state before the operation deadline; null in steady state and cleared by the next " +
 			"successful read or apply. It is not resource identity and configurations must not depend on it.",
+	}
+}
+
+// v3RelationDriftAttribute is the state attribute recording that the host
+// reports one of this resource's cross-resource relations as broken.
+const v3RelationDriftAttribute = "relation_drift_reason"
+
+// v3RelationDriftReasonAttribute declares the internal-recovery-only record of
+// a relation the host reports as no longer resolving to the incarnation this
+// resource was applied against: `ExternalChange` when the target name came back
+// on a different resource, `DependencyMissing` when it is gone.
+//
+// It exists so drift recovery stays REACHABLE from Terraform. The host never
+// re-binds a reference by name, so nothing about the desired spec changes when
+// a target is replaced; without a recorded signal the refreshed plan would be
+// empty, and an empty plan offers no apply to run. Recording the reason gives
+// ModifyPlan the one fact it needs to propose the apply that re-pins the
+// relation. It is provider-side recovery bookkeeping, never portable desired
+// state: no v1alpha3 wire member carries it, and configurations must not
+// depend on it.
+func v3RelationDriftReasonAttribute() schema.StringAttribute {
+	return schema.StringAttribute{
+		Computed: true,
+		Description: "Internal recovery only. The portable condition reason (\"ExternalChange\" or " +
+			"\"DependencyMissing\") when the host reports that a resource this one references was " +
+			"replaced or removed out of band; null in steady state and cleared by the next successful " +
+			"read or apply. It is not desired state, it is not part of the portable wire spec, and " +
+			"configurations must not depend on it.",
 	}
 }
 

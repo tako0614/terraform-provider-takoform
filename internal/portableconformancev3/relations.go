@@ -145,6 +145,64 @@ func (h *ReferenceHost) verifyBindingContract(
 	return ref, nil
 }
 
+// repinRelations attaches the relations THIS apply resolved to the
+// post-mutation resource.
+//
+// Every accepted mutation re-resolves and re-pins, including a spec-identical
+// one, which is what makes re-applying the remedy for a target that was
+// replaced out of band: the source stops pointing at an incarnation that is
+// gone. Re-pinning is host-owned bookkeeping, never desired state, so it MUST
+// NOT move generation — the client's desired spec is byte-identical. It does
+// change the representation the host serves, because the Ready condition stops
+// reporting ExternalChange, so it moves revision when the mutation has not
+// moved it already (spec/decisions/0011).
+func repinRelations(next, existing *storedResource, relations []storedRelation) {
+	next.Relations = relations
+	if existing == nil || relationsEqual(existing.Relations, relations) {
+		return
+	}
+	if next.Generation == existing.Generation && next.Revision == existing.Revision {
+		next.Revision++
+	}
+}
+
+// relationsEqual compares two resolved relation sets. Both are produced in one
+// stable pointer order, so position-wise comparison is exact.
+func relationsEqual(left, right []storedRelation) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if !relationEqual(left[index], right[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+func relationEqual(left, right storedRelation) bool {
+	switch {
+	case left.BindingRef == nil && right.BindingRef == nil:
+	case left.BindingRef == nil || right.BindingRef == nil:
+		return false
+	case *left.BindingRef != *right.BindingRef:
+		return false
+	}
+	left.BindingRef, right.BindingRef = nil, nil
+	return left == right
+}
+
+// relationTargetUID returns the UID one stored relation pointer resolved to,
+// or the empty string when the resource declares no such relation.
+func relationTargetUID(relations []storedRelation, pointer string) string {
+	for _, relation := range relations {
+		if relation.Pointer == pointer {
+			return relation.TargetUID
+		}
+	}
+	return ""
+}
+
 // indexRelations records this resource as a holder of every target UID it
 // references. The index is keyed by UID, never by name: a name can be reused
 // by a different resource, and a holder of the old incarnation must not look

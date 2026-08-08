@@ -33,6 +33,7 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 - `outputs_json` — JSON-serialized `status.outputs` document (`"{}"` when empty).
 - `form_api_version`, `form_kind`, `form_definition_version`, `form_schema_digest` — the exact immutable FormRef this state is bound to; reads dispatch on it.
 - `form_package_digest` — audit-only package provenance; never part of resource identity, queries, or fences.
+- `relation_drift_reason` — internal recovery only: `ExternalChange` or `DependencyMissing` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes an in-place re-apply of the same desired state, which is all a host needs to re-resolve and re-pin every reference. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.
 
 ## Import
 

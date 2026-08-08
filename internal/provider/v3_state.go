@@ -58,6 +58,10 @@ func (r *v3FormResource) writeV3State(
 	// A verified representation settles any earlier accepted-but-unfinished
 	// mutation: there is nothing left to resume.
 	diags.Append(state.SetAttribute(ctx, path.Root("pending_operation_id"), types.StringNull())...)
+	// Whether a relation is broken is re-derived from THIS representation on
+	// every write, so an apply that re-pinned the reference clears the recovery
+	// signal by the same rule that set it.
+	diags.Append(state.SetAttribute(ctx, path.Root(v3RelationDriftAttribute), v3RelationDriftState(res))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("create_timeout"), values.CreateTimeout)...)
 	if r.form.DeclaresUpdate() {
 		diags.Append(state.SetAttribute(ctx, path.Root("update_timeout"), values.UpdateTimeout)...)

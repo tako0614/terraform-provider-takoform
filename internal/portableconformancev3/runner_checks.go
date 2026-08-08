@@ -59,6 +59,7 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkBindingContractVerified(version) },
 		func() error { return r.checkRelationIncarnationChange(version, kv) },
 		r.checkHandlerGatedAttachments,
+		r.checkRelationReapplyRepins,
 		r.checkDeploymentWeightSum,
 		func() error { return r.checkRelationDeletionProtection(version, bundle) },
 		func() error { return r.checkImportFlows(kv, version) },
@@ -1533,9 +1534,9 @@ func (r *v3Runner) checkArtifactRejectList() error {
 	return nil
 }
 
-// kvReference builds the exact three-member reference an EdgeKVNamespace
-// binding carries. The group travels on the wire; only the name is authored.
-func kvReference(target probeTarget, name string) map[string]any {
+// exactReference builds the exact three-member reference addressing one probe
+// Form. The group and kind travel on the wire; only the name is authored.
+func exactReference(target probeTarget, name string) map[string]any {
 	return map[string]any{
 		"apiVersion": target.Ref.APIVersion,
 		"kind":       target.Ref.Kind,
@@ -1575,7 +1576,7 @@ func (r *v3Runner) checkWorkerVersionFlow(version, kv probeTarget) error {
 	missingTarget.Spec = cloneJSONMap(version.Spec)
 	missingTarget.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": kvReference(kv, "absent-kv"),
+		"resource": exactReference(kv, "absent-kv"),
 	}}
 	response, err := r.apply(missingTarget, applyOptions{
 		Create: true, IdempotencyKey: "key-version-missing-binding",
@@ -1696,7 +1697,7 @@ func (r *v3Runner) checkBindingContractVerified(version probeTarget) error {
 	offender.Spec = cloneJSONMap(version.Spec)
 	offender.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": kvReference(foreign, foreign.Name),
+		"resource": exactReference(foreign, foreign.Name),
 	}}
 	// The refusal may land at prepare or at apply; both are before any
 	// mutation, which is the property under test. A host that admits the
@@ -1767,7 +1768,7 @@ func (r *v3Runner) checkRelationIncarnationChange(version, kv probeTarget) error
 	source.Spec = cloneJSONMap(version.Spec)
 	source.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": kvReference(target, target.Name),
+		"resource": exactReference(target, target.Name),
 	}}
 	bound, _, err := r.applyResource(source, applyOptions{
 		Create: true, IdempotencyKey: "key-incarnation-version",
@@ -1838,6 +1839,123 @@ func (r *v3Runner) checkRelationIncarnationChange(version, kv probeTarget) error
 	}
 	r.complete("relation-incarnation-change-detected")
 	return nil
+}
+
+// checkRelationReapplyRepins proves the remedy the incarnation rule leaves
+// open. A host never re-binds a reference by itself, so without this rule the
+// only way out of an ExternalChange would be editing state by hand: the
+// desired spec is unchanged, so nothing about it can express "resolve this
+// again".
+//
+// The rule is that ACCEPTING an apply is what re-resolves and re-pins, even
+// when the spec is byte-identical. Re-pinning is host-owned bookkeeping, so it
+// must not touch generation — the client's desired state did not change — but
+// it does change the representation, because the Ready condition stops
+// reporting the drift, so revision must move (spec/decisions/0011 and 0015).
+// Applying once more after that moves nothing at all: the remedy is
+// idempotent, not a per-apply revision treadmill.
+func (r *v3Runner) checkRelationReapplyRepins() error {
+	input := r.contract.RunnerInput
+	// Dedicated resources, so the probes other checks drive are untouched.
+	queue := r.target(input.AtLeastOnceQueue)
+	queue.Name = "repin-queue"
+	created, _, err := r.applyResource(queue, applyOptions{
+		Create: true, IdempotencyKey: "key-repin-queue",
+	}, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("re-pin probe queue: %w", err)
+	}
+	consumer := r.target(input.QueueConsumer)
+	consumer.Name = "repin-consumer"
+	consumer.Spec = cloneJSONMap(consumer.Spec)
+	consumer.Spec["queue"] = exactReference(queue, queue.Name)
+	bound, _, err := r.applyResource(consumer, applyOptions{
+		Create: true, IdempotencyKey: "key-repin-consumer",
+	}, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("re-pin probe consumer: %w", err)
+	}
+	if !hasCapability(consumer.Lifecycle, "update") {
+		return errors.New("the re-pin probe needs a Form that declares an in-place update")
+	}
+
+	// The queue is destroyed out of band and the name comes back on a new
+	// incarnation, exactly the state the incarnation rule reports.
+	removed, err := r.deleteResource(
+		queue, created.Metadata.Revision, "key-repin-queue-delete",
+		map[string]string{ErrorProbeHeader: ProbeExternalChange},
+	)
+	if err != nil {
+		return err
+	}
+	if removed.Status != http.StatusNoContent {
+		return fmt.Errorf(
+			"out-of-band queue delete HTTP %d, want 204; body=%s",
+			removed.Status, strings.TrimSpace(string(removed.Body)),
+		)
+	}
+	if _, _, err := r.applyResource(queue, applyOptions{
+		Create: true, IdempotencyKey: "key-repin-queue-recreate",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("re-created queue: %w", err)
+	}
+	drifted, err := r.readRaw(consumer)
+	if err != nil {
+		return err
+	}
+	if err := requireNotReady(drifted, "ExternalChange"); err != nil {
+		return fmt.Errorf("consumer of a recreated queue: %w", err)
+	}
+
+	// The same desired spec, applied again, is the whole remedy.
+	repinned, _, err := r.applyResource(consumer, applyOptions{
+		ExpectedGeneration: bound.Metadata.Generation,
+		IdempotencyKey:     "key-repin-consumer-reapply",
+	}, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("spec-identical re-apply of a drifted source: %w", err)
+	}
+	if repinned.Metadata.Generation != bound.Metadata.Generation {
+		return fmt.Errorf(
+			"a spec-identical re-apply moved generation %s -> %s; re-pinning is not a desired-state change",
+			bound.Metadata.Generation, repinned.Metadata.Generation,
+		)
+	}
+	if repinned.Metadata.Revision == drifted.Metadata.Revision {
+		return fmt.Errorf(
+			"re-pinning left revision at %s while the Ready condition changed; the representation moved",
+			repinned.Metadata.Revision,
+		)
+	}
+
+	// And it is idempotent: with nothing left to re-pin, nothing moves.
+	again, _, err := r.applyResource(consumer, applyOptions{
+		ExpectedGeneration: repinned.Metadata.Generation,
+		IdempotencyKey:     "key-repin-consumer-again",
+	}, http.StatusOK)
+	if err != nil {
+		return err
+	}
+	if again.Metadata.Generation != repinned.Metadata.Generation ||
+		again.Metadata.Revision != repinned.Metadata.Revision {
+		return fmt.Errorf(
+			"a second identical apply moved identity %s/%s -> %s/%s",
+			repinned.Metadata.Generation, repinned.Metadata.Revision,
+			again.Metadata.Generation, again.Metadata.Revision,
+		)
+	}
+	r.complete("relation-reapply-repins")
+	return nil
+}
+
+// hasCapability reports whether a pinned lifecycle set carries one capability.
+func hasCapability(capabilities []string, want string) bool {
+	for _, capability := range capabilities {
+		if capability == want {
+			return true
+		}
+	}
+	return false
 }
 
 // checkRelationDeletionProtection proves dependency protection covers every
@@ -2084,7 +2202,7 @@ func (r *v3Runner) checkImportFlows(kv, version probeTarget) error {
 	invalid.Spec = cloneJSONMap(version.Spec)
 	invalid.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": kvReference(kv, "absent-kv"),
+		"resource": exactReference(kv, "absent-kv"),
 	}}
 	rejected, err := r.importResource(invalid, importOptions{
 		NativeID: "native/import-invalid-probe", IdempotencyKey: "key-import-invalid", Create: true,
@@ -2350,7 +2468,7 @@ func (r *v3Runner) checkAsyncCommitRevalidates(kv, version probeTarget) error {
 	pending.Spec = cloneJSONMap(version.Spec)
 	pending.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": kvReference(target, target.Name),
+		"resource": exactReference(target, target.Name),
 	}}
 	accepted, err := r.apply(pending, applyOptions{
 		Create:         true,
@@ -2438,7 +2556,7 @@ func (r *v3Runner) checkAsyncCommitRevalidates(kv, version probeTarget) error {
 	holder.Spec = cloneJSONMap(version.Spec)
 	holder.Spec["kvBindings"] = []any{map[string]any{
 		"name":     "CACHE",
-		"resource": kvReference(held, held.Name),
+		"resource": exactReference(held, held.Name),
 	}}
 	if _, _, err := r.applyResource(holder, applyOptions{
 		Create: true, IdempotencyKey: "key-revalidate-holder",

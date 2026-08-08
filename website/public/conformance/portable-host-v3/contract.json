@@ -327,6 +327,7 @@
     "relation-target-missing-rejected",
     "relation-target-deletion-blocked",
     "relation-incarnation-change-detected",
+    "relation-reapply-repins",
     "binding-contract-verified",
     "async-operation-flow",
     "operation-replay-terminal",

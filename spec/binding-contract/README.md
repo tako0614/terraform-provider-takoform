@@ -68,7 +68,9 @@ A consumer resource declares instances as typed data. The wire shape is a
   the host pins the target UID in host-owned records; desired state keeps the
   name reference. A target deleted and re-created under the same name is a
   different resource, and the source is NOT re-bound to it
-  ([`../host-api/v1alpha3.md`](../host-api/v1alpha3.md)).
+  ([`../host-api/v1alpha3.md`](../host-api/v1alpha3.md),
+  [decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md)).
+  Re-applying the source is what re-pins it.
 - Sensitive material never appears: a binding projects an API, not a
   credential. Sensitive-variable requirements are declared as named slots
   (`requiredSensitiveVars` on a worker version) and satisfied by
@@ -100,7 +102,10 @@ separate declared list the published Form Definition schema does not admit
 
 A conforming host verifies a declared binding before it mutates anything.
 Schema validity is never sufficient: a schema states the shape of a reference,
-never whether the contract behind it can be honored. In order:
+never whether the contract behind it can be honored. This order and its failure
+codes are decided by
+[decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md).
+In order:
 
 1. **Accepted by the source Form.** The source Form Definition's
    `acceptedBindings` must carry the annotated contract. Otherwise
@@ -124,8 +129,8 @@ never whether the contract behind it can be honored. In order:
 Deleting a resource any live binding — or any other stored relation — references
 fails `dependency_in_use` (409). The required conformance checks
 `binding-contract-verified`, `relation-target-missing-rejected`,
-`relation-target-deletion-blocked`, and `relation-incarnation-change-detected`
-prove a laxer host fails the lane.
+`relation-target-deletion-blocked`, `relation-incarnation-change-detected`, and
+`relation-reapply-repins` prove a laxer host fails the lane.
 
 ## Direction rule
 

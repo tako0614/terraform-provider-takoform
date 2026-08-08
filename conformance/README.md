@@ -190,7 +190,7 @@ WorkerVersion, WorkerDeployment, WorkerCronTrigger, QueueConsumer) with their
 registry package digests plus byte-pinned
 desired-negative fixtures. `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 56-check matrix over real HTTP: exact discovery and
+drives the complete 57-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -203,7 +203,9 @@ rejection, cross-resource relation resolution before mutation — every
 reference a Form derives from its desired schema, not only typed bindings —
 pinned by target uid, with `dependency_in_use` on the deletion of any
 referenced target, `ExternalChange` when a target is destroyed and recreated
-under the same name, and binding contracts verified against
+under the same name — which a spec-identical re-apply repairs, re-pinning
+every relation while generation stands still and only the revision moves —
+and binding contracts verified against
 allowedTargetForms, the target Form's providedInterfaces, and the source
 role, import validated exactly like apply, cross-resource semantics the Forms declare in prose but only a host can
 enforce (WorkerDeployment weights summing to 10000; a cron trigger or queue
