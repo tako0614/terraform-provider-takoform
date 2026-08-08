@@ -15,9 +15,17 @@ fixed by the `edge.kv` Interface.
 ## Observable semantics
 
 Exactly the `edge.kv@1.0.0` contract: get/getWithMetadata/put/delete/list,
-eventual consistency (a read after a write may return the previous value
-until replication converges), last-writer-wins per key, cursor pagination in
+eventual consistency, last-writer-wins per key, cursor pagination in
 lexicographic key order, closed errors, and portable minimum limits.
+
+A value is opaque BYTES, carried in the family's encoded-bytes shape, so the
+declared byte limit and the structural string ceiling measure the same thing
+(decision 0020). Eventual consistency means what it says: a read that follows
+a write may return the previous value, or `not_found`, until replication
+converges — including a read the same client issues immediately after its own
+write. There is no read-your-writes guarantee and no session in which one
+holds; convergence is a host obligation rather than something the desired-state
+conformance lane proves.
 
 ## Why this is one Form
 

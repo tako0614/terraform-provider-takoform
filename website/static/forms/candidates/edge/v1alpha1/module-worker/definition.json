@@ -25,7 +25,7 @@
       "apiVersion": "interfaces.takoform.com/v1alpha1",
       "name": "worker.runtime",
       "version": "1.0.0",
-      "schemaDigest": "sha256:fa7193bf4ab9f54ed8c943261cb520365e15a06718501182772e15902185e81e"
+      "schemaDigest": "sha256:06104adeefb967838766a90866f7229f12cfd1bceb31cd79c7b1826b15362c0f"
     },
     {
       "apiVersion": "interfaces.takoform.com/v1alpha1",

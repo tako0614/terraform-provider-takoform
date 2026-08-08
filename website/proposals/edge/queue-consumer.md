@@ -15,12 +15,19 @@ it and never deletes the queue or the worker.
 ## Observable semantics
 
 `queue` and `worker` are immutable; changing either replaces the attachment.
-Batching is bounded by `maxBatchSize` (1..100) and `maxBatchTimeoutSeconds`
-(0..60). A failed batch is redelivered after `retryDelaySeconds` up to
-`maxRetries` times; exhausted messages go to `deadLetterQueue` when declared
-and are dropped otherwise. `maxConcurrency` (1..250) bounds concurrent batch
-invocations. All of these change observable delivery behavior and are
-therefore desired fields, not host tuning.
+One queue has at most one consumer, so a second attachment against the same
+queue is refused. Batching is bounded by `maxBatchSize` (1..100) and
+`maxBatchTimeoutSeconds` (0..60). A handler that returns without settling
+anything acknowledges the whole batch; one that throws retries every message
+it had not already acknowledged, after `retryDelaySeconds`. `maxRetries`
+counts REDELIVERIES only — the first delivery does not count toward it — so a
+message is delivered at most `1 + maxRetries` times; exhausted messages go to
+`deadLetterQueue` when declared and are dropped otherwise, and the
+dead-letter copy is a new message there with its own identity, its own
+acceptance timestamp, and an attempt count starting again at 1.
+`maxConcurrency` (1..250) bounds concurrent batch invocations. All of these
+change observable delivery behavior and are therefore desired fields, not
+host tuning (decision 0020).
 
 ## Why this is one Form
 

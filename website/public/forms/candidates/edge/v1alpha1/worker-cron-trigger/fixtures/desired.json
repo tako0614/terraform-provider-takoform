@@ -1,5 +1,5 @@
 {
-  "cron": "0 3 * * *",
+  "cron": "*/5 * * * *",
   "worker": {
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "ModuleWorker",

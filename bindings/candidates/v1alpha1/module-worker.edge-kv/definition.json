@@ -4,13 +4,13 @@
   "name": "module-worker.edge-kv",
   "version": "1.0.0",
   "title": "Module Worker edge KV binding",
-  "description": "Projects the complete edge.kv runtime API into a Worker Version under one JavaScript-identifier binding name. The binding grants capability and API together; no credential or endpoint ever reaches the consumer. Runtime surface: env.NAME is an object with the methods get(key), getWithMetadata(key), put(key, value, options?), delete(key), and list(options?). Keys and values are strings; options and results are the exact input and output documents of the matching edge.kv operation. Every method returns a promise. get resolves to null for an absent key rather than rejecting, which is how the interface's not_found outcome appears in JavaScript; every other error rejects with an Error whose name is the edge.kv error code. Reads are eventually consistent: a get after a put may resolve to the previous value until replication converges.",
+  "description": "Projects the complete edge.kv runtime API into a Worker Version under one JavaScript-identifier binding name. The binding grants capability and API together; no credential or endpoint ever reaches the consumer. Runtime surface: env.NAME is an object with the methods get(key), getWithMetadata(key), put(key, value, options?), delete(key), and list(options?). A key is a string. A VALUE IS BYTES: put accepts an ArrayBuffer, a typed array, or a string (encoded UTF-8), and get resolves to an ArrayBuffer — the base64 envelope of edge.kv is the wire form, not the JavaScript form. Every method returns a promise. get resolves to null for an absent key rather than rejecting, which is how the interface's not_found outcome appears in JavaScript; every other error rejects with an Error whose name is the edge.kv error code. Reads are EVENTUALLY CONSISTENT and this binding promises no read-your-writes: a get immediately after a resolved put by the same isolate may resolve to the previous value, or to null, until replication converges.",
   "sourceRole": "revision",
   "targetInterface": {
     "apiVersion": "interfaces.takoform.com/v1alpha1",
     "name": "edge.kv",
     "version": "1.0.0",
-    "schemaDigest": "sha256:1db93de87b25b5feedb380cdcf3ac10e0ff81f0a005ca17bc11ae9e416201ebe"
+    "schemaDigest": "sha256:58c8e9af97dabcd205422eca0b47fba51734503bc80a66867056dae28efe1cf8"
   },
   "allowedTargetForms": [
     {

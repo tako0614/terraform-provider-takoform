@@ -7,7 +7,7 @@ description: |-
 
 # takoform_queue_consumer
 
-Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking its queue handler with message batches and redelivering failed batches. Consumption is inward activation and therefore an attachment, never a binding.
+Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking its queue handler with message batches and redelivering messages that were not acknowledged. Consumption is inward activation and therefore an attachment, never a binding. One queue has at most one consumer, so a second attachment against the same queue is refused. A handler that returns normally without settling anything acknowledges the whole batch; one that throws retries every message it had not already acknowledged. maxRetries counts REDELIVERIES only — the first delivery does not count toward it — so a message is delivered at most 1 + maxRetries times, and a message that exhausts them moves to dead_letter_queue when one is declared and is dropped otherwise. The dead-letter copy is a new message there: new identity, new acceptance timestamp, and an attempt count starting again at 1 (decision 0020).
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 

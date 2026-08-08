@@ -16,7 +16,7 @@ provider "takoform" {
 resource "takoform_worker_cron_trigger" "example" {
   name   = "worker-cron-trigger"
   worker = "module-worker"
-  cron   = "0 3 * * *"
+  cron   = "*/5 * * * *"
 }
 
 output "worker_cron_trigger_outputs" {

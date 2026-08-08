@@ -9,6 +9,7 @@ package edgeformcatalog
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
@@ -238,22 +239,28 @@ var Forms = []model.Form{
 		Kind:   "WorkerCronTrigger", Slug: "worker-cron-trigger", ResourceType: "takoform_worker_cron_trigger",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Cron Trigger",
-		Description: "Attaches one cron schedule to a Module Worker, invoking its scheduled handler at " +
-			"each match. Schedules are interpreted in UTC only; there is no timezone field, so two hosts " +
-			"can never fire the same trigger at different instants. The accepted grammar is exactly five " +
-			"single-value fields separated by single spaces: minute is a literal 0-59 and hour a literal " +
-			"0-23, day-of-month is `*` or 1-31, month is `*` or 1-12, and day-of-week is `*` or 0-6. " +
-			"Ranges, lists, steps such as `*/5`, names, and `*` in the minute or hour field are all " +
-			"rejected, so the most frequent representable schedule is once per day at one fixed UTC " +
-			"time. Hourly and " +
-			"sub-hourly schedules are not expressible and need a future grammar revision, which is a new " +
-			"definition version of this Form.",
+		Description: "Attaches one cron schedule to a Module Worker, invoking its scheduled handler at each " +
+			"match. Schedules are interpreted in UTC only; there is no timezone field, so two hosts can never " +
+			"fire the same trigger at different instants and no schedule ever skips or repeats an hour for a " +
+			"daylight-saving transition. The grammar is five fields separated by single spaces — minute 0-59, " +
+			"hour 0-23, day-of-month 1-31, month 1-12, day-of-week 0-6 with 0 Sunday — and each field is a " +
+			"comma-separated list of `*`, a literal, a range `low-high`, `*/step`, or `low-high/step`. Names " +
+			"and a step on a bare literal are not accepted, and neither is any value outside its field's own " +
+			"range, an inverted range, or a step outside 1..span. When day-of-month and day-of-week are BOTH " +
+			"restricted the trigger fires on a day either of them selects; when only one is restricted only " +
+			"that one constrains the day. A missed run is not made up: a host that could not fire a match — " +
+			"because it was unavailable, or because the previous invocation was still running — skips it " +
+			"rather than firing late, so a schedule never produces a backlog. At-least-once delivery applies " +
+			"to each match: a handler may be invoked more than once for one matched minute, and it must be " +
+			"idempotent. An uncaught exception in the handler is a failed invocation reported to host " +
+			"diagnostics; it is not retried within the matched minute and it never becomes an HTTP response.",
 		Fields: []model.Field{
 			moduleWorkerRef("worker", "worker", "Module Worker whose scheduled handler this trigger invokes.", true, true),
 			{HCL: "cron", Wire: "cron", Kind: model.KindString, Required: true,
 				Pattern: model.PatternCron, MaxLength: 64,
-				Doc:     "Portable five-field cron expression, interpreted in UTC only.",
-				Example: "0 3 * * *", AltExample: "15 0 * * *", CounterExample: "0 3 * *"},
+				Doc: "Portable five-field cron expression, interpreted in UTC only. The pattern bounds the shape; a host " +
+					"also parses it and refuses a value outside its field's range, an inverted range, or an out-of-span step.",
+				Example: "*/5 * * * *", AltExample: "0 3 * * *", CounterExample: "0 3 * *"},
 		},
 	},
 	{
@@ -261,9 +268,12 @@ var Forms = []model.Form{
 		Kind:   "EdgeKVNamespace", Slug: "edge-kv-namespace", ResourceType: "takoform_edge_kv_namespace",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Edge KV Namespace",
-		Description: "Globally replicated key/value namespace with eventual consistency, exactly as fixed " +
-			"by the edge.kv Interface. Eventual consistency is the Form's semantics, not an option: a " +
-			"store with different convergence behavior is a different Form.",
+		Description: "Globally replicated key/value namespace of opaque BYTES with eventual consistency, exactly " +
+			"as fixed by the edge.kv Interface. Eventual consistency is the Form's semantics, not an option: a " +
+			"store with different convergence behavior is a different Form, and this one promises no " +
+			"read-your-writes, in any session, at any location. Values are byte strings carried in the family's " +
+			"encoded-bytes shape, so the declared byte limit and the structural string ceiling measure the same " +
+			"thing (decision 0020).",
 		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "edge.kv", Version: "1.0.0"}},
 	},
 	{
@@ -277,9 +287,12 @@ var Forms = []model.Form{
 		Kind: "ObjectBucket", Slug: "object-bucket", ResourceType: "takoform_edge_object_bucket",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Object Bucket",
-		Description: "Flat-namespace object store with read-after-write consistency, exactly as fixed by " +
-			"the edge.objects Interface. Operating rules such as CORS, lifecycle, and lock are separate " +
-			"policy resources, never desired fields of the bucket identity.",
+		Description: "Flat-namespace object store with strong read-after-write consistency, streaming bodies, " +
+			"ranged and conditional reads, and multipart upload, exactly as fixed by the edge.objects Interface. " +
+			"An object body is a byte stream, never a JSON string: the contract's 5 GiB ceiling is only " +
+			"meaningful because bodies never travel inside an operation document (decision 0020). Operating " +
+			"rules such as CORS, lifecycle, and lock are separate policy resources, never desired fields of the " +
+			"bucket identity.",
 		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "edge.objects", Version: "1.0.0"}},
 	},
 	{
@@ -287,9 +300,11 @@ var Forms = []model.Form{
 		Kind:   "SQLiteDatabase", Slug: "sqlite-database", ResourceType: "takoform_sqlite_database",
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "SQLite Database",
-		Description: "Embedded SQLite database with serializable transactions, exactly as fixed by the " +
-			"edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, " +
-			"or isolation behavior is a different Form, never an engine token.",
+		Description: "Embedded SQLite database with serializable transactions and TAGGED values, exactly as " +
+			"fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, " +
+			"typing, or isolation behavior is a different Form, never an engine token. Values carry their " +
+			"storage class, so a 64-bit INTEGER and a BLOB round-trip losslessly instead of being flattened " +
+			"into a JSON scalar (decision 0020).",
 		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "edge.sql", Version: "1.0.0"}},
 	},
 	{
@@ -298,7 +313,10 @@ var Forms = []model.Form{
 		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
 		Title: "At-Least-Once Queue",
 		Description: "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed " +
-			"by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form.",
+			"by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form. Message " +
+			"bodies are opaque bytes, a message identity is stable across redeliveries, and a queue has AT MOST " +
+			"ONE consumer — two would split the stream between two retry policies and two dead-letter " +
+			"destinations, which leaves the queue's own behavior unstatable (decision 0020).",
 		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "edge.queue", Version: "1.0.0"}},
 		Fields: []model.Field{
 			// Retention has no portable default: how long a host keeps an
@@ -321,9 +339,16 @@ var Forms = []model.Form{
 		Kind:   "QueueConsumer", Slug: "queue-consumer", ResourceType: "takoform_queue_consumer",
 		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Queue Consumer",
-		Description: "Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking " +
-			"its queue handler with message batches and redelivering failed batches. Consumption is inward " +
-			"activation and therefore an attachment, never a binding.",
+		Description: "Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking its " +
+			"queue handler with message batches and redelivering messages that were not acknowledged. " +
+			"Consumption is inward activation and therefore an attachment, never a binding. One queue has at " +
+			"most one consumer, so a second attachment against the same queue is refused. A handler that " +
+			"returns normally without settling anything acknowledges the whole batch; one that throws retries " +
+			"every message it had not already acknowledged. maxRetries counts REDELIVERIES only — the first " +
+			"delivery does not count toward it — so a message is delivered at most 1 + maxRetries times, and a " +
+			"message that exhausts them moves to dead_letter_queue when one is declared and is dropped " +
+			"otherwise. The dead-letter copy is a new message there: new identity, new acceptance timestamp, " +
+			"and an attempt count starting again at 1 (decision 0020).",
 		Fields: []model.Field{
 			{HCL: "queue", Wire: "queue", Kind: model.KindResourceRef, TargetKind: "AtLeastOnceQueue",
 				Required: true, Immutable: true,
@@ -411,10 +436,144 @@ func Validate() error {
 	if err := validateEnvironmentNamespaces(); err != nil {
 		return err
 	}
+	if err := ValidateInterfaceDefinitions(InterfaceDefinitions()); err != nil {
+		return err
+	}
 	if err := validateRuntimeContract(); err != nil {
 		return err
 	}
 	return validateAbsenceSemanticExemptions()
+}
+
+// Grammars and bounds the published Interface Definition meta-schema fixes
+// (spec/schemas/interface-definition-v1alpha1.schema.json). They are re-stated
+// here so the catalog fails while it is being authored rather than after it has
+// emitted bytes no host would accept.
+var (
+	interfaceOperationNamePattern = regexp.MustCompile(`^[a-z][a-zA-Z0-9]{0,63}$`)
+	interfaceErrorCodePattern     = regexp.MustCompile(`^[a-z][a-z0-9_]{2,63}$`)
+	interfaceFixtureNamePattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
+)
+
+const (
+	interfaceDescriptionMaxLength          = 4096
+	interfaceOperationDescriptionMaxLength = 1024
+	interfaceTitleMaxLength                = 160
+)
+
+// ValidateInterfaceDefinitions proves, at authoring time, that every Interface
+// contract is internally coherent — not only the runtime ABI, which was the
+// only one checked before decision 0020.
+//
+// The rules are the ones a reader of a definition assumes without being told:
+// an operation name appears once, a fixture exercises an operation the contract
+// declares, and a fixture that expects a failure names an error THAT operation
+// lists. The last one is the important one. A fixture expecting an error the
+// operation's closed vocabulary does not carry describes a conforming host as
+// failing, so it is a trace no correct implementation can pass — the same class
+// of defect as a required conformance check no correct host can complete.
+//
+// The meta-schema bounds are re-proved here for a different reason: those
+// documents are generated, so a description that grew past the published
+// maxLength would only be caught after the bytes were written, by whatever read
+// them next.
+// It takes the set rather than reading the catalog so a test can hand it a
+// deliberately broken definition and prove the rule refuses it. A rule nothing
+// can be shown to break is a rule nobody can trust.
+func ValidateInterfaceDefinitions(definitions []InterfaceDefinition) error {
+	names := map[string]struct{}{}
+	for _, definition := range definitions {
+		if _, duplicate := names[definition.Name]; duplicate {
+			return fmt.Errorf("duplicate interface identity %q", definition.Name)
+		}
+		names[definition.Name] = struct{}{}
+		if len(definition.Title) > interfaceTitleMaxLength {
+			return fmt.Errorf("interface %s title is %d characters; the published schema bounds it at %d",
+				definition.Name, len(definition.Title), interfaceTitleMaxLength)
+		}
+		if len(definition.Description) > interfaceDescriptionMaxLength {
+			return fmt.Errorf("interface %s description is %d characters; the published schema bounds it at %d",
+				definition.Name, len(definition.Description), interfaceDescriptionMaxLength)
+		}
+		operations := map[string]InterfaceOperation{}
+		for _, operation := range definition.Operations {
+			if !interfaceOperationNamePattern.MatchString(operation.Name) {
+				return fmt.Errorf("interface %s declares operation %q outside the published name grammar",
+					definition.Name, operation.Name)
+			}
+			if _, duplicate := operations[operation.Name]; duplicate {
+				return fmt.Errorf("interface %s declares operation %q twice", definition.Name, operation.Name)
+			}
+			if len(operation.Description) > interfaceOperationDescriptionMaxLength {
+				return fmt.Errorf(
+					"interface %s operation %s description is %d characters; the published schema bounds it at %d",
+					definition.Name, operation.Name, len(operation.Description), interfaceOperationDescriptionMaxLength,
+				)
+			}
+			codes := map[string]struct{}{}
+			for _, code := range operation.Errors {
+				if !interfaceErrorCodePattern.MatchString(code) {
+					return fmt.Errorf("interface %s operation %s declares error %q outside the published grammar",
+						definition.Name, operation.Name, code)
+				}
+				if _, duplicate := codes[code]; duplicate {
+					return fmt.Errorf("interface %s operation %s declares error %q twice",
+						definition.Name, operation.Name, code)
+				}
+				codes[code] = struct{}{}
+			}
+			operations[operation.Name] = operation
+		}
+		if err := validateInterfaceFixtures(definition, operations); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateInterfaceFixtures(definition InterfaceDefinition, operations map[string]InterfaceOperation) error {
+	fixtures := map[string]struct{}{}
+	for _, fixture := range definition.Fixtures {
+		if !interfaceFixtureNamePattern.MatchString(fixture.Name) {
+			return fmt.Errorf("interface %s fixture %q is outside the published name grammar",
+				definition.Name, fixture.Name)
+		}
+		if _, duplicate := fixtures[fixture.Name]; duplicate {
+			return fmt.Errorf("interface %s declares fixture %q twice", definition.Name, fixture.Name)
+		}
+		fixtures[fixture.Name] = struct{}{}
+		if len(fixture.Steps) == 0 {
+			return fmt.Errorf("interface %s fixture %s has no steps", definition.Name, fixture.Name)
+		}
+		for _, step := range fixture.Steps {
+			operation, declared := operations[step.Operation]
+			if !declared {
+				return fmt.Errorf("interface %s fixture %s exercises undeclared operation %q",
+					definition.Name, fixture.Name, step.Operation)
+			}
+			if step.Input == nil {
+				return fmt.Errorf("interface %s fixture %s step %s carries no input",
+					definition.Name, fixture.Name, step.Operation)
+			}
+			if step.ExpectedError == "" {
+				continue
+			}
+			if len(step.Expected) > 0 {
+				return fmt.Errorf(
+					"interface %s fixture %s step %s expects both an output and the error %q; a step has one outcome",
+					definition.Name, fixture.Name, step.Operation, step.ExpectedError,
+				)
+			}
+			if !slices.Contains(operation.Errors, step.ExpectedError) {
+				return fmt.Errorf(
+					"interface %s fixture %s expects error %q, which operation %s does not declare; "+
+						"a conforming host may not produce it, so no correct implementation could pass the trace",
+					definition.Name, fixture.Name, step.ExpectedError, step.Operation,
+				)
+			}
+		}
+	}
+	return nil
 }
 
 // validateRuntimeContract proves, at authoring time, the three facts that make

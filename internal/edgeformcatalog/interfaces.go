@@ -75,10 +75,10 @@ type InterfaceFixtureStep struct {
 	ExpectedError string         `json:"expectedError,omitempty"`
 }
 
-// operationObject builds one closed Draft 2020-12 operation payload schema.
-func operationObject(required []string, properties map[string]any) map[string]any {
+// closedObject builds one closed object schema. It carries no `$schema`, so it
+// nests inside another schema without minting a second dialect declaration.
+func closedObject(required []string, properties map[string]any) map[string]any {
 	schema := map[string]any{
-		"$schema":              draft2020,
 		"type":                 "object",
 		"additionalProperties": false,
 		"properties":           properties,
@@ -87,6 +87,23 @@ func operationObject(required []string, properties map[string]any) map[string]an
 		schema["required"] = required
 	}
 	return schema
+}
+
+// operationObject builds one closed Draft 2020-12 operation payload schema.
+func operationObject(required []string, properties map[string]any) map[string]any {
+	schema := closedObject(required, properties)
+	schema["$schema"] = draft2020
+	return schema
+}
+
+// withDialect promotes one nested closed object to a top-level operation
+// payload schema.
+func withDialect(schema map[string]any) map[string]any {
+	out := map[string]any{"$schema": draft2020}
+	for key, value := range schema {
+		out[key] = value
+	}
+	return out
 }
 
 func stringSchema(minLength, maxLength int) map[string]any {
@@ -106,11 +123,153 @@ func closedStringMap(maxProperties int) map[string]any {
 	}
 }
 
+// Portable ceilings the data-plane contracts declare. They are constants
+// because each one is stated in two places that must agree — the structural
+// bound inside an operation schema and the declared `limits` entry — and a
+// literal repeated in both is a literal that eventually stops matching.
+const (
+	// kvMaxValueBytes bounds the DECODED length of one edge.kv value.
+	kvMaxValueBytes = 26214400
+	// queueMaxMessageBytes bounds the DECODED length of one queue message body.
+	queueMaxMessageBytes = 131072
+	// objectsMaxObjectBytes is the largest object, reachable only through a
+	// multipart upload.
+	objectsMaxObjectBytes = 5368709120
+	// objectsMaxSinglePutBytes is the largest object one put may write. Above
+	// it, and whenever the producer does not know the size in advance, the
+	// multipart operations are the path.
+	objectsMaxSinglePutBytes = 314572800
+	// objectsMaxMultipartParts bounds the parts of one multipart upload.
+	objectsMaxMultipartParts = 10000
+)
+
+// base64Value builds one encoded-bytes fixture value from its base64 text.
+func base64Value(data string) map[string]any {
+	return map[string]any{"encoding": "base64", "data": data}
+}
+
+// The five tagged SQLite values, as fixture literals.
+func sqlNull() map[string]any { return map[string]any{"type": "null"} }
+func sqlInteger(decimal string) map[string]any {
+	return map[string]any{"type": "integer", "value": decimal}
+}
+func sqlReal(value float64) map[string]any { return map[string]any{"type": "real", "value": value} }
+func sqlText(value string) map[string]any  { return map[string]any{"type": "text", "value": value} }
+func sqlBlob(base64 string) map[string]any { return map[string]any{"type": "blob", "base64": base64} }
+
+// base64Length is the exact length of the standard base64 encoding, with
+// padding, of maxDecodedBytes bytes. It is what bounds the `data` string of an
+// encoded-bytes value: the JSON ceiling and the byte limit then agree instead
+// of measuring two different quantities
+// ([decision 0020](../../spec/decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md)).
+func base64Length(maxDecodedBytes int) int {
+	return 4 * ((maxDecodedBytes + 2) / 3)
+}
+
+// encodedBytes is the ONE encoded-bytes shape of the family. Every contract
+// that carries opaque bytes through JSON carries them exactly this way, so a
+// value that moves from a queue message into a KV namespace does not change
+// representation on the way.
+//
+// It exists because `maxValueBytes` and a JSON Schema `maxLength` do not
+// measure the same thing: `maxLength` counts UTF-16 code units of a string,
+// while a byte limit counts bytes, and the two disagree for every value outside
+// ASCII. Making the value an explicitly encoded byte string removes the
+// question — the structural ceiling bounds the ENCODING, and the declared limit
+// bounds the DECODED bytes.
+func encodedBytes(maxDecodedBytes int) map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"data", "encoding"},
+		"properties": map[string]any{
+			"encoding": map[string]any{"type": "string", "enum": []any{"base64"}},
+			"data":     map[string]any{"type": "string", "maxLength": base64Length(maxDecodedBytes)},
+		},
+	}
+}
+
+// sqlDecimalInteger carries a 64-bit SQLite INTEGER as its canonical decimal
+// text. A JSON number cannot: IEEE-754 double has 53 bits of mantissa, so
+// 9223372036854775807 would arrive as 9223372036854775808 and a rowid past 2^53
+// would silently drift. The pattern admits a few values above the 64-bit range,
+// which the definition's own normative sentence closes — a structural minimum
+// with the semantic rule stated alongside it (decision 0014).
+func sqlDecimalInteger() map[string]any {
+	return map[string]any{
+		"type":      "string",
+		"maxLength": 20,
+		"pattern":   `^(?:0|-?[1-9][0-9]{0,18})$`,
+	}
+}
+
+// sqlValue is the tagged SQLite storage-class value: exactly one of NULL,
+// INTEGER, REAL, TEXT, and BLOB, each carrying its payload in the member that
+// can hold it losslessly.
+//
+// The untagged `boolean|null|number|string` union it replaces could carry
+// neither a 64-bit INTEGER nor a BLOB: the first lost precision above 2^53 and
+// the second had nowhere to go at all, so a column round-tripping through this
+// interface came back as a different value. SQLite has no boolean storage
+// class, so there is no boolean member either; 0 and 1 are INTEGERs.
+func sqlValue() map[string]any {
+	tagged := func(tag string, payload map[string]any, member string) map[string]any {
+		properties := map[string]any{"type": map[string]any{"type": "string", "enum": []any{tag}}}
+		required := []string{"type"}
+		if member != "" {
+			properties[member] = payload
+			required = []string{member, "type"}
+		}
+		return map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             required,
+			"properties":           properties,
+		}
+	}
+	return map[string]any{
+		"type": "object",
+		"oneOf": []any{
+			tagged("null", nil, ""),
+			tagged("integer", sqlDecimalInteger(), "value"),
+			tagged("real", map[string]any{"type": "number"}, "value"),
+			tagged("text", map[string]any{"type": "string", "maxLength": 1000000}, "value"),
+			tagged("blob", map[string]any{"type": "string", "maxLength": base64Length(1000000)}, "base64"),
+		},
+	}
+}
+
 func sqlParams() map[string]any {
 	return map[string]any{
 		"type":     "array",
 		"maxItems": 100,
-		"items":    map[string]any{"type": []any{"boolean", "null", "number", "string"}},
+		"items":    sqlValue(),
+	}
+}
+
+// sqlStatementResult is the ONE result shape of every statement, whether it ran
+// alone or inside a transaction. A transaction that could report only a write
+// count could not carry the rows a `SELECT` inside it returned, which made the
+// atomic path strictly weaker than the non-atomic one — a reason to leave the
+// transaction, which is the opposite of what it is for.
+func sqlStatementResult() map[string]any {
+	return closedObject([]string{"rows", "rowsWritten"}, map[string]any{
+		"rows":            sqlRows(),
+		"rowsWritten":     map[string]any{"type": "integer", "minimum": 0},
+		"lastInsertRowId": sqlDecimalInteger(),
+	})
+}
+
+func sqlRows() map[string]any {
+	return map[string]any{
+		"type":     "array",
+		"maxItems": 10000,
+		"items": map[string]any{
+			"type":                 "object",
+			"maxProperties":        256,
+			"propertyNames":        map[string]any{"type": "string", "maxLength": 128},
+			"additionalProperties": sqlValue(),
+		},
 	}
 }
 
@@ -179,35 +338,74 @@ func runtimeHandlersOf(definition InterfaceDefinition) ([]string, error) {
 	return nil, fmt.Errorf("interface %s declares no %s operation", definition.Name, RuntimeHandlerOperation)
 }
 
+// edgeKVInterface is the eventually consistent edge key/value contract.
+//
+// Two things about it were incoherent before decision 0020. Its fixtures
+// required a put to be visible to the very next get and a delete to make the
+// next get miss, while its semantics declared eventual consistency: both cannot
+// be normative, and the fixtures were the half that a correct eventually
+// consistent host would fail. And its value model measured two different
+// quantities at once — `maxValueBytes` counts bytes while a JSON Schema
+// `maxLength` counts string length — so no host could tell which one bounded a
+// value. Values are now explicitly bytes, carried in the family's one
+// encoded-bytes shape, and the fixtures assert only what one client can observe
+// without waiting for convergence.
 func edgeKVInterface() InterfaceDefinition {
 	key := stringSchema(1, 512)
 	metadata := closedStringMap(64)
+	value := encodedBytes(kvMaxValueBytes)
 	return InterfaceDefinition{
 		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
 		Name: "edge.kv", Version: "1.0.0",
 		Title: "Edge key/value namespace",
-		Description: "Globally replicated key/value reads and writes with eventual consistency: " +
-			"a read after a write may return the previous value until replication converges. " +
-			"Keys are UTF-8 strings; values are opaque text. Deleting an absent key succeeds.",
+		Description: "Globally replicated key/value storage of OPAQUE BYTES with eventual consistency. " +
+			"A value is a byte string, never text: it travels in the family's encoded-bytes shape " +
+			"{\"encoding\": \"base64\", \"data\": \"…\"}, where data is RFC 4648 section 4 base64 with padding " +
+			"and without line breaks. maxValueBytes bounds the DECODED length; the maxLength on data is the " +
+			"structural ceiling of that encoding and is not the limit. A put whose decoded value exceeds " +
+			"maxValueBytes fails with value_too_large, and one whose data is not decodable base64 fails with " +
+			"invalid_value. A key is a UTF-8 string and maxKeyBytes bounds its UTF-8 ENCODED length, so a key " +
+			"of 512 astral characters is 2048 bytes and fails with invalid_key even though it is 512 code " +
+			"points. Metadata is a text map, never bytes and never secret; maxMetadataBytes bounds the UTF-8 " +
+			"encoding of its canonical JSON and exceeding it fails with metadata_too_large. " +
+			"Consistency is eventual, and that is this contract's identity rather than an option a host " +
+			"chooses. A read is served by whichever replica is nearest, so a read that follows a write MAY " +
+			"return the previous value, or not_found, until replication converges — including a read the same " +
+			"client issues immediately after its own write, on the same connection, from the same location. " +
+			"This contract states NO read-your-writes guarantee, no session in which one would hold, and no " +
+			"bound on convergence time; a host states its own convergence target in its Host Support Profile. " +
+			"Deleting an absent key succeeds, and a delete converges the same way, so a get after a resolved " +
+			"delete may still return the deleted value. " +
+			"The behavior fixtures below are exactly what one client can prove about such a store: each runs " +
+			"against a fresh scope and asserts only facts that no write has to converge for. That a write " +
+			"eventually becomes visible everywhere is a HOST OBLIGATION rather than a proven property; the " +
+			"split is written down in the Host API specification.",
 		Semantics: InterfaceSemantics{Consistency: "eventual", Pagination: "cursor"},
-		Limits:    map[string]int64{"maxKeyBytes": 512, "maxValueBytes": 26214400, "maxMetadataBytes": 1024},
+		Limits: map[string]int64{
+			"maxKeyBytes": 512, "maxValueBytes": kvMaxValueBytes,
+			"maxMetadataBytes": 1024, "maxListPageKeys": 1000,
+		},
 		Operations: []InterfaceOperation{
 			{
-				Name:        "get",
-				Description: "Read one value by key. Absent keys fail with not_found.",
-				InputSchema: operationObject([]string{"key"}, map[string]any{"key": key}),
-				OutputSchema: operationObject([]string{"value"}, map[string]any{
-					"value": stringSchema(0, 26214400),
-				}),
-				Errors:     []string{"invalid_key", "not_found", "backend_unavailable"},
-				Idempotent: true,
+				Name: "get",
+				Description: "Read one value by key. Absent keys fail with not_found. Eventual consistency applies to this " +
+					"read: a key written moments ago, by this client or another, may still fail with not_found, and a key " +
+					"overwritten moments ago may still return the previous value. The value is the family's encoded-bytes " +
+					"shape; a host never returns a bare string here.",
+				InputSchema:  operationObject([]string{"key"}, map[string]any{"key": key}),
+				OutputSchema: operationObject([]string{"value"}, map[string]any{"value": value}),
+				Errors:       []string{"invalid_key", "not_found", "backend_unavailable"},
+				Idempotent:   true,
 			},
 			{
-				Name:        "getWithMetadata",
-				Description: "Read one value and its non-secret metadata document by key.",
+				Name: "getWithMetadata",
+				Description: "Read one value and its non-secret metadata document by key. A host that stored no metadata " +
+					"omits the property rather than returning an empty object. Everything get states about eventual " +
+					"consistency applies unchanged: the value and the metadata are read from one replica, so they agree " +
+					"with each other but are not necessarily current.",
 				InputSchema: operationObject([]string{"key"}, map[string]any{"key": key}),
 				OutputSchema: operationObject([]string{"value"}, map[string]any{
-					"value":    stringSchema(0, 26214400),
+					"value":    value,
 					"metadata": metadata,
 				}),
 				Errors:     []string{"invalid_key", "not_found", "backend_unavailable"},
@@ -215,28 +413,41 @@ func edgeKVInterface() InterfaceDefinition {
 			},
 			{
 				Name: "put",
-				Description: "Write one value, replacing any previous value for the key. " +
-					"An optional expiration TTL removes the entry after at least that many seconds.",
+				Description: "Write one value, replacing any previous value for the key. The value is the family's " +
+					"encoded-bytes shape and maxValueBytes bounds its DECODED length. An optional expiration TTL removes " +
+					"the entry after AT LEAST that many seconds; it is not gone at exactly that instant, and a get starts " +
+					"failing with not_found once the removal converges. A resolved put means the write is durable at the " +
+					"accepting replica; it is not a promise that the next get anywhere observes it.",
 				InputSchema: operationObject([]string{"key", "value"}, map[string]any{
 					"key":                  key,
-					"value":                stringSchema(0, 26214400),
+					"value":                value,
 					"expirationTtlSeconds": map[string]any{"type": "integer", "minimum": 60, "maximum": 315360000},
 					"metadata":             metadata,
 				}),
 				OutputSchema: operationObject(nil, map[string]any{}),
-				Errors:       []string{"invalid_key", "value_too_large", "backend_unavailable"},
+				Errors: []string{
+					"invalid_key", "invalid_value", "value_too_large",
+					"metadata_too_large", "backend_unavailable",
+				},
 			},
 			{
-				Name:         "delete",
-				Description:  "Delete one key. Deleting an absent key succeeds.",
+				Name: "delete",
+				Description: "Delete one key. Deleting an absent key succeeds, so delete can never be used to test " +
+					"existence. Like every write the removal converges: a get after a resolved delete may still return the " +
+					"deleted value.",
 				InputSchema:  operationObject([]string{"key"}, map[string]any{"key": key}),
 				OutputSchema: operationObject(nil, map[string]any{}),
 				Errors:       []string{"invalid_key", "backend_unavailable"},
 				Idempotent:   true,
 			},
 			{
-				Name:        "list",
-				Description: "List key names in lexicographic order, optionally under a prefix, one cursor page at a time.",
+				Name: "list",
+				Description: "List key names in lexicographic order by their UTF-8 bytes, optionally under a prefix, one " +
+					"cursor page at a time. limit bounds one page and a host may return fewer. listComplete is true exactly " +
+					"when this page is the last; when it is false the cursor addresses the next page and MUST be passed back " +
+					"unmodified. A cursor is opaque, and one a host did not issue fails with invalid_cursor. The listing is " +
+					"eventually consistent like every other read: a key written moments ago may be missing from it, and a " +
+					"key deleted moments ago may still appear.",
 				InputSchema: operationObject(nil, map[string]any{
 					"prefix": stringSchema(0, 512),
 					"cursor": stringSchema(1, 4096),
@@ -246,12 +457,7 @@ func edgeKVInterface() InterfaceDefinition {
 					"keys": map[string]any{
 						"type":     "array",
 						"maxItems": 1000,
-						"items": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []string{"name"},
-							"properties":           map[string]any{"name": key},
-						},
+						"items":    closedObject([]string{"name"}, map[string]any{"name": key}),
 					},
 					"listComplete": map[string]any{"type": "boolean"},
 					"cursor":       stringSchema(1, 4096),
@@ -260,31 +466,37 @@ func edgeKVInterface() InterfaceDefinition {
 				Idempotent: true,
 			},
 		},
+		// Every fixture runs against a fresh scope and asserts only outcomes that
+		// do not depend on replication having converged. A put-then-get trace is
+		// deliberately absent: it is the one thing an eventually consistent store
+		// is allowed to fail, so requiring it would have made this contract
+		// unimplementable by exactly the systems it describes.
 		Fixtures: []InterfaceFixture{
 			{
-				Name: "put-then-get",
+				Name: "put-accepted",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{"key": "greeting", "value": "hello"}},
-					{Operation: "get", Input: map[string]any{"key": "greeting"}, Expected: map[string]any{"value": "hello"}},
+					{Operation: "put", Input: map[string]any{
+						"key": "greeting", "value": base64Value("aGVsbG8="),
+					}},
 				},
 			},
 			{
-				Name: "delete-then-get-not-found",
+				Name: "never-written-key-is-not-found",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{"key": "ephemeral", "value": "x"}},
-					{Operation: "delete", Input: map[string]any{"key": "ephemeral"}},
-					{Operation: "get", Input: map[string]any{"key": "ephemeral"}, ExpectedError: "not_found"},
+					{Operation: "get", Input: map[string]any{"key": "never-written"}, ExpectedError: "not_found"},
 				},
 			},
 			{
-				Name: "list-prefix",
+				Name: "delete-absent-key-succeeds",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{"key": "config/a", "value": "1"}},
-					{Operation: "put", Input: map[string]any{"key": "config/b", "value": "2"}},
-					{Operation: "put", Input: map[string]any{"key": "other/c", "value": "3"}},
-					{Operation: "list", Input: map[string]any{"prefix": "config/"}, Expected: map[string]any{
-						"keys":         []any{map[string]any{"name": "config/a"}, map[string]any{"name": "config/b"}},
-						"listComplete": true,
+					{Operation: "delete", Input: map[string]any{"key": "never-written"}},
+				},
+			},
+			{
+				Name: "list-of-an-empty-scope-is-complete",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "list", Input: map[string]any{}, Expected: map[string]any{
+						"keys": []any{}, "listComplete": true,
 					}},
 				},
 			},
@@ -292,86 +504,162 @@ func edgeKVInterface() InterfaceDefinition {
 	}
 }
 
+// edgeObjectsInterface is the strongly consistent object bucket.
+//
+// Before decision 0020 its description promised range reads that `get` had no
+// input for, and its body was a JSON string bounded by nothing while the object
+// size limit said 5 GiB — a shape no host could produce and no client could
+// consume. It is now a real object API: head, ranged and conditional get,
+// conditional put, delete, list with delimiter roll-up, and the four multipart
+// operations, with bodies STREAMING beside the operation document rather than
+// inside it.
 func edgeObjectsInterface() InterfaceDefinition {
 	key := stringSchema(1, 1024)
 	etag := stringSchema(1, 256)
 	contentType := stringSchema(1, 256)
-	size := map[string]any{"type": "integer", "minimum": 0, "maximum": 5368709120}
+	size := map[string]any{"type": "integer", "minimum": 0, "maximum": objectsMaxObjectBytes}
+	millis := map[string]any{"type": "integer", "minimum": 0}
+	bodyStream := map[string]any{"type": "boolean"}
+	uploadID := stringSchema(1, 256)
+	partNumber := map[string]any{"type": "integer", "minimum": 1, "maximum": objectsMaxMultipartParts}
+	byteRange := closedObject([]string{"offset"}, map[string]any{
+		"offset": map[string]any{"type": "integer", "minimum": 0, "maximum": objectsMaxObjectBytes},
+		"length": map[string]any{"type": "integer", "minimum": 1, "maximum": objectsMaxObjectBytes},
+	})
 	return InterfaceDefinition{
 		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
 		Name: "edge.objects", Version: "1.0.0",
 		Title: "Object bucket",
-		Description: "Flat-namespace object reads and writes with read-after-write consistency: " +
-			"a get or head after a successful put observes that put. Writes to one key are last-writer-wins. " +
-			"Conditional requests fence on the strong etag returned by put and head; range reads return a " +
-			"contiguous byte subrange of one object version.",
+		Description: "Flat-namespace object storage with strong read-after-write consistency and STREAMING bodies. " +
+			"An object body never travels as a JSON member: maxObjectBytes is 5 GiB and no JSON string carries " +
+			"that, so get and put declare bodyStream and the bytes move as a stream beside the operation " +
+			"document. contentLength states the exact byte count in both directions, and a put whose stream " +
+			"does not deliver exactly contentLength bytes fails with invalid_body having stored nothing. " +
+			"Consistency: a get, head, or list issued after a put or a delete that has already resolved " +
+			"observes that put or that delete. Writes to one key are last-writer-wins; there is no cross-key " +
+			"atomicity, no transaction, and no versioning, so a replaced object is gone. An etag is a STRONG " +
+			"validator of the exact bytes of one object. A conditional get or put fences with ifMatch (act only " +
+			"when the current etag is exactly this one); a get may instead fence with ifNoneMatch on an etag, " +
+			"and a put with ifNoneMatch \"*\" to write only when the key is absent. A failed precondition is " +
+			"precondition_failed and changes nothing. A ranged get returns a contiguous subrange of ONE object: " +
+			"offset is the first byte, length the count, an omitted length runs to the end, and an offset at or " +
+			"past the object size fails with range_not_satisfiable rather than returning an empty body. " +
+			"Objects above maxSinglePutBytes, and any object whose size the producer does not know in advance, " +
+			"are written through the multipart operations: createMultipartUpload opens an upload, uploadPart " +
+			"writes one numbered part, completeMultipartUpload assembles the parts in part-number order into " +
+			"one object with one etag, and abortMultipartUpload discards the upload. Every part except the " +
+			"highest-numbered one MUST be at least 5242880 bytes. An upload holds no key until it completes, so " +
+			"a get of that key before completion behaves as though the upload did not exist. " +
+			"In a behavior trace, a step whose input declares bodyStream sends exactly contentLength bytes " +
+			"whose value at index i is i modulo 256, which makes every trace below byte-for-byte reproducible. " +
+			"Multipart traces are absent from that set because their steps depend on part etags the host mints " +
+			"during the trace; multipart assembly is a HOST OBLIGATION stated in the Host API specification.",
 		Semantics: InterfaceSemantics{Consistency: "read_after_write", Pagination: "cursor"},
-		Limits:    map[string]int64{"maxKeyBytes": 1024, "maxObjectBytes": 5368709120},
+		Limits: map[string]int64{
+			"maxKeyBytes": 1024, "maxObjectBytes": objectsMaxObjectBytes,
+			"maxSinglePutBytes": objectsMaxSinglePutBytes, "maxMultipartParts": objectsMaxMultipartParts,
+			"maxListPageObjects": 1000,
+		},
 		Operations: []InterfaceOperation{
 			{
-				Name:        "get",
-				Description: "Read one object body and its content type by key.",
+				Name: "head",
+				Description: "Read one object's size, strong etag, content type, and write time without its body. Absent " +
+					"keys fail with not_found. uploadedAtMillis is milliseconds since the Unix epoch, in UTC, of the write " +
+					"that produced the current bytes.",
 				InputSchema: operationObject([]string{"key"}, map[string]any{"key": key}),
-				OutputSchema: operationObject([]string{"body", "etag", "size"}, map[string]any{
-					"body":        map[string]any{"type": "string"},
-					"contentType": contentType,
-					"etag":        etag,
-					"size":        size,
+				OutputSchema: operationObject([]string{"etag", "size"}, map[string]any{
+					"contentType":      contentType,
+					"etag":             etag,
+					"size":             size,
+					"uploadedAtMillis": millis,
 				}),
 				Errors:     []string{"invalid_key", "not_found", "backend_unavailable"},
 				Idempotent: true,
 			},
 			{
-				Name:        "head",
-				Description: "Read one object's size, etag, and content type without its body.",
-				InputSchema: operationObject([]string{"key"}, map[string]any{"key": key}),
-				OutputSchema: operationObject([]string{"etag", "size"}, map[string]any{
+				Name: "get",
+				Description: "Read one object as a byte stream. bodyStream is always true in the output: the body is " +
+					"streamed beside this document and is never a member of it, so a caller may begin consuming before the " +
+					"whole object has arrived. size is the size of the WHOLE object, partial says whether a range was " +
+					"applied, and range echoes the exact subrange served. A conditional get fences with ifMatch (serve only " +
+					"when the current etag is exactly this one) or ifNoneMatch (serve only when it is not); a failed " +
+					"precondition is precondition_failed and carries no body. A range whose offset is at or past size fails " +
+					"with range_not_satisfiable.",
+				InputSchema: operationObject([]string{"key"}, map[string]any{
+					"key":         key,
+					"range":       byteRange,
+					"ifMatch":     etag,
+					"ifNoneMatch": etag,
+				}),
+				OutputSchema: operationObject([]string{"bodyStream", "etag", "partial", "size"}, map[string]any{
+					"bodyStream":  bodyStream,
 					"contentType": contentType,
 					"etag":        etag,
+					"partial":     map[string]any{"type": "boolean"},
+					"range":       byteRange,
 					"size":        size,
 				}),
-				Errors:     []string{"invalid_key", "not_found", "backend_unavailable"},
+				Errors: []string{
+					"invalid_key", "not_found", "precondition_failed",
+					"range_not_satisfiable", "backend_unavailable",
+				},
 				Idempotent: true,
 			},
 			{
 				Name: "put",
-				Description: "Write one object, replacing any previous object at the key, and return its strong etag. " +
-					"A conditional put carries the expected etag and fails with precondition_failed on mismatch.",
-				InputSchema: operationObject([]string{"body", "key"}, map[string]any{
-					"key":          key,
-					"body":         map[string]any{"type": "string"},
-					"contentType":  contentType,
-					"expectedEtag": etag,
+				Description: "Write one object from a byte stream, replacing any previous object at the key, and return " +
+					"the strong etag of the bytes written. bodyStream MUST be true and contentLength MUST be the exact byte " +
+					"count of the stream; a stream delivering a different count fails with invalid_body and stores nothing. " +
+					"A conditional put fences with ifMatch on the current etag, or with ifNoneMatch \"*\" to write only when " +
+					"the key is absent; a failed precondition is precondition_failed and writes nothing. A contentLength " +
+					"above maxSinglePutBytes fails with value_too_large — that object belongs in a multipart upload.",
+				InputSchema: operationObject([]string{"bodyStream", "contentLength", "key"}, map[string]any{
+					"key":           key,
+					"bodyStream":    bodyStream,
+					"contentLength": size,
+					"contentType":   contentType,
+					"ifMatch":       etag,
+					"ifNoneMatch":   map[string]any{"type": "string", "enum": []any{"*"}},
 				}),
-				OutputSchema: operationObject([]string{"etag"}, map[string]any{"etag": etag}),
-				Errors:       []string{"invalid_key", "value_too_large", "precondition_failed", "backend_unavailable"},
+				OutputSchema: operationObject([]string{"etag", "size"}, map[string]any{"etag": etag, "size": size}),
+				Errors: []string{
+					"invalid_key", "invalid_body", "value_too_large",
+					"precondition_failed", "backend_unavailable",
+				},
 			},
 			{
-				Name:         "delete",
-				Description:  "Delete one object. Deleting an absent key succeeds.",
+				Name: "delete",
+				Description: "Delete one object. Deleting an absent key succeeds, so delete never reports existence. A " +
+					"head, get, or list issued after a resolved delete does not see the object.",
 				InputSchema:  operationObject([]string{"key"}, map[string]any{"key": key}),
 				OutputSchema: operationObject(nil, map[string]any{}),
 				Errors:       []string{"invalid_key", "backend_unavailable"},
 				Idempotent:   true,
 			},
 			{
-				Name:        "list",
-				Description: "List objects in lexicographic key order, optionally under a prefix, one cursor page at a time.",
+				Name: "list",
+				Description: "List objects in lexicographic key order by their UTF-8 bytes, optionally under a prefix, one " +
+					"cursor page at a time. limit bounds one page and a host may return fewer. truncated is true exactly " +
+					"when another page follows, and the cursor then addresses it and MUST be passed back unmodified. A " +
+					"delimiter rolls every key whose remainder after the prefix contains it up into prefixes, and those keys " +
+					"are then absent from objects. The listing observes every put and delete that has already resolved.",
 				InputSchema: operationObject(nil, map[string]any{
-					"prefix": stringSchema(0, 1024),
-					"cursor": stringSchema(1, 4096),
-					"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
+					"prefix":    stringSchema(0, 1024),
+					"delimiter": stringSchema(1, 16),
+					"cursor":    stringSchema(1, 4096),
+					"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
 				}),
 				OutputSchema: operationObject([]string{"objects", "truncated"}, map[string]any{
 					"objects": map[string]any{
 						"type":     "array",
 						"maxItems": 1000,
-						"items": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []string{"etag", "key", "size"},
-							"properties":           map[string]any{"key": key, "etag": etag, "size": size},
-						},
+						"items": closedObject([]string{"etag", "key", "size"}, map[string]any{
+							"key": key, "etag": etag, "size": size, "uploadedAtMillis": millis,
+						}),
+					},
+					"prefixes": map[string]any{
+						"type": "array", "maxItems": 1000, "uniqueItems": true,
+						"items": stringSchema(1, 1024),
 					},
 					"truncated": map[string]any{"type": "boolean"},
 					"cursor":    stringSchema(1, 4096),
@@ -379,77 +667,234 @@ func edgeObjectsInterface() InterfaceDefinition {
 				Errors:     []string{"invalid_cursor", "backend_unavailable"},
 				Idempotent: true,
 			},
+			{
+				Name: "createMultipartUpload",
+				Description: "Open a multipart upload for one key and return its opaque uploadId. The key is not written " +
+					"and not reserved: another writer may put or complete the same key meanwhile, and last writer wins. An " +
+					"upload a host has abandoned fails every later part with upload_not_found.",
+				InputSchema: operationObject([]string{"key"}, map[string]any{
+					"key": key, "contentType": contentType,
+				}),
+				OutputSchema: operationObject([]string{"uploadId"}, map[string]any{"uploadId": uploadID}),
+				Errors:       []string{"invalid_key", "backend_unavailable"},
+			},
+			{
+				Name: "uploadPart",
+				Description: "Write one numbered part of an open upload from a byte stream and return the part's strong " +
+					"etag, which completeMultipartUpload requires back. Part numbers are 1..maxMultipartParts and need not " +
+					"be contiguous; re-uploading a number replaces that part. Every part except the highest-numbered one " +
+					"MUST be at least 5242880 bytes, and a shorter one fails with invalid_part. contentLength MUST be the " +
+					"exact byte count of the stream.",
+				InputSchema: operationObject(
+					[]string{"bodyStream", "contentLength", "key", "partNumber", "uploadId"},
+					map[string]any{
+						"key": key, "uploadId": uploadID, "partNumber": partNumber,
+						"bodyStream": bodyStream, "contentLength": size,
+					},
+				),
+				OutputSchema: operationObject([]string{"etag", "partNumber"}, map[string]any{
+					"etag": etag, "partNumber": partNumber,
+				}),
+				Errors: []string{
+					"invalid_key", "invalid_body", "invalid_part",
+					"upload_not_found", "value_too_large", "backend_unavailable",
+				},
+			},
+			{
+				Name: "completeMultipartUpload",
+				Description: "Assemble the named parts, in ascending part-number order, into one object at the key and " +
+					"return the object's strong etag and total size. Every part listed must have been uploaded and must " +
+					"carry the etag uploadPart returned for it; a mismatch fails with invalid_part and assembles nothing. " +
+					"The object becomes visible atomically: no reader ever observes a partially assembled object. " +
+					"Completing an upload the host no longer holds fails with upload_not_found.",
+				InputSchema: operationObject([]string{"key", "parts", "uploadId"}, map[string]any{
+					"key": key, "uploadId": uploadID,
+					"parts": map[string]any{
+						"type": "array", "minItems": 1, "maxItems": objectsMaxMultipartParts,
+						"items": closedObject([]string{"etag", "partNumber"}, map[string]any{
+							"etag": etag, "partNumber": partNumber,
+						}),
+					},
+				}),
+				OutputSchema: operationObject([]string{"etag", "size"}, map[string]any{"etag": etag, "size": size}),
+				Errors: []string{
+					"invalid_key", "invalid_part", "upload_not_found",
+					"value_too_large", "precondition_failed", "backend_unavailable",
+				},
+			},
+			{
+				Name: "abortMultipartUpload",
+				Description: "Discard an open upload and every part written to it. It never touches the key: an object " +
+					"already at that key is untouched. Aborting an upload the host no longer holds fails with " +
+					"upload_not_found, so abort is not a way to test whether an upload exists.",
+				InputSchema: operationObject([]string{"key", "uploadId"}, map[string]any{
+					"key": key, "uploadId": uploadID,
+				}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors:       []string{"invalid_key", "upload_not_found", "backend_unavailable"},
+			},
 		},
 		Fixtures: []InterfaceFixture{
 			{
-				Name: "put-then-get",
+				Name: "put-then-head-observes-the-write",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{"key": "reports/summary.txt", "body": "total: 3", "contentType": "text/plain"}},
-					{Operation: "get", Input: map[string]any{"key": "reports/summary.txt"}, Expected: map[string]any{"body": "total: 3"}},
+					{Operation: "put", Input: map[string]any{
+						"key": "reports/summary.txt", "bodyStream": true,
+						"contentLength": 8, "contentType": "text/plain",
+					}},
+					{Operation: "head", Input: map[string]any{"key": "reports/summary.txt"}, Expected: map[string]any{
+						"size": 8,
+					}},
+				},
+			},
+			{
+				Name: "ranged-get-returns-a-subrange-of-one-object",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "put", Input: map[string]any{
+						"key": "blobs/data.bin", "bodyStream": true, "contentLength": 1024,
+					}},
+					{Operation: "get", Input: map[string]any{
+						"key": "blobs/data.bin", "range": map[string]any{"offset": 512, "length": 256},
+					}, Expected: map[string]any{
+						"bodyStream": true, "partial": true, "size": 1024,
+						"range": map[string]any{"offset": 512, "length": 256},
+					}},
+				},
+			},
+			{
+				Name: "range-past-the-end-is-refused",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "put", Input: map[string]any{
+						"key": "blobs/small.bin", "bodyStream": true, "contentLength": 4,
+					}},
+					{Operation: "get", Input: map[string]any{
+						"key": "blobs/small.bin", "range": map[string]any{"offset": 64},
+					}, ExpectedError: "range_not_satisfiable"},
+				},
+			},
+			{
+				Name: "conditional-put-refuses-an-existing-key",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "put", Input: map[string]any{
+						"key": "once.txt", "bodyStream": true, "contentLength": 1,
+					}},
+					{Operation: "put", Input: map[string]any{
+						"key": "once.txt", "bodyStream": true, "contentLength": 1, "ifNoneMatch": "*",
+					}, ExpectedError: "precondition_failed"},
 				},
 			},
 			{
 				Name: "delete-then-head-not-found",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "put", Input: map[string]any{"key": "tmp/scratch.txt", "body": "x"}},
+					{Operation: "put", Input: map[string]any{
+						"key": "tmp/scratch.txt", "bodyStream": true, "contentLength": 1,
+					}},
 					{Operation: "delete", Input: map[string]any{"key": "tmp/scratch.txt"}},
 					{Operation: "head", Input: map[string]any{"key": "tmp/scratch.txt"}, ExpectedError: "not_found"},
+				},
+			},
+			{
+				Name: "list-truncates-at-the-requested-limit",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "put", Input: map[string]any{
+						"key": "page/a", "bodyStream": true, "contentLength": 1,
+					}},
+					{Operation: "put", Input: map[string]any{
+						"key": "page/b", "bodyStream": true, "contentLength": 1,
+					}},
+					{Operation: "list", Input: map[string]any{"prefix": "page/", "limit": 1}, Expected: map[string]any{
+						"truncated": true,
+					}},
+					{Operation: "list", Input: map[string]any{"prefix": "page/"}, Expected: map[string]any{
+						"truncated": false,
+					}},
 				},
 			},
 		},
 	}
 }
 
+// edgeSQLInterface is the embedded SQLite contract.
+//
+// Its value model used to be the untagged union boolean|null|number|string,
+// which could carry neither of the two things SQLite users depend on: a 64-bit
+// INTEGER (IEEE-754 double has 53 bits of mantissa, so a rowid past 2^53 came
+// back changed) and a BLOB (which had nowhere to go at all). Values are now
+// tagged by storage class, integers and rowids travel as canonical decimal
+// text, and every statement — inside a transaction or not — reports the same
+// result shape, so the atomic path is no longer strictly weaker than the
+// non-atomic one.
 func edgeSQLInterface() InterfaceDefinition {
-	rows := map[string]any{
-		"type":     "array",
-		"maxItems": 10000,
-		"items": map[string]any{
-			"type":                 "object",
-			"maxProperties":        256,
-			"propertyNames":        map[string]any{"type": "string", "maxLength": 128},
-			"additionalProperties": map[string]any{"type": []any{"boolean", "null", "number", "string"}},
-		},
-	}
-	writeResult := operationObject([]string{"rowsWritten"}, map[string]any{
-		"rowsWritten":     map[string]any{"type": "integer", "minimum": 0},
-		"lastInsertRowId": map[string]any{"type": "integer"},
-	})
+	statementResult := sqlStatementResult()
+	sql := stringSchema(1, 100000)
 	return InterfaceDefinition{
 		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
 		Name: "edge.sql", Version: "1.0.0",
 		Title: "Embedded SQLite database",
-		Description: "SQL statements executed against one embedded SQLite database with serializable " +
-			"transactions: a transaction observes a single consistent snapshot and its statements apply " +
-			"atomically or not at all. Concurrent writers may fail with busy and must retry.",
+		Description: "SQL statements executed against one embedded SQLite database with serializable transactions. " +
+			"Values are TAGGED, never bare JSON scalars: every bound parameter and every returned column value is " +
+			"exactly one of {\"type\":\"null\"}, {\"type\":\"integer\",\"value\":\"<decimal>\"}, " +
+			"{\"type\":\"real\",\"value\":<number>}, {\"type\":\"text\",\"value\":\"<string>\"}, and " +
+			"{\"type\":\"blob\",\"base64\":\"<base64>\"} — SQLite's five storage classes and nothing else. An " +
+			"INTEGER travels as canonical decimal TEXT because IEEE-754 double carries 53 bits of mantissa, so " +
+			"9223372036854775807 would arrive as 9223372036854775808 if it were a JSON number; a host MUST reject " +
+			"with sql_error an integer outside the 64-bit two's-complement range " +
+			"-9223372036854775808..9223372036854775807, and one carrying a leading zero, a leading plus, or " +
+			"surrounding space. A BLOB travels as RFC 4648 section 4 base64 with padding, so arbitrary bytes " +
+			"survive; TEXT is UTF-8. There is no boolean member because SQLite has no boolean storage class: 0 and " +
+			"1 are INTEGERs. lastInsertRowId is the same canonical decimal text for the same reason. " +
+			"Every statement reports the same result whether it ran alone or inside a transaction: rows, the rows " +
+			"it returned in order and empty when it returned none; rowsWritten, the number of rows it inserted, " +
+			"updated, or deleted; and lastInsertRowId when it inserted at least one row. Parameters bind " +
+			"POSITIONALLY, so ?1 is params[0], and a statement referencing an index the array does not carry fails " +
+			"with sql_error. " +
+			"A transaction applies its ordered statements atomically under serializable isolation: it observes one " +
+			"consistent snapshot, and either every statement applied or none did. A failure anywhere rolls the " +
+			"whole transaction back, leaves the database exactly as it was, and reports sql_error without partial " +
+			"results — a result list describing statements whose effects were discarded would record a state that " +
+			"never existed. Concurrent writers may fail with busy, which is the only retryable outcome; a caller " +
+			"that retries re-runs the whole call. query is declared idempotent, which is only true if it cannot " +
+			"write, so a host MUST refuse a writing statement submitted through query with sql_error.",
 		Semantics: InterfaceSemantics{Consistency: "serializable"},
-		Limits:    map[string]int64{"maxStatementBytes": 100000, "maxBoundParameters": 100},
+		Limits: map[string]int64{
+			"maxStatementBytes": 100000, "maxBoundParameters": 100,
+			"maxStatementsPerTransaction": 100, "maxRowsPerStatement": 10000,
+			"maxColumnsPerRow": 256,
+		},
 		Operations: []InterfaceOperation{
 			{
-				Name:         "execute",
-				Description:  "Run one write statement with bound parameters and return the written row count.",
-				InputSchema:  operationObject([]string{"sql"}, map[string]any{"sql": stringSchema(1, 100000), "params": sqlParams()}),
-				OutputSchema: writeResult,
+				Name: "execute",
+				Description: "Run one statement with positionally bound parameters and return its result. A statement that " +
+					"returns rows returns them here too; a statement that writes reports rowsWritten and, when it inserted at " +
+					"least one row, lastInsertRowId as canonical decimal text. execute is deliberately NOT idempotent: " +
+					"re-running an INSERT inserts again, so a caller that retries after a timeout must decide for itself " +
+					"whether the first attempt applied.",
+				InputSchema:  operationObject([]string{"sql"}, map[string]any{"sql": sql, "params": sqlParams()}),
+				OutputSchema: withDialect(statementResult),
 				Errors:       []string{"sql_error", "busy", "backend_unavailable"},
 			},
 			{
-				Name:        "query",
-				Description: "Run one read statement with bound parameters and return its rows.",
-				InputSchema: operationObject([]string{"sql"}, map[string]any{"sql": stringSchema(1, 100000), "params": sqlParams()}),
-				OutputSchema: operationObject([]string{"rows"}, map[string]any{
-					"rows": rows,
-				}),
-				Errors:     []string{"sql_error", "busy", "backend_unavailable"},
-				Idempotent: true,
+				Name: "query",
+				Description: "Run one READ statement with positionally bound parameters and return its rows. A host MUST " +
+					"refuse a statement that writes with sql_error: this operation is declared idempotent, and a writing " +
+					"statement behind that declaration would let a safe retry duplicate the write. rowsWritten is therefore " +
+					"always 0 here and lastInsertRowId never appears.",
+				InputSchema:  operationObject([]string{"sql"}, map[string]any{"sql": sql, "params": sqlParams()}),
+				OutputSchema: withDialect(statementResult),
+				Errors:       []string{"sql_error", "busy", "backend_unavailable"},
+				Idempotent:   true,
 			},
 			{
-				Name:        "transaction",
-				Description: "Apply an ordered statement list atomically under serializable isolation.",
+				Name: "transaction",
+				Description: "Apply an ordered statement list atomically under serializable isolation and return one result " +
+					"per statement, in statement order. results carries exactly as many entries as statements, and each entry " +
+					"is the full statement result — including the rows a SELECT inside the transaction returned, which is why " +
+					"a read-modify-write no longer has to leave the transaction to see what it read.",
 				InputSchema: operationObject([]string{"statements"}, map[string]any{
 					"statements": map[string]any{"type": "array", "minItems": 1, "maxItems": 100, "items": sqlStatement()},
 				}),
 				OutputSchema: operationObject([]string{"results"}, map[string]any{
-					"results": map[string]any{"type": "array", "maxItems": 100, "items": writeResult},
+					"results": map[string]any{"type": "array", "maxItems": 100, "items": statementResult},
 				}),
 				Errors: []string{"sql_error", "busy", "backend_unavailable"},
 			},
@@ -458,64 +903,268 @@ func edgeSQLInterface() InterfaceDefinition {
 			{
 				Name: "create-insert-select",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "execute", Input: map[string]any{"sql": "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)"}},
-					{Operation: "execute", Input: map[string]any{"sql": "INSERT INTO notes (body) VALUES (?1)", "params": []any{"first note"}}, Expected: map[string]any{"rowsWritten": 1}},
-					{Operation: "query", Input: map[string]any{"sql": "SELECT body FROM notes ORDER BY id"}, Expected: map[string]any{"rows": []any{map[string]any{"body": "first note"}}}},
+					{Operation: "execute", Input: map[string]any{
+						"sql": "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)",
+					}, Expected: map[string]any{"rows": []any{}, "rowsWritten": 0}},
+					{Operation: "execute", Input: map[string]any{
+						"sql":    "INSERT INTO notes (body) VALUES (?1)",
+						"params": []any{sqlText("first note")},
+					}, Expected: map[string]any{"rowsWritten": 1, "lastInsertRowId": "1"}},
+					{Operation: "query", Input: map[string]any{
+						"sql": "SELECT body FROM notes ORDER BY id",
+					}, Expected: map[string]any{
+						"rows":        []any{map[string]any{"body": sqlText("first note")}},
+						"rowsWritten": 0,
+					}},
+				},
+			},
+			{
+				// The whole reason integers are tagged decimal text. As a JSON
+				// number this value comes back as 9223372036854775808.
+				Name: "a-64-bit-integer-round-trips-losslessly",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "execute", Input: map[string]any{"sql": "CREATE TABLE counters (v INTEGER NOT NULL)"}},
+					{Operation: "execute", Input: map[string]any{
+						"sql":    "INSERT INTO counters (v) VALUES (?1)",
+						"params": []any{sqlInteger("9223372036854775807")},
+					}, Expected: map[string]any{"rowsWritten": 1}},
+					{Operation: "query", Input: map[string]any{"sql": "SELECT v FROM counters"}, Expected: map[string]any{
+						"rows": []any{map[string]any{"v": sqlInteger("9223372036854775807")}},
+					}},
+				},
+			},
+			{
+				// The other value the untagged union could not carry at all.
+				Name: "a-blob-round-trips-losslessly",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "execute", Input: map[string]any{"sql": "CREATE TABLE payloads (v BLOB NOT NULL)"}},
+					{Operation: "execute", Input: map[string]any{
+						"sql":    "INSERT INTO payloads (v) VALUES (?1)",
+						"params": []any{sqlBlob("AAECg/8=")},
+					}, Expected: map[string]any{"rowsWritten": 1}},
+					{Operation: "query", Input: map[string]any{"sql": "SELECT v FROM payloads"}, Expected: map[string]any{
+						"rows": []any{map[string]any{"v": sqlBlob("AAECg/8=")}},
+					}},
+				},
+			},
+			{
+				Name: "null-and-real-keep-their-storage-classes",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "execute", Input: map[string]any{"sql": "CREATE TABLE readings (a REAL, b TEXT)"}},
+					{Operation: "execute", Input: map[string]any{
+						"sql":    "INSERT INTO readings (a, b) VALUES (?1, ?2)",
+						"params": []any{sqlReal(1.5), sqlNull()},
+					}, Expected: map[string]any{"rowsWritten": 1}},
+					{Operation: "query", Input: map[string]any{"sql": "SELECT a, b FROM readings"}, Expected: map[string]any{
+						"rows": []any{map[string]any{"a": sqlReal(1.5), "b": sqlNull()}},
+					}},
+				},
+			},
+			{
+				Name: "a-transaction-reports-one-result-per-statement",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "transaction", Input: map[string]any{
+						"statements": []any{
+							map[string]any{"sql": "CREATE TABLE events (id INTEGER PRIMARY KEY, n INTEGER NOT NULL)"},
+							map[string]any{
+								"sql":    "INSERT INTO events (n) VALUES (?1)",
+								"params": []any{sqlInteger("7")},
+							},
+							map[string]any{"sql": "SELECT n FROM events ORDER BY id"},
+						},
+					}, Expected: map[string]any{
+						"results": []any{
+							map[string]any{"rows": []any{}, "rowsWritten": 0},
+							map[string]any{"rows": []any{}, "rowsWritten": 1, "lastInsertRowId": "1"},
+							map[string]any{"rows": []any{map[string]any{"n": sqlInteger("7")}}, "rowsWritten": 0},
+						},
+					}},
+				},
+			},
+			{
+				// Atomicity is provable from one client: the table the first
+				// statement created must not exist after the transaction failed.
+				Name: "a-failed-transaction-applies-nothing",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "transaction", Input: map[string]any{
+						"statements": []any{
+							map[string]any{"sql": "CREATE TABLE rolled_back (id INTEGER PRIMARY KEY)"},
+							map[string]any{"sql": "INSERT INTO no_such_table (id) VALUES (1)"},
+						},
+					}, ExpectedError: "sql_error"},
+					{Operation: "query", Input: map[string]any{
+						"sql": "SELECT id FROM rolled_back",
+					}, ExpectedError: "sql_error"},
 				},
 			},
 		},
 	}
 }
 
+// edgeQueueInterface is the at-least-once queue.
+//
+// It used to state only the producer half, and even that left the message model
+// open: a body was an unbounded JSON string, nothing said what a messageId or a
+// timestamp meant, nothing said how a delivery was settled, and nothing said
+// whether a queue could have two consumers. Every one of those is now data or a
+// normative sentence, and the answers are held to the QueueConsumer Form's
+// fields and to the queue-producer binding's projection, which still grants only
+// send and sendBatch.
 func edgeQueueInterface() InterfaceDefinition {
-	body := stringSchema(0, 131072)
+	body := encodedBytes(queueMaxMessageBytes)
 	delay := map[string]any{"type": "integer", "minimum": 0, "maximum": 43200}
 	messageID := stringSchema(1, 256)
+	batchID := stringSchema(1, 256)
 	return InterfaceDefinition{
 		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
 		Name: "edge.queue", Version: "1.0.0",
-		Title: "At-least-once queue producer",
-		Description: "Asynchronous message submission with at-least-once delivery and no ordering guarantee: " +
-			"an accepted message is delivered to the consumer one or more times, possibly out of send order. " +
-			"Consumers must be idempotent against duplicates.",
+		Title: "At-least-once queue",
+		Description: "Asynchronous message submission and batch consumption with at-least-once delivery and no " +
+			"ordering guarantee. A message body is OPAQUE BYTES in the family's encoded-bytes shape " +
+			"{\"encoding\": \"base64\", \"data\": \"…\"}; maxMessageBytes bounds the DECODED length and a larger " +
+			"message fails with message_too_large. A messageId is host-issued, opaque, unique within the queue " +
+			"for the lifetime of the message, and STABLE across redeliveries, so a consumer can deduplicate by " +
+			"it. timestampMillis is milliseconds since the Unix epoch, in UTC, of the instant the host ACCEPTED " +
+			"the message, and it does not change across redeliveries. attempts is 1 on a message's first " +
+			"delivery and increments by one on each redelivery. A resolved send means ACCEPTED and durable, " +
+			"never delivered: delivery follows later, at least once, possibly more than once, and possibly out " +
+			"of send order, so consumers must be idempotent. " +
+			"Consumption is not a binding; it is the Queue Consumer attachment, whose maxBatchSize, " +
+			"maxBatchTimeoutSeconds, maxRetries, retryDelaySeconds, maxConcurrency, and optional dead-letter " +
+			"queue are the operational parameters of every rule here. Settlement is per message or per batch: " +
+			"acknowledge settles one message as delivered and it is never redelivered; retry returns one message " +
+			"to the queue, delayed by delaySeconds when given and by the consumer's retryDelaySeconds otherwise; " +
+			"acknowledgeAll and retryAll settle every message of the batch still unsettled. A handler that " +
+			"returns normally without settling anything acknowledges the WHOLE batch. A handler that throws, or " +
+			"whose returned promise rejects, retries every message of the batch that was not already explicitly " +
+			"acknowledged — acknowledgements taken before the throw stand. " +
+			"maxRetries counts REDELIVERIES only: the first delivery does not count toward it, so a message is " +
+			"delivered at most 1 + maxRetries times and maxRetries 0 means one delivery and no retry. A message " +
+			"that exhausts its retries moves to the consumer's dead-letter queue when it declares one, and is " +
+			"dropped otherwise. The dead-letter copy is a NEW message on that queue: new messageId, new " +
+			"timestampMillis of the moment it was accepted there, and attempts starting again at 1. This " +
+			"contract carries no portable link back to the original. " +
+			"One queue has AT MOST ONE consumer. Two would split the stream between two retry policies and two " +
+			"dead-letter destinations, leaving the queue's own behavior unstatable, so a host refuses the second " +
+			"attachment. " +
+			"The fixtures below cover only what one client can prove without a consumer and without waiting; " +
+			"delivery, retry, dead-lettering, and attempt counts are HOST OBLIGATIONS stated in the Host API " +
+			"specification.",
 		Semantics: InterfaceSemantics{Consistency: "eventual", Delivery: "at_least_once", Ordering: "none"},
-		Limits:    map[string]int64{"maxMessageBytes": 131072, "maxBatchMessages": 100},
+		Limits: map[string]int64{
+			"maxMessageBytes": queueMaxMessageBytes, "maxBatchMessages": 100, "maxDelaySeconds": 43200,
+		},
 		Operations: []InterfaceOperation{
 			{
-				Name:        "send",
-				Description: "Submit one message, optionally delayed before it becomes deliverable.",
+				Name: "send",
+				Description: "Submit one message, optionally delayed before it becomes deliverable. The body is the " +
+					"family's encoded-bytes shape and maxMessageBytes bounds its decoded length. A resolved send means the " +
+					"host accepted and durably stored the message; it is not a statement that any consumer has seen it, or " +
+					"will see it within any bound this contract states.",
 				InputSchema: operationObject([]string{"body"}, map[string]any{
 					"body":         body,
 					"delaySeconds": delay,
 				}),
 				OutputSchema: operationObject([]string{"messageId"}, map[string]any{"messageId": messageID}),
-				Errors:       []string{"message_too_large", "backend_unavailable"},
+				Errors:       []string{"invalid_body", "message_too_large", "backend_unavailable"},
 			},
 			{
-				Name:        "sendBatch",
-				Description: "Submit an ordered batch of messages; acceptance is all-or-nothing.",
+				Name: "sendBatch",
+				Description: "Submit an ordered batch of messages; acceptance is all-or-nothing, so a rejected sendBatch " +
+					"stored none of them. messageIds is returned in exactly the order the messages were given. Acceptance " +
+					"order is not delivery order: the queue guarantees no ordering at all.",
 				InputSchema: operationObject([]string{"messages"}, map[string]any{
 					"messages": map[string]any{
 						"type": "array", "minItems": 1, "maxItems": 100,
-						"items": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []string{"body"},
-							"properties":           map[string]any{"body": body, "delaySeconds": delay},
-						},
+						"items": closedObject([]string{"body"}, map[string]any{"body": body, "delaySeconds": delay}),
 					},
 				}),
 				OutputSchema: operationObject([]string{"messageIds"}, map[string]any{
 					"messageIds": map[string]any{"type": "array", "minItems": 1, "maxItems": 100, "items": messageID},
 				}),
-				Errors: []string{"message_too_large", "batch_too_large", "backend_unavailable"},
+				Errors: []string{"invalid_body", "message_too_large", "batch_too_large", "backend_unavailable"},
+			},
+			{
+				Name: "acknowledge",
+				Description: "Settle one message of the batch this invocation is handling as delivered: it is never " +
+					"redelivered and never dead-lettered. batchId is the identity the delivered batch carried and messageId " +
+					"one of that batch's messages; anything else fails with unknown_batch or unknown_message. Settling a " +
+					"message twice fails with already_settled, so a double acknowledgement is an error rather than a silent " +
+					"no-op that hides a bug in the handler.",
+				InputSchema: operationObject([]string{"batchId", "messageId"}, map[string]any{
+					"batchId": batchID, "messageId": messageID,
+				}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors: []string{
+					"unknown_batch", "unknown_message", "already_settled", "backend_unavailable",
+				},
+			},
+			{
+				Name: "retry",
+				Description: "Return one message of this batch to the queue for redelivery, incrementing its attempts. " +
+					"delaySeconds overrides the consumer's retryDelaySeconds for this message only. A message whose attempts " +
+					"has already reached 1 + maxRetries is dead-lettered or dropped instead of redelivered, exactly as an " +
+					"unhandled failure would leave it.",
+				InputSchema: operationObject([]string{"batchId", "messageId"}, map[string]any{
+					"batchId": batchID, "messageId": messageID, "delaySeconds": delay,
+				}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors: []string{
+					"unknown_batch", "unknown_message", "already_settled", "backend_unavailable",
+				},
+			},
+			{
+				Name: "acknowledgeAll",
+				Description: "Settle every still-unsettled message of this batch as delivered. Messages already settled by " +
+					"acknowledge or retry keep the outcome they were given; this operation never reverses one.",
+				InputSchema:  operationObject([]string{"batchId"}, map[string]any{"batchId": batchID}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors:       []string{"unknown_batch", "backend_unavailable"},
+			},
+			{
+				Name: "retryAll",
+				Description: "Return every still-unsettled message of this batch to the queue, incrementing each attempts. " +
+					"It is exactly what an uncaught handler exception does, stated as an operation so a handler that caught " +
+					"its own error can choose the same outcome deliberately.",
+				InputSchema: operationObject([]string{"batchId"}, map[string]any{
+					"batchId": batchID, "delaySeconds": delay,
+				}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors:       []string{"unknown_batch", "backend_unavailable"},
 			},
 		},
 		Fixtures: []InterfaceFixture{
 			{
 				Name: "send-accepted",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "send", Input: map[string]any{"body": "{\"event\":\"user.created\"}"}},
+					{Operation: "send", Input: map[string]any{
+						"body": base64Value("eyJldmVudCI6InVzZXIuY3JlYXRlZCJ9"),
+					}},
+				},
+			},
+			{
+				Name: "send-batch-accepted",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "sendBatch", Input: map[string]any{
+						"messages": []any{
+							map[string]any{"body": base64Value("Zmlyc3Q=")},
+							map[string]any{"body": base64Value("c2Vjb25k"), "delaySeconds": 30},
+						},
+					}},
+				},
+			},
+			{
+				// Settlement is scoped to a batch this caller is handling, so a
+				// batch nothing delivered is refusable from one client with no
+				// consumer and no waiting.
+				Name: "settling-an-undelivered-batch-is-refused",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "acknowledge", Input: map[string]any{
+						"batchId": "batch-that-was-never-delivered", "messageId": "message-1",
+					}, ExpectedError: "unknown_batch"},
+					{Operation: "retryAll", Input: map[string]any{
+						"batchId": "batch-that-was-never-delivered",
+					}, ExpectedError: "unknown_batch"},
 				},
 			},
 		},
@@ -658,8 +1307,8 @@ func workerRuntimeInterface() InterfaceDefinition {
 			"contract version, and a Form that wants that runtime is a different Form version. " +
 			"Behavior fixtures run against a conformance bundle of two modules: index.js, whose default export " +
 			"exposes all four handlers, answers GET /health with 200, throws on GET /throw, and throws from its " +
-			"queue handler when a message body is exactly \"fail\"; and fetch-only.js, whose default export " +
-			"exposes fetch alone.",
+			"queue handler when a message body decodes to exactly the ASCII bytes fail; and fetch-only.js, whose " +
+			"default export exposes fetch alone.",
 		Semantics: InterfaceSemantics{Consistency: "read_after_write", Delivery: "at_least_once", Ordering: "none"},
 		Limits: map[string]int64{
 			"maxRequestBytes":        104857600,
@@ -786,29 +1435,27 @@ func workerRuntimeInterface() InterfaceDefinition {
 			{
 				Name: "queue",
 				Description: "Invokes queue(batch, env, ctx) with one message batch from a Queue Consumer attachment. The " +
-					"batch carries queue, the portable name of the At-Least-Once Queue it drained, and messages, an ordered " +
-					"array whose entries carry id (the host's message identity), timestamp (milliseconds since the Unix " +
-					"epoch when the message was accepted), body (the exact bytes the producer sent), and attempts (1 on " +
-					"first delivery, incremented on each redelivery). Batch size and timing are the consumer's " +
-					"maxBatchSize and maxBatchTimeoutSeconds. Returning normally acknowledges the whole batch. An uncaught " +
-					"throw or unhandled rejection FAILS the whole batch, which is redelivered under the at-least-once " +
-					"delivery edge.queue states and the maxRetries and retryDelaySeconds of the invoking consumer, so " +
-					"duplicates are visible and handlers must be idempotent.",
-				InputSchema: operationObject([]string{"messages", "queue"}, map[string]any{
-					"queue": stringSchema(1, 63),
+					"batch carries batchId, the identity every settlement operation of edge.queue is scoped to; queue, the " +
+					"portable name of the At-Least-Once Queue it drained; and messages, an ordered array whose entries carry " +
+					"id (the host's stable message identity), timestampMillis (the UTC instant the host accepted the " +
+					"message, in milliseconds since the Unix epoch), body (the producer's exact bytes in the family's " +
+					"encoded-bytes shape), and attempts (1 on first delivery, incremented on each redelivery). All of it is " +
+					"defined by edge.queue. Batch size and timing are the consumer's " +
+					"maxBatchSize and maxBatchTimeoutSeconds. Returning normally without settling " +
+					"anything acknowledges the whole batch. An uncaught throw or unhandled rejection RETRIES every message " +
+					"not already explicitly acknowledged, under the maxRetries and retryDelaySeconds of the invoking " +
+					"consumer, so duplicates are visible and handlers must be idempotent.",
+				InputSchema: operationObject([]string{"batchId", "messages", "queue"}, map[string]any{
+					"batchId": stringSchema(1, 256),
+					"queue":   stringSchema(1, 63),
 					"messages": map[string]any{
 						"type": "array", "minItems": 1, "maxItems": 100,
-						"items": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []string{"attempts", "body", "id", "timestamp"},
-							"properties": map[string]any{
-								"id":        stringSchema(1, 256),
-								"timestamp": map[string]any{"type": "integer", "minimum": 0},
-								"body":      stringSchema(0, 131072),
-								"attempts":  map[string]any{"type": "integer", "minimum": 1},
-							},
-						},
+						"items": closedObject([]string{"attempts", "body", "id", "timestampMillis"}, map[string]any{
+							"id":              stringSchema(1, 256),
+							"timestampMillis": map[string]any{"type": "integer", "minimum": 0},
+							"body":            encodedBytes(queueMaxMessageBytes),
+							"attempts":        map[string]any{"type": "integer", "minimum": 1},
+						}),
 					},
 				}),
 				OutputSchema: empty,
@@ -927,9 +1574,11 @@ func workerRuntimeInterface() InterfaceDefinition {
 				Name: "queue-failure-fails-the-whole-batch",
 				Steps: []InterfaceFixtureStep{
 					{Operation: "queue", Input: map[string]any{
-						"queue": "at-least-once-queue",
+						"batchId": "conformance-batch-1",
+						"queue":   "at-least-once-queue",
 						"messages": []any{map[string]any{
-							"id": "message-1", "timestamp": 0, "body": "fail", "attempts": 1,
+							"id": "message-1", "timestampMillis": 0, "attempts": 1,
+							"body": base64Value("ZmFpbA=="),
 						}},
 					}, ExpectedError: "handler_failed"},
 				},

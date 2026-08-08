@@ -5,21 +5,21 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "WorkerCronTrigger",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:3df385ba2b76a1476ef7af87c473883ecee2604f9941de17e6c7f700ecaec627"
+    "schemaDigest": "sha256:af45f8f03eb6a8f7a32e37c472ac95481f1704a2c6b78f4c78601c51d9194565"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 4240,
-      "digest": "sha256:19e32713857fd723acf458e7aed917fb27d206c57ddd497e7d30a321f8a02ce0"
+      "size": 5881,
+      "digest": "sha256:da9a0259f84a39bc6a64225c41b75a5ff35f4f7595b5b06fac45d42b4f69bb2d"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 155,
-      "digest": "sha256:6cca7802342cbc505bdd2d6dea37bdcc5669bf55970acb6d9bd9ea664b4bc4e0"
+      "size": 157,
+      "digest": "sha256:6c360493754a089a65e484fce5390ae0c8cee75037ddfe7609d28f0cba238793"
     },
     {
       "path": "fixtures/negative-cron.json",
@@ -36,20 +36,20 @@
     {
       "path": "fixtures/negative-missing-worker.json",
       "mediaType": "application/json",
-      "size": 26,
-      "digest": "sha256:d5b7df3fda67f38dd2557c9672ab006922a936d12b6679a6250fa0cb0977e96e"
+      "size": 28,
+      "digest": "sha256:334a0c7aa6368706f771b7889bcdf6197a3a3d7917865df639238407137099ca"
     },
     {
       "path": "fixtures/negative-unexpected-property.json",
       "mediaType": "application/json",
-      "size": 185,
-      "digest": "sha256:7ee25156ccbb59925520d14319872f4a22f6d89d1b9f274cb0cda550ff33b2ca"
+      "size": 187,
+      "digest": "sha256:76f71f004988d405ebf592dd0634e28f15c8fc29d89bc3e4a6a82393b9bc8940"
     },
     {
       "path": "fixtures/negative-worker.json",
       "mediaType": "application/json",
-      "size": 161,
-      "digest": "sha256:7fb6fed54a52807745546b312d99b091897a4072a5889c10375dbcbe66871666"
+      "size": 163,
+      "digest": "sha256:b0ff63de3520f87f4c360b4c5d2537bf15d2f0db4bd8eb07107ac7ecb35e3a8d"
     }
   ]
 }

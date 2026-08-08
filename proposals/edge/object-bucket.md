@@ -20,13 +20,19 @@ versioning changes observable read semantics and would be a different Form.
 
 ## Observable semantics
 
-Exactly the `edge.objects@1.0.0` contract: get/head/put/delete/list,
-read-after-write consistency (a read after a successful put observes it),
-last-writer-wins per key, strong etags with conditional puts
-(`precondition_failed` on mismatch), and cursor pagination. Range and
-conditional reads are described by the Interface's prose description; the
-typed `get`/`head` operation schemas carry no range or conditional inputs,
-so those reads are host API surface rather than typed Interface operations.
+Exactly the `edge.objects@1.0.0` contract: head/get/put/delete/list plus the
+four multipart operations, strong read-after-write consistency (a get, head,
+or list after a resolved put or delete observes it), last-writer-wins per
+key, strong etags with conditional reads and writes (`precondition_failed` on
+mismatch), and cursor pagination with delimiter roll-up.
+
+Bodies STREAM. `get` and `put` declare `bodyStream` and `contentLength`, and
+the bytes travel beside the operation document rather than inside it, which
+is what makes the 5 GiB object ceiling meaningful at all. Ranged and
+conditional reads are typed inputs of `get` — not prose — and objects above
+`maxSinglePutBytes`, or of unknown size, are written through
+`createMultipartUpload` / `uploadPart` / `completeMultipartUpload` /
+`abortMultipartUpload` (decision 0020).
 
 ## Why this is one Form
 

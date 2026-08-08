@@ -644,6 +644,12 @@ func (h *ReferenceHost) specDiagnostics(form *installedForm, spec map[string]any
 	if violation := h.declaredHandlerViolation(form, spec); violation != "" {
 		return []map[string]any{{"severity": "error", "message": violation}}, nil
 	}
+	// The cron grammar is decided by a parser rather than by the pattern the
+	// Definition carries, for the same reason: a structural minimum admits
+	// shapes that name no schedule (decision 0020).
+	if violation := cronExpressionViolation(form, spec); violation != "" {
+		return []map[string]any{{"severity": "error", "message": violation}}, nil
+	}
 	return []map[string]any{}, nil
 }
 
@@ -849,6 +855,9 @@ func (h *ReferenceHost) validateDesiredSemantics(
 		return nil, hostErr
 	}
 	if hostErr := h.validateDeclaredHandlers(form, spec); hostErr != nil {
+		return nil, hostErr
+	}
+	if hostErr := validateCronExpression(form, spec); hostErr != nil {
 		return nil, hostErr
 	}
 	relations, hostErr := h.resolveRelations(form, space, spec)

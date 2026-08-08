@@ -240,13 +240,21 @@ func (h *ReferenceHost) validateWorkerAggregate(
 		return h.validateInboundServiceBindings(space, relations)
 	}
 	if handler, attachment := attachmentHandler[form.Ref.Kind]; attachment {
-		return h.requireServingDeployment(
+		if hostErr := h.requireServingDeployment(
 			space,
 			nestedName(spec, "worker"),
 			relationTargetUID(relations, workerRelationPointer),
 			handler,
 			form.Ref.Kind+" "+name,
-		)
+		); hostErr != nil {
+			return hostErr
+		}
+		// A queue consumer carries one more cardinality rule, and it is about the
+		// QUEUE rather than the worker: edge.queue states that a queue has at most
+		// one consumer (decision 0020).
+		if form.Ref.Kind == queueConsumerKind {
+			return h.validateSingleQueueConsumer(space, name, relations)
+		}
 	}
 	return nil
 }

@@ -108,8 +108,6 @@ func (f Field) counterExample(group string) (any, bool) {
 		return nil, false
 	case KindStringEnum:
 		return "not-a-declared-choice", true
-	case KindDateString:
-		return "not-a-date", true
 	case KindJSONMap:
 		return map[string]any{"1 invalid key": "value"}, true
 	case KindResourceRef:

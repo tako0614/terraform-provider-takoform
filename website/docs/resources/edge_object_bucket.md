@@ -7,7 +7,7 @@ description: |-
 
 # takoform_edge_object_bucket
 
-Flat-namespace object store with read-after-write consistency, exactly as fixed by the edge.objects Interface. Operating rules such as CORS, lifecycle, and lock are separate policy resources, never desired fields of the bucket identity.
+Flat-namespace object store with strong read-after-write consistency, streaming bodies, ranged and conditional reads, and multipart upload, exactly as fixed by the edge.objects Interface. An object body is a byte stream, never a JSON string: the contract's 5 GiB ceiling is only meaningful because bodies never travel inside an operation document (decision 0020). Operating rules such as CORS, lifecycle, and lock are separate policy resources, never desired fields of the bucket identity.
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 

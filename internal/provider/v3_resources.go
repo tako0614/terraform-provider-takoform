@@ -390,13 +390,19 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 		}
 		return attribute
 	default:
-		// KindString, KindStringEnum, KindDateString.
+		// KindString and KindStringEnum.
 		var validators []validator.String
 		switch {
 		case len(field.Enum) > 0:
 			validators = append(validators, StringOneOf(field.Enum...))
-		case field.Kind == model.KindDateString:
-			validators = append(validators, StringMatches(model.PatternDate, field.HCL+" must be a YYYY-MM-DD calendar date"))
+		case field.Pattern == model.PatternCron:
+			// The cron grammar is decided by a parser, not by its regex: the
+			// pattern bounds the shape while the parser holds every field to its
+			// own domain, rejects an inverted range, and rejects a step outside a
+			// field's span. Validating with the pattern alone would let the plan
+			// accept `0 24 * * *` and `5-1 * * * *`, which the host then refuses —
+			// the plan-time/host-time split decision 0020 closes.
+			validators = append(validators, v3CronValidator{})
 		case field.Pattern != "":
 			validators = append(validators, StringMatches(field.Pattern, field.HCL+" must match "+field.Pattern))
 		}
@@ -1034,6 +1040,37 @@ func (v3WeightSumValidator) ValidateList(_ context.Context, req validator.ListRe
 			req.Path,
 			"Invalid deployment weight total",
 			fmt.Sprintf("version weights must sum to exactly %d basis points, got %d", workerDeploymentWeightSum, sum),
+		)
+	}
+}
+
+// v3CronValidator proves a configured cron expression is one a conforming host
+// accepts, using the same parser the host runs.
+//
+// The regex in the desired schema is the structural half of the grammar: it
+// admits `5-1`, `0-99`, and `*/0`, which are shapes rather than schedules. The
+// provider therefore parses, exactly as the host does, so a plan never shows a
+// trigger that apply will refuse — and the diagnostic names the offending field
+// instead of echoing a pattern the author has to decode.
+type v3CronValidator struct{}
+
+func (v3CronValidator) Description(context.Context) string {
+	return "value must be a five-field UTC cron expression the portable grammar accepts"
+}
+
+func (v v3CronValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v3CronValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if err := model.ValidateCron(req.ConfigValue.ValueString()); err != nil {
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"Invalid cron expression",
+			fmt.Sprintf("%q is not a portable UTC cron expression: %s", req.ConfigValue.ValueString(), err.Error()),
 		)
 	}
 }

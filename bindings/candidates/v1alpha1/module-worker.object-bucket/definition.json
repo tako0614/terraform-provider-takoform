@@ -4,13 +4,13 @@
   "name": "module-worker.object-bucket",
   "version": "1.0.0",
   "title": "Module Worker object bucket binding",
-  "description": "Projects the complete edge.objects runtime API into a Worker Version under one JavaScript-identifier binding name, without exposing credentials or endpoints. Runtime surface: env.NAME is an object with the methods get(key), head(key), put(key, body, options?), delete(key), and list(options?), each returning a promise. Object bodies STREAM: put accepts a ReadableStream, an ArrayBuffer, or a string, and get resolves to an object whose body is a ReadableStream the handler may consume incrementally — a conforming host never requires the whole object in memory. get and head resolve to null for an absent key; a failed conditional put rejects with an Error named precondition_failed, and every other error rejects with an Error named for its edge.objects code. A get or head after a successful put observes that put.",
+  "description": "Projects the complete edge.objects runtime API into a Worker Version under one JavaScript-identifier binding name, without exposing credentials or endpoints. Runtime surface: env.NAME is an object with the methods head(key), get(key, options?), put(key, body, options?), delete(key), list(options?), createMultipartUpload(key, options?), uploadPart(key, uploadId, partNumber, body), completeMultipartUpload(key, uploadId, parts), and abortMultipartUpload(key, uploadId), each returning a promise. Object bodies STREAM: put and uploadPart accept a ReadableStream, an ArrayBuffer, or a string, and get resolves to an object whose body is a ReadableStream the handler may consume incrementally — a conforming host never requires the whole object in memory, which is what makes the contract's 5 GiB ceiling usable. get options carry range for a ranged read and ifMatch or ifNoneMatch for a conditional one; put options carry ifMatch, or ifNoneMatch \"*\" to write only when the key is absent. get and head resolve to null for an absent key; a failed precondition rejects with an Error named precondition_failed, an unsatisfiable range with one named range_not_satisfiable, and every other error with an Error named for its edge.objects code. A get, head, or list after a resolved put or delete observes it.",
   "sourceRole": "revision",
   "targetInterface": {
     "apiVersion": "interfaces.takoform.com/v1alpha1",
     "name": "edge.objects",
     "version": "1.0.0",
-    "schemaDigest": "sha256:275b50a9337e5a9ea2367fee1a64e21401e5e74fb9c543b6ce3c4f2be7365f26"
+    "schemaDigest": "sha256:292668cf530eb7946f25d313740991b3efa0406f40d74ec12d788d2933d13f96"
   },
   "allowedTargetForms": [
     {
@@ -21,11 +21,15 @@
   "bindingNameGrammar": "^[A-Za-z_$][A-Za-z0-9_$]*$",
   "runtimeProjection": {
     "operations": [
-      "get",
       "head",
+      "get",
       "put",
       "delete",
-      "list"
+      "list",
+      "createMultipartUpload",
+      "uploadPart",
+      "completeMultipartUpload",
+      "abortMultipartUpload"
     ]
   },
   "lifecycle": {

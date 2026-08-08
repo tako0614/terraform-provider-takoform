@@ -3,12 +3,12 @@
   "kind": "AtLeastOnceQueue",
   "definitionVersion": "0.1.0",
   "title": "At-Least-Once Queue",
-  "description": "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form.",
+  "description": "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form. Message bodies are opaque bytes, a message identity is stable across redeliveries, and a queue has AT MOST ONE consumer — two would split the stream between two retry policies and two dead-letter destinations, which leaves the queue's own behavior unstatable (decision 0020).",
   "role": "identity",
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
-    "description": "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form.",
+    "description": "Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form. Message bodies are opaque bytes, a message identity is stable across redeliveries, and a queue has AT MOST ONE consumer — two would split the stream between two retry policies and two dead-letter destinations, which leaves the queue's own behavior unstatable (decision 0020).",
     "properties": {
       "deliveryDelaySeconds": {
         "default": 0,
@@ -43,7 +43,7 @@
       "apiVersion": "interfaces.takoform.com/v1alpha1",
       "name": "edge.queue",
       "version": "1.0.0",
-      "schemaDigest": "sha256:822e71c8bde4c8391a21d2de0d51f1fcc25ab6cbc1737a14cc8d3fe9bcb5d254"
+      "schemaDigest": "sha256:e88be3a9bfb0eb202422483cfca8bf45ab74d60f96f8c4f3fe289f0f607510cf"
     }
   ],
   "conformanceFixtures": [

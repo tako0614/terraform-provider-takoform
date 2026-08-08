@@ -12,22 +12,32 @@ the trigger never deletes the worker.
 
 ## Observable semantics
 
-`cron` is the portable five-field cron subset, interpreted in UTC only.
+`cron` is the portable five-field cron grammar, interpreted in UTC only.
 There is no timezone field, so two conforming hosts can never fire the same
-trigger at different instants. Each match invokes the scheduled handler of
-the worker's active deployment; a missed window is skipped, not queued.
+trigger at different instants and no schedule skips or repeats an hour for a
+daylight-saving transition. Each match invokes the scheduled handler of the
+worker's active deployment.
 
-The grammar is closed and deliberately small: exactly five single-value
-fields separated by single spaces, where minute is a literal `0`-`59`, hour a
-literal `0`-`23`, day-of-month `*` or `1`-`31`, month `*` or `1`-`12`, and
-day-of-week `*` or `0`-`6`. Ranges, lists, steps, and names are rejected, and
-`*` is not accepted in the minute or hour field: `* * * * *`, `0 * * * *`,
-and `*/5 * * * *` are all invalid. The most frequent representable schedule
-is therefore once per day at one fixed UTC time, and hourly or sub-hourly
-work cannot be declared with this Form. Widening the grammar changes the
-observable firing set, so it is a new definition version of this Form rather
-than a host-side relaxation; every conforming host must reject what this
-grammar rejects until then.
+The five fields are minute `0`-`59`, hour `0`-`23`, day-of-month `1`-`31`,
+month `1`-`12`, and day-of-week `0`-`6` with `0` Sunday. Each field is a
+comma-separated list of `*`, a literal, a range `low-high`, `*/step`, or
+`low-high/step`, so `* * * * *`, `0 * * * *`, and `*/5 * * * *` are all
+valid — the grammar exists for exactly those. Month and day names, and a step
+on a bare literal such as `5/10`, are not accepted. When day-of-month and
+day-of-week are both restricted the trigger fires on a day either selects;
+when only one is restricted, only that one constrains the day.
+
+The pattern in the Form Definition is the structural half of the grammar. A
+host also PARSES the expression, and refuses a value outside its field's
+range, an inverted range, or a step outside `1`..span, before any mutation;
+the provider runs the same parser at plan time, so a configuration that plans
+is one that applies (decision 0020).
+
+Delivery of a match is at-least-once, so a handler may run more than once for
+one matched minute and must be idempotent. A missed run is skipped rather
+than queued or fired late, so a schedule never produces a backlog. An
+uncaught exception in the handler is a failed invocation reported to host
+diagnostics; it is not retried within the matched minute.
 
 ## Why this is one Form
 
@@ -57,4 +67,5 @@ changing `worker` replaces the attachment.
 ## Prior art
 
 The cron trigger of a proven edge platform, restricted to the interoperable
-five-field UTC subset already used by the retained catalog.
+five-field UTC grammar: `*`, literals, lists, ranges, and steps, with no
+names and no seconds field.

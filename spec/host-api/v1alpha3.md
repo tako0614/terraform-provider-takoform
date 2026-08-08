@@ -352,6 +352,28 @@ weighted version that does not export the handler, fails
 missing. A stored version is a history entry, not a running one: gating on it
 would admit a cron trigger against code no deployment selects.
 
+Two attachments carry a further rule the desired schema cannot state
+([decision 0020](../decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md)).
+
+A `WorkerCronTrigger`'s `cron` MUST be parsed, not merely matched against the
+pattern the Form Definition carries. That pattern is the structural minimum a
+host holding only the Definition can enforce, and it admits shapes that name no
+schedule — `0 24 * * *`, `5-1 * * * *`, `*/0 * * * *`, `0 0 32 * *`. A host MUST
+refuse each of them before any mutation, on `validate`, `prepare`, and `apply`
+alike, with `invalid_argument` (400), and MUST accept the sub-hourly schedules
+the grammar exists for, `*/5 * * * *` and `0 * * * *` among them. This is the
+required conformance check `cron-grammar-enforced`.
+
+An `AtLeastOnceQueue` has AT MOST ONE `QueueConsumer`. A second consumer against
+the same queue incarnation fails `invalid_argument` (400) before any mutation:
+the consumer's `maxRetries`, `retryDelaySeconds`, `maxConcurrency`, and
+dead-letter destination are properties of how that queue is drained, so two
+consumers would give one queue two of each with no rule deciding which message
+got which. The rule is over the queue's UID rather than its name, exactly like
+the deployment rule above, and removing the first consumer makes the second
+representable. This is the required conformance check
+`queue-single-consumer-enforced`.
+
 ### Reverse validation and deletion
 
 The gate holds in both directions.
@@ -647,6 +669,57 @@ its behavior fixtures, which a runtime conformance run executes against a real
 isolate ([`../interface-contract/`](../interface-contract/README.md)). A host
 that passes this lane has not thereby proven it implements the ABI; it has
 proven it says which ABI it implements and holds desired state to it.
+
+The same split covers the four data-plane contracts —  `edge.kv`,
+`edge.objects`, `edge.sql`, and `edge.queue` — because this lane drives desired
+state and never moves a byte of application data
+([decision 0020](../decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md)).
+
+Proven by required checks:
+
+- the host advertises each of the four contracts at the EXACT pinned
+  `schemaDigest`, which is what turns "this host has a KV store" into a
+  statement about a consistency model, a value model, an error vocabulary, and a
+  set of limits (`edge-interface-contracts-advertised`);
+- a `WorkerCronTrigger` whose expression is a shape rather than a schedule is
+  refused, and the sub-hourly schedules the grammar exists for are accepted
+  (`cron-grammar-enforced`);
+- a second `QueueConsumer` against one queue is refused, and the same consumer
+  is accepted once the first is gone (`queue-single-consumer-enforced`).
+
+Obligations a conforming host MUST meet that this lane does NOT prove, because
+proving them means exercising the data plane rather than driving the Host API:
+
+- **`edge.kv` convergence.** That a write eventually becomes visible at every
+  location. One client cannot observe cross-location convergence at all, which
+  is why the contract's deterministic fixtures assert only facts no write has to
+  converge for. The obligation is that convergence happens, that a host's own
+  convergence target is stated in its Host Support Profile, and that the
+  contract's other reading — read-your-writes — is NOT provided and must not be
+  relied on.
+- **The encoded-bytes value model.** That `maxValueBytes` and
+  `maxMessageBytes` bound the DECODED length, that `maxKeyBytes` bounds a key's
+  UTF-8 encoding, and that undecodable base64 is refused.
+- **`edge.objects` streaming, ranges, conditionals, and multipart.** That a body
+  is never buffered into a JSON member, that a ranged `get` returns exactly the
+  requested subrange of one object version, that a failed precondition changes
+  nothing, and that a multipart upload assembles its parts atomically or not at
+  all. The contract's fixtures state the first three as traces a runtime
+  conformance run executes; multipart cannot be a static trace, because its
+  steps depend on part etags the host mints while the trace runs.
+- **`edge.sql` losslessness and atomicity.** That a 64-bit INTEGER and a BLOB
+  round-trip unchanged, that an out-of-range integer is refused, that a writing
+  statement submitted through `query` is refused, and that a failed transaction
+  applies nothing.
+- **`edge.queue` delivery.** That a `messageId` is stable across redeliveries,
+  that `attempts` counts them, that the first delivery does not count toward
+  `maxRetries`, that an uncaught handler exception retries every message not
+  already acknowledged, and that a dead-lettered message arrives as a new
+  message with `attempts` starting again at 1. All of it needs a consumer and
+  the passage of time, neither of which a desired-state runner has.
+
+Those are stated normatively in each contract's own descriptions and proven by
+its behavior fixtures wherever a fixture can prove them.
 
 ## Errors
 

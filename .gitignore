@@ -11,3 +11,4 @@ node_modules/
 /.release-tmp/
 /coverage.out
 /website/.wrangler/
+.claude/

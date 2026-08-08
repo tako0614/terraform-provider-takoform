@@ -355,6 +355,13 @@ func (r *v3Runner) checkHandlerGatedAttachments() error {
 			return fmt.Errorf("%s once the deployment serves its handler: %w", gated.Ref.Kind, err)
 		}
 	}
+	// The consumer is released again, and the cron trigger with it. A queue has
+	// AT MOST ONE consumer (spec/decisions/0020), so leaving this one live would
+	// make every later check that drains the same queue fail for a reason that
+	// has nothing to do with what it is proving.
+	if err := r.deleteExisting(consumer, "key-gated-consumer-release"); err != nil {
+		return err
+	}
 	r.complete("handler-gated-attachments")
 	return nil
 }

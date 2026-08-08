@@ -72,8 +72,6 @@ const (
 	KindBindingList FieldKind = "binding-list"
 	KindObjectList  FieldKind = "object-list"
 	KindObject      FieldKind = "object"
-	// KindDateString is a calendar date, YYYY-MM-DD.
-	KindDateString FieldKind = "date-string"
 )
 
 // Field is one typed portable field of a Form.
@@ -392,7 +390,7 @@ func validateField(kind string, field Field) error {
 				return err
 			}
 		}
-	case KindInteger, KindBoolean, KindJSONMap, KindDateString:
+	case KindInteger, KindBoolean, KindJSONMap:
 	default:
 		return fmt.Errorf("form %s field %s has unknown field kind %q", kind, field.Wire, field.Kind)
 	}
