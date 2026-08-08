@@ -116,7 +116,8 @@ var Forms = []model.Form{
 				Doc:     "Module event handlers this version exports. A host rejects an attachment whose event kind is not declared here.",
 				Example: []any{"fetch"}},
 			{HCL: "vars", Wire: "vars", Kind: model.KindJSONMap,
-				Default: map[string]any{},
+				Default:                  map[string]any{},
+				ProjectsEnvironmentNames: true,
 				Doc: "Non-secret configuration values projected into the module environment. Sensitive material never enters portable state. " +
 					"Omitting it projects no variable.",
 				Example: map[string]any{"LOG_LEVEL": "info"}},
@@ -146,8 +147,9 @@ var Forms = []model.Form{
 				Doc:     "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker. Omitting it declares no such binding.",
 				Example: []any{bindingInstance("AUTH", "ModuleWorker", "auth-worker")}},
 			{HCL: "required_sensitive_vars", Wire: "requiredSensitiveVars", Kind: model.KindStringSet,
-				ItemPattern: model.PatternSensitiveVarName,
-				Default:     []any{},
+				ItemPattern:              model.PatternSensitiveVarName,
+				Default:                  []any{},
+				ProjectsEnvironmentNames: true,
 				Doc: "Names of sensitive values this version requires the host to supply out-of-band. " +
 					"Only the names are portable state; values travel through each host's own sealed path. " +
 					"Omitting it requires no sensitive value.",
@@ -376,7 +378,34 @@ func Validate() error {
 	if err := validateDerivedRelations(); err != nil {
 		return err
 	}
+	if err := validateEnvironmentNamespaces(); err != nil {
+		return err
+	}
 	return validateAbsenceSemanticExemptions()
+}
+
+// validateEnvironmentNamespaces proves each Form's canonical Examples declare a
+// collision-free runtime environment namespace
+// ([decision 0016](../../spec/decisions/0016-the-worker-aggregate-has-one-active-deployment.md)).
+//
+// Only the WorkerVersion has such a namespace today: it is the one Form that
+// holds typed bindings alongside `vars` and `requiredSensitiveVars`, and all
+// three project into the single environment object its code receives. The rule
+// is stated for every Form because the next revision Form that holds bindings
+// inherits it without an edit here.
+//
+// The collision this catches is the one the AUTHORING model can decide. Whether
+// two declarations collide is otherwise a property of one instance, not of a
+// Form: a Form declaring five binding lists is not wrong, its author may simply
+// write one name in two of them. That instance rule is enforced by the provider
+// at plan time and by a conforming host before mutation.
+func validateEnvironmentNamespaces() error {
+	for _, form := range Forms {
+		if err := model.ValidateEnvironmentNamespace(form); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // validateBindingContracts proves, at authoring time, exactly the rules a

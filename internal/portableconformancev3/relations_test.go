@@ -289,9 +289,9 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 
 // TestHandlerGateMatchesTheResolvedWorkerIncarnation proves the attachment gate
 // is a statement about one worker INCARNATION, not one worker name. A stale
-// WorkerVersion pinned to a ModuleWorker that was replaced out of band
-// describes code the current worker does not run, so it cannot open the gate
-// for a new attachment; a version of the current incarnation can.
+// WorkerDeployment pinned to a ModuleWorker that was replaced out of band
+// governs traffic for a resource that is gone, so it cannot open the gate for a
+// new attachment; a deployment of the current incarnation can.
 func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	// The installed candidate catalog, not the fallback one: this rule is about
 	// the attachment Forms, which only the real Edge Family declares.
@@ -324,14 +324,35 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 			}},
 		})
 	}
+	storeDeployment := func(name, workerUID, version string) {
+		host.storeResource(&storedResource{
+			Group: group, Kind: "WorkerDeployment", Name: name, Space: space,
+			UID: "uid-" + name, Generation: 1, Revision: 1,
+			Spec: map[string]any{"worker": workerReference, "versions": []any{}},
+			Relations: []storedRelation{
+				{
+					Pointer: "/worker", Relation: "/worker",
+					TargetAPIVersion: group, TargetKind: "ModuleWorker",
+					TargetName: "module-worker-probe", TargetUID: workerUID,
+				},
+				{
+					Pointer: "/versions/0/workerVersion", Relation: "/versions/*/workerVersion",
+					TargetAPIVersion: group, TargetKind: "WorkerVersion",
+					TargetName: version, TargetUID: "uid-" + version,
+				},
+			},
+		})
+	}
 	storeWorker("uid-worker-first")
 	host.storeResource(&storedResource{
 		Group: group, Kind: "AtLeastOnceQueue", Name: "queue-probe", Space: space,
 		UID: "uid-queue", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	storeVersion("stale-version", "uid-worker-first")
+	storeDeployment("stale-deployment", "uid-worker-first", "stale-version")
 	// The worker is replaced out of band: same name, different resource. The
-	// stale version stays stored, still pinned to the incarnation that is gone.
+	// stale deployment stays stored, still pinned to the incarnation that is
+	// gone, and so does the version it weights.
 	storeWorker("uid-worker-second")
 
 	consumer := host.catalog.form(group, "QueueConsumer")
@@ -339,18 +360,19 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 		"worker": workerReference,
 		"queue":  map[string]any{"apiVersion": group, "kind": "AtLeastOnceQueue", "name": "queue-probe"},
 	})
-	_, hostErr := host.validateDesiredSemantics(consumer, space, spec)
+	_, hostErr := host.validateDesiredSemantics(consumer, space, "queue-consumer-probe", spec)
 	if hostErr == nil || hostErr.Code != "unsupported_capability" {
-		t.Fatalf("a stale version of the previous worker opened the gate: %+v", hostErr)
+		t.Fatalf("a stale deployment of the previous worker opened the gate: %+v", hostErr)
 	}
 	if !strings.Contains(hostErr.Message, "uid-worker-second") {
 		t.Fatalf("the refusal does not name the resolved worker incarnation: %s", hostErr.Message)
 	}
 
-	// A version of the CURRENT incarnation is what the gate is asking for.
+	// A deployment of the CURRENT incarnation is what the gate is asking for.
 	storeVersion("current-version", "uid-worker-second")
-	if _, hostErr := host.validateDesiredSemantics(consumer, space, spec); hostErr != nil {
-		t.Fatalf("a version of the current worker was refused: %+v", hostErr)
+	storeDeployment("current-deployment", "uid-worker-second", "current-version")
+	if _, hostErr := host.validateDesiredSemantics(consumer, space, "queue-consumer-probe", spec); hostErr != nil {
+		t.Fatalf("a deployment of the current worker was refused: %+v", hostErr)
 	}
 }
 

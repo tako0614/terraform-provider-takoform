@@ -58,9 +58,22 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkWorkerVersionFlow(version, kv) },
 		func() error { return r.checkBindingContractVerified(version) },
 		func() error { return r.checkRelationIncarnationChange(version, kv) },
-		r.checkHandlerGatedAttachments,
-		r.checkRelationReapplyRepins,
+		// The Worker aggregate sequence (spec/decisions/0016) is ordered by the
+		// state it needs: the attachment gate is proved while the worker still
+		// has NO deployment, the deployment is created next, and every later
+		// aggregate rule reads that deployment.
+		r.checkAttachmentRequiresActiveDeployment,
 		r.checkDeploymentWeightSum,
+		r.checkDeploymentIntegrity,
+		r.checkHandlerGatedAttachments,
+		r.checkBindingNameCollision,
+		r.checkDeploymentChangePreservesDependents,
+		r.checkDeploymentDeleteBlockedByDependent,
+		// Readiness rendered from the deployment is the second half of the
+		// aggregate: what a worker SERVES changes when its deployment changes, so
+		// the representation the host hands out changes with it.
+		r.checkDependentRevisionAdvancesWithRendering,
+		r.checkRelationReapplyRepins,
 		func() error { return r.checkRelationDeletionProtection(version, bundle) },
 		func() error { return r.checkImportFlows(kv, version) },
 		func() error { return r.checkDeleteFences(version, kv) },
@@ -1944,6 +1957,20 @@ func (r *v3Runner) checkRelationReapplyRepins() error {
 			again.Metadata.Generation, again.Metadata.Revision,
 		)
 	}
+	// The consumer is released again. It is an attachment of the shared worker,
+	// so leaving it live would keep that worker's deployment undeletable
+	// (spec/decisions/0016) and turn this check into a precondition of the
+	// relation-deletion checks that follow.
+	released, err := r.deleteResource(consumer, again.Metadata.Revision, "key-repin-consumer-delete", nil)
+	if err != nil {
+		return err
+	}
+	if released.Status != http.StatusNoContent {
+		return fmt.Errorf(
+			"releasing the re-pin probe consumer HTTP %d, want 204; body=%s",
+			released.Status, strings.TrimSpace(string(released.Body)),
+		)
+	}
 	r.complete("relation-reapply-repins")
 	return nil
 }
@@ -2069,58 +2096,14 @@ func (r *v3Runner) checkNoUpdateSpecChangeRejected(target probeTarget) error {
 	return nil
 }
 
-// checkHandlerGatedAttachments proves the cross-resource attachment gate: a
-// WorkerCronTrigger invokes the scheduled handler and a QueueConsumer invokes
-// the queue handler, so attaching either to a worker whose code declares no
-// such handler is an unsupported capability rejected before any mutation.
-// Declaration is resolved from any stored WorkerVersion of that worker; a
-// stored WorkerDeployment is deliberately NOT required.
-func (r *v3Runner) checkHandlerGatedAttachments() error {
-	input := r.contract.RunnerInput
-	attachments := []probeTarget{r.target(input.WorkerCronTrigger), r.target(input.QueueConsumer)}
-	for _, attachment := range attachments {
-		response, err := r.apply(attachment, applyOptions{
-			Create: true, IdempotencyKey: "key-ungated-" + attachment.Ref.Kind,
-		})
-		if err != nil {
-			return err
-		}
-		if err := r.expectStableError(response, "unsupported_capability"); err != nil {
-			return fmt.Errorf("%s without a declared handler: %w", attachment.Ref.Kind, err)
-		}
-		if err := r.expectResourceAbsent(attachment); err != nil {
-			return fmt.Errorf("%s handler gate mutated state: %w", attachment.Ref.Kind, err)
-		}
-	}
-	// One stored WorkerVersion of the same worker declaring both handlers
-	// opens both gates.
-	declaring := r.target(input.WorkerVersion)
-	declaring.Name = "handler-gate-version"
-	declaring.Spec = cloneJSONMap(declaring.Spec)
-	declaring.Spec["handlers"] = []any{"fetch", "queue", "scheduled"}
-	// No typed binding: the declared default of kvBindings is the empty list, so
-	// stating it explicitly is the same desired state the host would materialize
-	// and needs no binding target to exist.
-	declaring.Spec["kvBindings"] = []any{}
-	if _, _, err := r.applyResource(declaring, applyOptions{
-		Create: true, IdempotencyKey: "key-handler-gate-version",
-	}, http.StatusCreated); err != nil {
-		return fmt.Errorf("handler-declaring WorkerVersion: %w", err)
-	}
-	for _, attachment := range attachments {
-		if _, _, err := r.applyResource(attachment, applyOptions{
-			Create: true, IdempotencyKey: "key-gated-" + attachment.Ref.Kind,
-		}, http.StatusCreated); err != nil {
-			return fmt.Errorf("%s after its handler is declared: %w", attachment.Ref.Kind, err)
-		}
-	}
-	r.complete("handler-gated-attachments")
-	return nil
-}
-
-// checkDeploymentWeightSum proves the one WorkerDeployment rule the Form
+// checkDeploymentWeightSum proves the WorkerDeployment rule the Form
 // description calls host-validated: a JSON Schema cannot add numbers, so the
 // exact 10000 basis-point sum has to be enforced by the host before mutation.
+//
+// It also records the state transition the rest of the aggregate depends on:
+// creating the deployment is what makes the Module Worker Ready, because a
+// worker's readiness is a claim about service and nothing serves until a
+// deployment selects the versions that do (spec/decisions/0016).
 func (r *v3Runner) checkDeploymentWeightSum() error {
 	deployment := r.target(r.contract.RunnerInput.WorkerDeployment)
 	versions, _ := deployment.Spec["versions"].([]any)
@@ -2149,6 +2132,16 @@ func (r *v3Runner) checkDeploymentWeightSum() error {
 		Create: true, IdempotencyKey: "key-deployment-exact",
 	}, http.StatusCreated); err != nil {
 		return fmt.Errorf("weights summing to exactly 10000: %w", err)
+	}
+	worker, err := r.readRaw(r.target(r.contract.RunnerInput.ModuleWorker))
+	if err != nil {
+		return err
+	}
+	if condition := readyCondition(worker); condition.Status != "True" {
+		return fmt.Errorf(
+			"the worker reports Ready=%s/%s once its deployment serves the fetch handler, want True",
+			condition.Status, condition.Reason,
+		)
 	}
 	r.complete("deployment-weight-sum-enforced")
 	return nil

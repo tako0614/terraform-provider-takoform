@@ -40,6 +40,21 @@ discovery path; a v1alpha2 client can never select this lane accidentally.
   status, conditions, and outputs — changes. The strong ETag is the quoted
   revision; `If-Match` fences on it and a stale value fails
   `revision_conflict` (412).
+- A host that renders any part of a representation from OTHER resources MUST
+  advance that resource's `metadata.revision` when the rendering changes, and
+  MUST NOT move its `metadata.generation`: no desired spec changed. This lane
+  has two such renderings — relation drift and Worker readiness — so creating,
+  re-weighting, or deleting a `WorkerDeployment` moves the revision of the
+  `ModuleWorker` whose readiness follows it, and a target that is deleted or
+  replaced moves the revision of every source pinned to it. Serving the changed
+  representation under the old revision would make the ETag a validator that
+  reports "unchanged" about a change, and `If-Match` a fence on a
+  representation the client never saw. After an accepted mutation a host
+  recomputes the rendering of every resource that mutation can affect and
+  advances only those that actually changed, so an idempotent re-apply moves
+  nothing anywhere. This is a required conformance check
+  (`dependent-revision-advances-with-rendering`), and it is decided by
+  [decision 0016](../decisions/0016-the-worker-aggregate-has-one-active-deployment.md).
 - `status.observedGeneration` names the desired generation the status
   reflects; `status.conditions` uses the closed types `Ready`, `Reconciling`,
   `Degraded`, `Drifted`, `Blocked`, `Deleting` with closed portable reasons
@@ -81,8 +96,10 @@ substitution after prepare fails `invalid_argument` before mutation.
 
 Role rules are wire-enforced: an update to a `revision`-role resource fails
 `invalid_argument`; deleting a resource any live relation references fails
-`dependency_in_use` (409); a resource protected by policy fails
-`deletion_protected` (409).
+`dependency_in_use` (409); deleting a `deployment`-role resource any live
+dependent needs fails the same way
+([decision 0016](../decisions/0016-the-worker-aggregate-has-one-active-deployment.md));
+a resource protected by policy fails `deletion_protected` (409).
 
 ## Cross-resource relations
 
@@ -211,6 +228,113 @@ check, in this order:
 
 Rules 3 through 5 are about the target or holder the client chose and are
 therefore argument failures; rule 2 is about what this host can do at all.
+
+## The Worker aggregate
+
+The rules of this section are decided by
+[decision 0016](../decisions/0016-the-worker-aggregate-has-one-active-deployment.md).
+They are semantics a desired-state schema cannot express — a schema cannot count
+the deployments pointing at one worker, read the `/worker` relation of a version
+it does not contain, add weights, know which handlers a referenced version
+exports, or reach across sibling properties — so they live in the host under
+[decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)
+and are proven by required conformance checks.
+
+A **Worker aggregate** is one `ModuleWorker` incarnation, the Worker Versions
+pinned to it, the one Worker Deployment governing its traffic, and everything
+activated against it. Every rule below is decided against the UID the reference
+RESOLVED to, never against the worker name a spec spells.
+
+### One active deployment
+
+A `WorkerDeployment` whose resolved `/worker` UID already has one fails
+`invalid_argument` (400) before any mutation, on `apply` and on `import` alike.
+Re-applying a worker's own deployment is not a second one. Traffic moves by
+re-weighting the deployment a worker already has, which is what makes rollback a
+re-weighting rather than a mutation of a revision.
+
+### Deployment integrity
+
+Before any mutation a host MUST refuse a deployment whose `versions[]`
+
+- weights a `WorkerVersion` whose stored `/worker` relation targets a different
+  worker UID;
+- names one `WorkerVersion` twice, by resolved UID — `uniqueItems` rejects a
+  duplicated whole entry, so one version split across two different weights is
+  schema-valid and still says two things about one revision;
+- carries weights that do not sum to exactly 10000 basis points;
+- weights a version that is not Ready, or that an accepted delete is already
+  removing.
+
+Each is `invalid_argument` (400): the request is well formed but states
+something untrue about what will run.
+
+### Attachment gate
+
+Inward activation is admitted against the worker's ACTIVE DEPLOYMENT, not
+against any stored version:
+
+| Attachment | Required module handler |
+| --- | --- |
+| `WorkerCustomDomain` | `fetch` |
+| `WorkerCronTrigger` | `scheduled` |
+| `QueueConsumer` | `queue` |
+
+EVERY version the deployment weights MUST export that handler, because a request
+served by any weighted version has to find it. An absent deployment, or a
+weighted version that does not export the handler, fails
+`unsupported_capability` (422) before any mutation and the message names what is
+missing. A stored version is a history entry, not a running one: gating on it
+would admit a cron trigger against code no deployment selects.
+
+### Reverse validation and deletion
+
+The gate holds in both directions.
+
+- An apply that would leave a live dependent unserved fails
+  `unsupported_capability` (422) before any mutation. The dependents are a live
+  `WorkerCustomDomain` (`fetch`), a live `WorkerCronTrigger` (`scheduled`), a
+  live `QueueConsumer` (`queue`), and a live INBOUND service binding — another
+  Form's `serviceBindings` entry targeting this worker — which requires `fetch`.
+- Deleting a `WorkerDeployment` while any of those four lives fails
+  `dependency_in_use` (409). Nothing REFERENCES a deployment, so this is not the
+  relation rule above; it is the same statement about a different edge. A host
+  fails closed rather than degrading the dependents, and an accepted (202)
+  delete re-runs the scan at commit time.
+
+### Worker readiness and inbound service bindings
+
+`worker.service` is provided by the `ModuleWorker` identity and answered by
+whatever its active deployment selects, so readiness is a claim about SERVICE:
+
+- `Ready=True` / `Available` only when the worker has an active deployment whose
+  every weighted version exports `fetch`;
+- `Ready=False` / `Provisioning` when it has no deployment;
+- `Ready=False` / `UnsupportedCapability` when its deployment serves no `fetch`.
+
+Both false cases carry a `hostReason` naming the worker and what is missing. A
+`module-worker.service` binding to a worker in either state is refused at BIND
+time with `unsupported_capability` (422), rather than stored and reported
+not-Ready: a stored binding that projects nothing is a declared capability no
+host can keep.
+
+The worker is not addressed by any of the mutations that move it between these
+three states, so this is a representation rendered from another resource: a host
+MUST advance the worker's `metadata.revision`, and MUST NOT move its
+`metadata.generation`, when a deployment change flips the condition (see
+[Resource identity](#resource-identity)).
+
+### The environment namespace is single
+
+Within one `WorkerVersion`, `vars` keys, `requiredSensitiveVars` entries, and
+every binding `name` across every binding list are projected into ONE runtime
+environment object, so their union MUST be unique. A collision fails
+`invalid_argument` (400) before any mutation, and a client SHOULD refuse it at
+plan time so the author sees it without a round trip. The schema cannot state
+it: `uniqueItems` compares whole objects, so two bindings agreeing only on
+`name` are distinct, and no keyword relates a property's keys to a sibling
+array's element member. A host discovers the binding lists from the
+`x-takoform-binding` annotation the desired schema already carries.
 
 ## Lifecycle capabilities
 

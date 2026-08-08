@@ -199,7 +199,7 @@ func TestBundleDesiredStateResolvesItsManifestBeforeMutation(t *testing.T) {
 		{"absent digest", map[string]any{}, "artifact_invalid"},
 	}
 	for _, testCase := range cases {
-		_, hostErr := host.validateDesiredSemantics(form, contract.RunnerInput.Space, testCase.spec)
+		_, hostErr := host.validateDesiredSemantics(form, contract.RunnerInput.Space, "worker-bundle-probe", testCase.spec)
 		switch {
 		case testCase.code == "" && hostErr != nil:
 			t.Errorf("%s: hostErr = %+v, want acceptance", testCase.name, hostErr)
@@ -282,7 +282,7 @@ func TestCommittedManifestSurvivesUnrelatedAbandonedUpload(t *testing.T) {
 	// And the resource that references the manifest still resolves it.
 	bundleForm := host.catalog.form(bundleRef.APIVersion, bundleRef.Kind)
 	if _, hostErr := host.validateDesiredSemantics(
-		bundleForm, contract.RunnerInput.Space, map[string]any{"manifestDigest": referencedDigest},
+		bundleForm, contract.RunnerInput.Space, "worker-bundle-probe", map[string]any{"manifestDigest": referencedDigest},
 	); hostErr != nil {
 		t.Fatalf("the referenced manifest stopped resolving: %+v", hostErr)
 	}

@@ -19,3 +19,4 @@ record does not replace them.
 - [0013 — The v1alpha3 lane ships in provider v2.1](0013-v1alpha3-lane-ships-in-provider-v2-1.md)
 - [0014 — Published schemas are structural minima; closure lives in code and conformance](0014-published-schemas-are-structural-minima.md)
 - [0015 — Cross-resource references are UID-pinned relations](0015-cross-resource-references-are-uid-pinned-relations.md)
+- [0016 — The Worker aggregate has one active deployment](0016-the-worker-aggregate-has-one-active-deployment.md)

@@ -230,11 +230,19 @@ func (h *ReferenceHost) unindexRelations(resource *storedResource) {
 	}
 }
 
-// dependencyInUse refuses to delete a resource any stored relation references
-// by UID. It covers every relation a Form declares, not only typed bindings:
-// a Worker Version pinned by a deployment, a bundle a version executes, and a
-// dead-letter queue a consumer drains are all live dependencies.
+// dependencyInUse refuses to delete a resource any live dependent needs.
+//
+// Two kinds of dependency are covered. The first is every stored relation that
+// references this resource by UID — not only typed bindings, but a Worker
+// Version pinned by a deployment, a bundle a version executes, and a
+// dead-letter queue a consumer drains. The second is the Worker aggregate rule
+// of spec/decisions/0016: nothing references a WorkerDeployment, yet it is what
+// serves every attachment and every inbound service binding of its worker, so
+// removing it while one of those lives is the same class of mistake.
 func (h *ReferenceHost) dependencyInUse(resource *storedResource) *hostError {
+	if hostErr := h.deploymentDeleteBlocked(resource); hostErr != nil {
+		return hostErr
+	}
 	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
 	holders := make([]string, 0, len(h.relationHolders[resource.UID]))
 	for holder := range h.relationHolders[resource.UID] {

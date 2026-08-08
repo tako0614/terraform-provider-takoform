@@ -134,7 +134,7 @@
           "name": "worker-bundle-probe"
         },
         "compatibilityDate": "2026-01-01",
-        "handlers": ["fetch"],
+        "handlers": ["fetch", "scheduled", "queue"],
         "kvBindings": [
           {
             "name": "CACHE",
@@ -205,6 +205,27 @@
             }
           }
         ],
+        "worker": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "ModuleWorker",
+          "name": "module-worker-probe"
+        }
+      }
+    },
+    "workerCustomDomain": {
+      "name": "custom-domain-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "WorkerCustomDomain",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:475298a787ff3ab63f47149b7e5222af0b663073ba0a8ceddf3535dcd201ed7f"
+        },
+        "packageDigest": "sha256:a9d8fcd81538cd89281d68c77421ac9abf44c51038139b83cdbba3c18a22fd91"
+      },
+      "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
+      "desired": {
+        "hostname": "app.portable-conformance.invalid",
         "worker": {
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "ModuleWorker",
@@ -349,7 +370,16 @@
     "import-adopts-native-resource",
     "import-validates-like-apply",
     "deployment-weight-sum-enforced",
+    "deployment-single-active-per-worker",
+    "deployment-version-ownership",
+    "deployment-version-duplicate-rejected",
+    "attachment-requires-active-deployment",
     "handler-gated-attachments",
+    "binding-name-collision-rejected",
+    "deployment-change-preserves-dependents",
+    "deployment-delete-blocked-by-dependent",
+    "deployment-delete-blocked-by-inbound-binding",
+    "dependent-revision-advances-with-rendering",
     "artifact-manifest-reject-list",
     "artifact-commit-binds-declared-size",
     "artifact-manifest-kind-exclusive",

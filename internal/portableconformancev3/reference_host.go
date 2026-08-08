@@ -106,6 +106,12 @@ type storedResource struct {
 	// Relations is the resolved cross-resource reference set of this exact
 	// stored spec, pinned by target UID.
 	Relations []storedRelation
+	// DerivedRendering is the exact derived part of the representation this
+	// resource was last serving — the conditions this host renders from OTHER
+	// resources. It is what the revision of that representation was issued for,
+	// so a mutation elsewhere that changes it must move the revision
+	// (derived_rendering.go).
+	DerivedRendering string
 }
 
 type recordedReplay struct {
@@ -148,8 +154,13 @@ type hostOperation struct {
 	ID             string
 	Done           bool
 	PollsRemaining int
-	commit         func() (map[string]any, *hostError)
-	terminalBody   []byte
+	// DeleteTarget is the resource key an accepted-but-unfinished DELETE is
+	// removing, empty for every other accepted mutation. It is what makes
+	// "being deleted" observable to the aggregate rules without a marker on the
+	// resource that a cancel would have to unwind.
+	DeleteTarget string
+	commit       func() (map[string]any, *hostError)
+	terminalBody []byte
 }
 
 // ReferenceHost is a deliberately small, deterministic v1alpha3 host used to
@@ -725,10 +736,15 @@ func specOrEmpty(spec map[string]any) map[string]any {
 // attachment's worker are protected exactly as a typed binding is.
 func (h *ReferenceHost) validateDesiredSemantics(
 	form *installedForm,
-	space string,
+	space, name string,
 	spec map[string]any,
 ) ([]storedRelation, *hostError) {
+	// Two pure spec-shape rules first: neither needs another resource, so
+	// neither should depend on one resolving.
 	if hostErr := validateDeploymentWeightSum(form, spec); hostErr != nil {
+		return nil, hostErr
+	}
+	if hostErr := validateEnvironmentNamespace(form, spec); hostErr != nil {
 		return nil, hostErr
 	}
 	relations, hostErr := h.resolveRelations(form, space, spec)
@@ -740,19 +756,23 @@ func (h *ReferenceHost) validateDesiredSemantics(
 			return nil, hostErr
 		}
 	}
-	// The handler gate reads the relations this apply just resolved, never the
-	// names in the spec: the gate is a statement about one worker INCARNATION.
-	if hostErr := h.requireDeclaredHandler(form, space, spec, relations); hostErr != nil {
+	// The Worker aggregate rules read the relations this apply just resolved,
+	// never the names in the spec: every one of them is a statement about one
+	// worker INCARNATION (spec/decisions/0016).
+	if hostErr := h.validateWorkerAggregate(form, space, name, spec, relations); hostErr != nil {
 		return nil, hostErr
 	}
 	return relations, nil
 }
 
-// validateDeploymentWeightSum enforces the one WorkerDeployment rule the
-// Form description calls host-validated: traffic weights are basis points and
-// must sum to exactly 10000, because a JSON Schema cannot add numbers.
+// validateDeploymentWeightSum enforces the WorkerDeployment rule the Form
+// description calls host-validated: traffic weights are basis points and must
+// sum to exactly 10000, because a JSON Schema cannot add numbers. It is the
+// weight half of the deployment integrity rule; the ownership, uniqueness, and
+// availability halves need resolved relations and live in
+// validateWorkerDeployment.
 func validateDeploymentWeightSum(form *installedForm, spec map[string]any) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != "WorkerDeployment" {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerDeploymentKind {
 		return nil
 	}
 	versions, _ := spec["versions"].([]any)
@@ -780,64 +800,6 @@ func validateDeploymentWeightSum(form *installedForm, spec map[string]any) *host
 		)
 	}
 	return nil
-}
-
-// requireDeclaredHandler gates the two cross-resource attachments: a
-// WorkerCronTrigger invokes the scheduled handler and a QueueConsumer invokes
-// the queue handler, so attaching one to a worker whose code declares no such
-// handler is an unsupported capability, not a valid desired state. Declared
-// handlers are resolved from ANY stored WorkerVersion of that worker in the
-// same space and group; a stored WorkerDeployment is not required.
-//
-// Candidates are selected by the worker UID both sides RESOLVED to, never by
-// the worker name their specs happen to spell. A name can be reused: after a
-// ModuleWorker is replaced out of band, a stale WorkerVersion still pinned to
-// the deleted worker describes code the new incarnation does not run, and
-// admitting an attachment on its word would activate a handler that does not
-// exist. The attachment's own freshly resolved `/worker` relation is the
-// incarnation under test, and only versions pinned to that same incarnation
-// can answer for it.
-func (h *ReferenceHost) requireDeclaredHandler(
-	form *installedForm,
-	space string,
-	spec map[string]any,
-	relations []storedRelation,
-) *hostError {
-	if form.Ref.APIVersion != edgeFormsGroup {
-		return nil
-	}
-	var handler string
-	switch form.Ref.Kind {
-	case "WorkerCronTrigger":
-		handler = "scheduled"
-	case "QueueConsumer":
-		handler = "queue"
-	default:
-		return nil
-	}
-	worker := nestedName(spec, "worker")
-	workerUID := relationTargetUID(relations, "/worker")
-	if worker == "" || workerUID == "" {
-		return stableError("invalid_argument", form.Ref.Kind+" requires a target worker")
-	}
-	for _, candidate := range h.resources {
-		if candidate.Space != space || candidate.Group != form.Ref.APIVersion ||
-			candidate.Kind != "WorkerVersion" ||
-			relationTargetUID(candidate.Relations, "/worker") != workerUID {
-			continue
-		}
-		handlers, _ := candidate.Spec["handlers"].([]any)
-		for _, declared := range handlers {
-			if name, _ := declared.(string); name == handler {
-				return nil
-			}
-		}
-	}
-	return stableError(
-		"unsupported_capability",
-		"no stored WorkerVersion of worker "+worker+" at uid "+workerUID+
-			" declares the "+handler+" handler",
-	)
 }
 
 // mutationFence carries the exact precondition headers of one mutation. The
@@ -960,7 +922,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 	// poll time, so an accepted operation re-derives every precondition
 	// against the store as it is when the mutation actually lands.
 	applyOnce := func() (*storedResource, bool, *hostError) {
-		relations, hostErr := h.validateDesiredSemantics(form, space, body.Spec)
+		relations, hostErr := h.validateDesiredSemantics(form, space, name, body.Spec)
 		if hostErr != nil {
 			return nil, false, hostErr
 		}
@@ -1010,7 +972,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 		return next, create, nil
 	}
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
-		h.acceptOperation(w, request, raw, space, func() (map[string]any, *hostError) {
+		h.acceptOperation(w, request, raw, space, "", func() (map[string]any, *hostError) {
 			next, _, hostErr := applyOnce()
 			if hostErr != nil {
 				return nil, hostErr
@@ -1103,21 +1065,45 @@ func (h *ReferenceHost) nextResource(
 // storeResource installs one resource and keeps the UID reverse index exact:
 // whatever the previous incarnation of this key held is unindexed first, so a
 // stale relation can never keep a target undeletable.
+//
+// It is also one of the two places the store changes at all, so it is where the
+// derived-rendering rule is applied: every resource the new state renders
+// differently advances its revision (derived_rendering.go).
 func (h *ReferenceHost) storeResource(resource *storedResource) {
 	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
-	if previous := h.resources[key]; previous != nil {
+	previous := h.resources[key]
+	if previous != nil {
 		h.unindexRelations(previous)
 	}
 	h.resources[key] = resource
 	h.indexRelations(resource)
+	// The stored resource's own derived rendering is settled against the
+	// POST-mutation store. A resource born here has no earlier representation to
+	// differ from, so its first rendering simply IS revision 1; an existing one
+	// moves its revision only when this mutation has not moved it already,
+	// exactly like a relation re-pin — one representation change is one revision.
+	if rendered := h.derivedRendering(resource); rendered != resource.DerivedRendering {
+		if previous != nil &&
+			resource.Generation == previous.Generation && resource.Revision == previous.Revision {
+			resource.Revision++
+		}
+		resource.DerivedRendering = rendered
+	}
+	h.advanceDerivedRevisions(resource.Space, key)
 }
 
-// removeResource deletes one resource and its reverse-index entries.
+// removeResource deletes one resource and its reverse-index entries, and
+// advances the revision of everything the removal renders differently — the
+// out-of-band probe delete included, because a source whose target vanished is
+// exactly the case that must not keep serving its old ETag.
 func (h *ReferenceHost) removeResource(key string) {
-	if existing := h.resources[key]; existing != nil {
-		h.unindexRelations(existing)
+	existing := h.resources[key]
+	if existing == nil {
+		return
 	}
+	h.unindexRelations(existing)
 	delete(h.resources, key)
+	h.advanceDerivedRevisions(existing.Space, key)
 }
 
 func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any {
@@ -1126,23 +1112,9 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 	if resource.PackageDigest != "" {
 		reference["packageDigest"] = resource.PackageDigest
 	}
-	ready := map[string]any{
-		"type":               "Ready",
-		"status":             "True",
-		"reason":             "Available",
-		"lastTransitionTime": fixedTransitionTime,
-	}
-	// A stored relation whose target moved is reported, never repaired. The
-	// reason stays inside the closed portable vocabulary; the pointer and both
-	// uids travel in the free-form hostReason.
-	if reason, hostReason, drifted := h.relationDrift(resource); drifted {
-		ready["status"] = "False"
-		ready["reason"] = reason
-		ready["hostReason"] = hostReason
-	}
 	status := map[string]any{
 		"observedGeneration": strconv.FormatInt(resource.Generation, 10),
-		"conditions":         []map[string]any{ready},
+		"conditions":         h.derivedConditions(resource),
 	}
 	if resource.StatusTouches > 0 {
 		status["observed"] = map[string]any{"statusTouches": resource.StatusTouches}
@@ -1234,7 +1206,10 @@ func (h *ReferenceHost) handleObserve(
 	}
 	if request.Header.Get(ErrorProbeHeader) == ProbeTouchStatus {
 		// A host-side status touch: the representation changes, so the
-		// revision advances while the desired generation does not.
+		// revision advances while the desired generation does not. It touches
+		// nothing else — a status counter is not an input to any other
+		// resource's rendering — so this path needs no derived-rendering pass
+		// (derived_rendering.go).
 		resource.StatusTouches++
 		resource.Revision++
 	}
@@ -1289,7 +1264,7 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 	// Adoption is a mutation, so it passes the SAME cross-resource gauntlet
 	// as apply: an import may not mint a resource whose typed bindings, bundle
 	// bytes, deployment weights, or handler gates a fresh apply would reject.
-	relations, hostErr := h.validateDesiredSemantics(form, body.Metadata.Space, body.Spec)
+	relations, hostErr := h.validateDesiredSemantics(form, body.Metadata.Space, name, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
@@ -1357,7 +1332,7 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 	}
 	key := resourceKey(resource.Space, resource.Group, resource.Kind, resource.Name)
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
-		h.acceptOperation(w, request, raw, request.URL.Query().Get("space"), func() (map[string]any, *hostError) {
+		h.acceptOperation(w, request, raw, request.URL.Query().Get("space"), key, func() (map[string]any, *hostError) {
 			// The revision fence and the live-binding scan are re-derived at
 			// COMMIT time: an accepted delete must not remove a resource that
 			// has since been re-bound or re-revised.
@@ -1388,13 +1363,14 @@ func (h *ReferenceHost) acceptOperation(
 	w http.ResponseWriter,
 	request *http.Request,
 	raw []byte,
-	space string,
+	space, deleteTarget string,
 	commit func() (map[string]any, *hostError),
 ) {
 	h.opCounter++
 	operation := &hostOperation{
 		ID:             "op_" + strconv.Itoa(h.opCounter),
 		PollsRemaining: asyncOperationPolls,
+		DeleteTarget:   deleteTarget,
 		commit:         commit,
 	}
 	h.operations[operation.ID] = operation

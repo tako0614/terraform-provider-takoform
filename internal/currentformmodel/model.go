@@ -117,6 +117,18 @@ type Field struct {
 	// Fields declares the closed members of KindObject and KindObjectList.
 	Fields []Field
 
+	// ProjectsEnvironmentNames marks a field whose VALUES name entries in the
+	// same runtime environment namespace that binding names occupy: the map
+	// KEYS of a KindJSONMap, the ITEMS of a KindStringSet. A binding list always
+	// projects names by construction, so only the non-binding sources need the
+	// marker.
+	//
+	// It exists because the collision is unrepresentable in a desired schema:
+	// `uniqueItems` rejects a duplicated whole object, never two objects that
+	// agree only on `name`, and no keyword reaches across sibling properties at
+	// all (spec/decisions/0016).
+	ProjectsEnvironmentNames bool
+
 	// Example is the value used by the canonical conformance fixture.
 	Example any
 	// AltExample is a second valid value for immutable-field lifecycle proofs.
@@ -327,6 +339,17 @@ func validateField(kind string, field Field) error {
 	}
 	if err := validateFieldDefault(kind, field); err != nil {
 		return err
+	}
+	if field.ProjectsEnvironmentNames {
+		switch field.Kind {
+		case KindJSONMap, KindStringSet:
+		default:
+			return fmt.Errorf(
+				"form %s field %s marks ProjectsEnvironmentNames on kind %q; only a json-map's keys "+
+					"or a string-set's items can name environment entries",
+				kind, field.Wire, field.Kind,
+			)
+		}
 	}
 	switch field.Kind {
 	case KindString:

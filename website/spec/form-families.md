@@ -48,6 +48,22 @@ services) is a typed Binding held by a revision resource
 Inward activation (HTTP routes, custom domains, cron triggers, queue
 consumption) is an attachment resource. The two are never merged.
 
+A family that splits one running thing across these roles owes a statement of
+what holds them together. For the Edge Platform Family that statement is
+[decision 0016](decisions/0016-the-worker-aggregate-has-one-active-deployment.md),
+normatively stated in
+[`host-api/v1alpha3.md`](host-api/v1alpha3.md#the-worker-aggregate): an identity
+has at most ONE deployment resource; that deployment selects revisions of its
+own identity, each named once, with weights summing to exactly 10000; every
+attachment is admitted against the deployment rather than against any stored
+revision, and refused when the deployment is absent or does not serve the
+handler the attachment invokes; a deployment change that would leave a live
+attachment or inbound binding unserved is refused, as is deleting the deployment
+while one lives; and the identity reports itself Ready only while its deployment
+actually serves. Because that last one is a representation rendered from another
+resource, a deployment change also moves the identity's revision and therefore
+its ETag, while leaving its generation alone.
+
 ## Edge Platform Family
 
 `edge.forms.takoform.com/v1alpha1` is the first official family. Its members
@@ -84,6 +100,14 @@ an oversight:
   ([`form-package/`](form-package/index.md)), so the portable field carries
   the same fact — only the names of host-supplied sensitive values are
   portable state — in permitted vocabulary.
+- `WorkerVersion` projects `vars` keys, `requiredSensitiveVars` entries, and
+  every binding `name` into ONE runtime environment namespace, so their union
+  must be unique
+  ([decision 0016](decisions/0016-the-worker-aggregate-has-one-active-deployment.md)).
+  The desired schema cannot state it — `uniqueItems` compares whole objects, and
+  no keyword relates one property's keys to a sibling array's element member —
+  so a host refuses the collision before mutation and a client refuses it at
+  plan time.
 
 Semantics that differ from these shapes join other families instead of
 widening a member: `PostgresDatabase`, `FifoQueue`, `WasiFunction`,

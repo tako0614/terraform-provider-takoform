@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
@@ -255,6 +256,13 @@ type probeTarget struct {
 	Spec          map[string]any
 	// Lifecycle is the exact capability set the corpus pins for this Form.
 	Lifecycle []string
+	// ReadyOptional marks a probe whose Ready condition legitimately depends on
+	// other resources, so a generic lifecycle assertion must not demand
+	// Ready=True. A Module Worker is the one such probe: its readiness is a
+	// claim about SERVICE, and nothing serves until its deployment does
+	// (spec/decisions/0016). Every check that cares asserts the exact condition
+	// itself rather than leaning on the generic one.
+	ReadyOptional bool
 }
 
 // target builds one probe target with its desired spec already materialized
@@ -270,6 +278,7 @@ func (r *v3Runner) target(probe ResourceProbe) probeTarget {
 		Space:         r.contract.RunnerInput.Space,
 		Spec:          r.materialize(probe.Identity.FormRef, probe.Desired),
 		Lifecycle:     append([]string(nil), probe.LifecycleCapabilities...),
+		ReadyOptional: probe.Identity.FormRef.Kind == moduleWorkerKind,
 	}
 }
 
@@ -290,7 +299,7 @@ func (r *v3Runner) loadDesiredSchemas() error {
 	probes := []ResourceProbe{
 		input.ModuleWorker, input.EdgeKvNamespace, input.AtLeastOnceQueue,
 		input.WorkerVersion, input.WorkerBundle.ResourceProbe, input.WorkerDeployment,
-		input.WorkerCronTrigger, input.QueueConsumer,
+		input.WorkerCustomDomain, input.WorkerCronTrigger, input.QueueConsumer,
 	}
 	r.desiredSchemas = map[string]map[string]any{}
 	for _, probe := range probes {
@@ -516,8 +525,15 @@ func verifyResourceIdentity(got wireResource, target probeTarget) error {
 	}
 	ready := false
 	for _, condition := range got.Status.Conditions {
-		if condition.Type == "Ready" && condition.Status == "True" {
-			ready = condition.Reason != "" && condition.LastTransitionTime != ""
+		if condition.Type != "Ready" {
+			continue
+		}
+		complete := condition.Reason != "" && condition.LastTransitionTime != ""
+		// A probe whose readiness depends on other resources may legitimately
+		// answer Ready=False; the condition must still be COMPLETE, and the
+		// check that owns that state asserts its exact reason.
+		if condition.Status == "True" || (target.ReadyOptional && condition.Status == "False") {
+			ready = complete
 		}
 	}
 	if !ready {
@@ -772,22 +788,71 @@ func (r *v3Runner) read(target probeTarget) (wireResource, wireResponse, error) 
 // relation checks need a read that reports the condition instead of rejecting
 // it.
 func (r *v3Runner) readRaw(target probeTarget) (wireResource, error) {
+	resource, _, err := r.readRawResponse(target)
+	return resource, err
+}
+
+// readRawResponse is readRaw with the transport response, so a caller can hold
+// the host to the ETag that accompanied the exact representation it just read.
+func (r *v3Runner) readRawResponse(target probeTarget) (wireResource, wireResponse, error) {
 	response, err := r.request(
 		http.MethodGet,
 		r.resourceURL(target.Ref, target.Name, "", r.exactQuery(target.Space, target.Ref)),
 		nil, nil,
 	)
 	if err != nil {
-		return wireResource{}, err
+		return wireResource{}, wireResponse{}, err
 	}
 	resource, err := decodeResource(response, http.StatusOK)
 	if err != nil {
-		return wireResource{}, err
+		return wireResource{}, wireResponse{}, err
 	}
 	if err := verifyClosedConditionReasons(resource); err != nil {
-		return wireResource{}, err
+		return wireResource{}, wireResponse{}, err
 	}
-	return resource, nil
+	return resource, response, nil
+}
+
+// requireRevisionAdvanced holds one representation change to the identity rule
+// of decision 0011: the revision moves FORWARD, the generation does not move at
+// all, and the strong ETag served with the new representation is the new
+// revision. Anything less makes the ETag a validator that says "unchanged"
+// about a change.
+func requireRevisionAdvanced(before, after wireResource, response wireResponse, subject string) error {
+	if after.Metadata.Generation != before.Metadata.Generation {
+		return fmt.Errorf(
+			"%s moved generation %s -> %s; no desired spec changed",
+			subject, before.Metadata.Generation, after.Metadata.Generation,
+		)
+	}
+	beforeRevision, err := parseRevision(before.Metadata.Revision)
+	if err != nil {
+		return fmt.Errorf("%s: %w", subject, err)
+	}
+	afterRevision, err := parseRevision(after.Metadata.Revision)
+	if err != nil {
+		return fmt.Errorf("%s: %w", subject, err)
+	}
+	if afterRevision <= beforeRevision {
+		return fmt.Errorf(
+			"%s left revision at %s while the representation changed; want a revision greater than %s",
+			subject, after.Metadata.Revision, before.Metadata.Revision,
+		)
+	}
+	if err := verifyRevisionETag(response, after.Metadata.Revision); err != nil {
+		return fmt.Errorf("%s: %w", subject, err)
+	}
+	return nil
+}
+
+// parseRevision reads one canonical decimal revision. The wire type is a
+// string, but the ordering the identity contract states is numeric.
+func parseRevision(revision string) (int64, error) {
+	value, err := strconv.ParseInt(revision, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("revision %q is not a canonical decimal string", revision)
+	}
+	return value, nil
 }
 
 // readyCondition returns the Ready condition, or the zero value when absent.
