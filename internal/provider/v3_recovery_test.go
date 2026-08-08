@@ -107,50 +107,6 @@ func TestV3CreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
 	}
 }
 
-// TestV3GenericCreateAcceptedButUnfinishedWritesRecoverableState is the same
-// property for the generic exact-FormRef carrier.
-func TestV3GenericCreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
-	host := newV3FakeHost(t)
-	host.apply202Pending = true
-	generic := &v3GenericResource{data: newV3TestProviderData(t, host)}
-	ctx := context.Background()
-	schemaResponse := v3SchemaOf(t, generic)
-
-	const digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-		"form_api_version":        types.StringValue("forms.example.com/v1alpha1"),
-		"form_kind":               types.StringValue("Widget"),
-		"form_definition_version": types.StringValue("1.0.0"),
-		"form_schema_digest":      types.StringValue(digest),
-		"name":                    types.StringValue("my-widget"),
-		"create_timeout":          types.StringValue("400ms"),
-	})
-	createResponse := frameworkresource.CreateResponse{
-		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
-	}
-	generic.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
-
-	if !createResponse.Diagnostics.HasError() {
-		t.Fatal("a generic create whose operation never completed reported success")
-	}
-	if createResponse.State.Raw.IsNull() {
-		t.Fatal("accepted-but-unfinished generic create wrote no state")
-	}
-	for name, want := range map[string]string{
-		"name":                 "my-widget",
-		"space":                "prod",
-		"uid":                  "uid-1",
-		"form_api_version":     "forms.example.com/v1alpha1",
-		"form_kind":            "Widget",
-		"form_schema_digest":   digest,
-		"pending_operation_id": "op_apply_pending",
-	} {
-		if got := v3StateString(t, ctx, createResponse.State, name).ValueString(); got != want {
-			t.Errorf("recovered generic state %s = %q, want %q", name, got, want)
-		}
-	}
-}
-
 // v3PriorModuleWorkerRef is a SECOND exact identity of one Kind: the same
 // group, an earlier definition version, different bytes. It is what a Form line
 // that has advanced leaves behind in existing state.
@@ -267,8 +223,8 @@ func TestV3ReadAndDeleteDispatchOnTheStateFormRef(t *testing.T) {
 	}
 }
 
-// TestV3JSONObjectAttributesRejectTheLiteralNull covers both data-only JSON
-// attributes. encoding/json accepts `null` into a map target and leaves the map
+// TestV3JSONObjectAttributesRejectTheLiteralNull covers the data-only JSON
+// attribute. encoding/json accepts `null` into a map target and leaves the map
 // nil, so without an explicit guard a nil desired document travels to the host
 // as an absent object.
 func TestV3JSONObjectAttributesRejectTheLiteralNull(t *testing.T) {
@@ -295,28 +251,6 @@ func TestV3JSONObjectAttributesRejectTheLiteralNull(t *testing.T) {
 		assertNullJSONObjectRejected(t, createResponse.Diagnostics, "vars_json")
 		if len(host.applySpecs) != 0 {
 			t.Fatal("a null vars_json reached the host")
-		}
-	})
-
-	t.Run("spec_json", func(t *testing.T) {
-		host := newV3FakeHost(t)
-		generic := &v3GenericResource{data: newV3TestProviderData(t, host)}
-		schemaResponse := v3SchemaOf(t, generic)
-		plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-			"form_api_version":        types.StringValue("forms.example.com/v1alpha1"),
-			"form_kind":               types.StringValue("Widget"),
-			"form_definition_version": types.StringValue("1.0.0"),
-			"form_schema_digest":      types.StringValue("sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
-			"name":                    types.StringValue("my-widget"),
-			"spec_json":               types.StringValue("null"),
-		})
-		createResponse := frameworkresource.CreateResponse{
-			State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
-		}
-		generic.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
-		assertNullJSONObjectRejected(t, createResponse.Diagnostics, "spec_json")
-		if len(host.applySpecs) != 0 {
-			t.Fatal("a null spec_json reached the host")
 		}
 	})
 

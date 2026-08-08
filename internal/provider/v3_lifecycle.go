@@ -62,14 +62,22 @@ func NewV3FormResource(form model.Form) func() resource.Resource {
 	return func() resource.Resource { return &v3FormResource{form: form, codecs: v3Codecs()} }
 }
 
-// newV3FormResources lists every v3-lane resource constructor: the typed
-// family members plus the generic exact-FormRef carrier.
+// newV3FormResources lists every v3-lane resource constructor: exactly the
+// typed family members, one per catalog Form.
+//
+// There is deliberately no generic exact-FormRef carrier. A resource that
+// accepts an arbitrary third-party FormRef and an opaque JSON spec can back
+// none of what an exact reference promises: the v1alpha3 Form Definition
+// response is a closed envelope carrying only identity, display name,
+// description, and desiredSchema, so a client can neither recompute the
+// canonical definition digest the FormRef pins nor read the Form's role.
+// Shipping the carrier anyway would have offered reach with no verification
+// behind it (spec/decisions/0021).
 func newV3FormResources() []func() resource.Resource {
-	out := make([]func() resource.Resource, 0, len(edgeformcatalog.Forms)+1)
+	out := make([]func() resource.Resource, 0, len(edgeformcatalog.Forms))
 	for _, form := range edgeformcatalog.Forms {
 		out = append(out, NewV3FormResource(form))
 	}
-	out = append(out, NewV3GenericResource)
 	return out
 }
 

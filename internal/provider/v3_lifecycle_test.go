@@ -802,64 +802,34 @@ func TestV3ReadRejectsUnknownStateFormRefBeforeHost(t *testing.T) {
 	}
 }
 
-func TestV3GenericResourceAppliesWithExactRef(t *testing.T) {
-	host := newV3FakeHost(t)
-	data := newV3TestProviderData(t, host)
-	generic := &v3GenericResource{data: data}
+// TestV3LaneCarriesNoUntypedFormRef proves the v1alpha3 lane exposes no
+// resource that accepts an arbitrary FormRef. The withdrawn generic carrier
+// (spec/decisions/0021) is the shape this asserts against: a resource whose
+// Form identity is CONFIGURED rather than compiled in, which is exactly the
+// shape that cannot verify the identity it is handed.
+func TestV3LaneCarriesNoUntypedFormRef(t *testing.T) {
 	ctx := context.Background()
-	schemaResponse := v3SchemaOf(t, generic)
-
-	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-		"form_api_version":        types.StringValue("forms.example.com/v1alpha1"),
-		"form_kind":               types.StringValue("Widget"),
-		"form_definition_version": types.StringValue("1.0.0"),
-		"form_schema_digest":      types.StringValue("sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
-		"name":                    types.StringValue("my-widget"),
-		"spec_json":               types.StringValue(`{"size":3}`),
-	})
-	createResponse := frameworkresource.CreateResponse{
-		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
-	}
-	generic.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
-	if createResponse.Diagnostics.HasError() {
-		t.Fatalf("create: %v", createResponse.Diagnostics)
-	}
-	if host.eventIndex("apply:Widget/my-widget") < 0 {
-		t.Fatalf("generic apply never reached the host: %v", host.events)
-	}
-	spec := host.applySpecs[len(host.applySpecs)-1]
-	if got, _ := spec["size"].(float64); got != 3 {
-		t.Fatalf("generic spec = %#v, want size 3", spec)
-	}
-	if got := v3StateString(t, ctx, createResponse.State, "uid").ValueString(); got != "uid-1" {
-		t.Fatalf("generic created state uid = %q, want uid-1", got)
-	}
-	if got := v3StateString(t, ctx, createResponse.State, "spec_json").ValueString(); got != `{"size":3}` {
-		t.Fatalf("generic state spec_json = %q, want the authored text", got)
-	}
-}
-
-func TestV3GenericResourceRejectsRetainedGroups(t *testing.T) {
-	host := newV3FakeHost(t)
-	generic := &v3GenericResource{data: newV3TestProviderData(t, host)}
-	ctx := context.Background()
-	schemaResponse := v3SchemaOf(t, generic)
-
-	plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-		"form_api_version":        types.StringValue("forms.takoform.com/v1alpha2"),
-		"form_kind":               types.StringValue("ObjectBucket"),
-		"form_definition_version": types.StringValue("0.1.0"),
-		"form_schema_digest":      types.StringValue("sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
-		"name":                    types.StringValue("assets"),
-	})
-	createResponse := frameworkresource.CreateResponse{
-		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
-	}
-	generic.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
-	if !createResponse.Diagnostics.HasError() {
-		t.Fatal("retained frozen group was accepted as a v1alpha3 FormRef")
-	}
-	if len(host.applySpecs) != 0 {
-		t.Fatal("retained-group apply reached the host")
+	for _, factory := range newV3FormResources() {
+		candidate := factory()
+		var metadata frameworkresource.MetadataResponse
+		candidate.Metadata(ctx, frameworkresource.MetadataRequest{ProviderTypeName: "takoform"}, &metadata)
+		if metadata.TypeName == "takoform_resource" {
+			t.Fatal("the withdrawn generic takoform_resource carrier is registered again")
+		}
+		var schemaResponse frameworkresource.SchemaResponse
+		candidate.Schema(ctx, frameworkresource.SchemaRequest{}, &schemaResponse)
+		for _, configured := range []string{"spec_json", "form_api_version", "form_kind", "form_definition_version", "form_schema_digest"} {
+			attribute, declared := schemaResponse.Schema.Attributes[configured]
+			if !declared {
+				continue
+			}
+			// The four form_* attributes exist on every typed resource, but only
+			// as host-owned computed state recording which exact identity the
+			// resource was applied under. An OPTIONAL or REQUIRED one would mean
+			// the configuration names the Form, which is the withdrawn carrier.
+			if attribute.IsRequired() || attribute.IsOptional() {
+				t.Errorf("%s declares a configurable Form identity attribute %s", metadata.TypeName, configured)
+			}
+		}
 	}
 }

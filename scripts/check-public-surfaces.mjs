@@ -1303,10 +1303,12 @@ if (publicationTruth !== null) {
   );
 }
 
-// The Host API v1alpha3 lane: the eleven Edge Platform Family resources plus
-// the generic takoform_resource carrier, all rendered by
-// internal/standardforms (doc name = resource type minus the takoform_
-// prefix). They share the v2.1.0 source-candidate example pin.
+// The Host API v1alpha3 lane: exactly the eleven Edge Platform Family
+// resources, all rendered by internal/standardforms (doc name = resource type
+// minus the takoform_ prefix). They share the v2.1.0 source-candidate example
+// pin. There is deliberately no generic takoform_resource carrier: the lane
+// exposes no resource that is not a Form (spec/decisions/0021), so this exact
+// set is also the assertion that the carrier has not come back.
 const edgeFamilyDocNames = [
   "module_worker",
   "worker_bundle",
@@ -1319,7 +1321,6 @@ const edgeFamilyDocNames = [
   "sqlite_database",
   "at_least_once_queue",
   "queue_consumer",
-  "resource",
 ];
 
 const formDocNames = [...forms.map(({ docName }) => docName), ...edgeFamilyDocNames];

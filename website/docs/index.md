@@ -167,10 +167,11 @@ Edge Platform Family resources (`v2.1.0` source candidate; not yet published):
 - [at_least_once_queue](/docs/resources/at_least_once_queue.html)
 - [queue_consumer](/docs/resources/queue_consumer.html)
 
-Generic carrier for any other v1alpha3 Form, including third-party Forms
-(`v2.1.0` source candidate; no import support):
-
-- [resource](/docs/resources/resource.html)
+That is the entire v1alpha3 surface. There is no generic carrier for a Form the
+provider was not built against: the lane offers no way for a client to verify a
+FormRef it did not compile in, so supporting a third-party Form is a provider
+build rather than a configuration value
+([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html)).
 
 ## More project surfaces
 

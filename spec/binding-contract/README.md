@@ -150,6 +150,22 @@ fails `dependency_in_use` (409). The required conformance checks
 `relation-target-deletion-blocked`, `relation-incarnation-change-detected`, and
 `relation-reapply-repins` prove a laxer host fails the lane.
 
+## Binding distribution
+
+Binding Definitions are distributed **with this repository**, as digest-bound
+documents under `bindings/candidates/v1alpha1`. They are NOT independently
+installable third-party artifacts, and there is no Binding Package envelope:
+no such identity is specified, published, or planned for this generation
+([decision 0021](../decisions/0021-third-party-forms-and-contract-distribution.md)).
+
+The rule is the Interface distribution rule word for word
+([`../interface-contract/`](../interface-contract/README.md)).
+A `BindingRef`'s `schemaDigest` binds the canonical Definition bytes and
+nothing else: no package digest, no publisher identity, no signature, no
+revocation feed, and no closed payload inventory, because there is no package.
+A host that advertises a Binding at an exact digest in its Host Support Profile
+is stating which document it implements, not where it obtained it.
+
 ## Direction rule
 
 Outward capability (this worker *uses* KV, a bucket, a database, a queue, a

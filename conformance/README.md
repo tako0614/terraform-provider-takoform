@@ -7,12 +7,13 @@ characterization:
   exposes exactly the
   nine independently authored v1alpha2 candidates, and covers typed schema
   behavior, validation, CRUD, import, state refresh, and the absence of
-  plan-time remote mutation; the source tree additionally registers the
-  v1alpha3-lane Edge Platform Family resources and the generic
-  `takoform_resource` carrier for the unpublished v2.1 source candidate
-  ([decision 0013](../spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md));
+  plan-time remote mutation; the source tree additionally registers exactly the
+  v1alpha3-lane Edge Platform Family resources for the unpublished v2.1 source
+  candidate — and no generic carrier, which is itself asserted
+  ([decision 0013](../spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md),
+  [decision 0021](../spec/decisions/0021-third-party-forms-and-contract-distribution.md));
 - `internal/client/client_test.go` asserts discovery, capability negotiation, preview/apply evidence, error envelopes, observation, and deletion;
-- `examples/resources/` contains one formatted HCL example for every registered typed resource; the generic `takoform_resource` carrier intentionally has none.
+- `examples/resources/` contains one formatted HCL example for every registered resource, with no exceptions: every provider resource is derived from a Form, so every one has an example.
 
 Run:
 

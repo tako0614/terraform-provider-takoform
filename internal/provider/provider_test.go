@@ -454,9 +454,9 @@ func TestProviderExampleResourcesMatchCurrentResources(t *testing.T) {
 		}
 	}
 	sort.Strings(got)
-	// The generic exact-FormRef carrier now renders an example too: it uses a
-	// clearly third-party example FormRef, so every registered resource type
-	// has exactly one example directory.
+	// Every registered resource type has exactly one example directory, with no
+	// exceptions: every provider resource is derived from a Form, so every one
+	// has an example rendered from that Form (spec/decisions/0021).
 	want := append([]string(nil), currentProviderResourceTypeNames()...)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("example resource directories must match provider resources:\ngot  %v\nwant %v", got, want)
@@ -500,7 +500,7 @@ func TestPublishedHCLUsesFullyQualifiedProviderAddress(t *testing.T) {
 }
 
 func currentProviderResourceTypeNames() []string {
-	names := make([]string, 0, len(currentformcatalog.Kinds)+len(edgeformcatalog.Forms)+1)
+	names := make([]string, 0, len(currentformcatalog.Kinds)+len(edgeformcatalog.Forms))
 	for _, kind := range currentformcatalog.Kinds {
 		names = append(names, kind.ResourceType)
 	}
@@ -509,14 +509,15 @@ func currentProviderResourceTypeNames() []string {
 	return names
 }
 
-// v3ProviderResourceTypeNames is the Host API v1alpha3 lane: the typed Edge
-// Platform Family resources plus the generic exact-FormRef carrier.
+// v3ProviderResourceTypeNames is the Host API v1alpha3 lane: exactly the typed
+// Edge Platform Family resources. The lane ships no generic exact-FormRef
+// carrier — `takoform_resource` was withdrawn by spec/decisions/0021 because
+// nothing in the lane lets a client verify a FormRef it did not compile in.
 func v3ProviderResourceTypeNames() []string {
-	names := make([]string, 0, len(edgeformcatalog.Forms)+1)
+	names := make([]string, 0, len(edgeformcatalog.Forms))
 	for _, form := range edgeformcatalog.Forms {
 		names = append(names, form.ResourceType)
 	}
-	names = append(names, "takoform_resource")
 	sort.Strings(names)
 	return names
 }

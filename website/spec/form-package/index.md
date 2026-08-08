@@ -23,6 +23,14 @@ external data object that points to multiple exact `(FormRef, packageDigest)`
 pairs; it is not a wider Form Package. Each Form is distributed independently;
 one package never carries a catalog-wide version or multiple definitions.
 
+A Form Package carries a Form Definition and nothing else. There is no
+Interface Package and no Binding Package: those contracts are digest-bound
+documents distributed with this repository, and this envelope cannot carry
+one — the index is closed, fixes `kind` to `FormPackage`, and requires a
+`formRef`
+([decision 0021](../decisions/0021-third-party-forms-and-contract-distribution.md),
+[`../interface-contract/`](../interface-contract/index.md)).
+
 ## Index and identity
 
 The current family index has the fixed identity

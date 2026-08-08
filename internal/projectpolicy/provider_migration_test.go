@@ -203,12 +203,15 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Nine retained provider-v2 docs, the eleven Edge Platform Family docs of
-	// the Host API v1alpha3 lane, and the generic exact-FormRef carrier.
-	// Every doc, in either lane, must state the exact Form identity fields
-	// the state boundary fences on.
-	if len(resourceDocs) != 9+11+1 {
-		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), 9+11+1)
+	// Nine retained provider-v2 docs and the eleven Edge Platform Family docs
+	// of the Host API v1alpha3 lane. There is no twenty-first document: the
+	// generic exact-FormRef carrier was withdrawn (spec/decisions/0021), so
+	// every resource document now describes a resource backed by a Form —
+	// which is also why the package-digest exemption it needed is gone. Every
+	// doc, in either lane, must state the exact Form identity fields the state
+	// boundary fences on.
+	if len(resourceDocs) != 9+11 {
+		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), 9+11)
 	}
 	for _, filename := range resourceDocs {
 		raw, err := os.ReadFile(filename)
@@ -216,13 +219,6 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, field := range wantIdentityFields {
-			// The generic exact-FormRef carrier records no package digest:
-			// its FormRef is supplied by the configuration, so there is no
-			// installed package for the provider to attest. Every
-			// catalog-backed resource still carries the full identity.
-			if field == "form_package_digest" && filepath.Base(filename) == "resource.md" {
-				continue
-			}
 			if !strings.Contains(string(raw), "`"+field+"`") {
 				t.Errorf("%s omits exact state identity field %s", filename, field)
 			}

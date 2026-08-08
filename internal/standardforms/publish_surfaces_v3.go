@@ -22,16 +22,12 @@ func v3DocBasename(form model.Form) string {
 	return strings.TrimPrefix(form.ResourceType, "takoform_") + ".md"
 }
 
-// v3GenericResourceType is the generic v1alpha3 carrier. It is not a catalog
-// Form: it has no FormRef of its own and carries any third-party Form by
-// exact reference, so its surfaces are authored here instead of derived from
-// a Form.
-const v3GenericResourceType = "takoform_resource"
-
-// v3PublishedSurfaces renders every family-lane doc and example, plus the two
-// hand-authored surfaces of the generic takoform_resource carrier.
+// v3PublishedSurfaces renders every family-lane doc and example. Every v3-lane
+// surface is derived from a catalog Form; the lane has no hand-authored
+// resource surface, because it exposes no resource that is not a Form
+// (spec/decisions/0021).
 func v3PublishedSurfaces() []publishedSurface {
-	surfaces := make([]publishedSurface, 0, len(edgeformcatalog.Forms)*2+2)
+	surfaces := make([]publishedSurface, 0, len(edgeformcatalog.Forms)*2)
 	for _, form := range edgeformcatalog.Forms {
 		surfaces = append(surfaces,
 			publishedSurface{
@@ -44,17 +40,6 @@ func v3PublishedSurfaces() []publishedSurface {
 			},
 		)
 	}
-	surfaces = append(surfaces,
-		publishedSurface{
-			path: filepath.ToSlash(filepath.Join("docs", "resources",
-				strings.TrimPrefix(v3GenericResourceType, "takoform_")+".md")),
-			content: []byte(v3GenericResourceDoc()),
-		},
-		publishedSurface{
-			path:    filepath.ToSlash(filepath.Join("examples", "resources", v3GenericResourceType, "resource.tf")),
-			content: []byte(v3GenericExampleHCL()),
-		},
-	)
 	return surfaces
 }
 
@@ -410,173 +395,6 @@ provider "takoform" {
 	return builder.String()
 }
 
-// v3GenericResourceDoc renders the reference document for the generic
-// takoform_resource carrier. It is authored rather than derived because the
-// carrier has no Form Definition: it names an exact third-party FormRef and
-// one JSON desired spec. Every statement below mirrors
-// internal/provider/v3_generic_resource.go.
-func v3GenericResourceDoc() string {
-	return "---\n" +
-		"page_title: \"takoform_resource Resource - takoform\"\n" +
-		"subcategory: \"Host API v1alpha3\"\n" +
-		"description: |-\n" +
-		"  Generic Host API v1alpha3 carrier for any Form, including third-party Forms, addressed by exact FormRef.\n" +
-		"---\n" +
-		"\n" +
-		"# takoform_resource\n" +
-		"\n" +
-		"Carries any Host API v1alpha3 Form by exact FormRef, including Forms published\n" +
-		"by third parties in their own API groups. It is not a Form and has no FormRef\n" +
-		"of its own: the configuration names the exact reference plus one JSON desired\n" +
-		"spec, so a Form this provider was never built against is still usable.\n" +
-		"\n" +
-		"This resource speaks the Host API v1alpha3 lane and requires provider v2.1.0 or\n" +
-		"later (source candidate; not yet published). The configured host selects and\n" +
-		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
-		"price, or implementation. See the [complete example](../../examples/resources/takoform_resource/resource.tf).\n" +
-		"\n" +
-		"Prefer a typed resource where one exists: the Edge Platform Family resources\n" +
-		"carry per-field validation, a typed plan, and short import IDs. This carrier\n" +
-		"trades all three for reach — it imports too, but only through the exact\n" +
-		"identity it cannot infer.\n" +
-		"\n" +
-		"## Arguments\n" +
-		"\n" +
-		"The four `form_*` attributes are the exact FormRef. They, `name`, and `space`\n" +
-		"all force replacement, so existing state is never rebound to another identity.\n" +
-		"\n" +
-		"- `form_api_version` (String, required, forces replacement) — Exact namespaced Form group and version, for example `forms.example.com/v1alpha1`. The frozen `forms.takoform.com/v1alpha1` and `forms.takoform.com/v1alpha2` groups are rejected; retained-epoch Forms belong to the provider-v2 typed resources.\n" +
-		"- `form_kind` (String, required, forces replacement) — Exact Form kind, matching `^[A-Z][A-Za-z0-9]{0,63}$`.\n" +
-		"- `form_definition_version` (String, required, forces replacement) — Exact immutable Form definition version, a semantic version.\n" +
-		"- `form_schema_digest` (String, required, forces replacement) — Exact immutable Form schema digest, `sha256:` followed by 64 lowercase hexadecimal characters.\n" +
-		"- `name` (String, required, forces replacement) — Portable resource name (`metadata.name`), matching `^[a-z][a-z0-9-]{0,62}$`.\n" +
-		"- `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.\n" +
-		"- `spec_json` (String, optional) — The portable desired spec as one JSON object string (for example `jsonencode({...})`); the provider sends the parsed object as `spec`. Omitting it means the empty spec `{}`.\n" +
-		"- `create_timeout` / `update_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `20m` / `30m`).\n" +
-		"\n" +
-		"## Read-only attributes\n" +
-		"\n" +
-		"- `uid` — host-issued immutable resource identity; delete and re-create yields a new UID.\n" +
-		"- `generation` — desired-state generation; increments only when the portable desired spec changes. Updates fence on it together with `uid`.\n" +
-		"- `revision` — representation revision; increments whenever the representation changes — a spec-changing update, new status, or new outputs. Deletes fence on it via `If-Match`.\n" +
-		"- `conditions` — the complete status condition list the host reports, in its order. Each entry carries\n" +
-		"  `type` (the closed `Ready` / `Reconciling` / `Degraded` / `Drifted` / `Blocked` / `Deleting` vocabulary),\n" +
-		"  `status` (`True` / `False` / `Unknown`), the closed portable `reason`, an optional `message`, an optional\n" +
-		"  non-portable `host_reason` naming exactly what is wrong, the `observed_generation` the status reflects,\n" +
-		"  and `last_transition_time`. Conditions are host-rendered state: they change when this resource changes\n" +
-		"  AND when a resource it depends on changes, with no desired spec changing anywhere, so they are read-only\n" +
-		"  and a configuration must not assert them.\n" +
-		"- `ready` — derived convenience: true when `conditions` carries the closed `Ready` condition with status\n" +
-		"  `True`. Read `conditions` for the reason it is not.\n" +
-		"- `outputs_json` — JSON-serialized `status.outputs` document (`\"{}\"` when empty).\n" +
-		"- `relation_drift_reason` — internal recovery only: `ExternalChange` or `DependencyMissing` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes an in-place re-apply, which is all a host needs to re-resolve and re-pin every reference. A Form whose Definition omits `update` refuses that apply, naming the missing capability; replace the resource instead. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.\n" +
-		"- `pending_operation_id` — internal recovery only: the host operation id of a mutation the host accepted but that did not reach a terminal state before the operation deadline, null in steady state. A refresh consults it before it reads the resource, and it is cleared only once that operation settles. It is not resource identity and configurations must not depend on it.\n" +
-		"\n" +
-		"State records the four FormRef fields and no package digest: the distribution\n" +
-		"a host installed is audit evidence, never resource identity.\n" +
-		"\n" +
-		"## No local schema compilation\n" +
-		"\n" +
-		"The provider neither fetches nor compiles the Form's desired schema:\n" +
-		"\n" +
-		"- at plan time it checks only that the four FormRef fields are wholly known and satisfy the FormRef grammar and that `spec_json` parses as one JSON object; it reads no Form Definition and makes no host call;\n" +
-		"- before each apply the client requires `GET {api}/forms` to return that exact FormRef as installed, executable, activated, available to the principal, and supporting the requested operation, then calls `prepare` and `apply`;\n" +
-		"- the host validates `spec` against that exact Form's `desiredSchema`, so a spec that violates the Form surfaces as a host `invalid_argument` error during apply rather than as a plan-time diagnostic.\n" +
-		"\n" +
-		"Reads compare `spec_json` semantically rather than textually: your formatting\n" +
-		"survives while the parsed document still equals the host's `spec`, and a real\n" +
-		"out-of-band change adopts the host's canonical serialization so the next plan\n" +
-		"shows the drift.\n" +
-		"\n" +
-		"## State continuity\n" +
-		"\n" +
-		"- **A changed `uid` is an error, and state is kept.** When the host serves a different\n" +
-		"  `uid` under the recorded name, the resource this state was applied against is gone and\n" +
-		"  something re-used its name. The provider reports a hard error naming both uids and keeps\n" +
-		"  the resource in state. It does not re-bind — that would adopt a resource you never\n" +
-		"  applied — and it does not remove state, which would make the next apply fail against the\n" +
-		"  resource that does exist, with no plan left to repair it. Resolve it by importing the new\n" +
-		"  incarnation explicitly, restoring the prior one, or deleting the host-side replacement.\n" +
-		"- **An unfinished mutation is resumed, not re-created.** When `pending_operation_id` is\n" +
-		"  set, a refresh asks the host about that operation before it reads the resource. While the\n" +
-		"  operation is still running the resource may legitimately not exist yet, so its absence is\n" +
-		"  not treated as deletion and the marker survives; a terminal success is verified against\n" +
-		"  the exact identity and settles state; a terminal failure or an expired operation record\n" +
-		"  defers to an exact read of the resource, which decides.\n" +
-		"\n" +
-		"## Write the Form's defaults explicitly\n" +
-		"\n" +
-		"A host materializes the portable defaults a Form declares before it validates,\n" +
-		"digests, or stores your spec, so the `spec` it serves back can carry properties\n" +
-		"your `spec_json` omitted. Because this carrier reads no Form Definition, it\n" +
-		"cannot fill those defaults into the plan, and a read that adopts the host's\n" +
-		"materialized document leaves a difference the next plan proposes again — each\n" +
-		"apply is a host no-op that never advances `generation`, and the difference\n" +
-		"returns. Write every defaulted property explicitly in `spec_json`, or use the\n" +
-		"typed resource for that Form where one exists: typed resources carry each\n" +
-		"declared default in the schema, so an omitted attribute plans as the value the\n" +
-		"host will materialize and the second plan is empty.\n" +
-		"\n" +
-		"## Import\n" +
-		"\n" +
-		"The import ID is one JSON object naming the exact identity. It is not a\n" +
-		"delimiter-joined string, because a SpaceID is opaque UTF-8 whose only forbidden\n" +
-		"character is `/`, so no separator can escape it safely:\n" +
-		"\n" +
-		"```console\n" +
-		"terraform import takoform_resource.example \\\n" +
-		"  '{\"space\":\"prod\",\"apiVersion\":\"forms.example.com/v1alpha1\",\"kind\":\"ExampleWidget\",\"definitionVersion\":\"1.0.0\",\"schemaDigest\":\"sha256:…\",\"name\":\"example-widget\"}'\n" +
-		"```\n" +
-		"\n" +
-		"`space` is optional and falls back to the provider default; every other member\n" +
-		"is required. The `NAME` and `SPACE/NAME` short forms the typed family resources\n" +
-		"accept are refused here: this carrier has no default create ref to resolve them\n" +
-		"against, and guessing one would bind state to a Form the resource may not be.\n" +
-		"\n" +
-		"Import writes exactly the identity you state and nothing else; the refresh that\n" +
-		"follows is what verifies it against the host, and `spec_json` is adopted from\n" +
-		"the host's materialized spec there. Nothing about the carrier's trust model\n" +
-		"changes: no Form Definition is fetched and no schema is compiled.\n"
-}
-
-// v3GenericExampleHCL renders the generic carrier's example. The exact
-// FormRef values are illustrative third-party placeholders: no such Form is
-// published, and the provider resolves nothing from a catalog.
-func v3GenericExampleHCL() string {
-	return `terraform {
-  required_providers {
-    takoform = {
-      source = "registry.terraform.io/tako0614/takoform"
-      # provider v2.1.0 is an unpublished source candidate; build the provider from source.
-      version = "= 2.1.0"
-    }
-  }
-}
-
-provider "takoform" {
-  endpoint = "https://takoform.example.com"
-  space    = "prod"
-}
-
-# The four form_* values come from the Form's own publisher. They are an exact
-# identity, not a lookup key: the provider validates their grammar and the host
-# validates the spec against that exact Form.
-resource "takoform_resource" "example" {
-  form_api_version        = "forms.example.com/v1alpha1"
-  form_kind               = "ExampleWidget"
-  form_definition_version = "1.0.0"
-  form_schema_digest      = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
-  name                    = "example-widget"
-
-  spec_json = jsonencode({ size = "small" })
-}
-
-output "resource_outputs" {
-  value = takoform_resource.example.outputs_json
-}
-`
-}
-
 func v3BindingBlockHCL(field model.Field) string {
 	entries, _ := field.Example.([]any)
 	var builder strings.Builder
@@ -670,11 +488,13 @@ attachments activate inward events.
 			form.Kind, form.ResourceType, form.Role, form.DefinitionVersion, form.Description)
 	}
 	builder.WriteString(`
-A generic ` + "`takoform_resource`" + ` carries any third-party v1alpha3 Form by exact
-FormRef. Family membership grants no maturity: these members are tracked in
-the family candidate set, a lifecycle record begins only at an Experimental
-transition, and hosts state their supported subset in their Host Support
-Profiles.
+The provider exposes exactly these typed resources on the v1alpha3 lane, and no
+generic carrier for a Form it was not built against: nothing in the lane lets a
+client verify a FormRef it did not compile in, so a carrier would offer reach
+with no verification behind it (spec/decisions/0021). Family membership grants
+no maturity: these members are tracked in the family candidate set, a lifecycle
+record begins only at an Experimental transition, and hosts state their
+supported subset in their Host Support Profiles.
 `)
 	return builder.String()
 }
