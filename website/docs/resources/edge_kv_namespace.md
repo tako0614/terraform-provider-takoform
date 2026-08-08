@@ -36,7 +36,9 @@ price, or implementation. See the [complete example](../../examples/resources/ta
   and a configuration must not assert them.
 - `ready` — derived convenience: true when `conditions` carries the closed `Ready` condition with status
   `True`. Read `conditions` for the reason it is not.
-- `outputs_json` — JSON-serialized `status.outputs` document (`"{}"` when empty).
+- `outputs_json` — the WHOLE `status.outputs` document, JSON-serialized. This Form declares no `outputSchema`, so a conforming host omits `status.outputs` entirely and this
+  attribute is `"{}"`. It stays declared because a host may publish a value no contract describes, and
+  an undescribed value must still be reachable rather than silently dropped.
 - `form_api_version`, `form_kind`, `form_definition_version`, `form_schema_digest` — the exact immutable FormRef this state is bound to; reads dispatch on it.
 - `form_package_digest` — audit-only package provenance; never part of resource identity, queries, or fences.
 - `relation_drift_reason` — internal recovery only: `ExternalChange` or `DependencyMissing` while the host reports that a resource this one references was replaced or removed out of band, null otherwise. A refresh reports the break as a warning and keeps the resource in state; the next plan then proposes replacing this resource, because this Form declares no in-place update and a host refuses every apply to the existing one. It is provider-side recovery bookkeeping — no portable wire member carries it — and configurations must not depend on it.

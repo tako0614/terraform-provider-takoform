@@ -26,3 +26,5 @@ record does not replace them.
 - [0020 — The edge Interfaces state their data and delivery model](0020-the-edge-interfaces-state-their-data-and-delivery-model.md)
 - [0021 — Third-party Forms and contract distribution](0021-third-party-forms-and-contract-distribution.md)
 - [0022 — A host answers for an exact Form, and a relation pins its target's contract](0022-relations-pin-the-target-contract.md)
+- [0024 — A worker is reachable at an address the host assigns](0024-a-worker-is-reachable-at-a-host-assigned-address.md)
+- [0025 — A Form's declared outputs are a typed contract, not a JSON blob](0025-declared-outputs-are-a-typed-contract.md)

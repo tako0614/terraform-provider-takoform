@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 85-entry executed-check list every v3
+// requiredRunnerChecks is the closed 89-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -214,6 +214,14 @@ var requiredRunnerChecks = []string{
 	"relation-target-form-ref-verified",
 	"relation-target-interface-verified",
 	"relation-pin-records-target-form-ref",
+	// A worker is reachable over HTTPS at an address the host assigns
+	// (spec/decisions/0024).
+	"worker-endpoint-address-is-host-assigned",
+	"worker-endpoint-single-per-worker",
+	"worker-endpoint-follows-the-active-deployment",
+	// Declared outputs are a contract in both directions
+	// (spec/decisions/0025).
+	"form-declared-outputs-are-exact",
 }
 
 // FormRef is the exact four-field v1alpha3 Form identity.
@@ -240,6 +248,18 @@ type ResourceProbe struct {
 	Identity              InstalledFormReference `json:"identity"`
 	LifecycleCapabilities []string               `json:"lifecycleCapabilities"`
 	Desired               map[string]any         `json:"desired"`
+	// DeclaredOutputs is the exact member set this Form's `outputSchema`
+	// declares, or empty when it declares none.
+	//
+	// It is corpus data because the lane cannot read it from the host: the
+	// published form-definition response is a closed object carrying identity,
+	// display name, description, and desiredSchema, and its bytes are immutable
+	// (decision 0014), so there is no wire surface that serves an outputSchema.
+	// Pinning the member set here is what lets the runner hold `status.outputs`
+	// to the rule the published wire schema states — required for a Form that
+	// declares an output contract, omitted for one that does not — instead of
+	// accepting whatever a host happens to return.
+	DeclaredOutputs []string `json:"declaredOutputs,omitempty"`
 }
 
 // WorkerBundleProbe carries what the WorkerBundle probe needs beyond its
@@ -410,6 +430,7 @@ type RunnerInput struct {
 	FetchOnlyBundle                  ModuleBundleProbe        `json:"fetchOnlyBundle"`
 	WorkerDeployment                 ResourceProbe            `json:"workerDeployment"`
 	WorkerCustomDomain               ResourceProbe            `json:"workerCustomDomain"`
+	WorkerEndpoint                   ResourceProbe            `json:"workerEndpoint"`
 	WorkerCronTrigger                ResourceProbe            `json:"workerCronTrigger"`
 	QueueConsumer                    ResourceProbe            `json:"queueConsumer"`
 	SyntheticSecondGroup             FormRef                  `json:"syntheticSecondGroup"`
@@ -546,6 +567,7 @@ func validateContract(contract Contract) error {
 		{"workerBundle", input.WorkerBundle.ResourceProbe, "WorkerBundle"},
 		{"workerDeployment", input.WorkerDeployment, "WorkerDeployment"},
 		{"workerCustomDomain", input.WorkerCustomDomain, "WorkerCustomDomain"},
+		{"workerEndpoint", input.WorkerEndpoint, "WorkerEndpoint"},
 		{"workerCronTrigger", input.WorkerCronTrigger, "WorkerCronTrigger"},
 		{"queueConsumer", input.QueueConsumer, "QueueConsumer"},
 	}
@@ -677,6 +699,13 @@ func validateProbe(label string, probe ResourceProbe, kind string) error {
 	}
 	if probe.Desired == nil {
 		return fmt.Errorf("portable host v3 %s probe desired must be present", label)
+	}
+	seen := map[string]bool{}
+	for _, output := range probe.DeclaredOutputs {
+		if output == "" || seen[output] {
+			return fmt.Errorf("portable host v3 %s probe declaredOutputs is invalid", label)
+		}
+		seen[output] = true
 	}
 	return validateProbeCapabilities(label, probe.LifecycleCapabilities)
 }
@@ -1055,6 +1084,22 @@ func validateCrossResourceProbes(input RunnerInput) error {
 	}
 	if hostname, _ := input.WorkerCustomDomain.Desired["hostname"].(string); hostname == "" {
 		return errors.New("portable host v3 workerCustomDomain probe must pin a hostname")
+	}
+	// The endpoint probe's desired state is the worker reference and NOTHING
+	// else. That is what makes the address check meaningful at all: a corpus
+	// that sent a hostname could not tell an address the host assigned from one
+	// it echoed back (decision 0024).
+	endpoint := input.WorkerEndpoint
+	if len(endpoint.Desired) != 1 || nestedName(endpoint.Desired, "worker") != input.ModuleWorker.Name {
+		return errors.New(
+			"portable host v3 workerEndpoint probe desired must be exactly the moduleWorker reference; " +
+				"a probe carrying an address of its own could not prove the host assigned one",
+		)
+	}
+	if !reflect.DeepEqual(endpoint.DeclaredOutputs, []string{"hostname", "url"}) {
+		return errors.New(
+			"portable host v3 workerEndpoint probe must pin the exact outputs its Form declares, [hostname url]",
+		)
 	}
 	if nestedName(input.WorkerCronTrigger.Desired, "worker") != input.ModuleWorker.Name {
 		return errors.New("portable host v3 workerCronTrigger probe must reference the moduleWorker probe")

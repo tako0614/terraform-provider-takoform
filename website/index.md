@@ -35,6 +35,11 @@ resource "takoform_at_least_once_queue" "jobs" {
   message_retention_seconds = 345600
 }
 
+resource "takoform_worker_endpoint" "api" {
+  name   = "api-endpoint"
+  worker = takoform_module_worker.api.name
+}
+
 resource "takoform_worker_custom_domain" "api" {
   name     = "api-domain"
   worker   = takoform_module_worker.api.name
@@ -80,6 +85,7 @@ long-running operations, and content-addressed artifact upload.
 | [`takoform_worker_version`](/docs/resources/worker_version.html) | revision | an immutable snapshot: bundle, compatibility date, handlers, typed bindings |
 | [`takoform_worker_deployment`](/docs/resources/worker_deployment.html) | deployment | which versions serve traffic, in basis points |
 | [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html) | attachment | a hostname whose origin is the worker |
+| [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html) | attachment | reachability over HTTPS at an address the host assigns |
 | [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html) | attachment | a UTC cron invoking the scheduled handler |
 | [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html) | identity | an eventually consistent edge KV namespace |
 | [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html) | identity | a strongly consistent object bucket |

@@ -87,6 +87,16 @@ func (r *v3Runner) run() error {
 		r.checkUndeclaredRuntimeHandlerRejected,
 		r.checkDeclaredHandlerNotExportedRejected,
 		r.checkBindingNameCollision,
+		// Reachability without a customer-owned domain (spec/decisions/0024).
+		// It runs here because it needs exactly the state the gate check built:
+		// a worker whose active deployment serves fetch.
+		r.checkWorkerEndpointAddressIsHostAssigned,
+		r.checkWorkerEndpointSinglePerWorker,
+		// The one Form that declares an output contract is live right here, and
+		// so are five that declare none, which is what the declared-output
+		// comparison needs on both sides (spec/decisions/0025).
+		r.checkFormDeclaredOutputsAreExact,
+		r.checkWorkerEndpointFollowsTheActiveDeployment,
 		r.checkDeploymentChangePreservesDependents,
 		r.checkDeploymentDeleteBlockedByDependent,
 		// Readiness rendered from the deployment is the second half of the

@@ -1379,6 +1379,16 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 	if resource.StatusTouches > 0 {
 		status["observed"] = map[string]any{"statusTouches": resource.StatusTouches}
 	}
+	// `status.outputs` is present exactly when the installed Form Definition
+	// declares an outputSchema, and absent otherwise — the rule the published
+	// wire schema already states through x-takoform-requiredWhen and
+	// x-takoform-omittedWhen. Reading the installed Definition rather than
+	// switching on the kind is what makes it that rule rather than a coincidence.
+	if form := h.catalog.exact(resource.Ref); form != nil && form.OutputSchema != nil {
+		if outputs := h.resourceOutputs(resource); len(outputs) > 0 {
+			status["outputs"] = outputs
+		}
+	}
 	return map[string]any{
 		"apiVersion": resource.group(),
 		"kind":       resource.kind(),
@@ -1393,6 +1403,20 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 		"spec":   resource.Spec,
 		"status": status,
 	}
+}
+
+// resourceOutputs computes the host-owned `status.outputs` document of one
+// stored resource. A kind this host publishes nothing for returns nil, which
+// is how every Form in the family behaves except the one that declares an
+// output contract.
+func (h *ReferenceHost) resourceOutputs(resource *storedResource) map[string]any {
+	if resource.group() != edgeFormsGroup {
+		return nil
+	}
+	if resource.kind() == workerEndpointKind {
+		return workerEndpointOutputs(resource)
+	}
+	return nil
 }
 
 func quotedRevision(revision int64) string {
