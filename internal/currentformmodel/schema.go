@@ -21,14 +21,9 @@ const (
 	PatternRelativePath = `^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$`
 	// PatternHostname is a dotted DNS hostname.
 	PatternHostname = `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
-	// PatternCron is the small interoperable five-field cron subset shared
-	// with the retained catalog. Schedules are interpreted in UTC only.
-	PatternCron = `^(?:[0-9]|[1-5][0-9]) (?:[0-9]|1[0-9]|2[0-3]) (?:\*|[1-9]|[12][0-9]|3[01]) (?:\*|[1-9]|1[0-2]) (?:\*|[0-6])$`
 	// PatternCanonicalSHA256 is the algorithm-prefixed lowercase digest used
 	// by every exact Takoform identity.
 	PatternCanonicalSHA256 = `^sha256:[0-9a-f]{64}$`
-	// PatternDate is a calendar date, YYYY-MM-DD.
-	PatternDate = `^\d{4}-\d{2}-\d{2}$`
 	// PatternSensitiveVarName names one host-supplied sensitive value.
 	PatternSensitiveVarName = `^[A-Z][A-Z0-9_]{0,63}$`
 
@@ -149,8 +144,6 @@ func (f Field) jsonSchemaShape(group string) map[string]any {
 		return schema
 	case KindStringEnum:
 		return map[string]any{"type": "string", "enum": anySlice(f.Enum)}
-	case KindDateString:
-		return map[string]any{"type": "string", "pattern": PatternDate}
 	case KindStringSet:
 		items := map[string]any{"type": "string"}
 		if len(f.Enum) > 0 {

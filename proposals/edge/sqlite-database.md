@@ -18,6 +18,13 @@ parameters, SQLite's SQL dialect and dynamic typing, serializable
 transactions applying atomically over a single consistent snapshot, `busy`
 under write contention, and closed errors.
 
+Values are TAGGED by storage class — null, integer, real, text, blob — so a
+64-bit INTEGER (canonical decimal text) and a BLOB (base64) round-trip
+losslessly instead of being flattened into a JSON scalar that cannot hold
+them. Every statement reports the same result whether it ran alone or inside
+a transaction, so a `SELECT` inside a transaction returns its rows
+(decision 0020).
+
 ## Why this is one Form
 
 SQL dialect, typing, and isolation are what application code is written

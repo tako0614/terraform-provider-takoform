@@ -148,14 +148,21 @@ func v3FieldDocLine(form model.Form, field model.Field) string {
 	name := field.HCL
 	doc := field.Doc
 	if field.Pattern == model.PatternCron {
-		// The enforced grammar is the exact PatternCron subset; a loose
-		// "cron expression" claim would promise syntax the provider rejects.
-		doc = "UTC cron schedule in the enforced closed grammar: exactly five " +
-			"single-value fields separated by single spaces — minute `0`-`59` and " +
-			"hour `0`-`23` are literal numbers (`*` is not accepted there), " +
-			"day-of-month is `*` or `1`-`31`, month is `*` or `1`-`12`, and " +
-			"day-of-week is `*` or `0`-`6`. Ranges, lists, steps (such as `*/5`), " +
-			"and names are not accepted."
+		// The grammar is enforced by a PARSER, not only by the pattern, so the
+		// documentation states both halves: what the shape admits, and what the
+		// parser then refuses. A loose "cron expression" claim would promise
+		// syntax the provider rejects at plan time.
+		doc = "UTC cron schedule. Five fields separated by single spaces — minute " +
+			"`0`-`59`, hour `0`-`23`, day-of-month `1`-`31`, month `1`-`12`, and " +
+			"day-of-week `0`-`6` with `0` Sunday — where each field is a " +
+			"comma-separated list of `*`, a literal, a range `low-high`, `*/step`, " +
+			"or `low-high/step`. Month and day names, and a step on a bare literal " +
+			"such as `5/10`, are not accepted. The provider parses the expression at " +
+			"plan time exactly as the host does, so a value outside its field's " +
+			"range, an inverted range such as `5-1`, or a step outside `1`..span is " +
+			"a plan-time error rather than a failed apply. When day-of-month and " +
+			"day-of-week are both restricted the schedule fires on a day either " +
+			"selects."
 	}
 	docType := v3DocType(field)
 	switch field.Kind {

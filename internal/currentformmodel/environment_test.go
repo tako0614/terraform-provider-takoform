@@ -55,13 +55,13 @@ func TestProjectsEnvironmentNamesIsBoundedToNameCarryingKinds(t *testing.T) {
 		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
 		Role: RoleRevision, Title: "Worker Version", DefinitionVersion: "0.1.0",
 		Fields: []Field{{
-			HCL: "activation_date", Wire: "activationDate", Kind: KindDateString,
-			Required: true, Doc: "A calendar date, which names nothing in a runtime environment.", Example: "2026-08-06",
+			HCL: "activation_delay_seconds", Wire: "activationDelaySeconds", Kind: KindInteger,
+			Required: true, Doc: "A duration in seconds, which names nothing in a runtime environment.", Example: 30,
 			ProjectsEnvironmentNames: true,
 		}},
 	}
 	err := form.Validate()
 	if err == nil || !strings.Contains(err.Error(), "ProjectsEnvironmentNames") {
-		t.Fatalf("a date field marked as projecting environment names was accepted: %v", err)
+		t.Fatalf("an integer field marked as projecting environment names was accepted: %v", err)
 	}
 }

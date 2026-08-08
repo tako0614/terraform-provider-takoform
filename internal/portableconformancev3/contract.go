@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 76-entry executed-check list every v3
+// requiredRunnerChecks is the closed 79-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -200,6 +200,11 @@ var requiredRunnerChecks = []string{
 	"module-worker-runtime-contract-advertised",
 	"undeclared-runtime-handler-rejected",
 	"declared-handler-not-exported-rejected",
+	// The edge Interfaces state their data and delivery model
+	// (spec/decisions/0020).
+	"edge-interface-contracts-advertised",
+	"cron-grammar-enforced",
+	"queue-single-consumer-enforced",
 }
 
 // FormRef is the exact four-field v1alpha3 Form identity.
@@ -335,13 +340,27 @@ func (probe ModuleBundleProbe) unexportedHandler(runtime RuntimeContractProbe) s
 	return ""
 }
 
+// InterfaceContractProbe pins one exact data-plane Interface contract the lane
+// requires a host to advertise. Like the runtime ABI probe it carries the
+// schemaDigest, because "this host has a KV store" is worth nothing until it
+// says WHICH contract that store implements: the consistency model, the value
+// model, the closed error vocabulary, and the limits all live in the bytes that
+// digest names (spec/decisions/0020).
+type InterfaceContractProbe struct {
+	Name         string `json:"name"`
+	Version      string `json:"version"`
+	SchemaDigest string `json:"schemaDigest"`
+}
+
 // SupportProbes names the interface and binding support profiles the runner
-// must be able to read, and pins the exact runtime ABI contract the ModuleWorker
-// Form must both provide and advertise.
+// must be able to read, pins the exact runtime ABI contract the ModuleWorker
+// Form must both provide and advertise, and pins the exact data-plane Interface
+// contracts the family's storage and queue Forms provide.
 type SupportProbes struct {
-	Interface       NameVersion          `json:"interface"`
-	Binding         NameVersion          `json:"binding"`
-	RuntimeContract RuntimeContractProbe `json:"runtimeContract"`
+	Interface       NameVersion              `json:"interface"`
+	Binding         NameVersion              `json:"binding"`
+	RuntimeContract RuntimeContractProbe     `json:"runtimeContract"`
+	DataInterfaces  []InterfaceContractProbe `json:"dataInterfaces"`
 }
 
 // RunnerInput is the pinned black-box input of one v3 conformance run.
@@ -504,6 +523,9 @@ func validateContract(contract Contract) error {
 	// module it references exports, so neither answer may come from an unverified
 	// source.
 	if err := validateRuntimeContractProbe(input.SupportProbes.RuntimeContract); err != nil {
+		return err
+	}
+	if err := validateDataInterfaceProbes(input.SupportProbes); err != nil {
 		return err
 	}
 	if err := validateWorkerBundleProbe(input.WorkerBundle, input.SupportProbes.RuntimeContract); err != nil {
@@ -694,6 +716,46 @@ func validateRuntimeContractProbe(probe RuntimeContractProbe) error {
 		return errors.New(
 			"portable host v3 runtime contract probe must pin an undefinedHandler the contract does not define",
 		)
+	}
+	return nil
+}
+
+// familyDataInterfaceCount is how many data-plane Interface contracts the Edge
+// Platform Family declares: edge.kv, edge.objects, edge.sql, and edge.queue.
+// The corpus must pin all four, because a corpus free to pin none would make
+// `edge-interface-contracts-advertised` a check that passes without asking a
+// host anything.
+const familyDataInterfaceCount = 4
+
+// validateDataInterfaceProbes proves the corpus pins a usable data-plane
+// contract set: every entry names an exact contract at an exact digest, no
+// entry repeats, and none of them is the runtime ABI, which has its own probe
+// and its own check.
+func validateDataInterfaceProbes(probes SupportProbes) error {
+	if len(probes.DataInterfaces) < familyDataInterfaceCount {
+		return fmt.Errorf(
+			"portable host v3 must pin all %d data-plane Interface contracts; the corpus pins %d",
+			familyDataInterfaceCount, len(probes.DataInterfaces),
+		)
+	}
+	seen := map[string]bool{}
+	for _, probe := range probes.DataInterfaces {
+		if probe.Name == "" || probe.Version == "" || !formpackage.ValidDigest(probe.SchemaDigest) {
+			return errors.New(
+				"portable host v3 data-plane Interface probes must each pin an exact name, version, and schemaDigest",
+			)
+		}
+		if probe.Name == probes.RuntimeContract.Name {
+			return fmt.Errorf(
+				"portable host v3 data-plane Interface probe %s is the runtime ABI, which the runtime contract probe already pins",
+				probe.Name,
+			)
+		}
+		key := probe.Name + "@" + probe.Version
+		if seen[key] {
+			return fmt.Errorf("portable host v3 data-plane Interface probe %s is pinned twice", key)
+		}
+		seen[key] = true
 	}
 	return nil
 }

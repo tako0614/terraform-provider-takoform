@@ -4,11 +4,11 @@
   "name": "edge.kv",
   "version": "1.0.0",
   "title": "Edge key/value namespace",
-  "description": "Globally replicated key/value reads and writes with eventual consistency: a read after a write may return the previous value until replication converges. Keys are UTF-8 strings; values are opaque text. Deleting an absent key succeeds.",
+  "description": "Globally replicated key/value storage of OPAQUE BYTES with eventual consistency. A value is a byte string, never text: it travels in the family's encoded-bytes shape {\"encoding\": \"base64\", \"data\": \"…\"}, where data is RFC 4648 section 4 base64 with padding and without line breaks. maxValueBytes bounds the DECODED length; the maxLength on data is the structural ceiling of that encoding and is not the limit. A put whose decoded value exceeds maxValueBytes fails with value_too_large, and one whose data is not decodable base64 fails with invalid_value. A key is a UTF-8 string and maxKeyBytes bounds its UTF-8 ENCODED length, so a key of 512 astral characters is 2048 bytes and fails with invalid_key even though it is 512 code points. Metadata is a text map, never bytes and never secret; maxMetadataBytes bounds the UTF-8 encoding of its canonical JSON and exceeding it fails with metadata_too_large. Consistency is eventual, and that is this contract's identity rather than an option a host chooses. A read is served by whichever replica is nearest, so a read that follows a write MAY return the previous value, or not_found, until replication converges — including a read the same client issues immediately after its own write, on the same connection, from the same location. This contract states NO read-your-writes guarantee, no session in which one would hold, and no bound on convergence time; a host states its own convergence target in its Host Support Profile. Deleting an absent key succeeds, and a delete converges the same way, so a get after a resolved delete may still return the deleted value. The behavior fixtures below are exactly what one client can prove about such a store: each runs against a fresh scope and asserts only facts that no write has to converge for. That a write eventually becomes visible everywhere is a HOST OBLIGATION rather than a proven property; the split is written down in the Host API specification.",
   "operations": [
     {
       "name": "get",
-      "description": "Read one value by key. Absent keys fail with not_found.",
+      "description": "Read one value by key. Absent keys fail with not_found. Eventual consistency applies to this read: a key written moments ago, by this client or another, may still fail with not_found, and a key overwritten moments ago may still return the previous value. The value is the family's encoded-bytes shape; a host never returns a bare string here.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -29,8 +29,24 @@
         "additionalProperties": false,
         "properties": {
           "value": {
-            "maxLength": 26214400,
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "maxLength": 34952536,
+                "type": "string"
+              },
+              "encoding": {
+                "enum": [
+                  "base64"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "encoding"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -47,7 +63,7 @@
     },
     {
       "name": "getWithMetadata",
-      "description": "Read one value and its non-secret metadata document by key.",
+      "description": "Read one value and its non-secret metadata document by key. A host that stored no metadata omits the property rather than returning an empty object. Everything get states about eventual consistency applies unchanged: the value and the metadata are read from one replica, so they agree with each other but are not necessarily current.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -80,8 +96,24 @@
             "type": "object"
           },
           "value": {
-            "maxLength": 26214400,
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "maxLength": 34952536,
+                "type": "string"
+              },
+              "encoding": {
+                "enum": [
+                  "base64"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "encoding"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -98,7 +130,7 @@
     },
     {
       "name": "put",
-      "description": "Write one value, replacing any previous value for the key. An optional expiration TTL removes the entry after at least that many seconds.",
+      "description": "Write one value, replacing any previous value for the key. The value is the family's encoded-bytes shape and maxValueBytes bounds its DECODED length. An optional expiration TTL removes the entry after AT LEAST that many seconds; it is not gone at exactly that instant, and a get starts failing with not_found once the removal converges. A resolved put means the write is durable at the accepting replica; it is not a promise that the next get anywhere observes it.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -126,8 +158,24 @@
             "type": "object"
           },
           "value": {
-            "maxLength": 26214400,
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "data": {
+                "maxLength": 34952536,
+                "type": "string"
+              },
+              "encoding": {
+                "enum": [
+                  "base64"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "encoding"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -144,13 +192,15 @@
       },
       "errors": [
         "invalid_key",
+        "invalid_value",
         "value_too_large",
+        "metadata_too_large",
         "backend_unavailable"
       ]
     },
     {
       "name": "delete",
-      "description": "Delete one key. Deleting an absent key succeeds.",
+      "description": "Delete one key. Deleting an absent key succeeds, so delete can never be used to test existence. Like every write the removal converges: a get after a resolved delete may still return the deleted value.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -180,7 +230,7 @@
     },
     {
       "name": "list",
-      "description": "List key names in lexicographic order, optionally under a prefix, one cursor page at a time.",
+      "description": "List key names in lexicographic order by their UTF-8 bytes, optionally under a prefix, one cursor page at a time. limit bounds one page and a host may return fewer. listComplete is true exactly when this page is the last; when it is false the cursor addresses the next page and MUST be passed back unmodified. A cursor is opaque, and one a host did not issue fails with invalid_cursor. The listing is eventually consistent like every other read: a key written moments ago may be missing from it, and a key deleted moments ago may still appear.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -252,94 +302,57 @@
   },
   "limits": {
     "maxKeyBytes": 512,
+    "maxListPageKeys": 1000,
     "maxMetadataBytes": 1024,
     "maxValueBytes": 26214400
   },
   "fixtures": [
     {
-      "name": "put-then-get",
+      "name": "put-accepted",
       "steps": [
         {
           "operation": "put",
           "input": {
             "key": "greeting",
-            "value": "hello"
-          }
-        },
-        {
-          "operation": "get",
-          "input": {
-            "key": "greeting"
-          },
-          "expected": {
-            "value": "hello"
+            "value": {
+              "data": "aGVsbG8=",
+              "encoding": "base64"
+            }
           }
         }
       ]
     },
     {
-      "name": "delete-then-get-not-found",
+      "name": "never-written-key-is-not-found",
       "steps": [
-        {
-          "operation": "put",
-          "input": {
-            "key": "ephemeral",
-            "value": "x"
-          }
-        },
-        {
-          "operation": "delete",
-          "input": {
-            "key": "ephemeral"
-          }
-        },
         {
           "operation": "get",
           "input": {
-            "key": "ephemeral"
+            "key": "never-written"
           },
           "expectedError": "not_found"
         }
       ]
     },
     {
-      "name": "list-prefix",
+      "name": "delete-absent-key-succeeds",
       "steps": [
         {
-          "operation": "put",
+          "operation": "delete",
           "input": {
-            "key": "config/a",
-            "value": "1"
+            "key": "never-written"
           }
-        },
-        {
-          "operation": "put",
-          "input": {
-            "key": "config/b",
-            "value": "2"
-          }
-        },
-        {
-          "operation": "put",
-          "input": {
-            "key": "other/c",
-            "value": "3"
-          }
-        },
+        }
+      ]
+    },
+    {
+      "name": "list-of-an-empty-scope-is-complete",
+      "steps": [
         {
           "operation": "list",
-          "input": {
-            "prefix": "config/"
-          },
+          "input": {},
           "expected": {
-            "keys": [
-              {
-                "name": "config/a"
-              },
-              {
-                "name": "config/b"
-              }
-            ],
+            "keys": [],
             "listComplete": true
           }
         }

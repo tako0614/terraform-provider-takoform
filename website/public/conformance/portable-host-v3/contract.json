@@ -78,9 +78,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "ModuleWorker",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:cbe2b60608d9ebdbbcc22e097f776c6c1eedaaeed59ba80a3967cdce4652a27b"
+          "schemaDigest": "sha256:99fa5f9c0c2fdffc54a70ec2faf3becb9d9598a880cbf8a4a3c29dd3a7c2c828"
         },
-        "packageDigest": "sha256:834035635ae7aad061671437541e9add0454dc11aff7e3cc6e1134d2f0747331"
+        "packageDigest": "sha256:0e28df1c07bbbeeff9407ebe71358afb5490b04a68c53f55b5d96236df245fb3"
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
       "desired": {}
@@ -92,9 +92,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "EdgeKVNamespace",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:3eac96a522853f48f8cea48e48a13995c5b4d746004d208a52cc00d372d18469"
+          "schemaDigest": "sha256:c24609616f36229634e82a987b98da5fc4043cbf400d8ff918e77c19c64b1d7e"
         },
-        "packageDigest": "sha256:2cf70fc894d425ebec6eb182ae8d49deb130e1eb43adad3d88253917e9cf36d0"
+        "packageDigest": "sha256:790f567e482d49a6831f2f432270bf77b26b54a9eff1cc0e3095ccd9293291e3"
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
       "desired": {}
@@ -106,9 +106,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "AtLeastOnceQueue",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:092c0a77dc7a4755b509bba61d777933c0f028c6aa36da8809bc7200525e8949"
+          "schemaDigest": "sha256:46e1a90ac043300304e3c9512242ac7e5c5f25df90e7dfebe4932f717ef4efbc"
         },
-        "packageDigest": "sha256:82b6f03cb983fb03ae47885f2bf22d79f5afda6e7dd9220d0bc76aa2973c4b0e"
+        "packageDigest": "sha256:301130a2dacda683b7e4e8f94f88788439ee8ec12b1e69bcaa61c68af5830adf"
       },
       "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
       "desired": {
@@ -122,9 +122,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerVersion",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:ed257c07584aa62083a20587ab008dd89c6c65f2f9ea4a67df385d57704d244f"
+          "schemaDigest": "sha256:92091905ec623b872fb37996fc56641020e7af744653fcbadc5690a4c8a5979d"
         },
-        "packageDigest": "sha256:d4935fd3e391f626dca262db01a55d04c12e34e31eee14154ac8e0cb5e864c77"
+        "packageDigest": "sha256:6d85e6d07c135fa4e66831b8e9dd86671b3a341e539d94cd1e49a84679ba36b4"
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
       "desired": {
@@ -259,9 +259,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerCronTrigger",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:3df385ba2b76a1476ef7af87c473883ecee2604f9941de17e6c7f700ecaec627"
+          "schemaDigest": "sha256:af45f8f03eb6a8f7a32e37c472ac95481f1704a2c6b78f4c78601c51d9194565"
         },
-        "packageDigest": "sha256:4101105ad93c696e5bd946ea2a575d8157ed1cc72dc8b0c82bddf27da590684d"
+        "packageDigest": "sha256:1b45b582aeb286957a91632132796365b45330ace308b28a10a7c3aad9c04a1e"
       },
       "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
       "desired": {
@@ -280,9 +280,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "QueueConsumer",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:d4d447d2c9b3a05055401d871917f2c3d267a4c6107a574f81f67c9f47c47e06"
+          "schemaDigest": "sha256:a3f0a2425237a9b2f571d081623a8f2c898e2930158dce365d680a5e8bfb7830"
         },
-        "packageDigest": "sha256:3618a72137bd3a88d821ab14dbf54f4cf2abeeee59fa5fa772dfa9c845d0ac0c"
+        "packageDigest": "sha256:eed6e9ddcd9beb0aded6cee46334b2cc34f2e7dc45df8cbc7a0afe5741f6ef3c"
       },
       "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
       "desired": {
@@ -321,10 +321,32 @@
       "runtimeContract": {
         "name": "worker.runtime",
         "version": "1.0.0",
-        "schemaDigest": "sha256:fa7193bf4ab9f54ed8c943261cb520365e15a06718501182772e15902185e81e",
+        "schemaDigest": "sha256:06104adeefb967838766a90866f7229f12cfd1bceb31cd79c7b1826b15362c0f",
         "handlers": ["fetch", "scheduled", "queue", "tail"],
         "undefinedHandler": "alarm"
-      }
+      },
+      "dataInterfaces": [
+        {
+          "name": "edge.kv",
+          "version": "1.0.0",
+          "schemaDigest": "sha256:58c8e9af97dabcd205422eca0b47fba51734503bc80a66867056dae28efe1cf8"
+        },
+        {
+          "name": "edge.objects",
+          "version": "1.0.0",
+          "schemaDigest": "sha256:292668cf530eb7946f25d313740991b3efa0406f40d74ec12d788d2933d13f96"
+        },
+        {
+          "name": "edge.queue",
+          "version": "1.0.0",
+          "schemaDigest": "sha256:e88be3a9bfb0eb202422483cfca8bf45ab74d60f96f8c4f3fe289f0f607510cf"
+        },
+        {
+          "name": "edge.sql",
+          "version": "1.0.0",
+          "schemaDigest": "sha256:cd33793132cd91c20cdbe782db500e86fa7a8ad2e2281b95116337d697dcac1b"
+        }
+      ]
     },
     "negativeFixtures": [
       {
@@ -419,6 +441,9 @@
     "manifest-reference-is-not-a-capability",
     "module-worker-runtime-contract-advertised",
     "undeclared-runtime-handler-rejected",
-    "declared-handler-not-exported-rejected"
+    "declared-handler-not-exported-rejected",
+    "edge-interface-contracts-advertised",
+    "cron-grammar-enforced",
+    "queue-single-consumer-enforced"
   ]
 }

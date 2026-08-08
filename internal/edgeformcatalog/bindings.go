@@ -72,12 +72,14 @@ var bindingSpecs = []bindingSpec{
 			"JavaScript-identifier binding name. The binding grants capability and API together; " +
 			"no credential or endpoint ever reaches the consumer. " +
 			"Runtime surface: env.NAME is an object with the methods get(key), getWithMetadata(key), " +
-			"put(key, value, options?), delete(key), and list(options?). Keys and values are strings; " +
-			"options and results are the exact input and output documents of the matching edge.kv " +
-			"operation. Every method returns a promise. get resolves to null for an absent key rather " +
-			"than rejecting, which is how the interface's not_found outcome appears in JavaScript; every " +
-			"other error rejects with an Error whose name is the edge.kv error code. Reads are eventually " +
-			"consistent: a get after a put may resolve to the previous value until replication converges.",
+			"put(key, value, options?), delete(key), and list(options?). A key is a string. A VALUE IS " +
+			"BYTES: put accepts an ArrayBuffer, a typed array, or a string (encoded UTF-8), and get resolves " +
+			"to an ArrayBuffer — the base64 envelope of edge.kv is the wire form, not the JavaScript form. " +
+			"Every method returns a promise. get resolves to null for an absent key rather than rejecting, " +
+			"which is how the interface's not_found outcome appears in JavaScript; every other error rejects " +
+			"with an Error whose name is the edge.kv error code. Reads are EVENTUALLY CONSISTENT and this " +
+			"binding promises no read-your-writes: a get immediately after a resolved put by the same isolate " +
+			"may resolve to the previous value, or to null, until replication converges.",
 		iface:      "edge.kv",
 		targetKind: "EdgeKVNamespace",
 	},
@@ -86,14 +88,19 @@ var bindingSpecs = []bindingSpec{
 		title: "Module Worker object bucket binding",
 		description: "Projects the complete edge.objects runtime API into a Worker Version under one " +
 			"JavaScript-identifier binding name, without exposing credentials or endpoints. " +
-			"Runtime surface: env.NAME is an object with the methods get(key), head(key), " +
-			"put(key, body, options?), delete(key), and list(options?), each returning a promise. " +
-			"Object bodies STREAM: put accepts a ReadableStream, an ArrayBuffer, or a string, and get " +
-			"resolves to an object whose body is a ReadableStream the handler may consume incrementally " +
-			"— a conforming host never requires the whole object in memory. get and head resolve to null " +
-			"for an absent key; a failed conditional put rejects with an Error named precondition_failed, " +
-			"and every other error rejects with an Error named for its edge.objects code. A get or head " +
-			"after a successful put observes that put.",
+			"Runtime surface: env.NAME is an object with the methods head(key), get(key, options?), " +
+			"put(key, body, options?), delete(key), list(options?), createMultipartUpload(key, options?), " +
+			"uploadPart(key, uploadId, partNumber, body), completeMultipartUpload(key, uploadId, parts), and " +
+			"abortMultipartUpload(key, uploadId), each returning a promise. Object bodies STREAM: put and " +
+			"uploadPart accept a ReadableStream, an ArrayBuffer, or a string, and get resolves to an object " +
+			"whose body is a ReadableStream the handler may consume incrementally — a conforming host never " +
+			"requires the whole object in memory, which is what makes the contract's 5 GiB ceiling usable. " +
+			"get options carry range for a ranged read and ifMatch or ifNoneMatch for a conditional one; put " +
+			"options carry ifMatch, or ifNoneMatch \"*\" to write only when the key is absent. get and head " +
+			"resolve to null for an absent key; a failed precondition rejects with an Error named " +
+			"precondition_failed, an unsatisfiable range with one named range_not_satisfiable, and every other " +
+			"error with an Error named for its edge.objects code. A get, head, or list after a resolved put or " +
+			"delete observes it.",
 		iface:      "edge.objects",
 		targetKind: "ObjectBucket",
 	},
@@ -103,12 +110,15 @@ var bindingSpecs = []bindingSpec{
 		description: "Projects the complete edge.sql runtime API into a Worker Version under one " +
 			"JavaScript-identifier binding name, without exposing credentials or connection material. " +
 			"Runtime surface: env.NAME is an object with the methods execute(sql, params?), " +
-			"query(sql, params?), and transaction(statements), each returning a promise. params is an " +
-			"array of boolean, null, number, or string bound positionally; query resolves to the rows " +
-			"document of edge.sql, execute to its write result, and transaction to the ordered result " +
-			"list. Statements apply atomically under serializable isolation, so a rejected transaction " +
-			"has applied nothing. Errors reject with an Error whose name is the edge.sql error code; " +
-			"busy is the retryable one, and a caller that means to retry must re-run the whole call.",
+			"query(sql, params?), and transaction(statements), each returning a promise. params is an array of " +
+			"TAGGED edge.sql values bound positionally, so a 64-bit INTEGER (decimal text) and a BLOB (base64) " +
+			"survive the round trip that an untagged JSON scalar would have changed. Every one of the three " +
+			"resolves to the same statement-result shape — rows, rowsWritten, and lastInsertRowId — and " +
+			"transaction resolves to one such result per statement, in statement order, so a SELECT inside a " +
+			"transaction returns its rows without leaving the transaction. Statements apply atomically under " +
+			"serializable isolation, so a rejected transaction has applied nothing at all. Errors reject with " +
+			"an Error whose name is the edge.sql error code; busy is the retryable one, and a caller that means " +
+			"to retry must re-run the whole call.",
 		iface:      "edge.sql",
 		targetKind: "SQLiteDatabase",
 	},
@@ -119,11 +129,13 @@ var bindingSpecs = []bindingSpec{
 			"Version. Consumption is never a binding: it is the QueueConsumer attachment resource. " +
 			"Runtime surface: env.NAME is an object with exactly the methods send(body, options?) and " +
 			"sendBatch(messages), each returning a promise that resolves to the message identity or " +
-			"identities the host assigned. There is no receive, no acknowledge, and no peek: those names " +
-			"do not exist on this binding, because the consuming half arrives as the module's queue " +
-			"handler instead. A resolved send means accepted, not delivered — delivery is at-least-once " +
-			"and unordered, so the consumer may see duplicates. Errors reject with an Error named for " +
-			"the edge.queue code.",
+			"identities the host assigned. A body is BYTES: an ArrayBuffer, a typed array, or a string " +
+			"encoded UTF-8. There is no receive, no peek, and none of the settlement methods — acknowledge, " +
+			"retry, acknowledgeAll, and retryAll exist on the BATCH the module's queue handler receives, " +
+			"never here, because settling a message you were not delivered is not an operation. A resolved " +
+			"send means ACCEPTED and durable, not delivered — delivery is at-least-once and unordered, so the " +
+			"consumer may see duplicates and must be idempotent. Errors reject with an Error named for the " +
+			"edge.queue code.",
 		iface:      "edge.queue",
 		targetKind: "AtLeastOnceQueue",
 		operations: []string{"send", "sendBatch"},

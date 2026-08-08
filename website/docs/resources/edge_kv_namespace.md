@@ -7,7 +7,7 @@ description: |-
 
 # takoform_edge_kv_namespace
 
-Globally replicated key/value namespace with eventual consistency, exactly as fixed by the edge.kv Interface. Eventual consistency is the Form's semantics, not an option: a store with different convergence behavior is a different Form.
+Globally replicated key/value namespace of opaque BYTES with eventual consistency, exactly as fixed by the edge.kv Interface. Eventual consistency is the Form's semantics, not an option: a store with different convergence behavior is a different Form, and this one promises no read-your-writes, in any session, at any location. Values are byte strings carried in the family's encoded-bytes shape, so the declared byte limit and the structural string ceiling measure the same thing (decision 0020).
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 

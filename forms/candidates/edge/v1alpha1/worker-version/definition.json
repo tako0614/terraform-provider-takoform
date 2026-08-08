@@ -553,25 +553,25 @@
       "apiVersion": "bindings.takoform.com/v1alpha1",
       "name": "module-worker.edge-kv",
       "version": "1.0.0",
-      "schemaDigest": "sha256:ccca034705306047a3431d4d3d46f73ba311553b03d23a6e97a44a97b6a37295"
+      "schemaDigest": "sha256:cd5d49047209769f5aaeb6a0ccfb0840b6050147f477920cae59c798a0935c85"
     },
     {
       "apiVersion": "bindings.takoform.com/v1alpha1",
       "name": "module-worker.object-bucket",
       "version": "1.0.0",
-      "schemaDigest": "sha256:06fdea4cd47cea8eba9a9589cb53f0b20dae8d83648fdaeff0144414f0becb07"
+      "schemaDigest": "sha256:e9d54e1d5d496700cc369b46a91f7255ddb3821cc704100e851a7787a8e85956"
     },
     {
       "apiVersion": "bindings.takoform.com/v1alpha1",
       "name": "module-worker.sqlite",
       "version": "1.0.0",
-      "schemaDigest": "sha256:1bef7b86f8f7b9903050ddbd5dbe163ba22b234163101682a2d25e6dba494a77"
+      "schemaDigest": "sha256:acebb655c739466aac6db0d34afa15e26709857f4060aec8a256e4bfef682c71"
     },
     {
       "apiVersion": "bindings.takoform.com/v1alpha1",
       "name": "module-worker.queue-producer",
       "version": "1.0.0",
-      "schemaDigest": "sha256:7a5736a9d724056cb8a37a2442f70894839e116a29d56353075f217a86b0b610"
+      "schemaDigest": "sha256:dc9a083b54ae48180398590859da855dc1a4bdc1bf8312ed41e24394b2cdf49b"
     },
     {
       "apiVersion": "bindings.takoform.com/v1alpha1",

@@ -23,4 +23,4 @@ record does not replace them.
 - [0017 — Provider state survives Form evolution and interruption](0017-provider-state-survives-form-evolution-and-interruption.md)
 - [0018 — The Host API is deployable behind ordinary infrastructure](0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)
 - [0019 — The Module Worker ABI is an exact contract, not a date](0019-the-module-worker-abi-is-an-exact-contract.md)
-- [0021 — Third-party Forms and contract distribution wait for a trust model](0021-third-party-forms-and-contract-distribution.md)
+- [0020 — The edge Interfaces state their data and delivery model](0020-the-edge-interfaces-state-their-data-and-delivery-model.md)

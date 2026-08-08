@@ -154,14 +154,6 @@ func validateFieldDefault(kind string, field Field) error {
 		if !containsString(field.Enum, text) {
 			return fail("is not a declared enum member")
 		}
-	case KindDateString:
-		text, ok := field.Default.(string)
-		if !ok {
-			return fail("is not a string")
-		}
-		if err := matchesPattern(PatternDate, text); err != nil {
-			return fail(err.Error())
-		}
 	case KindStringSet:
 		items, ok := defaultSlice(field.Default)
 		if !ok {

@@ -4,13 +4,13 @@
   "name": "module-worker.sqlite",
   "version": "1.0.0",
   "title": "Module Worker SQLite binding",
-  "description": "Projects the complete edge.sql runtime API into a Worker Version under one JavaScript-identifier binding name, without exposing credentials or connection material. Runtime surface: env.NAME is an object with the methods execute(sql, params?), query(sql, params?), and transaction(statements), each returning a promise. params is an array of boolean, null, number, or string bound positionally; query resolves to the rows document of edge.sql, execute to its write result, and transaction to the ordered result list. Statements apply atomically under serializable isolation, so a rejected transaction has applied nothing. Errors reject with an Error whose name is the edge.sql error code; busy is the retryable one, and a caller that means to retry must re-run the whole call.",
+  "description": "Projects the complete edge.sql runtime API into a Worker Version under one JavaScript-identifier binding name, without exposing credentials or connection material. Runtime surface: env.NAME is an object with the methods execute(sql, params?), query(sql, params?), and transaction(statements), each returning a promise. params is an array of TAGGED edge.sql values bound positionally, so a 64-bit INTEGER (decimal text) and a BLOB (base64) survive the round trip that an untagged JSON scalar would have changed. Every one of the three resolves to the same statement-result shape — rows, rowsWritten, and lastInsertRowId — and transaction resolves to one such result per statement, in statement order, so a SELECT inside a transaction returns its rows without leaving the transaction. Statements apply atomically under serializable isolation, so a rejected transaction has applied nothing at all. Errors reject with an Error whose name is the edge.sql error code; busy is the retryable one, and a caller that means to retry must re-run the whole call.",
   "sourceRole": "revision",
   "targetInterface": {
     "apiVersion": "interfaces.takoform.com/v1alpha1",
     "name": "edge.sql",
     "version": "1.0.0",
-    "schemaDigest": "sha256:92a270d639a2f607367172b9b36a1c511a9ced4ba1f79f7585b1ce3094231f24"
+    "schemaDigest": "sha256:cd33793132cd91c20cdbe782db500e86fa7a8ad2e2281b95116337d697dcac1b"
   },
   "allowedTargetForms": [
     {

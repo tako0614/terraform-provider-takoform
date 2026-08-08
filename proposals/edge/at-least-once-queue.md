@@ -13,12 +13,19 @@ a consumer worker processes asynchronously. Producers use
 
 ## Observable semantics
 
-Exactly the `edge.queue@1.0.0` contract: send/sendBatch with at-least-once
-delivery and no ordering guarantee. An accepted message is delivered one or
-more times, possibly out of send order; consumers must be idempotent.
-`messageRetentionSeconds` (60..1209600) bounds how long an undelivered
-message survives; `deliveryDelaySeconds` (0..43200) defers deliverability.
-Both are portable retention/delay semantics, not host capacity.
+Exactly the `edge.queue@1.0.0` contract: send/sendBatch on the producer side,
+and per-message and per-batch settlement on the consumer side, with
+at-least-once delivery and no ordering guarantee. An accepted message is
+delivered one or more times, possibly out of send order; consumers must be
+idempotent. `messageRetentionSeconds` (60..1209600) bounds how long an
+undelivered message survives; `deliveryDelaySeconds` (0..43200) defers
+deliverability. Both are portable retention/delay semantics, not host
+capacity.
+
+A message body is opaque BYTES, a message identity is stable across
+redeliveries, and the acceptance timestamp does not move. A queue has AT MOST
+ONE consumer: two would give one queue two retry policies and two dead-letter
+destinations with no rule deciding which message got which (decision 0020).
 
 ## Why this is one Form
 

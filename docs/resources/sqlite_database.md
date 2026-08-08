@@ -7,7 +7,7 @@ description: |-
 
 # takoform_sqlite_database
 
-Embedded SQLite database with serializable transactions, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token.
+Embedded SQLite database with serializable transactions and TAGGED values, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Values carry their storage class, so a 64-bit INTEGER and a BLOB round-trip losslessly instead of being flattened into a JSON scalar (decision 0020).
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 

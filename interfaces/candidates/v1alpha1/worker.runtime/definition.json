@@ -4,7 +4,7 @@
   "name": "worker.runtime",
   "version": "1.0.0",
   "title": "ES Module Worker runtime ABI",
-  "description": "The exact runtime ABI a conforming host provides to the code of one Module Worker, and the exact shape that code must present. The main module is an ES module whose DEFAULT EXPORT is a plain object; each portable handler is an OPTIONAL own property of that object named exactly fetch, scheduled, queue, or tail, and every handler the Worker Version declares MUST exist there as a callable property — a declared handler that is absent fails the version, not the request. Every handler takes three arguments in this order: the event value, the binding environment env, and the invocation context ctx. A handler may be async; a returned promise is awaited. Request and response bodies are STREAMS, never buffered strings: a host never requires a handler to read a request body before responding, and streams a response body out as the handler produces it. env is a plain object whose own enumerable properties are exactly the names the Worker Version declares — every vars key, every requiredSensitiveVars name, and every binding name — and nothing else portable; a sensitive-variable slot appears as the host-supplied value under its declared name, and that value never enters portable state. ctx.waitUntil(promise) registers work the host keeps the isolate alive for until the promise settles; a rejection is reported to host diagnostics only, never changes an already-sent response, and never turns a successful invocation into a failed one. An uncaught throw or unhandled rejection in fetch is a HOST-GENERATED 500 response, never a hung request; in scheduled and queue it is a failed invocation with the retry semantics the relevant contract already states. The ABI is fixed by identity, not by a date: a runtime whose behavior differs is a different exact contract version, and a Form that wants that runtime is a different Form version. Behavior fixtures run against a conformance bundle of two modules: index.js, whose default export exposes all four handlers, answers GET /health with 200, throws on GET /throw, and throws from its queue handler when a message body is exactly \"fail\"; and fetch-only.js, whose default export exposes fetch alone.",
+  "description": "The exact runtime ABI a conforming host provides to the code of one Module Worker, and the exact shape that code must present. The main module is an ES module whose DEFAULT EXPORT is a plain object; each portable handler is an OPTIONAL own property of that object named exactly fetch, scheduled, queue, or tail, and every handler the Worker Version declares MUST exist there as a callable property — a declared handler that is absent fails the version, not the request. Every handler takes three arguments in this order: the event value, the binding environment env, and the invocation context ctx. A handler may be async; a returned promise is awaited. Request and response bodies are STREAMS, never buffered strings: a host never requires a handler to read a request body before responding, and streams a response body out as the handler produces it. env is a plain object whose own enumerable properties are exactly the names the Worker Version declares — every vars key, every requiredSensitiveVars name, and every binding name — and nothing else portable; a sensitive-variable slot appears as the host-supplied value under its declared name, and that value never enters portable state. ctx.waitUntil(promise) registers work the host keeps the isolate alive for until the promise settles; a rejection is reported to host diagnostics only, never changes an already-sent response, and never turns a successful invocation into a failed one. An uncaught throw or unhandled rejection in fetch is a HOST-GENERATED 500 response, never a hung request; in scheduled and queue it is a failed invocation with the retry semantics the relevant contract already states. The ABI is fixed by identity, not by a date: a runtime whose behavior differs is a different exact contract version, and a Form that wants that runtime is a different Form version. Behavior fixtures run against a conformance bundle of two modules: index.js, whose default export exposes all four handlers, answers GET /health with 200, throws on GET /throw, and throws from its queue handler when a message body decodes to exactly the ASCII bytes fail; and fetch-only.js, whose default export exposes fetch alone.",
   "operations": [
     {
       "name": "loadModule",
@@ -333,11 +333,16 @@
     },
     {
       "name": "queue",
-      "description": "Invokes queue(batch, env, ctx) with one message batch from a Queue Consumer attachment. The batch carries queue, the portable name of the At-Least-Once Queue it drained, and messages, an ordered array whose entries carry id (the host's message identity), timestamp (milliseconds since the Unix epoch when the message was accepted), body (the exact bytes the producer sent), and attempts (1 on first delivery, incremented on each redelivery). Batch size and timing are the consumer's maxBatchSize and maxBatchTimeoutSeconds. Returning normally acknowledges the whole batch. An uncaught throw or unhandled rejection FAILS the whole batch, which is redelivered under the at-least-once delivery edge.queue states and the maxRetries and retryDelaySeconds of the invoking consumer, so duplicates are visible and handlers must be idempotent.",
+      "description": "Invokes queue(batch, env, ctx) with one message batch from a Queue Consumer attachment. The batch carries batchId, the identity every settlement operation of edge.queue is scoped to; queue, the portable name of the At-Least-Once Queue it drained; and messages, an ordered array whose entries carry id (the host's stable message identity), timestampMillis (the UTC instant the host accepted the message, in milliseconds since the Unix epoch), body (the producer's exact bytes in the family's encoded-bytes shape), and attempts (1 on first delivery, incremented on each redelivery). All of it is defined by edge.queue. Batch size and timing are the consumer's maxBatchSize and maxBatchTimeoutSeconds. Returning normally without settling anything acknowledges the whole batch. An uncaught throw or unhandled rejection RETRIES every message not already explicitly acknowledged, under the maxRetries and retryDelaySeconds of the invoking consumer, so duplicates are visible and handlers must be idempotent.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "batchId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
           "messages": {
             "items": {
               "additionalProperties": false,
@@ -347,15 +352,31 @@
                   "type": "integer"
                 },
                 "body": {
-                  "maxLength": 131072,
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "maxLength": 174764,
+                      "type": "string"
+                    },
+                    "encoding": {
+                      "enum": [
+                        "base64"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "encoding"
+                  ],
+                  "type": "object"
                 },
                 "id": {
                   "maxLength": 256,
                   "minLength": 1,
                   "type": "string"
                 },
-                "timestamp": {
+                "timestampMillis": {
                   "minimum": 0,
                   "type": "integer"
                 }
@@ -364,7 +385,7 @@
                 "attempts",
                 "body",
                 "id",
-                "timestamp"
+                "timestampMillis"
               ],
               "type": "object"
             },
@@ -379,6 +400,7 @@
           }
         },
         "required": [
+          "batchId",
           "messages",
           "queue"
         ],
@@ -698,12 +720,16 @@
         {
           "operation": "queue",
           "input": {
+            "batchId": "conformance-batch-1",
             "messages": [
               {
                 "attempts": 1,
-                "body": "fail",
+                "body": {
+                  "data": "ZmFpbA==",
+                  "encoding": "base64"
+                },
                 "id": "message-1",
-                "timestamp": 0
+                "timestampMillis": 0
               }
             ],
             "queue": "at-least-once-queue"

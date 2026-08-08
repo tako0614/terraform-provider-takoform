@@ -75,6 +75,12 @@ func (r *v3Runner) run() error {
 		r.checkDeploymentWeightSum,
 		r.checkDeploymentIntegrity,
 		r.checkHandlerGatedAttachments,
+		// The two attachment rules a schema cannot state: a cron expression is a
+		// schedule rather than a shape, and one queue has one consumer
+		// (spec/decisions/0020). Both run against the worker the gate check just
+		// deployed, whose versions export every handler.
+		r.checkCronGrammarEnforced,
+		r.checkSingleQueueConsumerEnforced,
 		// The ABI closes the handler surface those attachments are gated on
 		// (spec/decisions/0019): first by vocabulary, then by what the code a
 		// version actually runs exports.
@@ -102,6 +108,7 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkCrossSpace(kv) },
 		r.checkSupportProfiles,
 		r.checkRuntimeContractAdvertised,
+		r.checkEdgeInterfaceContractsAdvertised,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
