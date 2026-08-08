@@ -118,10 +118,13 @@ yet published); the retained v2 resources above are unaffected:
 The Edge `ObjectBucket` registers as `takoform_edge_object_bucket` while the
 retained v2 lane still owns `takoform_object_bucket`.
 
-The generic [takoform_resource](resources/resource.md) carries any third-party
-v1alpha3 Form by exact FormRef. It compiles no schema locally — the host
-validates the desired spec against the exact Form — and `terraform import` is
-not supported for it, because an import ID cannot supply the exact FormRef.
+These are the whole v1alpha3 surface. The provider exposes no generic carrier
+for a Form it was not built against: a resource whose Form identity comes from
+the configuration cannot verify that identity, because the lane's Form
+Definition response carries neither the canonical definition bytes the
+`schemaDigest` pins nor the Form's role
+([decision 0021](../spec/decisions/0021-third-party-forms-and-contract-distribution.md)).
+Supporting a third-party Form is a provider build, not a configuration value.
 
 Takosumi Cloud separately offers `VerifiedDomain` and `AIGateway` as Cloud
 services; those two are not Forms and do not appear in this provider

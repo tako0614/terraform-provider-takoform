@@ -107,8 +107,10 @@ attachments activate inward events.
 | `AtLeastOnceQueue` | `takoform_at_least_once_queue` | `identity` | `0.1.0` | Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form. |
 | `QueueConsumer` | `takoform_queue_consumer` | `attachment` | `0.1.0` | Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking its queue handler with message batches and redelivering failed batches. Consumption is inward activation and therefore an attachment, never a binding. |
 
-A generic `takoform_resource` carries any third-party v1alpha3 Form by exact
-FormRef. Family membership grants no maturity: these members are tracked in
-the family candidate set, a lifecycle record begins only at an Experimental
-transition, and hosts state their supported subset in their Host Support
-Profiles.
+The provider exposes exactly these typed resources on the v1alpha3 lane, and no
+generic carrier for a Form it was not built against: nothing in the lane lets a
+client verify a FormRef it did not compile in, so a carrier would offer reach
+with no verification behind it (spec/decisions/0021). Family membership grants
+no maturity: these members are tracked in the family candidate set, a lifecycle
+record begins only at an Experimental transition, and hosts state their
+supported subset in their Host Support Profiles.

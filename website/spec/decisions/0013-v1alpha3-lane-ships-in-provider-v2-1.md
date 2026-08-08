@@ -1,6 +1,8 @@
 # 0013 — The v1alpha3 lane ships in provider v2.1
 
-- Status: accepted
+- Status: accepted; the generic `takoform_resource` carrier it lists is
+  withdrawn from the v2.1 surface by
+  [0021](0021-third-party-forms-and-contract-distribution.md)
 - Date: 2026-08-06
 - Owners: Takoform maintainers
 

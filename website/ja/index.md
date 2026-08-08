@@ -91,8 +91,10 @@ worker からの能力利用は typed binding (`kv_bindings`、`bucket_bindings`
 [Interface contracts](/spec/interface-contract/) と
 [Binding contracts](/spec/binding-contract/) に裏付けられます。外からの起動
 (route・domain・cron・consumption) は常に別の attachment リソースです。
-第三者 family の Form は汎用の `takoform_resource` が exact FormRef で
-運びます。
+v1alpha3 lane はこの typed リソースだけで、provider が組み込んでいない Form を
+運ぶ汎用リソースはありません。組み込んでいない FormRef を client が検証する
+手段がこの lane には無いためです
+([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html))。
 
 ## 保持される v2 リソース
 

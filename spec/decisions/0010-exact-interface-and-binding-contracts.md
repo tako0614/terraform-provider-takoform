@@ -1,6 +1,9 @@
 # 0010 — Exact Interface contracts and typed Bindings
 
-- Status: accepted
+- Status: accepted; its Interface Package envelope and the word "published" in
+  its description of an Interface are withdrawn by
+  [0021](0021-third-party-forms-and-contract-distribution.md), which distributes
+  Interface and Binding Definitions with this repository instead
 - Date: 2026-08-06
 - Owners: Takoform maintainers
 

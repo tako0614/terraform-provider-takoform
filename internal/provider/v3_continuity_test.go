@@ -277,58 +277,6 @@ func TestV3ImportIdentityForms(t *testing.T) {
 	})
 }
 
-// TestV3GenericImportRequiresTheExactFormRef proves the carrier imports only
-// through the canonical identity: it has no default create ref, so a short form
-// would have to be guessed.
-func TestV3GenericImportRequiresTheExactFormRef(t *testing.T) {
-	ctx := context.Background()
-	host := newV3FakeHost(t)
-	generic := &v3GenericResource{data: newV3TestProviderData(t, host)}
-	schemaResponse := v3SchemaOf(t, generic)
-	const digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-
-	response := frameworkresource.ImportStateResponse{
-		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
-	}
-	generic.ImportState(ctx, frameworkresource.ImportStateRequest{ID: "prod/my-widget"}, &response)
-	if !response.Diagnostics.HasError() {
-		t.Fatal("the generic carrier accepted a short import ID it cannot resolve")
-	}
-
-	id := `{"space":"prod","apiVersion":"forms.example.com/v1alpha1","kind":"Widget",` +
-		`"definitionVersion":"1.0.0","schemaDigest":"` + digest + `","name":"my-widget"}`
-	imported := frameworkresource.ImportStateResponse{
-		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
-	}
-	generic.ImportState(ctx, frameworkresource.ImportStateRequest{ID: id}, &imported)
-	if imported.Diagnostics.HasError() {
-		t.Fatalf("generic canonical import: %v", imported.Diagnostics)
-	}
-	for name, want := range map[string]string{
-		"name":                    "my-widget",
-		"space":                   "prod",
-		"form_api_version":        "forms.example.com/v1alpha1",
-		"form_kind":               "Widget",
-		"form_definition_version": "1.0.0",
-		"form_schema_digest":      digest,
-	} {
-		if got := v3StateString(t, ctx, imported.State, name).ValueString(); got != want {
-			t.Fatalf("generic import %s = %q, want %q", name, got, want)
-		}
-	}
-
-	// The imported identity is enough for the following read to reconcile.
-	host.storeResource("Widget", "my-widget", "prod", "forms.example.com/v1alpha1", "uid-7", map[string]any{})
-	readResponse := frameworkresource.ReadResponse{State: imported.State}
-	generic.Read(ctx, frameworkresource.ReadRequest{State: imported.State}, &readResponse)
-	if readResponse.Diagnostics.HasError() {
-		t.Fatalf("read after generic import: %v", readResponse.Diagnostics)
-	}
-	if got := v3StateString(t, ctx, readResponse.State, "uid").ValueString(); got != "uid-7" {
-		t.Fatalf("read after generic import uid = %q, want uid-7", got)
-	}
-}
-
 // TestV3UIDMismatchIsAnErrorThatPreservesState is the recovery property of
 // decision 0017. Removing state here would leave the operator stuck: the next
 // apply fences on If-None-Match:* against a resource that exists and fails,
@@ -358,28 +306,31 @@ func TestV3UIDMismatchIsAnErrorThatPreservesState(t *testing.T) {
 		assertUIDMismatchPreservesState(t, ctx, readResponse.Diagnostics, readResponse.State, "uid-1", "uid-99")
 	})
 
-	t.Run("generic", func(t *testing.T) {
+	t.Run("resumed after a pending operation", func(t *testing.T) {
 		host := newV3FakeHost(t)
-		generic := &v3GenericResource{data: newV3TestProviderData(t, host)}
-		schemaResponse := v3SchemaOf(t, generic)
+		resource := v3TestFormResource(t, "ModuleWorker", newV3TestProviderData(t, host))
+		schemaResponse := v3SchemaOf(t, resource)
 		plan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-			"form_api_version":        types.StringValue("forms.example.com/v1alpha1"),
-			"form_kind":               types.StringValue("Widget"),
-			"form_definition_version": types.StringValue("1.0.0"),
-			"form_schema_digest":      types.StringValue("sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
-			"name":                    types.StringValue("my-widget"),
+			"name": types.StringValue("module-worker"),
 		})
 		createResponse := frameworkresource.CreateResponse{
 			State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
 		}
-		generic.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
+		resource.Create(ctx, frameworkresource.CreateRequest{Plan: plan}, &createResponse)
 		if createResponse.Diagnostics.HasError() {
 			t.Fatalf("create: %v", createResponse.Diagnostics)
 		}
-		host.replaceIncarnation("Widget", "my-widget", "uid-99")
+		// A pending marker must not weaken the UID rule: the operation is
+		// consulted first, and the mismatch it then finds is still a hard error
+		// that keeps the resource under management.
+		state := createResponse.State
+		if diags := state.SetAttribute(ctx, path.Root("pending_operation_id"), types.StringValue("op_missing")); diags.HasError() {
+			t.Fatalf("seed pending marker: %v", diags)
+		}
+		host.replaceIncarnation("ModuleWorker", "module-worker", "uid-99")
 
-		readResponse := frameworkresource.ReadResponse{State: createResponse.State}
-		generic.Read(ctx, frameworkresource.ReadRequest{State: createResponse.State}, &readResponse)
+		readResponse := frameworkresource.ReadResponse{State: state}
+		resource.Read(ctx, frameworkresource.ReadRequest{State: state}, &readResponse)
 		assertUIDMismatchPreservesState(t, ctx, readResponse.Diagnostics, readResponse.State, "uid-1", "uid-99")
 	})
 }

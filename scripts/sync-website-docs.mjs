@@ -95,10 +95,64 @@ const projections = [
   },
 ];
 
+// The projection is a MIRROR, not an append: these four site trees hold
+// projected files and nothing else. Copying alone cannot express that, so a
+// canonical file that goes away — a resource document whose resource was
+// withdrawn, for example — would otherwise leave an orphan the site keeps
+// serving and no gate can see. --write prunes those; --check reports them.
+const mirroredTrees = [
+  path.join(repositoryRoot, "website", "docs", "resources"),
+  path.join(repositoryRoot, "website", "docs", "data-sources"),
+  path.join(repositoryRoot, "website", "static", "examples", "resources"),
+  path.join(repositoryRoot, "website", "static", "examples", "data-sources"),
+];
+
+function siteFiles(directory) {
+  let entries;
+  try {
+    entries = readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const files = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...siteFiles(entryPath));
+    } else {
+      files.push(entryPath);
+    }
+  }
+  return files;
+}
+
+function orphanedSiteFiles() {
+  const projected = new Set(projections.map(({ site }) => site));
+  const orphans = [];
+  for (const tree of mirroredTrees) {
+    for (const file of siteFiles(tree)) {
+      if (!projected.has(file)) {
+        orphans.push(file);
+      }
+    }
+  }
+  return orphans;
+}
+
 if (mode === "--write") {
   for (const { canonical, site } of projections) {
     mkdirSync(path.dirname(site), { recursive: true });
     copyFileSync(canonical, site);
+  }
+  for (const orphan of orphanedSiteFiles()) {
+    rmSync(orphan);
+    // An example projection owns its whole takoform_<name> directory, so the
+    // now-empty directory is removed with the file it held.
+    const parent = path.dirname(orphan);
+    if (!mirroredTrees.includes(parent) && readdirSync(parent).length === 0) {
+      rmSync(parent, { recursive: true });
+    }
+    process.stdout.write(`pruned ${path.relative(repositoryRoot, orphan)}\n`);
   }
   for (const { canonical, site } of projections) {
     process.stdout.write(
@@ -128,6 +182,11 @@ for (const { canonical, site } of projections) {
     drift.push(`${path.relative(repositoryRoot, site)}: drifted from canonical`);
   }
 }
+for (const orphan of orphanedSiteFiles()) {
+  drift.push(
+    `${path.relative(repositoryRoot, orphan)}: projects no canonical file (orphaned copy)`,
+  );
+}
 if (drift.length > 0) {
   for (const line of drift) process.stderr.write(`- ${line}\n`);
   throw new Error(
@@ -135,5 +194,5 @@ if (drift.length > 0) {
   );
 }
 process.stdout.write(
-  `website docs projection OK: ${projections.length} canonical files reproduced\n`,
+  `website docs projection OK: ${projections.length} canonical files reproduced, no orphaned copies\n`,
 );

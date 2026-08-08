@@ -1,6 +1,9 @@
 # 0017 — Provider state survives Form evolution and interruption
 
-- Status: accepted
+- Status: accepted; rule 5's clause about the generic carrier lapsed with the
+  carrier itself
+  ([0021](0021-third-party-forms-and-contract-distribution.md)). Every other
+  rule stands unchanged for the typed resources
 - Date: 2026-08-08
 - Owners: Takoform maintainers
 

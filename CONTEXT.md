@@ -82,9 +82,10 @@ attachment, or policy; tooling enforces role lifecycle rules mechanically.
 _Avoid_: Resource category, type tag
 
 **Interface Contract**:
-An independently published, digest-bound operation-surface contract fixing
-operations, types, errors, consistency, and behavior fixtures.
-_Avoid_: Open descriptor, endpoint credential
+A digest-bound operation-surface contract fixing operations, types, errors,
+consistency, and behavior fixtures, distributed with the specification
+repository rather than as an independently published package.
+_Avoid_: Open descriptor, endpoint credential, independently published package
 
 **Binding Contract**:
 A digest-bound typed-capability contract granting a consumer a runtime API and

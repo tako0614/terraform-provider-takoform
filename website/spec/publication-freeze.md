@@ -7,7 +7,10 @@ The Host API `forms.takoform.com/v1alpha3` lane and the
 While this freeze holds, the project MUST NOT:
 
 - publish a Form Package for any family Form;
-- publish an Interface Definition or Binding Definition package;
+- publish an Interface Definition or Binding Definition, in any envelope. No
+  Interface Package or Binding Package identity exists to publish one in; those
+  contracts are documents distributed with this repository
+  ([decision 0021](decisions/0021-third-party-forms-and-contract-distribution.md));
 - release provider `v2.1.0`, or any provider version that exposes the family
   resource types, to the Terraform Registry;
 - transition any family Form to Experimental, Stable, or any other lifecycle

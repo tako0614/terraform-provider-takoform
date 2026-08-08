@@ -1,9 +1,13 @@
 # Exact Interface contracts (interfaces.takoform.com/v1alpha1)
 
-An Interface is an independently published, digest-bound contract for one
-portable operation surface. It replaces the open `(name, version,
+An Interface is a digest-bound contract for one portable operation surface,
+distributed with this repository. It replaces the open `(name, version,
 operations)` descriptors of the retained v1alpha2 lane for all new-lane Forms
 ([decision 0010](../decisions/0010-exact-interface-and-binding-contracts.md)).
+It is not an independently published artifact: see
+[Interface distribution](#interface-distribution) below for exactly what an
+InterfaceRef does and does not assure
+([decision 0021](../decisions/0021-third-party-forms-and-contract-distribution.md)).
 The retained projection contract remains documented in
 [`../interface-declaration/`](../interface-declaration/) for the frozen lanes.
 
@@ -113,14 +117,34 @@ fixture scope and belong to distributed conformance runs, not packages.
 
 ## Interface distribution
 
-Interface candidates are currently distributed as digest-bound Interface
-Definition documents in the repository's `interfaces/candidates/v1alpha1`
-directory; the exact
-InterfaceRef with its `schemaDigest` is the immutable reference. A dedicated
-Interface Package envelope — one definition per canonical, digest-bound
-package with data-only payloads and fixture closure, mirroring Form
-Packages — is future work; no such package envelope identity is published
-yet.
+Interface Definitions are distributed **with this repository**, as digest-bound
+documents under `interfaces/candidates/v1alpha1`. They are NOT independently
+installable third-party artifacts, and there is no Interface Package envelope:
+no such identity is specified, published, or planned for this generation
+([decision 0021](../decisions/0021-third-party-forms-and-contract-distribution.md)).
+
+What an exact InterfaceRef therefore assures, and what it does not:
+
+- `schemaDigest` binds the RFC 8785 canonical Definition bytes, so a holder of
+  those bytes MUST be able to confirm they are the document the ref names, and
+  two different canonical byte strings are two different Interfaces;
+- the ref says nothing about where the bytes came from. There is no package
+  digest, no publisher identity, no signature, no transparency proof, no
+  revocation statement, and no closed payload inventory, because there is no
+  package. The Form Package trust lane
+  ([`../trust/`](../trust/index.md)) covers Form Packages only.
+
+A host obtains these contracts the way it obtains any other part of this
+specification. An operator who installs an Interface Definition from any other
+source has exactly the assurance they arranged for it themselves; this
+specification provides none and MUST NOT be read as providing any.
+
+Building the envelope means minting a `packages.interfaces.takoform.com` index
+identity, which cannot be done by reusing
+[`../schemas/package-index-v1alpha4.schema.json`](/schemas/v1alpha4/package-index.schema.json):
+that index is closed, fixes `kind` to `FormPackage`, and requires a `formRef`.
+The mint therefore waits for the next coherent generation of schema identities
+([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)).
 
 ## Relationship to Forms and Bindings
 

@@ -92,9 +92,11 @@ Workers use capability through typed bindings (`kv_bindings`,
 `service_bindings`) backed by exact
 [Interface contracts](/spec/interface-contract/) and
 [Binding contracts](/spec/binding-contract/); inward activation (routes,
-domains, cron, consumption) is always a separate attachment resource. A
-generic `takoform_resource` carries third-party family Forms by exact
-FormRef.
+domains, cron, consumption) is always a separate attachment resource. These
+typed resources are the whole lane: there is no generic carrier for a Form the
+provider was not built against, because the lane gives a client no way to
+verify a FormRef it did not compile in
+([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html)).
 
 ## Retained v2 resources
 

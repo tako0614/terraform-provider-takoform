@@ -167,10 +167,11 @@ Edge Platform Family リソース (`v2.1.0` source candidate、未公開):
 - [at_least_once_queue](/docs/resources/at_least_once_queue.html)
 - [queue_consumer](/docs/resources/queue_consumer.html)
 
-その他の v1alpha3 Form (第三者の Form を含む) を exact FormRef で運ぶ汎用
-リソース (`v2.1.0` source candidate、import 非対応):
-
-- [resource](/docs/resources/resource.html)
+v1alpha3 lane の surface はこれで全部です。provider が組み込んでいない Form を
+運ぶ汎用リソースはありません。組み込んでいない FormRef を client が検証する
+手段がこの lane に無いためで、第三者 Form への対応は設定値ではなく provider
+build の話になります
+([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html))。
 
 ## ホストとの境界
 
