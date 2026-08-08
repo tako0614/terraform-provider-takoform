@@ -10,9 +10,9 @@
     "website:dev": "VITE_EXTRA_EXTENSIONS=tf vitepress dev website",
     "website:preview": "VITE_EXTRA_EXTENSIONS=tf vitepress preview website",
     "check:website-snapshot": "bun scripts/check-website-dist.mjs",
-    "check:public-surfaces": "bun run check:public-authority && bun run check:website-snapshot && bun run check:public-snapshot",
+    "check:public-surfaces": "bun run check:publication-blockers && bun run check:public-authority && bun run check:website-snapshot && bun run check:public-snapshot",
     "check:public-authority": "go run ./cmd/standard-form-conformance legacy-published-package-check && go run ./cmd/standard-form-conformance legacy-admission-evidence-check",
-    "check:public-snapshot": "bun scripts/check-public-surfaces.mjs && bun scripts/sync-website-spec.mjs --check && bun test --timeout 30000 scripts/publication-truth.test.mjs scripts/current-authority-boundary.test.mjs scripts/deploy-safety.test.mjs scripts/website-cloudflare-safety.test.mjs scripts/public-schema-manifest.test.mjs scripts/schema-publication-guard.test.mjs scripts/workflow-embedded-node.test.mjs scripts/release-deploy.test.mjs",
+    "check:public-snapshot": "bun scripts/check-public-surfaces.mjs && bun scripts/sync-website-spec.mjs --check && bun test --timeout 30000 scripts/publication-truth.test.mjs scripts/current-authority-boundary.test.mjs scripts/deploy-safety.test.mjs scripts/website-cloudflare-safety.test.mjs scripts/public-schema-manifest.test.mjs scripts/schema-publication-guard.test.mjs scripts/workflow-embedded-node.test.mjs scripts/release-deploy.test.mjs scripts/publication-blockers.test.mjs",
     "sync:public-schemas": "bun scripts/sync-public-schemas.mjs --write",
     "sync:website-docs": "bun scripts/sync-website-docs.mjs --write",
     "sync:website-spec": "bun scripts/sync-website-spec.mjs --write",
@@ -28,7 +28,9 @@
     "test:portable": "go test ./... && go -C cmd/provider-release test ./... && go run ./cmd/portable-host-conformance self-test >/dev/null && go run ./cmd/portable-host-conformance self-test --contract conformance/portable-host-v3 >/dev/null && go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform && go run ./cmd/form-package conformance && bun run check:current-form-candidates && bun run check:current-form-families && go run ./cmd/standard-form-conformance verify && go run ./cmd/standard-form-conformance release-plan && go run ./cmd/standard-form-conformance current-release-plan >/dev/null && go run ./cmd/standard-form-conformance candidate-publication-check && go run ./cmd/standard-form-conformance published-package-check && go run ./cmd/standard-form-conformance retained-ga-core-v1-published-package-check",
     "build:portable": "set -e; build_dir=\"$(mktemp -d)\"; trap 'rm -rf \"$build_dir\"' EXIT; mkdir -p \"$build_dir/root\"; go build -o \"$build_dir/root/\" ./...; go -C cmd/provider-release build -o \"$build_dir/provider-release\" .",
     "check:publication-authority": "go run ./cmd/standard-form-conformance legacy-published-package-check",
-    "check:release-owner-gate": "bun run check:tools && bun run format:check && bun run check:publication-authority && bun run check:public-snapshot && bun run lint && bun run typecheck && bun run test:portable && bun run build:portable"
+    "check:publication-blockers": "bun scripts/publication-blockers.mjs --check",
+    "assert:publishable": "bun scripts/publication-blockers.mjs --assert-publishable",
+    "check:release-owner-gate": "bun run check:tools && bun run format:check && bun run assert:publishable && bun run check:publication-authority && bun run check:public-snapshot && bun run lint && bun run typecheck && bun run test:portable && bun run build:portable"
   },
   "devDependencies": {
     "vitepress": "^1.5.0",

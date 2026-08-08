@@ -1,0 +1,132 @@
+{
+  "format": "takoform.publication-blockers@v1",
+  "lane": "forms.takoform.com/v1alpha3",
+  "family": "edge.forms.takoform.com/v1alpha1",
+  "policy": "While any blocker below is open, this repository must not publish a Form Package, an Interface or Binding Definition, a provider release that exposes the family resource types, or a lifecycle transition for any family Form. Closing a blocker requires the evidence it names, not a passing local gate.",
+  "blockers": [
+    {
+      "id": "V3-001",
+      "title": "A real host preserves the exact FormRef",
+      "priority": "P0",
+      "affectedForms": [
+        "*"
+      ],
+      "status": "open",
+      "issue": 102,
+      "rationale": "The provider dispatches read, update and delete on the ref recorded in state. Until a host outside this repository answers for an exact ref rather than for a kind, that dispatch is unproven against anything but the reference host.",
+      "evidence": []
+    },
+    {
+      "id": "V3-002",
+      "title": "A relation pins the target's contract, not only its incarnation",
+      "priority": "P0",
+      "affectedForms": [
+        "*"
+      ],
+      "status": "open",
+      "issue": 103,
+      "rationale": "A reference pins the resolved target UID, so a re-created target is not adopted silently. It does not yet pin what contract that target satisfies, so a target whose Definition moves incompatibly still satisfies the reference.",
+      "evidence": []
+    },
+    {
+      "id": "V3-003",
+      "title": "Runtime loadable media types and artifact manifest media types agree",
+      "priority": "P0",
+      "affectedForms": [
+        "WorkerBundle",
+        "WorkerVersion"
+      ],
+      "status": "open",
+      "issue": 104,
+      "rationale": "The runtime ABI and the artifact manifest each state a media-type set, and they disagree. A bundle can therefore be accepted by one and unusable by the other.",
+      "evidence": []
+    },
+    {
+      "id": "V3-004",
+      "title": "Takosumi implements Host API v1alpha3",
+      "priority": "P0",
+      "affectedForms": [
+        "*"
+      ],
+      "status": "open",
+      "issue": 105,
+      "rationale": "The only implementation of this lane is the disposable reference host inside this repository. A lane with one implementation has not shown that its contract is implementable by anyone else.",
+      "evidence": []
+    },
+    {
+      "id": "V3-005",
+      "title": "A Cloud adapter materialises bundle, version and deployment",
+      "priority": "P0",
+      "affectedForms": [
+        "WorkerBundle",
+        "WorkerVersion",
+        "WorkerDeployment"
+      ],
+      "status": "open",
+      "issue": 106,
+      "rationale": "Immutable revisions and weighted traffic are the Forms' whole value. Until a real backend performs them, the state machine is asserted rather than demonstrated.",
+      "evidence": []
+    },
+    {
+      "id": "V3-006",
+      "title": "A Cloud adapter materialises the edge KV namespace and its typed binding",
+      "priority": "P0",
+      "affectedForms": [
+        "EdgeKVNamespace"
+      ],
+      "status": "open",
+      "issue": 107,
+      "rationale": "A binding projects an API into a running isolate. Nothing in this repository can prove that projection; only a real runtime can.",
+      "evidence": []
+    },
+    {
+      "id": "V3-007",
+      "title": "A worker is reachable over HTTPS without a customer-owned domain",
+      "priority": "P0",
+      "affectedForms": [
+        "WorkerEndpoint"
+      ],
+      "status": "open",
+      "issue": 108,
+      "rationale": "Requiring a verified custom domain before the first request makes the shortest path to a working worker longer than the path to abandoning it.",
+      "evidence": []
+    },
+    {
+      "id": "V3-008",
+      "title": "A real runtime is proven against the ABI contract",
+      "priority": "P0",
+      "affectedForms": [
+        "ModuleWorker",
+        "WorkerVersion"
+      ],
+      "status": "open",
+      "issue": 109,
+      "rationale": "The lane proves that a host states which ABI it implements and holds desired state to it. It does not prove that an isolate behaves that way; that needs a runtime conformance run outside the control plane.",
+      "evidence": []
+    },
+    {
+      "id": "V3-009",
+      "title": "A provider lifecycle runs end to end against a real host",
+      "priority": "P0",
+      "affectedForms": [
+        "*"
+      ],
+      "status": "open",
+      "issue": 110,
+      "rationale": "Create, roll out, promote, roll back, observe, recover from an interrupted apply, and destroy must be demonstrated as one sequence, because the failure modes worth catching only appear between the steps.",
+      "evidence": []
+    },
+    {
+      "id": "V3-010",
+      "title": "Destroy completes through the backend and leaves nothing orphaned",
+      "priority": "P0",
+      "affectedForms": [
+        "*"
+      ],
+      "status": "open",
+      "issue": 111,
+      "rationale": "A platform that cannot reliably delete what it created is not one anybody should adopt. An orphan scan finding nothing is the evidence.",
+      "evidence": []
+    }
+  ]
+}

@@ -54,11 +54,19 @@ data the published schema already admits — for example a JSON Schema
 ## Publication blockers
 
 A blocker is an invariant that is cheap to fix now and expensive to fix after
-publication. They are tracked as issues labelled
-`v1alpha3-publication-blocker`. The freeze lifts for a given Form only when
-every blocker that touches it is closed, its evidence exists under
-[`project-lifecycle.md`](project-lifecycle.md), and a real host has
-implemented it end to end.
+publication. The machine authority is
+[`publication-blockers.json`](publication-blockers.json); each entry is also
+tracked as an issue labelled `v1alpha3-publication-blocker`. The freeze lifts
+for a given Form only when every blocker that touches it is closed, its
+evidence exists under [`project-lifecycle.md`](project-lifecycle.md), and a
+real host has implemented it end to end.
+
+Prose cannot stop a release, so the ledger is enforced rather than described.
+`bun run check` validates its shape on every change, and
+`bun run check:release-owner-gate` refuses while any blocker is open, naming
+each one. A blocker closes by recording the evidence that was actually
+produced: an entry marked closed with an empty evidence list fails the gate,
+so the freeze cannot be lifted by editing a status field.
 
 The first Forms proposed for Experimental publication are the Worker and edge
 KV vertical slice: `ModuleWorker`, `WorkerBundle`, `WorkerVersion`,
