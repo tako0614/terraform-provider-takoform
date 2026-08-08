@@ -190,7 +190,7 @@ WorkerVersion, WorkerDeployment, WorkerCronTrigger, QueueConsumer) with their
 registry package digests plus byte-pinned
 desired-negative fixtures. `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 72-check matrix over real HTTP: exact discovery and
+drives the complete 73-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -229,7 +229,12 @@ record survives untouched; and a content address that is a name rather than an
 entitlement — another tenant reads neither the manifest nor the blob, a second
 principal of the HOLDING tenant reads both, and the other tenant that uploads
 the same bytes is told they are missing for IT before committing the identical,
-physically deduplicated artifact. Probing every stable error uses the runner-only
+physically deduplicated artifact. The same holding rule governs USING an address
+rather than only reading one: a bundle whose desired state references a manifest
+the caller's tenant does not hold is refused `artifact_missing` before any
+mutation, on apply and on import, storing nothing, while a second principal of
+the holding tenant references it successfully and the other tenant references it
+once it has supplied the bytes itself. Probing every stable error uses the runner-only
 `Takoform-Conformance-Probe` header (`error:<code>`, `async`,
 `touch-status`, `external-change`); it is disposable-adapter transport, never
 a production surface. `external-change` performs one delete as an out-of-band

@@ -608,11 +608,20 @@ func (r *v3Runner) resourceBody(target probeTarget) map[string]any {
 // prepareRequest posts one raw prepare; extraHeaders may carry the update
 // generation fence.
 func (r *v3Runner) prepareRequest(target probeTarget, extraHeaders map[string]string) (wireResponse, error) {
+	return r.prepareRequestAs(r.token, target, extraHeaders)
+}
+
+// prepareRequestAs posts one raw prepare under a named credential.
+func (r *v3Runner) prepareRequestAs(
+	token string,
+	target probeTarget,
+	extraHeaders map[string]string,
+) (wireResponse, error) {
 	body, err := encodeRunnerJSON(r.resourceBody(target))
 	if err != nil {
 		return wireResponse{}, err
 	}
-	return r.request(http.MethodPost, r.apiBase+"/resources/prepare", extraHeaders, body)
+	return r.requestWithToken(token, http.MethodPost, r.apiBase+"/resources/prepare", extraHeaders, body)
 }
 
 // prepare binds a create-intent prepare (no update fence).
@@ -624,11 +633,18 @@ func (r *v3Runner) prepare(target probeTarget) (prepareOutcome, error) {
 // update fence when generation is non-empty ("generation-fence-when-
 // updating").
 func (r *v3Runner) prepareWithFence(target probeTarget, generation string) (prepareOutcome, error) {
+	return r.prepareWithFenceAs(r.token, target, generation)
+}
+
+// prepareWithFenceAs is prepareWithFence under a named credential, so a check
+// that drives a mutation as another caller mints that caller's OWN review
+// instead of borrowing the primary's.
+func (r *v3Runner) prepareWithFenceAs(token string, target probeTarget, generation string) (prepareOutcome, error) {
 	var headers map[string]string
 	if generation != "" {
 		headers = map[string]string{expectedGenerationHeader: generation}
 	}
-	response, err := r.prepareRequest(target, headers)
+	response, err := r.prepareRequestAs(token, target, headers)
 	if err != nil {
 		return prepareOutcome{}, err
 	}
@@ -711,12 +727,18 @@ func (r *v3Runner) applyRequestParts(target probeTarget, options applyOptions) (
 }
 
 func (r *v3Runner) apply(target probeTarget, options applyOptions) (wireResponse, error) {
+	return r.applyAs(r.token, target, options)
+}
+
+// applyAs drives one apply under a named credential, minting the prepare
+// binding under that same credential.
+func (r *v3Runner) applyAs(token string, target probeTarget, options applyOptions) (wireResponse, error) {
 	if options.PrepareDigest == "" {
 		fence := ""
 		if !options.Create {
 			fence = options.ExpectedGeneration
 		}
-		prepared, err := r.prepareWithFence(target, fence)
+		prepared, err := r.prepareWithFenceAs(token, target, fence)
 		if err != nil {
 			return wireResponse{}, err
 		}
@@ -726,7 +748,7 @@ func (r *v3Runner) apply(target probeTarget, options applyOptions) (wireResponse
 	if err != nil {
 		return wireResponse{}, err
 	}
-	return r.request(http.MethodPut, fullURL, headers, body)
+	return r.requestWithToken(token, http.MethodPut, fullURL, headers, body)
 }
 
 func (r *v3Runner) applyResource(target probeTarget, options applyOptions, wantStatus int) (wireResource, wireResponse, error) {
@@ -756,6 +778,17 @@ type importOptions struct {
 }
 
 func (r *v3Runner) importResource(target probeTarget, options importOptions) (wireResponse, error) {
+	return r.importResourceAs(r.token, target, options)
+}
+
+// importResourceAs is importResource under a named credential: adoption is a
+// mutation, so a check that proves what a foreign caller may not adopt has to
+// speak as that caller.
+func (r *v3Runner) importResourceAs(
+	token string,
+	target probeTarget,
+	options importOptions,
+) (wireResponse, error) {
 	document := r.resourceBody(target)
 	document["nativeId"] = options.NativeID
 	headers := map[string]string{"Idempotency-Key": options.IdempotencyKey}
@@ -768,7 +801,9 @@ func (r *v3Runner) importResource(target probeTarget, options importOptions) (wi
 	if err != nil {
 		return wireResponse{}, err
 	}
-	return r.request(http.MethodPost, r.resourceURL(target.Ref, target.Name, "import", nil), headers, body)
+	return r.requestWithToken(
+		token, http.MethodPost, r.resourceURL(target.Ref, target.Name, "import", nil), headers, body,
+	)
 }
 
 func (r *v3Runner) read(target probeTarget) (wireResource, wireResponse, error) {

@@ -799,7 +799,14 @@ func specOrEmpty(spec map[string]any) map[string]any {
 // from its desired schema is resolved to a stored resource and pinned by that
 // resource's UID, so a deployment's worker version, a version's bundle, and an
 // attachment's worker are protected exactly as a typed binding is.
+//
+// The caller is carried in because one of these rules is an AUTHORIZATION rule:
+// resolving a referenced artifact manifest asks the same per-tenant holding
+// question the artifact read surfaces ask (spec/decisions/0018). It is a value
+// rather than a request so the async commit path re-derives it from the caller
+// the mutation was accepted from, long after that request is gone.
 func (h *ReferenceHost) validateDesiredSemantics(
+	caller hostAuthContext,
 	form *installedForm,
 	space, name string,
 	spec map[string]any,
@@ -817,7 +824,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 		return nil, hostErr
 	}
 	if form.Ref.Kind == "WorkerBundle" {
-		if hostErr := h.requireReferencedBundleManifest(spec); hostErr != nil {
+		if hostErr := h.requireReferencedBundleManifest(caller, spec); hostErr != nil {
 			return nil, hostErr
 		}
 	}
@@ -982,12 +989,17 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 	space := body.Metadata.Space
 	fences := mutationFenceOf(request)
 	prepareDigest := body.Review.PrepareDigest
+	// The authenticated caller is captured with the fences and for the same
+	// reason: the artifact this apply references is resolved against the tenant
+	// the mutation was accepted from, and the 202 path re-resolves it at commit
+	// time when the request no longer exists.
+	caller, _ := hostRequestAuth(request)
 	// applyOnce is the complete pre-mutation gauntlet plus the commit. The
 	// synchronous path runs it inline; the 202 path runs the SAME function at
 	// poll time, so an accepted operation re-derives every precondition
 	// against the store as it is when the mutation actually lands.
 	applyOnce := func() (*storedResource, bool, *hostError) {
-		relations, hostErr := h.validateDesiredSemantics(form, space, name, body.Spec)
+		relations, hostErr := h.validateDesiredSemantics(caller, form, space, name, body.Spec)
 		if hostErr != nil {
 			return nil, false, hostErr
 		}
@@ -1066,13 +1078,20 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 // names to the artifact contract before anything is mutated. The manifest,
 // never the resource spec, describes the bundle's modules, so this is where a
 // host learns what it is being asked to run.
-func (h *ReferenceHost) requireReferencedBundleManifest(spec map[string]any) *hostError {
+//
+// Resolution is per TENANT, exactly as the read surfaces are: a digest names
+// bytes and entitles nobody to them, so a manifest the caller's tenant does not
+// hold is answered artifact_missing — the same answer, with the same message, an
+// uncommitted digest gets (spec/decisions/0018). Distinguishing "exists but not
+// yours" from "does not exist" would make USING a leaked digest an existence
+// oracle over exactly what reading it already may not disclose.
+func (h *ReferenceHost) requireReferencedBundleManifest(caller hostAuthContext, spec map[string]any) *hostError {
 	digest, _ := spec["manifestDigest"].(string)
 	if !formpackage.ValidDigest(digest) {
 		return stableError("artifact_invalid", "manifestDigest must be a lowercase sha256:<hex> digest")
 	}
 	raw := h.manifests[digest]
-	if raw == nil {
+	if raw == nil || !h.holdsManifest(caller.Tenant, digest) {
 		return stableError("artifact_missing", "manifestDigest names no committed artifact manifest")
 	}
 	// The content address is re-derived rather than trusted: a stored document
@@ -1328,8 +1347,10 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 	}
 	// Adoption is a mutation, so it passes the SAME cross-resource gauntlet
 	// as apply: an import may not mint a resource whose typed bindings, bundle
-	// bytes, deployment weights, or handler gates a fresh apply would reject.
-	relations, hostErr := h.validateDesiredSemantics(form, body.Metadata.Space, name, body.Spec)
+	// bytes, deployment weights, or handler gates a fresh apply would reject —
+	// and it may not adopt its way to an artifact its tenant does not hold.
+	importer, _ := hostRequestAuth(request)
+	relations, hostErr := h.validateDesiredSemantics(importer, form, body.Metadata.Space, name, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
@@ -1828,7 +1849,7 @@ func (h *ReferenceHost) handleArtifactCommit(w http.ResponseWriter, request *htt
 	// bytes of this upload. Blobs are content-addressed and shared, so a
 	// second manifest can name an already-held digest under a size it never
 	// had; that manifest must never become an immutable identity.
-	if hostErr := h.verifyCommittedSizes(upload.Manifest); hostErr != nil {
+	if hostErr := h.verifyCommittedSizes(upload.Owner.Tenant, upload.Manifest); hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
 	}
@@ -1847,15 +1868,18 @@ func (h *ReferenceHost) handleArtifactCommit(w http.ResponseWriter, request *htt
 }
 
 // verifyCommittedSizes binds every declared size to the stored byte length of
-// the blob that digest resolves to.
-func (h *ReferenceHost) verifyCommittedSizes(manifest artifactManifest) *hostError {
+// the blob that digest resolves to. The lookup asks the committing tenant's
+// holding, not the byte store: a blob is resolved on behalf of a caller here
+// exactly as it is everywhere else, so this stays correct without depending on
+// the order of the checks around it.
+func (h *ReferenceHost) verifyCommittedSizes(tenant string, manifest artifactManifest) *hostError {
 	declared := func(name, digest string, size json.Number) *hostError {
 		want, err := strconv.ParseInt(size.String(), 10, 64)
 		if err != nil {
 			return stableError("artifact_invalid", "declared size of "+name+" is not an integer")
 		}
 		stored, ok := h.blobs[digest]
-		if !ok {
+		if !ok || !h.holdsBlob(tenant, digest) {
 			return stableError("artifact_missing", "manifest blob "+digest+" was not uploaded")
 		}
 		if int64(len(stored)) != want {

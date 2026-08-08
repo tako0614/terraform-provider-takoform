@@ -97,10 +97,15 @@ and the generated provider resource documents.
    already holds that address, acquired by uploading the bytes or by committing
    a manifest that names them; any other tenant is answered as if the address
    did not exist. `missingBlobs` is therefore answered per tenant rather than
-   per byte store. Physical deduplication is explicitly still permitted: one
-   stored copy per content address, one immutable identity for identical bytes,
-   and no tenant's abandon or garbage collection may take bytes away from
-   another.
+   per byte store. The rule binds every resolution a host performs for a
+   request, not only the read endpoints: a bundle-shaped desired state carries a
+   manifest digest, so the referenced manifest is resolved against the caller's
+   tenant too — before any mutation, on apply and import alike, and again when
+   an accepted `202` commits — and a manifest the tenant does not hold fails
+   `artifact_missing` indistinguishably from one nobody committed. Physical
+   deduplication is explicitly still permitted: one stored copy per content
+   address, one immutable identity for identical bytes, and no tenant's abandon
+   or garbage collection may take bytes away from another.
 
 4. **Lanes negotiate independently, under a short deadline of their own.** A
    client discovers each lane concurrently, bounded by a discovery deadline
@@ -123,8 +128,8 @@ Rules 1 through 3 are proved by required conformance checks
 (`namespaced-group-travels-as-two-path-segments`,
 `operation-bound-to-its-creating-principal`,
 `upload-session-bound-to-its-creating-principal`,
-`artifact-digest-is-not-a-capability`); rules 4 and 5 are provider behavior
-proved by provider tests.
+`artifact-digest-is-not-a-capability`, `manifest-reference-is-not-a-capability`);
+rules 4 and 5 are provider behavior proved by provider tests.
 
 ## Consequences
 

@@ -389,6 +389,7 @@
     "namespaced-group-travels-as-two-path-segments",
     "operation-bound-to-its-creating-principal",
     "upload-session-bound-to-its-creating-principal",
-    "artifact-digest-is-not-a-capability"
+    "artifact-digest-is-not-a-capability",
+    "manifest-reference-is-not-a-capability"
   ]
 }

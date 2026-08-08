@@ -75,7 +75,7 @@ func (f *aggregateFixture) validate(kind, name string, spec map[string]any) *hos
 	if form == nil {
 		f.t.Fatalf("%s is not installed", kind)
 	}
-	_, hostErr := f.host.validateDesiredSemantics(form, f.space, name, form.materialize(spec))
+	_, hostErr := f.host.validateDesiredSemantics(referencePrimaryAuth, form, f.space, name, form.materialize(spec))
 	return hostErr
 }
 

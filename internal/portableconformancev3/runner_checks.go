@@ -63,6 +63,7 @@ func (r *v3Runner) run() error {
 		// (spec/decisions/0018).
 		r.checkUploadSessionOwnership,
 		r.checkArtifactDigestIsNotACapability,
+		func() error { return r.checkManifestReferenceIsNotACapability(bundle) },
 		func() error { return r.checkWorkerVersionFlow(version, kv) },
 		func() error { return r.checkBindingContractVerified(version) },
 		func() error { return r.checkRelationIncarnationChange(version, kv) },
@@ -1245,52 +1246,14 @@ func (r *v3Runner) checkArtifacts(bundle probeTarget) error {
 }
 
 // uploadAndCommitManifest drives one complete upload — start, the blobs the
-// host reports missing, commit — and returns the committed manifest digest.
+// host reports missing, commit — as the primary caller, and returns the
+// committed manifest digest.
 func (r *v3Runner) uploadAndCommitManifest(
 	manifest map[string]any,
 	blobs map[string][]byte,
 	keyPrefix string,
 ) (string, error) {
-	uploadID, missing, err := r.startArtifactUpload(manifest, keyPrefix+"-start")
-	if err != nil {
-		return "", err
-	}
-	for _, digest := range missing {
-		blob, staged := blobs[digest]
-		if !staged {
-			return "", fmt.Errorf("host requires blob %s which this check did not stage", digest)
-		}
-		uploaded, err := r.request(
-			http.MethodPut,
-			r.apiBase+"/artifacts/uploads/"+url.PathEscape(uploadID)+"/blobs/"+url.PathEscape(digest),
-			map[string]string{"Content-Type": "application/octet-stream"}, blob,
-		)
-		if err != nil {
-			return "", err
-		}
-		if uploaded.Status != http.StatusCreated && uploaded.Status != http.StatusNoContent {
-			return "", fmt.Errorf("blob upload HTTP %d", uploaded.Status)
-		}
-	}
-	commit, err := r.commitArtifact(uploadID, keyPrefix+"-commit")
-	if err != nil {
-		return "", err
-	}
-	if commit.Status != http.StatusOK && commit.Status != http.StatusCreated {
-		return "", fmt.Errorf(
-			"artifact commit HTTP %d; body=%s", commit.Status, strings.TrimSpace(string(commit.Body)),
-		)
-	}
-	var result struct {
-		ManifestDigest string `json:"manifestDigest"`
-	}
-	if err := decodeStrictResponse(commit, &result); err != nil {
-		return "", err
-	}
-	if !formpackage.ValidDigest(result.ManifestDigest) {
-		return "", errors.New("artifact commit returned an invalid manifestDigest")
-	}
-	return result.ManifestDigest, nil
+	return r.uploadAndCommitManifestAs(r.token, manifest, blobs, keyPrefix)
 }
 
 // checkArtifactManifestKindExclusive proves the per-kind closure the published

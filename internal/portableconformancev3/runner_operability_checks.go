@@ -257,6 +257,67 @@ func decodeUploadStatus(response wireResponse) (string, []string, error) {
 	return status.UploadID, status.MissingBlobs, nil
 }
 
+// uploadAndCommitManifestAs drives one complete upload under a named
+// credential — start, the blobs the host reports missing FOR THAT CALLER, and
+// commit — and returns the committed manifest digest. The missing set is a
+// per-tenant answer, so the same manifest legitimately requires bytes from one
+// caller and not from another.
+func (r *v3Runner) uploadAndCommitManifestAs(
+	token string,
+	manifest map[string]any,
+	blobs map[string][]byte,
+	keyPrefix string,
+) (string, error) {
+	startResponse, err := r.startUploadAs(token, manifest, keyPrefix+"-start")
+	if err != nil {
+		return "", err
+	}
+	uploadID, missing, err := decodeUploadStatus(startResponse)
+	if err != nil {
+		return "", err
+	}
+	for _, digest := range missing {
+		blob, staged := blobs[digest]
+		if !staged {
+			return "", fmt.Errorf("host requires blob %s which this check did not stage", digest)
+		}
+		uploaded, err := r.requestWithToken(
+			token, http.MethodPut,
+			r.apiBase+"/artifacts/uploads/"+url.PathEscape(uploadID)+"/blobs/"+url.PathEscape(digest),
+			map[string]string{"Content-Type": "application/octet-stream"}, blob,
+		)
+		if err != nil {
+			return "", err
+		}
+		if uploaded.Status != http.StatusCreated && uploaded.Status != http.StatusNoContent {
+			return "", fmt.Errorf("blob upload HTTP %d", uploaded.Status)
+		}
+	}
+	commit, err := r.requestWithToken(
+		token, http.MethodPost,
+		r.apiBase+"/artifacts/uploads/"+url.PathEscape(uploadID)+"/commit",
+		map[string]string{"Idempotency-Key": keyPrefix + "-commit"}, nil,
+	)
+	if err != nil {
+		return "", err
+	}
+	if commit.Status != http.StatusOK && commit.Status != http.StatusCreated {
+		return "", fmt.Errorf(
+			"artifact commit HTTP %d; body=%s", commit.Status, strings.TrimSpace(string(commit.Body)),
+		)
+	}
+	var result struct {
+		ManifestDigest string `json:"manifestDigest"`
+	}
+	if err := decodeStrictResponse(commit, &result); err != nil {
+		return "", err
+	}
+	if !formpackage.ValidDigest(result.ManifestDigest) {
+		return "", errors.New("artifact commit returned an invalid manifestDigest")
+	}
+	return result.ManifestDigest, nil
+}
+
 // checkUploadSessionOwnership proves an upload id is bound the same way an
 // operation id is. Continuing (blob PUT), committing, and abandoning a session
 // the caller does not own each fail with the surface's ordinary not-found code,
@@ -487,5 +548,122 @@ func (r *v3Runner) checkArtifactDigestIsNotACapability() error {
 		return errors.New("a second tenant's commit changed the first holder's manifest")
 	}
 	r.complete("artifact-digest-is-not-a-capability")
+	return nil
+}
+
+// foreignUseBundleManifest is one WorkerBundle manifest owned by the reference
+// rule below and by nothing else, so proving what a foreign tenant may not
+// REFERENCE never depends on which other check has already uploaded what.
+func foreignUseBundleManifest() (map[string]any, string, string) {
+	source := "export default { async fetch() { return new Response(\"reference\"); } };\n"
+	digest := formpackage.DigestBytes([]byte(source))
+	return map[string]any{
+		"apiVersion": artifactAPIVersion,
+		"kind":       "WorkerBundle",
+		"mainModule": "reference.js",
+		"modules": []any{map[string]any{
+			"name":      "reference.js",
+			"mediaType": "application/javascript+module",
+			"size":      len(source),
+			"digest":    digest,
+		}},
+	}, source, digest
+}
+
+// checkManifestReferenceIsNotACapability proves the holding rule governs USING
+// a content address, not only reading one. A bundle-shaped resource carries a
+// manifest digest as its whole desired state, so a host that resolves that
+// digest against the byte store instead of against the caller's tenant hands a
+// stranger another tenant's deployable code through desired state — the same
+// disclosure the read surfaces refuse, through the resource API.
+//
+// The refusal is the ordinary artifact_missing a never-committed digest gets,
+// before any mutation, on apply and import alike, and nothing is stored. The
+// rule is about authorization and not about refusing shared content: a second
+// principal of the HOLDING tenant references the same manifest successfully,
+// and the foreign tenant that uploads the same bytes itself then references the
+// same immutable identity successfully too.
+func (r *v3Runner) checkManifestReferenceIsNotACapability(bundle probeTarget) error {
+	manifest, source, blobDigest := foreignUseBundleManifest()
+	blobs := map[string][]byte{blobDigest: []byte(source)}
+	manifestDigest, err := r.uploadAndCommitManifestAs(r.token, manifest, blobs, "key-reference-holder")
+	if err != nil {
+		return fmt.Errorf("committing the reference probe manifest: %w", err)
+	}
+
+	// Holding is the TENANT's: the principal that uploads a bundle and the
+	// principal that references it are routinely different
+	// (spec/decisions/0018).
+	holderUse := bundle
+	holderUse.Name = "bundle-holder-reference-probe"
+	holderUse.Spec = map[string]any{"manifestDigest": manifestDigest}
+	holderApply, err := r.applyAs(r.alternateToken, holderUse, applyOptions{
+		Create: true, IdempotencyKey: "key-reference-holder-apply",
+	})
+	if err != nil {
+		return err
+	}
+	if holderApply.Status != http.StatusCreated {
+		return fmt.Errorf(
+			"apply by another principal of the HOLDING tenant: HTTP %d, want 201; body=%s",
+			holderApply.Status, strings.TrimSpace(string(holderApply.Body)),
+		)
+	}
+
+	foreignUse := bundle
+	foreignUse.Name = "bundle-foreign-reference-probe"
+	foreignUse.Spec = map[string]any{"manifestDigest": manifestDigest}
+	foreignApply, err := r.applyAs(r.alternateTenantToken, foreignUse, applyOptions{
+		Create: true, IdempotencyKey: "key-reference-foreign-apply",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(foreignApply, "artifact_missing"); err != nil {
+		return fmt.Errorf("apply referencing a manifest the caller's tenant does not hold: %w", err)
+	}
+	if err := r.expectResourceAbsent(foreignUse); err != nil {
+		return fmt.Errorf("a refused foreign manifest reference stored a resource: %w", err)
+	}
+	foreignImport, err := r.importResourceAs(r.alternateTenantToken, foreignUse, importOptions{
+		NativeID: "native-foreign-reference-probe", IdempotencyKey: "key-reference-foreign-import", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(foreignImport, "artifact_missing"); err != nil {
+		return fmt.Errorf("import referencing a manifest the caller's tenant does not hold: %w", err)
+	}
+	if err := r.expectResourceAbsent(foreignUse); err != nil {
+		return fmt.Errorf("a refused foreign manifest adoption stored a resource: %w", err)
+	}
+
+	// The same bytes, supplied by the other tenant itself, make the same
+	// immutable identity referenceable by it.
+	foreignDigest, err := r.uploadAndCommitManifestAs(
+		r.alternateTenantToken, manifest, blobs, "key-reference-foreign",
+	)
+	if err != nil {
+		return fmt.Errorf("the other tenant committing the same manifest: %w", err)
+	}
+	if foreignDigest != manifestDigest {
+		return fmt.Errorf(
+			"the same manifest bytes committed by another tenant answered digest %s, want %s",
+			foreignDigest, manifestDigest,
+		)
+	}
+	nowUsable, err := r.applyAs(r.alternateTenantToken, foreignUse, applyOptions{
+		Create: true, IdempotencyKey: "key-reference-foreign-apply-held",
+	})
+	if err != nil {
+		return err
+	}
+	if nowUsable.Status != http.StatusCreated {
+		return fmt.Errorf(
+			"apply by the tenant that just committed the manifest: HTTP %d, want 201; body=%s",
+			nowUsable.Status, strings.TrimSpace(string(nowUsable.Body)),
+		)
+	}
+	r.complete("manifest-reference-is-not-a-capability")
 	return nil
 }

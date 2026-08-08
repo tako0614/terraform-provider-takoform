@@ -119,7 +119,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 72-entry executed-check list every v3
+// requiredRunnerChecks is the closed 73-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -195,6 +195,7 @@ var requiredRunnerChecks = []string{
 	"operation-bound-to-its-creating-principal",
 	"upload-session-bound-to-its-creating-principal",
 	"artifact-digest-is-not-a-capability",
+	"manifest-reference-is-not-a-capability",
 }
 
 // FormRef is the exact four-field v1alpha3 Form identity.

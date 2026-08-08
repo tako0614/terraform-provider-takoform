@@ -504,7 +504,10 @@ bytes, so the manifest and the desired spec are never two spellings of the
 same facts. A host MUST therefore resolve the referenced manifest before it
 mutates anything, on apply and on import alike, and fail closed when
 
-- the digest names no committed manifest — `artifact_missing` (404);
+- the digest names no committed manifest the caller's tenant holds —
+  `artifact_missing` (404). Resolution is the same per-tenant question the
+  artifact read surfaces ask, so a manifest another tenant committed is answered
+  exactly as an uncommitted digest is;
 - the stored manifest's RFC 8785 canonical digest differs from the referenced
   digest, its document is undecodable, or its `kind` is not the kind the Form
   requires — `artifact_invalid` (400);
@@ -548,6 +551,19 @@ however many tenants hold it. Two tenants that upload the same bytes and commit
 the same manifest see the same immutable identity, and neither one's abandon or
 garbage collection may take the bytes away from the other. This is the required
 conformance check `artifact-digest-is-not-a-capability`.
+
+The rule governs **using** an address as well as reading one. Wherever a host
+resolves a manifest or a blob on behalf of a request — above all the referenced
+manifest of a bundle-shaped desired state — it asks the same per-tenant holding
+question, so a caller who merely learns a digest cannot apply or import their way
+to another tenant's artifact. The refusal is the ordinary `artifact_missing`
+(404), raised before any mutation on apply and import alike and re-raised when a
+202 commits, and it MUST NOT distinguish "exists but is not yours" from "does not
+exist": a distinguishable refusal is the existence oracle the read rule removes.
+Holding is the tenant's, so a manifest one principal uploaded is referenceable by
+another principal of the same tenant, and a tenant that supplies the same bytes
+itself references the same immutable identity like any other holder. This is the
+required conformance check `manifest-reference-is-not-a-capability`.
 
 ## Support profiles
 
