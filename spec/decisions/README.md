@@ -27,3 +27,4 @@ record does not replace them.
 - [0021 — Third-party Forms and contract distribution](0021-third-party-forms-and-contract-distribution.md)
 - [0022 — A host answers for an exact Form, and a relation pins its target's contract](0022-relations-pin-the-target-contract.md)
 - [0023 — The runtime ABI is measured separately from the control plane](0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)
+- [0026 — An attachment's claim is decided on canonical, resolved identity](0026-attachment-claims-are-canonical-and-acyclic.md)

@@ -142,7 +142,10 @@ not already acknowledged. `maxRetries` counts REDELIVERIES only, so a message is
 delivered at most `1 + maxRetries` times and `maxRetries: 0` means one delivery.
 A message that exhausts its retries becomes a NEW message on the dead-letter
 queue — new id, new acceptance timestamp, `attempts` starting again at 1 — or is
-dropped when no dead-letter queue is declared.
+dropped when no dead-letter queue is declared. Because the transfer resets the
+attempt count, a dead-letter destination that leads back to the origin is a loop
+`maxRetries` cannot bound; refusing that cycle is
+[decision 0026](0026-attachment-claims-are-canonical-and-acyclic.md).
 
 One queue has AT MOST ONE consumer. `maxRetries`, `retryDelaySeconds`,
 `maxConcurrency`, and the dead-letter destination are properties of how that

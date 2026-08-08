@@ -479,6 +479,45 @@ the deployment rule above, and removing the first consumer makes the second
 representable. This is the required conformance check
 `queue-single-consumer-enforced`.
 
+### An attachment's claim is decided on canonical, resolved identity
+
+Two further attachment rules are about what an attachment CLAIMS rather than
+about the worker it activates
+([decision 0026](../decisions/0026-attachment-claims-are-canonical-and-acyclic.md)).
+Both fail `invalid_argument` (400) before any mutation, on `apply` and on
+`import` alike, and are re-raised when an accepted `202` commits: each is a
+statement about the store, and the store moves between accept and commit.
+
+A `WorkerCustomDomain`'s `hostname` is **canonicalized before it is compared and
+before it is stored**: the trailing root dot removed and every ASCII letter
+lowercased. Canonicalization happens at the same entry point as declared
+defaults — before validation, before the spec digest, before storage and echo —
+so `API.Example.com`, `api.example.com.` and `api.example.com` produce
+byte-identical desired state, the same `specDigest`, and the same `generation`.
+An internationalized name travels as its **A-label**; the Form's `hostname`
+pattern admits no non-ASCII byte, so a host performs no IDNA mapping of its own
+and two hosts on different Unicode tables cannot canonicalize one name two ways.
+The canonical hostname is then unique **per tenant**: a second
+`WorkerCustomDomain` claiming a hostname a live one already serves — in that
+space or in any other space of the same tenant — fails `invalid_argument` (400),
+and releasing the holder makes the claim representable. Spaces partition one
+tenant's resources; DNS does not partition with them, and one hostname has one
+answer. These are the required conformance checks
+`custom-domain-hostname-canonicalized` and
+`custom-domain-hostname-claim-unique`.
+
+A `QueueConsumer`'s `deadLetterQueue` MUST NOT lead back to the queue the
+consumer drains. A destination resolving to the same queue UID is refused, and
+so is one closing a cycle through the dead-letter graph of any length: the graph
+is over queues, where the edge `Q -> D` exists when the consumer of `Q` declares
+`D`. An exhausted message arrives at its dead-letter queue as a NEW message with
+its attempt count starting again at 1, so a cycle is a loop `maxRetries` cannot
+bound — the platform would build an infinite redelivery for the author. Because
+a queue has at most one consumer it has at most one outgoing edge, so a host
+follows a single path; the walk admits each queue UID once, so it terminates on
+any graph shape, including a cycle a laxer state left behind. This is the
+required conformance check `dead-letter-cycle-rejected`.
+
 ### Reverse validation and deletion
 
 The gate holds in both directions.
@@ -664,6 +703,29 @@ references the manifest. Abandoning an unrelated upload session, or
 garbage-collecting staged blobs, MUST NOT make a referenced artifact
 unresolvable.
 
+### A bundle's modules are what the runtime can load
+
+The module media types a `WorkerBundle` manifest admits are exactly the
+LOADABLE set `worker.runtime@1.0.0` imports —
+`application/javascript+module`, `text/plain`, `application/octet-stream`,
+`application/wasm` — plus the AUXILIARY set a bundle carries and the graph
+never imports, today `application/source-map+json` alone. `application/json`
+is in neither: this ABI version loads none, and the published manifest enum
+never admitted one
+([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
+
+A host MUST refuse a `WorkerBundle` whose `mainModule` names an auxiliary
+module, before commit and before any mutation that references the manifest,
+with `artifact_invalid` (400) — and MUST NOT refuse a bundle merely for
+CARRYING one. The published manifest schema states the union in one enum and
+cannot relate `mainModule` to the media type of the module it names, so the
+split is host-enforced under
+[decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)
+and proved by the required conformance check `bundle-main-module-is-loadable`.
+The corresponding runtime obligation — an import resolving to an auxiliary
+module fails `unsupported_media_type` — is behavior no desired-state runner
+observes, and stays a host obligation with the rest of the ABI.
+
 ### Upload sessions are owned
 
 An upload id is a handle bound to the tenant and principal that started the
@@ -783,7 +845,9 @@ proving them means executing the module rather than driving the Host API:
   an already-sent response;
 - an uncaught throw becoming a host-generated 500 in `fetch` and a failed
   invocation in `scheduled` and `queue`;
-- the `globals` floor, and the loadable module media types.
+- the `globals` floor, the loadable module media types, and that an import
+  resolving to an auxiliary module fails `unsupported_media_type` rather than
+  linking source-map evidence into the graph.
 
 One further obligation is not merely unproven here but UNMEASURABLE anywhere
 today, and is listed rather than left implied:
@@ -823,7 +887,15 @@ Proven by required checks:
   refused, and the sub-hourly schedules the grammar exists for are accepted
   (`cron-grammar-enforced`);
 - a second `QueueConsumer` against one queue is refused, and the same consumer
-  is accepted once the first is gone (`queue-single-consumer-enforced`).
+  is accepted once the first is gone (`queue-single-consumer-enforced`);
+- a `WorkerCustomDomain` written in any spelling of one DNS name is stored under
+  the canonical one, and a second attachment claiming it — in either spelling —
+  is refused while the first lives and accepted once it is gone
+  (`custom-domain-hostname-canonicalized`,
+  `custom-domain-hostname-claim-unique`);
+- a `QueueConsumer` whose dead-letter destination resolves to its own queue, or
+  closes a cycle through another consumer's, is refused, and an acyclic
+  destination is accepted (`dead-letter-cycle-rejected`).
 
 Obligations a conforming host MUST meet that this lane does NOT prove, because
 proving them means exercising the data plane rather than driving the Host API:

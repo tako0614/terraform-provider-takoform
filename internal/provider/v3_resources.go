@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -403,6 +404,13 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 			// accept `0 24 * * *` and `5-1 * * * *`, which the host then refuses —
 			// the plan-time/host-time split decision 0020 closes.
 			validators = append(validators, v3CronValidator{})
+		case field.Pattern == model.PatternHostname:
+			// The hostname pattern admits the spellings DNS treats as one name,
+			// because a host canonicalizes rather than refusing them. A
+			// Terraform attribute cannot hold a value the host will rewrite
+			// without planning drift forever, so the client refuses here and
+			// names the canonical spelling (decision 0026).
+			validators = append(validators, v3HostnameValidator{})
 		case field.Pattern != "":
 			validators = append(validators, StringMatches(field.Pattern, field.HCL+" must match "+field.Pattern))
 		}
@@ -1074,6 +1082,53 @@ func (v3CronValidator) ValidateString(_ context.Context, req validator.StringReq
 		)
 	}
 }
+
+// v3HostnameValidator refuses a DNS hostname written in any spelling but its
+// canonical one.
+//
+// A host canonicalizes before it compares and before it stores
+// (spec/decisions/0026), so "API.Example.com" and "api.example.com." are
+// applied as "api.example.com". A Terraform attribute holds the literal string
+// the author wrote, so a configuration the host would rewrite plans one value
+// and reads back another on every refresh, forever. Terraform also forbids a
+// plan modifier from replacing a Required attribute's configured value, so the
+// honest client-side rule is a refusal that names the canonical spelling
+// rather than a silent rewrite.
+type v3HostnameValidator struct{}
+
+func (v3HostnameValidator) Description(context.Context) string {
+	return "value must be a canonical DNS hostname: lowercase, with no trailing dot"
+}
+
+func (v v3HostnameValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v3HostnameValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	written := req.ConfigValue.ValueString()
+	if !v3HostnamePattern.MatchString(written) {
+		resp.Diagnostics.AddAttributeError(
+			req.Path, "Invalid hostname",
+			fmt.Sprintf("%q is not a dotted ASCII DNS hostname. An internationalized name is written as its A-label.", written),
+		)
+		return
+	}
+	if model.HostnameIsCanonical(written) {
+		return
+	}
+	resp.Diagnostics.AddAttributeError(
+		req.Path, "Hostname is not canonical",
+		fmt.Sprintf(
+			"%q and %q are one hostname to DNS, and a host stores the canonical spelling. Write %q.",
+			written, model.CanonicalHostname(written), model.CanonicalHostname(written),
+		),
+	)
+}
+
+var v3HostnamePattern = regexp.MustCompile(model.PatternHostname)
 
 // v3ParseTimeout parses one positive Go duration.
 func v3ParseTimeout(text string) (time.Duration, bool) {

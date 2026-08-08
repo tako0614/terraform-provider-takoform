@@ -51,13 +51,16 @@ data:
 - **`loadModule`** — the module's default export is a plain object; each
   handler is an optional own property of it; a handler a version DECLARES must
   exist there or the version fails before traffic arrives. It also fixes the
-  loadable media types (`application/javascript+module`, `application/json`,
-  `text/plain`, `application/octet-stream`, `application/wasm`) and states that
-  a WASM module's default export is a compiled `WebAssembly.Module`, never an
+  **loadable** media types (`application/javascript+module`, `text/plain`,
+  `application/octet-stream`, `application/wasm`) and states that a WASM
+  module's default export is a compiled `WebAssembly.Module`, never an
   instance, so imports stay the application's choice. Its `declaredHandlers`
   enum IS the closed handler vocabulary of the ABI, and it is the single source
   of truth for it: the `WorkerVersion` `handlers` enum is read back out of this
-  contract rather than written a second time.
+  contract rather than written a second time. Its `modules` and
+  `auxiliaryModules` media-type enums are the single source of truth for the
+  two module classes in the same way (see "The loadable set is the manifest's
+  set, minus what is never imported" below).
 - **`fetch`** — `fetch(request, env, ctx) -> Response | Promise<Response>`,
   with the request/response types, `bodyStream`, and `handlerOutcome`.
 - **`scheduled`** — `scheduled(event, env, ctx) -> void | Promise<void>`; the
@@ -101,6 +104,42 @@ fixture can prove them — the placement model of [decision
 0014](0014-published-schemas-are-structural-minima.md). Nothing about this
 contract required a new schema identity.
 
+### The loadable set is the manifest's set, minus what is never imported
+
+The ABI's first statement of its loadable media types was written beside, not
+against, the artifact manifest's — and the two did not agree. The manifest
+admitted `application/source-map+json`, which no runtime loads; the ABI claimed
+`application/json`, which the published manifest enum never admitted. A bundle
+could therefore be accepted by one and unusable by the other, and nothing
+discovered it until deploy: a Worker built out of modules the runtime refuses.
+
+The reconciled set is one statement in two classes:
+
+- **loadable** — `application/javascript+module`, `text/plain`,
+  `application/octet-stream`, `application/wasm`. What the module graph may
+  import, and the only class a bundle's `mainModule` may name.
+- **auxiliary** — `application/source-map+json`. What a bundle may carry and
+  the graph never imports. Refused as `mainModule`, refused as an import target
+  (`unsupported_media_type`), and never an error merely for being present.
+
+`application/json` is not supported in this ABI version. Removing it is the
+narrowing direction decision 0014 permits: the published manifest enum is the
+union of the two classes above, so the code narrows onto the published bytes
+rather than past them, and a widening later would be a contract change with a
+new digest like any other.
+
+The set has ONE source of truth — `internal/currentformmodel` — which the
+runtime contract's two enums, the host's manifest validator, and the provider's
+authoring allowlist all read rather than restate. A drift gate holds it to the
+published manifest enum, and the required conformance check
+`bundle-main-module-is-loadable` proves the half a schema cannot state: the
+published enum lists all five media types in one place and cannot relate
+`mainModule` to the media type of the module it names, so only a host stops a
+bundle whose first module is evidence rather than code
+([decision 0014](0014-published-schemas-are-structural-minima.md), and
+[decision 0012](0012-artifacts-use-content-addressed-upload.md) for the
+manifest side).
+
 ### `compatibilityDate` and `compatibilityFlags` are removed
 
 Both fields, and the `nodejs_compat` enum, are deleted from `WorkerVersion` in
@@ -130,7 +169,7 @@ decision 0014.
 
 ### Conformance
 
-Three required checks join the v1alpha3 runner list:
+Four required checks join the v1alpha3 runner list:
 
 - `module-worker-runtime-contract-advertised` — the host serves the runtime
   contract's support profile at the exact pinned `schemaDigest` and supports the
@@ -151,6 +190,11 @@ Three required checks join the v1alpha3 runner list:
   reads the bundle relation, the committed manifest, and the module's content
   address, so it lives on the mutation path beside the other Worker aggregate
   rules.
+- `bundle-main-module-is-loadable` — a `WorkerBundle` manifest whose
+  `mainModule` names an auxiliary module is refused, while the same module set
+  with a loadable `mainModule` commits with the auxiliary module still in it.
+  One module set drives both directions, so the only difference between the
+  refusal and the acceptance is which module `mainModule` names.
 
 `support-profiles-present` additionally now fails a host that advertises a
 `compatibilityDate` range or a `compatibilityFlags` enum, or whose `handlers`
@@ -184,6 +228,11 @@ contract's behavior fixtures against a real runtime.
 - The `handlers` vocabulary has exactly one source of truth. Widening it is a
   contract change with a new digest, which every consumer sees, rather than a
   quiet host decision.
+- So does the module media-type set. Four surfaces state it and none of them
+  owns a list: the contract, the manifest schema gate, the host validator, and
+  the authoring allowlist all resolve to one declaration, so a bundle a host
+  commits is a bundle this runtime can load, by construction rather than by
+  review.
 - An asset-serving worker and a sub-hourly cron remain unexpressible; those are
   separate blockers with their own decisions. Nothing here widens them.
 - `WorkerVersion` loses its only `date-string` field. The authoring model keeps

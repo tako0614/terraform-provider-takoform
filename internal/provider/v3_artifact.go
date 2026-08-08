@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -44,14 +45,12 @@ import (
 const artifactManifestAPIVersion = "artifacts.takoform.com/v1alpha1"
 
 // workerBundleMediaTypes is the closed module media-type set of a WorkerBundle
-// artifact manifest.
-var workerBundleMediaTypes = []string{
-	"application/javascript+module",
-	"application/wasm",
-	"text/plain",
-	"application/octet-stream",
-	"application/source-map+json",
-}
+// artifact manifest: every type the module graph may import, plus every type
+// the bundle may merely carry. It is READ from the lane's single media-type
+// statement, never spelled a second time, so the authoring surface can never
+// admit a module the host would refuse or the runtime could not link
+// (spec/decisions/0012 and 0019).
+var workerBundleMediaTypes = model.BundleModuleMediaTypes()
 
 // workerBundleMaxModuleBytes mirrors the artifact manifest's per-module size
 // ceiling.
@@ -283,6 +282,23 @@ func v3AuthoredBundleModules(list types.List, mainModule string) ([]v3BundleModu
 		diags.AddAttributeError(path.Root("main_module"), "Unknown main module",
 			fmt.Sprintf("main_module %q does not name a declared module.", mainModule))
 		return nil, diags
+	}
+	// An auxiliary module may sit in the bundle and may never be linked, so it
+	// can never be the module the runtime instantiates first. Refusing it here
+	// means the author sees it in the plan rather than at commit.
+	for _, module := range modules {
+		if module.Name != mainModule {
+			continue
+		}
+		if !model.ModuleMediaTypeLoadable(module.ContentType) {
+			diags.AddAttributeError(path.Root("main_module"), "Main module is not loadable",
+				fmt.Sprintf(
+					"main_module %q is declared as %s, which the module graph never imports. "+
+						"main_module must name a module the runtime can instantiate: %s.",
+					mainModule, module.ContentType, strings.Join(model.LoadableModuleMediaTypes(), ", "),
+				))
+			return nil, diags
+		}
 	}
 	return modules, diags
 }

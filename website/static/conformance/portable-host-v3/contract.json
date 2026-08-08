@@ -78,9 +78,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "ModuleWorker",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:99fa5f9c0c2fdffc54a70ec2faf3becb9d9598a880cbf8a4a3c29dd3a7c2c828"
+          "schemaDigest": "sha256:2be908b100782620c1791b4388788ce97312896a3e80f643819a8a83eec7297b"
         },
-        "packageDigest": "sha256:0e28df1c07bbbeeff9407ebe71358afb5490b04a68c53f55b5d96236df245fb3"
+        "packageDigest": "sha256:4275c46dd62569daff598238cd5a347bef6d098963b8e4a3d79ba65978b33678"
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
       "desired": {}
@@ -122,9 +122,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerVersion",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:d5e3d7950e01cd320b9fb8f99184ae008c530b959077062471f1fcefced3c912"
+          "schemaDigest": "sha256:0d769a5d3d0d7d69cbf63ba10176cf6f48df2069ee600c313e920ac7847a1e07"
         },
-        "packageDigest": "sha256:9ba9539e9b7cd071d19f387c665372419a7852338681f4a456990483a3f7d38f"
+        "packageDigest": "sha256:5ef460b5819d58433d7cfd5204702b213754358f393a8c14175a79e193a32e96"
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
       "desired": {
@@ -208,9 +208,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerDeployment",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:e9bcf327d8a023b54d8c01649f954f97261b2ede929e844a215d2f36c7055aa6"
+          "schemaDigest": "sha256:3cfd2b83a7974f0cfb230eb0d135c6951aa4a0710e49292c8f8503882dd8e285"
         },
-        "packageDigest": "sha256:5a72c9848a71ad70de5accba9887460a89b205ca0074c4f81faec5efee6419d7"
+        "packageDigest": "sha256:cd4814a7fc7f2ef36388c32487c18e16f07ed42de39a82b6b3f25c603be33b49"
       },
       "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
       "desired": {
@@ -238,9 +238,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerCustomDomain",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:82dca69cae00df23ab533488c7c857fb19727aadc98cc9d37a5bc20bd2713dd8"
+          "schemaDigest": "sha256:29f89f9137656f0b4dfc0f814f3e402be390333541e2b914a2f67ae2c88e4839"
         },
-        "packageDigest": "sha256:ae95095f332be983c11f6b32843bd3ab8234835e23cb7d190248fe148032892c"
+        "packageDigest": "sha256:4636493c88ccf41f30aaad2d16a8f5d69cec79d797e50d5388395f3a274aa0aa"
       },
       "lifecycleCapabilities": ["create", "read", "delete", "import", "observe"],
       "desired": {
@@ -259,9 +259,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "WorkerCronTrigger",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:e80304baba75da0b110d4315d29ef50f738fe0facc3d6d15df609d048ad103bd"
+          "schemaDigest": "sha256:aebcecc0eb2c34538b31416a2ba6039044457b83ee6bf816d19d6efd6ba4d264"
         },
-        "packageDigest": "sha256:92268f345abc07d91b4ca7c07eca6919773046dbe95802993cc6ac44abd6f451"
+        "packageDigest": "sha256:fc0764a6fb318bee1532ad459563fa270e9856f081533819fafe0338088f2ce0"
       },
       "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
       "desired": {
@@ -280,9 +280,9 @@
           "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "kind": "QueueConsumer",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:35b7dc23c75b5f01e4068ef9bc3df73688e4fbc021ac40cc400c1cea9f13c469"
+          "schemaDigest": "sha256:1e1fee7020aeb0d0a79912055264720348d7472a10eee324485a6acd0b7f4a43"
         },
-        "packageDigest": "sha256:45d8dba9b32af7f2971bcafad634129e9b12db9ec787ee0ebfc1b22ad0ea133c"
+        "packageDigest": "sha256:707f8a2aac9f68ac352987ed08cd6766f78b233bdee3bb6fadfb0c4b91b96006"
       },
       "lifecycleCapabilities": ["create", "read", "update", "delete", "import", "observe"],
       "desired": {
@@ -336,7 +336,7 @@
       "runtimeContract": {
         "name": "worker.runtime",
         "version": "1.0.0",
-        "schemaDigest": "sha256:06104adeefb967838766a90866f7229f12cfd1bceb31cd79c7b1826b15362c0f",
+        "schemaDigest": "sha256:1db4c093befc3c8bb769361c26f26a582561c5ff0edae36a62f45143641a2152",
         "handlers": ["fetch", "scheduled", "queue", "tail"],
         "undefinedHandler": "alarm"
       },
@@ -449,6 +449,7 @@
     "artifact-manifest-reject-list",
     "artifact-commit-binds-declared-size",
     "artifact-manifest-kind-exclusive",
+    "bundle-main-module-is-loadable",
     "artifact-retention-while-referenced",
     "namespaced-group-travels-as-two-path-segments",
     "operation-bound-to-its-creating-principal",
@@ -461,6 +462,9 @@
     "edge-interface-contracts-advertised",
     "cron-grammar-enforced",
     "queue-single-consumer-enforced",
+    "custom-domain-hostname-canonicalized",
+    "custom-domain-hostname-claim-unique",
+    "dead-letter-cycle-rejected",
     "two-definition-versions-answer-independently",
     "resource-answers-only-under-its-recorded-form-ref",
     "relation-target-form-ref-verified",
