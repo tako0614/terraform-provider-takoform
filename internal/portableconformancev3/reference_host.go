@@ -16,6 +16,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 const (
@@ -77,13 +78,19 @@ const (
 
 var artifactPathPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$`)
 
-var artifactModuleMediaTypes = map[string]bool{
-	"application/javascript+module": true,
-	"application/wasm":              true,
-	"text/plain":                    true,
-	"application/octet-stream":      true,
-	"application/source-map+json":   true,
-}
+// artifactModuleMediaTypes is what a WorkerBundle manifest admits. It is
+// DERIVED from the lane's single media-type statement rather than listed here,
+// so this host cannot commit a bundle the runtime contract could not load, nor
+// refuse one the published manifest schema admits (spec/decisions/0012, 0014,
+// and 0019). The loadable/auxiliary split the same statement carries is what
+// makes `mainModule` and the source-map rule below decidable.
+var artifactModuleMediaTypes = func() map[string]bool {
+	admitted := map[string]bool{}
+	for _, mediaType := range currentformmodel.BundleModuleMediaTypes() {
+		admitted[mediaType] = true
+	}
+	return admitted
+}()
 
 // hostError is one closed stable error outcome.
 type hostError struct {
@@ -1808,6 +1815,7 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 		return stableError("artifact_invalid", "manifest kind is not a closed artifact kind")
 	}
 	names := map[string]bool{}
+	loadable := map[string]bool{}
 	moduleBytes := int64(0)
 	for _, module := range manifest.Modules {
 		if !artifactPathPattern.MatchString(module.Name) || len(module.Name) > 240 {
@@ -1820,6 +1828,7 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 		if !artifactModuleMediaTypes[module.MediaType] {
 			return stableError("artifact_invalid", "module mediaType is not closed")
 		}
+		loadable[module.Name] = currentformmodel.ModuleMediaTypeLoadable(module.MediaType)
 		if err := validateArtifactSize(module.Size); err != nil {
 			return err
 		}
@@ -1829,8 +1838,23 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 		size, _ := strconv.ParseInt(module.Size.String(), 10, 64)
 		moduleBytes += size
 	}
-	if manifest.Kind == "WorkerBundle" && !names[manifest.MainModule] {
-		return stableError("artifact_invalid", "mainModule must name one declared module")
+	if manifest.Kind == "WorkerBundle" {
+		if !names[manifest.MainModule] {
+			return stableError("artifact_invalid", "mainModule must name one declared module")
+		}
+		// An AUXILIARY module — today, source-map evidence about another
+		// module — may sit in the bundle and is never imported, so it can
+		// never be the module the runtime instantiates first. The published
+		// manifest schema admits it in `modules` alongside loadable code and
+		// cannot tell the two apart, so this is a host rule proved by a
+		// required conformance check (spec/decisions/0012, 0014, and 0019).
+		if !loadable[manifest.MainModule] {
+			return stableError(
+				"artifact_invalid",
+				"mainModule "+quoteText(manifest.MainModule)+
+					" names a module the runtime never imports; mainModule must be a loadable module",
+			)
+		}
 	}
 	// A source map is evidence about another module. "<module>.map" is the
 	// portable naming rule, so a source map whose target module is not

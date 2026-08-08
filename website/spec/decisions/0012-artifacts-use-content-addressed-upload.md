@@ -40,10 +40,23 @@ An artifact manifest is a typed, canonical document (for example
 per manifest kind. Archives are transport only; a tar or zip byte stream is
 never a semantic identity.
 
+"Closed per manifest kind" is closed **against the runtime**, not against a
+list this document keeps. A `WorkerBundle` manifest admits exactly the media
+types `worker.runtime` can LOAD, plus the ones a bundle may CARRY and the graph
+never imports — today source maps alone. A media type in neither is refused,
+and an auxiliary media type is refused as `mainModule` while being perfectly
+admissible in `modules`. Stating the set anywhere but once, beside the runtime
+contract that consumes it, is how the manifest and the ABI came to disagree in
+the first place; the reconciled set and its two classes live in
+[decision 0019](0019-the-module-worker-abi-is-an-exact-contract.md) and are
+enforced in code and conformance under
+[decision 0014](0014-published-schemas-are-structural-minima.md), because the
+published enum states the union and cannot state the split.
+
 Hosts reject: duplicate module names, absolute paths, `..`, backslashes, NUL,
 invalid UTF-8 names, unsupported media types, size or digest mismatches, file
-count and total-size overruns, a missing main module, source maps whose
-target module is absent, and archive bombs.
+count and total-size overruns, a missing main module, a main module the runtime
+never imports, source maps whose target module is absent, and archive bombs.
 
 Uploads are resumable: re-asking for missing blobs and re-committing the same
 manifest is idempotent and converges on the same manifest digest.

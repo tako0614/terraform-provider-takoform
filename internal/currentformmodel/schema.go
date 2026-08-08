@@ -20,8 +20,13 @@ const (
 	PatternBindingName = `^[A-Za-z_$][A-Za-z0-9_$]*$`
 	// PatternRelativePath is a non-escaping relative module path.
 	PatternRelativePath = `^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$`
-	// PatternHostname is a dotted DNS hostname.
-	PatternHostname = `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
+	// PatternHostname is a dotted DNS hostname. It admits the two spellings
+	// DNS treats as one name and canonicalization removes — an uppercase
+	// letter and the trailing root dot — because refusing a legitimate
+	// spelling outright is not the same rule as agreeing on one identity for
+	// it (see CanonicalHostname). It admits no non-ASCII byte, so an
+	// internationalized name travels as its A-label.
+	PatternHostname = `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\.?$`
 	// PatternCanonicalSHA256 is the algorithm-prefixed lowercase digest used
 	// by every exact Takoform identity.
 	PatternCanonicalSHA256 = `^sha256:[0-9a-f]{64}$`

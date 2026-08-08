@@ -57,6 +57,7 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkArtifacts(bundle) },
 		r.checkArtifactRejectList,
 		r.checkArtifactManifestKindExclusive,
+		r.checkBundleMainModuleIsLoadable,
 		func() error { return r.checkArtifactRetentionWhileReferenced(bundle) },
 		// Ownership of the artifact surface: an upload id is a handle, and a
 		// content address is a name rather than an entitlement
@@ -81,6 +82,13 @@ func (r *v3Runner) run() error {
 		// deployed, whose versions export every handler.
 		r.checkCronGrammarEnforced,
 		r.checkSingleQueueConsumerEnforced,
+		// What an attachment CLAIMS, decided on the identity the claim names
+		// rather than on the bytes a client wrote (spec/decisions/0023). The
+		// hostname pair runs in order: the first stores the claim under its
+		// canonical spelling, the second proves nothing else may take it.
+		r.checkCustomDomainHostnameCanonicalized,
+		r.checkCustomDomainHostnameClaimUnique,
+		r.checkDeadLetterCycleRejected,
 		// The ABI closes the handler surface those attachments are gated on
 		// (spec/decisions/0019): first by vocabulary, then by what the code a
 		// version actually runs exports.

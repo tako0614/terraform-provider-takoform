@@ -122,6 +122,12 @@ Rules 3, 4, and 8 are three views of one fact — an activated worker is what it
 deployment selects — so a host that implements any of them in terms of stored
 versions rather than the deployment has implemented none of them.
 
+Every rule here is about the worker an attachment activates. What an attachment
+CLAIMS — the DNS hostname a `WorkerCustomDomain` serves, the queue a
+`QueueConsumer` dead-letters to — is a separate question with the same shape,
+decided against the store on canonical, resolved identity:
+[decision 0023](0023-attachment-claims-are-canonical-and-acyclic.md).
+
 Rule 6 is enforced in three places for three different reasons: the authoring
 model proves a Form's own canonical examples are collision-free, the provider
 refuses the configuration during plan against the attribute the author wrote,

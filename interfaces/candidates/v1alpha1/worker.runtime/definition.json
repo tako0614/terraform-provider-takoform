@@ -8,11 +8,37 @@
   "operations": [
     {
       "name": "loadModule",
-      "description": "Loads one Worker Bundle into a fresh isolate before the first invocation. mainModule names the ES module whose default export carries the handlers; modules lists the whole bundle. Exactly these media types load: application/javascript+module as an ES module; application/json, default export the parsed document; text/plain, default export the decoded UTF-8 text; application/octet-stream, default export an ArrayBuffer; and application/wasm, whose default export is a COMPILED WebAssembly.Module, never an instance — the runtime compiles it once per isolate and the JavaScript module instantiates it with new WebAssembly.Instance(module, imports), so imports stay the application's choice. exportedHandlers is the subset of the vocabulary the default export exposes as callable own properties; a declared handler the module does not export fails with handler_not_exported before any traffic arrives. The declaredHandlers enum IS this ABI's handler vocabulary: a Worker Version declaring anything outside it is refused.",
+      "description": "Loads one Worker Bundle into a fresh isolate. mainModule names the ES module whose default export carries the handlers, and MUST name one entry of modules. modules is the IMPORTABLE module graph; exactly these load: application/javascript+module as an ES module; text/plain as decoded UTF-8 text; application/octet-stream as an ArrayBuffer; and application/wasm as a COMPILED WebAssembly.Module, never an instance, so imports stay the application's choice. auxiliaryModules is what the bundle CARRIES without linking: source-map evidence. Its presence is not an error, it is never mainModule, and resolving an import to one fails unsupported_media_type. This ABI version loads no application/json. exportedHandlers is the subset of the vocabulary the default export exposes as callable own properties; a declared handler the module does not export fails handler_not_exported before traffic arrives. The declaredHandlers enum IS this ABI's handler vocabulary: anything outside it is refused.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "auxiliaryModules": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "mediaType": {
+                  "enum": [
+                    "application/source-map+json"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 1024,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mediaType",
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 512,
+            "type": "array",
+            "uniqueItems": true
+          },
           "declaredHandlers": {
             "items": {
               "enum": [
@@ -39,7 +65,6 @@
                 "mediaType": {
                   "enum": [
                     "application/javascript+module",
-                    "application/json",
                     "application/octet-stream",
                     "application/wasm",
                     "text/plain"
@@ -602,6 +627,62 @@
             ]
           },
           "expectedError": "handler_not_exported"
+        }
+      ]
+    },
+    {
+      "name": "auxiliary-module-is-carried-never-loaded",
+      "steps": [
+        {
+          "operation": "loadModule",
+          "input": {
+            "auxiliaryModules": [
+              {
+                "mediaType": "application/source-map+json",
+                "name": "index.js.map"
+              }
+            ],
+            "declaredHandlers": [
+              "fetch"
+            ],
+            "mainModule": "index.js",
+            "modules": [
+              {
+                "mediaType": "application/javascript+module",
+                "name": "index.js"
+              }
+            ]
+          },
+          "expected": {
+            "exportedHandlers": [
+              "fetch",
+              "scheduled",
+              "queue",
+              "tail"
+            ]
+          }
+        },
+        {
+          "operation": "loadModule",
+          "input": {
+            "auxiliaryModules": [
+              {
+                "mediaType": "application/source-map+json",
+                "name": "index.js.map"
+              }
+            ],
+            "declaredHandlers": [
+              "fetch"
+            ],
+            "mainModule": "index.js.map",
+            "modules": [
+              {
+                "mediaType": "application/javascript+module",
+                "name": "index.js"
+              }
+            ]
+          },
+          "expectedError": "unsupported_media_type"
         }
       ]
     },

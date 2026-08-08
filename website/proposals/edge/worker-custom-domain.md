@@ -42,6 +42,10 @@ None.
 ## Lifecycle risks
 
 Two attachments claiming one hostname must conflict deterministically.
+They do: the hostname is canonicalized before it is compared and before it is
+stored, and one canonical hostname is claimed by at most one attachment per
+tenant, with `invalid_argument` (400) before any mutation
+([decision 0023](../../spec/decisions/0023-attachment-claims-are-canonical-and-acyclic.md)).
 Deleting the worker while the attachment exists must fail with
 `dependency_in_use`. Import must recover hostname and worker exactly.
 

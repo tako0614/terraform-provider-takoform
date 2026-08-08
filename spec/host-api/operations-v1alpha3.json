@@ -112,8 +112,19 @@
     "kindMismatch": "artifact_invalid/400-before-mutation",
     "manifestContractViolation": "artifact_invalid/400-before-mutation",
     "perKindExclusivity": "WorkerBundle-carries-modules-not-files; StaticAssetBundle-and-MigrationBundle-carry-files-not-modules",
+    "loadableModuleMediaTypes": "application/javascript+module, text/plain, application/octet-stream, application/wasm",
+    "auxiliaryModuleMediaTypes": "application/source-map+json",
+    "unsupportedModuleMediaTypes": "application/json",
+    "mainModuleClass": "must-name-a-loadable-module; auxiliary-mainModule-is-artifact_invalid/400; carrying-an-auxiliary-module-is-never-an-error",
     "commitRevalidation": "every-manifest-rule-re-verified-at-commit",
     "retention": "committed-manifest-and-blobs-readable-while-any-resource-references-them"
+  },
+  "attachmentClaims": {
+    "hostnameCanonicalization": "trailing-root-dot-removed-and-ascii-lowercased-at-the-materialization-entry-point-before-validation-digesting-storage-and-echo",
+    "hostnameInternationalization": "a-label-only; the-form-pattern-admits-no-non-ascii-byte-and-a-host-performs-no-idna-mapping",
+    "hostnameUniqueness": "one-canonical-hostname-per-tenant-across-every-space; second-claim-is-invalid_argument/400-before-mutation",
+    "deadLetterAcyclicity": "a-dead-letter-reference-resolving-to-the-consumers-own-queue-or-closing-a-cycle-of-any-length-is-invalid_argument/400-before-mutation",
+    "commitRevalidation": "both-claims-re-verified-when-an-accepted-202-commits"
   },
   "roleRules": {
     "revisionUpdate": "invalid_argument",

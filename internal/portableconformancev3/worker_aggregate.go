@@ -249,11 +249,20 @@ func (h *ReferenceHost) validateWorkerAggregate(
 		); hostErr != nil {
 			return hostErr
 		}
-		// A queue consumer carries one more cardinality rule, and it is about the
-		// QUEUE rather than the worker: edge.queue states that a queue has at most
-		// one consumer (decision 0020).
-		if form.Ref.Kind == queueConsumerKind {
-			return h.validateSingleQueueConsumer(space, name, relations)
+		// Two attachments carry a further rule that is about what they CLAIM
+		// rather than about the worker they activate (decisions 0020 and 0023).
+		switch form.Ref.Kind {
+		case queueConsumerKind:
+			// A queue has at most one consumer, and a consumer's dead-letter
+			// destination must lead somewhere a message can come to rest.
+			if hostErr := h.validateSingleQueueConsumer(space, name, relations); hostErr != nil {
+				return hostErr
+			}
+			return h.validateDeadLetterAcyclic(space, name, relations)
+		case workerCustomDomainKind:
+			// One DNS hostname has one answer, per tenant, on the canonical
+			// spelling this host stored.
+			return h.validateSingleHostnameClaim(space, name, spec)
 		}
 	}
 	return nil

@@ -24,9 +24,13 @@ module.
 
 Before it mutates anything, a host resolves the referenced manifest and holds
 it to the artifact contract: an uncommitted digest is `artifact_missing`, and
-a manifest of another kind, one whose `mainModule` is not declared, one
-carrying asset `files`, one naming a media type outside the closed set, or
-one overrunning the host's published bundle limit is `artifact_invalid`.
+a manifest of another kind, one whose `mainModule` is not declared, one whose
+`mainModule` names a module the runtime never imports, one carrying asset
+`files`, one naming a media type outside the closed set, or one overrunning
+the host's published bundle limit is `artifact_invalid`. The closed set is the
+media types `worker.runtime` LOADS plus the ones a bundle CARRIES and the graph
+never imports — source maps — and `mainModule` may only be one of the first
+([decision 0019](../../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 
 ## Why this is one Form
 
