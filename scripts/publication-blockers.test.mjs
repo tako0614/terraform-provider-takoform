@@ -130,6 +130,44 @@ describe("evidence must be real, not decorative", () => {
   });
 });
 
+describe("an issue number traces to an issue", () => {
+  // GitHub draws issues and pull requests from ONE sequence, so a blocker that
+  // records a pull request number reads as correct: `gh issue view 116`
+  // resolves the pull request and answers. Nothing offline can confirm a
+  // number IS an issue, but the repository's own history can REFUTE one: a
+  // number it landed as a pull request is not an issue.
+  test("a number this repository landed as a pull request is refused", () => {
+    expect(() =>
+      parseBlockerLedger(ledger([blocker({ issue: 116 })]), repositoryRoot),
+    ).toThrow(/records #116 as a pull request/);
+  });
+
+  test("the committed ledger names no pull request number", () => {
+    const parsed = loadBlockerLedger(repositoryRoot);
+    expect(parsed.pullRequestNumbersKnown).toBeGreaterThan(0);
+    for (const entry of parsed.blockers) {
+      expect(typeof entry.issue).toBe("number");
+    }
+  });
+
+  test("two blockers may not name one issue", () => {
+    expect(() =>
+      parseBlockerLedger(
+        ledger([blocker({ id: "V3-001", issue: 900001 }), blocker({ id: "V3-002", issue: 900001 })]),
+      ),
+    ).toThrow(/one issue tracks one blocker/);
+  });
+
+  test("a number no commit landed is accepted", () => {
+    const parsed = parseBlockerLedger(ledger([blocker({ issue: 900002 })]), repositoryRoot);
+    expect(parsed.blockers[0].issue).toBe(900002);
+  });
+
+  test("a non-positive issue is still refused", () => {
+    expect(() => parseBlockerLedger(ledger([blocker({ issue: 0 })]))).toThrow(/positive integer/);
+  });
+});
+
 describe("the freeze stays scoped to this lane", () => {
   // The shared owner gate also serves the retained packages and the append-only
   // revocation path. An urgent revocation must never wait on this lane.

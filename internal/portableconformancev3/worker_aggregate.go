@@ -92,9 +92,17 @@ var attachmentHandler = map[string]string{
 	queueConsumerKind:      queueHandler,
 }
 
-// sortedResources returns every stored resource in a stable key order, so
-// every aggregate decision and every message this file produces is
-// deterministic regardless of Go map iteration.
+// sortedResources returns every stored resource of EVERY tenant in a stable key
+// order, so every scan built on it is deterministic regardless of Go map
+// iteration.
+//
+// It is the unfiltered view, and almost nothing should use it. A rule decided
+// over the store is a rule about one tenant's plane, so the two callers that take
+// this view are the two that say why in their own doc comments: the tenant-wide
+// hostname claim scan, which supplies its own tenant filter, and the dead-letter
+// successor map, which is keyed by uid and can therefore only ever be walked into
+// from inside the tenant that owns those uids. Everything else takes
+// scopedResources (spec/decisions/0028).
 func (h *ReferenceHost) sortedResources() []*storedResource {
 	keys := make([]string, 0, len(h.resources))
 	for key := range h.resources {
@@ -108,19 +116,33 @@ func (h *ReferenceHost) sortedResources() []*storedResource {
 	return out
 }
 
+// scopedResources is the store as ONE scope sees it: the resources of one tenant
+// in one space, in a stable key order. Every cross-resource scan that decides a
+// mutation, and the derived-rendering pass that writes revisions, iterate this
+// rather than the whole host.
+func (h *ReferenceHost) scopedResources(scope resourceScope) []*storedResource {
+	out := make([]*storedResource, 0, len(h.resources))
+	for _, candidate := range h.sortedResources() {
+		if candidate.Tenant != scope.Tenant || candidate.Space != scope.Space {
+			continue
+		}
+		out = append(out, candidate)
+	}
+	return out
+}
+
 // activeDeployment returns the one WorkerDeployment governing one worker
 // INCARNATION, or nil when that worker has none.
 //
 // The lookup is by the worker's UID, never by the name a deployment's spec
 // spells: a name can be reused, and a deployment still pinned to a deleted
 // worker describes traffic for a resource that no longer exists.
-func (h *ReferenceHost) activeDeployment(space, workerUID string) *storedResource {
+func (h *ReferenceHost) activeDeployment(scope resourceScope, workerUID string) *storedResource {
 	if workerUID == "" {
 		return nil
 	}
-	for _, candidate := range h.sortedResources() {
-		if candidate.Space != space || candidate.group() != edgeFormsGroup ||
-			candidate.kind() != workerDeploymentKind {
+	for _, candidate := range h.scopedResources(scope) {
+		if candidate.group() != edgeFormsGroup || candidate.kind() != workerDeploymentKind {
 			continue
 		}
 		if relationTargetUID(candidate.Relations, workerRelationPointer) == workerUID {
@@ -135,13 +157,13 @@ func (h *ReferenceHost) activeDeployment(space, workerUID string) *storedResourc
 // whose target no longer resolves to the UID it was pinned to yields nothing:
 // that deployment entry selects an incarnation that is gone, so it serves no
 // handler at all.
-func (h *ReferenceHost) weightedVersions(space string, relations []storedRelation) []*storedResource {
+func (h *ReferenceHost) weightedVersions(scope resourceScope, relations []storedRelation) []*storedResource {
 	var out []*storedResource
 	for _, relation := range relations {
 		if relation.Relation != deploymentVersionsRelation {
 			continue
 		}
-		version := h.resources[resourceKey(space, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
+		version := h.resources[resourceKey(scope, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
 		if version == nil || version.UID != relation.TargetUID {
 			continue
 		}
@@ -199,10 +221,10 @@ type workerDependent struct {
 // worker IDENTITY (decision 0015): what a service binding actually reaches is
 // whatever the target worker's active deployment selects, so a deployment that
 // stops serving `fetch` silently breaks every caller bound to it.
-func (h *ReferenceHost) workerDependents(space, workerUID string) []workerDependent {
+func (h *ReferenceHost) workerDependents(scope resourceScope, workerUID string) []workerDependent {
 	var out []workerDependent
-	for _, candidate := range h.sortedResources() {
-		if candidate.Space != space || candidate.group() != edgeFormsGroup {
+	for _, candidate := range h.scopedResources(scope) {
+		if candidate.group() != edgeFormsGroup {
 			continue
 		}
 		if handler, attachment := attachmentHandler[candidate.kind()]; attachment {
@@ -233,18 +255,19 @@ func (h *ReferenceHost) workerDependents(space, workerUID string) []workerDepend
 // decision 0016 states. It runs on apply and on import alike, and is re-run at
 // async COMMIT time, exactly like relation resolution.
 //
-// The caller travels with the space and the name because the rules below are
-// not all scoped the same way. Every aggregate rule is decided on a host-issued
-// UID — one deployment per worker INCARNATION, one consumer per queue
-// INCARNATION — and a UID names one resource inside one boundary, so those
-// scans cannot reach past it. The hostname claim is the exception: it compares
-// a name DNS owns rather than a uid this host issued, so nothing in the
-// comparison carries a boundary and the boundary has to be supplied
-// (spec/decisions/0026).
+// The SCOPE travels with the name because every rule below is decided inside one
+// tenant. Most of them are decided on a host-issued UID — one deployment per
+// worker INCARNATION, one consumer per queue INCARNATION — and a uid names one
+// resource inside one tenant, so those scans could not reach past it even
+// without the filter; they are scoped anyway, because a scan that only happens
+// to be safe is one refactor away from not being. The hostname claim is the
+// deliberate exception in the other direction: it compares a name DNS owns
+// rather than a uid this host issued, so it spans every space OF THE TENANT and
+// takes the tenant alone (spec/decisions/0026, 0028).
 func (h *ReferenceHost) validateWorkerAggregate(
-	caller hostAuthContext,
 	form *InstalledForm,
-	space, name string,
+	scope resourceScope,
+	name string,
 	spec map[string]any,
 	relations []storedRelation,
 ) *hostError {
@@ -253,16 +276,16 @@ func (h *ReferenceHost) validateWorkerAggregate(
 	}
 	switch form.Ref.Kind {
 	case workerDeploymentKind:
-		return h.validateWorkerDeployment(space, name, relations)
+		return h.validateWorkerDeployment(scope, name, relations)
 	case workerVersionKind:
-		if hostErr := h.exportedHandlerViolation(form, space, spec, relations); hostErr != nil {
+		if hostErr := h.exportedHandlerViolation(form, scope, spec, relations); hostErr != nil {
 			return hostErr
 		}
-		return h.validateInboundServiceBindings(space, relations)
+		return h.validateInboundServiceBindings(scope, relations)
 	}
 	if handler, attachment := attachmentHandler[form.Ref.Kind]; attachment {
 		if hostErr := h.requireServingDeployment(
-			space,
+			scope,
 			nestedName(spec, "worker"),
 			relationTargetUID(relations, workerRelationPointer),
 			handler,
@@ -276,17 +299,17 @@ func (h *ReferenceHost) validateWorkerAggregate(
 		case queueConsumerKind:
 			// A queue has at most one consumer, and a consumer's dead-letter
 			// destination must lead somewhere a message can come to rest.
-			if hostErr := h.validateSingleQueueConsumer(space, name, relations); hostErr != nil {
+			if hostErr := h.validateSingleQueueConsumer(scope, name, relations); hostErr != nil {
 				return hostErr
 			}
-			return h.validateDeadLetterAcyclic(space, name, relations)
+			return h.validateDeadLetterAcyclic(scope, name, relations)
 		case workerCustomDomainKind:
 			// One DNS hostname has one answer, per tenant, on the canonical
 			// spelling this host stored.
-			return h.validateSingleHostnameClaim(caller.Tenant, space, name, spec)
+			return h.validateSingleHostnameClaim(scope, name, spec)
 		}
 		if form.Ref.Kind == workerEndpointKind {
-			return h.validateSingleWorkerEndpoint(space, name, relations)
+			return h.validateSingleWorkerEndpoint(scope, name, relations)
 		}
 	}
 	return nil
@@ -308,16 +331,17 @@ func (h *ReferenceHost) validateWorkerAggregate(
 // removed — and `unsupported_capability` would blame the host for a limit the
 // contract states, not one this host happens to have.
 func (h *ReferenceHost) validateSingleWorkerEndpoint(
-	space, name string,
+	scope resourceScope,
+	name string,
 	relations []storedRelation,
 ) *hostError {
 	workerUID := relationTargetUID(relations, workerRelationPointer)
 	if workerUID == "" {
 		return stableError("invalid_argument", "a WorkerEndpoint requires a target worker")
 	}
-	selfKey := resourceKey(space, edgeFormsGroup, workerEndpointKind, name)
-	for _, candidate := range h.sortedResources() {
-		if candidate.Space != space || candidate.group() != edgeFormsGroup ||
+	selfKey := resourceKey(scope, edgeFormsGroup, workerEndpointKind, name)
+	for _, candidate := range h.scopedResources(scope) {
+		if candidate.group() != edgeFormsGroup ||
 			candidate.kind() != workerEndpointKind || candidate.key() == selfKey {
 			continue
 		}
@@ -345,12 +369,13 @@ func (h *ReferenceHost) validateSingleWorkerEndpoint(
 // `invalid_argument` because the request is well formed: what is missing is
 // the capability the worker currently offers.
 func (h *ReferenceHost) requireServingDeployment(
-	space, workerName, workerUID, handler, subject string,
+	scope resourceScope,
+	workerName, workerUID, handler, subject string,
 ) *hostError {
 	if workerName == "" || workerUID == "" {
 		return stableError("invalid_argument", subject+" requires a target worker")
 	}
-	deployment := h.activeDeployment(space, workerUID)
+	deployment := h.activeDeployment(scope, workerUID)
 	if deployment == nil {
 		return stableError(
 			"unsupported_capability",
@@ -358,7 +383,7 @@ func (h *ReferenceHost) requireServingDeployment(
 				workerUID+", which has none; no version of that worker serves the "+handler+" handler",
 		)
 	}
-	offender, serves := servesHandler(h.weightedVersions(space, deployment.Relations), handler)
+	offender, serves := servesHandler(h.weightedVersions(scope, deployment.Relations), handler)
 	if serves {
 		return nil
 	}
@@ -382,13 +407,15 @@ func (h *ReferenceHost) requireServingDeployment(
 // not-Ready is deliberate: the first Forms should be simple to reason about,
 // and a stored binding that projects nothing is a resource whose declared
 // capability is a promise no host can keep.
-func (h *ReferenceHost) validateInboundServiceBindings(space string, relations []storedRelation) *hostError {
+func (h *ReferenceHost) validateInboundServiceBindings(
+	scope resourceScope, relations []storedRelation,
+) *hostError {
 	for _, relation := range relations {
 		if relation.Relation != serviceBindingsRelation {
 			continue
 		}
 		if hostErr := h.requireServingDeployment(
-			space, relation.TargetName, relation.TargetUID, fetchHandler,
+			scope, relation.TargetName, relation.TargetUID, fetchHandler,
 			"the module-worker.service binding at "+relation.Pointer,
 		); hostErr != nil {
 			return hostErr
@@ -403,18 +430,19 @@ func (h *ReferenceHost) validateInboundServiceBindings(space string, relations [
 // and weights only versions a host can actually run — and it refuses a change
 // that would leave a live dependent unserved.
 func (h *ReferenceHost) validateWorkerDeployment(
-	space, name string,
+	scope resourceScope,
+	name string,
 	relations []storedRelation,
 ) *hostError {
 	workerUID := relationTargetUID(relations, workerRelationPointer)
 	if workerUID == "" {
 		return stableError("invalid_argument", "a WorkerDeployment requires a target worker")
 	}
-	selfKey := resourceKey(space, edgeFormsGroup, workerDeploymentKind, name)
+	selfKey := resourceKey(scope, edgeFormsGroup, workerDeploymentKind, name)
 	// A. One active deployment per worker. Two deployments of one worker leave
 	//    "which one serves" undefined, and no rule chosen after the fact — newest,
 	//    lowest name, highest weight — is a rule an author can predict.
-	if existing := h.activeDeployment(space, workerUID); existing != nil {
+	if existing := h.activeDeployment(scope, workerUID); existing != nil {
 		key := existing.key()
 		if key != selfKey {
 			return stableError(
@@ -432,7 +460,7 @@ func (h *ReferenceHost) validateWorkerDeployment(
 			continue
 		}
 		weighted++
-		version := h.resources[resourceKey(space, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
+		version := h.resources[resourceKey(scope, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
 		if version == nil || version.UID != relation.TargetUID {
 			// Relation resolution already pinned this UID moments ago, so this is
 			// unreachable through the API; refusing keeps it unreachable.
@@ -470,8 +498,8 @@ func (h *ReferenceHost) validateWorkerDeployment(
 	}
 	// D. Reverse validation: the deployment being applied must keep every live
 	//    dependent of this worker satisfied.
-	versions := h.weightedVersions(space, relations)
-	for _, dependent := range h.workerDependents(space, workerUID) {
+	versions := h.weightedVersions(scope, relations)
+	for _, dependent := range h.workerDependents(scope, workerUID) {
 		offender, serves := servesHandler(versions, dependent.Handler)
 		if serves {
 			continue
@@ -561,7 +589,7 @@ func (h *ReferenceHost) deploymentDeleteBlocked(resource *storedResource) *hostE
 		return nil
 	}
 	workerUID := relationTargetUID(resource.Relations, workerRelationPointer)
-	dependents := h.workerDependents(resource.Space, workerUID)
+	dependents := h.workerDependents(resource.scope(), workerUID)
 	if len(dependents) == 0 {
 		return nil
 	}
@@ -589,14 +617,14 @@ func (h *ReferenceHost) workerServiceUnavailable(resource *storedResource) (reas
 	if resource.group() != edgeFormsGroup || resource.kind() != moduleWorkerKind {
 		return "", "", false
 	}
-	deployment := h.activeDeployment(resource.Space, resource.UID)
+	deployment := h.activeDeployment(resource.scope(), resource.UID)
 	if deployment == nil {
 		return "Provisioning",
 			"ModuleWorker " + resource.Name + " at uid " + resource.UID +
 				" has no active WorkerDeployment, so it serves no traffic and provides no worker.service interface yet",
 			true
 	}
-	offender, serves := servesHandler(h.weightedVersions(resource.Space, deployment.Relations), fetchHandler)
+	offender, serves := servesHandler(h.weightedVersions(resource.scope(), deployment.Relations), fetchHandler)
 	if serves {
 		return "", "", false
 	}
@@ -733,12 +761,12 @@ func (h *ReferenceHost) validateDeclaredHandlers(form *InstalledForm, spec map[s
 // boundary is why the lane proves the refusal for a pinned bundle rather than
 // claiming to prove it for every possible one; see spec/host-api/v1alpha3.md.
 func (h *ReferenceHost) exportedHandlerViolation(
-	form *InstalledForm, space string, spec map[string]any, relations []storedRelation,
+	form *InstalledForm, scope resourceScope, spec map[string]any, relations []storedRelation,
 ) *hostError {
 	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
 		return nil
 	}
-	exported, known := h.bundleModuleExports(space, relations)
+	exported, known := h.bundleModuleExports(scope, relations)
 	if !known {
 		return nil
 	}
@@ -769,7 +797,9 @@ func (h *ReferenceHost) exportedHandlerViolation(
 // module entry carries the content address of the bytes. Nothing is read from
 // the version's spec but the relation it produced, so a renamed or replaced
 // bundle is a different answer rather than the same one.
-func (h *ReferenceHost) bundleModuleExports(space string, relations []storedRelation) ([]string, bool) {
+func (h *ReferenceHost) bundleModuleExports(
+	scope resourceScope, relations []storedRelation,
+) ([]string, bool) {
 	bundleUID := relationTargetUID(relations, bundleRelationPointer)
 	if bundleUID == "" {
 		return nil, false
@@ -779,7 +809,7 @@ func (h *ReferenceHost) bundleModuleExports(space string, relations []storedRela
 		if relation.Pointer != bundleRelationPointer {
 			continue
 		}
-		bundle = h.resources[resourceKey(space, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
+		bundle = h.resources[resourceKey(scope, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
 	}
 	if bundle == nil || bundle.UID != bundleUID {
 		return nil, false

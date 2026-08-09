@@ -30,3 +30,4 @@ record does not replace them.
 - [0024 — A worker is reachable at an address the host assigns](0024-a-worker-is-reachable-at-a-host-assigned-address.md)
 - [0025 — A Form's declared outputs are a typed contract, not a JSON blob](0025-declared-outputs-are-a-typed-contract.md)
 - [0026 — An attachment's claim is decided on canonical, resolved identity](0026-attachment-claims-are-canonical-and-acyclic.md)
+- [0028 — The resource plane is tenant-isolated, by address](0028-the-resource-plane-is-tenant-isolated.md)

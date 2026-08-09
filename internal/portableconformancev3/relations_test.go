@@ -17,21 +17,24 @@ func relationFixture(t *testing.T) (*ReferenceHost, Contract, *storedResource, *
 	host, contract := fallbackHost(t)
 	group := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef.APIVersion
 	host.storeResource(&storedResource{
-		Ref: mustProbeRef(t, contract, "ModuleWorker"), Name: "module-worker-probe", Space: "conformance",
+		Ref: mustProbeRef(t, contract, "ModuleWorker"), Name: "module-worker-probe",
+		Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-worker", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	host.storeResource(&storedResource{
-		Ref: mustProbeRef(t, contract, "WorkerBundle"), Name: "worker-bundle-probe", Space: "conformance",
+		Ref: mustProbeRef(t, contract, "WorkerBundle"), Name: "worker-bundle-probe",
+		Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-bundle", Generation: 1, Revision: 1,
 		Spec: map[string]any{"manifestDigest": formpackage.DigestBytes([]byte("bundle"))},
 	})
 	host.storeResource(&storedResource{
-		Ref: mustProbeRef(t, contract, "EdgeKVNamespace"), Name: "edge-kv-probe", Space: "conformance",
+		Ref: mustProbeRef(t, contract, "EdgeKVNamespace"), Name: "edge-kv-probe",
+		Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-kv", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	versionForm := host.probeForm("WorkerVersion")
 	spec := relationVersionSpec(group, "edge-kv-probe")
-	relations, hostErr := host.resolveRelations(versionForm, "conformance", spec)
+	relations, hostErr := host.resolveRelations(versionForm, referencePrimaryAuth.scope("conformance"), spec)
 	if hostErr != nil {
 		t.Fatalf("resolve relations: %+v", hostErr)
 	}
@@ -40,12 +43,13 @@ func relationFixture(t *testing.T) (*ReferenceHost, Contract, *storedResource, *
 		t.Fatal(err)
 	}
 	version := &storedResource{
-		Ref: mustProbeRef(t, contract, "WorkerVersion"), Name: "worker-version-probe", Space: "conformance",
+		Ref: mustProbeRef(t, contract, "WorkerVersion"), Name: "worker-version-probe",
+		Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-version", Generation: 1, Revision: 1,
 		Spec: spec, SpecDigest: digest, Relations: relations,
 	}
 	host.storeResource(version)
-	return host, contract, host.resources[resourceKey("conformance", group, "EdgeKVNamespace", "edge-kv-probe")], version
+	return host, contract, host.resources[resourceKey(referencePrimaryAuth.scope("conformance"), group, "EdgeKVNamespace", "edge-kv-probe")], version
 }
 
 func relationVersionSpec(group, kvName string) map[string]any {
@@ -107,7 +111,7 @@ func TestReverseIndexBlocksEveryRelationKind(t *testing.T) {
 		{"ModuleWorker", "module-worker-probe"},
 		{"WorkerBundle", "worker-bundle-probe"},
 	} {
-		stored := host.resources[resourceKey("conformance", group, target.kind, target.name)]
+		stored := host.resources[resourceKey(referencePrimaryAuth.scope("conformance"), group, target.kind, target.name)]
 		if stored == nil {
 			t.Fatalf("%s %s is not stored", target.kind, target.name)
 		}
@@ -120,10 +124,10 @@ func TestReverseIndexBlocksEveryRelationKind(t *testing.T) {
 		t.Fatalf("the holder is not a target but reported %+v", hostErr)
 	}
 	// Releasing the holder releases every target it pinned.
-	host.removeResource(resourceKey("conformance", group, version.kind(), version.Name))
+	host.removeResource(resourceKey(referencePrimaryAuth.scope("conformance"), group, version.kind(), version.Name))
 	for _, name := range []string{"edge-kv-probe", "module-worker-probe", "worker-bundle-probe"} {
 		for _, kind := range []string{"EdgeKVNamespace", "ModuleWorker", "WorkerBundle"} {
-			stored := host.resources[resourceKey("conformance", group, kind, name)]
+			stored := host.resources[resourceKey(referencePrimaryAuth.scope("conformance"), group, kind, name)]
 			if stored == nil {
 				continue
 			}
@@ -160,7 +164,7 @@ func TestRecreatedTargetIsNotRebound(t *testing.T) {
 	}
 
 	// The target vanishes: the source reports the missing dependency.
-	key := resourceKey("conformance", kv.group(), kv.kind(), kv.Name)
+	key := resourceKey(referencePrimaryAuth.scope("conformance"), kv.group(), kv.kind(), kv.Name)
 	host.removeResource(key)
 	if condition := read(); condition.Status != "False" || condition.Reason != "DependencyMissing" {
 		t.Fatalf("source of a vanished target reports %s/%s", condition.Status, condition.Reason)
@@ -168,7 +172,7 @@ func TestRecreatedTargetIsNotRebound(t *testing.T) {
 
 	// The same NAME comes back on a different incarnation.
 	host.storeResource(&storedResource{
-		Ref: kv.Ref, Name: kv.Name, Space: kv.Space,
+		Ref: kv.Ref, Name: kv.Name, Tenant: kv.Tenant, Space: kv.Space,
 		UID: "uid-kv-second", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	condition := read()
@@ -181,7 +185,7 @@ func TestRecreatedTargetIsNotRebound(t *testing.T) {
 		}
 	}
 	// Reading did not re-bind: the stored relation still pins the old uid.
-	stored := host.resources[resourceKey("conformance", version.group(), version.kind(), version.Name)]
+	stored := host.resources[resourceKey(referencePrimaryAuth.scope("conformance"), version.group(), version.kind(), version.Name)]
 	for _, relation := range stored.Relations {
 		if relation.Pointer == "/kvBindings/0/resource" && relation.TargetUID != "uid-kv" {
 			t.Fatalf("a read re-bound the relation to uid %q", relation.TargetUID)
@@ -267,7 +271,7 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 			target := host.probeForm("EdgeKVNamespace")
 			testCase.break_(host, source, target)
 			spec := relationVersionSpec(group, "edge-kv-probe")
-			_, hostErr := host.resolveRelations(source, "conformance", spec)
+			_, hostErr := host.resolveRelations(source, referencePrimaryAuth.scope("conformance"), spec)
 			if hostErr == nil {
 				t.Fatalf("a broken binding contract was accepted")
 			}
@@ -281,7 +285,7 @@ func TestBindingContractRulesAreVerified(t *testing.T) {
 	// for the rule it broke and nothing else.
 	host, _, _, _ := relationFixture(t)
 	source := host.probeForm("WorkerVersion")
-	if _, hostErr := host.resolveRelations(source, "conformance", relationVersionSpec(group, "edge-kv-probe")); hostErr != nil {
+	if _, hostErr := host.resolveRelations(source, referencePrimaryAuth.scope("conformance"), relationVersionSpec(group, "edge-kv-probe")); hostErr != nil {
 		t.Fatalf("the intact binding contract was refused: %+v", hostErr)
 	}
 }
@@ -307,13 +311,15 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	workerReference := map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"}
 	storeWorker := func(uid string) {
 		host.storeResource(&storedResource{
-			Ref: mustProbeRef(t, contract, "ModuleWorker"), Name: "module-worker-probe", Space: space,
+			Ref: mustProbeRef(t, contract, "ModuleWorker"), Name: "module-worker-probe",
+			Tenant: referencePrimaryAuth.Tenant, Space: space,
 			UID: uid, Generation: 1, Revision: 1, Spec: map[string]any{},
 		})
 	}
 	storeVersion := func(name, workerUID string) {
 		host.storeResource(&storedResource{
-			Ref: mustProbeRef(t, contract, "WorkerVersion"), Name: name, Space: space,
+			Ref: mustProbeRef(t, contract, "WorkerVersion"), Name: name,
+			Tenant: referencePrimaryAuth.Tenant, Space: space,
 			UID: "uid-" + name, Generation: 1, Revision: 1,
 			Spec: map[string]any{"worker": workerReference, "handlers": []any{"fetch", "queue"}},
 			Relations: []storedRelation{{
@@ -325,7 +331,8 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	}
 	storeDeployment := func(name, workerUID, version string) {
 		host.storeResource(&storedResource{
-			Ref: mustProbeRef(t, contract, "WorkerDeployment"), Name: name, Space: space,
+			Ref: mustProbeRef(t, contract, "WorkerDeployment"), Name: name,
+			Tenant: referencePrimaryAuth.Tenant, Space: space,
 			UID: "uid-" + name, Generation: 1, Revision: 1,
 			Spec: map[string]any{"worker": workerReference, "versions": []any{}},
 			Relations: []storedRelation{
@@ -344,7 +351,8 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	}
 	storeWorker("uid-worker-first")
 	host.storeResource(&storedResource{
-		Ref: mustProbeRef(t, contract, "AtLeastOnceQueue"), Name: "queue-probe", Space: space,
+		Ref: mustProbeRef(t, contract, "AtLeastOnceQueue"), Name: "queue-probe",
+		Tenant: referencePrimaryAuth.Tenant, Space: space,
 		UID: "uid-queue", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	storeVersion("stale-version", "uid-worker-first")
@@ -359,7 +367,9 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 		"worker": workerReference,
 		"queue":  map[string]any{"apiVersion": group, "kind": "AtLeastOnceQueue", "name": "queue-probe"},
 	})
-	_, hostErr := host.validateDesiredSemantics(referencePrimaryAuth, consumer, space, "queue-consumer-probe", spec)
+	_, hostErr := host.validateDesiredSemantics(
+		referencePrimaryAuth, consumer, referencePrimaryAuth.scope(space), "queue-consumer-probe", spec,
+	)
 	if hostErr == nil || hostErr.Code != "unsupported_capability" {
 		t.Fatalf("a stale deployment of the previous worker opened the gate: %+v", hostErr)
 	}
@@ -371,7 +381,7 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 	storeVersion("current-version", "uid-worker-second")
 	storeDeployment("current-deployment", "uid-worker-second", "current-version")
 	if _, hostErr := host.validateDesiredSemantics(
-		referencePrimaryAuth, consumer, space, "queue-consumer-probe", spec,
+		referencePrimaryAuth, consumer, referencePrimaryAuth.scope(space), "queue-consumer-probe", spec,
 	); hostErr != nil {
 		t.Fatalf("a deployment of the current worker was refused: %+v", hostErr)
 	}
@@ -385,7 +395,7 @@ func TestRelationTargetMustExistBeforeMutation(t *testing.T) {
 	source := host.probeForm("WorkerVersion")
 	spec := relationVersionSpec(group, "edge-kv-probe")
 	spec["worker"] = map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "absent-worker"}
-	_, hostErr := host.resolveRelations(source, "conformance", spec)
+	_, hostErr := host.resolveRelations(source, referencePrimaryAuth.scope("conformance"), spec)
 	if hostErr == nil || hostErr.Code != "resource_not_found" {
 		t.Fatalf("absent non-binding target = %+v, want resource_not_found", hostErr)
 	}

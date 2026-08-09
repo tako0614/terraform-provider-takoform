@@ -204,7 +204,7 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 93-check matrix over real HTTP: exact discovery and
+drives the complete 102-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -265,7 +265,27 @@ rather than only reading one: a bundle whose desired state references a manifest
 the caller's tenant does not hold is refused `artifact_missing` before any
 mutation, on apply and on import, storing nothing, while a second principal of
 the holding tenant references it successfully and the other tenant references it
-once it has supplied the bytes itself. Probing every stable error uses the runner-only
+once it has supplied the bytes itself. The plane those three surround is held to
+the same boundary by
+[decision 0028](../spec/decisions/0028-the-resource-plane-is-tenant-isolated.md):
+two tenants create one `{space, kind, name}` and get two resources with two uids,
+neither reads, observes, updates, or deletes the other's — answered
+`resource_not_found`, indistinguishably from a name nobody created, message
+included — a reference resolves only inside the referring tenant even when the
+name matches exactly, a `prepareDigest` minted by one tenant is not spendable by
+another, and one `Idempotency-Key` from two tenants is two operations rather than
+a replay. `import` is the one surface whose absent answer is a SUCCESS, and it is
+measured as one: a second tenant adopting the name the first tenant holds is
+answered the 201 it would be answered for a name nobody holds anywhere — same
+status, same ETag, same document but for the minted uid and the name — while the
+holder's uid, generation, and revision do not move, and the fenced form of the
+same adoption is refused `resource_not_found`. The nine are enumerated by
+SURFACE rather than by intent: every route that takes a resource name is listed
+against the check measuring it, and that list is bound to the published route
+block and to the required-check list, so a name-addressed endpoint cannot be
+added without one. All nine are black box and all nine need the alternate-TENANT
+credential, which is why the runner requires it.
+Probing every stable error uses the runner-only
 `Takoform-Conformance-Probe` header (`error:<code>`, `async`,
 `touch-status`, `external-change`); it is disposable-adapter transport, never
 a production surface. `external-change` performs one delete as an out-of-band

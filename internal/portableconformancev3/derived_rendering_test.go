@@ -40,7 +40,7 @@ func TestWorkerRevisionFollowsItsDeployment(t *testing.T) {
 
 	// And back: removing the deployment returns the worker to Provisioning,
 	// which is again a different representation.
-	f.host.removeResource(resourceKey(f.space, f.group, workerDeploymentKind, "deployment"))
+	f.host.removeResource(resourceKey(f.scope(), f.group, workerDeploymentKind, "deployment"))
 	requireIdentity(t, worker, 1, 3, "a worker whose deployment was removed")
 }
 
@@ -63,7 +63,7 @@ func TestRelationDriftAdvancesTheSourceRevision(t *testing.T) {
 	source := f.store(workerVersionKind, "version", spec)
 	requireIdentity(t, source, 1, 1, "a bound source")
 
-	f.host.removeResource(resourceKey(f.space, f.group, "EdgeKVNamespace", "cache"))
+	f.host.removeResource(resourceKey(f.scope(), f.group, "EdgeKVNamespace", "cache"))
 	requireIdentity(t, source, 1, 2, "a source whose relation target vanished")
 	if _, _, drifted := f.host.relationDrift(source); !drifted {
 		t.Fatal("the source does not report the drift its new revision was issued for")
@@ -82,8 +82,8 @@ func TestDerivedRevisionPassTerminatesAndDoesNotChurn(t *testing.T) {
 		worker: worker.Revision, version: version.Revision, deployment: deployment.Revision,
 	}
 
-	f.host.advanceDerivedRevisions(f.space, "")
-	f.host.advanceDerivedRevisions(f.space, "")
+	f.host.advanceDerivedRevisions(f.scope(), "")
+	f.host.advanceDerivedRevisions(f.scope(), "")
 	for resource, revision := range settled {
 		if resource.Revision != revision {
 			t.Fatalf(
