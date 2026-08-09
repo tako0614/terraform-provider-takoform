@@ -56,8 +56,10 @@ const (
 	tenantSharedName      = "tenant-address-probe"
 	tenantPrivateName     = "tenant-private-probe"
 	tenantAbsentName      = "tenant-absent-probe"
+	tenantOwnMutationName = "tenant-own-mutation-probe"
 	tenantRelationWorker  = "tenant-relation-worker"
-	tenantRelationAttach  = "tenant-relation-endpoint"
+	tenantRelationBundle  = "tenant-relation-bundle"
+	tenantRelationSource  = "tenant-relation-version"
 	tenantPrepareName     = "tenant-prepare-probe"
 	tenantIdempotencyName = "tenant-idempotency-probe"
 	tenantImportHeldName  = "tenant-import-held-probe"
@@ -84,6 +86,155 @@ func (r *v3Runner) checkTenantIsolatedResourcePlane() error {
 		if err := step(worker); err != nil {
 			return err
 		}
+	}
+	// And the half none of the nine states: the second tenant's plane is a plane,
+	// not a waiting room. It runs last because it is the only one that needs a
+	// Form declaring `update`, and because it must find both tenants' planes
+	// already proved separate.
+	return r.checkEachTenantMutatesItsOwnPlane()
+}
+
+// checkEachTenantMutatesItsOwnPlane proves the second tenant OWNS what it
+// creates.
+//
+// Every other check in this file measures the boundary from one side: the
+// alternate tenant creates, reads, and is refused everything belonging to the
+// first. Across the whole corpus it never changed or removed anything of its
+// own — so a host that is create-and-read-only for every tenant but the first,
+// answering `resource_not_found` to each update and each delete of the second
+// tenant's OWN resources, satisfied all nine while breaking decision 0028 rule 2
+// outright. That host is not exotic: it is what a tenant column bolted onto a
+// single-tenant store looks like when the write paths still resolve through the
+// original owner, and the failure is silent, because a 404 for your own resource
+// reads like a resource you never made.
+//
+// So both mutating surfaces are driven inside the second tenant's plane, against
+// a name the FIRST tenant also holds, and the first tenant's resource is
+// measured before and after each one. Two facts at once: the second tenant can
+// really write, and writing does not reach across.
+func (r *v3Runner) checkEachTenantMutatesItsOwnPlane() error {
+	// The queue is the probe that declares `update`, so "the same operation the
+	// holder was refused" is a real spec change here rather than a re-apply.
+	subject := r.target(r.contract.RunnerInput.AtLeastOnceQueue)
+	subject.Name = tenantOwnMutationName
+
+	firstResponse, err := r.applyAs(r.token, subject, applyOptions{
+		Create: true, IdempotencyKey: "key-tenant-own-mutation-first",
+	})
+	if err != nil {
+		return err
+	}
+	first, err := decodeResource(firstResponse, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("the first tenant's create: %w", err)
+	}
+	secondResponse, err := r.applyAs(r.alternateTenantToken, subject, applyOptions{
+		Create: true, IdempotencyKey: "key-tenant-own-mutation-second",
+	})
+	if err != nil {
+		return err
+	}
+	second, err := decodeResource(secondResponse, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("the second tenant's create: %w", err)
+	}
+
+	changed := subject
+	changed.Spec = map[string]any{"deliveryDelaySeconds": 30, "messageRetentionSeconds": 600000}
+	changed.Spec = r.materialize(changed.Ref, changed.Spec)
+	updated, err := r.applyAs(r.alternateTenantToken, changed, applyOptions{
+		ExpectedGeneration: second.Metadata.Generation,
+		IdempotencyKey:     "key-tenant-own-mutation-update",
+	})
+	if err != nil {
+		return err
+	}
+	moved, err := decodeResource(updated, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf(
+			"the second tenant updating its OWN %s: %w; a tenant that may create and read but not write is not "+
+				"isolated, it is quarantined, and every tenant-boundary refusal in this file is satisfied by it",
+			subject.Ref.Kind, err,
+		)
+	}
+	if moved.Metadata.UID != second.Metadata.UID {
+		return fmt.Errorf(
+			"the second tenant's own update answered uid %s, want its own %s",
+			moved.Metadata.UID, second.Metadata.UID,
+		)
+	}
+	if moved.Metadata.Generation == second.Metadata.Generation {
+		return fmt.Errorf(
+			"the second tenant's own spec change left generation at %s; the update was answered but not performed",
+			moved.Metadata.Generation,
+		)
+	}
+	// It landed in the store, and only in that tenant's.
+	readBack, err := r.readAs(r.alternateTenantToken, subject)
+	if err != nil {
+		return err
+	}
+	stored, err := decodeResource(readBack, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("the second tenant reading back what it updated: %w", err)
+	}
+	if stored.Metadata.Generation != moved.Metadata.Generation {
+		return fmt.Errorf(
+			"the second tenant's own update answered generation %s and reads back as %s",
+			moved.Metadata.Generation, stored.Metadata.Generation,
+		)
+	}
+	if err := r.requireUnmoved(first, "the second tenant's update of its own resource"); err != nil {
+		return err
+	}
+
+	// The other mutating surface, in the tenant that holds the resource.
+	if err := r.deleteExistingAs(r.alternateTenantToken, subject, "key-tenant-own-mutation-delete"); err != nil {
+		return fmt.Errorf(
+			"the second tenant deleting its OWN %s: %w; a delete that only ever refuses is a delete nobody has",
+			subject.Ref.Kind, err,
+		)
+	}
+	gone, err := r.readAs(r.alternateTenantToken, subject)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(gone, "resource_not_found"); err != nil {
+		return fmt.Errorf("the second tenant reading what it deleted: %w", err)
+	}
+	if err := r.requireUnmoved(first, "the second tenant's delete of its own resource"); err != nil {
+		return err
+	}
+	if err := r.deleteExisting(subject, "key-tenant-own-mutation-teardown"); err != nil {
+		return err
+	}
+	r.complete("each-tenant-mutates-its-own-plane")
+	return nil
+}
+
+// requireUnmoved re-reads one tenant's resource under the primary credential and
+// holds its whole identity still.
+func (r *v3Runner) requireUnmoved(before wireResource, subject string) error {
+	target := probeTarget{
+		Ref: before.Form.FormRef, Name: before.Metadata.Name, Space: before.Metadata.Space,
+	}
+	response, err := r.readAs(r.token, target)
+	if err != nil {
+		return err
+	}
+	after, err := decodeResource(response, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("%s left the other tenant's resource unreadable: %w", subject, err)
+	}
+	if after.Metadata.UID != before.Metadata.UID ||
+		after.Metadata.Generation != before.Metadata.Generation ||
+		after.Metadata.Revision != before.Metadata.Revision {
+		return fmt.Errorf(
+			"%s moved the other tenant's identically-named resource from uid %s generation %s revision %s to "+
+				"uid %s generation %s revision %s",
+			subject, before.Metadata.UID, before.Metadata.Generation, before.Metadata.Revision,
+			after.Metadata.UID, after.Metadata.Generation, after.Metadata.Revision,
+		)
 	}
 	return nil
 }
@@ -559,13 +710,29 @@ func comparableCreation(response wireResponse, name, uid string) (string, error)
 // because a host that scoped only its apply would still mint a review binding
 // another tenant's live uid and generation — a document that says, to whoever
 // holds it, that a resource of that name exists and is at generation 1.
+//
+// And the holder updates it AFTERWARDS, which is the half a refusal cannot
+// state. Proving only that the foreign update did not land is satisfied by a
+// host that quarantines the resource the moment a stranger touches it — refuse
+// the foreigner, then refuse everyone, and nothing was destroyed. The lane's
+// `observe` and `import` boundaries are already two-sided for this reason; this
+// one is now too. The holder's apply is fenced at the same generation the
+// foreign one presented, and is spec-identical, which is the update surface a
+// Form declaring no in-place spec change still accepts
+// (decision 0015 rule 9) — so what separates the two requests is the credential
+// and nothing else.
 func (r *v3Runner) checkResourceUpdateIsTenantIsolated(worker probeTarget) error {
 	private := worker
 	private.Name = tenantPrivateName
-	before, err := r.readUIDAs(r.token, private, "the holding tenant reading before the foreign update")
+	held, err := r.readAs(r.token, private)
 	if err != nil {
 		return err
 	}
+	holder, err := decodeResource(held, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("the holding tenant reading before the foreign update: %w", err)
+	}
+	before := holder.Metadata.UID
 
 	fenced, err := r.prepareRequestAs(
 		r.alternateTenantToken, private, map[string]string{expectedGenerationHeader: "1"},
@@ -603,6 +770,35 @@ func (r *v3Runner) checkResourceUpdateIsTenantIsolated(worker probeTarget) error
 	if after != before {
 		return fmt.Errorf("a foreign update replaced the holder's incarnation %s with %s", before, after)
 	}
+
+	// The permissive half: the SAME surface, the same fence, the same document,
+	// the holder's own credential.
+	ownUpdate, err := r.applyAs(r.token, private, applyOptions{
+		ExpectedGeneration: holder.Metadata.Generation,
+		IdempotencyKey:     "key-tenant-holder-update",
+	})
+	if err != nil {
+		return err
+	}
+	reapplied, err := decodeResource(ownUpdate, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf(
+			"the holding tenant updating %s after a foreign attempt was refused: %w; a host that answers the "+
+				"refusal by quarantining the resource passes the two legs above and has taken it from its owner",
+			private.Name, err,
+		)
+	}
+	if reapplied.Metadata.UID != before {
+		return fmt.Errorf(
+			"the holder's own update answered uid %s, want its own %s", reapplied.Metadata.UID, before,
+		)
+	}
+	if reapplied.Metadata.Generation != holder.Metadata.Generation {
+		return fmt.Errorf(
+			"a spec-identical apply moved generation %s -> %s; no desired state changed",
+			holder.Metadata.Generation, reapplied.Metadata.Generation,
+		)
+	}
 	r.complete("resource-update-is-tenant-isolated")
 	return nil
 }
@@ -611,6 +807,13 @@ func (r *v3Runner) checkResourceUpdateIsTenantIsolated(worker probeTarget) error
 // tenant cannot remove what it cannot read. Both of the holder's real fences are
 // presented — the generation a delete requires and the revision it may carry —
 // so nothing but the address stops it.
+//
+// Then the holder removes it, which is the half a refusal cannot state. "The
+// resource survived a foreign delete" is also true of a host that answers a
+// stranger's delete by locking the record — and an operator who cannot destroy
+// what they created has lost the resource just as completely, only slower and
+// with a bill attached. So the last exchange is the holder's own delete of the
+// same name, under the same fences, succeeding.
 func (r *v3Runner) checkResourceDeleteIsTenantIsolated(worker probeTarget) error {
 	private := worker
 	private.Name = tenantPrivateName
@@ -657,13 +860,39 @@ func (r *v3Runner) checkResourceDeleteIsTenantIsolated(worker probeTarget) error
 			still.Metadata.UID, still.Metadata.Revision,
 		)
 	}
+
+	// The permissive half: the same request, the same fences, the holder's own
+	// credential.
+	own, err := r.requestWithToken(
+		r.token, http.MethodDelete,
+		r.resourceURL(private.Ref, private.Name, "", r.exactQuery(private.Space, private.Ref)),
+		map[string]string{
+			expectedGenerationHeader: still.Metadata.Generation,
+			"If-Match":               `"` + still.Metadata.Revision + `"`,
+			"Idempotency-Key":        "key-tenant-holder-delete",
+		}, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if own.Status != http.StatusNoContent {
+		return fmt.Errorf(
+			"the holding tenant deleting %s after a foreign attempt was refused: HTTP %d, want 204; body=%s; "+
+				"a host that quarantines a resource a stranger reached for passes the legs above and has taken it "+
+				"from its owner",
+			private.Name, own.Status, strings.TrimSpace(string(own.Body)),
+		)
+	}
+	if err := r.expectResourceAbsent(private); err != nil {
+		return fmt.Errorf("the holder's own delete answered 204 and removed nothing: %w", err)
+	}
 	r.complete("resource-delete-is-tenant-isolated")
 	return nil
 }
 
 // checkRelationResolutionIsTenantScoped proves a reference resolves inside the
 // referring resource's own tenant, when the name matches another tenant's
-// resource EXACTLY.
+// resource EXACTLY — and that what the host STORED is the uid it resolved.
 //
 // A reference is `{apiVersion, kind, name}` and carries no tenant, so a host that
 // resolved it against a store keyed without one would bind a stranger's desired
@@ -671,13 +900,35 @@ func (r *v3Runner) checkResourceDeleteIsTenantIsolated(worker probeTarget) error
 // 0015 closes for incarnations, committed across a security boundary instead of a
 // naming one.
 //
-// The positive control is the whole point. After the second tenant creates its
-// OWN worker under that exact name, the same request stops failing on an absent
-// target and starts failing on the attachment gate (`unsupported_capability`,
-// the worker has no deployment). The refusal MOVED, which is what says the
-// relation resolved — inside the second tenant, to a different incarnation — and
-// that the first refusal was the boundary rather than a blanket rejection.
+// The check used to stop at a refusal that MOVED: absent target first, attachment
+// gate second, which says the name resolved to something. It never reached a
+// successful apply, so no relation was ever stored and no pin was ever inspected
+// — and a host that resolved correctly at the gate and then pinned the OTHER
+// tenant's uid passed it. Pinning is the half that matters, because the pin is
+// what deletion protection, drift, and every aggregate rule are computed from
+// afterwards: a foreign pin means one tenant's resource is protected from its own
+// owner by a stranger's reference, and the stranger's source silently follows a
+// resource its author never named.
+//
+// So the source here is a `WorkerVersion`, which references a worker and a bundle
+// and passes through no attachment gate, and the second tenant's apply SUCCEEDS.
+// The pin is then read the only way a black box can read it — by what it protects:
+//
+//   - the first tenant deletes its identically-named worker and MUST succeed. A
+//     host that pinned that uid refuses with `dependency_in_use`, which is the
+//     foreign pin saying so out loud.
+//   - the second tenant's source is still Ready afterwards. A host that pinned the
+//     removed uid reports `DependencyMissing` or `ExternalChange` instead.
+//   - the second tenant deletes its OWN worker and MUST be refused
+//     `dependency_in_use`. Its version is that worker's only holder, so nothing
+//     else can be producing that answer, and a host that pinned nothing at all
+//     removes it.
 func (r *v3Runner) checkRelationResolutionIsTenantScoped(worker probeTarget) error {
+	if r.artifactManifestDigest == "" {
+		return errors.New(
+			"the second tenant's bundle needs the committed manifest digest; this check runs after the artifact sequence",
+		)
+	}
 	holder := worker
 	holder.Name = tenantRelationWorker
 	created, err := r.applyAs(r.token, holder, applyOptions{
@@ -691,18 +942,24 @@ func (r *v3Runner) checkRelationResolutionIsTenantScoped(worker probeTarget) err
 		return fmt.Errorf("the first tenant's relation target: %w", err)
 	}
 
-	// A WorkerEndpoint's desired state is the worker reference and nothing else
-	// (spec/decisions/0024), so this request is one relation and no other input.
-	endpoint := r.target(r.contract.RunnerInput.WorkerEndpoint)
-	endpoint.Name = tenantRelationAttach
-	endpoint.Spec = map[string]any{
-		"worker": map[string]any{
-			"apiVersion": holder.Ref.APIVersion, "kind": holder.Ref.Kind, "name": tenantRelationWorker,
-		},
+	// The second tenant's own bundle, so the only relation left unresolved below
+	// is the worker. Its manifest is one that tenant committed for itself: a
+	// content address is not a capability, so the first tenant's would not resolve.
+	bundle := r.target(r.contract.RunnerInput.WorkerBundle.ResourceProbe)
+	bundle.Name = tenantRelationBundle
+	bundle.Spec = map[string]any{"manifestDigest": r.artifactManifestDigest}
+	bundleCreated, err := r.applyAs(r.alternateTenantToken, bundle, applyOptions{
+		Create: true, IdempotencyKey: "key-tenant-relation-bundle",
+	})
+	if err != nil {
+		return err
 	}
-	endpoint.Spec = r.materialize(endpoint.Ref, endpoint.Spec)
+	if _, err := decodeResource(bundleCreated, http.StatusCreated); err != nil {
+		return fmt.Errorf("the second tenant's own bundle: %w", err)
+	}
+	source := r.workerVersionOfBundle(tenantRelationSource, tenantRelationWorker, tenantRelationBundle, fetchHandler)
 
-	absent, err := r.applyAs(r.alternateTenantToken, endpoint, applyOptions{
+	absent, err := r.applyAs(r.alternateTenantToken, source, applyOptions{
 		Create: true, IdempotencyKey: "key-tenant-relation-foreign",
 	})
 	if err != nil {
@@ -737,20 +994,78 @@ func (r *v3Runner) checkRelationResolutionIsTenantScoped(worker probeTarget) err
 		return errors.New("the two tenants' relation targets share a uid")
 	}
 
-	resolved, err := r.applyAs(r.alternateTenantToken, endpoint, applyOptions{
+	resolved, err := r.applyAs(r.alternateTenantToken, source, applyOptions{
 		Create: true, IdempotencyKey: "key-tenant-relation-resolved",
 	})
 	if err != nil {
 		return err
 	}
-	// The gate, not the address: the relation resolved to the second tenant's own
-	// worker, which has no active deployment.
-	if err := r.expectStableError(resolved, "unsupported_capability"); err != nil {
+	if _, err := decodeResource(resolved, http.StatusCreated); err != nil {
 		return fmt.Errorf(
 			"the same reference against the second tenant's OWN %s: %w; if it still reports an absent target the "+
 				"relation resolves against nothing, and the first refusal proved no boundary",
 			holder.Ref.Kind, err,
 		)
+	}
+
+	// What was pinned. The first tenant's worker is nobody's target.
+	if err := r.deleteExisting(holder, "key-tenant-relation-worker-delete"); err != nil {
+		return fmt.Errorf(
+			"deleting the FIRST tenant's %s %s while only the second tenant's source references that name: %w; "+
+				"a `dependency_in_use` here is a foreign pin — one tenant's resource held hostage by a reference "+
+				"it never appeared in",
+			holder.Ref.Kind, tenantRelationWorker, err,
+		)
+	}
+	stillBound, err := r.readAs(r.alternateTenantToken, source)
+	if err != nil {
+		return err
+	}
+	sourceAfter, err := decodeResource(stillBound, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("the second tenant reading its source after the other tenant released the name: %w", err)
+	}
+	if condition := readyCondition(sourceAfter); condition.Status != "True" {
+		return fmt.Errorf(
+			"removing the FIRST tenant's %s reported %s/%s on the second tenant's source; it is pinned to a uid "+
+				"in another tenant",
+			holder.Ref.Kind, condition.Status, condition.Reason,
+		)
+	}
+
+	// And the second tenant's own worker is protected, which is the same fact
+	// from the other side.
+	ownWorker, err := r.readAs(r.alternateTenantToken, holder)
+	if err != nil {
+		return err
+	}
+	ownWorkerRead, err := decodeResource(ownWorker, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("the second tenant reading its own relation target: %w", err)
+	}
+	protected, err := r.requestWithToken(
+		r.alternateTenantToken, http.MethodDelete,
+		r.resourceURL(holder.Ref, holder.Name, "", r.exactQuery(holder.Space, holder.Ref)),
+		map[string]string{
+			expectedGenerationHeader: ownWorkerRead.Metadata.Generation,
+			"Idempotency-Key":        "key-tenant-relation-worker-alternate-delete",
+		}, nil,
+	)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(protected, "dependency_in_use"); err != nil {
+		return fmt.Errorf(
+			"deleting the SECOND tenant's own %s while its own source references it: %w; its source is that "+
+				"worker's only holder, so a host that permits this stored no pin at all",
+			holder.Ref.Kind, err,
+		)
+	}
+
+	for _, target := range []probeTarget{source, holder, bundle} {
+		if err := r.deleteExistingAs(r.alternateTenantToken, target, "key-"+target.Name+"-tenant-delete"); err != nil {
+			return err
+		}
 	}
 	r.complete("relation-resolution-is-tenant-scoped")
 	return nil
@@ -770,6 +1085,14 @@ func (r *v3Runner) checkRelationResolutionIsTenantScoped(worker probeTarget) err
 // caller is addressing is its OWN, the request is well formed, and what is untrue
 // is the review it presents about it. Nothing here is a statement about whether
 // any other tenant's resource exists, so nothing here discloses one.
+//
+// The boundary is the TENANT, and the last leg is what says so. A review bound to
+// the minting PRINCIPAL instead refuses the foreign tenant identically and passes
+// every other leg here — while breaking the ordinary split decision 0018 assumes,
+// where one identity plans and another applies. So a second principal of the
+// MINTING tenant spends the same digest and is accepted: enforced tighter than
+// written is still a divergence between two hosts, and this is the leg that
+// catches it.
 func (r *v3Runner) checkPrepareIsTenantScoped(worker probeTarget) error {
 	subject := worker
 	subject.Name = tenantPrepareName
@@ -806,6 +1129,30 @@ func (r *v3Runner) checkPrepareIsTenantScoped(worker probeTarget) error {
 	if err := r.expectResourceAbsent(subject); err != nil {
 		return fmt.Errorf("a prepare mutated the minting tenant's plane: %w", err)
 	}
+
+	// The same review, the same document, a second principal of the tenant that
+	// minted it.
+	shared, err := r.applyAs(r.alternateToken, subject, applyOptions{
+		Create: true, IdempotencyKey: "key-tenant-prepare-shared",
+		PrepareDigest: minted.PrepareDigest,
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := decodeResource(shared, http.StatusCreated); err != nil {
+		return fmt.Errorf(
+			"a second principal of the MINTING tenant spending the review minted at %s: %w; a review binds the "+
+				"tenant, so a host binding it to the principal refuses the ordinary plan-here-apply-there split "+
+				"and is indistinguishable from a correct one against the foreign leg above",
+			minted.PrepareDigest, err,
+		)
+	}
+	if err := r.deleteExisting(subject, "key-tenant-prepare-shared-delete"); err != nil {
+		return err
+	}
+	if err := r.deleteExistingAs(r.alternateTenantToken, subject, "key-tenant-prepare-own-delete"); err != nil {
+		return err
+	}
 	r.complete("prepare-is-tenant-scoped")
 	return nil
 }
@@ -820,9 +1167,18 @@ func (r *v3Runner) checkPrepareIsTenantScoped(worker probeTarget) error {
 // and would do it while performing no mutation at all, so the second tenant would
 // hold state for a resource it does not have.
 //
-// One key, two tenants, three assertions: two independent creates with two uids,
-// a real replay for the second tenant's own repeat, and the first tenant's
-// resource unmoved.
+// One key, two tenants, four assertions: two independent creates with two uids,
+// the second tenant's resource actually THERE, a real replay for that tenant's
+// own repeat, and the first tenant's resource unmoved.
+//
+// The read-back is not a formality. Without it the check asks only that the
+// second tenant's 201 differ from the first tenant's, and a host that answers a
+// key it has already seen from another tenant by minting a fresh-looking
+// document — new uid, generation 1, a plausible ETag — and storing nothing
+// satisfies every remaining assertion, including the byte-identical "replay",
+// which is just the same synthesis twice. The client is told it owns a resource
+// that does not exist, which is the same non-convergence a stale replay record
+// produces, arrived at from the other end.
 func (r *v3Runner) checkIdempotencyIsTenantScoped(worker probeTarget) error {
 	const key = "key-tenant-idempotency-shared"
 	subject := worker
@@ -864,6 +1220,21 @@ func (r *v3Runner) checkIdempotencyIsTenantScoped(worker probeTarget) error {
 	if alternateCreated.Metadata.UID == primaryCreated.Metadata.UID {
 		return fmt.Errorf(
 			"the second tenant was answered the first tenant's record at uid %s", primaryCreated.Metadata.UID,
+		)
+	}
+	// It EXECUTED. A 201 is a claim about the store, and this is the request that
+	// would be answered from a record rather than performed.
+	alternateStored, err := r.readUIDAs(
+		r.alternateTenantToken, subject, "the second tenant reading what its own key created",
+	)
+	if err != nil {
+		return err
+	}
+	if alternateStored != alternateCreated.Metadata.UID {
+		return fmt.Errorf(
+			"the second tenant's create answered uid %s and its plane holds %s; the key was answered rather "+
+				"than executed",
+			alternateCreated.Metadata.UID, alternateStored,
 		)
 	}
 

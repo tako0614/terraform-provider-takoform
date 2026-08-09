@@ -123,6 +123,26 @@ verbatim. This is the required conformance check
   Conditions are host-rendered state that changes without any desired spec
   changing, so a client MUST NOT carry a previous value forward as if it were
   still true.
+- **A replay record does not outlive the incarnation it reports.** A host MUST
+  NOT answer a request from a recorded idempotency replay once the incarnation
+  that recording reports as LIVE no longer exists; such a record is RETIRED and
+  the request is executed as the new request it is. A record is bound to the
+  `metadata.uid` its recorded answer carries — a create, an update, an adoption,
+  and an observe all report one. A record whose answer reports no live
+  incarnation is bound to nothing and MUST keep replaying: that is a successful
+  delete, whose `204` reports the incarnation gone, and every refusal. An
+  accepted `202` is bound to its Operation and follows that operation's outcome.
+  Retirement is by INCARNATION, never by name: a later resource taking the same
+  name retires nothing, and a host MAY still expire records by age or capacity.
+  Both halves matter. Without retirement a `destroy` followed by an `apply` of an
+  unchanged configuration is answered the old `201` forever and never converges,
+  because a create's prepare binds the create markers so the re-create derives a
+  byte-identical key and fingerprint; retire a delete's own record and the
+  retried delete of a lost response is EXECUTED against whichever incarnation
+  holds the name now. These are the required conformance checks
+  `apply-idempotency-replay` and
+  `replay-record-retires-with-its-incarnation`, and they are decided by
+  [decision 0011](../decisions/0011-resource-identity-generation-and-revision.md).
 - The Form semantic identity is the exact FormRef. The package digest used
   at installation is audit evidence (`form.packageDigest`, optional in
   responses); it never enters queries, fences, or state identity, and a host
@@ -187,6 +207,16 @@ member names one, so it comes from the credential and from nowhere else. It is
 recorded when a resource is created and carried forward by every update and
 import, exactly like the recorded exact FormRef.
 
+A request that carries no credential, or one naming nobody, therefore has no
+tenant and MUST be refused `unauthenticated` (401) — never
+`permission_denied` (403), because the caller has not been identified and there
+is nothing yet to deny. This is the required conformance check
+`unauthenticated-request-refused`, driven with an ABSENT `Authorization` header
+and with a well-formed bearer credential naming nobody, on a read surface and on
+a mutating one. Everything below is downstream of it: a host whose credential
+lookup fails open has picked a tenant the caller never named, and every rule in
+this section is then about a boundary that is not there.
+
 Everything else follows from the address.
 
 - Two tenants MAY create one `{space, apiVersion, kind, name}`. They get two
@@ -205,6 +235,16 @@ Everything else follows from the address.
   (403) is the wrong answer and is forbidden here: it would confirm that a
   resource of that name exists somewhere on the host, which is the fact the
   boundary exists to withhold, to any caller who can guess a name.
+- **"Its own tenant" is a permission as well as a limit.** Every tenant MUST be
+  able to create, read, observe, update, import, and delete resources in its own
+  plane, and a resource MUST stay operable by its holder after a caller from
+  another tenant has been refused. A host that is create-and-read-only outside
+  one privileged tenant, and a host that quarantines a record a stranger reached
+  for, both refuse everything the paragraph above requires them to refuse — and
+  both have taken a resource from the tenant that owns it. Required conformance
+  checks: `each-tenant-mutates-its-own-plane`, and the holder's own leg of
+  `resource-update-is-tenant-isolated` and
+  `resource-delete-is-tenant-isolated`.
 - `import` is the one surface whose absent answer is not a refusal, so the rule
   is stated for it exactly. An adoption under `If-None-Match: *` of a name the
   caller does not hold MINTS a resource at generation 1, and a name held only by
@@ -222,11 +262,17 @@ Everything else follows from the address.
 - `validate` carries a name and resolves none: it answers diagnostics about the
   document it was handed and reads no stored resource, so it has no
   tenant-dependent answer to give.
-- **Relations resolve only within the same tenant.** A reference is
+- **Relations resolve only within the same tenant, and the stored pin is the uid
+  they resolved to.** A reference is
   `{apiVersion, kind, name}` and carries neither a tenant nor a space, so it is
   resolved inside the referring resource's own scope. A name that only another
   tenant holds is an absent target and fails `resource_not_found` (404) like any
-  other. A host that resolved a reference across tenants would bind one tenant's
+  other. Resolving correctly and PINNING the other tenant's uid is the same
+  defect arriving one step later, and it is the step everything downstream reads:
+  deletion protection, drift, and every Worker aggregate rule are computed from
+  the pin, so a foreign pin protects one tenant's resource from its own owner and
+  makes another tenant's source follow a resource its author never named. A host
+  that resolved a reference across tenants would bind one tenant's
   desired state to another tenant's resource and pin its uid into stored state,
   which is the substitution
   [decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md)
@@ -240,12 +286,17 @@ Everything else follows from the address.
   untrue is the review. A create binding pins no uid and no generation, so
   without the tenant two tenants preparing one name in one space would hold the
   same digest, and a review — a value clients log, print in plans, and pass
-  between processes — would be a bearer token over another tenant's plane.
+  between processes — would be a bearer token over another tenant's plane. The
+  boundary is the TENANT and not the principal: a second principal of the minting
+  tenant MUST be able to spend the same review, because planning under one
+  identity and applying under another is ordinary operation and a host enforcing
+  the rule more tightly than it is written is a host two deployments differ on.
 - An `Idempotency-Key` names one operation **of one tenant**. The same key from
   two tenants is two operations, and each tenant replays only its own recorded
   response. Answering a second tenant with the first tenant's recorded success
   would hand it another tenant's uid, generation, and ETag while performing no
-  mutation at all.
+  mutation at all — and so would answering it a fresh-looking `201` that stores
+  nothing, which is why the check reads the second tenant's resource back.
 - Anything a host renders from OTHER resources — the relation drift and Worker
   readiness of [Resource identity](#resource-identity) — is computed from, and
   advances the revision of, resources of the mutating tenant only. That pass
@@ -260,18 +311,19 @@ and DNS does not partition with them
 That rule drops the space and keeps the tenant. It does not reach past the
 tenant, and no rule in this lane does.
 
-Nine required conformance checks measure this, all of them black box, all of
+Ten required conformance checks measure this, all of them black box, all of
 them driven with two configured tenants' credentials:
 `resource-address-is-tenant-scoped`, `resource-read-is-tenant-isolated`,
 `resource-observe-is-tenant-isolated`, `resource-update-is-tenant-isolated`,
 `resource-import-is-tenant-isolated`, `resource-delete-is-tenant-isolated`,
-`relation-resolution-is-tenant-scoped`, `prepare-is-tenant-scoped`, and
-`idempotency-is-tenant-scoped`. A runner that cannot authenticate as two tenants
+`relation-resolution-is-tenant-scoped`, `prepare-is-tenant-scoped`,
+`idempotency-is-tenant-scoped`, and `each-tenant-mutates-its-own-plane`. A
+runner that cannot authenticate as two tenants
 can measure none of them, which is why the lane's runner REQUIRES an
 alternate-tenant credential alongside the same-tenant alternate principal rather
 than treating it as optional.
 
-The nine are enumerated by SURFACE and not by intent. Every route of
+Nine of the ten are enumerated by SURFACE and not by intent. Every route of
 [Lifecycle](#lifecycle) that takes a resource name is listed against the check
 that measures it, and the list is bound to the published route block, to the
 reference host's router, and to the required-check list by tests, so a
@@ -279,7 +331,9 @@ name-addressed endpoint cannot be added to this lane without one. An
 enumeration by intent is what left `observe` and `import` out of the first
 version of this section: both take a name, one returns a whole representation
 and one mutates, and a host that scoped `read`, `apply` and `delete` while
-resolving either host-wide satisfied every check there was.
+resolving either host-wide satisfied every check there was. The tenth is not a
+surface but the permissive half of all of them, so it is listed against `PUT` and
+`DELETE` beside the two boundary checks it completes.
 
 Two facts are host obligations this lane does NOT prove, because a black-box
 runner cannot observe them:
@@ -638,7 +692,18 @@ about the worker it activates
 ([decision 0026](../decisions/0026-attachment-claims-are-canonical-and-acyclic.md)).
 Both fail `invalid_argument` (400) before any mutation, on `apply` and on
 `import` alike, and are re-raised when an accepted `202` commits: each is a
-statement about the store, and the store moves between accept and commit.
+statement about the store, and the store moves between accept and commit. All
+three surfaces are measured, and the two beyond `apply` are where a laxer host
+is most likely to differ: `import` mints a resource for something already
+running, so an adoption that skips the scan is how a second attachment reaches a
+hostname the host already answers; and at commit each of the two requests that
+together produce the collision was correct when it was made. The required
+conformance checks are `attachment-claim-decided-on-import`, which drives both
+rules through adoption in both polarities so a host cannot pass by refusing every
+adoption, and `attachment-claim-revalidated-at-commit`, which accepts a `202`
+while the store makes it legal, moves the store with a synchronous request that
+is itself legal, and requires the commit to terminate `invalid_argument`, commit
+nothing, and leave the synchronous resource alive.
 
 A `WorkerCustomDomain`'s `hostname` is **canonicalized before it is compared and
 before it is stored**: the trailing root dot removed and every ASCII letter
@@ -649,6 +714,14 @@ byte-identical desired state, the same `specDigest`, and the same `generation`.
 An internationalized name travels as its **A-label**; the Form's `hostname`
 pattern admits no non-ASCII byte, so a host performs no IDNA mapping of its own
 and two hosts on different Unicode tables cannot canonicalize one name two ways.
+This is a REFUSAL and not a conversion: a U-label is refused
+`invalid_argument` (400) at `validate` and at `prepare`, and the A-label of the
+same name is accepted and stored byte-for-byte as written. A host that mapped
+the U-label instead would put its own Unicode table version into a portable
+contract, so one desired state would claim two different hostnames depending on
+where it was applied. This is the required conformance check
+`custom-domain-u-label-refused`, driven while the name is free so nothing but the
+Form's grammar can produce the refusal.
 The canonical hostname is then unique **per tenant**: a second
 `WorkerCustomDomain` claiming a hostname a live one already serves — in that
 space or in any other space of the same tenant — fails `invalid_argument` (400),

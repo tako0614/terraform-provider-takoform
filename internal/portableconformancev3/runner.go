@@ -363,6 +363,19 @@ func (r *v3Runner) requestWithToken(
 	headers map[string]string,
 	body []byte,
 ) (wireResponse, error) {
+	return r.requestWithAuthorization("Bearer "+token, method, target, headers, body)
+}
+
+// requestWithAuthorization is the transport with the credential stated
+// literally. An EMPTY authorization omits the header entirely, which is the one
+// request shape every other helper in this file makes unsendable — and the shape
+// that decides whether a host reads its tenant from the credential or from a
+// default it falls back to.
+func (r *v3Runner) requestWithAuthorization(
+	authorization, method, target string,
+	headers map[string]string,
+	body []byte,
+) (wireResponse, error) {
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
@@ -372,7 +385,9 @@ func (r *v3Runner) requestWithToken(
 		return wireResponse{}, err
 	}
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "Bearer "+token)
+	if authorization != "" {
+		request.Header.Set("Authorization", authorization)
+	}
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}

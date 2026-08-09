@@ -204,12 +204,23 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 106-check matrix over real HTTP: exact discovery and
-availability,
+drives the complete 112-check matrix over real HTTP: exact discovery and
+availability, a credential that is REQUIRED — an absent `Authorization` header
+and a bearer credential naming nobody are both refused `unauthenticated` on a
+read surface and on a mutating one, and the identical requests under a real
+credential succeed, so a host whose credential lookup fails open cannot pick a
+tenant the caller never named,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
 fence, and a fence-less or stale prepare is rejected),
-uid minting and delete-then-recreate uid change, generation fences versus
+uid minting and delete-then-recreate uid change, a replay record that does not
+outlive the incarnation it reports — the byte-identical create that replays while
+its resource is present is a NEW create with a new uid once that resource is
+deleted, and reads back, so `terraform destroy` followed by `terraform apply` of
+an unchanged configuration converges; while the delete's own record, which
+reports no live incarnation, still replays its 204 and does not remove the
+replacement that holds the name, and an accepted 202 follows the incarnation its
+operation committed, generation fences versus
 revision fences (including a host-side status touch that advances only the
 revision), a delete fenced on the expected generation — refused unfenced,
 refused stale, and accepted carrying nothing else, while the representation
@@ -233,7 +244,11 @@ other, and a relation refused before mutation when its target does not satisfy
 the contract the reference annotates, whether that is an exact Form identity or
 a required Interface, with the stored pin recording the target's exact FormRef
 beside its uid — import validated exactly like apply, cross-resource semantics the Forms declare in prose but only a host can
-enforce (WorkerDeployment weights summing to 10000; a cron trigger or queue
+enforce (WorkerDeployment weights summing to exactly 10000 — short and long are
+both refused, and a real two-version split at 4000/6000 is accepted, so a host
+that admits only one weighted entry has no traffic split and fails; one active
+deployment per worker, with a replacement accepted once the live one is released,
+so the rule is about what is live rather than a flag nothing clears; a cron trigger or queue
 consumer refused with `unsupported_capability` until some WorkerVersion
 declares the matching handler; a WorkerEndpoint answered with a complete HTTPS
 address the host assigned rather than the author, in canonical form — lowercase,
@@ -279,8 +294,18 @@ neither reads, observes, updates, or deletes the other's — answered
 `resource_not_found`, indistinguishably from a name nobody created, message
 included — a reference resolves only inside the referring tenant even when the
 name matches exactly, a `prepareDigest` minted by one tenant is not spendable by
-another, and one `Idempotency-Key` from two tenants is two operations rather than
-a replay. The one claim in the lane that stops at the tenant WITHOUT the tenant
+another — while a second PRINCIPAL of the minting tenant spends the same review
+successfully, because the boundary is the tenant — and one `Idempotency-Key` from
+two tenants is two operations rather than a replay, with the second tenant's
+resource read back so an answered key cannot stand in for an executed one. Every
+one of those refusals is paired with the permissive half it would otherwise be
+satisfied by refusing: the second tenant UPDATES and DELETES resources of its own
+while the first tenant's identically-named resource does not move; the holder of
+a resource a stranger reached for can still update and delete it, so a host that
+quarantines the record fails; and the relation check reaches a successful apply
+and reads the stored pin by what it protects — the first tenant's identically
+named target deletes freely, the second tenant's source stays Ready when it does,
+and the second tenant's own target is refused `dependency_in_use`. The one claim in the lane that stops at the tenant WITHOUT the tenant
 being in its address is the `WorkerCustomDomain` hostname, and it is measured in
 the direction that costs a mistake: a second tenant standing up its own
 aggregate and claiming the hostname the first tenant serves is ACCEPTED, both
@@ -291,12 +316,25 @@ measured as one: a second tenant adopting the name the first tenant holds is
 answered the 201 it would be answered for a name nobody holds anywhere — same
 status, same ETag, same document but for the minted uid and the name — while the
 holder's uid, generation, and revision do not move, and the fenced form of the
-same adoption is refused `resource_not_found`. The nine are enumerated by
+same adoption is refused `resource_not_found`. Nine of the ten are enumerated by
 SURFACE rather than by intent: every route that takes a resource name is listed
 against the check measuring it, and that list is bound to the published route
 block and to the required-check list, so a name-addressed endpoint cannot be
-added without one. All nine are black box and all nine need the alternate-TENANT
+added without one; the tenth is the permissive half of all of them. All ten are
+black box and all ten need the alternate-TENANT
 credential, which is why the runner requires it.
+The two attachment claims of
+[decision 0026](../spec/decisions/0026-attachment-claims-are-canonical-and-acyclic.md)
+are driven on all three surfaces that record names, not on `apply` alone: a
+colliding hostname and a cycle-closing consumer are both refused through
+`import` and accepted through it once the state that made them wrong is gone,
+and an accepted `202` that was legal when it was accepted terminates
+`invalid_argument` at commit when a synchronous request took the hostname, or
+closed the loop, while it was pending — committing nothing and leaving the
+synchronous resource alive. The A-label rule is driven as the refusal it is: a
+U-label hostname is rejected at `validate` and at `prepare` while the name is
+free, so nothing but the Form's grammar can be refusing it, and the A-label of
+the same name is accepted and stored byte-for-byte.
 Probing every stable error uses the runner-only
 `Takoform-Conformance-Probe` header (`error:<code>`, `async`,
 `touch-status`, `external-change`); it is disposable-adapter transport, never

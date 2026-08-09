@@ -32,6 +32,20 @@ const (
 	// and the only thing a refusal could mean is a claim scan that reached past
 	// the tenant.
 	sharedClaimHostname = "shared.portable-conformance.invalid"
+	// importClaimHostname is the name the ADOPTION path competes for, and
+	// commitClaimHostname the name an accepted 202 competes for. Each surface gets
+	// its own so the three sequences can run in any order without one's holder
+	// deciding another's verdict.
+	importClaimHostname = "adopted.portable-conformance.invalid"
+	commitClaimHostname = "committed.portable-conformance.invalid"
+	// uLabelClaimHostname is an internationalized name written as a U-label, and
+	// aLabelClaimHostname is the same name written the way this lane carries it.
+	// The Form's `hostname` pattern admits no non-ASCII byte, so the first is
+	// refused by the Form's own grammar and the conversion belongs in the author's
+	// tooling, where the Unicode table version is the author's choice rather than
+	// the host's (spec/decisions/0026).
+	uLabelClaimHostname = "café.portable-conformance.invalid"
+	aLabelClaimHostname = "xn--caf-dma.portable-conformance.invalid"
 )
 
 // customDomainClaiming builds one Worker Custom Domain of the deployed gate
@@ -539,18 +553,34 @@ func (r *v3Runner) checkCustomDomainHostnameClaimStopsAtTheTenant() error {
 // destination's own consumer stores the infinite circulation. A -> B -> C -> D
 // is accepted, so a host cannot pass by refusing every dead-letter queue, nor
 // by refusing chains once they are longer than the shapes above.
-func (r *v3Runner) checkDeadLetterCycleRejected() error {
+// queueConsumerOf builds one Queue Consumer of the deployed gate worker,
+// draining one named queue and dead-lettering into another.
+func (r *v3Runner) queueConsumerOf(name string, drains, deadLetter probeTarget) probeTarget {
 	input := r.contract.RunnerInput
-	queueOf := func(name, key string) (probeTarget, error) {
-		queue := r.target(input.AtLeastOnceQueue)
-		queue.Name = name
-		if _, _, err := r.applyResource(queue, applyOptions{
-			Create: true, IdempotencyKey: key,
-		}, http.StatusCreated); err != nil {
-			return probeTarget{}, fmt.Errorf("the %s queue: %w", name, err)
-		}
-		return queue, nil
+	consumer := r.target(input.QueueConsumer)
+	consumer.Name = name
+	consumer.Spec = cloneJSONMap(consumer.Spec)
+	consumer.Spec["worker"] = exactReference(r.target(input.ModuleWorker), "gate-worker")
+	consumer.Spec["queue"] = exactReference(drains, drains.Name)
+	consumer.Spec["deadLetterQueue"] = exactReference(deadLetter, deadLetter.Name)
+	return consumer
+}
+
+// liveQueue creates one At-Least-Once Queue and returns the target it was
+// created under.
+func (r *v3Runner) liveQueue(name, key string) (probeTarget, error) {
+	queue := r.target(r.contract.RunnerInput.AtLeastOnceQueue)
+	queue.Name = name
+	if _, _, err := r.applyResource(queue, applyOptions{
+		Create: true, IdempotencyKey: key,
+	}, http.StatusCreated); err != nil {
+		return probeTarget{}, fmt.Errorf("the %s queue: %w", name, err)
 	}
+	return queue, nil
+}
+
+func (r *v3Runner) checkDeadLetterCycleRejected() error {
+	queueOf := r.liveQueue
 	first, err := queueOf("dead-letter-queue-a", "key-dead-letter-queue-a")
 	if err != nil {
 		return err
@@ -560,15 +590,7 @@ func (r *v3Runner) checkDeadLetterCycleRejected() error {
 		return err
 	}
 
-	consumerOf := func(name string, drains, deadLetter probeTarget) probeTarget {
-		consumer := r.target(input.QueueConsumer)
-		consumer.Name = name
-		consumer.Spec = cloneJSONMap(consumer.Spec)
-		consumer.Spec["worker"] = exactReference(r.target(input.ModuleWorker), "gate-worker")
-		consumer.Spec["queue"] = exactReference(drains, drains.Name)
-		consumer.Spec["deadLetterQueue"] = exactReference(deadLetter, deadLetter.Name)
-		return consumer
-	}
+	consumerOf := r.queueConsumerOf
 
 	// One hop: the destination resolves to the queue this consumer drains.
 	if err := r.refuseCreate(
@@ -669,6 +691,334 @@ func (r *v3Runner) checkDeadLetterCycleRejected() error {
 		}
 	}
 	r.complete("dead-letter-cycle-rejected")
+	return nil
+}
+
+// refuseImport drives one create-intent adoption the host must refuse before
+// any mutation, and proves nothing was stored under the name it addressed.
+func (r *v3Runner) refuseImport(target probeTarget, code, nativeID, key, subject string) error {
+	response, err := r.importResource(target, importOptions{
+		NativeID: nativeID, IdempotencyKey: key, Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(response, code); err != nil {
+		return fmt.Errorf("%s: %w", subject, err)
+	}
+	if err := r.expectResourceAbsent(target); err != nil {
+		return fmt.Errorf("%s mutated state: %w", subject, err)
+	}
+	return nil
+}
+
+// checkAttachmentClaimDecidedOnImport proves the two claim rules are decided on
+// the ADOPTION surface as well as on apply.
+//
+// Decision 0026 says both refusals land "on `apply` and on `import` alike", and
+// the corpus measured only the first. That is not a formality: import is the
+// surface that mints a resource for something that already exists outside the
+// host, so a host that skipped the claim scan there would adopt a second
+// attachment onto a hostname it already answers, or adopt a consumer that closes
+// a dead-letter cycle — and adoption is precisely the path where the author is
+// least likely to be looking, because the configuration they are adopting was
+// already running. A host validating the whole gauntlet on apply and treating
+// import as "write what the backend already has" is the ordinary shape of this
+// mistake.
+//
+// Both polarities are driven for both rules, so a host cannot pass by refusing
+// every adoption: the colliding hostname and the closing consumer are refused
+// while the state that makes them wrong is live, and the SAME adoptions land
+// once it is not.
+func (r *v3Runner) checkAttachmentClaimDecidedOnImport() error {
+	holder := r.customDomainClaiming("import-claim-holder", importClaimHostname)
+	if _, _, err := r.applyResource(holder, applyOptions{
+		Create: true, IdempotencyKey: "key-import-claim-holder",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("the attachment that serves %s: %w", importClaimHostname, err)
+	}
+	// Written in a spelling the store does not hold, so a host comparing bytes
+	// rather than the canonical name adopts it.
+	adopting := r.customDomainClaiming("import-claim-adopted", "Adopted.Portable-Conformance.INVALID.")
+	if err := r.refuseImport(
+		adopting, "invalid_argument", "native/import-claim", "key-import-claim-refused",
+		"adopting a WorkerCustomDomain onto a hostname a live attachment already serves",
+	); err != nil {
+		return err
+	}
+	if err := r.deleteExisting(holder, "key-import-claim-holder-delete"); err != nil {
+		return err
+	}
+	adopted, err := r.importResource(adopting, importOptions{
+		NativeID: "native/import-claim", IdempotencyKey: "key-import-claim-accepted", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	adoptedResource, err := decodeResource(adopted, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("adopting the same hostname once the holder released it: %w", err)
+	}
+	if stored, _ := adoptedResource.Spec["hostname"].(string); stored != importClaimHostname {
+		return fmt.Errorf(
+			"an adoption stored hostname %q for the spelling it was handed; canonicalization is at the host's "+
+				"single materialization entry point, so import reaches it too, want %q",
+			stored, importClaimHostname,
+		)
+	}
+	if err := r.deleteExisting(adopting, "key-import-claim-adopted-delete"); err != nil {
+		return err
+	}
+
+	first, err := r.liveQueue("import-dead-letter-a", "key-import-dead-letter-a")
+	if err != nil {
+		return err
+	}
+	second, err := r.liveQueue("import-dead-letter-b", "key-import-dead-letter-b")
+	if err != nil {
+		return err
+	}
+	forward := r.queueConsumerOf("import-dead-letter-forward", first, second)
+	if _, _, err := r.applyResource(forward, applyOptions{
+		Create: true, IdempotencyKey: "key-import-dead-letter-forward",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("a consumer dead-lettering onward: %w", err)
+	}
+	if err := r.refuseImport(
+		r.queueConsumerOf("import-dead-letter-back", second, first),
+		"invalid_argument", "native/import-dead-letter", "key-import-dead-letter-refused",
+		"adopting a QueueConsumer that closes a dead-letter cycle",
+	); err != nil {
+		return err
+	}
+	third, err := r.liveQueue("import-dead-letter-c", "key-import-dead-letter-c")
+	if err != nil {
+		return err
+	}
+	acyclic := r.queueConsumerOf("import-dead-letter-back", second, third)
+	onward, err := r.importResource(acyclic, importOptions{
+		NativeID: "native/import-dead-letter", IdempotencyKey: "key-import-dead-letter-accepted", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := decodeResource(onward, http.StatusCreated); err != nil {
+		return fmt.Errorf("adopting a consumer whose dead-letter destination closes no cycle: %w", err)
+	}
+	for _, consumer := range []probeTarget{acyclic, forward} {
+		if err := r.deleteExisting(consumer, "key-"+consumer.Name+"-delete"); err != nil {
+			return err
+		}
+	}
+	for _, queue := range []probeTarget{third, second, first} {
+		if err := r.deleteExisting(queue, "key-"+queue.Name+"-delete"); err != nil {
+			return err
+		}
+	}
+	r.complete("attachment-claim-decided-on-import")
+	return nil
+}
+
+// checkAttachmentClaimRevalidatedAtCommit proves both claim rules are re-derived
+// when an accepted `202` COMMITS, rather than decided once at accept time.
+//
+// A claim is a statement about the store, and the store moves between accept and
+// commit — which is the whole reason decision 0016 rule 9 and decision 0015
+// rule 10 exist, and decision 0026 says the same of these two. The corpus proved
+// it for relations and for the delete scan and never for a claim, so a host that
+// evaluated the hostname and the dead-letter walk in the accepting request and
+// treated the commit as "write what was approved" passed everything. What it
+// produces is two live attachments on one DNS name, or an unbounded redelivery
+// loop — built, in both cases, by two ordinary requests that were each correct
+// when they were made.
+//
+// Each half is driven the same way: a mutation is accepted while the store makes
+// it legal, the store is then moved by a SYNCHRONOUS request that is itself
+// legal, and the accepted operation must terminate `invalid_argument` and commit
+// nothing. The synchronous request is the positive control — it proves the state
+// the commit is refused for was reachable — and the resource it created must
+// survive the refusal.
+func (r *v3Runner) checkAttachmentClaimRevalidatedAtCommit() error {
+	pending := r.customDomainClaiming("commit-claim-pending", commitClaimHostname)
+	accepted, err := r.apply(pending, applyOptions{
+		Create: true, IdempotencyKey: "key-commit-claim-async",
+		ExtraHeaders: map[string]string{ErrorProbeHeader: ProbeAsync},
+	})
+	if err != nil {
+		return err
+	}
+	claimOperation, err := acceptedOperation(accepted, "a custom domain claiming a free hostname")
+	if err != nil {
+		return err
+	}
+	taker := r.customDomainClaiming("commit-claim-taker", commitClaimHostname)
+	if _, _, err := r.applyResource(taker, applyOptions{
+		Create: true, IdempotencyKey: "key-commit-claim-taker",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("taking the hostname while the accepted claim is pending: %w", err)
+	}
+	terminal, err := r.pollOperation(claimOperation)
+	if err != nil {
+		return err
+	}
+	if err := requireTerminalOperationError(terminal, "invalid_argument"); err != nil {
+		return fmt.Errorf(
+			"an accepted claim on %s that another attachment took while it was pending: %w; a claim is a "+
+				"statement about the store, and the store moved",
+			commitClaimHostname, err,
+		)
+	}
+	if err := r.expectResourceAbsent(pending); err != nil {
+		return fmt.Errorf("a claim refused at commit still committed: %w", err)
+	}
+	if _, _, err := r.read(taker); err != nil {
+		return fmt.Errorf("the attachment that legitimately took the hostname did not survive: %w", err)
+	}
+	if err := r.deleteExisting(taker, "key-commit-claim-taker-delete"); err != nil {
+		return err
+	}
+
+	// The dead-letter graph, moved the same way. The accepted consumer adds the
+	// edge B -> A, which closes no cycle when it is accepted because nothing
+	// leaves A; the synchronous consumer adds A -> B, which closes no cycle when
+	// IT is applied because the first is not committed. Together they are a loop,
+	// and only the commit can see it.
+	first, err := r.liveQueue("commit-dead-letter-a", "key-commit-dead-letter-a")
+	if err != nil {
+		return err
+	}
+	second, err := r.liveQueue("commit-dead-letter-b", "key-commit-dead-letter-b")
+	if err != nil {
+		return err
+	}
+	pendingConsumer := r.queueConsumerOf("commit-dead-letter-pending", second, first)
+	acceptedConsumer, err := r.apply(pendingConsumer, applyOptions{
+		Create: true, IdempotencyKey: "key-commit-dead-letter-async",
+		ExtraHeaders: map[string]string{ErrorProbeHeader: ProbeAsync},
+	})
+	if err != nil {
+		return err
+	}
+	cycleOperation, err := acceptedOperation(acceptedConsumer, "a consumer whose dead-letter destination is free")
+	if err != nil {
+		return err
+	}
+	closing := r.queueConsumerOf("commit-dead-letter-closing", first, second)
+	if _, _, err := r.applyResource(closing, applyOptions{
+		Create: true, IdempotencyKey: "key-commit-dead-letter-closing",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("the consumer that closes the cycle only in combination: %w", err)
+	}
+	cycleTerminal, err := r.pollOperation(cycleOperation)
+	if err != nil {
+		return err
+	}
+	if err := requireTerminalOperationError(cycleTerminal, "invalid_argument"); err != nil {
+		return fmt.Errorf(
+			"an accepted consumer whose dead-letter destination acquired a path home while it was pending: %w", err,
+		)
+	}
+	if err := r.expectResourceAbsent(pendingConsumer); err != nil {
+		return fmt.Errorf("a dead-letter cycle refused at commit still committed: %w", err)
+	}
+	if _, _, err := r.read(closing); err != nil {
+		return fmt.Errorf("the consumer that was legitimately applied did not survive: %w", err)
+	}
+	if err := r.deleteExisting(closing, "key-commit-dead-letter-closing-delete"); err != nil {
+		return err
+	}
+	for _, queue := range []probeTarget{second, first} {
+		if err := r.deleteExisting(queue, "key-"+queue.Name+"-delete"); err != nil {
+			return err
+		}
+	}
+	r.complete("attachment-claim-revalidated-at-commit")
+	return nil
+}
+
+// acceptedOperation reads the pending Operation id out of one 202.
+func acceptedOperation(response wireResponse, subject string) (string, error) {
+	if response.Status != http.StatusAccepted {
+		return "", fmt.Errorf(
+			"%s: async apply HTTP %d, want 202; body=%s",
+			subject, response.Status, strings.TrimSpace(string(response.Body)),
+		)
+	}
+	var envelope struct {
+		Operation wireOperation `json:"operation"`
+	}
+	if err := decodeStrictResponse(response, &envelope); err != nil {
+		return "", err
+	}
+	if envelope.Operation.Done {
+		return "", fmt.Errorf("%s: the 202 was already terminal, so nothing could be revalidated", subject)
+	}
+	return envelope.Operation.ID, nil
+}
+
+// checkCustomDomainULabelRefused proves an internationalized hostname travels as
+// its A-label, and that the host REFUSES the other form rather than converting
+// it.
+//
+// This is the one half of decision 0026's canonicalization rule the corpus never
+// drove, and it is the half where a host doing something helpful is the defect.
+// IDNA/UTS-46 mapping inside a host would make that host's Unicode table version
+// part of the portable contract: two conforming hosts on two table versions can
+// canonicalize one U-label to two different names, so the same desired state
+// would claim two different hostnames depending on where it was applied — the
+// privately-decided meaning this lane refuses everywhere else. Converting is
+// also the obvious thing to reach for, because every mainstream language ships
+// an IDNA function and refusing looks unfriendly.
+//
+// The refusal is driven while the name is FREE, so nothing but the Form's own
+// grammar can produce it, and at both pre-mutation gates a client meets. The
+// permissive half is the same name written as its A-label: accepted, and stored
+// byte-for-byte as written, so a host that refuses anything unusual-looking — or
+// that rewrites the A-label back into something else — fails here.
+func (r *v3Runner) checkCustomDomainULabelRefused() error {
+	offender := r.customDomainClaiming("u-label-domain", uLabelClaimHostname)
+	subject := "a WorkerCustomDomain whose hostname is written as a U-label"
+	valid, diagnostics, err := r.validateResource(offender, offender.Spec)
+	if err != nil {
+		return err
+	}
+	if valid || diagnostics == 0 {
+		return fmt.Errorf(
+			"validate accepted %s; the Form's hostname pattern admits no non-ASCII byte, and a host that maps "+
+				"one to its A-label puts its own Unicode table version into the portable contract",
+			subject,
+		)
+	}
+	refused, err := r.prepareRequest(offender, map[string]string{})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(refused, "invalid_argument"); err != nil {
+		return fmt.Errorf("prepare of %s: %w", subject, err)
+	}
+	if err := r.expectResourceAbsent(offender); err != nil {
+		return fmt.Errorf("%s mutated state: %w", subject, err)
+	}
+
+	// The same name, written the way this lane carries it.
+	aLabel := r.customDomainClaiming("a-label-domain", aLabelClaimHostname)
+	created, _, err := r.applyResource(aLabel, applyOptions{
+		Create: true, IdempotencyKey: "key-a-label-domain",
+	}, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("a WorkerCustomDomain whose hostname is an A-label: %w", err)
+	}
+	if stored, _ := created.Spec["hostname"].(string); stored != aLabelClaimHostname {
+		return fmt.Errorf(
+			"the host stored hostname %q for the A-label it was given, want %q; an A-label is already the "+
+				"canonical spelling and nothing may rewrite it",
+			stored, aLabelClaimHostname,
+		)
+	}
+	if err := r.deleteExisting(aLabel, "key-a-label-domain-delete"); err != nil {
+		return err
+	}
+	r.complete("custom-domain-u-label-refused")
 	return nil
 }
 

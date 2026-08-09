@@ -168,6 +168,28 @@ type recordedReplay struct {
 	Status      int
 	ETag        string
 	Body        []byte
+	// Binding is the incarnation this recorded answer reports as LIVE. A record
+	// does not outlive it (spec/decisions/0011, replayBinding).
+	Binding replayBinding
+}
+
+// replayBinding is what one recorded answer says about a live incarnation, and
+// therefore what retires the record.
+//
+// A recorded response either reports a resource that exists — a create, an
+// update, an adoption, an observe — or it reports none: a delete's 204 says the
+// incarnation is GONE, and a refusal says nothing happened. Only the first kind
+// is bound, and a bound record is retired the moment its uid stops existing,
+// because from then on replaying it would report a resource the host does not
+// have.
+//
+// An accepted 202 carries no uid at accept time: the mutation has not run. It is
+// bound to its OPERATION instead, and follows that operation's outcome — a
+// commit that created or rewrote a resource binds the record to that uid, and a
+// commit that removed one or failed leaves it bound to nothing.
+type replayBinding struct {
+	UID       string
+	Operation string
 }
 
 type artifactUpload struct {
@@ -222,7 +244,12 @@ type hostOperation struct {
 	// 202 is an acceptance of a mutation to ONE resource, so the identity that
 	// mutation may land on is recorded here rather than resolved again from a
 	// name at commit time (acceptedTarget).
-	Accepted     acceptedTarget
+	Accepted acceptedTarget
+	// CommittedUID is the incarnation this operation left live when it settled,
+	// empty for one that removed a resource, created nothing, or failed. The
+	// idempotency record that handed out this operation's 202 follows it
+	// (replayBinding).
+	CommittedUID string
 	commit       func() (map[string]any, *hostError)
 	terminalBody []byte
 }
@@ -1439,7 +1466,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 	response := encodeJSONBody(h.renderResource(next))
 	etag := quotedRevision(next.Revision)
 	h.writeRaw(w, status, etag, response)
-	h.recordReplay(request, raw, space, status, etag, response)
+	h.recordReplay(request, raw, space, status, etag, response, replayBinding{UID: next.UID})
 }
 
 // requireReferencedBundleManifest resolves the ONE thing a WorkerBundle's
@@ -1727,7 +1754,10 @@ func (h *ReferenceHost) handleObserve(
 	response := encodeJSONBody(map[string]any{"resource": h.renderResource(resource)})
 	etag := quotedRevision(resource.Revision)
 	h.writeRaw(w, http.StatusOK, etag, response)
-	h.recordReplay(request, raw, request.URL.Query().Get("space"), http.StatusOK, etag, response)
+	h.recordReplay(
+		request, raw, request.URL.Query().Get("space"),
+		http.StatusOK, etag, response, replayBinding{UID: resource.UID},
+	)
 }
 
 func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Request, group, kind, name string) {
@@ -1802,7 +1832,7 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 	response := encodeJSONBody(h.renderResource(next))
 	etag := quotedRevision(next.Revision)
 	h.writeRaw(w, status, etag, response)
-	h.recordReplay(request, raw, body.Metadata.Space, status, etag, response)
+	h.recordReplay(request, raw, body.Metadata.Space, status, etag, response, replayBinding{UID: next.UID})
 }
 
 func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Request, group, kind, name string) {
@@ -1875,7 +1905,13 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 	}
 	h.removeResource(accepted.Key)
 	h.writeRaw(w, http.StatusNoContent, "", nil)
-	h.recordReplay(request, raw, request.URL.Query().Get("space"), http.StatusNoContent, "", nil)
+	// A completed delete reports the incarnation GONE, so nothing retires this
+	// record: the same delete retried after a lost response must keep being
+	// answered 204 rather than executed against whatever holds the name now.
+	h.recordReplay(
+		request, raw, request.URL.Query().Get("space"),
+		http.StatusNoContent, "", nil, replayBinding{},
+	)
 }
 
 // acceptOperation registers a deferred mutation and answers 202 with a
@@ -1901,7 +1937,10 @@ func (h *ReferenceHost) acceptOperation(
 	h.operations[operation.ID] = operation
 	response := encodeJSONBody(map[string]any{"operation": h.renderOperation(operation)})
 	h.writeRaw(w, http.StatusAccepted, "", response)
-	h.recordReplay(request, raw, space, http.StatusAccepted, "", response)
+	// The 202 names no incarnation yet, so the record follows the operation: it
+	// replays while the mutation is pending, and it retires with whatever
+	// incarnation the commit leaves live.
+	h.recordReplay(request, raw, space, http.StatusAccepted, "", response, replayBinding{Operation: operation.ID})
 }
 
 func (h *ReferenceHost) renderOperation(operation *hostOperation) map[string]any {
@@ -1925,8 +1964,20 @@ func (h *ReferenceHost) completeOperation(operation *hostOperation, result map[s
 		}
 	} else {
 		document["result"] = result
+		operation.CommittedUID = committedResourceUID(result)
 	}
 	operation.terminalBody = encodeJSONBody(document)
+}
+
+// committedResourceUID reads the incarnation an operation left live out of its
+// own terminal result. An accepted apply or import commits a resource and names
+// it; an accepted delete answers `{"deleted": true}` and names none, which is
+// the whole difference between a record that must retire and one that must not.
+func committedResourceUID(result map[string]any) string {
+	resource, _ := result["resource"].(map[string]any)
+	metadata, _ := resource["metadata"].(map[string]any)
+	uid, _ := metadata["uid"].(string)
+	return uid
 }
 
 // ownedOperation resolves one operation for the caller that created it. An
@@ -2207,7 +2258,9 @@ func (h *ReferenceHost) handleArtifactUploadStart(w http.ResponseWriter, request
 	}
 	response := encodeJSONBody(map[string]any{"uploadId": upload.ID, "missingBlobs": missing})
 	h.writeRaw(w, http.StatusCreated, "", response)
-	h.recordReplay(request, raw, "", http.StatusCreated, "", response)
+	// An artifact address is content, not an incarnation: nothing about a
+	// resource's lifetime can make this answer wrong, so the record binds nothing.
+	h.recordReplay(request, raw, "", http.StatusCreated, "", response, replayBinding{})
 }
 
 // ownedUpload resolves one upload session for the caller that started it. As
@@ -2318,7 +2371,7 @@ func (h *ReferenceHost) handleArtifactCommit(w http.ResponseWriter, request *htt
 	h.grantManifest(upload.Owner.Tenant, upload.ManifestDigest)
 	response := encodeJSONBody(map[string]any{"manifestDigest": upload.ManifestDigest})
 	h.writeRaw(w, status, "", response)
-	h.recordReplay(request, raw, "", status, "", response)
+	h.recordReplay(request, raw, "", status, "", response, replayBinding{})
 }
 
 // verifyCommittedSizes binds every declared size to the stored byte length of
@@ -2510,14 +2563,27 @@ func (h *ReferenceHost) formSupportProfile(form *InstalledForm) map[string]any {
 // space, and key; the fingerprint binds method, request target,
 // preconditions, and exact body bytes. A recorded success replays its exact
 // status, ETag, and body; a fingerprint mismatch fails invalid_argument.
+//
+// A record whose incarnation is gone is RETIRED before any of that, and the
+// request is executed as the new one it is (spec/decisions/0011, "A replay
+// record does not outlive the incarnation it reports"). Without it a create
+// never converges across a deletion: a create's prepare binds the create
+// markers, so a byte-identical re-create derives a byte-identical key and
+// fingerprint, and a destroy followed by an apply of an unchanged configuration
+// would be answered the old 201 forever while nothing was created.
 func (h *ReferenceHost) tryReplay(w http.ResponseWriter, request *http.Request, raw []byte, space string) bool {
 	key := request.Header.Get("Idempotency-Key")
 	if key == "" {
 		h.writeError(w, "invalid_argument", "Idempotency-Key is required")
 		return true
 	}
-	recorded, ok := h.replays[h.replayKey(request, space, key)]
+	recordKey := h.replayKey(request, space, key)
+	recorded, ok := h.replays[recordKey]
 	if !ok {
+		return false
+	}
+	if h.replayRetired(recorded.Binding) {
+		delete(h.replays, recordKey)
 		return false
 	}
 	if recorded.Fingerprint != requestFingerprint(request, raw) {
@@ -2528,6 +2594,36 @@ func (h *ReferenceHost) tryReplay(w http.ResponseWriter, request *http.Request, 
 	return true
 }
 
+// replayRetired reports whether a recorded answer has outlived the incarnation
+// it reports. A record bound to nothing is never retired here — that is a
+// delete's 204, a refusal, and an artifact commit, none of which claims a
+// resource exists.
+func (h *ReferenceHost) replayRetired(binding replayBinding) bool {
+	uid := binding.UID
+	if uid == "" && binding.Operation != "" {
+		if operation := h.operations[binding.Operation]; operation != nil {
+			uid = operation.CommittedUID
+		}
+	}
+	if uid == "" {
+		return false
+	}
+	return h.resourceByUID(uid) == nil
+}
+
+// resourceByUID resolves one host-issued incarnation wherever it lives. A uid
+// names one resource across the whole store by construction, so this asks no
+// tenant question and answers none: it is only ever used to ask whether an
+// incarnation this host itself minted still exists.
+func (h *ReferenceHost) resourceByUID(uid string) *storedResource {
+	for _, resource := range h.resources {
+		if resource.UID == uid {
+			return resource
+		}
+	}
+	return nil
+}
+
 func (h *ReferenceHost) recordReplay(
 	request *http.Request,
 	raw []byte,
@@ -2535,6 +2631,7 @@ func (h *ReferenceHost) recordReplay(
 	status int,
 	etag string,
 	body []byte,
+	binding replayBinding,
 ) {
 	key := request.Header.Get("Idempotency-Key")
 	if key == "" {
@@ -2545,6 +2642,7 @@ func (h *ReferenceHost) recordReplay(
 		Status:      status,
 		ETag:        etag,
 		Body:        append([]byte(nil), body...),
+		Binding:     binding,
 	}
 }
 

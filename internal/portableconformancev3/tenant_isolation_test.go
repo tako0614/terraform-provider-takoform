@@ -3,10 +3,11 @@ package portableconformancev3
 // tenant_isolation_test.go holds the reference host to the parts of
 // spec/decisions/0028 the black-box corpus cannot reach.
 //
-// The corpus drives nine required checks over real HTTP with two credentials,
+// The corpus drives ten required checks over real HTTP with two credentials,
 // and those cover everything a third-party host can be HELD to: two tenants
 // naming one resource, reads, observes, updates, imports, deletes, relation
-// resolution, prepare bindings, and idempotency. The nine are enumerated by
+// resolution, prepare bindings, idempotency, and — the permissive half of all of
+// them — each tenant writing its own plane. Nine are enumerated by
 // SURFACE, and the three enumeration tests at the end of this file are what
 // keeps that true. What it cannot see is the SHAPE of the address —
 // whether the tenant is in the key or in a filter someone remembered to write —

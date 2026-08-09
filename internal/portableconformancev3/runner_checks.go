@@ -33,6 +33,9 @@ func (r *v3Runner) run() error {
 	steps := []func() error{
 		r.checkDiscovery,
 		r.checkErrorTaxonomy,
+		// Before any of the boundaries below mean anything: the credential is
+		// required, and the tenant comes from it (spec/decisions/0028).
+		r.checkUnauthenticatedRequestRefused,
 		func() error { return r.checkFormsAvailability(mw) },
 		func() error { return r.checkFormDefinitions(mw, kv) },
 		func() error { return r.checkValidate(mw, kv, queue) },
@@ -41,6 +44,10 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkPrepareSubstitution(queue) },
 		func() error { return r.checkApplyHeaders(kv) },
 		func() error { return r.checkCreateLifecycle(kv, mw, queue) },
+		// How long the record that replay just proved stays true. It runs beside
+		// the replay it qualifies, on names of its own, and leaves nothing behind
+		// (spec/decisions/0011).
+		func() error { return r.checkReplayRecordRetiresWithItsIncarnation(kv) },
 		func() error { return r.checkGenerationFences(queue) },
 		func() error { return r.checkPrepareFences(queue) },
 		func() error { return r.checkReadETags(kv, queue) },
@@ -93,6 +100,11 @@ func (r *v3Runner) run() error {
 		// correct answer is that the operation works.
 		r.checkCustomDomainHostnameClaimStopsAtTheTenant,
 		r.checkDeadLetterCycleRejected,
+		// The same two rules on the other two surfaces decision 0026 names, and
+		// the refusal its canonicalization rule states rather than performs.
+		r.checkAttachmentClaimDecidedOnImport,
+		r.checkAttachmentClaimRevalidatedAtCommit,
+		r.checkCustomDomainULabelRefused,
 		// The ABI closes the handler surface those attachments are gated on
 		// (spec/decisions/0019): first by vocabulary, then by what the code a
 		// version actually runs exports.
@@ -227,6 +239,96 @@ func (r *v3Runner) checkDiscovery() error {
 		}
 	}
 	r.complete("discovery-exact")
+	return nil
+}
+
+// checkUnauthenticatedRequestRefused proves the credential is required, on a
+// read surface and on a mutating one.
+//
+// Everything else in this lane is downstream of it. A resource's address begins
+// with the AUTHENTICATED tenant, and nothing on the wire names one
+// (spec/decisions/0028), so a host that answers a request carrying no credential
+// has to have chosen a tenant by some other means — a default, the first one it
+// has, whatever a proxy header said. Every tenant check in this corpus is driven
+// with one of three valid tokens, and the taxonomy check produces
+// `unauthenticated` from the runner-only error probe rather than from a real
+// request, so the whole matrix was satisfied by a host whose credential lookup
+// failed OPEN. That is not an exotic bug; it is the ordinary shape of "auth is
+// wired in later", and it exposes every tenant's plane to anyone who can reach
+// the port.
+//
+// Two shapes are driven because they fail differently: an ABSENT header, which a
+// framework may route past authentication entirely, and a well-formed bearer
+// credential that names nobody, which a lookup returning a zero value turns into
+// a valid caller. Both must be `unauthenticated` (401) and never
+// `permission_denied` — the caller has not been identified, so there is nothing
+// yet to deny. The permissive control is the identical request under a real
+// credential, so a host cannot pass by refusing the route.
+func (r *v3Runner) checkUnauthenticatedRequestRefused() error {
+	probe := r.target(r.contract.RunnerInput.EdgeKvNamespace)
+	probe.Name = "unauthenticated-probe"
+	formsURL := r.apiBase + "/forms?" + r.exactQuery(probe.Space, probe.Ref).Encode()
+	prepared, err := r.prepare(probe)
+	if err != nil {
+		return err
+	}
+	applyURL, applyHeaders, applyBody, err := r.applyRequestParts(probe, applyOptions{
+		Create: true, IdempotencyKey: "key-unauthenticated-create", PrepareDigest: prepared.PrepareDigest,
+	})
+	if err != nil {
+		return err
+	}
+	for _, credential := range []struct {
+		Authorization string
+		Subject       string
+	}{
+		{Authorization: "", Subject: "a request carrying no Authorization header"},
+		{Authorization: "Bearer takoform-conformance-unissued-credential", Subject: "a bearer credential naming nobody"},
+	} {
+		read, err := r.requestWithAuthorization(credential.Authorization, http.MethodGet, formsURL, nil, nil)
+		if err != nil {
+			return err
+		}
+		if err := r.expectStableError(read, "unauthenticated"); err != nil {
+			return fmt.Errorf(
+				"%s reading the installed set: %w; a host that answers this has picked a tenant the caller "+
+					"never named",
+				credential.Subject, err,
+			)
+		}
+		mutate, err := r.requestWithAuthorization(
+			credential.Authorization, http.MethodPut, applyURL, applyHeaders, applyBody,
+		)
+		if err != nil {
+			return err
+		}
+		if err := r.expectStableError(mutate, "unauthenticated"); err != nil {
+			return fmt.Errorf("%s creating a resource: %w", credential.Subject, err)
+		}
+		if err := r.expectResourceAbsent(probe); err != nil {
+			return fmt.Errorf("%s mutated state: %w", credential.Subject, err)
+		}
+	}
+
+	// The same two requests under a credential the host issued.
+	authenticated, err := r.request(http.MethodGet, formsURL, nil, nil)
+	if err != nil {
+		return err
+	}
+	if authenticated.Status != http.StatusOK {
+		return fmt.Errorf("the same read under a real credential HTTP %d, want 200", authenticated.Status)
+	}
+	created, err := r.request(http.MethodPut, applyURL, applyHeaders, applyBody)
+	if err != nil {
+		return err
+	}
+	if _, err := decodeResource(created, http.StatusCreated); err != nil {
+		return fmt.Errorf("the same create under a real credential: %w", err)
+	}
+	if err := r.deleteExisting(probe, "key-unauthenticated-probe-delete"); err != nil {
+		return err
+	}
+	r.complete("unauthenticated-request-refused")
 	return nil
 }
 
@@ -993,6 +1095,41 @@ func (r *v3Runner) checkExpectedUID(queue probeTarget) error {
 	}
 	if err := r.expectStableError(response, "uid_mismatch"); err != nil {
 		return fmt.Errorf("expectedUid mismatch: %w", err)
+	}
+	// And the fence a client would actually send: the uid it read. Without this
+	// leg the whole optional fence is satisfied by a host that answers
+	// `uid_mismatch` to every request carrying an `expectedUid` — including a
+	// host that never implemented the field and refuses the member it does not
+	// recognise. That host makes the safe read-then-write path, where a client
+	// pins the incarnation it read so it cannot write through a replacement,
+	// permanently unavailable, and pushes every client onto the unfenced one the
+	// field exists to avoid.
+	// The applied spec is the resource's CURRENT desired spec, so nothing but the
+	// uid fence differs between this request and the one above.
+	unchanged := queue
+	unchanged.Spec = current.Spec
+	matched, err := r.apply(unchanged, applyOptions{
+		ExpectedGeneration: current.Metadata.Generation,
+		ExpectedUID:        current.Metadata.UID,
+		IdempotencyKey:     "key-uid-matched",
+	})
+	if err != nil {
+		return err
+	}
+	fenced, err := decodeResource(matched, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("an apply carrying the uid it read: %w", err)
+	}
+	if fenced.Metadata.UID != current.Metadata.UID {
+		return fmt.Errorf(
+			"a uid-fenced apply answered uid %s, want the fenced %s", fenced.Metadata.UID, current.Metadata.UID,
+		)
+	}
+	if fenced.Metadata.Generation != current.Metadata.Generation {
+		return fmt.Errorf(
+			"a spec-identical uid-fenced apply moved generation %s -> %s",
+			current.Metadata.Generation, fenced.Metadata.Generation,
+		)
 	}
 	r.complete("expected-uid-mismatch-rejected")
 	return nil
@@ -2188,6 +2325,43 @@ func (r *v3Runner) checkDeploymentWeightSum() error {
 	}
 	if err := r.expectResourceAbsent(deployment); err != nil {
 		return fmt.Errorf("rejected weight sum mutated state: %w", err)
+	}
+	// The other side of "exactly", and it takes two entries to reach: one weight
+	// is capped at 10000 by the Form's own schema, so an OVER-sum is a shape only
+	// a host that actually adds can see. Only the short sum was ever driven, so a
+	// host enforcing `sum >= 10000` — the natural reading of "the weights must
+	// cover all the traffic" — passed, and would then store a split that sends
+	// more than all of it and means nothing.
+	secondVersion := r.workerVersionOf(
+		"weight-sum-version", r.contract.RunnerInput.ModuleWorker.Name, fetchHandler,
+	)
+	if _, _, err := r.applyResource(secondVersion, applyOptions{
+		Create: true, IdempotencyKey: "key-weight-sum-version",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("a second version to weigh against: %w", err)
+	}
+	overweightEntry := cloneJSONMap(entry)
+	overweightEntry["weight"] = 5000
+	long := deployment
+	long.Spec = cloneJSONMap(deployment.Spec)
+	long.Spec["versions"] = []any{overweightEntry, map[string]any{
+		"workerVersion": exactReference(secondVersion, secondVersion.Name),
+		"weight":        5001,
+	}}
+	over, err := r.apply(long, applyOptions{
+		Create: true, IdempotencyKey: "key-deployment-overweight",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(over, "invalid_argument"); err != nil {
+		return fmt.Errorf("weights summing to 10001: %w", err)
+	}
+	if err := r.expectResourceAbsent(deployment); err != nil {
+		return fmt.Errorf("rejected weight sum mutated state: %w", err)
+	}
+	if err := r.deleteExisting(secondVersion, "key-weight-sum-version-delete"); err != nil {
+		return err
 	}
 	if _, _, err := r.applyResource(deployment, applyOptions{
 		Create: true, IdempotencyKey: "key-deployment-exact",
