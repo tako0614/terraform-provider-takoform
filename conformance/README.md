@@ -436,11 +436,33 @@ a rejected task leaves the sent response alone, a `scheduled` invocation from
 the cron attachment, and a queue batch delivered to the `queue` handler with the
 producer's exact bytes. Two more take the streaming pair one worker further
 along: the same request-body and response-body observations, made THROUGH the
-`module-worker.service` binding into a second worker running the same bundle,
-which is what holds the projection to the streaming model `worker.service@1.0.0`
-states. A self-binding would let a host answer from its own handler without
-dispatching anything, so the corpus states a peer deployment and the loader
-refuses a service binding with no callee behind it.
+`module-worker.service` binding into a SECOND worker, which is what holds the
+projection to the streaming model `worker.service@1.0.0` states.
+
+That second worker has to be distinguishable from the first, and stating that
+it exists is not enough. While the peer ran the caller's own byte-pinned
+bundle, a host that answered `env.PEER.fetch(...)` out of the caller's fetch
+handler produced the same accounting, the same chunk timing and the same status
+as the dispatch it never performed, so both checks passed a runtime with no
+cross-worker projection at all — a required check no incorrect runtime can
+fail. The peer therefore runs its own bundle, `conformance-peer`, whose module
+declares an identity the caller's bytes do not contain and stamps it on every
+observation it emits; the runner credits a service check only for stamped
+answers. The loader enforces both halves of that: the identity must be
+derivable from the peer module an operator deploys, and it must appear in no
+other bundle of the corpus, so an answer the caller could have produced is
+refused. Which checks require it is pinned in the runner beside the required
+check list, so dropping the marker fails verification rather than quietly
+restoring the defect.
+
+The response-stream procedure also holds the response HEAD to the body that
+follows it. `worker.service` spells an unknown length as a null `contentLength`
+precisely because the call completes at the head, where a body still being
+generated has no byte count; the two ways a host can refuse to say so are both
+refused here. A host that BUFFERS the body to learn a count delivers chunks the
+producer separated in time all at once and fails the separation. A host that
+INVENTS one is held to it: the runner reads the body to its end and requires a
+declared length to be the length delivered.
 
 Every handler the ABI declares is measured, and the loader ENFORCES that rather
 than the corpus asserting it: a handler in `handlerVocabulary` with no check
@@ -473,10 +495,14 @@ the first run's leftovers, and a conforming runtime failed because the
 
 `self-test` runs the whole matrix against an in-process stand-in shipped with
 this repository, so the corpus is exercised on every `bun run check`. The
-stand-in has no JavaScript engine and reimplements the probe module's behaviour
-in Go; what keeps it honest is that it is constructed from the deployment
-description and the module bytes and nothing else, so it never sees a check or
-an expected observation. A self-test report says this in the document itself:
+stand-in has no JavaScript engine and reimplements each corpus module's
+behaviour in Go; what keeps it honest is that it is constructed from the
+deployment description and the module bytes and nothing else, so it never sees
+a check or an expected observation. The peer's identity is part of that: the
+stand-in reads it out of the main module it was handed, the way it reads the
+exported handler set, so a stand-in wired to answer service calls from the
+caller stamps nothing and fails the two service checks exactly as a real host
+doing the same thing would. A self-test report says this in the document itself:
 its `classification` is `in-process-fake-runtime-self-test` and its `proves`
 member states that it proves the corpus and nothing about any runtime.
 

@@ -16,6 +16,7 @@
 package runtimeconformance
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -95,9 +96,21 @@ var requiredChecks = []string{
 	"queue-batch-delivered-to-the-queue-handler",
 }
 
+// serviceBindingChecks are the checks whose subject is the `worker.service`
+// projection rather than the worker that declares it. They are pinned here
+// beside requiredChecks, and for the same reason: what makes them worth running
+// is that the answer they accept must come from the CALLEE's bytes, and a
+// corpus that dropped that requirement would restore two checks a
+// self-binding passes.
+var serviceBindingChecks = []string{
+	"service-request-body-streams-to-the-callee",
+	"service-response-body-streams-from-the-callee",
+}
+
 var (
-	digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	noncePattern  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+	digestPattern       = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	noncePattern        = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+	peerIdentityPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{15,126}$`)
 )
 
 // InterfaceRef is the exact identity of the Interface contract a corpus
@@ -143,11 +156,24 @@ type DeploymentBinding struct {
 // The binding projects a call to ANOTHER Module Worker, so a corpus that bound
 // the worker to itself would let a host pass by short-circuiting into its own
 // handler, and the two service checks would measure nothing the direct
-// streaming checks do not already measure. It runs the same byte-pinned bundle,
-// which is what lets one module answer both sides.
+// streaming checks do not already measure.
+//
+// Deploying a second worker is not by itself enough, and the first version of
+// this corpus stopped there. While the peer ran the caller's byte-pinned
+// bundle, a self-binding was observationally IDENTICAL to the dispatch: the
+// caller's own `/abi/echo-stream` answered a call to `/abi/service-echo-stream`
+// with the same accounting and the same timing, so a runtime that never
+// implemented cross-worker projection passed both service checks and earned a
+// `complete` report. Identity closes that: the peer runs its OWN bundle, whose
+// bytes carry Identity and no other bundle's do, every observation it emits is
+// stamped with it, and the runner credits a service check only for stamped
+// answers. The distinguishing fact is therefore something the caller's pinned
+// bytes cannot produce, rather than a name, a header, or a deployment property
+// a short circuit still satisfies.
 type PeerContract struct {
 	Bundle           string   `json:"bundle"`
 	DeclaredHandlers []string `json:"declaredHandlers"`
+	Identity         string   `json:"identity"`
 	Note             string   `json:"note"`
 }
 
@@ -262,18 +288,28 @@ type UnmeasuredCase struct {
 
 // Check is one required conformance check: what it proves, which procedure
 // decides it, and the exact inputs and expected observations.
+//
+// ThroughBinding names the binding a check's traffic must CROSS. It is the
+// difference between measuring a projection and measuring the worker that
+// declares one: a check that carries it is credited only for observations
+// stamped with the callee's own identity, so an answer the caller produced —
+// which is what a short-circuited `worker.service` call returns — fails it.
+// Which checks carry it is not the corpus's choice: serviceBindingChecks below
+// pins the list, so removing the marker fails corpus verification by name
+// instead of quietly restoring a check no incorrect runtime can fail.
 type Check struct {
-	Name       string          `json:"name"`
-	Operation  string          `json:"operation"`
-	Procedure  string          `json:"procedure"`
-	Proves     string          `json:"proves"`
-	Bundle     string          `json:"bundle,omitempty"`
-	Load       *LoadCase       `json:"load,omitempty"`
-	Request    *RequestCase    `json:"request,omitempty"`
-	Expect     *ExpectCase     `json:"expect,omitempty"`
-	Timing     *TimingCase     `json:"timing,omitempty"`
-	Payload    *PayloadCase    `json:"payload,omitempty"`
-	Unmeasured *UnmeasuredCase `json:"unmeasured,omitempty"`
+	Name           string          `json:"name"`
+	Operation      string          `json:"operation"`
+	Procedure      string          `json:"procedure"`
+	Proves         string          `json:"proves"`
+	Bundle         string          `json:"bundle,omitempty"`
+	ThroughBinding string          `json:"throughBinding,omitempty"`
+	Load           *LoadCase       `json:"load,omitempty"`
+	Request        *RequestCase    `json:"request,omitempty"`
+	Expect         *ExpectCase     `json:"expect,omitempty"`
+	Timing         *TimingCase     `json:"timing,omitempty"`
+	Payload        *PayloadCase    `json:"payload,omitempty"`
+	Unmeasured     *UnmeasuredCase `json:"unmeasured,omitempty"`
 }
 
 // Contract is the verified conformance/runtime-abi-v1 contract.
@@ -646,13 +682,26 @@ func validateDeployment(contract Contract) error {
 	return validatePeer(contract)
 }
 
-// validatePeer holds the second worker to the same honesty rules as the first.
+// validatePeer holds the second worker to the same honesty rules as the first,
+// and to one more that only a callee has.
 //
 // A `worker.service` binding addresses ANOTHER Module Worker, so the corpus
 // must say which one an operator deploys; a binding with no stated callee is a
 // deployment nobody can reproduce, and a stated callee no binding addresses is
 // a worker nobody would deploy. The peer must also export what it declares, or
 // the run would ask a conforming host to accept a version it has to refuse.
+//
+// The rule beyond that is DISTINGUISHABILITY, and it is the one this corpus was
+// missing. A peer nothing can tell apart from the caller measures nothing: a
+// host that answers `env.PEER.fetch(...)` out of the caller's own fetch handler
+// produces the same bytes at the same times, so the two service checks pass a
+// runtime with no cross-worker projection at all. The peer therefore carries an
+// identity in its MODULE BYTES, and the two halves below are what make it
+// unfakeable by a short circuit: the identity must be derivable from the peer
+// module the operator deploys, and it must appear in no other bundle of the
+// corpus — least of all the measured worker's, whose bytes are pinned and
+// public. Whatever the host does with the dispatch, the caller running its own
+// bytes cannot stamp an answer with a string those bytes do not contain.
 func validatePeer(contract Contract) error {
 	peer := contract.Deployment.Peer
 	if peer == nil {
@@ -686,7 +735,60 @@ func validatePeer(contract Contract) error {
 			"runtime ABI peer bundle %q exports no fetch handler; a worker.service callee is invoked through fetch",
 			bundle.Name)
 	}
+	return validatePeerIdentity(contract, bundle)
+}
+
+// validatePeerIdentity proves the peer is distinguishable from whoever might
+// answer for it, by reading the bytes rather than believing the declaration.
+func validatePeerIdentity(contract Contract, peerBundle BundleContract) error {
+	identity := contract.Deployment.Peer.Identity
+	if !peerIdentityPattern.MatchString(identity) {
+		return fmt.Errorf(
+			"runtime ABI peer identity %q is not a portable identity; the corpus must state the value the peer's "+
+				"own bytes stamp on every observation, because an unstamped answer is one the caller could have given",
+			identity)
+	}
+	main, ok := peerBundle.Module(peerBundle.MainModule)
+	if !ok {
+		return fmt.Errorf("runtime ABI peer bundle %q carries no module named %q",
+			peerBundle.Name, peerBundle.MainModule)
+	}
+	derived, err := workerbundle.DerivePeerIdentity(main.bytes)
+	if err != nil {
+		return fmt.Errorf("runtime ABI peer bundle %q: %w", peerBundle.Name, err)
+	}
+	if derived != identity {
+		return fmt.Errorf(
+			"runtime ABI peer identity is %q and the bytes of %s declare %q; the corpus states what the peer "+
+				"stamps, and a peer that stamps something else answers no check",
+			identity, main.Source, derived)
+	}
+	for _, bundle := range contract.Bundles {
+		if bundle.Name == peerBundle.Name {
+			continue
+		}
+		for _, module := range bundle.Modules {
+			if !bytes.Contains(module.bytes, []byte(identity)) {
+				continue
+			}
+			return fmt.Errorf(
+				"runtime ABI peer identity %q also appears in %s; an identity the caller's own bytes carry is one a "+
+					"host can produce without dispatching anything, which is the short circuit this identity exists "+
+					"to refuse",
+				identity, module.Source)
+		}
+	}
 	return nil
+}
+
+// Module returns the named module of a corpus bundle.
+func (b BundleContract) Module(name string) (ModuleContract, bool) {
+	for _, module := range b.Modules {
+		if module.Name == name {
+			return module, true
+		}
+	}
+	return ModuleContract{}, false
 }
 
 func validateChecks(contract Contract) error {
@@ -718,7 +820,68 @@ func validateChecks(contract Contract) error {
 		}
 		templates[check.Payload.NonceTemplate] = check.Name
 	}
+	if err := validateServiceBindingChecks(contract); err != nil {
+		return err
+	}
 	return validateEveryDeclaredHandlerIsMeasured(contract)
+}
+
+// validateServiceBindingChecks keeps the two worker-to-worker checks measuring
+// a DISPATCH rather than a route.
+//
+// A check that crosses the binding is credited only for observations stamped
+// with the peer's identity; a check that does not carry the marker accepts
+// whatever answered, which for `/abi/service-echo-stream` and
+// `/abi/service-stream` is satisfied by the caller answering itself. The
+// marked set is pinned in Go beside requiredChecks rather than left to the
+// corpus, so dropping the marker is a corpus that fails verification instead of
+// a corpus with two checks quietly back to proving nothing.
+func validateServiceBindingChecks(contract Contract) error {
+	marked := map[string]string{}
+	for _, check := range contract.Checks {
+		if check.ThroughBinding == "" {
+			continue
+		}
+		binding, ok := bindingOf(contract, check.ThroughBinding)
+		if !ok || binding.Interface != ServiceInterfaceName {
+			return fmt.Errorf(
+				"runtime ABI check %q crosses binding %q, which the deployment does not declare as %s",
+				check.Name, check.ThroughBinding, ServiceInterfaceName)
+		}
+		if check.Procedure != ProcedureRequestStream && check.Procedure != ProcedureResponseStream {
+			return fmt.Errorf(
+				"runtime ABI check %q crosses a binding under procedure %q, which reads no observation to check "+
+					"the callee's identity on",
+				check.Name, check.Procedure)
+		}
+		marked[check.Name] = check.ThroughBinding
+	}
+	for _, name := range serviceBindingChecks {
+		if _, ok := marked[name]; ok {
+			delete(marked, name)
+			continue
+		}
+		return fmt.Errorf(
+			"runtime ABI check %q measures the %s projection and does not state the binding it crosses; "+
+				"without it the check accepts an answer the caller produced, which a self-binding gives for free",
+			name, ServiceInterfaceName)
+	}
+	for name := range marked {
+		return fmt.Errorf(
+			"runtime ABI check %q states a binding it crosses and is not one of the %s checks; "+
+				"a check that requires the callee's identity must be one that measures the callee",
+			name, ServiceInterfaceName)
+	}
+	return nil
+}
+
+func bindingOf(contract Contract, name string) (DeploymentBinding, bool) {
+	for _, binding := range contract.Deployment.Bindings {
+		if binding.Name == name {
+			return binding, true
+		}
+	}
+	return DeploymentBinding{}, false
 }
 
 // validateEveryDeclaredHandlerIsMeasured enforces the property the ABI now has

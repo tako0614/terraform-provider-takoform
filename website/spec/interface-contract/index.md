@@ -150,11 +150,18 @@ Where a value is bytes, the contract carries it in one shared encoded-bytes
 shape rather than as a bare string, so that a declared byte limit and a
 structural `maxLength` do not measure two different quantities. Where a payload
 streams at all — an object body, a worker-to-worker request or response — the
-operation declares that it streams and states its exact length instead of
-carrying it, and the bytes travel beside the document. A contract that streams
-also has to say what a caller can OBSERVE about the stream: whether an absent
-body differs from an empty one, when it starts, how backpressure and
-cancellation behave, and how a truncation on each side is reported.
+operation declares that it streams and states what is KNOWN of its length
+instead of carrying the bytes, and the bytes travel beside the document. What
+is known is sometimes nothing: a `worker.service` call completes at the response
+head, so a body generated as it is written has no byte count to state there, and
+a contract that demanded one would have bought it by buffering the body — the
+defect streaming exists to avoid. Its `contentLength` is therefore nullable in
+both directions, an integer being an exact count the writer knows and `null` a
+count it does not have. A contract that streams also has to say what a caller
+can OBSERVE about the stream: whether an absent body differs from an empty one
+and from one of unknown length, what a declared count obliges when the bytes
+disagree with it, when the stream starts, how backpressure and cancellation
+behave, and how a truncation on each side is reported.
 `worker.service@1.0.0` is the worked example, and its first version is the
 counter-example — it declared bodies as JSON strings while the binding that
 projects it promised streaming, so the two halves of one contract disagreed.

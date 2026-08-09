@@ -129,6 +129,13 @@ func fastCorpus(t *testing.T) Contract {
 			"deadlineSeconds": 5, "gapMillis": 25,
 			"requestChunkSize": []any{4096, 8192},
 		})
+		retime(document, "service-response-body-streams-from-the-callee", map[string]any{
+			"deadlineSeconds": 5, "gapMillis": 50, "chunks": 3,
+		})
+		retime(document, "service-request-body-streams-to-the-callee", map[string]any{
+			"deadlineSeconds": 5, "gapMillis": 25,
+			"requestChunkSize": []any{4096, 8192},
+		})
 	})
 	contract, err := Verify(root)
 	if err != nil {

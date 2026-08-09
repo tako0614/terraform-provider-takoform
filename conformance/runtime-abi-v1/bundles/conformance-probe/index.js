@@ -11,15 +11,18 @@
  *
  * The module uses only the portable globals floor the contract fixes and the
  * three bindings the corpus deployment declares: CACHE (edge.kv), EVENTS
- * (edge.queue) and PEER (worker.service, addressing the second deployment of
- * these same bytes). Base64 is implemented here rather than taken from a
+ * (edge.queue) and PEER (worker.service, addressing a SECOND worker running the
+ * corpus's peer bundle). Base64 is implemented here rather than taken from a
  * global, because base64 is not on the floor.
  *
  * The two PEER routes carry nothing of their own: each hands the callee the
  * stream it is still receiving and returns the callee's response body unread,
  * so what a runner measures across them is the BINDING's behaviour rather than
  * this module's. They are the observation the direct streaming routes make,
- * taken one worker further along.
+ * taken one worker further along — and the answer that comes back is stamped
+ * with an identity the peer's bytes carry and THESE bytes do not, so a host
+ * that answered from this module's own /abi/echo-stream or /abi/stream instead
+ * of dispatching is refused rather than credited with the projection.
  *
  * Correlation is the runner's, never the module's. Every route that stores an
  * observation stores it under the correlation value the RUNNER sent, and every

@@ -1255,19 +1255,36 @@ const (
 // exists to prevent: it is the same mistake edge.objects made with a 5 GiB
 // ceiling, one order of magnitude down. The contract therefore moves to the
 // streaming model the binding already promised — the operation document says
-// whether a body exists and how many bytes it carries, and the bytes travel
+// whether a body exists and what is known of its size, and the bytes travel
 // beside it.
 //
+// A REQUIRED EXACT COUNT would have undone that in one member. The call
+// completes at the response HEAD, and a body generated as it is written has no
+// byte count then, so a host asked for an exact number at the head could only
+// buffer the body to learn one — the defect this contract exists to prevent —
+// or invent one. contentLength is therefore nullable in BOTH directions: an
+// integer is an exact count the writer knows, null is a count it does not have.
+// The request direction is not a lesser case of the same problem, it is the
+// same problem: a caller streaming a body it is still producing stands exactly
+// where the callee does, and the conformance corpus's own request-stream probe
+// sends such a body, so under the first version of this member the corpus could
+// not have described the traffic it already sends.
+//
 // Everything a portable caller can observe about that model is stated, because
-// an unstated one is a portability hole rather than a detail: an absent body
-// against an empty one, when each stream starts, backpressure, cancellation,
-// the two aborts, the floors, what a callee exception produces, and what a call
-// that never happened produces. The published meta-schema has a member for none
-// of it, so it is normative prose in the descriptions and fixtures where a
-// fixture can carry it (decision 0014).
+// an unstated one is a portability hole rather than a detail: absent against
+// empty against unknown, what a declared count obliges, when each stream starts,
+// backpressure, cancellation, the two aborts, the floors, what a callee
+// exception produces, and what a call that never happened produces. The
+// published meta-schema has a member for none of it, so it is normative prose in
+// the descriptions and fixtures where a fixture can carry it (decision 0014).
 func workerServiceInterface() InterfaceDefinition {
 	headers := closedStringMap(serviceHeaderSlotCount)
-	bodyLength := map[string]any{"type": "integer", "minimum": 0, "maximum": serviceMaxBodyBytes}
+	// An exact count, or null for a length the writer does not have. The
+	// bound still applies to the count it states; an unknown-length body is
+	// bounded by maxRequestBytes / maxResponseBytes as its bytes arrive.
+	bodyLength := map[string]any{
+		"type": []any{"integer", "null"}, "minimum": 0, "maximum": serviceMaxBodyBytes,
+	}
 	return InterfaceDefinition{
 		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
 		Name: "worker.service", Version: "1.0.0",
@@ -1275,44 +1292,49 @@ func workerServiceInterface() InterfaceDefinition {
 		Description: "Direct HTTP-shaped invocation of another Module Worker, STREAMING in both directions, with " +
 			"read-after-write consistency toward the invoked worker's own state: a response reflects every effect " +
 			"the callee completed before responding. The call never leaves the host. " +
-			"NEITHER BODY IS A MEMBER OF THIS DOCUMENT. The document states whether a body exists and exactly how " +
-			"many bytes it carries; the bytes travel beside it as a stream, so no side ever buffers a body to " +
-			"produce a value. " +
-			"ABSENT IS NOT EMPTY. bodyStream false means there is no body at all and the callee's request.body is " +
-			"null; bodyStream true means a body exists and contentLength is exactly how many bytes it delivers, so " +
-			"bodyStream true with contentLength 0 is a PRESENT body that ends immediately. The two are observably " +
-			"different and a host MUST NOT collapse them, in either direction. " +
-			"WHEN A STREAM STARTS. The callee is invoked as soon as the request head — method, path, headers — has " +
-			"arrived, before any body byte is read, and the caller's call completes as soon as the response head — " +
-			"status, headers — has arrived, before any response byte is read. Neither side waits for the other's " +
-			"end of stream: a caller may still be writing while it reads, and a callee may answer without having " +
-			"consumed its request. " +
-			"BACKPRESSURE. Both streams are backpressured end to end: the reader's demand reaches the writer, and a " +
-			"producer that outruns its consumer is suspended rather than buffered without bound. A host MUST NOT " +
-			"read a whole body to decouple the two, which is the same statement as the first one and the reason it " +
-			"is measurable. " +
-			"CANCELLATION. Cancelling propagates to the other side. A caller that cancels the response stream " +
-			"cancels the callee's response stream; a callee that cancels the request stream fails the caller's " +
-			"remaining writes. A cancellation is neither a host fault nor retryable, and it is never reported as " +
-			"backend_unavailable. " +
+			"NEITHER BODY IS A MEMBER OF THIS DOCUMENT. The document states whether a body exists and what is known " +
+			"of its size; the bytes travel beside it as a stream, so no side ever buffers a body to produce a value. " +
+			"ABSENT, EMPTY AND UNKNOWN ARE THREE STATES. bodyStream false pairs with contentLength 0 and means there " +
+			"is no body at all: the callee's request.body is null. bodyStream true means a body exists, and " +
+			"contentLength says what is KNOWN of its size — an integer is its exact byte count, null is a count the " +
+			"writer does not have. bodyStream true with contentLength 0 is a PRESENT body that ends immediately; " +
+			"with null it is a present body of unknown length. No one of the three collapses into another, in " +
+			"either direction. " +
+			"A COUNT IS NEVER INVENTED AND NEVER LEARNED BY BUFFERING. A side that knows its byte count states it, " +
+			"a side that does not states null, and a host MUST NOT read a body to compute a count or replace null " +
+			"with one: the call completes at the response head, where a body still being generated has no count to " +
+			"give. " +
+			"A DECLARED COUNT IS A PROMISE. When contentLength is an integer and the stream delivers a different " +
+			"number of bytes — fewer or more — the receiving side observes an ERRORED body, reported as " +
+			"request_aborted or response_aborted by which side of the response head it fell on. A host never " +
+			"rewrites the head to match the bytes and never truncates the bytes to match the head. Under null there " +
+			"is no count to disagree with: end of stream ends the body, and only a transport failure aborts. " +
+			"WHEN A STREAM STARTS. The callee is invoked as soon as the request head has arrived, before any body " +
+			"byte is read, and the caller's call completes as soon as the response head has arrived, before any " +
+			"response byte is read. Neither side waits for the other's end of stream: a caller may still be writing " +
+			"while it reads, and a callee may answer without having consumed its request. " +
+			"BACKPRESSURE reaches the writer from the reader, end to end: a producer that outruns its consumer is " +
+			"suspended, never buffered without bound. " +
+			"CANCELLATION propagates. A caller that cancels the response stream cancels the callee's; a callee that " +
+			"cancels the request stream fails the caller's remaining writes. Neither is a host fault, a retryable " +
+			"condition, or backend_unavailable. " +
 			"THE TWO ABORTS ARE DIFFERENT OUTCOMES, because they fall on different sides of the response head. " +
-			"request_aborted is a request stream that ended before contentLength bytes arrived: the callee sees an " +
-			"errored request body and MAY still answer with a status. response_aborted is a response stream that " +
-			"ended before contentLength bytes arrived AFTER the status was already delivered: the caller holds a " +
-			"status and an errored body, and the status is never retroactively rewritten. A caller can therefore " +
-			"tell a truncated answer from an unanswered call. " +
+			"request_aborted is a request stream that ended before the callee held the whole body: the callee sees " +
+			"an errored request body and MAY still answer with a status. response_aborted is the same fault AFTER " +
+			"the status was delivered: the caller holds a status and an errored body, and the status is never " +
+			"retroactively rewritten. A caller can therefore tell a truncated answer from an unanswered call. " +
 			"LIMITS ARE FLOORS. maxRequestHeaders, maxRequestHeaderBytes, maxRequestBytes and their response " +
-			"counterparts are the portable minimum every conforming host accepts, not a host's ceiling; a host that " +
-			"accepts more has not made the excess portable, and a request above what the host accepts fails " +
-			"request_too_large before the callee is invoked. " +
+			"counterparts are the portable minimum every conforming host accepts, not a ceiling; a request above " +
+			"what the host accepts fails request_too_large before the callee is invoked, and an unknown-length body " +
+			"that grows past it fails the same way once it does. " +
 			"A CALLEE EXCEPTION IS A COMPLETE RESPONSE. An uncaught throw or unhandled rejection in the callee's " +
 			"fetch handler is a host-generated 500 with a status, headers and a terminated body — never a hung " +
-			"call, never a truncated connection with no status — and this operation SUCCEEDS with it. " +
+			"call, never a truncated connection — and this operation SUCCEEDS with it. " +
 			"A CALL THAT NEVER HAPPENED IS NOT A 500. When the call could not be dispatched at all — no active " +
 			"deployment, no fetch handler, the callee unreachable — there is no status, and the operation FAILS " +
-			"backend_unavailable. The binding projects the difference as resolve versus reject, so a caller " +
-			"distinguishes a callee that failed from a call that did not happen without reading a body. " +
-			"Behavior fixtures address a callee that answers GET /health with 200 and throws on GET /throw.",
+			"backend_unavailable; the binding projects the difference as resolve versus reject. " +
+			"Behavior fixtures address a callee answering /health with 200 whatever the method and throwing on " +
+			"GET /throw.",
 		Semantics: InterfaceSemantics{Consistency: "read_after_write"},
 		Limits: map[string]int64{
 			"maxRequestBytes":        serviceMaxBodyBytes,
@@ -1326,15 +1348,16 @@ func workerServiceInterface() InterfaceDefinition {
 			{
 				Name: "fetch",
 				Description: "Invoke the target worker's fetch handler with one request and return its response. Both " +
-					"documents carry bodyStream and contentLength and NEITHER carries bytes: bodyStream says whether a " +
-					"body exists, contentLength is the exact byte count of the stream that accompanies it, and a stream " +
-					"delivering a different count is an abort rather than a short body. bodyStream false pairs with " +
-					"contentLength 0 and means no body; bodyStream true with contentLength 0 means an empty body that is " +
-					"nevertheless there. The response document is produced when the response HEAD arrives, so status and " +
-					"headers are readable while the body is still being written. request_too_large is refused before the " +
-					"callee is invoked; request_aborted and response_aborted are the two truncations, and only the second " +
-					"can carry a status; backend_unavailable is a call that produced no status at all. A callee that " +
-					"throws is not an error here: it is a 500 in status.",
+					"documents carry bodyStream and contentLength and no bytes. bodyStream false with contentLength 0 is " +
+					"no body. bodyStream true is a body whose contentLength is its exact byte count when the writer knows " +
+					"one, null when it does not, so a caller still producing its request, or a callee generating its " +
+					"response, states null rather than buffering or inventing a count. An integer is a promise: " +
+					"delivering fewer or more bytes than declared is an abort, not a short body. Under null, end of " +
+					"stream is the end. The response document is produced at the response HEAD, so status and headers " +
+					"are readable while the body is still written — which is why a count cannot be required there. " +
+					"request_too_large is refused before the callee is invoked; request_aborted and response_aborted are " +
+					"the two truncations and only the second carries a status; backend_unavailable produced none. " +
+					"A callee that throws is not an error here: it is a 500 in status.",
 				InputSchema: operationObject([]string{"bodyStream", "contentLength", "method", "path"}, map[string]any{
 					"method":        map[string]any{"type": "string", "enum": []any{"DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"}},
 					"path":          stringSchema(1, serviceMaxPathBytes),
@@ -1360,6 +1383,19 @@ func workerServiceInterface() InterfaceDefinition {
 				Steps: []InterfaceFixtureStep{
 					{Operation: "fetch", Input: map[string]any{
 						"method": "GET", "path": "/health", "bodyStream": false, "contentLength": 0,
+					}, Expected: map[string]any{"status": 200, "bodyStream": true}},
+				},
+			},
+			{
+				// A caller that is still producing its body has a length to
+				// state, and it is not a number. A trace is where that is a fact
+				// rather than a sentence: under a required exact count this step
+				// could not have been written, and a host that answers it has
+				// dispatched a call whose size nobody knew at the head.
+				Name: "request-body-of-unknown-length-is-declarable",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "fetch", Input: map[string]any{
+						"method": "POST", "path": "/health", "bodyStream": true, "contentLength": nil,
 					}, Expected: map[string]any{"status": 200, "bodyStream": true}},
 				},
 			},

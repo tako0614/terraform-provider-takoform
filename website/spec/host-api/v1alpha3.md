@@ -1012,12 +1012,14 @@ has proven it says which ABI it implements and holds desired state to it.
 The same split covers the four data-plane contracts —  `edge.kv`,
 `edge.objects`, `edge.sql`, and `edge.queue` — and `worker.service`, whose whole
 delivery model is a claim about bytes moving between two workers: that neither
-body is buffered, that an absent body is distinguishable from an empty one, that
-backpressure and cancellation propagate, that a request abort and a response
-abort are different observable outcomes, that a callee exception arrives as a
-complete host-generated 500 rather than a hung call, and that a call which could
-not be dispatched fails rather than answering with a status. This lane drives
-desired state and never moves a byte of application data
+body is buffered, that an absent body is distinguishable from an empty one and
+from one whose length the writer does not yet know, that a length the head DOES
+declare is one the bytes keep, that backpressure and cancellation propagate,
+that a request abort and a response abort are different observable outcomes,
+that a callee exception arrives as a complete host-generated 500 rather than a
+hung call, and that a call which could not be dispatched fails rather than
+answering with a status. This lane drives desired state and never moves a byte
+of application data
 ([decision 0020](../decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md)).
 
 Proven by required checks:

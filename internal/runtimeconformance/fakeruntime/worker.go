@@ -32,6 +32,14 @@ func (r *Runtime) WorkerHandler() http.Handler {
 // the module becomes a host-generated 500 here — never a hung request and
 // never a truncated connection with no status.
 func (r *Runtime) invokeFetch(writer http.ResponseWriter, request *http.Request, route string) {
+	// A worker whose bytes declare an identity is the corpus's peer module,
+	// which serves two routes and nothing else. The stand-in reimplements each
+	// corpus module's behaviour, so it answers as the module whose bytes it
+	// loaded rather than as a union of both.
+	if r.peerIdentity != "" {
+		r.invokePeerFetch(writer, request, route)
+		return
+	}
 	switch route {
 	case "health":
 		writeJSON(writer, http.StatusOK, map[string]any{"probe": ProbeProtocol, "ok": true})
@@ -79,6 +87,35 @@ func (r *Runtime) invokeFetch(writer http.ResponseWriter, request *http.Request,
 			"probe": ProbeProtocol, "error": "unknown probe route", "route": route,
 		})
 	}
+}
+
+// invokePeerFetch is the peer module's `fetch`: the two streaming routes a
+// callee serves, and nothing else. Every observation it writes is stamped with
+// the identity its own bytes carry, which is what makes a call that reached it
+// distinguishable from one the caller answered.
+func (r *Runtime) invokePeerFetch(writer http.ResponseWriter, request *http.Request, route string) {
+	switch route {
+	case "echo-stream":
+		r.echoRequestStream(writer, request)
+	case "stream":
+		r.streamResponse(writer, request)
+	default:
+		writeJSON(writer, http.StatusNotFound, map[string]any{
+			"probe": ProbeProtocol, "peer": r.peerIdentity,
+			"error": "unknown peer route", "route": route,
+		})
+	}
+}
+
+// observation stamps one streamed line with whatever identity this worker's own
+// bytes declare. A module that declares none — the caller's — writes none, so a
+// runner reading a stamped line knows which module produced it.
+func (r *Runtime) observation(body map[string]any) map[string]any {
+	body["probe"] = ProbeProtocol
+	if r.peerIdentity != "" {
+		body["peer"] = r.peerIdentity
+	}
+	return body
 }
 
 func (r *Runtime) reportGlobals(writer http.ResponseWriter, request *http.Request) {
@@ -152,9 +189,9 @@ func (r *Runtime) echoRequestStream(writer http.ResponseWriter, request *http.Re
 		read, err := request.Body.Read(buffer)
 		if read > 0 {
 			reads++
-			writeLine(writer, map[string]any{
-				"probe": ProbeProtocol, "read": reads, "bytes": read,
-			})
+			writeLine(writer, r.observation(map[string]any{
+				"read": reads, "bytes": read,
+			}))
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -163,7 +200,7 @@ func (r *Runtime) echoRequestStream(writer http.ResponseWriter, request *http.Re
 			break
 		}
 	}
-	writeLine(writer, map[string]any{"probe": ProbeProtocol, "end": true})
+	writeLine(writer, r.observation(map[string]any{"end": true}))
 	if flusher != nil {
 		flusher.Flush()
 	}
@@ -181,7 +218,7 @@ func (r *Runtime) streamResponse(writer http.ResponseWriter, request *http.Reque
 		if chunk > 1 {
 			time.Sleep(time.Duration(gapMillis) * time.Millisecond)
 		}
-		writeLine(writer, map[string]any{"probe": ProbeProtocol, "chunk": chunk})
+		writeLine(writer, r.observation(map[string]any{"chunk": chunk}))
 		if flusher != nil {
 			flusher.Flush()
 		}
@@ -342,13 +379,24 @@ func (r *Runtime) moduleQueue(queue, identity string, attempts int, body []byte)
 // callee's response unread.
 //
 // Nothing between the two is buffered, which is the whole point. The peer is a
-// separate Runtime built from its own deployment description, so the bytes
-// really do cross a worker boundary, and the caller's own ResponseWriter is what
-// the callee writes into — the Go expression of "the caller returns the
-// callee's Response". A deployment with no `worker.service` binding has no peer
-// and this route says so rather than answering as though it had one.
+// separate Runtime built from its own deployment description and its own
+// bundle, so the bytes really do cross a worker boundary, and the caller's own
+// ResponseWriter is what the callee writes into — the Go expression of "the
+// caller returns the callee's Response". A deployment with no `worker.service`
+// binding has no peer and this route says so rather than answering as though it
+// had one.
+//
+// Under the ShortCircuitServiceBinding defect the dispatch never leaves this
+// worker: the call re-enters the CALLER's own fetch handler at the route the
+// callee would have served. Everything downstream is identical — the same
+// streaming, the same accounting, the same timing — which is exactly why the
+// answer has to carry the callee's bytes to be worth anything.
 func (r *Runtime) serveThroughPeer(writer http.ResponseWriter, request *http.Request, peerPath string) {
-	if r.peer == nil {
+	callee := r.peer
+	if r.shortCircuitServiceBinding {
+		callee = r
+	}
+	if callee == nil {
 		writeJSON(writer, http.StatusInternalServerError, map[string]any{
 			"probe": ProbeProtocol,
 			"error": "the deployment declares no worker.service binding, so there is no callee",
@@ -362,7 +410,7 @@ func (r *Runtime) serveThroughPeer(writer http.ResponseWriter, request *http.Req
 		Header: request.Header.Clone(),
 		Body:   request.Body,
 	}
-	r.peer.WorkerHandler().ServeHTTP(writer, peerRequest.WithContext(request.Context()))
+	callee.WorkerHandler().ServeHTTP(writer, peerRequest.WithContext(request.Context()))
 }
 
 func writeJSON(writer http.ResponseWriter, status int, body map[string]any) {

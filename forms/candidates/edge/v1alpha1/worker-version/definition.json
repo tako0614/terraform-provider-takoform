@@ -447,7 +447,7 @@
               "x-takoform-required-interface": {
                 "apiVersion": "interfaces.takoform.com/v1alpha1",
                 "name": "worker.service",
-                "schemaDigest": "sha256:37e676415b3e3a503fbd2031b1b4345ccb374410de73ef311397cd03388d3b31",
+                "schemaDigest": "sha256:8024073e25413c8906c3e189555a7485b4c7a6656e8a537fb2801f9b9682536e",
                 "version": "1.0.0"
               }
             }
@@ -620,7 +620,7 @@
       "apiVersion": "bindings.takoform.com/v1alpha1",
       "name": "module-worker.service",
       "version": "1.0.0",
-      "schemaDigest": "sha256:086cd157adb9208f11edf54e65c254046838b94a106df52ffc8f6ea292aba8dc"
+      "schemaDigest": "sha256:533546eeb2bdc43035f21e804c170558fdf44690bb957289e8007ee0027bfb60"
     }
   ],
   "conformanceFixtures": [

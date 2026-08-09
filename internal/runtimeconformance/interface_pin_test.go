@@ -1,6 +1,7 @@
 package runtimeconformance
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/runtimeconformance/workerbundle"
 )
 
 // interfaceDefinition is the fraction of the ABI contract this lane reads
@@ -171,8 +173,53 @@ func TestTheServiceChecksAddressTheBindingTheDeploymentDeclares(t *testing.T) {
 	if deployment.Peer == nil {
 		t.Fatal("the corpus states no peer for the service binding to address")
 	}
-	if deployment.Peer.Bundle.MainModule != deployment.Bundle.MainModule {
-		t.Fatalf("the peer runs %q and the measured worker runs %q; one bundle answers both sides",
-			deployment.Peer.Bundle.MainModule, deployment.Bundle.MainModule)
+	for _, name := range serviceBindingChecks {
+		if check := checkFor(t, contract, name); check.ThroughBinding != contract.ProbeProtocol.ServiceBinding {
+			t.Fatalf("check %q crosses %q, not the declared service binding %q",
+				name, check.ThroughBinding, contract.ProbeProtocol.ServiceBinding)
+		}
+	}
+}
+
+// TestThePeerIsDistinguishableFromTheCaller reads the property the two service
+// checks now rest on off the committed corpus, the way a reviewer would.
+//
+// The peer used to run the measured worker's own byte-pinned bundle, and that
+// made a self-binding observationally identical to the dispatch: the caller's
+// `/abi/echo-stream` answered `/abi/service-echo-stream` with the same
+// accounting and the same timing. What separates them now is bytes — the peer's
+// module declares an identity, the caller's does not, and no other bundle
+// carries the string — so an answer produced by the caller cannot be mistaken
+// for one produced by the callee.
+func TestThePeerIsDistinguishableFromTheCaller(t *testing.T) {
+	contract := verifiedContract(t)
+	deployment, err := contract.WorkerDeployment()
+	if err != nil {
+		t.Fatalf("deployment: %v", err)
+	}
+	if deployment.Peer.Bundle.Name == deployment.Bundle.Name {
+		t.Fatalf("the peer runs the measured worker's bundle %q; a peer nobody can tell apart from the caller "+
+			"measures no dispatch", deployment.Bundle.Name)
+	}
+	identity := contract.Deployment.Peer.Identity
+	peerMain, ok := deployment.Peer.Bundle.Module(deployment.Peer.Bundle.MainModule)
+	if !ok {
+		t.Fatal("the peer bundle carries no main module")
+	}
+	derived, err := workerbundle.DerivePeerIdentity(peerMain.Source)
+	if err != nil {
+		t.Fatalf("derive the peer identity: %v", err)
+	}
+	if derived != identity {
+		t.Fatalf("the corpus states peer identity %q and the peer's bytes declare %q", identity, derived)
+	}
+	callerMain, _ := deployment.Bundle.Module(deployment.Bundle.MainModule)
+	if bytes.Contains(callerMain.Source, []byte(identity)) {
+		t.Fatalf("the measured worker's bytes carry the peer identity %q; a host could stamp it without "+
+			"dispatching anything", identity)
+	}
+	callerIdentity, err := workerbundle.DerivePeerIdentity(callerMain.Source)
+	if err != nil || callerIdentity != "" {
+		t.Fatalf("the measured worker declares peer identity %q (%v); only a callee has one", callerIdentity, err)
 	}
 }

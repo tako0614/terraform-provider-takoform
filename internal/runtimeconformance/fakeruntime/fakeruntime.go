@@ -71,6 +71,15 @@ type Options struct {
 	// QueueDelay is how long an accepted message waits before the simulated
 	// Queue Consumer attachment delivers it.
 	QueueDelay time.Duration
+
+	// ShortCircuitServiceBinding builds a runtime with a DEFECT: a
+	// `worker.service` call is answered by the caller's own fetch handler
+	// instead of being dispatched to the worker the binding addresses. It is
+	// the cheapest wrong way to implement the binding and the one the corpus
+	// could not detect while the peer ran the caller's bytes, so a test states
+	// what the corpus now does about it. Nothing on a self-test path sets it,
+	// and a runtime built with it is not a conforming runtime.
+	ShortCircuitServiceBinding bool
 }
 
 // Runtime is one loaded, running worker plus the module loader beside it.
@@ -80,11 +89,22 @@ type Runtime struct {
 	exports          map[string]bool
 	queueDelay       time.Duration
 
+	// peerIdentity is what THIS worker's main module bytes say this worker is,
+	// derived the same way its export set is. It is empty for a module that
+	// declares none, and every observation is stamped with it when it is not,
+	// so what a caller returns from a service call carries the identity of
+	// whichever worker actually answered.
+	peerIdentity string
+
 	// peer is the second worker the deployment's `worker.service` binding
 	// addresses. It is a Runtime of its own, loaded from its own deployment
-	// description, so a call through the binding crosses a worker boundary
-	// rather than re-entering this one.
+	// description and its own bundle, so a call through the binding crosses a
+	// worker boundary rather than re-entering this one.
 	peer *Runtime
+
+	// shortCircuitServiceBinding is the defect Options describes: the binding
+	// re-enters this worker instead of reaching the peer.
+	shortCircuitServiceBinding bool
 
 	mutex   sync.Mutex
 	kv      map[string][]byte
@@ -117,6 +137,14 @@ func New(deployment workerbundle.Deployment, options Options) (*Runtime, error) 
 	if err != nil {
 		return nil, err
 	}
+	// Read from the module's own bytes, never from the deployment description
+	// and never from the corpus: a stand-in told which worker it is could stamp
+	// an identity its bytes do not carry, which is the very answer the corpus
+	// refuses from a real host.
+	identity, err := workerbundle.DerivePeerIdentity(main.Source)
+	if err != nil {
+		return nil, err
+	}
 	exports := map[string]bool{}
 	for _, handler := range exported {
 		exports[handler] = true
@@ -139,12 +167,14 @@ func New(deployment workerbundle.Deployment, options Options) (*Runtime, error) 
 		options.QueueDelay = 10 * time.Millisecond
 	}
 	runtime := &Runtime{
-		deployment:       deployment,
-		environmentNames: names,
-		exports:          exports,
-		queueDelay:       options.QueueDelay,
-		kv:               map[string][]byte{},
-		stop:             make(chan struct{}),
+		deployment:                 deployment,
+		environmentNames:           names,
+		exports:                    exports,
+		queueDelay:                 options.QueueDelay,
+		peerIdentity:               identity,
+		shortCircuitServiceBinding: options.ShortCircuitServiceBinding,
+		kv:                         map[string][]byte{},
+		stop:                       make(chan struct{}),
 	}
 	if deployment.Peer != nil {
 		peer, err := New(*deployment.Peer, options)

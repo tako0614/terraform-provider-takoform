@@ -26,7 +26,7 @@
     {
       "name": "worker.service",
       "version": "1.0.0",
-      "schemaDigest": "sha256:37e676415b3e3a503fbd2031b1b4345ccb374410de73ef311397cd03388d3b31"
+      "schemaDigest": "sha256:8024073e25413c8906c3e189555a7485b4c7a6656e8a537fb2801f9b9682536e"
     },
     {
       "name": "worker.runtime",
