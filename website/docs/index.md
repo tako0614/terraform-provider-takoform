@@ -3,6 +3,15 @@
 Get from zero to a running resource, then choose the lane that matches your
 job.
 
+| Tier | What it covers | How you get it |
+| --- | --- | --- |
+| **Current published** | provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | `terraform init` installs it from the Registry |
+| **Edge preview** | the provider `v2.1` source candidate and the unpublished `edge.forms.takoform.com/v1alpha1` family | build the provider from repository source; no Registry install |
+
+The quick start below is the current published tier. The
+[Edge preview](#edge-preview-the-v1alpha3-lane) is further down and is marked
+as such everywhere it appears.
+
 ## Quick start
 
 Provider `v2.0.0` is the published client and the installable path; it
@@ -93,19 +102,7 @@ lanes:
 | --- | --- | --- |
 | **v1.0.3** (published) | existing Legacy state, refresh, delete, recovery | from the Registry |
 | **v2.0.0** (published, current client) | the nine retained provider-v2 contracts | from the Registry |
-| **v2.1.0** (source candidate, not yet published) | the Edge Platform Family on the v1alpha3 lane | build from source; no Registry install |
-
-### Edge Platform Family (v1alpha3 lane)
-
-The `edge.forms.takoform.com/v1alpha1` family resources — for example
-[module_worker](/docs/resources/module_worker.html),
-[worker_bundle](/docs/resources/worker_bundle.html), and
-[worker_deployment](/docs/resources/worker_deployment.html) — speak the
-`forms.takoform.com/v1alpha3` Host API, discovered at
-`/.well-known/takoform/v1alpha3`. They require provider `v2.1.0`, a source
-candidate that is not yet published: there is no Registry install, so build
-the provider from the repository source. The published `v2.0.0` quick start
-above remains the installable path.
+| **v2.1.0** (Edge preview; source candidate, not yet published) | [the Edge Platform Family](#edge-preview-the-v1alpha3-lane) on the v1alpha3 lane | build from source; no Registry install |
 
 ### Maintain published Legacy
 
@@ -134,6 +131,81 @@ Provider v2 refuses provider-v1 state.
    conformance proof.
 4. Move consumers, observe the result, then delete Legacy through v1 after
    rollback is no longer needed.
+
+## Edge preview: the v1alpha3 lane
+
+::: warning Edge preview — source only
+The `edge.forms.takoform.com/v1alpha1` family rides provider `v2.1.0`, an
+unpublished source candidate. There is no Registry install and no public host:
+build the provider from the repository source. No family Form, Interface, or
+Binding is published and none holds a lifecycle record, because the lane stays
+frozen while its [publication blockers](/spec/publication-freeze.html) are
+open. The published `v2.0.0` quick start above remains the installable path.
+:::
+
+Family resources speak the `forms.takoform.com/v1alpha3` Host API, discovered
+at `/.well-known/takoform/v1alpha3`, with UID/generation/revision identity,
+long-running operations, and content-addressed artifact upload.
+
+A worker becomes reachable through a chain, not a single resource: an identity,
+an immutable bundle of module bytes, an immutable version that names the
+handlers those bytes export, a deployment that sends traffic to it, and an
+attachment that gives it an address. An endpoint whose worker has no active
+deployment never becomes Ready, so the whole chain is one configuration:
+
+```hcl
+provider "takoform" {
+  endpoint = "https://host.example.com"
+  space    = "prod"
+}
+
+resource "takoform_module_worker" "api" {
+  name = "api"
+}
+
+resource "takoform_worker_bundle" "api" {
+  name        = "api-bundle"
+  main_module = "worker.mjs"
+
+  modules = [
+    {
+      name         = "worker.mjs"
+      content_type = "application/javascript+module"
+      content_file = "${path.module}/dist/worker.mjs"
+    },
+  ]
+}
+
+resource "takoform_worker_version" "api" {
+  name      = "api-v1"
+  worker    = takoform_module_worker.api.name
+  bundle    = takoform_worker_bundle.api.name
+  handlers  = ["fetch"]
+  vars_json = jsonencode({ "LOG_LEVEL" = "info" })
+}
+
+resource "takoform_worker_deployment" "api" {
+  name   = "api"
+  worker = takoform_module_worker.api.name
+
+  versions = [
+    {
+      worker_version = takoform_worker_version.api.name
+      weight         = 10000
+    },
+  ]
+}
+
+resource "takoform_worker_endpoint" "api" {
+  name   = "api"
+  worker = takoform_module_worker.api.name
+}
+```
+
+Each resource's own page carries a single-resource example with the `v2.1.0`
+source-candidate pin and the same source-only warning. Capability is added to a
+version through typed bindings; inward activation — a custom domain, a cron
+trigger, a queue consumer — is always a separate attachment resource.
 
 ## Resource reference
 

@@ -1,6 +1,6 @@
 # Exact Interface contracts (interfaces.takoform.com/v1alpha1)
 
-An Interface is an independently published, digest-bound contract for one
+An Interface is a repository-distributed, digest-bound contract for one
 portable operation surface. It replaces the open `(name, version,
 operations)` descriptors of the retained v1alpha2 lane for all new-lane Forms
 ([decision 0010](../decisions/0010-exact-interface-and-binding-contracts.md)).
@@ -150,14 +150,18 @@ published meta-schema has no member for either.
 
 ## Interface distribution
 
-Interface candidates are currently distributed as digest-bound Interface
+Interface candidates are distributed as digest-bound Interface
 Definition documents in the repository's `interfaces/candidates/v1alpha1`
 directory; the exact
-InterfaceRef with its `schemaDigest` is the immutable reference. A dedicated
-Interface Package envelope — one definition per canonical, digest-bound
-package with data-only payloads and fixture closure, mirroring Form
-Packages — is future work; no such package envelope identity is published
-yet.
+InterfaceRef with its `schemaDigest` is the immutable reference. They are not
+independently installable third-party artifacts, and no Interface Package
+envelope identity exists, is specified, or is published: the envelope was
+withdrawn, not deferred
+([decision 0021](../decisions/0021-third-party-forms-and-contract-distribution.md)).
+A `schemaDigest` therefore binds the canonical Definition bytes and says
+nothing about where they came from — no package digest, no publisher identity,
+no signature, no revocation feed — so a host obtains these contracts the way it
+obtains any other part of this specification.
 
 ## Relationship to Forms and Bindings
 

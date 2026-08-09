@@ -181,6 +181,12 @@ probe, concurrency/idempotency rules, stable errors, and required cross-repo
 black-box checks. The retained-lane provider client consumes this contract in
 adversarial HTTP tests.
 
+Every count this page states about a corpus — the size of a check matrix, of an
+error taxonomy, of a retryable set — is bound by `bun run check:public-surfaces`
+to the array in that corpus's `contract.json` that defines it. A number written
+here beside a number a machine already knows is a defect waiting to recur, so
+the gate names both values and fails when they part company.
+
 `portable-host-v3/` is the Host API v1alpha3 corpus consumed by the provider
 v2.1 client lane. It pins the v1alpha3 discovery/API paths, the closed
 26-code error taxonomy with its exact HTTP status map and 4-code retryable
@@ -198,7 +204,7 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 89-check matrix over real HTTP: exact discovery and
+drives the complete 93-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation

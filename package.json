@@ -3,9 +3,9 @@
   "private": true,
   "packageManager": "bun@1.3.14",
   "scripts": {
-    "check": "bun run check:tools && bun run format:check && bun run check:public-surfaces && bun run lint && bun run typecheck && bun run test:portable && bun run build:portable",
+    "check": "bun run check:tools && bun run format:check && bun run check:public-surfaces && bun run check:site-commit && bun run lint && bun run typecheck && bun run test:portable && bun run build:portable",
     "deploy": "bun scripts/deploy.mjs",
-    "check:tools": "set -e; for tool in go gofmt node tofu terraform; do command -v \"$tool\" >/dev/null || { printf 'Required portable check tool is missing: %s\\n' \"$tool\" >&2; exit 127; }; done",
+    "check:tools": "set -e; for tool in git go gofmt node tofu terraform; do command -v \"$tool\" >/dev/null || { printf 'Required portable check tool is missing: %s\\n' \"$tool\" >&2; exit 127; }; done",
     "website:build": "VITE_EXTRA_EXTENSIONS=tf vitepress build website",
     "website:dev": "VITE_EXTRA_EXTENSIONS=tf vitepress dev website",
     "website:preview": "VITE_EXTRA_EXTENSIONS=tf vitepress preview website",
@@ -29,6 +29,7 @@
     "build:portable": "set -e; build_dir=\"$(mktemp -d)\"; trap 'rm -rf \"$build_dir\"' EXIT; mkdir -p \"$build_dir/root\"; go build -o \"$build_dir/root/\" ./...; go -C cmd/provider-release build -o \"$build_dir/provider-release\" .",
     "check:publication-authority": "go run ./cmd/standard-form-conformance legacy-published-package-check",
     "check:publication-blockers": "bun scripts/publication-blockers.mjs --check",
+    "check:site-commit": "bun scripts/site-status.mjs --check-commit",
     "assert:publishable": "bun scripts/publication-blockers.mjs --assert-publishable",
     "check:release-owner-gate": "bun run check:tools && bun run format:check && bun run check:publication-authority && bun run check:public-snapshot && bun run lint && bun run typecheck && bun run test:portable && bun run build:portable"
   },
