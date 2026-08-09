@@ -12,10 +12,15 @@ import (
 // candidate catalog: the rules are about WorkerDeployment and the three
 // attachment Forms, which only the Edge Platform Family declares.
 type aggregateFixture struct {
-	t     *testing.T
-	host  *ReferenceHost
-	group string
-	space string
+	t    *testing.T
+	host *ReferenceHost
+	// caller is the authenticated identity this fixture stores and validates as.
+	// A resource's address begins with its tenant (spec/decisions/0028), so a
+	// fixture pointed at another tenant addresses a different plane entirely and
+	// has to build its own resources there.
+	caller hostAuthContext
+	group  string
+	space  string
 }
 
 func newAggregateFixture(t *testing.T) *aggregateFixture {
@@ -29,10 +34,11 @@ func newAggregateFixture(t *testing.T) *aggregateFixture {
 		t.Fatalf("load catalog: %v", err)
 	}
 	return &aggregateFixture{
-		t:     t,
-		host:  NewReferenceHost(contract, catalog),
-		group: edgeFormsGroup,
-		space: contract.RunnerInput.Space,
+		t:      t,
+		host:   NewReferenceHost(contract, catalog),
+		caller: referencePrimaryAuth,
+		group:  edgeFormsGroup,
+		space:  contract.RunnerInput.Space,
 	}
 }
 
@@ -40,12 +46,18 @@ func (f *aggregateFixture) ref(kind, name string) map[string]any {
 	return map[string]any{"apiVersion": f.group, "kind": kind, "name": name}
 }
 
+// scope is this fixture's address boundary: its caller's tenant, and its space
+// (spec/decisions/0028).
+func (f *aggregateFixture) scope() resourceScope {
+	return f.caller.scope(f.space)
+}
+
 // store installs one resource exactly the way an accepted apply would: the spec
 // is materialized, every relation is resolved and pinned, the creating tenant is
 // recorded, and the reverse index is kept exact.
 func (f *aggregateFixture) store(kind, name string, spec map[string]any) *storedResource {
 	f.t.Helper()
-	return f.storeAs(referencePrimaryAuth, kind, name, spec)
+	return f.storeAs(f.caller, kind, name, spec)
 }
 
 // storeAs is store under another authenticated caller, so a rule scoped to the
@@ -61,7 +73,7 @@ func (f *aggregateFixture) storeAs(
 		f.t.Fatalf("%s is not installed", kind)
 	}
 	materialized := form.materialize(spec)
-	relations, hostErr := f.host.resolveRelations(form, f.space, materialized)
+	relations, hostErr := f.host.resolveRelations(form, caller.scope(f.space), materialized)
 	if hostErr != nil {
 		f.t.Fatalf("store %s %s: %+v", kind, name, hostErr)
 	}
@@ -88,10 +100,20 @@ func (f *aggregateFixture) inSpace(space string) *aggregateFixture {
 	return &elsewhere
 }
 
+// asTenant returns the same fixture pointed at another tenant's resource plane.
+// Nothing carries over: a reference resolves inside the caller's own tenant, so a
+// fixture that moved tenants without rebuilding its aggregate would be writing
+// resources whose relations name nothing (spec/decisions/0028).
+func (f *aggregateFixture) asTenant(caller hostAuthContext) *aggregateFixture {
+	elsewhere := *f
+	elsewhere.caller = caller
+	return &elsewhere
+}
+
 // validate runs the complete pre-mutation gauntlet for one desired spec.
 func (f *aggregateFixture) validate(kind, name string, spec map[string]any) *hostError {
 	f.t.Helper()
-	return f.validateAs(referencePrimaryAuth, kind, name, spec)
+	return f.validateAs(f.caller, kind, name, spec)
 }
 
 // validateAs runs the same gauntlet as another authenticated caller. The caller
@@ -107,7 +129,7 @@ func (f *aggregateFixture) validateAs(
 	if form == nil {
 		f.t.Fatalf("%s is not installed", kind)
 	}
-	_, hostErr := f.host.validateDesiredSemantics(caller, form, f.space, name, form.materialize(spec))
+	_, hostErr := f.host.validateDesiredSemantics(caller, form, caller.scope(f.space), name, form.materialize(spec))
 	return hostErr
 }
 
@@ -271,7 +293,7 @@ func TestDeploymentRefusesUnavailableVersion(t *testing.T) {
 	f.store(workerVersionKind, "drifting-version", spec)
 
 	// The bound namespace vanishes out of band, so the version is not Ready.
-	f.host.removeResource(resourceKey(f.space, f.group, "EdgeKVNamespace", "cache"))
+	f.host.removeResource(resourceKey(f.scope(), f.group, "EdgeKVNamespace", "cache"))
 	hostErr := f.validate(workerDeploymentKind, "other-deployment",
 		f.deploymentSpec("other-worker", map[string]int{"drifting-version": 10000}))
 	f.requireCode(hostErr, "invalid_argument", "weighting a version that is not Ready")
@@ -284,7 +306,7 @@ func TestDeploymentRefusesUnavailableVersion(t *testing.T) {
 	f.host.operations["op_delete"] = &hostOperation{
 		ID: "op_delete",
 		DeleteTarget: resourceKey(
-			healthy.Space, healthy.group(), healthy.kind(), healthy.Name,
+			healthy.scope(), healthy.group(), healthy.kind(), healthy.Name,
 		),
 	}
 	hostErr = f.validate(workerDeploymentKind, "other-deployment",
@@ -413,7 +435,7 @@ func TestDeploymentChangePreservesDependents(t *testing.T) {
 	for kind, name := range map[string]string{
 		workerCustomDomainKind: "domain", workerCronTriggerKind: "cron", queueConsumerKind: "consumer",
 	} {
-		f.host.removeResource(resourceKey(f.space, f.group, kind, name))
+		f.host.removeResource(resourceKey(f.scope(), f.group, kind, name))
 	}
 	hostErr := f.validate(workerDeploymentKind, "deployment",
 		f.deploymentSpec("worker", map[string]int{"no-fetch": 10000}))
@@ -422,7 +444,7 @@ func TestDeploymentChangePreservesDependents(t *testing.T) {
 		t.Fatalf("the refusal does not name the inbound service binding holder: %s", hostErr.Message)
 	}
 
-	f.host.removeResource(resourceKey(f.space, f.group, workerVersionKind, caller.Name))
+	f.host.removeResource(resourceKey(f.scope(), f.group, workerVersionKind, caller.Name))
 	f.requireAccepted(
 		f.validate(workerDeploymentKind, "deployment",
 			f.deploymentSpec("worker", map[string]int{"no-fetch": 10000})),
@@ -446,7 +468,7 @@ func TestDeploymentDeleteBlockedByDependent(t *testing.T) {
 	if !strings.Contains(hostErr.Message, "cron") {
 		t.Fatalf("the refusal does not name the dependent: %s", hostErr.Message)
 	}
-	f.host.removeResource(resourceKey(f.space, f.group, workerCronTriggerKind, "cron"))
+	f.host.removeResource(resourceKey(f.scope(), f.group, workerCronTriggerKind, "cron"))
 	f.requireAccepted(f.host.dependencyInUse(deployment), "deleting the deployment once the trigger is gone")
 }
 

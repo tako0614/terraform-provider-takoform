@@ -30,7 +30,7 @@ Binding candidates in `interfaces/candidates/v1alpha1` and
 | --- | --- | --- | --- |
 | [ModuleWorker](module-worker.md) | identity | Logical identity of one ES Module Worker application; the ABI is fixed by identity. | A WASI function or container service is a different Form. |
 | [WorkerBundle](worker-bundle.md) | revision | Immutable content-addressed module bundle: main module plus digest-pinned modules. | A different linking or packaging model is a different Form. |
-| [WorkerVersion](worker-version.md) | revision | Immutable executable snapshot: bundle, compatibility date, handlers, vars, typed bindings. | Mutable in-place code or config is not a version of this Form. |
+| [WorkerVersion](worker-version.md) | revision | Immutable executable snapshot: bundle, handlers, vars, sensitive slots, typed bindings. | Mutable in-place code or config is not a version of this Form. |
 | [WorkerDeployment](worker-deployment.md) | deployment | Basis-point traffic split across up to eight Worker Versions of one worker. | Per-request routing rules or geographic steering is separate work. |
 | [WorkerCustomDomain](worker-custom-domain.md) | attachment | Serves one DNS hostname from a worker's active deployment over HTTPS. | Path-pattern routes are a separate attachment Form. |
 | [WorkerEndpoint](worker-endpoint.md) | attachment | Makes a worker reachable over HTTPS at an address the host assigns and publishes. | A name the author owns is `WorkerCustomDomain`; a chosen label or region is host placement, not a Form. |

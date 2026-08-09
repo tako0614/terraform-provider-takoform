@@ -68,10 +68,16 @@ func (h *ReferenceHost) derivedRendering(resource *storedResource) string {
 // caller has already settled — apply, import, and delete each decide their own
 // subject's identity — and is skipped here.
 //
-// Scope. The mutated resource's SPACE is the exact blast radius. A reference
-// carries no space member, so a relation never crosses a space, and every
-// Worker aggregate lookup is space-filtered; no resource outside the space can
+// Scope. The mutated resource's TENANT AND SPACE are the exact blast radius. A
+// reference carries neither member, so a relation never crosses either, and every
+// Worker aggregate lookup is scope-filtered; no resource outside the scope can
 // render differently because of this mutation.
+//
+// The tenant half is not an optimization. This pass WRITES — it advances other
+// resources' revisions — so a pass that ran host-wide would let one tenant's
+// mutation move another tenant's ETag, and the rendering it compares is computed
+// from the other tenant's relations and readiness, which is a read of that
+// tenant's state to decide it (spec/decisions/0028).
 //
 // Termination. One bounded pass over that space, no recursion and no fixpoint
 // loop. The derived rendering is a pure function of the stored specs,
@@ -87,11 +93,8 @@ func (h *ReferenceHost) derivedRendering(resource *storedResource) string {
 // rendered differently because of someone else's mutation did not change, and a
 // host that moved it would break every client's update fence for a change the
 // client did not make.
-func (h *ReferenceHost) advanceDerivedRevisions(space, mutated string) {
-	for _, candidate := range h.sortedResources() {
-		if candidate.Space != space {
-			continue
-		}
+func (h *ReferenceHost) advanceDerivedRevisions(scope resourceScope, mutated string) {
+	for _, candidate := range h.scopedResources(scope) {
 		key := candidate.key()
 		if key == mutated {
 			continue

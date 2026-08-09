@@ -964,6 +964,18 @@ func (r *v3Runner) statusAction(
 	action, generation, key string,
 	extraHeaders map[string]string,
 ) (wireResponse, error) {
+	return r.statusActionAs(r.token, target, action, generation, key, extraHeaders)
+}
+
+// statusActionAs is statusAction under a named credential, so a check can drive
+// the fenced read-only re-observation as a caller that does not hold the
+// resource it names.
+func (r *v3Runner) statusActionAs(
+	token string,
+	target probeTarget,
+	action, generation, key string,
+	extraHeaders map[string]string,
+) (wireResponse, error) {
 	headers := map[string]string{
 		expectedGenerationHeader: generation,
 		"Idempotency-Key":        key,
@@ -971,8 +983,8 @@ func (r *v3Runner) statusAction(
 	for headerKey, value := range extraHeaders {
 		headers[headerKey] = value
 	}
-	return r.request(
-		http.MethodPost,
+	return r.requestWithToken(
+		token, http.MethodPost,
 		r.resourceURL(target.Ref, target.Name, action, r.exactQuery(target.Space, target.Ref)),
 		headers, nil,
 	)

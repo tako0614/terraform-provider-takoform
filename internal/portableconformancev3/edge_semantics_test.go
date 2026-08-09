@@ -82,17 +82,24 @@ func TestHostnameClaimStopsAtTheTenant(t *testing.T) {
 	// Another TENANT is another claim. Nothing in this contract decides who
 	// controls a DNS name, so a name one tenant serves is none of this scan's
 	// business.
+	//
+	// The other tenant builds its own aggregate, because it has to: a reference
+	// resolves inside the caller's own tenant, so the worker this attachment
+	// activates cannot be the one the primary tenant stored under that name
+	// (spec/decisions/0028). That is the shape of the boundary, not an obstacle to
+	// stating it — the two tenants agree on every name in the request and still
+	// address two different planes.
+	foreign := f.asTenant(referenceOtherTenantAuth)
+	foreign.baseAggregate()
 	f.requireAccepted(
-		f.validateAs(referenceOtherTenantAuth, workerCustomDomainKind, "second", f.domainSpec(claimedHostname)),
+		foreign.validate(workerCustomDomainKind, "second", foreign.domainSpec(claimedHostname)),
 		"a claim on a hostname another tenant serves",
 	)
 
 	// That acceptance is the scope and not an exemption: the other tenant's own
 	// claim collides with the other tenant's own holder.
-	f.storeAs(referenceOtherTenantAuth, workerCustomDomainKind, "foreign-holder", f.domainSpec(claimedHostname))
-	foreignErr := f.validateAs(
-		referenceOtherTenantAuth, workerCustomDomainKind, "foreign-second", f.domainSpec(restatedHostname),
-	)
+	foreign.store(workerCustomDomainKind, "foreign-holder", foreign.domainSpec(claimedHostname))
+	foreignErr := foreign.validate(workerCustomDomainKind, "foreign-second", foreign.domainSpec(restatedHostname))
 	f.requireCode(foreignErr, "invalid_argument", "a second claim inside the other tenant")
 	if !strings.Contains(foreignErr.Message, "foreign-holder") {
 		t.Fatalf("the other tenant's refusal names a resource outside its tenant: %s", foreignErr.Message)
@@ -115,10 +122,10 @@ func TestHostnameClaimSpansEverySpaceOfOneTenant(t *testing.T) {
 		elsewhere.validate(workerCustomDomainKind, "far-domain", elsewhere.domainSpec(restatedHostname)),
 		"invalid_argument", "a claim in a second space of the tenant that already serves the name",
 	)
+	foreignElsewhere := elsewhere.asTenant(referenceOtherTenantAuth)
+	foreignElsewhere.baseAggregate()
 	f.requireAccepted(
-		elsewhere.validateAs(
-			referenceOtherTenantAuth, workerCustomDomainKind, "far-domain", elsewhere.domainSpec(claimedHostname),
-		),
+		foreignElsewhere.validate(workerCustomDomainKind, "far-domain", foreignElsewhere.domainSpec(claimedHostname)),
 		"another tenant's claim in that same second space",
 	)
 	f.requireAccepted(

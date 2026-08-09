@@ -15,6 +15,11 @@ import {
   loadPublicationTruth,
   validatePublicationClaimText,
 } from "./publication-truth.mjs";
+import { verifySiteStatusDocument } from "./site-status.mjs";
+import {
+  EDGE_PREVIEW_PROVIDER_VERSION,
+  FAMILY_CANDIDATE_SET,
+} from "../website/.vitepress/site-status.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -603,12 +608,16 @@ function checkTerraformProviderExample(filePath, providerVersion) {
   }
 }
 
-// The Edge Platform Family examples pin the v2.1.0 SOURCE CANDIDATE, which is
+// The Edge Platform Family examples pin the SOURCE CANDIDATE, which is
 // deliberately NOT the published release version: v2.0.0 does not contain
 // these resources, so pinning it would be a false availability claim. The
 // example must state the unpublished source-candidate status and must never
 // pin the published release.
-const edgeFamilySourceCandidateVersion = "2.1.0";
+//
+// The version is the same constant the site serves as `edgePreviewProvider`,
+// so the Edge preview tier is declared once and this check binds that single
+// declaration to the bytes the generator produces.
+const edgeFamilySourceCandidateVersion = EDGE_PREVIEW_PROVIDER_VERSION;
 
 function checkEdgeFamilyProviderExample(filePath, publishedVersion) {
   const source = read(filePath);
@@ -1095,6 +1104,191 @@ function checkWebsiteDocsProjection(formDocNames) {
   );
 }
 
+// Every hand-written inventory of the resource set, and what each one must say
+// about a Form for a reader to be able to find it.
+//
+// The generated trees (docs/resources, examples/resources, the site
+// projections) were already compared against the roster above; nothing checked
+// the prose and the navigation, which is exactly why WorkerEndpoint reached
+// production missing from the README, the sidebar and the Japanese docs index
+// while every generated surface carried it. A Form now cannot be added or
+// removed without every one of these learning about it.
+function checkHandWrittenInventories(retainedForms, familyRoster) {
+  const retainedKinds = retainedForms.map(({ kind }) => kind);
+  const familyKinds = familyRoster.map(({ kind }) => kind);
+  const retainedDocNames = retainedForms.map(({ docName }) => docName);
+  const familyDocNames = familyRoster.map(({ docName }) => docName);
+  const retainedSlugs = retainedForms.map(({ slug }) => slug);
+  const familySlugs = familyRoster.map(({ slug }) => slug);
+
+  const resourceDocLinks = (names) =>
+    names.map((name) => ({
+      needle: `/docs/resources/${name}.html`,
+      subject: name,
+    }));
+
+  const inventories = [
+    {
+      file: "README.md",
+      label: "the Edge Platform Family list",
+      required: familyKinds.map((kind) => ({
+        needle: `\`${kind}\``,
+        subject: kind,
+      })),
+    },
+    {
+      file: "README.md",
+      label: "the retained v1alpha2 list",
+      required: retainedKinds.map((kind) => ({
+        needle: `\`${kind}\``,
+        subject: kind,
+      })),
+    },
+    {
+      file: "website/.vitepress/config.mts",
+      label: "the Edge preview resource sidebar",
+      required: resourceDocLinks(familyDocNames),
+    },
+    {
+      file: "website/.vitepress/config.mts",
+      label: "the current published resource sidebar",
+      required: [
+        ...resourceDocLinks(retainedDocNames),
+        { needle: "/docs/data-sources/interface.html", subject: "interface" },
+      ],
+    },
+    {
+      file: "website/.vitepress/config.mts",
+      label: "the Edge preview proposal sidebar",
+      required: familySlugs.map((slug) => ({
+        needle: `/proposals/edge/${slug}.html`,
+        subject: slug,
+      })),
+    },
+    {
+      file: "website/.vitepress/config.mts",
+      label: "the current published proposal sidebar",
+      required: retainedSlugs.map((slug) => ({
+        needle: `/proposals/${slug}.html`,
+        subject: slug,
+      })),
+    },
+    {
+      file: "website/docs/index.md",
+      label: "the English resource reference",
+      required: resourceDocLinks([...retainedDocNames, ...familyDocNames]),
+    },
+    {
+      file: "website/ja/docs/index.md",
+      label: "the Japanese resource reference",
+      required: resourceDocLinks([...retainedDocNames, ...familyDocNames]),
+    },
+    {
+      file: "website/index.md",
+      label: "the English landing inventory",
+      required: [...retainedDocNames, ...familyDocNames].map((name) => ({
+        needle: `takoform_${name}`,
+        subject: name,
+      })),
+    },
+    {
+      file: "website/ja/index.md",
+      label: "the Japanese landing inventory",
+      required: [...retainedDocNames, ...familyDocNames].map((name) => ({
+        needle: `takoform_${name}`,
+        subject: name,
+      })),
+    },
+    {
+      file: "forms/README.md",
+      label: "the generated Form inventory",
+      required: [...retainedKinds, ...familyKinds].map((kind) => ({
+        needle: `\`${kind}\``,
+        subject: kind,
+      })),
+    },
+  ];
+
+  for (const { file, label, required } of inventories) {
+    const source = read(path.join(repositoryRoot, file));
+    for (const { needle, subject } of required) {
+      if (!source.includes(needle)) {
+        fail(
+          `${file}: ${label} is missing ${subject}; expected ${JSON.stringify(needle)}`,
+        );
+      }
+    }
+  }
+
+  for (const { slug } of familyRoster) {
+    const proposal = path.join(repositoryRoot, "proposals", "edge", `${slug}.md`);
+    if (!existsSync(proposal)) {
+      fail(`proposals/edge/${slug}.md: Edge Platform Family Form has no Proposal`);
+    }
+  }
+}
+
+// A count written in prose beside a count a machine already knows rots the
+// moment the corpus moves, and nothing notices. Every such number in the
+// conformance guide is bound here to the array in the corpus that defines it.
+function checkConformanceCorpusCounts() {
+  const file = path.join(repositoryRoot, "conformance", "README.md");
+  const text = read(file).replace(/\s+/gu, " ");
+  const claims = [
+    {
+      label: "the Host API v1alpha3 check matrix size",
+      pattern: /(\d+)-check matrix/g,
+      corpus: "conformance/portable-host-v3/contract.json",
+      field: ["requiredRunnerChecks"],
+    },
+    {
+      label: "the v1alpha3 error taxonomy size",
+      pattern: /(\d+)-code error taxonomy/g,
+      corpus: "conformance/portable-host-v3/contract.json",
+      field: ["errorEnvelope", "codes"],
+    },
+    {
+      label: "the v1alpha3 automatically-retryable set size",
+      pattern: /(\d+)-code retryable set/g,
+      corpus: "conformance/portable-host-v3/contract.json",
+      field: ["errorEnvelope", "automaticallyRetryable"],
+    },
+    {
+      label: "the runtime ABI corpus check list size",
+      pattern: /(\d+) required checks/g,
+      corpus: "conformance/runtime-abi-v1/contract.json",
+      field: ["requiredChecks"],
+    },
+  ];
+
+  for (const { label, pattern, corpus, field } of claims) {
+    let declared = readJson(path.join(repositoryRoot, corpus));
+    for (const key of field) {
+      declared = declared?.[key];
+    }
+    if (!Array.isArray(declared)) {
+      fail(`${corpus}: ${field.join(".")} must be an array to count`);
+      continue;
+    }
+    const matches = [...text.matchAll(pattern)];
+    if (matches.length === 0) {
+      fail(
+        `conformance/README.md: ${label} is not stated; the corpus declares ` +
+          `${declared.length} in ${corpus} ${field.join(".")}`,
+      );
+      continue;
+    }
+    for (const match of matches) {
+      if (Number(match[1]) !== declared.length) {
+        fail(
+          `conformance/README.md: ${label} is written as ${match[1]}, but ` +
+            `${corpus} ${field.join(".")} has ${declared.length} entries`,
+        );
+      }
+    }
+  }
+}
+
 function checkPublicSchemas() {
   let schemas;
   try {
@@ -1309,20 +1503,62 @@ if (publicationTruth !== null) {
 // pin. There is deliberately no generic takoform_resource carrier: the lane
 // exposes no resource that is not a Form (spec/decisions/0021), so this exact
 // set is also the assertion that the carrier has not come back.
-const edgeFamilyDocNames = [
-  "module_worker",
-  "worker_bundle",
-  "worker_version",
-  "worker_deployment",
-  "worker_custom_domain",
-  "worker_endpoint",
-  "worker_cron_trigger",
-  "edge_kv_namespace",
-  "edge_object_bucket",
-  "sqlite_database",
-  "at_least_once_queue",
-  "queue_consumer",
+//
+// Each column is bound to repository data below: the kinds and slugs to the
+// family candidate set, the doc names to docs/resources, the slugs to
+// proposals/edge. A Form cannot enter or leave the family without this table
+// moving, and the table is what every hand-written inventory is measured
+// against.
+const edgeFamilyRoster = [
+  { kind: "ModuleWorker", slug: "module-worker", docName: "module_worker" },
+  { kind: "WorkerBundle", slug: "worker-bundle", docName: "worker_bundle" },
+  { kind: "WorkerVersion", slug: "worker-version", docName: "worker_version" },
+  {
+    kind: "WorkerDeployment",
+    slug: "worker-deployment",
+    docName: "worker_deployment",
+  },
+  {
+    kind: "WorkerCustomDomain",
+    slug: "worker-custom-domain",
+    docName: "worker_custom_domain",
+  },
+  { kind: "WorkerEndpoint", slug: "worker-endpoint", docName: "worker_endpoint" },
+  {
+    kind: "WorkerCronTrigger",
+    slug: "worker-cron-trigger",
+    docName: "worker_cron_trigger",
+  },
+  {
+    kind: "EdgeKVNamespace",
+    slug: "edge-kv-namespace",
+    docName: "edge_kv_namespace",
+  },
+  { kind: "ObjectBucket", slug: "object-bucket", docName: "edge_object_bucket" },
+  { kind: "SQLiteDatabase", slug: "sqlite-database", docName: "sqlite_database" },
+  {
+    kind: "AtLeastOnceQueue",
+    slug: "at-least-once-queue",
+    docName: "at_least_once_queue",
+  },
+  { kind: "QueueConsumer", slug: "queue-consumer", docName: "queue_consumer" },
 ];
+const edgeFamilyDocNames = edgeFamilyRoster.map(({ docName }) => docName);
+
+const familySet = readJson(path.join(repositoryRoot, FAMILY_CANDIDATE_SET));
+const familyEntries = Array.isArray(familySet.forms) ? familySet.forms : [];
+compareExact(
+  "Edge Platform Family kinds",
+  familyEntries.map((entry) => entry?.kind ?? ""),
+  edgeFamilyRoster.map(({ kind }) => kind),
+);
+compareExact(
+  "Edge Platform Family Form slugs",
+  familyEntries.map((entry) =>
+    path.posix.basename(typeof entry?.path === "string" ? entry.path : ""),
+  ),
+  edgeFamilyRoster.map(({ slug }) => slug),
+);
 
 const formDocNames = [...forms.map(({ docName }) => docName), ...edgeFamilyDocNames];
 const expectedResourceDocs = formDocNames.map((name) => `${name}.md`);
@@ -1440,6 +1676,11 @@ checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
 checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
+checkHandWrittenInventories(forms, edgeFamilyRoster);
+checkConformanceCorpusCounts();
+for (const failure of verifySiteStatusDocument(repositoryRoot, publicationTruth)) {
+  fail(failure);
+}
 
 if (failures.length > 0) {
   console.error(
