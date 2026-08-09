@@ -58,13 +58,21 @@ func v3RequireStateUID(
 	if stateUID == "" || res == nil || stateUID == res.Metadata.UID {
 		return true
 	}
-	diags.AddError(
-		kind+" is a different incarnation than state records",
-		fmt.Sprintf(
-			"State records uid %s for %s/%s, but the host now serves uid %s under that name. "+
-				"The resource this state was applied against no longer exists, and the provider will not "+
-				"re-bind state to a resource it never applied — nor remove state, which would make the next "+
-				"apply fail against the resource that does exist. Resolve it explicitly, by one of:\n"+
+	diags.Append(v3Diagnostic{
+		Summary:           kind + " is a different incarnation than state records",
+		Space:             space,
+		Name:              name,
+		Pointer:           "/metadata/uid",
+		Code:              v3CodeUIDMismatch,
+		ExpectedUID:       stateUID,
+		CurrentUID:        res.Metadata.UID,
+		CurrentGeneration: res.Metadata.Generation,
+		CurrentRevision:   res.Metadata.Revision,
+		Detail: "The resource this state was applied against no longer exists, and the provider will not " +
+			"re-bind state to a resource it never applied — nor remove state, which would make the next " +
+			"apply fail against the resource that does exist.",
+		Repair: fmt.Sprintf(
+			"Resolve it explicitly, by one of:\n"+
 				"  1. import the new incarnation: remove this resource from state "+
 				"(terraform state rm) and import it again, which binds state to uid %s;\n"+
 				"  2. restore the prior incarnation, if the resource the state names can be recovered "+
@@ -72,9 +80,9 @@ func v3RequireStateUID(
 				"  3. delete the host-side replacement, then re-apply to create the resource this "+
 				"configuration describes.\n"+
 				"State is preserved until you choose.",
-			stateUID, space, name, res.Metadata.UID, res.Metadata.UID, stateUID,
+			res.Metadata.UID, stateUID,
 		),
-	)
+	}.error())
 	return false
 }
 

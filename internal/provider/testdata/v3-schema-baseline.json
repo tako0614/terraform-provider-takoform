@@ -1,0 +1,1502 @@
+{
+  "takoform_at_least_once_queue": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delivery_delay_seconds": {
+        "type": "basetypes.Int64Type",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "message_retention_seconds": {
+        "type": "basetypes.Int64Type",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "update_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      }
+    }
+  },
+  "takoform_edge_kv_namespace": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      }
+    }
+  },
+  "takoform_edge_object_bucket": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      }
+    }
+  },
+  "takoform_module_worker": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      }
+    }
+  },
+  "takoform_queue_consumer": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "dead_letter_queue": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "max_batch_size": {
+        "type": "basetypes.Int64Type",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "max_batch_timeout_seconds": {
+        "type": "basetypes.Int64Type",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "max_concurrency": {
+        "type": "basetypes.Int64Type",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "max_retries": {
+        "type": "basetypes.Int64Type",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "queue": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "retry_delay_seconds": {
+        "type": "basetypes.Int64Type",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "update_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "worker": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      }
+    }
+  },
+  "takoform_sqlite_database": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      }
+    }
+  },
+  "takoform_worker_bundle": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "main_module": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "manifest_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "modules": {
+        "type": "types.ListType[types.ObjectType[\"content_file\":basetypes.StringType, \"content_type\":basetypes.StringType, \"digest\":basetypes.StringType, \"name\":basetypes.StringType, \"size\":basetypes.Int64Type]]",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      }
+    }
+  },
+  "takoform_worker_cron_trigger": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "cron": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "update_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "worker": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      }
+    }
+  },
+  "takoform_worker_custom_domain": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "hostname": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "worker": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      }
+    }
+  },
+  "takoform_worker_deployment": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "update_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "versions": {
+        "type": "types.ListType[types.ObjectType[\"weight\":basetypes.Int64Type, \"worker_version\":basetypes.StringType]]",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "worker": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      }
+    }
+  },
+  "takoform_worker_endpoint": {
+    "version": 1,
+    "attributes": {
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "hostname": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "url": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "worker": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      }
+    }
+  },
+  "takoform_worker_version": {
+    "version": 1,
+    "attributes": {
+      "bucket_bindings": {
+        "type": "types.ListType[types.ObjectType[\"name\":basetypes.StringType, \"target_name\":basetypes.StringType]]",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "bundle": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "conditions": {
+        "type": "types.ListType[types.ObjectType[\"host_reason\":basetypes.StringType, \"last_transition_time\":basetypes.StringType, \"message\":basetypes.StringType, \"observed_generation\":basetypes.StringType, \"reason\":basetypes.StringType, \"status\":basetypes.StringType, \"type\":basetypes.StringType]]",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "create_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "delete_timeout": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": false
+      },
+      "form_api_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_definition_version": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_kind": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_package_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "form_schema_digest": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "generation": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "handlers": {
+        "type": "types.SetType[basetypes.StringType]",
+        "required": true,
+        "optional": false,
+        "computed": false
+      },
+      "kv_bindings": {
+        "type": "types.ListType[types.ObjectType[\"name\":basetypes.StringType, \"target_name\":basetypes.StringType]]",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "name": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "outputs_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "pending_operation_id": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "queue_producer_bindings": {
+        "type": "types.ListType[types.ObjectType[\"name\":basetypes.StringType, \"target_name\":basetypes.StringType]]",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "ready": {
+        "type": "basetypes.BoolType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "relation_drift_reason": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "required_sensitive_vars": {
+        "type": "types.SetType[basetypes.StringType]",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "revision": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "service_bindings": {
+        "type": "types.ListType[types.ObjectType[\"name\":basetypes.StringType, \"target_name\":basetypes.StringType]]",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "space": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "sqlite_bindings": {
+        "type": "types.ListType[types.ObjectType[\"name\":basetypes.StringType, \"target_name\":basetypes.StringType]]",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "uid": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": false,
+        "computed": true
+      },
+      "vars_json": {
+        "type": "basetypes.StringType",
+        "required": false,
+        "optional": true,
+        "computed": true
+      },
+      "worker": {
+        "type": "basetypes.StringType",
+        "required": true,
+        "optional": false,
+        "computed": false
+      }
+    }
+  }
+}

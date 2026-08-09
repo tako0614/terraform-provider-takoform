@@ -157,16 +157,21 @@ func v3RenderRefs(refs []currentformregistry.V3Ref) string {
 // the resource under a different exact FormRef would reinterpret one contract
 // as another, and a 404 from that query would then look like deletion.
 func v3UnsupportedStateRefError(kind string, got v3FormRefValue, known []currentformregistry.V3Ref) diag.Diagnostic {
-	return diag.NewErrorDiagnostic(
-		"State Form identity is not supported by this provider",
-		fmt.Sprintf(
-			"State is bound to %s/%s@%s schema=%s. This provider build carries codecs for %s. "+
+	return v3Diagnostic{
+		Summary: "State Form identity is not supported by this provider",
+		Ref: currentformregistry.V3Ref{
+			APIVersion: got.APIVersion, Kind: got.Kind,
+			DefinitionVersion: got.DefinitionVersion, SchemaDigest: got.SchemaDigest,
+		},
+		Pointer: "/form",
+		Code:    v3CodeStateRefUnsupported,
+		Detail: fmt.Sprintf(
+			"This provider build carries %s codecs for %s. "+
 				"The provider will not read, update, or delete this resource under a different exact FormRef, "+
-				"because that would reinterpret state written against one contract as another. "+
-				"Pin the provider version that wrote the state, or perform an explicit create/import migration "+
-				"onto an identity this build supports.",
-			got.APIVersion, got.Kind, got.DefinitionVersion, got.SchemaDigest,
-			v3RenderRefs(known),
+				"because that would reinterpret state written against one contract as another.",
+			kind, v3RenderRefs(known),
 		),
-	)
+		Repair: "Pin the provider version that wrote the state, or perform an explicit create/import migration " +
+			"onto an identity this build supports.",
+	}.error()
 }

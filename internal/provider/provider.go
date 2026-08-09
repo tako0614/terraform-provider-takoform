@@ -79,6 +79,11 @@ type providerData struct {
 	// and delete. A state FormRef only needs membership here; it does not have
 	// to be the current default, so a future Form bump never strands state.
 	supported []client.InstalledFormReference
+	// support caches the v1alpha3 Host Support Profiles the plan decides
+	// against. It is per provider configuration because a profile is a static
+	// statement about one host, and a plan asks the same questions once per
+	// resource (v3_host_support.go).
+	support *v3SupportCache
 }
 
 // takoformProviderModel maps the provider configuration schema.
@@ -213,6 +218,7 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 		defaultSpace: space,
 		forms:        providerCandidateForms(),
 		supported:    providerSupportedForms(),
+		support:      newV3SupportCache(),
 	}
 	resp.ResourceData = data
 	resp.DataSourceData = data

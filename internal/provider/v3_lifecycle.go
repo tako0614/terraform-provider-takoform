@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -110,21 +111,41 @@ func (r *v3FormResource) assertV3Configured(diags *diag.Diagnostics) bool {
 
 func assertV3Lane(data *providerData, resourceType string, diags *diag.Diagnostics) bool {
 	if data == nil {
-		diags.AddError(
-			"Provider not configured",
-			"The takoform provider was not configured before use. This is usually a provider bug.",
-		)
+		diags.Append(v3Diagnostic{
+			Summary:      "Provider not configured",
+			ResourceType: resourceType,
+			Code:         v3CodeNotConfigured,
+			Detail:       "The takoform provider was not configured before use.",
+			Repair: "This is a provider bug rather than a configuration fault. Report it with the resource type " +
+				"above and the CLI version.",
+		}.error())
 		return false
 	}
 	if data.clientV3 == nil {
-		detail := "The configured endpoint did not negotiate the Host API v1alpha3 lane required by " + resourceType + "."
-		if data.v3Err != nil {
-			detail += " " + data.v3Err.Error()
-		}
-		diags.AddError("Takoform v1alpha3 lane unavailable", detail)
+		diags.Append(v3LaneDiagnostic(resourceType, "v1alpha3", data.v3Err))
 		return false
 	}
 	return true
+}
+
+// v3LaneDiagnostic is the one shape a resource or data source uses when the
+// lane it needs did not negotiate. The recorded per-lane error is the whole
+// point of the diagnostic: the provider configured successfully — the OTHER
+// lane answered — so "not configured" would be false, and the endpoint's own
+// reason is the only thing that tells the reader whether to change the endpoint,
+// the credential, or the resource.
+func v3LaneDiagnostic(resourceType, lane string, laneErr error) diag.Diagnostic {
+	return v3Diagnostic{
+		Summary:      "Takoform " + lane + " lane unavailable",
+		ResourceType: resourceType,
+		Code:         v3CodeLaneUnavailable,
+		Cause:        laneErr,
+		Detail: "The configured endpoint did not negotiate the Host API " + lane + " lane required by " +
+			resourceType + ". The provider itself configured normally: the other lane negotiated, so resources " +
+			"on that lane keep working.",
+		Repair: "Point `endpoint` at a host that serves the " + lane + " lane, or remove the " + resourceType +
+			" entries from this configuration.",
+	}.error()
 }
 
 // codecTable is the exact-FormRef dispatch table this resource serves. A
@@ -143,8 +164,15 @@ func (r *v3FormResource) codecTable() *v3CodecTable {
 func (r *v3FormResource) v3DefaultCodec(diags *diag.Diagnostics) (v3FormCodec, bool) {
 	codec, err := r.codecTable().defaultCreate(r.form.Kind)
 	if err != nil {
-		diags.AddError(r.form.Kind+" FormRef missing",
-			"This provider build has no exact candidate "+r.form.Kind+" FormRef: "+err.Error()+" This is a provider bug.")
+		diags.Append(v3Diagnostic{
+			Summary:      r.form.Kind + " FormRef missing",
+			ResourceType: r.form.ResourceType,
+			Pointer:      "/form",
+			Code:         v3CodeProviderBug,
+			Cause:        err,
+			Detail:       "This provider build carries no exact create target for " + r.form.Kind + ".",
+			Repair:       "This is a provider bug. Pin a provider build whose registry carries this Form kind.",
+		}.error())
 		return v3FormCodec{}, false
 	}
 	return codec, true
@@ -160,10 +188,16 @@ func (r *v3FormResource) v3DefaultCodec(diags *diag.Diagnostics) (v3FormCodec, b
 func (r *v3FormResource) v3StateCodec(identity v3StateIdentity, diags *diag.Diagnostics) (v3FormCodec, bool) {
 	got, ok := identity.formRef()
 	if !ok {
-		diags.AddError(
-			"State has no exact v1alpha3 Form identity",
-			"The v1alpha3 resource lane fails closed on state without a complete exact FormRef. Retained v2-lane state is never transformed in place; perform an explicit create/import migration.",
-		)
+		diags.Append(v3Diagnostic{
+			Summary:      "State has no exact v1alpha3 Form identity",
+			ResourceType: r.form.ResourceType,
+			Pointer:      "/form",
+			Code:         v3CodeStateRefMissing,
+			Detail: "The v1alpha3 resource lane fails closed on state without a complete exact FormRef, because " +
+				"every read, update, and delete addresses the resource under the identity it was applied under.",
+			Repair: "Retained v2-lane state is never transformed in place. Perform an explicit create or import " +
+				"migration onto this lane.",
+		}.error())
 		return v3FormCodec{}, false
 	}
 	table := r.codecTable()
@@ -235,6 +269,12 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 			return
 		}
 	}
+	// An immutable revision is named by its content, and the content is only
+	// wholly resolved here. A plan that already derived the name derives the
+	// same one from the same spec, so state and plan cannot disagree.
+	if !r.v3EnsureRevisionName(&values, spec, &resp.Diagnostics) {
+		return
+	}
 	timeout, ok := v3Timeout(values.CreateTimeout, "create_timeout", v3DefaultCreateTimeout, &resp.Diagnostics)
 	if !ok {
 		return
@@ -259,7 +299,13 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		// orphans a resource the host owns and the next plan creates a duplicate.
 		// Record the identity that is known before surfacing the failure.
 		r.writeV3AcceptedState(ctx, &resp.State, codec, space, values, err, &resp.Diagnostics)
-		resp.Diagnostics.AddError("Failed to create "+r.form.Kind, err.Error())
+		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to create "+r.form.Kind, err, v3Diagnostic{
+			ResourceType: r.form.ResourceType,
+			Space:        space,
+			Name:         values.Name.ValueString(),
+			Ref:          codec.Ref,
+			Pointer:      "/spec",
+		}))
 		return
 	}
 	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, codec, space, values, res, false)...)
@@ -308,7 +354,15 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Failed to read "+r.form.Kind, err.Error())
+		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to read "+r.form.Kind, err, v3Diagnostic{
+			ResourceType: r.form.ResourceType,
+			Space:        space,
+			Name:         values.Name.ValueString(),
+			Ref:          codec.Ref,
+			Pointer:      "/metadata",
+			ExpectedUID:  v3StateStringValue(values.UID),
+			OperationID:  v3StateStringValue(values.PendingOperationID),
+		}))
 		return
 	}
 	if !v3RequireStateUID(r.form.Kind, space, values.Name.ValueString(), v3StateStringValue(values.UID), res, &resp.Diagnostics) {
@@ -317,7 +371,8 @@ func (r *v3FormResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 	v3ReportRelationCondition(
-		r.form.Kind, space, values.Name.ValueString(), res, r.form.DeclaresUpdate(), &resp.Diagnostics,
+		r.form.Kind, r.form.ResourceType, space, values.Name.ValueString(), codec.Ref,
+		res, r.form.DeclaresUpdate(), &resp.Diagnostics,
 	)
 	// Only a Form that declares update can converge an out-of-band change in
 	// place, so only there does adopting the host's spec produce a plan the
@@ -378,7 +433,8 @@ func v3RelationDriftState(res *clientv3.Resource) types.String {
 // the recorded relation_drift_reason lets the next plan propose the apply that
 // re-resolves the reference (v3PlanRelationRecovery).
 func v3ReportRelationCondition(
-	kind, space, name string,
+	kind, resourceType, space, name string,
+	ref currentformregistry.V3Ref,
 	res *clientv3.Resource,
 	declaresUpdate bool,
 	diags *diag.Diagnostics,
@@ -391,27 +447,81 @@ func v3ReportRelationCondition(
 	if declaresUpdate {
 		remedy = "re-applying this resource in place"
 	}
-	detail := fmt.Sprintf(
-		"The host reports %s/%s as not ready with reason %s: %s. It stays pinned to the incarnation it was applied against, because the host never re-binds a reference by name.",
-		space, name, reason, summary,
-	)
-	if hostReason != "" {
-		detail += " The host names the relation pointer and both uids: " + hostReason + "."
-	}
-	detail += " The next plan proposes " + remedy +
-		", and that apply re-resolves the reference against the resource that exists now." +
-		" A target that no longer exists must be re-created first, or this resource removed with it."
-	diags.AddWarning(kind+" references a resource that changed out of band", detail)
+	pointer, expectedUID, currentUID := v3ParseRelationHostReason(hostReason)
+	diags.Append(v3Diagnostic{
+		Summary:      kind + " references a resource that changed out of band",
+		ResourceType: resourceType,
+		Space:        space,
+		Name:         name,
+		Ref:          ref,
+		Pointer:      pointer,
+		ExpectedUID:  expectedUID,
+		CurrentUID:   currentUID,
+		Code:         v3CodeRelationTargetChanged,
+		Host:         &v3HostFault{HostCode: hostReason},
+		Detail: fmt.Sprintf(
+			"The host reports this resource as not ready with the portable reason %s: %s. It stays pinned to "+
+				"the incarnation it was applied against, because the host never re-binds a reference by name.",
+			reason, summary,
+		),
+		Repair: "The next plan proposes " + remedy +
+			", and that apply re-resolves the reference against the resource that exists now." +
+			" A target that no longer exists must be re-created first, or this resource removed with it.",
+	}.warning())
 }
 
-// ModifyPlan carries the two plan-time facts of the v3 lane: a relation the
-// host reports as broken is planned into an apply that can repair it, and a
-// worker bundle's identity follows its bytes.
+// v3ParseRelationHostReason lifts the relation pointer and the two uids out of
+// the host's free-form `hostReason`.
+//
+// The portable condition carries only the closed reason; WHICH relation moved
+// and from which incarnation is host-specific detail, so the lane puts it in
+// `hostReason` rather than inventing structure for it. A host that writes the
+// lane's own phrasing gets those three facts promoted into the diagnostic's
+// identity block; any other spelling simply leaves them out, and the raw
+// hostReason is rendered either way, so nothing the host said is ever lost.
+func v3ParseRelationHostReason(hostReason string) (pointer, expectedUID, currentUID string) {
+	rest, found := strings.CutPrefix(hostReason, "relation ")
+	if !found {
+		return "", "", ""
+	}
+	pointer, _, _ = strings.Cut(rest, " ")
+	if !strings.HasPrefix(pointer, "/") {
+		return "", "", ""
+	}
+	switch {
+	case strings.Contains(rest, " changed incarnation from uid "):
+		_, after, _ := strings.Cut(rest, " changed incarnation from uid ")
+		expectedUID, after, _ = strings.Cut(after, " ")
+		if _, to, ok := strings.Cut(after, " to uid "); ok {
+			currentUID, _, _ = strings.Cut(to, " ")
+		}
+	case strings.Contains(rest, " no longer exists"):
+		if _, after, ok := strings.Cut(rest, " uid "); ok {
+			expectedUID, _, _ = strings.Cut(after, " ")
+		}
+	}
+	return pointer, expectedUID, currentUID
+}
+
+// ModifyPlan carries the plan-time facts of the v3 lane, in the one order they
+// depend on each other:
+//
+//  1. a relation the host reports as broken is planned into an apply that can
+//     repair it;
+//  2. a worker bundle's identity follows its bytes, so the manifest digest is
+//     resolved before anything reads it;
+//  3. an immutable revision's host name is derived from that resolved content;
+//  4. a replacement that would still land on the recorded name is refused,
+//     because neither apply order can complete it;
+//  5. what the host declares it supports is decided HERE rather than at apply.
 func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	v3PlanRelationRecovery(ctx, req.State, r.form.DeclaresUpdate(), resp)
 	if r.form.Kind == workerBundleKind {
 		r.modifyWorkerBundlePlan(ctx, req, resp)
 	}
+	r.v3PlanRevisionName(ctx, req, resp)
+	r.v3PlanImmutableRevisionSafety(ctx, req, resp)
+	r.v3PlanHostSupport(ctx, resp)
 }
 
 // v3PlanRelationRecovery turns a recorded relation break into a plan Terraform
@@ -501,7 +611,16 @@ func (r *v3FormResource) Update(ctx context.Context, req resource.UpdateRequest,
 	defer cancel()
 	res, err := r.data.clientV3.ApplyResource(opCtx, v3RequestResource(codec.Ref, values.Name.ValueString(), space, spec), fence)
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to update "+r.form.Kind, err.Error())
+		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to update "+r.form.Kind, err, v3Diagnostic{
+			ResourceType:       r.form.ResourceType,
+			Space:              space,
+			Name:               values.Name.ValueString(),
+			Ref:                codec.Ref,
+			Pointer:            "/spec",
+			ExpectedUID:        fence.ExpectedUID,
+			ExpectedGeneration: fence.ExpectedGeneration,
+			ExpectedRevision:   v3StateStringValue(stateValues.Revision),
+		}))
 		return
 	}
 	resp.Diagnostics.Append(r.writeV3State(ctx, &resp.State, codec, space, values, res, false)...)
@@ -612,7 +731,15 @@ func (r *v3FormResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	defer cancel()
 	err := r.data.clientV3.DeleteResource(opCtx, space, clientFormRef(codec.Ref), values.Name.ValueString(), values.Revision.ValueString())
 	if err != nil && !errors.Is(err, clientv3.ErrNotFound) {
-		resp.Diagnostics.AddError("Failed to delete "+r.form.Kind, err.Error())
+		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to delete "+r.form.Kind, err, v3Diagnostic{
+			ResourceType:     r.form.ResourceType,
+			Space:            space,
+			Name:             values.Name.ValueString(),
+			Ref:              codec.Ref,
+			Pointer:          "/metadata",
+			ExpectedUID:      v3StateStringValue(values.UID),
+			ExpectedRevision: values.Revision.ValueString(),
+		}))
 	}
 }
 
@@ -632,7 +759,16 @@ func (r *v3FormResource) ImportState(ctx context.Context, req resource.ImportSta
 	}
 	identity, err := v3ParseImportID(req.ID)
 	if err != nil {
-		resp.Diagnostics.AddError("Invalid import ID", err.Error())
+		resp.Diagnostics.Append(v3Diagnostic{
+			Summary:      "Invalid import ID",
+			ResourceType: r.form.ResourceType,
+			Pointer:      "/metadata/name",
+			Code:         v3CodeImportIDInvalid,
+			Cause:        err,
+			Repair: "Import either the short `NAME` or `SPACE/NAME` form, which resolves to this build's default " +
+				"create ref, or the canonical JSON object " +
+				`{"space","apiVersion","kind","definitionVersion","schemaDigest","name"}`,
+		}.error())
 		return
 	}
 	codec, ok := r.v3ImportCodec(identity, &resp.Diagnostics)

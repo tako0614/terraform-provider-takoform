@@ -40,6 +40,12 @@ type interfaceDataSourceModel struct {
 	FormKind     types.String `tfsdk:"form_kind"`
 }
 
+// interfaceDataSourceType is this data source's address as a practitioner
+// writes it. A diagnostic names it so the reader knows which of the two lanes
+// the message is about: this data source is a v1alpha2 consumer, and there is
+// no v1alpha3 interface read to fall back to.
+const interfaceDataSourceType = "data.takoform_interface"
+
 func (d *interfaceDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_interface"
 }
@@ -117,8 +123,27 @@ func (d *interfaceDataSource) Configure(_ context.Context, req datasource.Config
 }
 
 func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	if d.data == nil || d.data.client == nil {
-		resp.Diagnostics.AddError("Provider not configured", "The takoform provider is not configured.")
+	// The two nil cases are structurally different and must not share a
+	// diagnostic. A nil providerData is a provider bug; a nil v1alpha2 client
+	// after a successful Configure is a fact about the ENDPOINT — the v1alpha3
+	// lane negotiated and this data source's lane did not — and the recorded
+	// per-lane error is the only thing that tells the reader which to change.
+	// The v2 form resources and the v3 resources both already report it this
+	// way; this data source used to answer "Provider not configured" and throw
+	// `v2Err` away.
+	if d.data == nil {
+		resp.Diagnostics.Append(v3Diagnostic{
+			Summary:      "Provider not configured",
+			ResourceType: interfaceDataSourceType,
+			Code:         v3CodeNotConfigured,
+			Detail:       "The takoform provider was not configured before use.",
+			Repair: "This is a provider bug rather than a configuration fault. Report it with the data source " +
+				"name above and the CLI version.",
+		}.error())
+		return
+	}
+	if d.data.client == nil {
+		resp.Diagnostics.Append(v3LaneDiagnostic(interfaceDataSourceType, "v1alpha2", d.data.v2Err))
 		return
 	}
 	var config interfaceDataSourceModel
@@ -162,22 +187,44 @@ func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 		ResourceKind: resourceKind, ResourceName: resourceName,
 	})
 	if err != nil {
+		identity := config.Name.ValueString()
+		if requestedVersion != "" {
+			identity += "@" + requestedVersion
+		}
+		base := v3Diagnostic{
+			ResourceType: interfaceDataSourceType,
+			Space:        space,
+			Name:         identity,
+			Pointer:      "/interfaces/" + config.Name.ValueString(),
+			Cause:        err,
+		}
 		switch {
 		case errors.Is(err, client.ErrInterfaceDeclarationsUnsupported):
-			resp.Diagnostics.AddError("Host does not declare interfaces", "This host does not advertise features.interface_declarations.")
+			base.Summary = "Host does not declare interfaces"
+			base.Code = v3CodeInterfaceUnsupported
+			base.Detail = "This host does not advertise features.interface_declarations, so it publishes no " +
+				"Interface Declarations at all. No interface was read."
+			base.Repair = "Remove this data source, or point the provider at a host that advertises " +
+				"features.interface_declarations."
 		case errors.Is(err, client.ErrInterfaceIdentityAmbiguous):
-			resp.Diagnostics.AddError("Interface version is ambiguous", err.Error()+"; configure version explicitly.")
+			base.Summary = "Interface version is ambiguous"
+			base.Code = v3CodeCapabilityUnsupported
+			base.Repair = "Configure `version` explicitly."
 		case errors.Is(err, client.ErrInterfaceInstanceAmbiguous):
-			resp.Diagnostics.AddError("Interface Resource is ambiguous", err.Error()+"; configure resource_kind and resource_name explicitly.")
+			base.Summary = "Interface Resource is ambiguous"
+			base.Code = v3CodeCapabilityUnsupported
+			base.Repair = "Configure `resource_kind` and `resource_name` explicitly."
 		case errors.Is(err, client.ErrNotFound):
-			identity := config.Name.ValueString()
-			if requestedVersion != "" {
-				identity += "@" + requestedVersion
-			}
-			resp.Diagnostics.AddError("Interface not found", fmt.Sprintf("The host declares no interface %q in space %q.", identity, space))
+			base.Summary = "Interface not found"
+			base.Code = v3CodeHostResponseInvalid
+			base.Detail = fmt.Sprintf("The host declares no interface %q in space %q.", identity, space)
+			base.Repair = "Create or make Ready the resource that materializes this declaration, then re-run."
 		default:
-			resp.Diagnostics.AddError("Unable to read interface", err.Error())
+			base.Summary = "Unable to read interface"
+			resp.Diagnostics.Append(v3HostCallDiagnostic(base.Summary, err, base))
+			return
 		}
+		resp.Diagnostics.Append(base.error())
 		return
 	}
 
@@ -186,13 +233,33 @@ func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 	config.ResourceName = types.StringValue(declared.Resource.Name)
 	documentJSON, err := encodeInterfaceJSON(declared.Document)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to encode interface document", err.Error())
+		resp.Diagnostics.Append(v3Diagnostic{
+			Summary:      "Unable to encode interface document",
+			ResourceType: interfaceDataSourceType,
+			Space:        space,
+			Name:         declared.Name,
+			Pointer:      "/document",
+			Code:         v3CodeHostResponseInvalid,
+			Cause:        err,
+			Detail:       "The host's Interface Declaration document could not be re-encoded as JSON.",
+			Repair:       "Report the document to the host operator; the provider will not record a partial one.",
+		}.error())
 		return
 	}
 	config.DocumentJSON = types.StringValue(documentJSON)
 	valuesJSON, err := encodeInterfaceJSON(declared.Values)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to encode interface values", err.Error())
+		resp.Diagnostics.Append(v3Diagnostic{
+			Summary:      "Unable to encode interface values",
+			ResourceType: interfaceDataSourceType,
+			Space:        space,
+			Name:         declared.Name,
+			Pointer:      "/values",
+			Code:         v3CodeHostResponseInvalid,
+			Cause:        err,
+			Detail:       "The host's Interface Declaration values could not be re-encoded as JSON.",
+			Repair:       "Report the declaration to the host operator; the provider will not record partial values.",
+		}.error())
 		return
 	}
 	config.ValuesJSON = types.StringValue(valuesJSON)

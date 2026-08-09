@@ -145,6 +145,36 @@ in that client, governed by its own versioning — for the Terraform/OpenTofu
 provider, by "Provider versions are independent" above, which already forbids
 silently reinterpreting persisted state as a different FormRef within a major.
 
+### What a Form version change costs a Terraform resource type
+
+A codec absorbs a definition change invisibly. A Terraform resource SCHEMA
+cannot: there is exactly one `takoform_worker_version` schema in a provider
+build, every resource of that type decodes through it, and a configuration
+written against it is source a user maintains. The rule is therefore about the
+schema rather than about the codec
+([decision 0030](decisions/0030-a-form-line-moves-a-terraform-resource-type-may-not.md)).
+
+The SAME Terraform resource type is kept when every existing attribute keeps
+exactly its meaning and the change is one of
+
+- adding an Optional attribute,
+- adding a Computed attribute, a declared output included,
+- relaxing validation, or
+- adding an enum value that breaks neither an existing host nor existing state.
+
+A NEW Terraform resource type is required for removing an attribute, changing an
+attribute's type, making an attribute required, changing a declared output's
+type, changing the Form's lifecycle role, changing the identity or the
+replacement unit, or any other semantic break. A Form that breaks
+`takoform_worker_version`'s schema becomes `takoform_worker_version_v2`, or a
+different Form kind; both types then exist in one build, the old one serving the
+state written under it through its own codec. Removing the old type is a
+provider major under "Provider versions are independent" above.
+
+Every v1alpha3-lane resource carries a schema version and registers a state
+upgrader for each earlier version, so a resource type can outlive a change to
+its own persisted layout without minting a new type for it.
+
 ### Existing identities
 
 An occupied FormRef MUST never be reused for different bytes. An existing kind

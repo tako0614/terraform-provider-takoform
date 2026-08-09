@@ -345,8 +345,9 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	workerFile := v3BundleFile(t, dir, "worker.mjs", originalBytes)
 	originalManifest := v3ExpectedManifestDigest(t, "worker.mjs", workerFile, originalBytes)
 
+	// The name is deliberately NOT written: a revision Form derives it from its
+	// own content, so the bundle's identity and its host name move together.
 	createPlan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-		"name":        types.StringValue("worker-bundle"),
 		"main_module": types.StringValue("worker.mjs"),
 		"modules":     v3BundleModulesValue("worker.mjs", workerFile),
 	})
@@ -359,6 +360,10 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	}
 	if got := v3StateString(t, ctx, createResponse.State, "manifest_digest").ValueString(); got != originalManifest {
 		t.Fatalf("created state manifest_digest = %q, want %q", got, originalManifest)
+	}
+	originalName := v3StateString(t, ctx, createResponse.State, "name").ValueString()
+	if want, _ := v3DerivedRevisionName("bundle", originalManifest); originalName != want {
+		t.Fatalf("created state name = %q, want the derived %q", originalName, want)
 	}
 
 	// Rewrite the module bytes at the SAME path.
@@ -404,6 +409,19 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	}
 	if !modifyResponse.RequiresReplace.Contains(path.Root("manifest_digest")) {
 		t.Fatalf("changed module bytes did not force replacement: %v", modifyResponse.RequiresReplace)
+	}
+	// The derived name moves with the bytes, which is what makes the
+	// replacement land beside the old revision instead of on top of it.
+	var plannedName types.String
+	if diags := modifyResponse.Plan.GetAttribute(ctx, path.Root("name"), &plannedName); diags.HasError() {
+		t.Fatalf("planned name: %v", diags)
+	}
+	wantName, _ := v3DerivedRevisionName("bundle", wantManifestDigest)
+	if plannedName.ValueString() != wantName || plannedName.ValueString() == originalName {
+		t.Fatalf("planned name = %q, want the derived %q (prior %q)", plannedName.ValueString(), wantName, originalName)
+	}
+	if !modifyResponse.RequiresReplace.Contains(path.Root("name")) {
+		t.Fatalf("a changed derived name did not force replacement: %v", modifyResponse.RequiresReplace)
 	}
 
 	// Restoring the original bytes removes the diff: the proposed plan (prior
@@ -487,6 +505,9 @@ func TestV3WorkerBundleImportRestoresManifestDigest(t *testing.T) {
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
 		State: readResponse.State,
 		Plan:  sameDigest,
+		// An imported bundle's name came from the import ID, so the configuration
+		// that adopts it pins that name rather than deriving one.
+		Config: tfsdk.Config{Schema: schemaResponse.Schema, Raw: readResponse.State.Raw},
 	}, &sameResponse)
 	if sameResponse.Diagnostics.HasError() {
 		t.Fatalf("same-digest plan: %v", sameResponse.Diagnostics)
@@ -510,8 +531,9 @@ func TestV3WorkerBundleImportRestoresManifestDigest(t *testing.T) {
 		RequiresReplace: path.Paths{path.Root("main_module"), path.Root("modules")},
 	}
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
-		State: readResponse.State,
-		Plan:  local,
+		State:  readResponse.State,
+		Plan:   local,
+		Config: tfsdk.Config{Schema: schemaResponse.Schema, Raw: readResponse.State.Raw},
 	}, &localResponse)
 	if localResponse.Diagnostics.HasError() {
 		t.Fatalf("local-authoring plan: %v", localResponse.Diagnostics)
