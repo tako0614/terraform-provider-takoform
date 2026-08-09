@@ -245,7 +245,7 @@ the contract the reference annotates, whether that is an exact Form identity or
 a required Interface, with the stored pin recording the target's exact FormRef
 beside its uid — import validated exactly like apply, cross-resource semantics the Forms declare in prose but only a host can
 enforce (WorkerDeployment weights summing to exactly 10000 — short and long are
-both refused, and a real two-version split at 4000/6000 is accepted, so a host
+both refused, and a real two-version split at 1000/9000 is accepted, so a host
 that admits only one weighted entry has no traffic split and fails; one active
 deployment per worker, with a replacement accepted once the live one is released,
 so the rule is about what is live rather than a flag nothing clears; a cron trigger or queue
