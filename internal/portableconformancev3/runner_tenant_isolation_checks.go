@@ -608,8 +608,9 @@ func (r *v3Runner) checkResourceUpdateIsTenantIsolated(worker probeTarget) error
 }
 
 // checkResourceDeleteIsTenantIsolated proves the most damaging half: a foreign
-// tenant cannot remove what it cannot read. The revision fence it presents is the
-// holder's real one, so nothing but the address stops it.
+// tenant cannot remove what it cannot read. Both of the holder's real fences are
+// presented — the generation a delete requires and the revision it may carry —
+// so nothing but the address stops it.
 func (r *v3Runner) checkResourceDeleteIsTenantIsolated(worker probeTarget) error {
 	private := worker
 	private.Name = tenantPrivateName
@@ -626,8 +627,9 @@ func (r *v3Runner) checkResourceDeleteIsTenantIsolated(worker probeTarget) error
 		r.alternateTenantToken, http.MethodDelete,
 		r.resourceURL(private.Ref, private.Name, "", r.exactQuery(private.Space, private.Ref)),
 		map[string]string{
-			"If-Match":        `"` + holder.Metadata.Revision + `"`,
-			"Idempotency-Key": "key-tenant-foreign-delete",
+			expectedGenerationHeader: holder.Metadata.Generation,
+			"If-Match":               `"` + holder.Metadata.Revision + `"`,
+			"Idempotency-Key":        "key-tenant-foreign-delete",
 		}, nil,
 	)
 	if err != nil {
@@ -635,8 +637,8 @@ func (r *v3Runner) checkResourceDeleteIsTenantIsolated(worker probeTarget) error
 	}
 	if err := r.expectStableError(foreign, "resource_not_found"); err != nil {
 		return fmt.Errorf(
-			"another tenant deleting %s at its exact revision %s: %w",
-			private.Name, holder.Metadata.Revision, err,
+			"another tenant deleting %s at its exact generation %s and revision %s: %w",
+			private.Name, holder.Metadata.Generation, holder.Metadata.Revision, err,
 		)
 	}
 

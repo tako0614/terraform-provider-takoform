@@ -204,14 +204,18 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 103-check matrix over real HTTP: exact discovery and
+drives the complete 106-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
 fence, and a fence-less or stale prepare is rejected),
 uid minting and delete-then-recreate uid change, generation fences versus
 revision fences (including a host-side status touch that advances only the
-revision), packageDigest as audit-only evidence that never enters identity or
+revision), a delete fenced on the expected generation — refused unfenced,
+refused stale, and accepted carrying nothing else, while the representation
+fence stays honored when a client sends one and is never required, so tearing
+an aggregate down succeeds under the generation a refresh read before the
+teardown moved the revision itself, packageDigest as audit-only evidence that never enters identity or
 queries, one kind name in two namespaced groups, revision-role update
 rejection, cross-resource relation resolution before mutation — every
 reference a Form derives from its desired schema, not only typed bindings —
@@ -276,7 +280,13 @@ neither reads, observes, updates, or deletes the other's — answered
 included — a reference resolves only inside the referring tenant even when the
 name matches exactly, a `prepareDigest` minted by one tenant is not spendable by
 another, and one `Idempotency-Key` from two tenants is two operations rather than
-a replay. `import` is the one surface whose absent answer is a SUCCESS, and it is
+a replay. The one claim in the lane that stops at the tenant WITHOUT the tenant
+being in its address is the `WorkerCustomDomain` hostname, and it is measured in
+the direction that costs a mistake: a second tenant standing up its own
+aggregate and claiming the hostname the first tenant serves is ACCEPTED, both
+claims stay live under two uids, releasing one leaves the other where it was,
+and a third claim inside the second tenant is still refused — naming that
+tenant's own holder and no one else's. `import` is the one surface whose absent answer is a SUCCESS, and it is
 measured as one: a second tenant adopting the name the first tenant holds is
 answered the 201 it would be answered for a name nobody holds anywhere — same
 status, same ETag, same document but for the minted uid and the name — while the

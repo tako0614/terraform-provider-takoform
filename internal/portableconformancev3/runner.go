@@ -944,10 +944,20 @@ func (r *v3Runner) expectResourceAbsent(target probeTarget) error {
 	return r.expectStableError(response, "resource_not_found")
 }
 
-func (r *v3Runner) deleteResource(target probeTarget, revision, key string, extraHeaders map[string]string) (wireResponse, error) {
+// deleteResource deletes under the delete fence this lane requires: the
+// expected DESIRED GENERATION. The representation revision is deliberately not
+// sent — a client that fenced a teardown on it would be refused by a revision
+// its own teardown moved, because removing a dependent re-renders what is left
+// (spec/decisions/0011, 0016 rule 9). A check that means to exercise the
+// optional representation fence passes `If-Match` in extraHeaders.
+func (r *v3Runner) deleteResource(
+	target probeTarget,
+	generation, key string,
+	extraHeaders map[string]string,
+) (wireResponse, error) {
 	headers := map[string]string{
-		"If-Match":        `"` + revision + `"`,
-		"Idempotency-Key": key,
+		expectedGenerationHeader: generation,
+		"Idempotency-Key":        key,
 	}
 	for headerKey, value := range extraHeaders {
 		headers[headerKey] = value

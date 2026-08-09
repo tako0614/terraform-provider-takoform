@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
+	"sort"
 )
 
 // MatrixReport is the evidence both supported CLIs produced.
@@ -68,6 +70,104 @@ func ValidateMatrix(matrix MatrixReport) error {
 		!reflect.DeepEqual(first.HeterogeneousVars, second.HeterogeneousVars) {
 		return errors.New("OpenTofu and Terraform derived different owner names or vars types")
 	}
+	// The teardown is compared on what it built and what it left, not on the
+	// exact interleaving. The graph fixes a partial order and both CLIs honor it
+	// (Validate holds each one to it), but the two are free to walk independent
+	// branches in different orders, so requiring one sequence would measure a
+	// scheduler rather than the contract.
+	if !reflect.DeepEqual(first.ModuleDestroy.Built, second.ModuleDestroy.Built) ||
+		!reflect.DeepEqual(first.ModuleDestroy.LeftBehind, second.ModuleDestroy.LeftBehind) ||
+		!reflect.DeepEqual(deletedKinds(first.ModuleDestroy.Mutations), deletedKinds(second.ModuleDestroy.Mutations)) {
+		return errors.New("OpenTofu and Terraform tore the worker-app module down differently")
+	}
+	return nil
+}
+
+// teardownAggregate is the Worker aggregate the module builds.
+var teardownAggregate = []string{
+	"WorkerEndpoint", "WorkerDeployment", "WorkerVersion", "WorkerBundle", "ModuleWorker",
+}
+
+// teardownEdges is what a destroy is held to: a PARTIAL order, one entry per
+// edge the host itself refuses to have reversed.
+//
+// Every pair here is a `dependency_in_use` (409) or a
+// `dependency_in_use`-shaped deployment refusal if the destroy takes them the
+// other way round (spec/decisions/0015, 0016), so this is the contract's
+// ordering and not a preference about scheduling. What is deliberately NOT here
+// is the `WorkerBundle`/`ModuleWorker` pair: once the version is gone neither
+// holds the other, so the two are independent leaves and either CLI may take
+// them in either order. Asserting a total order would measure a graph walker.
+var teardownEdges = [][2]string{
+	{"WorkerEndpoint", "WorkerDeployment"},
+	{"WorkerEndpoint", "ModuleWorker"},
+	{"WorkerDeployment", "WorkerVersion"},
+	{"WorkerDeployment", "ModuleWorker"},
+	{"WorkerVersion", "WorkerBundle"},
+	{"WorkerVersion", "ModuleWorker"},
+}
+
+// deletedKinds is the sorted multiset of kinds one timeline deleted.
+func deletedKinds(mutations []mutation) []string {
+	out := make([]string, 0, len(mutations))
+	for _, entry := range mutations {
+		if entry.Method == http.MethodDelete {
+			out = append(out, entry.Kind)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// assertTeardown holds one destroy to the three things it claims: it removed a
+// live aggregate, it removed it in the order the host's refusals impose, and it
+// left nothing.
+func assertTeardown(evidence TeardownEvidence) error {
+	built := append([]string(nil), evidence.Built...)
+	sort.Strings(built)
+	if len(built) != len(teardownAggregate) {
+		return fmt.Errorf(
+			"the destroy ran against %d resources (%v), want the five-resource worker aggregate", len(built), built)
+	}
+	if evidence.ReadySamples == 0 || evidence.NotReadySamples != 0 {
+		return fmt.Errorf(
+			"the worker was not observed serving before the teardown (%d ready, %d not)",
+			evidence.ReadySamples, evidence.NotReadySamples)
+	}
+	position := map[string]int{}
+	for index, entry := range evidence.Mutations {
+		if entry.Method != http.MethodDelete {
+			return fmt.Errorf(
+				"the destroy drove a %s of %s; a teardown writes nothing", entry.Method, entry.Kind)
+		}
+		if entry.Status != http.StatusNoContent && entry.Status != http.StatusAccepted {
+			return fmt.Errorf(
+				"deleting %s %s answered HTTP %d; the delete fence is the desired generation, and a "+
+					"teardown moves revisions it does not own",
+				entry.Kind, entry.Name, entry.Status)
+		}
+		if _, seen := position[entry.Kind]; seen {
+			return fmt.Errorf("the destroy deleted two %s resources", entry.Kind)
+		}
+		position[entry.Kind] = index
+	}
+	for _, kind := range teardownAggregate {
+		if _, deleted := position[kind]; !deleted {
+			return fmt.Errorf("the destroy never deleted the %s; it deleted %d resources", kind, len(position))
+		}
+	}
+	for _, edge := range teardownEdges {
+		if position[edge[0]] > position[edge[1]] {
+			return fmt.Errorf(
+				"the destroy removed the %s before the %s, which a conforming host refuses",
+				edge[1], edge[0])
+		}
+	}
+	if len(evidence.LeftBehind) != 0 {
+		return fmt.Errorf(
+			"the destroy left %v behind; a completed teardown holds nothing, and the store is read "+
+				"whole rather than probed by name so an orphan cannot hide", evidence.LeftBehind)
+	}
 	return nil
 }
 
@@ -111,6 +211,9 @@ func Validate(report Report) error {
 	}
 	if !report.ModuleDeploy.EndpointURLStable {
 		return errors.New("the host-assigned endpoint address did not survive the code change")
+	}
+	if err := assertTeardown(report.ModuleDestroy); err != nil {
+		return fmt.Errorf("worker-app module destroy: %w", err)
 	}
 	// Two owners of byte-identical build output are two owners. A digest names
 	// the bytes; it is not an ownership claim, and a Terraform address has

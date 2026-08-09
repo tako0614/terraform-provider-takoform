@@ -248,7 +248,7 @@ func (r *v3Runner) checkSingleQueueConsumerEnforced() error {
 	if err != nil {
 		return err
 	}
-	response, err := r.deleteResource(queue, current.Metadata.Revision, "key-single-consumer-queue-delete", nil)
+	response, err := r.deleteResource(queue, current.Metadata.Generation, "key-single-consumer-queue-delete", nil)
 	if err != nil {
 		return err
 	}

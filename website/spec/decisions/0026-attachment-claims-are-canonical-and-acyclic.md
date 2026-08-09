@@ -1,6 +1,8 @@
 # 0026 — An attachment's claim is decided on canonical, resolved identity
 
-- Status: accepted
+- Status: accepted; amended 2026-08-09 — the tenant half of the claim scope is
+  now MEASURED, and the acyclic half of the dead-letter rule is measured for a
+  shape other than one chain
 - Date: 2026-08-08
 - Owners: Takoform maintainers
 
@@ -164,23 +166,59 @@ cycle, so the author can act on it without a second request.
   "exhausted messages come to rest" a checkable claim rather than an intention.
   Building a two-queue mutual dead-letter pair is unrepresentable; a chain
   A -> B -> C is not.
-- Three required conformance checks join the v1alpha3 runner list:
+- Four required conformance checks join the v1alpha3 runner list:
   `custom-domain-hostname-canonicalized`, `custom-domain-hostname-claim-unique`,
-  and `dead-letter-cycle-rejected`. Each drives a configuration a laxer host
-  accepts and proves nothing was stored, and each also drives the accepting case
-  so a host cannot pass by refusing everything. Two of them drive the SCOPE of
-  the rule and not only the rule: the claim check builds a second space with its
-  own worker, version and deployment and collides from there while the first
-  space's holder is live, in both directions, so a host enforcing uniqueness
-  inside one space fails; the cycle check closes a three-queue cycle, so a host
-  testing the destination for an immediate back edge fails.
-- The corpus proves the SPACE half of the claim scope and deliberately does not
-  measure the tenant half. Requiring a host to ACCEPT a hostname another tenant
-  already serves would decide who controls that name, which is the authority
-  this decision has just declined to take — a host may well refuse for reasons
-  of its own, and still be conforming. The boundary is therefore stated here and
-  held by each host's own tests, which is the same split the lane already uses
-  for what a host knows about code it never ran (decision 0019).
+  `custom-domain-hostname-claim-stops-at-the-tenant`, and
+  `dead-letter-cycle-rejected`. Each drives a configuration a laxer host accepts
+  and proves nothing was stored, and each also drives the accepting case so a
+  host cannot pass by refusing everything. Three of them drive the SCOPE of the
+  rule and not only the rule: the claim check builds a second space with its own
+  worker, version and deployment and collides from there while the first space's
+  holder is live, in both directions, so a host enforcing uniqueness inside one
+  space fails; the tenant check does the opposite and is described below; the
+  cycle check closes a three-queue cycle, so a host testing the destination for
+  an immediate back edge fails.
+- **The tenant half of the claim scope is measured too** *(amended
+  2026-08-09)*. The first version of this record proved the SPACE half and
+  declined the other, on the reasoning that requiring a host to ACCEPT a
+  hostname another tenant serves would decide who controls that name. That
+  reasoning was wrong about its own rule. Rule 2 above does not say a host may
+  choose; it says the scope "is not wider than the tenant" and that a host
+  answering the claim out of an unpartitioned store "would refuse a name this
+  decision says another tenant may hold". Leaving the only normative half a
+  corpus cannot see to each host's own tests is how a boundary stops being one —
+  and this boundary's failure is not an internal detail, it is one tenant
+  denying another a DNS name it has every right to claim, on nothing but who
+  asked first.
+  Nor does measuring it decide who controls a name. Every hostname this corpus
+  writes is under `.invalid`, which RFC 2606 reserves precisely so that no
+  registry, host, or tenant has any claim to it. There is no control question
+  for a host to be answering about such a name, so the only thing a refusal can
+  be is a claim scan that reached past the tenant. A host with a control policy
+  of its own — domain verification, an allow list — answers a different question
+  about different names and is untouched.
+  The check therefore drives BOTH polarities against one live pair, because the
+  accepting half alone would be satisfied by a host with no claim rule at all: a
+  second tenant's claim on the name the first tenant serves must SUCCEED, both
+  claims must read back live under two host-issued uids, releasing one must
+  leave the other exactly where it was — and a THIRD claim inside the second
+  tenant must still be refused. It also reads the refusal, because the message
+  names the holder: a host-wide scan would name a resource in another tenant,
+  which is the membership oracle the tenant-isolation checks of
+  [decision 0028](0028-the-resource-plane-is-tenant-isolated.md) spend a whole
+  check removing. So the refusal must name the caller's own holder and must not
+  name anyone else's.
+- **The acyclic half of the dead-letter rule is measured as a graph, not as a
+  chain** *(amended 2026-08-09)*. The cycle check drove three refusals and one
+  accepted path, and every destination it ever accepted had in-degree zero and
+  no consumer. A host that never walks the graph — refusing only the
+  self-reference and any destination that already has a consumer — passed the
+  whole check, including the three-queue cycle the check exists for, and would
+  then refuse legitimate configurations this decision permits. In-degree is
+  unbounded here: a queue has at most one CONSUMER and therefore at most one
+  outgoing edge (decision 0020), and nothing bounds how many chains end at one
+  queue. The check now closes a diamond as well, so two acyclic chains meeting
+  is accepted and the shortcut fails.
 
 ## Rejected alternatives
 

@@ -494,10 +494,20 @@ func (c *Client) fencedStatusAction(ctx context.Context, action, space string, r
 	return &out, nil
 }
 
-// DeleteResource deletes under an If-Match revision fence. A direct 404 or a
-// terminal delete Operation failing resource_not_found returns ErrNotFound
-// so callers can treat "already gone" deliberately.
-func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, name, revision string) error {
+// DeleteResource deletes under the expected-generation fence.
+//
+// A delete withdraws desired state, so it fences like every other desired-state
+// mutation of this lane and NOT on the representation revision. The revision
+// moves for reasons the deleting client did not cause: a host-side status
+// change, and above all the derived rendering of decision 0016 — removing a
+// dependent re-renders whatever was rendered from it, which during a teardown
+// is precisely the resource the client is about to delete next. A client that
+// fenced on the revision would be refused by a revision its own teardown moved,
+// with a plan already computed and nothing left to do but waive the fence.
+//
+// A direct 404 or a terminal delete Operation failing resource_not_found
+// returns ErrNotFound so callers can treat "already gone" deliberately.
+func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, name, generation string) error {
 	if err := c.requireReady(); err != nil {
 		return err
 	}
@@ -510,13 +520,13 @@ func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, 
 	if err := ValidateResourceName(name); err != nil {
 		return err
 	}
-	if !validCanonicalDecimal(revision) {
-		return errors.New("takoform: delete requires a canonical decimal revision fence")
+	if !validCanonicalDecimal(generation) {
+		return errors.New("takoform: delete requires a canonical decimal generation fence")
 	}
 	headers := map[string]string{
-		"If-Match": quoteRevision(revision),
+		expectedGenerationHeader: generation,
 		"Idempotency-Key": mutationKey(
-			"delete", ref.APIVersion, ref.Kind, name, space, revision, "",
+			"delete", ref.APIVersion, ref.Kind, name, space, generation, "",
 		),
 	}
 	fullURL := c.resourceURL(ref, name, "", exactFormQuery(space, ref))

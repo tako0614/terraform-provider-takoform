@@ -729,16 +729,24 @@ func (r *v3FormResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 	opCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	err := r.data.clientV3.DeleteResource(opCtx, space, clientFormRef(codec.Ref), values.Name.ValueString(), values.Revision.ValueString())
+	// The delete fence is the desired GENERATION, not the revision state
+	// happens to hold. A destroy removes dependents first, and removing one
+	// re-renders whatever was rendered from it — so by the time this call is
+	// made, the revision the plan read is routinely stale through this very
+	// destroy (spec/decisions/0011, 0016 rule 9). The generation is not: it
+	// moves only when some client changes desired state.
+	err := r.data.clientV3.DeleteResource(
+		opCtx, space, clientFormRef(codec.Ref), values.Name.ValueString(), values.Generation.ValueString(),
+	)
 	if err != nil && !errors.Is(err, clientv3.ErrNotFound) {
 		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to delete "+r.form.Kind, err, v3Diagnostic{
-			ResourceType:     r.form.ResourceType,
-			Space:            space,
-			Name:             values.Name.ValueString(),
-			Ref:              codec.Ref,
-			Pointer:          "/metadata",
-			ExpectedUID:      v3StateStringValue(values.UID),
-			ExpectedRevision: values.Revision.ValueString(),
+			ResourceType:       r.form.ResourceType,
+			Space:              space,
+			Name:               values.Name.ValueString(),
+			Ref:                codec.Ref,
+			Pointer:            "/metadata",
+			ExpectedUID:        v3StateStringValue(values.UID),
+			ExpectedGeneration: values.Generation.ValueString(),
 		}))
 	}
 }

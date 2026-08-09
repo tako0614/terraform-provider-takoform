@@ -74,6 +74,27 @@ verbatim. This is the required conformance check
   status, conditions, and outputs — changes. The strong ETag is the quoted
   revision; `If-Match` fences on it and a stale value fails
   `revision_conflict` (412).
+- **A `delete` fences on the expected generation, and MUST NOT be required to
+  fence on the revision.** A delete withdraws desired state, so it is a
+  desired-state mutation and carries the same fence every other one carries: the
+  `Takoform-Expected-Generation` header, REQUIRED, with a stale value failing
+  `generation_conflict` (412) and an absent one `invalid_argument` (400). A
+  client MAY additionally send `If-Match`, and a host that is given one MUST
+  honor it and answer `revision_conflict` (412) when the representation moved —
+  but a host MUST NOT require it, and MUST NOT refuse an otherwise valid delete
+  because the revision moved. The revision moves for reasons the deleting client
+  did not cause: a host-side status change, and the derived rendering below.
+  Removing an aggregate means removing its dependents first, so a client's own
+  teardown moves the revision of the resource it is about to delete next, after
+  the plan that computed the teardown read it — and requiring the representation
+  fence would refuse a destroy on a change the destroy itself made, with no
+  repair available, because the next dependent moves it again. The generation
+  moves only when a client changes a desired spec, which is the only "it changed
+  under me" a deleter can act on; the incarnation question is `expectedUid`'s,
+  and an accepted delete resolves through the recorded uid before it evaluates
+  any fence. These are the required conformance checks `delete-generation-fence`
+  and `delete-fence-survives-derived-rendering`, and they are decided by
+  [decision 0011](../decisions/0011-resource-identity-generation-and-revision.md).
 - A host that renders any part of a representation from OTHER resources MUST
   advance that resource's `metadata.revision` when the rendering changes, and
   MUST NOT move its `metadata.generation`: no desired spec changed. This lane
@@ -89,6 +110,8 @@ verbatim. This is the required conformance check
   nothing anywhere. This is a required conformance check
   (`dependent-revision-advances-with-rendering`), and it is decided by
   [decision 0016](../decisions/0016-the-worker-aggregate-has-one-active-deployment.md).
+  It is also exactly why a delete does not fence on the revision, above: the
+  rendering a teardown moves is the rendering of what the teardown deletes next.
 - `status.observedGeneration` names the desired generation the status
   reflects; `status.conditions` uses the closed types `Ready`, `Reconciling`,
   `Degraded`, `Drifted`, `Blocked`, `Deleting` with closed portable reasons
@@ -303,6 +326,10 @@ digest; a client MUST NOT describe provider apply-time preparation as
 "reviewed in plan". `prepare` binds the exact spec, identity, and fences to
 a `prepareDigest` the way v1alpha2 `preview` binds a plan digest;
 substitution after prepare fails `invalid_argument` before mutation.
+
+`delete` carries an empty body, an `Idempotency-Key`, and the expected
+generation, which is its only required precondition ([Resource
+identity](#resource-identity)).
 
 Role rules are wire-enforced: an update to a `revision`-role resource fails
 `invalid_argument`; deleting a resource any live relation references fails
@@ -631,10 +658,17 @@ answer. The tenant is the AUTHENTICATED tenant of the request, because no
 reference and no metadata field names one, and at commit it is the tenant the
 accepted mutation was admitted from. A hostname a DIFFERENT tenant serves is
 outside the comparison: who controls a name is authority this contract does not
-answer. These are the required conformance checks
-`custom-domain-hostname-canonicalized` and
-`custom-domain-hostname-claim-unique`; the second collides from a second space
-of the tenant, against an aggregate of its own, in both directions.
+answer, so a host MUST accept a claim on a hostname only another tenant serves,
+and the refusal it gives inside a tenant MUST name that tenant's own holder and
+no one else's — naming another tenant's resource discloses exactly what
+[Tenant isolation](#tenant-isolation) withholds. These are the required
+conformance checks `custom-domain-hostname-canonicalized`,
+`custom-domain-hostname-claim-unique`, and
+`custom-domain-hostname-claim-stops-at-the-tenant`; the second collides from a
+second space of the tenant, against an aggregate of its own, in both directions,
+and the third stands a second tenant's whole aggregate up and requires its claim
+on the served name to SUCCEED while a third claim inside that tenant is still
+refused.
 
 A `QueueConsumer`'s `deadLetterQueue` MUST NOT lead back to the queue the
 consumer drains. A destination resolving to the same queue UID is refused, and
@@ -649,7 +683,9 @@ any graph shape, including a cycle a laxer state left behind. Any length means
 any: a host that asks only whether the destination's own consumer points back
 admits `A -> B -> C -> A`, so the required conformance check
 `dead-letter-cycle-rejected` closes a three-queue cycle and accepts a
-four-queue chain.
+four-queue chain. In-degree is UNBOUNDED: one consumer is one outgoing edge, and
+any number of chains may end at one queue, so the same check accepts a DIAMOND
+and a host refusing a destination something already dead-letters to fails it.
 
 ### The host-assigned endpoint
 
@@ -884,8 +920,9 @@ one ([decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-
 A host records the target's exact `formRef` and `metadata.uid` beside the fence
 the mutation was accepted under, and at commit time resolves through that record
 rather than re-deriving a target from the name the request addressed. A name is
-unique per kind and reusable, and a re-created resource starts at revision 1, so
-a target removed out of band and re-created — under the same contract or under
+unique per kind and reusable, and a re-created resource starts at generation 1
+and at revision 1, so whichever counter a fence names, a target removed out of
+band and re-created — under the same contract or under
 another definition version of it — presents a NEW incarnation behind the same
 address that satisfies the fence the original was accepted under. When the name
 is held by a different incarnation the operation terminates `uid_mismatch` (409);
@@ -1162,9 +1199,14 @@ Proven by required checks:
   is refused while the first lives and accepted once it is gone
   (`custom-domain-hostname-canonicalized`,
   `custom-domain-hostname-claim-unique`);
+- a hostname another TENANT serves is claimable, both claims stay live under two
+  uids, releasing one leaves the other alone, and inside either tenant a second
+  claim is still refused without naming anyone else's resource
+  (`custom-domain-hostname-claim-stops-at-the-tenant`);
 - a `QueueConsumer` whose dead-letter destination resolves to its own queue, or
   closes a cycle through another consumer's, is refused, and an acyclic
-  destination is accepted (`dead-letter-cycle-rejected`).
+  destination is accepted, including one that shares a destination with another
+  chain (`dead-letter-cycle-rejected`).
 
 Obligations a conforming host MUST meet that this lane does NOT prove, because
 proving them means exercising the data plane rather than driving the Host API:

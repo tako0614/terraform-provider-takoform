@@ -27,8 +27,8 @@ price, or implementation. See the [complete example](../../examples/resources/ta
 ## Read-only attributes
 
 - `uid` — host-issued immutable resource identity; delete and re-create yields a new UID.
-- `generation` — desired-state generation; increments only when the portable desired spec changes. Updates fence on it.
-- `revision` — representation revision; increments whenever the representation changes — a spec-changing update, new status, or new outputs. Deletes fence on it via `If-Match`.
+- `generation` — desired-state generation; increments only when the portable desired spec changes. Updates fence on it. It is also the DELETE fence, because a delete withdraws desired state like any other desired-state mutation.
+- `revision` — representation revision; increments whenever the representation changes — a spec-changing update, new status, new outputs, or a change to another resource this one is rendered from. It is the strong ETag, and it is deliberately NOT the delete fence: a teardown removes dependents first and would otherwise be refused by a revision it moved itself.
 - `conditions` — the complete status condition list the host reports, in its order. Each entry carries
   `type` (the closed `Ready` / `Reconciling` / `Degraded` / `Drifted` / `Blocked` / `Deleting` vocabulary),
   `status` (`True` / `False` / `Unknown`), the closed portable `reason`, an optional `message`, an optional

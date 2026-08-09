@@ -28,6 +28,10 @@ import (
 
 const v3TestAPIRoot = "/apis/forms.takoform.com/v1alpha3"
 
+// v3ExpectedGenerationHeader is the desired-state fence every mutation of this
+// lane carries, deletes included.
+const v3ExpectedGenerationHeader = "Takoform-Expected-Generation"
+
 const v3TestPrepareDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
 type v3HostRecord struct {
@@ -515,10 +519,17 @@ func (h *v3FakeHost) serveResource(w http.ResponseWriter, r *http.Request, remai
 			h.writeStableError(w, http.StatusNotFound, "resource_not_found")
 			return
 		}
-		if want := `"` + strconv.Itoa(record.revision) + `"`; r.Header.Get("If-Match") != want {
-			h.t.Errorf("delete If-Match = %q, want %q", r.Header.Get("If-Match"), want)
-			h.writeStableError(w, http.StatusPreconditionFailed, "revision_conflict")
+		// A delete fences on the desired generation, exactly like an update,
+		// and never on the representation revision — which a teardown moves by
+		// removing dependents (spec/decisions/0011, 0016 rule 9).
+		if want := strconv.Itoa(record.generation); r.Header.Get(v3ExpectedGenerationHeader) != want {
+			h.t.Errorf("delete %s = %q, want %q",
+				v3ExpectedGenerationHeader, r.Header.Get(v3ExpectedGenerationHeader), want)
+			h.writeStableError(w, http.StatusPreconditionFailed, "generation_conflict")
 			return
+		}
+		if got := r.Header.Get("If-Match"); got != "" {
+			h.t.Errorf("delete must not carry an If-Match revision fence, got %q", got)
 		}
 		if r.Header.Get("Idempotency-Key") == "" {
 			h.t.Errorf("delete must carry an Idempotency-Key")
@@ -621,7 +632,7 @@ func (h *v3FakeHost) serveApply(w http.ResponseWriter, r *http.Request, group, k
 		h.writeStableError(w, http.StatusNotFound, "resource_not_found")
 		return
 	}
-	if fence := r.Header.Get("Takoform-Expected-Generation"); fence != strconv.Itoa(record.generation) {
+	if fence := r.Header.Get(v3ExpectedGenerationHeader); fence != strconv.Itoa(record.generation) {
 		h.writeStableError(w, http.StatusPreconditionFailed, "generation_conflict")
 		return
 	}

@@ -118,6 +118,15 @@ and [`../form-families.md`](../form-families.md).
    cannot, because a rendering is a function of stored specs, relations, and
    UIDs and never of a revision.
 
+   This rule is what forced the delete fence off the revision. A teardown
+   removes dependents first, so removing a deployment re-renders the worker that
+   is about to be deleted next, after the plan read it — and a delete fenced on
+   the representation would then be refused by a change the teardown itself
+   made, with no repair, because the next dependent moves it again. So the rule
+   stands and the fence moved: a delete fences on the desired generation
+   ([decision 0011](0011-resource-identity-generation-and-revision.md), amended
+   2026-08-09), which this rule deliberately never touches.
+
 Rules 3, 4, and 8 are three views of one fact — an activated worker is what its
 deployment selects — so a host that implements any of them in terms of stored
 versions rather than the deployment has implemented none of them.
@@ -170,7 +179,12 @@ unfalsified.
 - Removing a worker is now explicitly ordered: attachments and inbound callers
   first, then the deployment, then the versions, then the worker. Every step is
   a refusal with a named dependent rather than a silent degradation, so the
-  order is discoverable from the errors.
+  order is discoverable from the errors. That the whole ordering completes
+  through a real `terraform destroy` and `tofu destroy` of the official
+  `worker-app` module, leaving nothing in the store, is measured by the
+  authoring matrix (`cmd/worker-authoring-conformance`) rather than by this
+  lane, because it is a claim about a client walking the order and not about a
+  host answering one request.
 - A deployment is a claim about what runs, so the versions it weights are held
   to being runnable at the moment it is stored. A host with an asynchronous
   provisioning model refuses a version whose Ready is False for its own reasons

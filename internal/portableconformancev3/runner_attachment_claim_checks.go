@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
@@ -24,6 +25,13 @@ import (
 const (
 	canonicalClaimHostname    = "claim.portable-conformance.invalid"
 	nonCanonicalClaimHostname = "Claim.Portable-Conformance.INVALID."
+	// sharedClaimHostname is the one name two TENANTS hold at once. It is a
+	// separate name from the one above so the two claim checks cannot interfere,
+	// and it is under `.invalid` like every hostname this corpus writes: RFC 2606
+	// reserves that TLD, so no host has any control question to answer about it
+	// and the only thing a refusal could mean is a claim scan that reached past
+	// the tenant.
+	sharedClaimHostname = "shared.portable-conformance.invalid"
 )
 
 // customDomainClaiming builds one Worker Custom Domain of the deployed gate
@@ -332,6 +340,184 @@ func (r *v3Runner) checkCustomDomainHostnameClaimUnique() error {
 	return nil
 }
 
+// checkCustomDomainHostnameClaimStopsAtTheTenant proves the other edge of the
+// same scope: the claim reaches every space of one tenant, and NOTHING FURTHER.
+//
+// This is the only rule in the lane whose correct answer is that the operation
+// WORKS, and that polarity is why it went unmeasured. Every other boundary check
+// drives a refusal, so a host enforcing this claim over an unpartitioned store
+// passed the whole corpus while letting whichever tenant asked first deny a DNS
+// name to everyone else on the host — the exact outcome decision 0026 rule 2
+// says a host must not produce, and the reason decision 0028 put the tenant in
+// the resource address rather than in a late filter.
+//
+// A check that only required the second tenant's claim to succeed would be
+// satisfied by a host with no claim rule at all, so both polarities are driven
+// against the same live pair: the second tenant's claim is ACCEPTED while the
+// first tenant serves the name, and a THIRD claim inside the second tenant is
+// REFUSED while the second tenant serves it. One hostname, two tenants, two
+// answers, and inside either tenant still exactly one.
+//
+// The refusal is also read for what it discloses. Decision 0026 requires the
+// message to name the holder so an author can act on it without a second
+// request; a host scanning host-wide would therefore name a resource in another
+// tenant, which is the membership oracle the read boundary spends its own check
+// eliminating. So the refusal must name the caller's own holder and must not
+// name the other tenant's.
+//
+// The second tenant stands up a COMPLETE aggregate of its own — bundle, worker,
+// version, and the deployment that serves fetch — so the attachment gate has
+// nothing to say and the only thing left for a host to be deciding is the
+// hostname. Its bundle references the manifest digest that tenant committed for
+// itself earlier in the run; a content address is not a capability, so a
+// manifest the FIRST tenant committed would not resolve here at all.
+func (r *v3Runner) checkCustomDomainHostnameClaimStopsAtTheTenant() error {
+	input := r.contract.RunnerInput
+	if r.artifactManifestDigest == "" {
+		return errors.New(
+			"the second tenant's bundle needs the committed manifest digest; " +
+				"this check runs after the artifact sequence",
+		)
+	}
+
+	// The first tenant serves the name, on the aggregate the gate check deployed.
+	held := r.customDomainClaiming("claim-tenant-holder", sharedClaimHostname)
+	heldCreated, _, err := r.applyResource(held, applyOptions{
+		Create: true, IdempotencyKey: "key-claim-tenant-holder",
+	}, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("the first tenant's claim on %s: %w", sharedClaimHostname, err)
+	}
+
+	// An aggregate of the second tenant's own, in the same space and under
+	// different names: the tenant is the only thing that differs.
+	bundle := r.target(input.WorkerBundle.ResourceProbe)
+	bundle.Name = "claim-tenant-bundle"
+	bundle.Spec = map[string]any{"manifestDigest": r.artifactManifestDigest}
+	worker := r.target(input.ModuleWorker)
+	worker.Name = "claim-tenant-worker"
+	version := r.workerVersionOfBundle("claim-tenant-version", worker.Name, bundle.Name, fetchHandler)
+	deployment := r.deploymentOf("claim-tenant-deployment", worker.Name, version.Name)
+	for _, target := range []probeTarget{bundle, worker, version, deployment} {
+		response, err := r.applyAs(r.alternateTenantToken, target, applyOptions{
+			Create: true, IdempotencyKey: "key-" + target.Name,
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := decodeResource(response, http.StatusCreated); err != nil {
+			return fmt.Errorf("the second tenant's %s: %w", target.Name, err)
+		}
+	}
+
+	// The claim itself. This MUST be accepted: what one tenant may hold in DNS is
+	// authority this contract does not answer, and a host answering it out of an
+	// unpartitioned store answers it for everybody.
+	foreign := r.customDomainClaimingIn("", "claim-tenant-domain", worker.Name, sharedClaimHostname)
+	accepted, err := r.applyAs(r.alternateTenantToken, foreign, applyOptions{
+		Create: true, IdempotencyKey: "key-claim-tenant-domain",
+	})
+	if err != nil {
+		return err
+	}
+	foreignCreated, err := decodeResource(accepted, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf(
+			"a second tenant claiming hostname %s while another tenant serves it: %w; the claim is unique "+
+				"per tenant and stops there, so a host scanning its whole store lets whoever asked first "+
+				"deny a DNS name to every other tenant",
+			sharedClaimHostname, err,
+		)
+	}
+	if foreignCreated.Metadata.UID == heldCreated.Metadata.UID {
+		return fmt.Errorf(
+			"the two tenants' claims on %s share the host-issued uid %s; they are one record",
+			sharedClaimHostname, heldCreated.Metadata.UID,
+		)
+	}
+
+	// Both live, each read by its holder.
+	heldUID, err := r.readUIDAs(r.token, held, "the first tenant reading its own claim")
+	if err != nil {
+		return err
+	}
+	foreignUID, err := r.readUIDAs(r.alternateTenantToken, foreign, "the second tenant reading its own claim")
+	if err != nil {
+		return err
+	}
+	if heldUID != heldCreated.Metadata.UID || foreignUID != foreignCreated.Metadata.UID {
+		return fmt.Errorf(
+			"one hostname read back as uid %s for the first tenant and %s for the second, want %s and %s",
+			heldUID, foreignUID, heldCreated.Metadata.UID, foreignCreated.Metadata.UID,
+		)
+	}
+
+	// Inside either tenant it is still exactly one claim, so a host that simply
+	// stopped comparing hostnames fails here rather than passing the leg above.
+	inside := r.customDomainClaimingIn("", "claim-tenant-domain-again", worker.Name, sharedClaimHostname)
+	refused, err := r.applyAs(r.alternateTenantToken, inside, applyOptions{
+		Create: true, IdempotencyKey: "key-claim-tenant-domain-again",
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(refused, "invalid_argument"); err != nil {
+		return fmt.Errorf("a second claim on %s inside the tenant that serves it: %w", sharedClaimHostname, err)
+	}
+	// And the refusal names the caller's OWN holder. A host-wide scan would name
+	// the other tenant's, which tells a stranger that a resource of that name
+	// exists on this host and is not theirs.
+	message := strings.TrimSpace(string(refused.Body))
+	if !strings.Contains(message, foreign.Name) {
+		return fmt.Errorf(
+			"the refusal does not name the caller's own holder %q, so an author cannot act on it: %s",
+			foreign.Name, message,
+		)
+	}
+	if strings.Contains(message, held.Name) {
+		return fmt.Errorf(
+			"the refusal names %q, a resource in ANOTHER tenant: %s; a claim refusal may not disclose "+
+				"what a caller cannot read",
+			held.Name, message,
+		)
+	}
+	if err := r.refuseCreate(
+		r.customDomainClaiming("claim-tenant-holder-again", sharedClaimHostname),
+		"invalid_argument", "key-claim-tenant-holder-again",
+		"a second claim on one hostname inside the FIRST tenant",
+	); err != nil {
+		return err
+	}
+
+	// Independently deletable: releasing one tenant's claim leaves the other's
+	// exactly where it was.
+	if err := r.deleteExisting(held, "key-claim-tenant-holder-delete"); err != nil {
+		return err
+	}
+	survivor, err := r.readUIDAs(r.alternateTenantToken, foreign, "the second tenant after the first released")
+	if err != nil {
+		return err
+	}
+	if survivor != foreignCreated.Metadata.UID {
+		return fmt.Errorf(
+			"releasing the first tenant's claim moved the second tenant's from uid %s to %s",
+			foreignCreated.Metadata.UID, survivor,
+		)
+	}
+	if err := r.deleteExistingAs(
+		r.alternateTenantToken, foreign, "key-claim-tenant-domain-delete",
+	); err != nil {
+		return err
+	}
+	for _, target := range []probeTarget{deployment, version, worker, bundle} {
+		if err := r.deleteExistingAs(r.alternateTenantToken, target, "key-"+target.Name+"-delete"); err != nil {
+			return err
+		}
+	}
+	r.complete("custom-domain-hostname-claim-stops-at-the-tenant")
+	return nil
+}
+
 // checkDeadLetterCycleRejected proves an exhausted message comes to rest.
 //
 // `edge.queue` moves a message that exhausts its retries to the dead-letter
@@ -449,12 +635,35 @@ func (r *v3Runner) checkDeadLetterCycleRejected() error {
 		return fmt.Errorf("a consumer extending an acyclic dead-letter chain to four queues: %w", err)
 	}
 
-	for _, consumer := range []probeTarget{acyclic, onward, forward} {
+	// A DIAMOND: a fifth queue whose consumer dead-letters into C, which B's
+	// consumer already dead-letters into. The graph is acyclic — E -> C -> D — so
+	// it must be accepted, and until it is driven every destination this check
+	// ever accepted had no consumer and no other source. A host that never walks
+	// the graph and instead refuses any destination that already has a consumer,
+	// or any destination something already points at, passes every refusal above
+	// and fails here. Out-degree is what a queue's single consumer bounds
+	// (decision 0020); in-degree is unbounded, and nothing about two chains
+	// meeting stops a message coming to rest.
+	fifth, err := queueOf("dead-letter-queue-e", "key-dead-letter-queue-e")
+	if err != nil {
+		return err
+	}
+	diamond := consumerOf("dead-letter-diamond", fifth, third)
+	if _, _, err := r.applyResource(diamond, applyOptions{
+		Create: true, IdempotencyKey: "key-dead-letter-diamond",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf(
+			"a second consumer dead-lettering into a queue another consumer already dead-letters into: %w; "+
+				"the rule forbids a cycle, and two acyclic chains meeting is not one", err,
+		)
+	}
+
+	for _, consumer := range []probeTarget{diamond, acyclic, onward, forward} {
 		if err := r.deleteExisting(consumer, "key-"+consumer.Name+"-delete"); err != nil {
 			return err
 		}
 	}
-	for _, queue := range []probeTarget{fourth, third, second, first} {
+	for _, queue := range []probeTarget{fifth, fourth, third, second, first} {
 		if err := r.deleteExisting(queue, "key-"+queue.Name+"-delete"); err != nil {
 			return err
 		}

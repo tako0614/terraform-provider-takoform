@@ -284,11 +284,17 @@ func TestObserveResourceHonorsFence(t *testing.T) {
 	}
 }
 
-func TestDeleteResourceRevisionFence(t *testing.T) {
+func TestDeleteResourceGenerationFence(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
 		if r.Method == http.MethodDelete && r.URL.EscapedPath() == splitGroupResourcePath("app", "") {
-			if r.Header.Get("If-Match") != `"9"` {
-				t.Errorf("delete must fence with If-Match on the quoted revision, got %q", r.Header.Get("If-Match"))
+			if r.Header.Get(expectedGenerationHeader) != "9" {
+				t.Errorf("delete must fence on the expected generation, got %q", r.Header.Get(expectedGenerationHeader))
+			}
+			// And never on the representation: a teardown moves revisions it
+			// does not own, so a delete that carried If-Match would refuse
+			// itself (spec/decisions/0011).
+			if got := r.Header.Get("If-Match"); got != "" {
+				t.Errorf("delete must not fence on the representation revision, got If-Match %q", got)
 			}
 			if r.Header.Get("Idempotency-Key") == "" {
 				t.Errorf("delete must send an Idempotency-Key")

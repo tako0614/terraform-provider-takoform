@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/portableconformancev3"
 )
 
 // Report is the evidence one CLI produced. It is never publication-ready: the
@@ -27,6 +29,7 @@ type Report struct {
 	PlanRefusal        RefusalEvidence   `json:"planRefusal"`
 	RollForward        SequenceEvidence  `json:"rollForward"`
 	ModuleDeploy       SequenceEvidence  `json:"moduleDeploy"`
+	ModuleDestroy      TeardownEvidence  `json:"moduleDestroy"`
 	TwoOwners          OwnershipEvidence `json:"twoOwners"`
 	HeterogeneousVars  VarsEvidence      `json:"heterogeneousVars"`
 	ShortestModuleName string            `json:"shortestModuleName"`
@@ -48,6 +51,27 @@ type OwnershipEvidence struct {
 // VarsEvidence records the JSON type each `vars` entry arrived at the host as.
 type VarsEvidence struct {
 	WireTypes map[string]string `json:"wireTypes"`
+}
+
+// TeardownEvidence records what a full `destroy` of the official module did.
+//
+// A teardown is an ordering claim and an emptiness claim at once, so both are
+// carried: the deletes the host actually saw, and the store afterwards.
+type TeardownEvidence struct {
+	// Built is the aggregate the destroy was run against, as sorted
+	// `Kind/name` text.
+	Built []string `json:"built"`
+	// Mutations is the destroy's own timeline, recorded from a reset
+	// recorder so nothing the apply drove is in it.
+	Mutations []mutation `json:"mutations"`
+	// ReadySamples and NotReadySamples are the worker's readiness over the
+	// window immediately BEFORE the destroy: what came apart was serving.
+	ReadySamples    int `json:"readySamples"`
+	NotReadySamples int `json:"notReadySamples"`
+	// LeftBehind is every resource the host still holds after the destroy,
+	// read from the store rather than probed by name — a name probe cannot see
+	// an orphan. Empty is the claim.
+	LeftBehind []string `json:"leftBehind"`
 }
 
 // ReportFormat identifies the evidence shape.
@@ -112,6 +136,12 @@ func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
 		return Report{}, err
 	}
 	report.ModuleDeploy = moduleDeploy
+
+	moduleDestroy, err := runModuleDestroy(ctx, repoRoot, cliPath)
+	if err != nil {
+		return Report{}, err
+	}
+	report.ModuleDestroy = moduleDestroy
 
 	twoOwners, err := runTwoOwners(ctx, repoRoot, cliPath)
 	if err != nil {
@@ -181,14 +211,14 @@ func runSameNameDeadlock(ctx context.Context, repoRoot, cliPath string) (Deadloc
 	evidence := DeadlockEvidence{}
 
 	// Order one: destroy the old revision first. A live relation holds it. The
-	// delete carries the revision fence a conforming client always sends, so the
-	// refusal is the dependency rule and not a missing precondition.
+	// delete carries the generation fence a conforming client always sends, so
+	// the refusal is the dependency rule and not a missing precondition.
 	stored, err := client.GetResource(ctx, harnessSpace, clientFormRef3(bundleRef), workerName+"-bundle")
 	if err != nil {
 		return DeadlockEvidence{}, CLIIdentity{}, fmt.Errorf("read the applied bundle: %w", err)
 	}
 	deleteErr := client.DeleteResource(
-		ctx, harnessSpace, clientFormRef3(bundleRef), workerName+"-bundle", stored.Metadata.Revision)
+		ctx, harnessSpace, clientFormRef3(bundleRef), workerName+"-bundle", stored.Metadata.Generation)
 	code, status, ok := stableErrorOf(deleteErr)
 	if !ok {
 		return DeadlockEvidence{}, CLIIdentity{}, fmt.Errorf(
@@ -332,6 +362,101 @@ func runModuleDeploy(ctx context.Context, repoRoot, cliPath string) (SequenceEvi
 	}
 	evidence.EndpointURLStable = true
 	return evidence, nil
+}
+
+// runModuleDestroy proves the official module comes apart again.
+//
+// Standing an aggregate up is the half every other scenario measures. Taking it
+// down is the half that broke, and it broke for a reason no single-resource
+// teardown reaches: removing a `WorkerDeployment` re-renders the `ModuleWorker`
+// whose readiness follows it (spec/decisions/0016 rule 9), so the worker's
+// revision moves in the middle of the destroy, AFTER the plan read it. While a
+// delete fenced on the representation, that made `terraform destroy` of the
+// official module fail on a change the destroy itself caused — with no repair,
+// because the next dependent moves the revision again. The fence is the desired
+// generation, and this is what says so end to end, through the real CLI.
+//
+// The teardown is measured three ways, because "the command exited zero" is not
+// the claim. The recorded timeline must be five deletes and nothing else, in an
+// order the host's own refusals impose. The readiness sampler must have found
+// the worker serving right up to the moment the teardown began, so what came
+// apart was a live aggregate rather than a half-built one. And the host's store
+// must be EMPTY afterwards — not "the names this configuration declared are
+// gone", which cannot see an orphan.
+func runModuleDestroy(ctx context.Context, repoRoot, cliPath string) (TeardownEvidence, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+	if err != nil {
+		return TeardownEvidence{}, err
+	}
+	defer h.Close()
+	modulePath, err := filepath.Abs(filepath.Join(repoRoot, "modules", "worker-app"))
+	if err != nil {
+		return TeardownEvidence{}, err
+	}
+	if err := h.writeModuleSource(1); err != nil {
+		return TeardownEvidence{}, err
+	}
+	if err := h.write("main.tf", defaultModuleStack(h.Endpoint(), modulePath, true)); err != nil {
+		return TeardownEvidence{}, err
+	}
+	if output, err := h.run(ctx, "init", "-backend=false", "-input=false", "-no-color"); err != nil {
+		// Module installation only; the dev override serves the provider.
+		_ = output
+	}
+	if output, err := h.run(ctx, "apply", "-auto-approve", "-input=false", "-no-color"); err != nil {
+		return TeardownEvidence{}, fmt.Errorf(
+			"%s worker-app module apply: %w\n%s", h.identity.Product, err, output)
+	}
+
+	// The aggregate is live and serving. The sampler runs across the destroy
+	// PLAN and the address read rather than across a single request, so "it was
+	// serving" is an observation over the window immediately before the
+	// teardown — and the plan being computable at all is half of what a destroy
+	// needs.
+	stop, err := h.startReadinessSamplerFor(ctx, workerName)
+	if err != nil {
+		return TeardownEvidence{}, err
+	}
+	planOutput, planErr := h.run(ctx, "plan", "-destroy", "-input=false", "-no-color")
+	url, outputErr := h.output(ctx, moduleInstanceLabel(workerName)+"_url")
+	ready, notReady := stop()
+	if planErr != nil {
+		return TeardownEvidence{}, fmt.Errorf(
+			"%s worker-app module destroy plan: %w\n%s", h.identity.Product, planErr, planOutput)
+	}
+	if outputErr != nil {
+		return TeardownEvidence{}, outputErr
+	}
+	if !strings.HasPrefix(url, "https://") {
+		return TeardownEvidence{}, fmt.Errorf(
+			"the aggregate about to be destroyed publishes no host-assigned https address, got %q", url)
+	}
+	built := storedAddresses(h.store.SnapshotResources())
+
+	// Everything from here is the destroy alone.
+	h.host.Reset()
+	if output, err := h.run(ctx, "destroy", "-auto-approve", "-input=false", "-no-color"); err != nil {
+		return TeardownEvidence{}, fmt.Errorf(
+			"%s worker-app module destroy: %w\n%s", h.identity.Product, err, output)
+	}
+	return TeardownEvidence{
+		Built:           built,
+		Mutations:       h.host.Mutations(),
+		ReadySamples:    ready,
+		NotReadySamples: notReady,
+		LeftBehind:      storedAddresses(h.store.SnapshotResources()),
+	}, nil
+}
+
+// storedAddresses renders a store snapshot as stable `Kind/name` text. The
+// space is omitted because every resource this harness creates lives in one.
+func storedAddresses(snapshot []portableconformancev3.ResourceAddress) []string {
+	out := make([]string, 0, len(snapshot))
+	for _, address := range snapshot {
+		out = append(out, address.Kind+"/"+address.Name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // runTwoOwners proves that two independent owners of byte-identical build

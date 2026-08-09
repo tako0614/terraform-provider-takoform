@@ -316,8 +316,8 @@ func TestDeleteOfBoundTargetFailsDependencyInUse(t *testing.T) {
 	target := contract.APIPath + "/resources/" +
 		groupSegments(kvRef.APIVersion) + "/" + kvRef.Kind + "/edge-kv-probe?" + query.Encode()
 	status, body := hostRequest(t, server, http.MethodDelete, target, map[string]string{
-		"If-Match":        `"1"`,
-		"Idempotency-Key": "key-bound-delete",
+		expectedGenerationHeader: "1",
+		"Idempotency-Key":        "key-bound-delete",
 	}, nil)
 	if status != http.StatusConflict || !strings.Contains(string(body), "dependency_in_use") {
 		t.Fatalf("bound delete = %d %s, want 409 dependency_in_use", status, strings.TrimSpace(string(body)))
@@ -331,8 +331,8 @@ func TestDeleteOfBoundTargetFailsDependencyInUse(t *testing.T) {
 		referencePrimaryAuth.scope("conformance"), versionRef.APIVersion, versionRef.Kind, "worker-version-probe",
 	))
 	deleteStatus, _ := hostRequest(t, server, http.MethodDelete, target, map[string]string{
-		"If-Match":        `"1"`,
-		"Idempotency-Key": "key-unbound-delete",
+		expectedGenerationHeader: "1",
+		"Idempotency-Key":        "key-unbound-delete",
 	}, nil)
 	if deleteStatus != http.StatusNoContent {
 		t.Fatalf("unbound delete = HTTP %d, want 204", deleteStatus)
@@ -544,8 +544,10 @@ func TestAcceptedApplyBindsTheIncarnationItWasAcceptedFor(t *testing.T) {
 	}
 }
 
-// TestStaleRevisionDeleteRejected proves the If-Match revision fence over
-// real HTTP.
+// TestStaleRevisionDeleteRejected proves the OPTIONAL If-Match revision fence
+// over real HTTP: a delete carrying the required generation fence and a stale
+// representation fence is refused, so a client that asks about the
+// representation it read is answered rather than ignored.
 func TestStaleRevisionDeleteRejected(t *testing.T) {
 	host, contract := fallbackHost(t)
 	kvRef := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef
@@ -565,8 +567,9 @@ func TestStaleRevisionDeleteRejected(t *testing.T) {
 	target := contract.APIPath + "/resources/" +
 		groupSegments(kvRef.APIVersion) + "/" + kvRef.Kind + "/edge-kv-probe?" + query.Encode()
 	status, body := hostRequest(t, server, http.MethodDelete, target, map[string]string{
-		"If-Match":        `"3"`,
-		"Idempotency-Key": "key-stale-delete",
+		expectedGenerationHeader: "1",
+		"If-Match":               `"3"`,
+		"Idempotency-Key":        "key-stale-delete",
 	}, nil)
 	if status != http.StatusPreconditionFailed || !strings.Contains(string(body), "revision_conflict") {
 		t.Fatalf("stale delete = %d %s, want 412 revision_conflict", status, strings.TrimSpace(string(body)))
