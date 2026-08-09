@@ -7,7 +7,7 @@ description: |-
 
 # takoform_module_worker
 
-Long-lived logical identity of one ES Module Worker application. The Form fixes the ES Module Worker ABI by identity, and states it exactly: the runtime contract worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, the fetch, scheduled, queue, and tail handler signatures, the binding environment, ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that exact digest; a runtime that behaves differently is a different contract version and a different Form version, never a compatibility date. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.
+Long-lived logical identity of one ES Module Worker application. The Form fixes the ES Module Worker ABI by identity, and states it exactly: the runtime contract worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, the fetch, scheduled, and queue handler signatures, the binding environment, ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that exact digest; a runtime that behaves differently is a different contract version and a different Form version, never a compatibility date. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 

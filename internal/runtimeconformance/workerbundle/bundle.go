@@ -21,7 +21,7 @@ import (
 // HandlerVocabulary is the closed handler vocabulary of the ABI: the
 // `declaredHandlers` enum of `worker.runtime@1.0.0`'s loadModule operation,
 // which is the single source of truth for it.
-var HandlerVocabulary = []string{"fetch", "scheduled", "queue", "tail"}
+var HandlerVocabulary = []string{"fetch", "scheduled", "queue"}
 
 // LoadableMediaTypes is the closed set of module media types
 // `worker.runtime@1.0.0` loads. Anything else fails `unsupported_media_type` —
@@ -103,6 +103,16 @@ type Binding struct {
 // Deployment describes the one worker a runtime conformance run is measured
 // against: which bundle runs, which handlers the version declares, and exactly
 // what the ABI must project into `env`.
+//
+// Peer is the SECOND worker a `worker.service` binding addresses. The binding
+// projects a call to ANOTHER Module Worker, so a run that measured it against
+// the worker itself would measure a short circuit rather than the projection;
+// the peer is therefore its own deployment, running its OWN bundle and
+// declaring `fetch` and nothing else. Its bundle is not the caller's, because a
+// peer running the caller's bytes is observationally the caller: the peer's
+// module carries an identity (PeerIdentityBinding) that the caller's does not,
+// and the answer a service call returns is credited only when it is stamped
+// with it. A deployment with no `worker.service` binding carries no peer.
 type Deployment struct {
 	Bundle           Bundle
 	DeclaredHandlers []string
@@ -111,6 +121,7 @@ type Deployment struct {
 	Bindings         []Binding
 	Cron             string
 	Queue            string
+	Peer             *Deployment
 }
 
 // EnvironmentPropertyNames is the complete set of own enumerable `env`
@@ -190,6 +201,62 @@ func DeriveExportedHandlers(source []byte, vocabulary []string) ([]string, error
 		}
 	}
 	return handlers, nil
+}
+
+// PeerIdentityBinding is the top-level constant a corpus module declares to
+// say which worker it is. It is read out of module BYTES, the way the exported
+// handler set is, because that is the only source a worker's answer can come
+// from: a host that dispatches a `worker.service` call to the wrong worker —
+// most cheaply, back into the caller — runs bytes that do not carry the
+// callee's identity and cannot stamp it on what it returns.
+const PeerIdentityBinding = "PEER_IDENTITY"
+
+// DerivePeerIdentity reads the module's own bytes and reports the identity its
+// top-level PEER_IDENTITY binding declares, if it declares one. A module with
+// no such binding has no identity to stamp, which is the ordinary case: only a
+// callee needs to be distinguishable from whoever might have answered for it.
+//
+// It is the same reference derivation DeriveExportedHandlers is, held to the
+// same rule: what it cannot read statically it does not guess at. A binding
+// that is not a plain string literal is reported as ErrModuleSyntax rather than
+// silently treated as absent, because an identity nobody can read is
+// indistinguishable from an identity nobody has.
+func DerivePeerIdentity(source []byte) (string, error) {
+	code, inString, err := sanitize(source)
+	if err != nil {
+		return "", err
+	}
+	for _, keyword := range []string{"const", "let", "var"} {
+		at := findToken(code, inString, keyword, 0)
+		for at >= 0 {
+			cursor := skipSpace(code, at+len(keyword))
+			name, end := readIdentifier(code, cursor)
+			if name != PeerIdentityBinding {
+				at = findToken(code, inString, keyword, at+1)
+				continue
+			}
+			cursor = skipSpace(code, end)
+			if cursor >= len(code) || code[cursor] != '=' {
+				return "", fmt.Errorf("%w: %s is not bound to a value", ErrModuleSyntax, PeerIdentityBinding)
+			}
+			cursor = skipSpace(code, cursor+1)
+			if cursor >= len(code) || (code[cursor] != '"' && code[cursor] != '\'') {
+				return "", fmt.Errorf(
+					"%w: %s is not bound to a string literal", ErrModuleSyntax, PeerIdentityBinding)
+			}
+			quote := code[cursor]
+			start := cursor + 1
+			finish := start
+			for finish < len(code) && !(code[finish] == quote && !inString[finish]) {
+				finish++
+			}
+			if finish >= len(code) {
+				return "", fmt.Errorf("%w: %s is truncated", ErrModuleSyntax, PeerIdentityBinding)
+			}
+			return string(code[start:finish]), nil
+		}
+	}
+	return "", nil
 }
 
 // sanitize replaces comment bytes with spaces and returns a mask marking every

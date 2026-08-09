@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/tako0614/terraform-provider-takoform/internal/runtimeconformance/fakeruntime"
@@ -73,9 +74,9 @@ func runCheck(ctx context.Context, contract Contract, target *target, check Chec
 	case ProcedureKVRoundTrip:
 		observed, err = runKVRoundTrip(ctx, contract, target, check)
 	case ProcedureRequestStream:
-		observed, err = runRequestStream(ctx, target, check)
+		observed, err = runRequestStream(ctx, contract, target, check)
 	case ProcedureResponseStream:
-		observed, err = runResponseStream(ctx, target, check)
+		observed, err = runResponseStream(ctx, contract, target, check)
 	case ProcedureWaitUntil:
 		observed, err = runWaitUntil(ctx, contract, target, check)
 	case ProcedureScheduledObservation:
@@ -314,10 +315,49 @@ type requestResult struct {
 	err      error
 }
 
+// calleeIdentity is the identity an answer must carry to count for this check.
+//
+// It is empty for a check that measures the worker itself, and the peer's own
+// byte-carried identity for one that crosses the `worker.service` binding. The
+// runner reads it from the corpus and the peer stamps it from its module bytes,
+// so the only way an observation can carry it is for the peer to have produced
+// it: a host that short-circuits the call into the caller's own handler runs
+// bytes that do not contain the string.
+func calleeIdentity(contract Contract, check Check) string {
+	if check.ThroughBinding == "" || contract.Deployment.Peer == nil {
+		return ""
+	}
+	return contract.Deployment.Peer.Identity
+}
+
+// verifyCalleeIdentity refuses an observation the callee did not produce.
+func verifyCalleeIdentity(identity string, observed streamObservation, line []byte) error {
+	if identity == "" || observed.Peer == identity {
+		return nil
+	}
+	if observed.Peer == "" {
+		return fmt.Errorf(
+			"an observation arrived with no callee identity where the peer's %q was due: %s; "+
+				"the caller's own bundle carries no identity, so this answer is one the caller produced "+
+				"rather than one the worker.service binding dispatched",
+			identity, line)
+	}
+	return fmt.Errorf(
+		"an observation names callee %q where the peer's %q was due: %s; the call reached a worker that is not "+
+			"the one the binding addresses",
+		observed.Peer, identity, line)
+}
+
 // runRequestStream proves the request body is not buffered. The runner sends
 // the first chunk, requires the worker to account for ALL of it BEFORE the
 // second chunk exists, and only then sends the second. A host that waits for
 // the whole body cannot produce that ordering.
+//
+// The body it sends declares NO length: it is written as it is produced, which
+// is exactly the case `worker.service`'s nullable contentLength exists to
+// spell. A host that demands an exact count before invoking the callee has only
+// one way to obtain one, and it is the way this check fails — no response head
+// arrives, because the body has not ended.
 //
 // What the check does not require is that read boundaries mirror write
 // boundaries. A ReadableStream read is not a transport frame, so a conforming
@@ -326,7 +366,8 @@ type requestResult struct {
 // it has actually sent. The property proven is unchanged — every byte counted
 // below was answered for while the second chunk existed nowhere but in this
 // function.
-func runRequestStream(ctx context.Context, target *target, check Check) (string, error) {
+func runRequestStream(ctx context.Context, contract Contract, target *target, check Check) (string, error) {
+	identity := calleeIdentity(contract, check)
 	sizes := check.Timing.RequestChunkSize
 	deadline := time.Duration(check.Timing.DeadlineSeconds) * time.Second
 	pipeReader, pipeWriter := io.Pipe()
@@ -373,7 +414,7 @@ func runRequestStream(ctx context.Context, target *target, check Check) (string,
 		return "status=" + strconv.Itoa(response.StatusCode), errors.New("the worker refused the streamed request")
 	}
 	lines := newLineReader(response.Body)
-	reads, err := awaitChunkAccounted(ctx, lines, deadline, 0, sizes[0])
+	reads, err := awaitChunkAccounted(ctx, lines, deadline, 0, sizes[0], identity)
 	if err != nil {
 		_ = pipeWriter.Close()
 		return fmt.Sprintf("reads=%d", reads), fmt.Errorf("the first request chunk was not answered: %w", err)
@@ -388,10 +429,13 @@ func runRequestStream(ctx context.Context, target *target, check Check) (string,
 		_ = pipeWriter.CloseWithError(err)
 		return "", err
 	}
-	total, err := awaitChunkAccounted(ctx, lines, deadline, reads, sizes[1])
+	total, err := awaitChunkAccounted(ctx, lines, deadline, reads, sizes[1], identity)
 	_ = pipeWriter.Close()
 	if err != nil {
 		return fmt.Sprintf("reads=%d", total), fmt.Errorf("the second request chunk was not answered: %w", err)
+	}
+	if identity != "" {
+		return fmt.Sprintf("firstChunkAnsweredBeforeSecondSent=true reads=%d callee=%s", total, identity), nil
 	}
 	return fmt.Sprintf("firstChunkAnsweredBeforeSecondSent=true reads=%d", total), nil
 }
@@ -428,12 +472,13 @@ func discardResult(results <-chan requestResult) {
 // awaitChunkAccounted reads incremental observations until the worker has
 // accounted for `sent` further bytes, and reports the read count it reached.
 //
-// It accepts any split of those bytes across reads and rejects three things: an
-// observation that arrives out of order, one that reports no bytes, and one
-// that pushes the total past what the client has actually written — the last
-// being an answer that cannot have come from the bytes this check sent.
+// It accepts any split of those bytes across reads and rejects four things: an
+// observation that arrives out of order, one that reports no bytes, one that
+// pushes the total past what the client has actually written — an answer that
+// cannot have come from the bytes this check sent — and, when the check crosses
+// a binding, one that does not carry the callee's own identity.
 func awaitChunkAccounted(
-	ctx context.Context, lines *lineReader, deadline time.Duration, reads, sent int,
+	ctx context.Context, lines *lineReader, deadline time.Duration, reads, sent int, identity string,
 ) (int, error) {
 	accounted := 0
 	for accounted < sent {
@@ -444,6 +489,9 @@ func awaitChunkAccounted(
 		}
 		observed, err := decodeStreamRead(line)
 		if err != nil {
+			return reads, err
+		}
+		if err := verifyCalleeIdentity(identity, observed, line); err != nil {
 			return reads, err
 		}
 		reads++
@@ -465,7 +513,18 @@ func awaitChunkAccounted(
 
 // runResponseStream proves the response body is produced incrementally: two
 // chunks the module separates in time must arrive separated in time.
-func runResponseStream(ctx context.Context, target *target, check Check) (string, error) {
+//
+// It also holds the response HEAD to what the body then does. A body generated
+// as it is written has no byte count at the head, which is why
+// `worker.service`'s contentLength is nullable in that direction; the two ways a
+// host can refuse to say so are both refused here. One is to BUFFER the body to
+// learn a count, which delivers chunks the producer separated in time all at
+// once and fails the gap below. The other is to INVENT one, which the drain
+// after the last chunk catches: a head that declared an exact length is held to
+// delivering exactly that many bytes, and a length nobody could have known at
+// the head is a length nobody may state there.
+func runResponseStream(ctx context.Context, contract Contract, target *target, check Check) (string, error) {
+	identity := calleeIdentity(contract, check)
 	path := fmt.Sprintf("%s?chunks=%d&gapMillis=%d",
 		check.Request.Path, check.Timing.Chunks, check.Timing.GapMillis)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target.worker+path, nil)
@@ -483,11 +542,23 @@ func runResponseStream(ctx context.Context, target *target, check Check) (string
 	if response.StatusCode != http.StatusOK {
 		return "status=" + strconv.Itoa(response.StatusCode), errors.New("the worker refused the streamed response")
 	}
+	// The head's own claim about the body's size: a byte count when the host
+	// declared one, and -1 when it declared none, which is what a body of
+	// unknown length looks like on the wire.
+	declared := response.ContentLength
 	lines := newLineReader(response.Body)
 	deadline := time.Duration(check.Timing.DeadlineSeconds) * time.Second
 	arrivals := make([]time.Time, 0, check.Timing.Chunks)
 	for chunk := 0; chunk < check.Timing.Chunks; chunk++ {
-		if _, err := lines.next(ctx, deadline); err != nil {
+		line, err := lines.next(ctx, deadline)
+		if err != nil {
+			return fmt.Sprintf("chunksRead=%d declaredContentLength=%d", chunk, declared), err
+		}
+		observed, err := decodeStreamRead(line)
+		if err != nil {
+			return fmt.Sprintf("chunksRead=%d", chunk), err
+		}
+		if err := verifyCalleeIdentity(identity, observed, line); err != nil {
 			return fmt.Sprintf("chunksRead=%d", chunk), err
 		}
 		arrivals = append(arrivals, time.Now())
@@ -499,11 +570,56 @@ func runResponseStream(ctx context.Context, target *target, check Check) (string
 	for index := 1; index < len(arrivals); index++ {
 		gap := arrivals[index].Sub(arrivals[index-1])
 		if gap < threshold {
-			return fmt.Sprintf("gap=%s", gap),
-				fmt.Errorf("chunk %d arrived %s after chunk %d; the body was buffered", index+1, gap, index)
+			return fmt.Sprintf("gap=%s declaredContentLength=%d", gap, declared),
+				fmt.Errorf(
+					"chunk %d arrived %s after chunk %d; the body was buffered, which is what a host does "+
+						"whether it is decoupling the two streams or reading the body to learn a length for a head "+
+						"the contract lets it leave unknown",
+					index+1, gap, index)
 		}
 	}
-	return fmt.Sprintf("chunks=%d minimumGap=%s", len(arrivals), threshold), nil
+	if err := verifyDeclaredLength(ctx, lines, deadline, declared); err != nil {
+		return fmt.Sprintf("declaredContentLength=%d deliveredBytes=%d", declared, lines.consumed()), err
+	}
+	return fmt.Sprintf("chunks=%d minimumGap=%s declaredContentLength=%d deliveredBytes=%d%s",
+		len(arrivals), threshold, declared, lines.consumed(), calleeSuffix(identity)), nil
+}
+
+func calleeSuffix(identity string) string {
+	if identity == "" {
+		return ""
+	}
+	return " callee=" + identity
+}
+
+// verifyDeclaredLength reads the body to its end and holds the head to it.
+//
+// A head that declared no length promised nothing about the count, and the
+// stream simply ends. A head that declared one promised exactly that many
+// bytes: fewer is the abort `worker.service` names response_aborted, and there
+// is no third outcome in which a host states a number and delivers a different
+// one. A count the host could only have obtained by buffering the body is
+// refused a step earlier, by the gap.
+func verifyDeclaredLength(ctx context.Context, lines *lineReader, deadline time.Duration, declared int64) error {
+	delivered, err := lines.awaitEnd(ctx, deadline)
+	if err != nil {
+		if declared < 0 {
+			return fmt.Errorf("the response body never reached a clean end of stream: %w", err)
+		}
+		return fmt.Errorf(
+			"the response head declared contentLength %d and the body errored after %d bytes (%w); a declared "+
+				"count is a promise the bytes keep, and a host that cannot know the count when it answers the head "+
+				"states an unknown length rather than inventing one",
+			declared, delivered, err)
+	}
+	if declared >= 0 && delivered != declared {
+		return fmt.Errorf(
+			"the response head declared contentLength %d and the body delivered %d; a declared count is a promise "+
+				"the bytes keep, and a host that cannot know the count when it answers the head states an unknown "+
+				"length rather than inventing one",
+			declared, delivered)
+	}
+	return nil
 }
 
 // runWaitUntil proves both halves of the operation at once: a rejected task
@@ -748,17 +864,40 @@ func closeBody(response *http.Response) {
 	}
 }
 
+// countingReader counts the body bytes a stream actually delivered, which is
+// the half of a length claim the head does not get to state.
+type countingReader struct {
+	inner io.Reader
+	count atomic.Int64
+}
+
+func (c *countingReader) Read(buffer []byte) (int, error) {
+	read, err := c.inner.Read(buffer)
+	c.count.Add(int64(read))
+	return read, err
+}
+
 // lineReader reads newline-delimited observations from a streaming body
-// without letting a stalled runtime stall the whole run.
+// without letting a stalled runtime stall the whole run, and counts every byte
+// it consumed so the body can be held to what the head declared.
 type lineReader struct {
-	lines chan []byte
-	fail  chan error
+	lines  chan []byte
+	closed chan struct{}
+	body   *countingReader
+
+	// terminal is how the stream ended: io.EOF for a body that finished, and
+	// the transport's own error for one that did not. It is written before
+	// closed is closed and read only after, so the close is the barrier.
+	terminal error
 }
 
 func newLineReader(body io.Reader) *lineReader {
-	reader := &lineReader{lines: make(chan []byte, 8), fail: make(chan error, 1)}
+	counted := &countingReader{inner: body}
+	reader := &lineReader{
+		lines: make(chan []byte, 8), closed: make(chan struct{}), body: counted,
+	}
 	go func() {
-		scanner := bufio.NewScanner(body)
+		scanner := bufio.NewScanner(counted)
 		scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
 		for scanner.Scan() {
 			line := append([]byte(nil), scanner.Bytes()...)
@@ -767,23 +906,42 @@ func newLineReader(body io.Reader) *lineReader {
 			}
 			reader.lines <- line
 		}
-		if err := scanner.Err(); err != nil {
-			reader.fail <- err
-			return
+		reader.terminal = scanner.Err()
+		if reader.terminal == nil {
+			reader.terminal = io.EOF
 		}
-		reader.fail <- io.EOF
+		close(reader.closed)
 	}()
 	return reader
 }
 
+// consumed is how many body bytes the stream delivered so far.
+func (l *lineReader) consumed() int64 { return l.body.count.Load() }
+
 func (l *lineReader) next(ctx context.Context, deadline time.Duration) ([]byte, error) {
+	// A line already in hand beats the terminal signal. The scanner goroutine
+	// reaches end of stream before a caller has drained what it queued, so a
+	// plain select over both channels reports EOF at random while observations
+	// are still waiting — which happens exactly when a whole body arrived at
+	// once, and turns "the body was buffered" into "EOF" in the report of the
+	// check that exists to say so.
+	select {
+	case line := <-l.lines:
+		return line, nil
+	default:
+	}
 	timer := time.NewTimer(deadline)
 	defer timer.Stop()
 	select {
 	case line := <-l.lines:
 		return line, nil
-	case err := <-l.fail:
-		return nil, err
+	case <-l.closed:
+		select {
+		case line := <-l.lines:
+			return line, nil
+		default:
+		}
+		return nil, l.terminal
 	case <-timer.C:
 		return nil, fmt.Errorf("no streamed observation arrived within %s", deadline)
 	case <-ctx.Done():
@@ -791,15 +949,40 @@ func (l *lineReader) next(ctx context.Context, deadline time.Duration) ([]byte, 
 	}
 }
 
-type streamRead struct {
-	Read  int `json:"read"`
-	Bytes int `json:"bytes"`
+// awaitEnd drains whatever is left and reports how many body bytes arrived in
+// total. A clean end of stream is not an error here; anything else is the
+// transport failure that ended the body early.
+func (l *lineReader) awaitEnd(ctx context.Context, deadline time.Duration) (int64, error) {
+	timer := time.NewTimer(deadline)
+	defer timer.Stop()
+	for {
+		select {
+		case <-l.lines:
+		case <-l.closed:
+			if errors.Is(l.terminal, io.EOF) {
+				return l.consumed(), nil
+			}
+			return l.consumed(), l.terminal
+		case <-timer.C:
+			return l.consumed(), fmt.Errorf("the response body did not end within %s", deadline)
+		case <-ctx.Done():
+			return l.consumed(), ctx.Err()
+		}
+	}
 }
 
-func decodeStreamRead(line []byte) (streamRead, error) {
-	var decoded streamRead
+// streamObservation is the part of a streamed line every procedure reads: what
+// the worker accounted for, and WHICH worker accounted for it.
+type streamObservation struct {
+	Read  int    `json:"read"`
+	Bytes int    `json:"bytes"`
+	Peer  string `json:"peer"`
+}
+
+func decodeStreamRead(line []byte) (streamObservation, error) {
+	var decoded streamObservation
 	if err := json.Unmarshal(line, &decoded); err != nil {
-		return streamRead{}, fmt.Errorf("streamed observation is not decodable: %w", err)
+		return streamObservation{}, fmt.Errorf("streamed observation is not decodable: %w", err)
 	}
 	return decoded, nil
 }

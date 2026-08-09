@@ -46,6 +46,31 @@ toward `maxRetries`, what the attempt count was after a dead-letter transfer, or
 whether one queue could have two consumers. Every one of those is a thing two
 conforming hosts could answer differently.
 
+**`worker.service` contradicted its own binding.** The Interface declared both
+the request body and the response body as JSON strings, while the
+`module-worker.service` Binding Definition that projects it said the call
+streams request to response in both directions and buffers neither. Both cannot
+be true, and the one that has to go is the JSON string: buffering a body into a
+document member is the exact defect this decision exists to correct, one order
+of magnitude down from the 5 GiB object body. The contract was also silent on
+everything a caller can observe about a stream — whether an absent body differs
+from an empty one, when either stream starts, what backpressure does, what
+cancelling does, what a truncation looks like on each side of the response head,
+what the portable floors are, what a callee exception produces, and what a call
+that never happened produces. Each of those is a thing two conforming hosts
+could answer differently.
+
+The first correction of it reintroduced the same defect through the member that
+was meant to describe the fix. It replaced the JSON strings with `bodyStream`
+and a REQUIRED exact `contentLength` in both directions, while also stating that
+the call completes at the response HEAD. A body generated as it is written has
+no byte count at the head, so a host held to both sentences had two ways out and
+both were wrong: buffer the body to learn a count — the defect the streaming
+model exists to prevent — or state a number nothing keeps. The corpus's own
+`/abi/stream` probe is such a body, and its request-stream probe already sent
+one from the caller's side, so the contract could not describe the traffic the
+lane measuring it was sending.
+
 **The cron grammar rejected the schedules the Form exists for.** The enforced
 pattern was five single-value fields, so `* * * * *`, `0 * * * *`, and
 `*/5 * * * *` were all refused and the most frequent representable schedule was
@@ -113,6 +138,98 @@ missing, and a listing truncating at the requested limit. A trace declaring
 *i* mod 256, so every trace is byte-for-byte reproducible. Multipart assembly is
 a host obligation: its steps depend on part etags the host mints during the
 trace, which a static trace cannot carry.
+
+### `worker.service` streams, and says everything a caller can observe
+
+Request and response bodies are STREAMS. The operation document carries
+`bodyStream` and `contentLength` in each direction and no bytes at all, exactly
+as `edge.objects` does; the bytes travel beside it. That alone would leave the
+same holes the old contract had, so the whole observable surface is stated:
+
+- **An absent body is not an empty one, and neither is a body of unknown
+  length.** `bodyStream: false` means there is no body and the callee's
+  `request.body` is null; `bodyStream: true` means a body exists. Both members
+  are REQUIRED in both directions, because a boolean a document may omit is the
+  ambiguity the rule closes rather than a shorthand for it — and `contentLength`
+  is NULLABLE, because a required exact count would have undone the streaming
+  model in one member.
+
+  The first version of this contract demanded an integer. The call completes at
+  the response HEAD, so a body generated as it is written has no byte count
+  when the head is answered, and a host asked for one there could only buffer
+  the body to learn it — the defect this section exists to prevent — or invent
+  a number. The request direction is not a lesser case of the same problem, it
+  is the same problem: a caller streaming a body it is still producing stands
+  exactly where the callee does, and the runtime corpus's own request-stream
+  probe already sends such a body, so under a required count the corpus could
+  not have described the traffic it was sending. So `contentLength` is nullable
+  in BOTH directions.
+
+  That leaves three states and no way for one to collapse into another.
+  `bodyStream: false` with `contentLength: 0` is no body. `bodyStream: true`
+  with `contentLength: 0` is a body that is present and ends immediately.
+  `bodyStream: true` with `contentLength: null` is a body that is present and
+  whose length the writer does not have. `null` is not a spelling of zero and
+  zero is not a spelling of unknown; a body that does not exist has no unknown
+  length to state, so `bodyStream: false` pairs with `0` and nothing else.
+- **A declared count is a promise, and an undeclared one promises nothing.** A
+  host MUST NOT read a body to compute a count and MUST NOT replace `null` with
+  one it computed. When `contentLength` is an integer and the stream delivers a
+  different number of bytes — fewer, or more than declared — the receiving side
+  observes an ERRORED body, reported as `request_aborted` or `response_aborted`
+  by which side of the response head it fell on. A host never rewrites the head
+  to match the bytes and never truncates the bytes to make them agree with the
+  head: silence there would let two conforming hosts answer a disagreement
+  differently, which is the whole failure this decision exists to correct.
+  Under `null` there is no count to disagree with — end of stream is the end of
+  the body, and only a transport failure is an abort.
+- **When each stream starts.** The callee is invoked as soon as the request head
+  has arrived, before any body byte is read; the call completes as soon as the
+  response head has arrived, before any response byte is read. Neither side
+  waits for the other's end of stream.
+- **Backpressure** reaches the writer from the reader, and a host MUST NOT read
+  a whole body to decouple them — which is the same sentence as the first rule
+  and the reason a runner can measure it.
+- **Cancellation** propagates: a caller cancelling the response cancels the
+  callee's response stream, a callee cancelling the request fails the caller's
+  remaining writes, and neither is a host fault or a retryable one.
+- **The two aborts are different observable outcomes**, because they fall on
+  different sides of the response head. `request_aborted` is a request stream
+  that ended short, and the callee MAY still answer with a status;
+  `response_aborted` is a response stream that ended short AFTER the status was
+  delivered, and the status is never retroactively rewritten. A caller can
+  therefore tell a truncated answer from an unanswered call.
+- **The limits are FLOORS.** `maxRequestHeaders`, `maxRequestHeaderBytes`,
+  `maxRequestBytes` and their response counterparts are the portable minimum
+  every conforming host accepts, never a host's ceiling; exceeding what the host
+  accepts is `request_too_large`, refused before the callee is invoked.
+- **A callee exception is a complete response.** An uncaught throw is a
+  host-generated 500 with a status, headers, and a terminated body, and the
+  operation SUCCEEDS with it — never a hung call and never a truncated
+  connection with no status.
+- **A call that never happened is not a 500.** When the call could not be
+  dispatched at all there is no status, and the operation fails
+  `backend_unavailable`. The binding already projected that difference as
+  resolve versus reject; now the Interface is what says so.
+
+Nothing here mints a schema identity: the members are ordinary schema members —
+`contentLength` widens to `["integer", "null"]`, which the published Interface
+Definition meta-schema admits as it admits any nested schema — and the rest is
+normative prose in the descriptions, with two rules carried as fixtures because
+a trace is the only place they can be stated as facts rather than as sentences
+(decision 0014): a callee that throws resolving with a 500, and a caller
+declaring a request body whose length it does not have. The second could not
+have been written at all under the required count, which is the shortest
+statement of what was wrong with it.
+
+`edge.objects` keeps its exact counts, and the difference is not oversight. An
+object store's `put` is a write of a known object, its `get` answers about
+bytes the store already holds, and a body whose length the writer does not know
+has a portable path there that `worker.service` does not have: multipart
+upload, whose parts are each of known length. The disagreement rule is stated
+there too — a `put` whose stream does not deliver exactly `contentLength` bytes
+fails `invalid_body` having stored nothing — so neither half of this correction
+is missing from that contract.
 
 ### `edge.sql` values are tagged by storage class
 
@@ -189,6 +306,31 @@ host diagnostics, not retried within the matched minute.
   `cron-grammar-enforced`, and `queue-single-consumer-enforced` — bringing the
   closed list to 79. They are exactly what a black-box Host API runner can
   prove; everything else these contracts state is listed as a host obligation.
+- `worker.service`'s streaming model is measured where it can be measured, which
+  is not the Host API lane: `conformance/runtime-abi-v1` gains
+  `service-request-body-streams-to-the-callee` and
+  `service-response-body-streams-from-the-callee`. They are the two direct
+  streaming observations taken one worker further along, through the
+  `module-worker.service` binding into a SECOND worker running the same corpus
+  bundle, and they observe separation in TIME rather than in framing — the
+  request side requires the callee to account for the first chunk while the
+  second exists nowhere but in the runner, and the response side requires
+  arrivals separated by at least half the gap the callee declared. A peer worker
+  rather than a self-binding, because the binding addresses ANOTHER Module
+  Worker and a self-call lets a host answer from its own handler without
+  dispatching anything — and the peer runs its OWN bundle carrying its own
+  identity, because a peer running the caller's bytes is a self-call nobody can
+  detect ([decision 0023](0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
+  The corpus pins `worker.service@1.0.0` by digest beside the runtime ABI's, so
+  a contract that reverted to buffered bodies would fail the corpus rather than
+  leave two checks asserting a model nothing declares.
+- The nullable count is measured rather than described. The response-stream
+  procedure of `conformance/runtime-abi-v1` reads the body to its end and holds
+  the response head to it: a host that declared an exact length delivers exactly
+  that many bytes, and a host that bought a length by reading the whole body
+  first fails the separation the same procedure already required. Between them
+  a host is left with the answer the contract asks for — state the count when
+  you have one, state unknown when you do not, and never buy one by buffering.
 - The catalog gains an authoring-time proof for EVERY Interface, not only the
   runtime ABI: operation names are unique and well formed, fixtures exercise
   declared operations, and a fixture expecting a failure names an error that
@@ -221,6 +363,53 @@ host diagnostics, not retried within the matched minute.
 - **JSON-string object bodies.** Rejected because the object ceiling is 5 GiB.
   Either the body model or the ceiling had to go, and shrinking an object store
   to what fits in a JSON string makes it not an object store.
+- **Keep `worker.service` bodies as JSON strings and correct the binding
+  instead.** Rejected because the binding was the half that was right. A
+  worker-to-worker call is the cheapest call an application makes and the one it
+  makes on every request; a projection that buffered both bodies would make a
+  100 MiB proxy hop allocate 100 MiB twice and would remove streaming from every
+  application built out of two workers rather than one. It would also have made
+  the family inconsistent with itself, since `edge.objects` streams for the same
+  reason at a larger size.
+- **Require an exact `contentLength` in both directions.** Rejected because the
+  contract already says the call completes at the response head, and the two
+  statements cannot both hold: a body generated as it is written has no count
+  there. A host held to both would buffer the body to learn a number — which is
+  the defect the whole streaming model exists to prevent, reintroduced by the
+  member meant to describe it — or invent one, which makes the head a claim
+  nothing keeps. The corpus's own `/abi/stream` probe is exactly such a body.
+- **Spell unknown as `contentLength: 0` and let `bodyStream` carry the rest.**
+  Rejected because those two members had just been given the job of separating
+  an absent body from an empty one: `bodyStream: true` with `contentLength: 0`
+  already
+  means a present body that ends immediately. Overloading it a second time
+  would make a host unable to tell an empty body from an unbounded one until
+  the bytes stopped, which is the collapse the rule above forbids in the same
+  breath.
+- **Spell unknown as `-1`.** Rejected because a sentinel inside the value space
+  is a value every reader must be told about separately: `minimum: 0` would
+  have to go, so the schema would stop bounding the member at all, and any
+  consumer that added the two directions or compared against a limit would be
+  arithmetic on a magic number. `null` is absence in the type system rather
+  than a number that means absence.
+- **Make `contentLength` optional and let omission mean unknown.** Rejected for
+  the reason both members are required in the first place: a document that may
+  omit a member cannot distinguish "unknown" from "the producer forgot", and
+  the two rules would then disagree — one saying omission is meaningful, the
+  other saying an omitted `bodyStream` is the ambiguity being closed.
+- **Say a declared count and the delivered bytes disagreeing is
+  implementation-defined.** Rejected because it is the same class of hole as
+  every other one this decision closes. One host would truncate to the declared
+  count, another would deliver the extra bytes, a third would rewrite the head;
+  an author could not write against any of them, and a conformance run could
+  not fail a host over a behaviour nothing states.
+- **State the streaming model and leave the observable details to hosts.**
+  Rejected because each unstated detail is a portability hole with a plausible
+  reading on both sides: a host may decide an empty body is no body, that a
+  stream starts at end of request, that cancellation is silent, or that a
+  truncated response is a 500. An author cannot write against a contract that
+  has not decided those, and a conformance run cannot fail a host over a
+  behaviour nothing states.
 - **Narrow `edge.objects` to a small-text store and rename it.** Rejected
   because decision 0008 names the strongly consistent object bucket as one of
   the family's proven service shapes; narrowing it would remove the shape rather

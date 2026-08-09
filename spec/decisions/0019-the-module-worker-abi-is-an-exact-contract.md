@@ -69,9 +69,6 @@ data:
 - **`queue`** — `queue(batch, env, ctx) -> void | Promise<void>`; the batch
   carries the queue name and ordered messages with `id`, `timestamp`, `body`,
   and `attempts`.
-- **`tail`** — `tail(events, env, ctx)`; each event carries `scriptName`,
-  `outcome`, `eventTimestamp`, `logs`, and `exceptions`, and a failed tail
-  handler never fails the invocation it observed.
 - **`environment`** — `env`'s own enumerable properties are exactly the union of
   the version's `vars` keys, `requiredSensitiveVars` names, and binding names,
   and nothing else portable; a sensitive-variable slot appears as its
@@ -139,6 +136,43 @@ bundle whose first module is evidence rather than code
 ([decision 0014](0014-published-schemas-are-structural-minima.md), and
 [decision 0012](0012-artifacts-use-content-addressed-upload.md) for the
 manifest side).
+
+### `tail` is removed, and every declared handler is measured
+
+The vocabulary above no longer contains `tail`. It was declared, and nothing in
+the Edge Platform Family could activate it: the inward-activation attachments
+are `WorkerCustomDomain` (`fetch`), `WorkerCronTrigger` (`scheduled`),
+`QueueConsumer` (`queue`), and `WorkerEndpoint` (`fetch`). No portable
+deployment could cause a host to invoke it, so no run could observe it and two
+hosts could implement it differently with nothing able to detect the
+divergence — which is the `compatibilityDate` defect in a different member.
+[Decision 0023](0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)
+recorded the removal as the recommended fix and deferred it on sequencing,
+because the Interface bytes are the input to the generated Form chain; this is
+that change. Blocker **V3-011** closes with it.
+
+Adding a `WorkerTailConsumer` instead would have made the handler observable and
+is the wrong move now: it widens the family by a Form nothing else asks for, and
+it decides the trace model — what an event carries, what sampling means, what a
+failed consumer does to the traced invocation — inside a change whose subject is
+the ABI. **`tail` returns together with the attachment that makes it observable
+and a NEW exact `worker.runtime` version, never as a bare handler.** Under the
+rule this decision already states, a runtime revision IS a new exact contract
+version, so re-adding it is a version bump with a new digest every consumer
+sees, not a quiet widening.
+
+What replaces the handler is a property: **every handler the ABI declares is
+measured.** That is a claim worth nothing as prose, so the runtime corpus
+ENFORCES it. Its loader refuses a corpus in which a member of
+`handlerVocabulary` — which is read out of this contract's own
+`declaredHandlers` enum — has no check whose `operation` names it, and an
+`unmeasured` entry does not discharge one, because recording a handler as
+unmeasured is exactly what the corpus did for `tail`. Widening the enum without
+measuring the addition therefore fails corpus verification by name rather than
+waiting for review. The `unmeasured` mechanism itself stays: the load lane still
+reports itself unmeasured when an operator supplies no module-loader adapter,
+and a future surface that genuinely cannot be observed can still say so — what
+it can no longer do is stand in for a handler.
 
 ### `compatibilityDate` and `compatibilityFlags` are removed
 
@@ -238,6 +272,19 @@ contract's behavior fixtures against a real runtime.
 - `WorkerVersion` loses its only `date-string` field. The authoring model keeps
   the kind, because it describes a shape a future Form may legitimately need;
   what it must never again describe is a runtime selector.
+- The handler vocabulary is three, not four. `WorkerVersion`'s `handlers` enum,
+  the runtime corpus's `handlerVocabulary`, the Host Support Profile a host
+  advertises, and the reference module every positive control is driven against
+  all follow from the one declaration, so none of them had to be edited twice —
+  and the corpus's own reference module stopped exporting a handler the ABI no
+  longer defines, because a module claiming an export the contract does not
+  declare is refused at load.
+- `conformance/runtime-abi-v1` goes from seventeen checks to eighteen: `tail`'s
+  unmeasured entry leaves, and two worker-to-worker streaming checks arrive
+  ([decision 0020](0020-the-edge-interfaces-state-their-data-and-delivery-model.md)).
+  Its self-test is now `complete` rather than `partial` whenever the load lane is
+  measured, which is the observable difference between a matrix with a hole in it
+  and one without.
 
 ## Rejected alternatives
 

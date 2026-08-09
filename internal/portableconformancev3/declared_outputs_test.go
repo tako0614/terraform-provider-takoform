@@ -310,16 +310,28 @@ func rewriteEndpointOutputs(body []byte, assign func(name string) map[string]any
 	if err := decoder.Decode(&document); err != nil {
 		return nil, false
 	}
-	if kind, _ := document["kind"].(string); kind != workerEndpointKind {
+	// A read answers with the resource document; `observe` answers with it
+	// wrapped in a `resource` envelope. Both are representations of the same
+	// resource, so a host that rewrote one and not the other would be two hosts.
+	resource := document
+	envelope := false
+	if nested, wrapped := document["resource"].(map[string]any); wrapped {
+		resource = nested
+		envelope = true
+	}
+	if kind, _ := resource["kind"].(string); kind != workerEndpointKind {
 		return nil, false
 	}
-	status, _ := document["status"].(map[string]any)
+	status, _ := resource["status"].(map[string]any)
 	if status == nil {
 		return nil, false
 	}
-	metadata, _ := document["metadata"].(map[string]any)
+	metadata, _ := resource["metadata"].(map[string]any)
 	name, _ := metadata["name"].(string)
 	status["outputs"] = assign(name)
+	if envelope {
+		document["resource"] = resource
+	}
 	rewritten, err := json.Marshal(document)
 	if err != nil {
 		return nil, false
