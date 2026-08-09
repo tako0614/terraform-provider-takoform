@@ -14,7 +14,7 @@ provider "takoform" {
 }
 
 resource "takoform_worker_version" "example" {
-  name                    = "worker-version"
+  revision_owner          = "module-worker"
   worker                  = "module-worker"
   bundle                  = "worker-bundle"
   handlers                = ["fetch"]

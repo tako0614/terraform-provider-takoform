@@ -10,7 +10,7 @@ output "worker_ready" {
 
 output "bundle_name" {
   value       = takoform_worker_bundle.this.name
-  description = "Derived name of the current Worker Bundle revision: bundle-<manifest digest prefix>."
+  description = "Derived name of the current Worker Bundle revision: bundle-<manifest digest prefix>-<owner digest prefix>."
 }
 
 output "manifest_digest" {
@@ -20,7 +20,7 @@ output "manifest_digest" {
 
 output "version_name" {
   value       = takoform_worker_version.this.name
-  description = "Derived name of the current Worker Version revision: version-<spec digest prefix>."
+  description = "Derived name of the current Worker Version revision: version-<spec digest prefix>-<owner digest prefix>."
 }
 
 output "deployment_name" {

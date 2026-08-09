@@ -37,6 +37,12 @@ func v3SchemaOf(t *testing.T, candidate frameworkresource.Resource) frameworkres
 	return schemaResponse
 }
 
+// v3TestRevisionOwner is the owner a test declares for a revision whose name
+// the provider derives. Every derived name is a function of content AND owner,
+// so a test that omits the owner is asking the provider to hand one host
+// address to whoever else builds the same bytes.
+const v3TestRevisionOwner = "counter"
+
 func v3PlanWith(t *testing.T, ctx context.Context, schemaResponse frameworkresource.SchemaResponse, values map[string]attr.Value) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}
@@ -346,10 +352,12 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	originalManifest := v3ExpectedManifestDigest(t, "worker.mjs", workerFile, originalBytes)
 
 	// The name is deliberately NOT written: a revision Form derives it from its
-	// own content, so the bundle's identity and its host name move together.
+	// own content and its declared owner, so the bundle's identity and its host
+	// name move together.
 	createPlan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-		"main_module": types.StringValue("worker.mjs"),
-		"modules":     v3BundleModulesValue("worker.mjs", workerFile),
+		"main_module":            types.StringValue("worker.mjs"),
+		"modules":                v3BundleModulesValue("worker.mjs", workerFile),
+		v3RevisionOwnerAttribute: types.StringValue(v3TestRevisionOwner),
 	})
 	createResponse := frameworkresource.CreateResponse{
 		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
@@ -362,7 +370,7 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 		t.Fatalf("created state manifest_digest = %q, want %q", got, originalManifest)
 	}
 	originalName := v3StateString(t, ctx, createResponse.State, "name").ValueString()
-	if want, _ := v3DerivedRevisionName("bundle", originalManifest); originalName != want {
+	if want, _ := v3DerivedRevisionName("bundle", v3TestRevisionOwner, originalManifest); originalName != want {
 		t.Fatalf("created state name = %q, want the derived %q", originalName, want)
 	}
 
@@ -379,9 +387,15 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	// state; without plan-time byte identity this plan would claim no change.
 	proposed := tfsdk.Plan{Schema: schemaResponse.Schema, Raw: createResponse.State.Raw}
 	modifyResponse := frameworkresource.ModifyPlanResponse{Plan: proposed}
+	authored := v3ConfigWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"main_module":            types.StringValue("worker.mjs"),
+		"modules":                v3BundleModulesValue("worker.mjs", workerFile),
+		v3RevisionOwnerAttribute: types.StringValue(v3TestRevisionOwner),
+	})
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
-		State: createResponse.State,
-		Plan:  proposed,
+		State:  createResponse.State,
+		Plan:   proposed,
+		Config: authored,
 	}, &modifyResponse)
 	if modifyResponse.Diagnostics.HasError() {
 		t.Fatalf("modify plan: %v", modifyResponse.Diagnostics)
@@ -416,7 +430,7 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	if diags := modifyResponse.Plan.GetAttribute(ctx, path.Root("name"), &plannedName); diags.HasError() {
 		t.Fatalf("planned name: %v", diags)
 	}
-	wantName, _ := v3DerivedRevisionName("bundle", wantManifestDigest)
+	wantName, _ := v3DerivedRevisionName("bundle", v3TestRevisionOwner, wantManifestDigest)
 	if plannedName.ValueString() != wantName || plannedName.ValueString() == originalName {
 		t.Fatalf("planned name = %q, want the derived %q (prior %q)", plannedName.ValueString(), wantName, originalName)
 	}
@@ -432,8 +446,9 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	unchangedProposed := tfsdk.Plan{Schema: schemaResponse.Schema, Raw: createResponse.State.Raw}
 	unchangedResponse := frameworkresource.ModifyPlanResponse{Plan: unchangedProposed}
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
-		State: createResponse.State,
-		Plan:  unchangedProposed,
+		State:  createResponse.State,
+		Plan:   unchangedProposed,
+		Config: authored,
 	}, &unchangedResponse)
 	if unchangedResponse.Diagnostics.HasError() {
 		t.Fatalf("unchanged modify plan: %v", unchangedResponse.Diagnostics)

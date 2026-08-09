@@ -192,6 +192,49 @@ func v3FieldDocLine(form model.Form, field model.Field) string {
 		name, docType, v3DocRequirement(form, field), doc, v3DocConstraint(field), v3DocDefault(field))
 }
 
+// v3NameArgumentDoc renders the `name` bullet, and — on a revision — the
+// `revision_owner` bullet beside it.
+//
+// A revision's name is not the author's to choose: it is derived from the
+// revision's own CONTENT, so that changed bytes are a new revision beside the
+// old one rather than a replacement of it (spec/decisions/0029). A content
+// digest names the bytes and nothing else, though, and a Terraform address has
+// exactly one owner — so the derivation also takes the owner, and the two
+// arguments have to be documented together or neither is usable.
+func v3NameArgumentDoc(form model.Form) string {
+	if form.Role != model.RoleRevision {
+		return "- `name` (String, required, forces replacement) — Portable resource name (`metadata.name`).\n"
+	}
+	prefix := strings.TrimPrefix(form.Slug, "worker-")
+	if prefix == "" {
+		prefix = form.Slug
+	}
+	return "- `name` (String, optional, computed, forces replacement) — Portable resource name (`metadata.name`). " +
+		"Omit it and set `revision_owner` instead: this Form is an immutable revision, so the provider derives " +
+		"`" + prefix + "-<content digest prefix>-<owner digest prefix>` from this revision's own content and its " +
+		"declared owner. Changed content is then a NEW revision created beside the old one, which is the only way " +
+		"a code change applies at all — a host refuses every update to a revision, and replacing one under a name " +
+		"it still holds completes in neither apply order. Setting it pins the name, which an imported revision " +
+		"needs; the provider then refuses at plan time any change that would replace this revision under it.\n" +
+		"- `revision_owner` (String, optional, forces replacement) — Stable name of whatever owns this revision; " +
+		"the `takoform_module_worker` it belongs to is the usual answer. Required whenever `name` is omitted. " +
+		"Two independent resources built from identical content derive identical content digests, so without an " +
+		"owner they would derive one name and two Terraform resources would manage one host address — where a " +
+		"destroy of either breaks the other. It is provider-side authoring input: no wire member carries it, the " +
+		"host never sees it, and it enters only the derived name. The official " +
+		"[`worker-app` module](https://github.com/tako0614/terraform-provider-takoform/tree/main/modules/worker-app) " +
+		"sets it for you.\n"
+}
+
+// v3RevisionOwnerExample is the owner an example declares for a derived
+// revision name: the Module Worker whose aggregate the revision belongs to.
+func v3RevisionOwnerExample() string {
+	if worker, ok := edgeformcatalog.ByKind("ModuleWorker"); ok {
+		return worker.FixtureName()
+	}
+	return "module-worker"
+}
+
 // v3ResourceDoc renders one family resource reference document.
 func v3ResourceDoc(form model.Form) string {
 	var builder strings.Builder
@@ -214,7 +257,7 @@ description: |-
 		"price, or implementation. See the [complete example](../../examples/resources/" +
 		form.ResourceType + "/resource.tf).\n")
 	builder.WriteString("\n## Arguments\n\n")
-	builder.WriteString("- `name` (String, required, forces replacement) — Portable resource name (`metadata.name`).\n")
+	builder.WriteString(v3NameArgumentDoc(form))
 	if form.Kind == "WorkerBundle" {
 		builder.WriteString("- `manifest_digest` (String, optional, computed, forces replacement) — Immutable digest of the committed artifact manifest this bundle is. It is the whole portable desired state: the manifest, not this resource, describes the modules. Declare exactly one of the two authoring modes — reference a manifest already committed to the host by setting this digest, or leave it unset and author the bundle locally with the two arguments below. Writing it alongside local authoring is accepted only when the authored bytes commit exactly that manifest; a disagreement is refused before any host call.\n")
 		builder.WriteString("- `main_module` (String, optional, forces replacement) — Local authoring only: relative path of the ES module the runtime instantiates first; it must name one declared module. It is not portable desired state; it describes the artifact manifest the provider commits.\n")
@@ -399,7 +442,13 @@ provider "takoform" {
 
 `)
 	fmt.Fprintf(&builder, "resource %q \"example\" {\n", form.ResourceType)
+	// A revision shows the shape an author should write: no `name`, and the
+	// owner the derived name needs beside the content digest. Pinning a name
+	// stays legitimate — an imported revision has one — but it is the exception.
 	scalars := [][2]string{{"name", fmt.Sprintf("%q", form.FixtureName())}}
+	if form.Role == model.RoleRevision {
+		scalars = [][2]string{{"revision_owner", fmt.Sprintf("%q", v3RevisionOwnerExample())}}
+	}
 	var blocks []string
 	if form.Kind == "WorkerBundle" {
 		scalars = append(scalars, [2]string{"main_module", `"worker.mjs"`})

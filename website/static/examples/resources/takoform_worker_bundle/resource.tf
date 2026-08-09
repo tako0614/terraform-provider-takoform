@@ -14,8 +14,8 @@ provider "takoform" {
 }
 
 resource "takoform_worker_bundle" "example" {
-  name        = "worker-bundle"
-  main_module = "worker.mjs"
+  revision_owner = "module-worker"
+  main_module    = "worker.mjs"
 
   modules = [
     {

@@ -2,6 +2,7 @@ package workerauthoring
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -19,15 +20,34 @@ import (
 // host is a disposable reference implementation and the provider is built from
 // the working tree.
 type Report struct {
-	Format           string           `json:"format"`
-	PublicationReady bool             `json:"publicationReady"`
-	CLI              CLIIdentity      `json:"cli"`
-	SameNameDeadlock DeadlockEvidence `json:"sameNameDeadlock"`
-	PlanRefusal      RefusalEvidence  `json:"planRefusal"`
-	RollForward      SequenceEvidence `json:"rollForward"`
-	ModuleDeploy     SequenceEvidence `json:"moduleDeploy"`
-	HostSupport      RefusalEvidence  `json:"hostSupportAtPlan"`
-	Configurations   []string         `json:"validatedConfigurations"`
+	Format             string            `json:"format"`
+	PublicationReady   bool              `json:"publicationReady"`
+	CLI                CLIIdentity       `json:"cli"`
+	SameNameDeadlock   DeadlockEvidence  `json:"sameNameDeadlock"`
+	PlanRefusal        RefusalEvidence   `json:"planRefusal"`
+	RollForward        SequenceEvidence  `json:"rollForward"`
+	ModuleDeploy       SequenceEvidence  `json:"moduleDeploy"`
+	TwoOwners          OwnershipEvidence `json:"twoOwners"`
+	HeterogeneousVars  VarsEvidence      `json:"heterogeneousVars"`
+	ShortestModuleName string            `json:"shortestModuleName"`
+	HostSupport        RefusalEvidence   `json:"hostSupportAtPlan"`
+	Configurations     []string          `json:"validatedConfigurations"`
+}
+
+// OwnershipEvidence records what two independent owners of byte-identical
+// build output derived, and what happened when one of them went away.
+type OwnershipEvidence struct {
+	BundleNames  []string `json:"bundleNames"`
+	VersionNames []string `json:"versionNames"`
+	// HeldOwnerUnmoved reports that moving one owner forward — which deletes
+	// that owner's old bundle and version — left the other owner holding
+	// exactly the revisions it held before, and serving throughout.
+	HeldOwnerUnmoved bool `json:"heldOwnerUnmoved"`
+}
+
+// VarsEvidence records the JSON type each `vars` entry arrived at the host as.
+type VarsEvidence struct {
+	WireTypes map[string]string `json:"wireTypes"`
 }
 
 // ReportFormat identifies the evidence shape.
@@ -92,6 +112,24 @@ func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
 		return Report{}, err
 	}
 	report.ModuleDeploy = moduleDeploy
+
+	twoOwners, err := runTwoOwners(ctx, repoRoot, cliPath)
+	if err != nil {
+		return Report{}, err
+	}
+	report.TwoOwners = twoOwners
+
+	vars, err := runHeterogeneousVars(ctx, repoRoot, cliPath)
+	if err != nil {
+		return Report{}, err
+	}
+	report.HeterogeneousVars = vars
+
+	shortest, err := runShortestName(ctx, repoRoot, cliPath)
+	if err != nil {
+		return Report{}, err
+	}
+	report.ShortestModuleName = shortest
 
 	support, err := runHostSupportAtPlan(ctx, repoRoot, cliPath)
 	if err != nil {
@@ -260,7 +298,7 @@ func runModuleDeploy(ctx context.Context, repoRoot, cliPath string) (SequenceEvi
 	if err := h.writeModuleSource(1); err != nil {
 		return SequenceEvidence{}, err
 	}
-	if err := h.write("main.tf", moduleStack(h.Endpoint(), modulePath, true)); err != nil {
+	if err := h.write("main.tf", defaultModuleStack(h.Endpoint(), modulePath, true)); err != nil {
 		return SequenceEvidence{}, err
 	}
 	if output, err := h.run(ctx, "init", "-backend=false", "-input=false", "-no-color"); err != nil {
@@ -273,7 +311,7 @@ func runModuleDeploy(ctx context.Context, repoRoot, cliPath string) (SequenceEvi
 	if output, err := h.run(ctx, "apply", "-auto-approve", "-input=false", "-no-color"); err != nil {
 		return SequenceEvidence{}, fmt.Errorf("%s worker-app module apply: %w\n%s", h.identity.Product, err, output)
 	}
-	before, err := h.output(ctx, "worker_app_url")
+	before, err := h.output(ctx, moduleInstanceLabel(workerName)+"_url")
 	if err != nil {
 		return SequenceEvidence{}, err
 	}
@@ -284,7 +322,7 @@ func runModuleDeploy(ctx context.Context, repoRoot, cliPath string) (SequenceEvi
 	if err != nil {
 		return SequenceEvidence{}, err
 	}
-	after, err := h.output(ctx, "worker_app_url")
+	after, err := h.output(ctx, moduleInstanceLabel(workerName)+"_url")
 	if err != nil {
 		return SequenceEvidence{}, err
 	}
@@ -294,6 +332,285 @@ func runModuleDeploy(ctx context.Context, repoRoot, cliPath string) (SequenceEvi
 	}
 	evidence.EndpointURLStable = true
 	return evidence, nil
+}
+
+// runTwoOwners proves that two independent owners of byte-identical build
+// output are two independent revisions.
+//
+// Two `worker-app` instances in one space, built from identical output, hold
+// identical content. A digest names the BYTES, and this lane's own rule is that
+// a digest is a name rather than an ownership claim — but a Terraform address
+// has exactly one owner. So the scenario asserts the two facts that follow: the
+// four derived revision names are four distinct names, and moving ONE owner
+// forward — which deletes that owner's old bundle and version — leaves the
+// other owner untouched and serving throughout.
+//
+// The delete is the half that matters. Under a shared name it is refused,
+// because the peer's version still holds the bundle, or it succeeds and takes
+// the peer's revision with it.
+func runTwoOwners(ctx context.Context, repoRoot, cliPath string) (OwnershipEvidence, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+	if err != nil {
+		return OwnershipEvidence{}, err
+	}
+	defer h.Close()
+	modulePath, err := filepath.Abs(filepath.Join(repoRoot, "modules", "worker-app"))
+	if err != nil {
+		return OwnershipEvidence{}, err
+	}
+	owners := []string{workerName, workerName + "-peer"}
+	options := moduleStackOptions{Owners: owners, Endpoint: true}
+	for _, owner := range owners {
+		if err := h.writeModuleSourceIn(options.contentDir(owner), 1); err != nil {
+			return OwnershipEvidence{}, err
+		}
+	}
+	if err := h.write("main.tf", moduleStack(h.Endpoint(), modulePath, options)); err != nil {
+		return OwnershipEvidence{}, err
+	}
+	if _, err := h.run(ctx, "init", "-backend=false", "-input=false", "-no-color"); err != nil {
+		// Module installation is what init is for here; the provider comes from
+		// the dev override and the CLI still reports the unpublished constraint.
+	}
+	if output, err := h.run(ctx, "apply", "-auto-approve", "-input=false", "-no-color"); err != nil {
+		return OwnershipEvidence{}, fmt.Errorf(
+			"%s could not apply two worker-app owners built from identical output: %w\n%s",
+			h.identity.Product, err, output)
+	}
+	evidence := OwnershipEvidence{}
+	names := map[string][2]string{}
+	for _, owner := range owners {
+		label := moduleInstanceLabel(owner)
+		bundle, err := h.output(ctx, label+"_bundle_name")
+		if err != nil {
+			return OwnershipEvidence{}, err
+		}
+		version, err := h.output(ctx, label+"_version_name")
+		if err != nil {
+			return OwnershipEvidence{}, err
+		}
+		names[owner] = [2]string{bundle, version}
+		evidence.BundleNames = append(evidence.BundleNames, bundle)
+		evidence.VersionNames = append(evidence.VersionNames, version)
+	}
+	if err := assertDistinct("WorkerBundle", evidence.BundleNames); err != nil {
+		return OwnershipEvidence{}, err
+	}
+	if err := assertDistinct("WorkerVersion", evidence.VersionNames); err != nil {
+		return OwnershipEvidence{}, err
+	}
+
+	// Move the SECOND owner forward. That apply deletes the second owner's old
+	// bundle and version, while nothing about the first owner changes at all.
+	held := owners[0]
+	sampler, err := h.startReadinessSamplerFor(ctx, held)
+	if err != nil {
+		return OwnershipEvidence{}, err
+	}
+	if err := h.writeModuleSourceIn(options.contentDir(owners[1]), 2); err != nil {
+		return OwnershipEvidence{}, err
+	}
+	output, applyErr := h.run(ctx, "apply", "-auto-approve", "-input=false", "-no-color")
+	ready, notReady := sampler()
+	if applyErr != nil {
+		return OwnershipEvidence{}, fmt.Errorf(
+			"%s could not move one of two owners built from identical output: %w\n%s",
+			h.identity.Product, applyErr, output)
+	}
+	if ready == 0 || notReady != 0 {
+		return OwnershipEvidence{}, fmt.Errorf(
+			"moving one owner stopped the other owner's worker %q from serving: %d of %d observations",
+			held, notReady, ready+notReady)
+	}
+
+	// The untouched owner still holds exactly the revisions it held before.
+	for index, name := range []string{
+		moduleInstanceLabel(held) + "_bundle_name",
+		moduleInstanceLabel(held) + "_version_name",
+	} {
+		current, err := h.output(ctx, name)
+		if err != nil {
+			return OwnershipEvidence{}, err
+		}
+		if current != names[held][index] {
+			return OwnershipEvidence{}, fmt.Errorf(
+				"moving one owner moved the other owner's %s from %q to %q",
+				name, names[held][index], current)
+		}
+	}
+	if serving, err := h.workerReady(ctx, held); err != nil || !serving {
+		return OwnershipEvidence{}, fmt.Errorf(
+			"the untouched owner %q is not serving after the peer moved (%v)", held, err)
+	}
+	evidence.HeldOwnerUnmoved = true
+	return evidence, nil
+}
+
+// assertDistinct refuses a derived-name set in which two owners landed on one
+// host address.
+func assertDistinct(kind string, names []string) error {
+	seen := map[string]bool{}
+	for _, name := range names {
+		if name == "" {
+			return fmt.Errorf("a %s derived no name at all", kind)
+		}
+		if seen[name] {
+			return fmt.Errorf(
+				"two independent owners derived one %s name %q, so two Terraform resources manage one host address: %v",
+				kind, name, names)
+		}
+		seen[name] = true
+	}
+	return nil
+}
+
+// runHeterogeneousVars proves that a `vars` map whose values have three
+// different JSON types reaches the host with those three types intact, THROUGH
+// the official module rather than only through the raw resource.
+//
+// The Form admits any bounded JSON value, so `true` must arrive as a JSON
+// boolean and `3` as a JSON number. A module input typed as a collection with
+// one inferred element type cannot carry that: the values unify — usually to
+// strings — before anything encodes them.
+func runHeterogeneousVars(ctx context.Context, repoRoot, cliPath string) (VarsEvidence, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+	if err != nil {
+		return VarsEvidence{}, err
+	}
+	defer h.Close()
+	modulePath, err := filepath.Abs(filepath.Join(repoRoot, "modules", "worker-app"))
+	if err != nil {
+		return VarsEvidence{}, err
+	}
+	if err := h.writeModuleSource(1); err != nil {
+		return VarsEvidence{}, err
+	}
+	stack := moduleStack(h.Endpoint(), modulePath, moduleStackOptions{Vars: heterogeneousVars})
+	if err := h.write("main.tf", stack); err != nil {
+		return VarsEvidence{}, err
+	}
+	if _, err := h.run(ctx, "init", "-backend=false", "-input=false", "-no-color"); err != nil {
+		// See runModuleDeploy: init installs the local module only.
+	}
+	if output, err := h.run(ctx, "apply", "-auto-approve", "-input=false", "-no-color"); err != nil {
+		return VarsEvidence{}, fmt.Errorf("%s heterogeneous vars apply: %w\n%s", h.identity.Product, err, output)
+	}
+	versionName, err := h.output(ctx, moduleInstanceLabel(workerName)+"_version_name")
+	if err != nil {
+		return VarsEvidence{}, err
+	}
+	client, err := h.client(ctx)
+	if err != nil {
+		return VarsEvidence{}, err
+	}
+	ref, err := edgeFormRef("WorkerVersion")
+	if err != nil {
+		return VarsEvidence{}, err
+	}
+	stored, err := client.GetResource(ctx, harnessSpace, clientFormRef3(ref), versionName)
+	if err != nil {
+		return VarsEvidence{}, fmt.Errorf("read the applied WorkerVersion %q: %w", versionName, err)
+	}
+	vars, ok := stored.Spec["vars"].(map[string]any)
+	if !ok {
+		return VarsEvidence{}, fmt.Errorf("the host stored no vars object for %q: %v", versionName, stored.Spec["vars"])
+	}
+	evidence := VarsEvidence{WireTypes: map[string]string{}}
+	for name, value := range vars {
+		evidence.WireTypes[name] = jsonTypeName(value)
+	}
+	want := map[string]string{"enabled": "boolean", "retries": "number", "label": "string"}
+	for name, wanted := range want {
+		if got := evidence.WireTypes[name]; got != wanted {
+			return VarsEvidence{}, fmt.Errorf(
+				"the module sent vars.%s to the host as a JSON %s, want %s (whole object: %v)",
+				name, got, wanted, vars)
+		}
+	}
+	return evidence, nil
+}
+
+// jsonTypeName names the JSON type one decoded value arrived as.
+func jsonTypeName(value any) string {
+	switch value.(type) {
+	case bool:
+		return "boolean"
+	// The v1alpha3 client decodes with UseNumber, so a JSON number arrives as
+	// json.Number rather than float64. Both are the same JSON type.
+	case json.Number, float64:
+		return "number"
+	case string:
+		return "string"
+	case nil:
+		return "null"
+	case []any:
+		return "array"
+	case map[string]any:
+		return "object"
+	}
+	return fmt.Sprintf("%T", value)
+}
+
+// runShortestName proves the official module accepts every name the portable
+// grammar admits, including the shortest one.
+//
+// `^[a-z][a-z0-9-]{0,62}$` admits a single letter. A module that demands a
+// second terminal character rejects a name `takoform_module_worker` accepts,
+// and sends the author back to the raw resources for no reason at all.
+func runShortestName(ctx context.Context, repoRoot, cliPath string) (string, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+	if err != nil {
+		return "", err
+	}
+	defer h.Close()
+	modulePath, err := filepath.Abs(filepath.Join(repoRoot, "modules", "worker-app"))
+	if err != nil {
+		return "", err
+	}
+	if err := h.writeModuleSource(1); err != nil {
+		return "", err
+	}
+	stack := moduleStack(h.Endpoint(), modulePath, moduleStackOptions{Owners: []string{shortestPortableName}})
+	if err := h.write("main.tf", stack); err != nil {
+		return "", err
+	}
+	if _, err := h.run(ctx, "init", "-backend=false", "-input=false", "-no-color"); err != nil {
+		// See runModuleDeploy: init installs the local module only.
+	}
+	if output, err := h.run(ctx, "apply", "-auto-approve", "-input=false", "-no-color"); err != nil {
+		return "", fmt.Errorf(
+			"%s refused the shortest name the portable grammar admits through the official module: %w\n%s",
+			h.identity.Product, err, output)
+	}
+	applied, err := h.output(ctx, moduleInstanceLabel(shortestPortableName)+"_worker_name")
+	if err != nil {
+		return "", err
+	}
+	if applied != shortestPortableName {
+		return "", fmt.Errorf("the module applied the worker as %q, want %q", applied, shortestPortableName)
+	}
+	return applied, nil
+}
+
+// shortestPortableName is the shortest name `^[a-z][a-z0-9-]{0,62}$` admits.
+const shortestPortableName = "a"
+
+// workerReady reports whether one Module Worker is serving right now.
+func (h *harness) workerReady(ctx context.Context, name string) (bool, error) {
+	client, err := h.client(ctx)
+	if err != nil {
+		return false, err
+	}
+	ref, err := edgeFormRef("ModuleWorker")
+	if err != nil {
+		return false, err
+	}
+	res, err := client.GetResource(ctx, harnessSpace, clientFormRef3(ref), name)
+	if err != nil {
+		return false, fmt.Errorf("read the ModuleWorker %q: %w", name, err)
+	}
+	condition := clientv3.ResourceCondition(res, "Ready")
+	return condition != nil && condition.Status == "True", nil
 }
 
 // rollForward performs one code change and measures both properties the change
@@ -385,6 +702,12 @@ const workerDeploymentKind = "WorkerDeployment"
 // (spec/decisions/0016) — so an observation of Ready=False during the apply is
 // exactly the window the roll-forward must not have.
 func (h *harness) startReadinessSampler(ctx context.Context) (func() (int, int), error) {
+	return h.startReadinessSamplerFor(ctx, workerName)
+}
+
+// startReadinessSamplerFor observes one named Module Worker, which is what a
+// scenario with more than one worker in the stack needs.
+func (h *harness) startReadinessSamplerFor(ctx context.Context, name string) (func() (int, int), error) {
 	client, err := h.client(ctx)
 	if err != nil {
 		return nil, err
@@ -410,7 +733,7 @@ func (h *harness) startReadinessSampler(ctx context.Context) (func() (int, int),
 				return
 			case <-ticker.C:
 			}
-			res, err := client.GetResource(sampleCtx, harnessSpace, clientFormRef3(ref), workerName)
+			res, err := client.GetResource(sampleCtx, harnessSpace, clientFormRef3(ref), name)
 			if err != nil {
 				// A cancelled sample is the harness shutting down, not a fact
 				// about the worker.

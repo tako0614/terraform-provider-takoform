@@ -20,8 +20,8 @@ module "worker_app" {
 | Resource                     | Role       | Named by                                   |
 | ---------------------------- | ---------- | ------------------------------------------ |
 | `takoform_module_worker`     | identity   | `var.name` — stable across every deploy    |
-| `takoform_worker_bundle`     | revision   | derived `bundle-<manifest digest prefix>`  |
-| `takoform_worker_version`    | revision   | derived `version-<spec digest prefix>`     |
+| `takoform_worker_bundle`     | revision   | derived `bundle-<manifest digest prefix>-<owner digest prefix>` |
+| `takoform_worker_version`    | revision   | derived `version-<spec digest prefix>-<owner digest prefix>` |
 | `takoform_worker_deployment` | deployment | `<name>-deployment` — updated, never replaced |
 | `takoform_worker_endpoint`   | attachment | `<name>-endpoint`, when `endpoint = true`  |
 
@@ -39,8 +39,18 @@ pins, that replacement completes in neither order —
 
 So the module writes no `name` on either revision. The provider derives one from
 the revision's own content, and changed bytes are therefore a different resource
-rather than a replacement of the same one. Both revisions additionally declare
-`create_before_destroy`, which is what orders the apply as
+rather than a replacement of the same one.
+
+A derived name also has to say WHOSE revision it is. A content digest names the
+bytes, and two instances of this module built from identical output hold
+identical bytes — so a name derived from content alone would hand one host
+address to two Terraform resources, and the first destroy would break the other
+one. The module therefore sets `revision_owner = var.name` on both revisions.
+That is what `var.name` is for beyond the worker's own identity, and it is why
+the name you choose has to stay distinct inside a space.
+
+Both revisions additionally declare `create_before_destroy`, which is what
+orders the apply as
 
 ```
 create bundle-<new> → create version-<new> → re-weight the deployment
@@ -53,7 +63,10 @@ the worker has no active deployment.
 ## Secrets
 
 `vars` is portable desired state and is persisted in Terraform state. Put no
-secret value in it. `required_sensitive_vars` carries only the NAMES of secret
+secret value in it. Its values keep their own JSON types — `{ enabled = true,
+retries = 3, label = "prod" }` reaches the worker as a boolean, a number, and a
+string — so the variable is typed `any` rather than as a collection with one
+inferred element type. `required_sensitive_vars` carries only the NAMES of secret
 slots the worker requires; the values are host-owned and never enter desired
 state.
 

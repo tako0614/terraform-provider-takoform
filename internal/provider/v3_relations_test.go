@@ -218,10 +218,8 @@ func TestV3ReadOfBrokenRelationKeepsStateAndPlansReplacement(t *testing.T) {
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
 		State: readResponse.State,
 		Plan:  proposed,
-		Config: tfsdk.Config{
-			Schema: schemaResponse.Schema,
-			Raw:    v3EmptyRaw(t, ctx, schemaResponse),
-		},
+		// The configuration is what the author wrote, and it pins the name.
+		Config: v3ConfigWith(t, ctx, schemaResponse, configured),
 	}, &modifyResponse)
 	if modifyResponse.Diagnostics.HasError() {
 		t.Fatalf("plan: %v", modifyResponse.Diagnostics)

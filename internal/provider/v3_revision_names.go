@@ -63,6 +63,20 @@ import (
 // `If-None-Match: *` create fence rather than overwriting anything.
 const v3RevisionNameDigestLength = 12
 
+// v3RevisionOwnerDigestLength is how much of the owner digest the derived name
+// carries, and it is the same width for the same reasons.
+//
+// The owner travels as a DIGEST rather than as a literal prefix so the derived
+// name has a fixed width. A literal owner would make the longest legal owner
+// name derive a revision name past the 63-character portable grammar, and the
+// only way to keep that inside the grammar would be to refuse owner names the
+// provider itself accepts — which is precisely the module-narrows-the-provider
+// defect this same review found elsewhere.
+const v3RevisionOwnerDigestLength = 12
+
+// v3RevisionOwnerAttribute is the attribute naming who owns a derived revision.
+const v3RevisionOwnerAttribute = "revision_owner"
+
 // derivesRevisionName reports whether this Form's host name is a function of
 // its content. It is exactly the revision role: an identity Form's name is the
 // author's chosen, stable handle, a deployment's and an attachment's names are
@@ -82,16 +96,26 @@ func v3RevisionNamePrefix(form model.Form) string {
 	return prefix
 }
 
-// v3DerivedRevisionName renders one derived name from a content digest. The
-// digest is the canonical `sha256:<hex>` spelling every content address in this
-// lane uses; anything else is refused rather than truncated into a name that
-// looks derived and is not.
-func v3DerivedRevisionName(prefix, digest string) (string, bool) {
+// v3DerivedRevisionName renders one derived name from a content digest and the
+// owner that declares this revision.
+//
+// The digest is the canonical `sha256:<hex>` spelling every content address in
+// this lane uses; anything else is refused rather than truncated into a name
+// that looks derived and is not. The owner is folded in as a digest of its own,
+// so a name states BOTH facts a Terraform address needs: which bytes this
+// revision is, and whose revision it is. Changing the bytes still changes the
+// name — the content half is untouched — and two owners of byte-identical
+// output no longer land on one host address.
+func v3DerivedRevisionName(prefix, owner, digest string) (string, bool) {
 	hexDigest, found := strings.CutPrefix(digest, "sha256:")
-	if !found || len(hexDigest) < v3RevisionNameDigestLength {
+	if !found || len(hexDigest) < v3RevisionNameDigestLength || owner == "" {
 		return "", false
 	}
-	return prefix + "-" + hexDigest[:v3RevisionNameDigestLength], true
+	ownerSum := sha256.Sum256([]byte(owner))
+	ownerHex := hex.EncodeToString(ownerSum[:])
+	return prefix + "-" +
+		hexDigest[:v3RevisionNameDigestLength] + "-" +
+		ownerHex[:v3RevisionOwnerDigestLength], true
 }
 
 // v3ContentDigest is the content address one revision's name is derived from.
@@ -115,13 +139,13 @@ func v3ContentDigest(kind string, spec map[string]any) (string, bool) {
 }
 
 // v3RevisionNameFromSpec derives the host name of one revision from its
-// resolved desired spec.
-func (r *v3FormResource) v3RevisionNameFromSpec(spec map[string]any) (string, bool) {
+// resolved desired spec and its declared owner.
+func (r *v3FormResource) v3RevisionNameFromSpec(spec map[string]any, owner string) (string, bool) {
 	digest, ok := v3ContentDigest(r.form.Kind, spec)
 	if !ok {
 		return "", false
 	}
-	return v3DerivedRevisionName(v3RevisionNamePrefix(r.form), digest)
+	return v3DerivedRevisionName(v3RevisionNamePrefix(r.form), owner, digest)
 }
 
 // v3EnsureRevisionName supplies the derived name at APPLY time for a revision
@@ -141,7 +165,12 @@ func (r *v3FormResource) v3EnsureRevisionName(values *v3Values, spec map[string]
 		}.error())
 		return false
 	}
-	derived, ok := r.v3RevisionNameFromSpec(spec)
+	owner, owned := v3PlanKnownString(values.RevisionOwner)
+	if !owned {
+		diags.Append(r.v3RevisionOwnerMissing())
+		return false
+	}
+	derived, ok := r.v3RevisionNameFromSpec(spec, owner)
 	if !ok {
 		diags.Append(v3Diagnostic{
 			Summary:      "Cannot derive the " + r.form.Kind + " revision name",
@@ -158,6 +187,32 @@ func (r *v3FormResource) v3EnsureRevisionName(values *v3Values, spec map[string]
 	return true
 }
 
+// v3RevisionOwnerMissing is the refusal to derive a name that states only the
+// bytes.
+//
+// A content digest names the BYTES. It is a name, not an ownership claim, and
+// two configurations built from identical output hold identical bytes — so a
+// name derived from content alone hands one host address to two Terraform
+// resources. Terraform requires exactly one owner per address, and no owner is
+// recoverable from the content, from the space, or from the resource address
+// (the framework never shows a provider its own address). It therefore has to
+// be DECLARED, and the provider refuses to derive a name without it rather than
+// minting one that two owners can both reach.
+func (r *v3FormResource) v3RevisionOwnerMissing() diag.Diagnostic {
+	return v3Diagnostic{
+		Summary:      "Deriving this " + r.form.Kind + " name needs to know whose revision it is.",
+		ResourceType: r.form.ResourceType,
+		Pointer:      "/metadata/name",
+		Code:         v3CodeRevisionOwnerMissing,
+		Detail: "A derived revision name is a function of this revision's CONTENT, and two independent " +
+			"resources built from identical content derive identical names. A Terraform address has exactly " +
+			"one owner, so the derivation also needs the owner, and nothing in the content says who that is.",
+		Repair: "Set `" + v3RevisionOwnerAttribute + "` to the stable name of whatever owns this revision — " +
+			"the `takoform_module_worker` it belongs to is the usual answer — or pin `name` yourself. The " +
+			"official `worker-app` module sets it for you.",
+	}.error()
+}
+
 // v3PlanRevisionName writes the derived name into the plan.
 //
 // It runs after the bundle's own plan step, so a locally authored bundle's
@@ -172,23 +227,45 @@ func (r *v3FormResource) v3PlanRevisionName(
 	}
 	// A configured name belongs to the author. The provider does not overwrite
 	// it, and the safety check below is what protects it.
-	var configured types.String
+	var configured, configuredOwner types.String
 	if req.Config.Schema != nil && !req.Config.Raw.IsNull() {
 		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("name"), &configured)...)
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root(v3RevisionOwnerAttribute), &configuredOwner)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
 	if !configured.IsNull() {
+		// A pinned name settles the whole question, so an owner beside it decides
+		// nothing. Accepting both silently would leave an author believing the
+		// owner separates two revisions when the pinned name is what collides.
+		if !configuredOwner.IsNull() {
+			resp.Diagnostics.Append(v3Diagnostic{
+				Summary:      "A pinned " + r.form.Kind + " name leaves `" + v3RevisionOwnerAttribute + "` with nothing to decide.",
+				ResourceType: r.form.ResourceType,
+				Name:         configured.ValueString(),
+				Pointer:      "/metadata/name",
+				Code:         v3CodeRevisionOwnerIgnored,
+				Detail: "`" + v3RevisionOwnerAttribute + "` distinguishes two owners of identical content when the " +
+					"provider DERIVES the name. This resource pins `name`, so the derivation never runs and the " +
+					"owner has no effect on anything.",
+				Repair: "Remove `" + v3RevisionOwnerAttribute + "`, or remove `name` and let the provider derive it.",
+			}.error())
+		}
+		return
+	}
+	if configuredOwner.IsNull() {
+		resp.Diagnostics.Append(r.v3RevisionOwnerMissing())
 		return
 	}
 	spec, resolved := r.v3PlannedSpec(ctx, resp)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	owner, owned := v3PlanKnownString(configuredOwner)
 	var derived types.String
-	if resolved {
-		name, ok := r.v3RevisionNameFromSpec(spec)
+	if resolved && owned {
+		name, ok := r.v3RevisionNameFromSpec(spec, owner)
 		if !ok {
 			return
 		}

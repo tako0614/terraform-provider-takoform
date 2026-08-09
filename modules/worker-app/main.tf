@@ -12,9 +12,14 @@
 # Two mechanisms carry that, and both are load-bearing:
 #
 #   - the revisions carry NO `name`. The provider derives
-#     `bundle-<manifest digest prefix>` and `version-<spec digest prefix>` from
-#     the revision's own content, so changed bytes are a different resource
-#     rather than a replacement of the same one.
+#     `bundle-<manifest digest prefix>-<owner digest prefix>` and
+#     `version-<spec digest prefix>-<owner digest prefix>` from the revision's
+#     own content and its declared owner, so changed bytes are a different
+#     resource rather than a replacement of the same one. The owner is this
+#     module's `name`, which is the one name an author chooses and is already
+#     unique in the space: without it two instances of this module built from
+#     identical output would derive one name, and two Terraform resources would
+#     manage one host address.
 #   - the revisions declare `create_before_destroy`. Terraform's default order
 #     destroys first, and the destroy is refused with `dependency_in_use` (409)
 #     while the Worker Version still executes the bundle and the Worker
@@ -50,10 +55,12 @@ resource "takoform_module_worker" "this" {
 }
 
 resource "takoform_worker_bundle" "this" {
-  # No name: the provider derives bundle-<manifest digest prefix>.
-  space       = var.space
-  main_module = var.main_module
-  modules     = local.modules
+  # No name: the provider derives bundle-<manifest digest prefix>-<owner digest
+  # prefix>, and this module owns it.
+  revision_owner = var.name
+  space          = var.space
+  main_module    = var.main_module
+  modules        = local.modules
 
   create_timeout = var.create_timeout
   delete_timeout = var.delete_timeout
@@ -64,11 +71,13 @@ resource "takoform_worker_bundle" "this" {
 }
 
 resource "takoform_worker_version" "this" {
-  # No name: the provider derives version-<spec digest prefix>.
-  space    = var.space
-  worker   = takoform_module_worker.this.name
-  bundle   = takoform_worker_bundle.this.name
-  handlers = var.handlers
+  # No name: the provider derives version-<spec digest prefix>-<owner digest
+  # prefix>, and this module owns it.
+  revision_owner = var.name
+  space          = var.space
+  worker         = takoform_module_worker.this.name
+  bundle         = takoform_worker_bundle.this.name
+  handlers       = var.handlers
 
   vars_json               = length(var.vars) > 0 ? jsonencode(var.vars) : null
   required_sensitive_vars = var.required_sensitive_vars

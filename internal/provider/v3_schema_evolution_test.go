@@ -432,17 +432,17 @@ func TestV3DerivedRevisionNamesAreDeterministicAndDistinct(t *testing.T) {
 	bundle := &v3FormResource{form: mustForm(t, "WorkerBundle"), codecs: v3Codecs()}
 	version := &v3FormResource{form: mustForm(t, "WorkerVersion"), codecs: v3Codecs()}
 	digest := "sha256:" + strings.Repeat("ab", 32)
-	first, ok := bundle.v3RevisionNameFromSpec(map[string]any{"manifestDigest": digest})
+	first, ok := bundle.v3RevisionNameFromSpec(map[string]any{"manifestDigest": digest}, v3TestRevisionOwner)
 	if !ok || !strings.HasPrefix(first, "bundle-") {
 		t.Fatalf("bundle derived %q, want a bundle- name", first)
 	}
-	again, _ := bundle.v3RevisionNameFromSpec(map[string]any{"manifestDigest": digest})
+	again, _ := bundle.v3RevisionNameFromSpec(map[string]any{"manifestDigest": digest}, v3TestRevisionOwner)
 	if again != first {
 		t.Fatalf("the same content derived %q then %q", first, again)
 	}
 	other, _ := bundle.v3RevisionNameFromSpec(map[string]any{
 		"manifestDigest": "sha256:" + strings.Repeat("cd", 32),
-	})
+	}, v3TestRevisionOwner)
 	if other == first {
 		t.Fatalf("different content derived the same name %q", first)
 	}
@@ -451,7 +451,7 @@ func TestV3DerivedRevisionNamesAreDeterministicAndDistinct(t *testing.T) {
 		"bundle":   map[string]any{"apiVersion": edgeformcatalog.Family.APIVersion(), "kind": "WorkerBundle", "name": first},
 		"handlers": []string{"fetch"},
 	}
-	versionName, ok := version.v3RevisionNameFromSpec(spec)
+	versionName, ok := version.v3RevisionNameFromSpec(spec, v3TestRevisionOwner)
 	if !ok || !strings.HasPrefix(versionName, "version-") {
 		t.Fatalf("version derived %q, want a version- name", versionName)
 	}
@@ -462,9 +462,44 @@ func TestV3DerivedRevisionNamesAreDeterministicAndDistinct(t *testing.T) {
 		}
 	}
 	spec["handlers"] = []string{"fetch", "scheduled"}
-	moved, _ := version.v3RevisionNameFromSpec(spec)
+	moved, _ := version.v3RevisionNameFromSpec(spec, v3TestRevisionOwner)
 	if moved == versionName {
 		t.Fatalf("a changed desired spec derived the same version name %q", versionName)
+	}
+	spec["handlers"] = []string{"fetch"}
+
+	// A second owner of byte-identical content is a second owner. Both kinds
+	// have to separate them: a Terraform address has exactly one owner, and a
+	// content digest names the bytes rather than who declared them.
+	peer := "counter-peer"
+	peerBundle, ok := bundle.v3RevisionNameFromSpec(map[string]any{"manifestDigest": digest}, peer)
+	if !ok || peerBundle == first {
+		t.Fatalf("two owners derived one WorkerBundle name %q from identical content", first)
+	}
+	peerVersion, ok := version.v3RevisionNameFromSpec(spec, peer)
+	if !ok || peerVersion == versionName {
+		t.Fatalf("two owners derived one WorkerVersion name %q from an identical spec", versionName)
+	}
+	for _, name := range []string{peerBundle, peerVersion} {
+		if !portable.MatchString(name) {
+			t.Fatalf("derived name %q is not a portable resource name", name)
+		}
+	}
+	// A derived name is still a function of the content: the owner is folded in
+	// beside the content digest, never over it.
+	if !strings.HasPrefix(peerBundle, "bundle-"+strings.TrimPrefix(digest, "sha256:")[:v3RevisionNameDigestLength]+"-") {
+		t.Fatalf("the owner overwrote the content half of %q", peerBundle)
+	}
+	// No owner, no derived name. The provider refuses rather than minting one
+	// two owners can both reach.
+	if _, ok := bundle.v3RevisionNameFromSpec(map[string]any{"manifestDigest": digest}, ""); ok {
+		t.Fatal("a revision name was derived without an owner")
+	}
+	// The longest owner the provider accepts still derives a portable name.
+	longest, ok := bundle.v3RevisionNameFromSpec(
+		map[string]any{"manifestDigest": digest}, strings.Repeat("z", model.ResourceNameMaxLength))
+	if !ok || !portable.MatchString(longest) {
+		t.Fatalf("the longest owner derived %q, which is not a portable resource name", longest)
 	}
 }
 

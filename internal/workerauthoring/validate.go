@@ -64,6 +64,10 @@ func ValidateMatrix(matrix MatrixReport) error {
 	if !reflect.DeepEqual(first.Configurations, second.Configurations) {
 		return errors.New("OpenTofu and Terraform validated different configurations")
 	}
+	if !reflect.DeepEqual(first.TwoOwners, second.TwoOwners) ||
+		!reflect.DeepEqual(first.HeterogeneousVars, second.HeterogeneousVars) {
+		return errors.New("OpenTofu and Terraform derived different owner names or vars types")
+	}
 	return nil
 }
 
@@ -107,6 +111,29 @@ func Validate(report Report) error {
 	}
 	if !report.ModuleDeploy.EndpointURLStable {
 		return errors.New("the host-assigned endpoint address did not survive the code change")
+	}
+	// Two owners of byte-identical build output are two owners. A digest names
+	// the bytes; it is not an ownership claim, and a Terraform address has
+	// exactly one owner.
+	if err := assertDistinct("WorkerBundle", report.TwoOwners.BundleNames); err != nil {
+		return err
+	}
+	if err := assertDistinct("WorkerVersion", report.TwoOwners.VersionNames); err != nil {
+		return err
+	}
+	if len(report.TwoOwners.BundleNames) != 2 || len(report.TwoOwners.VersionNames) != 2 {
+		return errors.New("the two-owner scenario did not measure two owners")
+	}
+	if !report.TwoOwners.HeldOwnerUnmoved {
+		return errors.New("moving one owner disturbed the other owner's revisions")
+	}
+	for name, wanted := range map[string]string{"enabled": "boolean", "retries": "number", "label": "string"} {
+		if got := report.HeterogeneousVars.WireTypes[name]; got != wanted {
+			return fmt.Errorf("the module sent vars.%s to the host as a JSON %s, want %s", name, got, wanted)
+		}
+	}
+	if report.ShortestModuleName != shortestPortableName {
+		return fmt.Errorf("the official module did not accept the shortest portable name %q", shortestPortableName)
 	}
 	if len(report.Configurations) == 0 {
 		return errors.New("no configuration was validated")

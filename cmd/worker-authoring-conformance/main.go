@@ -64,10 +64,15 @@ func main() {
 		}
 		return
 	}
+	first := matrix.Reports[0]
 	fmt.Printf(
 		"verified non-publishable worker authoring evidence: %d CLIs, %d validated configurations, "+
-			"same-name replacement refused at plan, roll-forward serves throughout\n",
-		len(matrix.Reports), len(matrix.Reports[0].Configurations),
+			"same-name replacement refused at plan, roll-forward serves throughout "+
+			"(%d Ready samples, %d not ready), two owners of identical output hold %d distinct revisions, "+
+			"heterogeneous vars keep their JSON types\n",
+		len(matrix.Reports), len(first.Configurations),
+		first.ModuleDeploy.ReadySamples, first.ModuleDeploy.NotReadySamples,
+		len(first.TwoOwners.BundleNames)+len(first.TwoOwners.VersionNames),
 	)
 }
 

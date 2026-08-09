@@ -98,6 +98,11 @@ func (r *v3FormResource) writeV3StateFrom(
 	// every write, so an apply that re-pinned the reference clears the recovery
 	// signal by the same rule that set it.
 	diags.Append(state.SetAttribute(ctx, path.Root(v3RelationDriftAttribute), v3RelationDriftState(res))...)
+	// The owner is authoring input the host never echoes, so it is carried
+	// through from the configuration rather than read back from the response.
+	if r.derivesRevisionName() {
+		diags.Append(state.SetAttribute(ctx, path.Root(v3RevisionOwnerAttribute), values.RevisionOwner)...)
+	}
 	diags.Append(state.SetAttribute(ctx, path.Root("create_timeout"), values.CreateTimeout)...)
 	if r.form.DeclaresUpdate() {
 		diags.Append(state.SetAttribute(ctx, path.Root("update_timeout"), values.UpdateTimeout)...)
@@ -364,9 +369,12 @@ type v3Values struct {
 	// but that produced no verified representation. A read consults it before it
 	// reads the resource (v3ResumePendingOperation).
 	PendingOperationID types.String
-	CreateTimeout      types.String
-	UpdateTimeout      types.String
-	DeleteTimeout      types.String
+	// RevisionOwner names who owns a derived revision. It is provider-side
+	// authoring input that decides the derived NAME and never reaches the wire.
+	RevisionOwner types.String
+	CreateTimeout types.String
+	UpdateTimeout types.String
+	DeleteTimeout types.String
 	// Fields is keyed by the HCL attribute name (v3AttributeName).
 	Fields map[string]attr.Value
 }
@@ -413,6 +421,9 @@ type v3AttributeGetter interface {
 
 func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGetter) (v3Values, diag.Diagnostics) {
 	values, diags := v3CommonValuesFrom(ctx, getter, r.form.DeclaresUpdate())
+	if r.derivesRevisionName() {
+		diags.Append(getter.GetAttribute(ctx, path.Root(v3RevisionOwnerAttribute), &values.RevisionOwner)...)
+	}
 	if r.form.Kind == workerBundleKind {
 		var manifestDigest, mainModule types.String
 		var modules types.List

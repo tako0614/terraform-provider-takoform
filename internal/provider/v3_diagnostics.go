@@ -46,6 +46,8 @@ const (
 	v3CodeLaneUnavailable           = "takoform.provider/lane-unavailable"
 	v3CodeImmutableRevisionSameName = "takoform.provider/immutable-revision-same-name"
 	v3CodeNameUnresolved            = "takoform.provider/revision-name-unresolved"
+	v3CodeRevisionOwnerMissing      = "takoform.provider/revision-owner-missing"
+	v3CodeRevisionOwnerIgnored      = "takoform.provider/revision-owner-ignored"
 	v3CodeStateRefUnsupported       = "takoform.provider/state-form-ref-unsupported"
 	v3CodeStateRefMissing           = "takoform.provider/state-form-ref-missing"
 	v3CodeImportIDInvalid           = "takoform.provider/import-id-invalid"
