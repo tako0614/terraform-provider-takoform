@@ -178,19 +178,28 @@ already exists. It is a CLAIM, not a hint.
   of the caller under a different `nativeId` fails `import_conflict` (409)
   before any mutation. Re-importing that resource under the identity it already
   holds is not a conflict: it is the ordinary fenced import and answers the same
-  incarnation. A resource this host created holds no claim, so the first
-  `import` naming it records one rather than changing one.
-- **The claim is released with its holder.** Once the resource holding an
-  identity is deleted, that identity is adoptable again — otherwise a
-  `destroy` would leave a backend object permanently unimportable.
-- **The claim spans every space of one tenant and stops at the tenant.** Spaces
-  partition one tenant's resources and a backend object does not partition with
-  them, so two spaces adopting one object is the same duplication as two
-  resources in one space. It stops at the tenant for the reason every refusal in
+  incarnation. A resource this host created holds no claim, so the FIRST
+  `import` naming it records one rather than changing one — and that import is
+  the ordinary one, `terraform import` onto an address a configuration already
+  manages.
+- **The claim is released with its holder, and by nothing else.** Once the
+  resource holding an identity is deleted, that identity is adoptable again —
+  otherwise a `destroy` would leave a backend object permanently unimportable.
+  An ordinary `apply` on the holder withdraws nothing: a resource that survives
+  an update keeps the object it was adopted onto.
+- **The claim spans every space of one tenant, and every Form kind, and stops at
+  the tenant.** Spaces partition one tenant's resources and a backend object does
+  not partition with them, so two spaces adopting one object is the same
+  duplication as two resources in one space. Neither is an object partitioned by
+  the Form that adopted it: it has one identity, so an `AtLeastOnceQueue` and an
+  `EdgeKVNamespace` of one tenant may not both name it, and a host keying the
+  claim by `(tenant, kind, nativeId)` is holding a narrower claim than this one.
+  It stops at the tenant for the reason every refusal in
   [Tenant isolation](#tenant-isolation) is shaped the way it is: a host-wide
   claim would answer "somebody already manages that" to a caller who cannot see
   the holder, which is a membership oracle over every identifier a stranger can
   guess. Whose account an object lives in is authority this lane does not model.
+  Inside each tenant the claim binds in full, for every tenant.
 
 These are the required conformance checks `import-claims-its-native-identity`
 and `import-records-its-native-identity`, with the tenant edge driven by
@@ -200,7 +209,11 @@ gauntlet, the claim scan of [decision
 0026](../decisions/0026-attachment-claims-are-canonical-and-acyclic.md) — a plain
 create also satisfies. A host whose `/import` created would pass the rest of the
 corpus while `terraform import` against it minted a NEW backend object and
-orphaned the one being adopted.
+orphaned the one being adopted. Each is measured at the scope written above and
+not at a convenient narrowing of it: the rival that may not adopt is a different
+Form kind from the holder, the release is measured by that other kind, and the
+first claim is driven onto a resource the host created as well as onto one
+adoption brought into being.
 
 **The `nativeId` never appears in a response, and no rule above asks a portable
 author to know one.** A native identifier is host detail, outside the Form

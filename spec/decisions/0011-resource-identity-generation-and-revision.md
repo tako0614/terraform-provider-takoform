@@ -201,19 +201,32 @@ hold at most one live resource per native identity within one tenant.
   the caller under a different `nativeId` fails `import_conflict` (409) the same
   way; re-importing that resource under the identity it already holds is the
   ordinary fenced import and answers the same incarnation. A resource this host
-  created holds no claim, so the first import naming it records one.
-- The claim is released with its holder: once the resource is deleted, the
-  identity is adoptable again.
-- It spans every space of one tenant and STOPS at the tenant, which is the same
-  scope, for the same two reasons, as the hostname claim of decision
+  created holds no claim, so the FIRST import naming it records one — that
+  import is the ordinary `terraform import` onto an address a configuration
+  already manages, and it is a recording rather than a change.
+- The claim is released with its holder and by nothing else: once the resource
+  is deleted the identity is adoptable again, and an ordinary update withdraws
+  nothing.
+- It spans every space of one tenant and every FORM KIND, and STOPS at the
+  tenant, which is the same scope, for the same reasons, as the hostname claim
+  of decision
   [0026](0026-attachment-claims-are-canonical-and-acyclic.md). Spaces partition
-  one tenant's resources and a backend object does not partition with them. And
-  a host-wide claim would answer "somebody already manages that" to a caller who
-  cannot see the holder — a membership oracle over every identifier a stranger
-  can guess, which decision
+  one tenant's resources and a backend object does not partition with them.
+  Neither does a Form kind: an object has one identity whatever Form was pointed
+  at it, so a claim keyed by `(tenant, kind, nativeId)` — the shape that falls
+  out of keeping the claim in the per-kind table the resource already lives in —
+  lets a queue and a KV namespace manage one object between them, which is the
+  duplication this rule exists to prevent wearing a second Form. And a host-wide
+  claim would answer "somebody already manages that" to a caller who cannot see
+  the holder — a membership oracle over every identifier a stranger can guess,
+  which decision
   [0028](0028-the-resource-plane-is-tenant-isolated.md) forbids a refusal to
   disclose. Whose account an object lives in is authority this lane does not
   model.
+- Every tenant is a caller. The claim binds inside the plane of whichever tenant
+  makes the request, so a host that holds it in one tenant and not the others
+  has not scoped the rule — it has stopped applying it everywhere the corpus was
+  not looking.
 
 Why this is an identity rule and not a nicety: `nativeId` was on the wire, was
 REQUIRED, and meant nothing. Everything else the lane asked of `import` — a
@@ -249,7 +262,13 @@ than on any check.
 The required conformance checks are `import-claims-its-native-identity` and
 `import-records-its-native-identity`; the tenant edge is a leg of
 `resource-import-is-tenant-isolated`, where the rest of that boundary already
-lives.
+lives. Each is driven at the scope the rule above is written at, because a check
+narrower than its rule is passed by a host that implements only the check:
+holder and rival are different Form kinds, the release is measured by the kind
+that did not hold the claim, both paths onto a first claim are driven — the
+resource this host created and the resource adopted into being — and the tenant
+leg measures the second tenant taking the identity AND then holding it against
+its own next adoption.
 - The Form semantic identity of a resource is its exact FormRef. The package
   digest used at creation may be recorded as audit evidence but never enters
   resource identity, queries, or update/delete fences. A host that installed
@@ -280,9 +299,14 @@ lives.
 - *(2026-08-09)* A host keeps one more field per RESOURCE — the native identity
   it was adopted onto — and one tenant-scoped scan over it before an adoption
   mutates anything. A host with a real datastore would more naturally hold it as
-  a unique index on `(tenant, nativeId)`; the reference host scans, because what
-  the lane measures is the answer. The corpus grows to 114 required checks, and
-  `import_conflict` gains its first organic producer.
+  a unique index on `(tenant, nativeId)` — never on `(tenant, kind, nativeId)`,
+  which is the natural index and the wrong one, because the row it would key is
+  the resource and the thing being claimed is the object; the reference host
+  scans, because what the lane measures is the answer. That field also survives
+  every update of its resource, which is not a rule of its own so much as the
+  reading of "released with its holder" that a host rebuilding its stored record
+  from the request document gets wrong for free. The corpus grows to 114
+  required checks, and `import_conflict` gains its first organic producer.
 - *(2026-08-09)* A host that records replays keeps one more field per record —
   the incarnation the recorded answer reports, or the Operation it handed back —
   and consults it before replaying. The reference host stores it as
@@ -364,6 +388,14 @@ Rejected in the 2026-08-09 amendment:
   partitioned by space. Two spaces of one tenant adopting one object is the same
   double management as two resources in one space, and it is the likelier
   accident: a second workspace importing what the first already manages.
+- **Scope the claim per Form kind.** Rejected for the same reason and with less
+  excuse, because nothing about a native identity was ever qualified by kind: an
+  object has one identity, and which Form a practitioner pointed at it is a fact
+  about the configuration rather than about the object. It is nonetheless the
+  index a host writes without thinking — the claim goes in the table the
+  resource lives in, and that table is per kind — and it is invisible to any
+  check that drives holder and rival through one probe, which is why the
+  conformance leg drives them through two.
 - **Refuse a re-import that names the identity a resource already holds.** It
   would fall out of a host that kept a bare set of identifiers it had seen, and
   it breaks the one thing a client can retry: an import re-run has nothing else

@@ -133,15 +133,23 @@ type storedResource struct {
 	Imported      bool
 	// NativeID is the backend object this resource was ADOPTED onto, recorded
 	// at the adoption that named it and never rewritten afterwards. A resource
-	// this host created holds none.
+	// this host created holds none until an import names one, which is the
+	// ordinary `terraform import` onto an address a configuration already
+	// manages; that import records a first claim rather than changing one.
+	//
+	// It is carried forward by every later mutation, because an update is not a
+	// release. The whole record is copied on update (nextResource), so this comes
+	// for free here; a host that rebuilt its stored resource from the request
+	// document would drop the claim on the next apply, and its import path would
+	// look perfectly correct while doing it.
 	//
 	// It never travels on the wire in either direction beyond the `nativeId` a
 	// client writes on `import`: a native identifier is host detail, outside the
 	// portable Form contract (spec/portability-boundary.md), so the only thing
 	// portable about it is that this host holds at most one resource per
-	// identity within one tenant. That is what makes adoption observable at all
-	// without putting a vendor's identifier format in a portable author's path
-	// (spec/decisions/0011).
+	// identity within one tenant — under any kind, in any space. That is what
+	// makes adoption observable at all without putting a vendor's identifier
+	// format in a portable author's path (spec/decisions/0011).
 	NativeID      string
 	PackageDigest string
 	// Relations is the resolved cross-resource reference set of this exact
@@ -1883,12 +1891,21 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 // resources and a backend object does not partition with them: adopting one
 // object into two spaces is the same duplication as adopting it twice in one.
 //
+// It spans every FORM KIND of that tenant, which is why the scan filters on the
+// tenant and the identity and on nothing else. The tempting index is the one a
+// real datastore reaches for — the claim column on the table the resource
+// already lives in, keyed `(tenant, kind, nativeId)` — and it is wrong, because
+// what is claimed is the object rather than the row: one object adopted once as
+// a queue and once as a KV namespace is managed twice, with two desired states,
+// exactly as it is when two queues adopt it.
+//
 // It stops at the tenant, because a host-wide scan would answer "somebody
 // already holds this" to a caller who cannot see the holder — a membership
 // oracle over every identifier a stranger can guess, which is precisely what
 // spec/decisions/0028 refuses to let a refusal disclose. Two tenants naming one
 // identifier is not this contract's problem to adjudicate: whose account the
-// object lives in is authority this lane does not model.
+// object lives in is authority this lane does not model. Within each tenant,
+// including every tenant that is not the first one to call, it binds in full.
 func (h *ReferenceHost) validateNativeIdentityClaim(
 	scope resourceScope,
 	form *InstalledForm,

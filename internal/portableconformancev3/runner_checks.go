@@ -139,9 +139,11 @@ func (r *v3Runner) run() error {
 		func() error { return r.checkImportFlows(kv, version) },
 		// What makes an adoption an adoption rather than a create
 		// (spec/decisions/0011, amended). They run beside the import flows they
-		// qualify, on names of their own, and leave nothing behind.
-		func() error { return r.checkNativeIdentityClaim(kv) },
-		func() error { return r.checkRecordedNativeIdentity(kv) },
+		// qualify, on names of their own, and leave nothing behind. Both take two
+		// probe kinds, because the claim they measure names none: one object is
+		// adoptable once for the tenant however many Forms could point at it.
+		func() error { return r.checkNativeIdentityClaim(kv, queue) },
+		func() error { return r.checkRecordedNativeIdentity(kv, queue) },
 		func() error { return r.checkDeleteFences(version, kv) },
 		func() error { return r.checkOperations(kv) },
 		func() error { return r.checkOperationOwnership(kv) },
@@ -449,6 +451,19 @@ func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
 // bytes the corpus already pins for another reason. It costs no new pin, and a
 // second contract of one Form line whose served schema nothing checked would be
 // exactly the same hole in the one place the lane installs two.
+//
+// What it does NOT measure, stated so it is not mistaken for coverage: the
+// published rule is about every exact FormRef a host serves, and this compares
+// the eleven documents the corpus pins. A host serving a desired schema of its
+// own for an installed Form no probe drives passes, and a client of that Form
+// has exactly the specDigest problem above. It is deliberate rather than
+// forgotten — a pin nothing materializes against is maintenance with no oracle
+// value (spec/decisions/0022) — and it is the reason the pin is required of
+// every probe rather than of a hand-written list, so the coverage grows with the
+// probes. The residual is that the lane's word covers the Forms it drives, which
+// is what a report of this corpus says; closing it for the whole catalog would
+// mean pinning every installed Definition's desired schema, and nothing in this
+// lane needs those bytes for anything else.
 func (r *v3Runner) checkFormDefinitions() error {
 	input := r.contract.RunnerInput
 	type pinnedDefinition struct {
@@ -2520,17 +2535,35 @@ func (r *v3Runner) checkImportFlows(kv, version probeTarget) error {
 // A native identifier is host detail and stays off every response
 // (spec/portability-boundary.md), so what is observed is not the identifier but
 // what a host that recorded it can no longer do: adopt the same object twice.
-// Three legs, because the SCOPE of the claim is as portable as its existence —
-// a host that scoped it per space would let a second workspace adopt the same
-// object, and a host that scoped it host-wide would answer "somebody holds
-// this" to a caller who cannot see the holder, which is the membership oracle
-// spec/decisions/0028 forbids. That third leg runs in the tenant-isolation
-// sequence, on the check that owns the import surface's boundary.
 //
-// The last leg is release. A claim that outlived its holder would refuse the
-// re-import after a `terraform destroy`, and two hosts would differ on whether
-// an identity is ever adoptable again.
-func (r *v3Runner) checkNativeIdentityClaim(kv probeTarget) error {
+// The SCOPE of the claim is as portable as its existence, and it is measured in
+// all three directions the contract writes it in, because a claim held at a
+// narrower scope than the published one is a claim a conforming client cannot
+// rely on:
+//
+//   - Across NAMES. A second resource of the same kind, in the same space.
+//   - Across SPACES. Spaces partition one tenant's resources and a backend
+//     object does not partition with them, so a host scoping the claim per space
+//     lets a second workspace adopt what the first already manages.
+//   - Across FORM KINDS. A backend object has one identity whatever Form adopted
+//     it, and the rule names no kind. A host indexing claims by
+//     `(tenant, kind, nativeId)` — the shape that falls out of keeping the claim
+//     in the per-kind table the resource already lives in — passed a corpus that
+//     drove holder and rival through one probe, while letting a queue and a KV
+//     namespace manage one object between them.
+//
+// And it stops at the tenant, which is the one direction whose correct answer is
+// that the adoption WORKS: a host scoping it host-wide answers "somebody holds
+// this" to a caller who cannot see the holder, which is the membership oracle
+// spec/decisions/0028 forbids. That leg runs in the tenant-isolation sequence,
+// on the check that owns the import surface's boundary.
+//
+// The last leg is release, measured by the kind that is NOT the holder's. A
+// claim that outlived its holder would refuse the re-import after a `terraform
+// destroy`, and a claim released only into the index slot it was written to
+// would free the object for its own kind and no other — the same narrowing as
+// above, one step later.
+func (r *v3Runner) checkNativeIdentityClaim(kv, queue probeTarget) error {
 	const adopted = "native/claimed-object"
 	holder := kv
 	holder.Name = "native-claim-holder"
@@ -2567,7 +2600,21 @@ func (r *v3Runner) checkNativeIdentityClaim(kv probeTarget) error {
 		return err
 	}
 
-	// The holder is unmoved by either refusal.
+	// And through ANOTHER FORM KIND. One object, one identity: which Form was
+	// pointed at it decides nothing about how many resources may manage it.
+	crossKind := queue
+	crossKind.Name = "native-claim-cross-kind-rival"
+	if err := r.refuseImport(
+		crossKind, "import_conflict", adopted, "key-native-claim-cross-kind",
+		fmt.Sprintf(
+			"a second Form kind, %s, adopting the native resource this tenant already manages as %s",
+			crossKind.Ref.Kind, holder.Ref.Kind,
+		),
+	); err != nil {
+		return err
+	}
+
+	// The holder is unmoved by any of the three refusals.
 	stillHeld, _, err := r.read(holder)
 	if err != nil {
 		return err
@@ -2585,10 +2632,12 @@ func (r *v3Runner) checkNativeIdentityClaim(kv probeTarget) error {
 
 	// Released with its holder: the same object is adoptable again once nothing
 	// manages it, or a destroy would make an object permanently unimportable.
+	// The adopter is the kind the holder was not, so the release is measured at
+	// the scope the claim was held at.
 	if err := r.deleteExisting(holder, "key-native-claim-holder-delete"); err != nil {
 		return err
 	}
-	readopted, err := r.importResource(rival, importOptions{
+	readopted, err := r.importResource(crossKind, importOptions{
 		NativeID: adopted, IdempotencyKey: "key-native-claim-readopt", Create: true,
 	})
 	if err != nil {
@@ -2596,12 +2645,13 @@ func (r *v3Runner) checkNativeIdentityClaim(kv probeTarget) error {
 	}
 	if _, err := decodeResource(readopted, http.StatusCreated); err != nil {
 		return fmt.Errorf(
-			"adopting %s again after the resource holding it was deleted: %w; a claim that outlives its holder "+
-				"makes a destroyed-and-re-imported object unmanageable forever",
-			adopted, err,
+			"adopting %s under %s after the %s holding it was deleted: %w; a claim that outlives its holder makes a "+
+				"destroyed-and-re-imported object unmanageable forever, and one released only for the kind that "+
+				"held it makes the object unmanageable by any other",
+			adopted, crossKind.Ref.Kind, holder.Ref.Kind, err,
 		)
 	}
-	if err := r.deleteExisting(rival, "key-native-claim-rival-delete"); err != nil {
+	if err := r.deleteExisting(crossKind, "key-native-claim-readopt-delete"); err != nil {
 		return err
 	}
 	r.complete("import-claims-its-native-identity")
@@ -2618,25 +2668,148 @@ func (r *v3Runner) checkNativeIdentityClaim(kv probeTarget) error {
 // noticing. Both are driven here: naming another identity for a resource
 // already adopted is refused, and naming its own is the ordinary fenced import
 // onto the same incarnation.
-func (r *v3Runner) checkRecordedNativeIdentity(kv probeTarget) error {
-	const adopted = "native/recorded-object"
+//
+// Both are driven twice, because a resource arrives at its claim by two paths
+// and the contract distinguishes them only to say that the FIRST import records
+// rather than changes:
+//
+//   - a resource this host CREATED, adopted afterwards. This is the ordinary
+//     `terraform import` onto an address a configuration already manages, and it
+//     is the path a host misses when it reads `nativeId` on the branch that mints
+//     a resource and nowhere else. Such a host records nothing for an object it
+//     already served, so the next workspace adopts that object unopposed, and the
+//     address can be walked onto a different object one import at a time.
+//   - a resource ADOPTED into being, by a create-intent import. Still a real
+//     path, and still the only one the fenced cases used to start from.
+//
+// The recorded claim is unobservable directly — a native identifier stays off
+// every response — so on both paths it is read the only way a black-box client
+// can read it: another resource, of another Form kind, is refused the object
+// this one holds. On the created path that refusal is also the first evidence
+// anywhere that the claim was recorded at all, and it is repeated after an
+// ordinary update, because an update is not a release and a host that rebuilds
+// its record from the request document would drop the claim there without
+// touching a line of import code.
+func (r *v3Runner) checkRecordedNativeIdentity(kv, queue probeTarget) error {
+	// ---- The first import of a resource this host created ----
+	const adoptedAfterCreate = "native/adopted-after-create"
+	created := queue
+	created.Name = "native-recorded-created-probe"
+	made, _, err := r.applyResource(created, applyOptions{
+		Create: true, IdempotencyKey: "key-native-recorded-created",
+	}, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("creating the resource to be adopted afterwards: %w", err)
+	}
+	firstClaim, err := r.importResource(created, importOptions{
+		NativeID:           adoptedAfterCreate,
+		IdempotencyKey:     "key-native-recorded-created-adopt",
+		ExpectedGeneration: made.Metadata.Generation,
+	})
+	if err != nil {
+		return err
+	}
+	adopted, err := decodeResource(firstClaim, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf(
+			"the first import of %s, a resource this host created: %w; it holds no claim yet, so naming one records "+
+				"a first claim rather than changing one",
+			created.Name, err,
+		)
+	}
+	if adopted.Metadata.UID != made.Metadata.UID {
+		return fmt.Errorf(
+			"adopting the created %s answered uid %s, want the live %s; an import onto an existing resource "+
+				"addresses that resource rather than minting beside it",
+			created.Name, adopted.Metadata.UID, made.Metadata.UID,
+		)
+	}
+
+	// It was RECORDED: the object is now held, against every other resource of
+	// this tenant.
+	rival := kv
+	rival.Name = "native-recorded-created-rival"
+	if err := r.refuseImport(
+		rival, "import_conflict", adoptedAfterCreate, "key-native-recorded-created-rival",
+		fmt.Sprintf(
+			"adopting under %s the native resource the created %s was imported onto; a host that reads nativeId "+
+				"only where it mints a resource records nothing here, and the object is adopted twice",
+			rival.Ref.Kind, created.Ref.Kind,
+		),
+	); err != nil {
+		return err
+	}
+
+	// An ordinary update is not a release. A host that rewrites the stored
+	// resource from the request document loses the claim on the next apply, and
+	// nothing about its import path looks wrong.
+	changed := created
+	changed.Spec = r.materialize(changed.Ref, map[string]any{"messageRetentionSeconds": 600000})
+	updated, _, err := r.applyResource(changed, applyOptions{
+		ExpectedGeneration: adopted.Metadata.Generation,
+		IdempotencyKey:     "key-native-recorded-created-update",
+	}, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("updating the adopted %s: %w", created.Name, err)
+	}
+	if err := r.refuseImport(
+		rival, "import_conflict", adoptedAfterCreate, "key-native-recorded-created-rival-after-update",
+		"a rival adopting the same native resource after its holder was updated; an update withdraws no claim",
+	); err != nil {
+		return err
+	}
+
+	// And from its first claim onwards that claim is immutable, exactly as it is
+	// for a resource adopted into being.
+	if err := r.refuseNativeIdentityChange(created, updated, "key-native-recorded-created-moved"); err != nil {
+		return err
+	}
+	if err := r.expectSameNativeIdentityReimported(
+		created, adoptedAfterCreate, "key-native-recorded-created-again", made.Metadata.UID,
+	); err != nil {
+		return err
+	}
+	if err := r.deleteExisting(created, "key-native-recorded-created-delete"); err != nil {
+		return err
+	}
+
+	// ---- The same two rules on a resource adopted into being ----
+	const adoptedIntoBeing = "native/recorded-object"
 	target := kv
 	target.Name = "native-recorded-probe"
 	response, err := r.importResource(target, importOptions{
-		NativeID: adopted, IdempotencyKey: "key-native-recorded-adopt", Create: true,
+		NativeID: adoptedIntoBeing, IdempotencyKey: "key-native-recorded-adopt", Create: true,
 	})
 	if err != nil {
 		return err
 	}
 	first, err := decodeResource(response, http.StatusCreated)
 	if err != nil {
-		return fmt.Errorf("the adoption of %s: %w", adopted, err)
+		return fmt.Errorf("the adoption of %s: %w", adoptedIntoBeing, err)
 	}
+	if err := r.refuseNativeIdentityChange(target, first, "key-native-recorded-moved"); err != nil {
+		return err
+	}
+	if err := r.expectSameNativeIdentityReimported(
+		target, adoptedIntoBeing, "key-native-recorded-again", first.Metadata.UID,
+	); err != nil {
+		return err
+	}
+	if err := r.deleteExisting(target, "key-native-recorded-delete"); err != nil {
+		return err
+	}
+	r.complete("import-records-its-native-identity")
+	return nil
+}
 
+// refuseNativeIdentityChange drives the immutability half of the recorded claim
+// against one live resource: an import naming another object is refused, and the
+// resource it named does not move.
+func (r *v3Runner) refuseNativeIdentityChange(target probeTarget, live wireResource, key string) error {
 	moved, err := r.importResource(target, importOptions{
-		NativeID:           "native/other-object",
-		IdempotencyKey:     "key-native-recorded-moved",
-		ExpectedGeneration: first.Metadata.Generation,
+		NativeID:           "native/other-object-for-" + target.Name,
+		IdempotencyKey:     key,
+		ExpectedGeneration: live.Metadata.Generation,
 	})
 	if err != nil {
 		return err
@@ -2652,19 +2825,30 @@ func (r *v3Runner) checkRecordedNativeIdentity(kv probeTarget) error {
 	if err != nil {
 		return err
 	}
-	if unmoved.Metadata.UID != first.Metadata.UID ||
-		unmoved.Metadata.Generation != first.Metadata.Generation ||
-		unmoved.Metadata.Revision != first.Metadata.Revision {
-		return errors.New("the refused re-pointing mutated the adopted resource")
+	if unmoved.Metadata.UID != live.Metadata.UID ||
+		unmoved.Metadata.Generation != live.Metadata.Generation ||
+		unmoved.Metadata.Revision != live.Metadata.Revision {
+		return fmt.Errorf("the refused re-pointing mutated the adopted resource %s", target.Name)
 	}
+	return nil
+}
 
-	// The same fenced import, naming what the resource actually holds, is not a
-	// conflict: it addresses the same incarnation, which is what makes the
-	// refusal above a statement about the identity rather than about repetition.
+// expectSameNativeIdentityReimported drives the permissive half: the same fenced
+// import, naming what the resource actually holds, is not a conflict. It
+// addresses the same incarnation, which is what makes the refusal above a
+// statement about the identity rather than about repetition.
+func (r *v3Runner) expectSameNativeIdentityReimported(
+	target probeTarget,
+	nativeID, key, wantUID string,
+) error {
+	current, _, err := r.read(target)
+	if err != nil {
+		return err
+	}
 	again, err := r.importResource(target, importOptions{
-		NativeID:           adopted,
-		IdempotencyKey:     "key-native-recorded-again",
-		ExpectedGeneration: unmoved.Metadata.Generation,
+		NativeID:           nativeID,
+		IdempotencyKey:     key,
+		ExpectedGeneration: current.Metadata.Generation,
 	})
 	if err != nil {
 		return err
@@ -2677,16 +2861,12 @@ func (r *v3Runner) checkRecordedNativeIdentity(kv probeTarget) error {
 			target.Name, err,
 		)
 	}
-	if repeated.Metadata.UID != first.Metadata.UID {
+	if repeated.Metadata.UID != wantUID {
 		return fmt.Errorf(
 			"re-importing under the recorded native resource answered uid %s, want the adopted %s",
-			repeated.Metadata.UID, first.Metadata.UID,
+			repeated.Metadata.UID, wantUID,
 		)
 	}
-	if err := r.deleteExisting(target, "key-native-recorded-delete"); err != nil {
-		return err
-	}
-	r.complete("import-records-its-native-identity")
 	return nil
 }
 

@@ -65,10 +65,12 @@ const (
 	tenantImportHeldName  = "tenant-import-held-probe"
 	tenantImportFreeName  = "tenant-import-free-probe"
 
-	// The two names and the one native identity that measure the far edge of the
-	// adoption claim: one identity, adopted once in each tenant.
+	// The three names and the one native identity that measure the far edge of
+	// the adoption claim: one identity, adopted once in each tenant, and held
+	// inside each of them.
 	tenantSharedNativeName        = "tenant-native-claim-probe"
 	tenantSharedNativeForeignName = "tenant-native-claim-foreign-probe"
+	tenantSharedNativeRivalName   = "tenant-native-claim-foreign-rival-probe"
 	tenantSharedNativeID          = "native-tenant-shared-object"
 )
 
@@ -703,6 +705,39 @@ func (r *v3Runner) checkResourceImportIsTenantIsolated(worker probeTarget) error
 	}
 	if secondHolder.Metadata.UID == firstHolder.Metadata.UID {
 		return errors.New("two tenants adopting one native identity were answered one resource")
+	}
+	// And what the second tenant just took is a CLAIM, in its own plane.
+	//
+	// The leg above is satisfied by a host that enforces no claim at all outside
+	// the first tenant — the permissive half this file already had to add once
+	// for mutation (`each-tenant-mutates-its-own-plane`), and the same shape: a
+	// boundary measured only from the first tenant's side is satisfied by a host
+	// that simply does less for everybody else. Here that host would let one
+	// backend object be adopted twice by every tenant but one, which is the
+	// duplication decision 0011 exists to prevent, minus the only account it was
+	// ever measured in.
+	foreignRival := worker
+	foreignRival.Name = tenantSharedNativeRivalName
+	rivalAdoption, err := r.importResourceAs(r.alternateTenantToken, foreignRival, importOptions{
+		NativeID: tenantSharedNativeID, IdempotencyKey: "key-tenant-shared-native-foreign-rival", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(rivalAdoption, "import_conflict"); err != nil {
+		return fmt.Errorf(
+			"a second resource of the SECOND tenant adopting the native identity that tenant already manages as "+
+				"%s: %w; the claim is one live resource per identity for the caller's tenant, and every tenant is "+
+				"a caller",
+			tenantSharedNativeForeignName, err,
+		)
+	}
+	absent, err := r.readAs(r.alternateTenantToken, foreignRival)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(absent, "resource_not_found"); err != nil {
+		return fmt.Errorf("the second tenant's refused adoption stored a resource: %w", err)
 	}
 	r.complete("resource-import-is-tenant-isolated")
 	return nil

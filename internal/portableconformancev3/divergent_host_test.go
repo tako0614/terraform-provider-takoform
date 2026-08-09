@@ -1,10 +1,11 @@
 package portableconformancev3
 
-// divergent_host_test.go holds the two hosts this lane exists to fail, and it
-// holds them together because they are one defect wearing two faces: an oracle
-// that lets the subject supply the standard it is measured against.
+// divergent_host_test.go holds the hosts this lane exists to fail, and it holds
+// them together because they are one defect wearing several faces: an oracle
+// that lets the subject supply the standard it is measured against, or that
+// measures a narrower rule than the one the contract publishes.
 //
-// Both were passed by the 112-check corpus that preceded them. That is what
+// Every one of them was passed by the corpus that preceded it. That is what
 // makes each a finding rather than a precaution, and each test says which check
 // now refuses it.
 
@@ -208,15 +209,158 @@ type nativeIdentityBlinder struct {
 }
 
 func (blinder *nativeIdentityBlinder) ServeHTTP(w http.ResponseWriter, request *http.Request) {
-	if request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/import") {
-		if rewritten, ok := blinder.blind(request); ok {
-			request = rewritten
-		}
+	if rewritten, ok := rewriteAdoptedIdentity(request, func(_ map[string]any, _ string) string {
+		blinder.mu.Lock()
+		defer blinder.mu.Unlock()
+		blinder.minted++
+		return "blinded/" + strconv.Itoa(blinder.minted)
+	}); ok {
+		request = rewritten
 	}
 	blinder.inner.ServeHTTP(w, request)
 }
 
-func (blinder *nativeIdentityBlinder) blind(request *http.Request) (*http.Request, bool) {
+// ---- Hole 3: the host that scopes the claim to one Form kind ----
+
+// TestNativeIdentityClaimSpansEveryFormKind is the tooth of the claim's SCOPE
+// (spec/decisions/0011, amended).
+//
+// This host records the adoption claim, holds it exclusively, releases it with
+// its holder, and refuses to move it — inside one Form kind. Its index is
+// `(tenant, kind, nativeId)`, which is what falls out of keeping the claim in
+// the per-kind table the resource already lives in, and nothing about it looks
+// like a defect from inside a check that derives holder and rival from one
+// probe.
+//
+// It is a defect because a backend object has one identity no matter which Form
+// adopted it. Managing it once as a queue and once as a KV namespace is the same
+// doubled infrastructure, on the same bill, as managing it twice as a queue —
+// and the contract says "one live resource per native identity for the tenant",
+// with no kind in the key.
+//
+// The 114-check corpus that preceded this test passed this host, because
+// `import-claims-its-native-identity` drove holder and rival through the KV
+// probe alone.
+func TestNativeIdentityClaimSpansEveryFormKind(t *testing.T) {
+	report, err := runAgainstWrappedReferenceHost(
+		t, "native-claim-scoped-per-form-kind",
+		func(inner http.Handler) http.Handler { return &nativeIdentityKindScoper{inner: inner} },
+	)
+	if err == nil {
+		t.Fatalf("a host holding one native identity once PER KIND passed the lane: %+v", report)
+	}
+	t.Logf("the lane refuses this host with: %v", err)
+	for _, want := range []string{"import_conflict", "AtLeastOnceQueue", "EdgeKVNamespace"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("failure %q does not name %q; the diagnostic must say the claim crosses kinds", err, want)
+		}
+	}
+}
+
+// nativeIdentityKindScoper qualifies every adoption claim by the kind adopting
+// it, so two Forms may adopt one object and no single-kind sequence can tell.
+type nativeIdentityKindScoper struct{ inner http.Handler }
+
+func (scoper *nativeIdentityKindScoper) ServeHTTP(w http.ResponseWriter, request *http.Request) {
+	if rewritten, ok := rewriteAdoptedIdentity(request, func(document map[string]any, nativeID string) string {
+		kind, _ := document["kind"].(string)
+		return kind + "|" + nativeID
+	}); ok {
+		request = rewritten
+	}
+	scoper.inner.ServeHTTP(w, request)
+}
+
+// ---- Hole 4: the host that records the claim only when import creates ----
+
+// TestFirstImportOfAHostCreatedResourceRecordsItsClaim is the tooth of the first
+// adoption of a resource the host made itself (spec/decisions/0011, amended).
+//
+// This host records the `nativeId` where a create is the obvious place to record
+// it — the branch that mints the resource — and treats the field as spent for a
+// resource that already exists. Every adoption that BRINGS a resource into being
+// claims its object correctly, so the exclusivity, the immutability, and the
+// release all hold for resources born by `import`.
+//
+// The path it drops is the ordinary one: `terraform import` onto an address a
+// configuration already manages, which is a fenced import of a resource this
+// host created. That object's identity is never written down, so the next
+// workspace adopts the same object unopposed, and the same address will later
+// accept a DIFFERENT object without complaint — the resource can be walked onto
+// another backend object one import at a time.
+//
+// The 114-check corpus that preceded this test passed this host, because
+// `import-records-its-native-identity` built its target through a create-intent
+// import, so the claim was already recorded before the first fenced case ran.
+func TestFirstImportOfAHostCreatedResourceRecordsItsClaim(t *testing.T) {
+	report, err := runAgainstWrappedReferenceHost(
+		t, "native-claim-recorded-only-at-create",
+		func(inner http.Handler) http.Handler {
+			return &nativeClaimRecordedOnlyAtCreate{inner: inner, bornByImport: map[string]bool{}, blinded: map[string]string{}}
+		},
+	)
+	if err == nil {
+		t.Fatalf("a host recording the adopted identity only when import CREATES passed the lane: %+v", report)
+	}
+	t.Logf("the lane refuses this host with: %v", err)
+	if !strings.Contains(err.Error(), "import_conflict") {
+		t.Errorf("failure %q does not name the refusal a conforming host owes: import_conflict", err)
+	}
+}
+
+// nativeClaimRecordedOnlyAtCreate passes create-intent adoptions through
+// untouched and blinds every fenced adoption of an address no adoption created.
+//
+// Blinding with a value stable per address is what makes this the host described
+// rather than a noisier one: the identity handed to a resource this host created
+// is never recorded, and a later import of that same address is compared against
+// the blind value instead of against what the client actually named — which is
+// exactly "the field is read on the create branch and nowhere else".
+type nativeClaimRecordedOnlyAtCreate struct {
+	inner http.Handler
+
+	mu           sync.Mutex
+	bornByImport map[string]bool
+	blinded      map[string]string
+}
+
+func (host *nativeClaimRecordedOnlyAtCreate) ServeHTTP(w http.ResponseWriter, request *http.Request) {
+	createIntent := request.Header.Get("If-None-Match") == "*"
+	caller := request.Header.Get("Authorization") + " " + request.URL.Path
+	if rewritten, ok := rewriteAdoptedIdentity(request, func(document map[string]any, nativeID string) string {
+		metadata, _ := document["metadata"].(map[string]any)
+		space, _ := metadata["space"].(string)
+		address := caller + " " + space
+		host.mu.Lock()
+		defer host.mu.Unlock()
+		if createIntent {
+			host.bornByImport[address] = true
+			return nativeID
+		}
+		if host.bornByImport[address] {
+			return nativeID
+		}
+		if blind, assigned := host.blinded[address]; assigned {
+			return blind
+		}
+		blind := "unrecorded/" + strconv.Itoa(len(host.blinded)+1)
+		host.blinded[address] = blind
+		return blind
+	}); ok {
+		request = rewritten
+	}
+	host.inner.ServeHTTP(w, request)
+}
+
+// rewriteAdoptedIdentity re-encodes one adoption under whatever native identity
+// `next` answers for it, and leaves every other request exactly as it arrived.
+func rewriteAdoptedIdentity(
+	request *http.Request,
+	next func(document map[string]any, nativeID string) string,
+) (*http.Request, bool) {
+	if request.Method != http.MethodPost || !strings.HasSuffix(request.URL.Path, "/import") {
+		return nil, false
+	}
 	raw, err := io.ReadAll(request.Body)
 	if err != nil {
 		return nil, false
@@ -227,19 +371,17 @@ func (blinder *nativeIdentityBlinder) blind(request *http.Request) (*http.Reques
 	if err := decoder.Decode(&document); err != nil {
 		return nil, false
 	}
-	if _, present := document["nativeId"]; !present {
+	nativeID, present := document["nativeId"].(string)
+	if !present {
 		return nil, false
 	}
-	blinder.mu.Lock()
-	blinder.minted++
-	document["nativeId"] = "blinded/" + strconv.Itoa(blinder.minted)
-	blinder.mu.Unlock()
+	document["nativeId"] = next(document, nativeID)
 	rewritten, err := json.Marshal(document)
 	if err != nil {
 		return nil, false
 	}
-	next := request.Clone(request.Context())
-	next.Body = io.NopCloser(bytes.NewReader(rewritten))
-	next.ContentLength = int64(len(rewritten))
-	return next, true
+	replacement := request.Clone(request.Context())
+	replacement.Body = io.NopCloser(bytes.NewReader(rewritten))
+	replacement.ContentLength = int64(len(rewritten))
+	return replacement, true
 }

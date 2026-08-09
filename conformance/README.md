@@ -257,10 +257,18 @@ beside its uid — import validated exactly like apply and DISTINGUISHABLE from 
 create: the `nativeId` an adoption names is a claim the host records on the
 resource and holds exclusively within the caller's tenant, so a second live
 resource adopting one native identity is refused `import_conflict` before any
-mutation (from any space of that tenant, and never across tenants, where a
-refusal would report what a stranger manages), a resource already adopted cannot
-be re-pointed at another native identity, and the claim is released when its
-holder is deleted. Everything else the lane asks of an import — a minted uid,
+mutation — from any space of that tenant, and under any FORM KIND, because a
+backend object has one identity whatever Form was pointed at it and a host
+indexing claims by `(tenant, kind, nativeId)` lets a queue and a KV namespace
+manage one object between them; never across tenants, where a refusal would
+report what a stranger manages, while inside the second tenant's own plane the
+same claim binds in full. A resource already adopted cannot be re-pointed at
+another native identity, and the claim is released when its holder is deleted
+and by nothing else — an ordinary update withdraws none of it. Both paths onto a
+first claim are driven, because the claim is recorded by the first import
+whichever way the resource arrived: the ordinary `terraform import` onto a
+resource this host CREATED, and the adoption that brought one into being.
+Everything else the lane asks of an import — a minted uid,
 generation 1, the whole validation gauntlet — a plain create also satisfies, and
 `terraform import` against such a host mints a new backend object and orphans
 the one being adopted
