@@ -199,18 +199,20 @@ func TestSpecChangingApplyToFormWithoutUpdateIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	host.storeResource(&storedResource{
-		Ref: ref, Name: name, Space: space,
+		Ref: ref, Name: name, Tenant: referencePrimaryAuth.Tenant, Space: space,
 		UID: "uid-1", Generation: 1, Revision: 1,
 		Spec: stored, SpecDigest: storedDigest,
 	})
 	// The referenced resources exist: this test is about the capability
 	// refusal, and an unresolvable relation would refuse first.
 	host.storeResource(&storedResource{
-		Ref: mustProbeRef(t, contract, "ModuleWorker"), Name: "module-worker-probe", Space: space,
+		Ref: mustProbeRef(t, contract, "ModuleWorker"), Name: "module-worker-probe",
+		Tenant: referencePrimaryAuth.Tenant, Space: space,
 		UID: "uid-2", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	host.storeResource(&storedResource{
-		Ref: mustProbeRef(t, contract, "WorkerBundle"), Name: "worker-bundle-probe", Space: space,
+		Ref: mustProbeRef(t, contract, "WorkerBundle"), Name: "worker-bundle-probe",
+		Tenant: referencePrimaryAuth.Tenant, Space: space,
 		UID: "uid-3", Generation: 1, Revision: 1,
 		Spec: map[string]any{"manifestDigest": formpackage.DigestBytes([]byte("bundle"))},
 	})
@@ -233,7 +235,7 @@ func TestSpecChangingApplyToFormWithoutUpdateIsRefused(t *testing.T) {
 	if !strings.Contains(string(raw), "no update capability") {
 		t.Fatalf("refusal does not name the missing capability: %s", strings.TrimSpace(string(raw)))
 	}
-	current := host.resources[resourceKey(space, ref.APIVersion, ref.Kind, name)]
+	current := host.resources[resourceKey(referencePrimaryAuth.scope(space), ref.APIVersion, ref.Kind, name)]
 	if current.Generation != 1 || current.Revision != 1 || current.SpecDigest != storedDigest {
 		t.Fatalf("the refused apply mutated state: %+v", current)
 	}
@@ -259,7 +261,7 @@ func TestV1Alpha3HostAdvertisesNoRefresh(t *testing.T) {
 	defer server.Close()
 	ref := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef
 	host.storeResource(&storedResource{
-		Ref: ref, Name: "edge-kv-probe", Space: "conformance",
+		Ref: ref, Name: "edge-kv-probe", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-1", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	query := exactQueryValues("conformance", ref)

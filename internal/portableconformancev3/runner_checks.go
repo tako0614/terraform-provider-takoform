@@ -144,6 +144,12 @@ func (r *v3Runner) run() error {
 		r.checkSupportProfiles,
 		r.checkRuntimeContractAdvertised,
 		r.checkEdgeInterfaceContractsAdvertised,
+		// The resource plane is tenant-isolated (spec/decisions/0028). It runs
+		// last because it is the only sequence that writes into a SECOND tenant's
+		// plane, and because everything it creates in the first tenant carries a
+		// name of its own — so no earlier check can be perturbed by it, however
+		// the matrix is reordered later.
+		r.checkTenantIsolatedResourcePlane,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -558,16 +564,32 @@ func (r *v3Runner) checkCreateLifecycle(kv, mw, queue probeTarget) error {
 	r.complete("apply-idempotency-replay")
 
 	// Another principal and another tenant must not address the primary
-	// principal's cached success: their independent execution collides with
-	// the existing resource instead of replaying 201.
-	for _, token := range []string{r.alternateToken, r.alternateTenantToken} {
-		crossResponse, err := r.requestWithToken(token, http.MethodPut, fullURL, headers, body)
-		if err != nil {
-			return err
-		}
-		if err := r.expectStableError(crossResponse, "generation_conflict"); err != nil {
-			return fmt.Errorf("cross-principal idempotency isolation: %w", err)
-		}
+	// principal's cached success. Neither replays it, and the two are refused
+	// for different reasons, which is the tenant boundary showing through:
+	//
+	//   - the same tenant's other principal executes independently and collides
+	//     with the resource its own tenant already holds (generation_conflict);
+	//   - another tenant does not hold that name at all, so nothing collides —
+	//     what stops it is the review it is carrying, which was minted inside
+	//     the primary tenant and is not spendable outside it (invalid_argument,
+	//     spec/decisions/0028). Its independent execution under its OWN review is
+	//     what `idempotency-is-tenant-scoped` drives.
+	crossPrincipal, err := r.requestWithToken(r.alternateToken, http.MethodPut, fullURL, headers, body)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(crossPrincipal, "generation_conflict"); err != nil {
+		return fmt.Errorf("cross-principal idempotency isolation: %w", err)
+	}
+	crossTenant, err := r.requestWithToken(r.alternateTenantToken, http.MethodPut, fullURL, headers, body)
+	if err != nil {
+		return err
+	}
+	if crossTenant.Status == createResponse.Status && bytes.Equal(crossTenant.Body, createResponse.Body) {
+		return errors.New("another tenant replayed the primary tenant's recorded success")
+	}
+	if err := r.expectStableError(crossTenant, "invalid_argument"); err != nil {
+		return fmt.Errorf("cross-tenant idempotency isolation: %w", err)
 	}
 	r.complete("cross-principal-idempotency-isolation")
 

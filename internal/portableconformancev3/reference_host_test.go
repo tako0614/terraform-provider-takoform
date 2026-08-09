@@ -88,7 +88,7 @@ func TestMutationFences(t *testing.T) {
 	form := host.catalog.exact(queueRef)
 	existing := &storedResource{
 		Ref:  queueRef,
-		Name: "queue-probe", Space: "conformance",
+		Name: "queue-probe", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-7", Generation: 3, Revision: 5,
 	}
 	host.storeResource(existing)
@@ -136,7 +136,7 @@ func TestMutationFences(t *testing.T) {
 	for _, testCase := range cases {
 		_, _, hostErr := host.mutationFences(
 			fenceRequest(t, testCase.headers), testCase.form,
-			"conformance", testCase.resource, testCase.bodyGen, testCase.uid,
+			referencePrimaryAuth.scope("conformance"), testCase.resource, testCase.bodyGen, testCase.uid,
 		)
 		if hostErr == nil || hostErr.Code != testCase.wantCode {
 			t.Fatalf("%s: hostErr = %+v, want code %s", testCase.name, hostErr, testCase.wantCode)
@@ -146,7 +146,7 @@ func TestMutationFences(t *testing.T) {
 	// The exact fence over the existing generation admits the update.
 	resolved, create, hostErr := host.mutationFences(
 		fenceRequest(t, map[string]string{expectedGenerationHeader: "3"}),
-		form, "conformance", "queue-probe", "", "uid-7",
+		form, referencePrimaryAuth.scope("conformance"), "queue-probe", "", "uid-7",
 	)
 	if hostErr != nil || create || resolved != existing {
 		t.Fatalf("exact fence rejected: %+v %v", hostErr, create)
@@ -281,12 +281,12 @@ func TestDeleteOfBoundTargetFailsDependencyInUse(t *testing.T) {
 	versionRef := contract.RunnerInput.WorkerVersion.Identity.FormRef
 	host.storeResource(&storedResource{
 		Ref:  kvRef,
-		Name: "edge-kv-probe", Space: "conformance",
+		Name: "edge-kv-probe", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-1", Generation: 1, Revision: 1, Spec: map[string]any{},
 	})
 	host.storeResource(&storedResource{
 		Ref:  versionRef,
-		Name: "worker-version-probe", Space: "conformance",
+		Name: "worker-version-probe", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-2", Generation: 1, Revision: 1,
 		Spec: map[string]any{
 			"kvBindings": []any{map[string]any{
@@ -327,7 +327,9 @@ func TestDeleteOfBoundTargetFailsDependencyInUse(t *testing.T) {
 		t.Fatalf("bound target vanished after rejected delete: HTTP %d", readStatus)
 	}
 	// After the holder is gone the same fenced delete succeeds.
-	host.removeResource(resourceKey("conformance", versionRef.APIVersion, versionRef.Kind, "worker-version-probe"))
+	host.removeResource(resourceKey(
+		referencePrimaryAuth.scope("conformance"), versionRef.APIVersion, versionRef.Kind, "worker-version-probe",
+	))
 	deleteStatus, _ := hostRequest(t, server, http.MethodDelete, target, map[string]string{
 		"If-Match":        `"1"`,
 		"Idempotency-Key": "key-unbound-delete",
@@ -347,7 +349,7 @@ func TestPrepareFenceOnExistingResource(t *testing.T) {
 	queueRef := contract.RunnerInput.AtLeastOnceQueue.Identity.FormRef
 	host.storeResource(&storedResource{
 		Ref:  queueRef,
-		Name: "queue-probe", Space: "conformance",
+		Name: "queue-probe", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-7", Generation: 3, Revision: 5,
 	})
 	server := httptest.NewServer(host)
@@ -404,12 +406,15 @@ func TestPrepareFenceOnExistingResource(t *testing.T) {
 		t.Fatalf("prepare specDigest = %s, want the materialized %s", prepared.Review.SpecDigest, specDigest)
 	}
 	_, createDigest, err := prepareBindingPayload(
-		specDigest, queueRef, "queue-probe", "conformance", prepareCreateUID, prepareCreateGeneration,
+		specDigest, queueRef, "queue-probe", referencePrimaryAuth.scope("conformance"),
+		prepareCreateUID, prepareCreateGeneration,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, updateDigest, err := prepareBindingPayload(specDigest, queueRef, "queue-probe", "conformance", "uid-7", "3")
+	_, updateDigest, err := prepareBindingPayload(
+		specDigest, queueRef, "queue-probe", referencePrimaryAuth.scope("conformance"), "uid-7", "3",
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,7 +451,7 @@ func TestAcceptedApplyBindsTheIncarnationItWasAcceptedFor(t *testing.T) {
 	}
 	accepted := &storedResource{
 		Ref:  queueRef,
-		Name: "queue-probe", Space: "conformance",
+		Name: "queue-probe", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-7", Generation: 3, Revision: 5,
 		Spec: spec, SpecDigest: specDigest,
 	}
@@ -546,7 +551,7 @@ func TestStaleRevisionDeleteRejected(t *testing.T) {
 	kvRef := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef
 	host.storeResource(&storedResource{
 		Ref:  kvRef,
-		Name: "edge-kv-probe", Space: "conformance",
+		Name: "edge-kv-probe", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 		UID: "uid-1", Generation: 1, Revision: 4, Spec: map[string]any{},
 	})
 	server := httptest.NewServer(host)

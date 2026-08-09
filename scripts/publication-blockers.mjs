@@ -16,6 +16,7 @@
 // would exist if the lane had published: an unpublished candidate set and an
 // empty family lifecycle.
 
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -28,6 +29,51 @@ const BLOCKER_ID = /^V3-[0-9]{3}$/;
 
 function fail(message) {
   throw new Error(message);
+}
+
+/**
+ * mergedPullRequestNumbers reads the numbers this repository's own history
+ * records as PULL REQUESTS, from the `(#N)` suffix the squash-merge convention
+ * puts on every landed commit subject.
+ *
+ * It exists because `issue` cannot be validated as an issue offline, and a
+ * network call from `bun run check` is not something this repository does.
+ * GitHub draws issues and pull requests from ONE number sequence, so a blocker
+ * naming a pull request number is a mistake nothing notices: `gh issue view
+ * 116` resolves the pull request and reads as a confirmation. That is exactly
+ * how V3-012 came to record 116 — the number of the pull request that landed
+ * the preceding ledger edit — instead of its real issue, 121.
+ *
+ * What this cannot do is confirm that a number IS an issue; nothing offline
+ * can. What it can do is REFUTE, and soundly: a number the history records as a
+ * pull request is, by the shared sequence, not an issue. Incomplete and sound
+ * beats absent, and it costs one local `git log`.
+ *
+ * A history that cannot be read yields null rather than an empty set, so the
+ * caller reports that the refutation did not run instead of reporting a clean
+ * result it did not earn. CI checks this repository out at full depth, so the
+ * gate that guards a merge always runs it.
+ */
+function mergedPullRequestNumbers(repositoryRoot) {
+  let log;
+  try {
+    log = execFileSync("git", ["log", "--format=%s", "HEAD"], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    return null;
+  }
+  const numbers = new Map();
+  for (const subject of log.split("\n")) {
+    const match = /\(#([0-9]+)\)\s*$/u.exec(subject);
+    if (match !== null && !numbers.has(Number(match[1]))) {
+      numbers.set(Number(match[1]), subject.trim());
+    }
+  }
+  return numbers.size === 0 ? null : numbers;
 }
 
 /**
@@ -52,6 +98,8 @@ export function parseBlockerLedger(document, repositoryRoot = null) {
   }
 
   const seen = new Set();
+  const issues = new Map();
+  const pullRequests = repositoryRoot === null ? null : mergedPullRequestNumbers(repositoryRoot);
   const blockers = document.blockers.map((blocker, index) => {
     const at = `${BLOCKER_LEDGER} blocker ${index}`;
     if (blocker === null || typeof blocker !== "object" || Array.isArray(blocker)) {
@@ -109,13 +157,43 @@ export function parseBlockerLedger(document, repositoryRoot = null) {
     if (blocker.status === "closed" && blocker.evidence.length === 0) {
       fail(`${blocker.id} is closed but names no evidence; a blocker closes by evidence, not by editing its status`);
     }
-    if (blocker.issue !== undefined && (!Number.isInteger(blocker.issue) || blocker.issue <= 0)) {
-      fail(`${blocker.id} issue must be a positive integer when present`);
+    if (blocker.issue !== undefined) {
+      if (!Number.isInteger(blocker.issue) || blocker.issue <= 0) {
+        fail(`${blocker.id} issue must be a positive integer when present`);
+      }
+      // One issue tracks one blocker. Two blockers on one number is the same
+      // copy-paste that puts the wrong number there in the first place, and it
+      // makes the ledger's traceability a coincidence.
+      if (issues.has(blocker.issue)) {
+        fail(
+          `${blocker.id} names issue #${blocker.issue}, which ${issues.get(blocker.issue)} already tracks; ` +
+            `one issue tracks one blocker`,
+        );
+      }
+      issues.set(blocker.issue, blocker.id);
+      const landed = pullRequests?.get(blocker.issue);
+      if (landed !== undefined) {
+        fail(
+          `${blocker.id} names issue #${blocker.issue}, but this repository's history records #${blocker.issue} ` +
+            `as a pull request: ${JSON.stringify(landed)}. GitHub numbers issues and pull requests from one ` +
+            `sequence, so \`gh issue view ${blocker.issue}\` resolves that pull request and the mistake reads as ` +
+            `a confirmation. Name the issue's own number.`,
+        );
+      }
     }
     return blocker;
   });
 
-  return { lane: document.lane, family: document.family, policy: document.policy, blockers };
+  return {
+    lane: document.lane,
+    family: document.family,
+    policy: document.policy,
+    blockers,
+    // How many pull-request numbers the offline refutation had to work with, or
+    // null when the history could not be read. The caller reports it rather
+    // than claiming a clean result the check did not earn.
+    pullRequestNumbersKnown: pullRequests === null ? null : pullRequests.size,
+  };
 }
 
 export function loadBlockerLedger(repositoryRoot) {
@@ -199,9 +277,12 @@ function main() {
     byPriority.set(blocker.priority, (byPriority.get(blocker.priority) ?? 0) + 1);
   }
   const summary = [...byPriority.entries()].sort().map(([priority, count]) => `${priority}=${count}`).join(" ");
+  const traceability = ledger.pullRequestNumbersKnown === null
+    ? "no readable history, so no issue number was refuted"
+    : `${ledger.pullRequestNumbersKnown} pull-request numbers refuted against`;
   console.log(
     `publication blockers OK: ${ledger.blockers.length} recorded, ${open.length} open (${summary || "none"}); ` +
-      `${ledger.lane} stays frozen`,
+      `${ledger.lane} stays frozen; ${traceability}`,
   );
 }
 

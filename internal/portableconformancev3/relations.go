@@ -44,15 +44,24 @@ type storedRelation struct {
 // schema against the materialized spec, verifies the binding contracts, and
 // returns the records to store. It runs before any mutation on the apply and
 // import paths alike, and is re-run at async commit time.
+//
+// Resolution happens inside ONE scope — the mutating caller's tenant, and the
+// space the request named. A reference carries `{apiVersion, kind, name}` and
+// names neither, so a host that resolved a name host-wide would let one tenant's
+// desired state bind to another tenant's resource whenever the two chose the same
+// name, and would then pin that foreign uid into stored state. The refusal for a
+// name only another tenant holds is therefore the ordinary absent-target
+// `resource_not_found`: the target is not in this tenant's plane, which is the
+// same fact as it not existing (spec/decisions/0028).
 func (h *ReferenceHost) resolveRelations(
 	form *InstalledForm,
-	space string,
+	scope resourceScope,
 	spec map[string]any,
 ) ([]storedRelation, *hostError) {
 	instances := currentformmodel.RelationInstances(form.Relations, spec)
 	out := make([]storedRelation, 0, len(instances))
 	for _, instance := range instances {
-		target := h.resources[resourceKey(space, instance.TargetAPIVersion, instance.TargetKind, instance.TargetName)]
+		target := h.resources[resourceKey(scope, instance.TargetAPIVersion, instance.TargetKind, instance.TargetName)]
 		if target == nil {
 			return nil, stableError(
 				"resource_not_found",
@@ -225,9 +234,10 @@ func (h *ReferenceHost) verifyBindingContract(
 				contract.TargetInterface.Version+", which Form "+targetForm.Ref.Kind+" does not provide",
 		)
 	}
-	// 6. Same space. A reference carries no space member at all, so the target
-	//    was resolved inside the source's own space by construction; a
-	//    cross-space binding is unrepresentable rather than refused.
+	// 6. Same tenant and same space. A reference carries neither member, so the
+	//    target was resolved inside the source's own scope by construction; a
+	//    cross-space or cross-tenant binding is unrepresentable rather than
+	//    refused (spec/decisions/0028).
 	return ref, nil
 }
 
@@ -371,7 +381,7 @@ func (h *ReferenceHost) dependencyInUse(resource *storedResource) *hostError {
 func (h *ReferenceHost) relationDrift(resource *storedResource) (reason, hostReason string, drifted bool) {
 	for _, relation := range resource.Relations {
 		current := h.resources[resourceKey(
-			resource.Space, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName,
+			resource.scope(), relation.TargetAPIVersion, relation.TargetKind, relation.TargetName,
 		)]
 		identity := relation.TargetAPIVersion + " " + relation.TargetKind + " " + relation.TargetName
 		if current == nil {

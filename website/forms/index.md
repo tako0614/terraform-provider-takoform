@@ -1,4 +1,13 @@
-# Current v1alpha2 Form candidates
+# Form inventory
+
+This page carries both inventories this repository renders, and it is generated
+from the same declarations the packages are built from. The first is the
+retained provider-v2 candidate set under `forms.takoform.com/v1alpha2`; the
+second is the Edge Platform Family source candidate set under
+`edge.forms.takoform.com/v1alpha1`. Neither is published, Experimental,
+Stable, centrally approved, or guaranteed commercially available.
+
+## Retained v1alpha2 Form candidates
 
 This is the provider-v2 source candidate inventory for the nine Form-backed
 Resources currently operated by Takosumi Cloud. Every entry is a local
@@ -13,7 +22,7 @@ The frozen v1alpha1 inventory remains verifiable through
 [`standard-package-set.json`](standard-package-set.json) and immutable
 release sources, but it is not rendered as the current provider catalog.
 
-## Compute and application
+### Compute and application
 
 | Kind | Resource | Version | Portable intent |
 | --- | --- | --- | --- |
@@ -22,7 +31,7 @@ release sources, but it is not rendered as the current provider catalog.
 | `ContainerService` | `takoform_container_service` | `0.1.0` | Portable service executed from an immutable OCI image digest. |
 | `StatefulEntity` | `takoform_stateful_entity` | `0.1.0` | Portable namespace of addressable persistent entities implemented by digest-bound application bytes. |
 
-## Data and storage
+### Data and storage
 
 | Kind | Resource | Version | Portable intent |
 | --- | --- | --- | --- |
@@ -32,7 +41,7 @@ release sources, but it is not rendered as the current provider catalog.
 | `Queue` | `takoform_queue` | `0.1.0` | Portable asynchronous at-least-once message delivery. |
 | `VectorIndex` | `takoform_vector_index` | `0.1.0` | Portable vector index with dimensions fixed for the index lifecycle. |
 
-## Declared runtime interfaces
+### Declared runtime interfaces
 
 A Form may declare the runtime interfaces its service exposes. The names are
 author-defined and open: there is no registry, no allowlist, and no central
@@ -51,7 +60,7 @@ lifecycle.
 | `StatefulEntity` | `entity.invoke@1` (invoke) |
 | `VectorIndex` | `vector.query@1` (delete, query, upsert) |
 
-## Immutable fields
+### Immutable fields
 
 Every Form fixes its `/name`. A Form that additionally fixes a field states so
 in its definition, and the provider enforces replacement for exactly those
@@ -69,9 +78,9 @@ fields; the protocol lifecycle proves both.
 | `StatefulEntity` | `/name` |
 | `VectorIndex` | `/dimensions`, `/name` |
 
-## Status
+### Status
 
-Every entry in this inventory is an unpublished `0.1.0` candidate.
+Every entry in this retained inventory is an unpublished `0.1.0` candidate.
 Takosumi Cloud implementation is workload and first-host evidence only; it
 does not turn a Proposal into a portable standard or authorize publication.
 

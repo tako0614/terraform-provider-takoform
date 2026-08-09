@@ -582,7 +582,16 @@ func generateRetiredInventory(root string) error {
 // from.
 func formInventoryDoc() string {
 	var builder strings.Builder
-	builder.WriteString(`# Current v1alpha2 Form candidates
+	builder.WriteString(`# Form inventory
+
+This page carries both inventories this repository renders, and it is generated
+from the same declarations the packages are built from. The first is the
+retained provider-v2 candidate set under ` + "`forms.takoform.com/v1alpha2`" + `; the
+second is the Edge Platform Family source candidate set under
+` + "`edge.forms.takoform.com/v1alpha1`" + `. Neither is published, Experimental,
+Stable, centrally approved, or guaranteed commercially available.
+
+## Retained v1alpha2 Form candidates
 
 This is the provider-v2 source candidate inventory for the nine Form-backed
 Resources currently operated by Takosumi Cloud. Every entry is a local
@@ -608,13 +617,13 @@ release sources, but it is not rendered as the current provider catalog.
 		if len(kinds) == 0 {
 			continue
 		}
-		fmt.Fprintf(&builder, "## %s\n\n| Kind | Resource | Version | Portable intent |\n| --- | --- | --- | --- |\n", domain.title)
+		fmt.Fprintf(&builder, "### %s\n\n| Kind | Resource | Version | Portable intent |\n| --- | --- | --- | --- |\n", domain.title)
 		for _, kind := range kinds {
 			fmt.Fprintf(&builder, "| `%s` | `%s` | `%s` | %s |\n", kind.Kind, kind.ResourceType, kind.Version(), kind.Description)
 		}
 		builder.WriteString("\n")
 	}
-	builder.WriteString(`## Declared runtime interfaces
+	builder.WriteString(`### Declared runtime interfaces
 
 A Form may declare the runtime interfaces its service exposes. The names are
 author-defined and open: there is no registry, no allowlist, and no central
@@ -631,7 +640,7 @@ lifecycle.
 		}
 	}
 	builder.WriteString(`
-## Immutable fields
+### Immutable fields
 
 Every Form fixes its ` + "`/name`" + `. A Form that additionally fixes a field states so
 in its definition, and the provider enforces replacement for exactly those
@@ -644,9 +653,9 @@ fields; the protocol lifecycle proves both.
 		fmt.Fprintf(&builder, "| `%s` | `%s` |\n", kind.Kind, strings.Join(kind.ImmutableFields(), "`, `"))
 	}
 	builder.WriteString(`
-## Status
+### Status
 
-Every entry in this inventory is an unpublished ` + "`0.1.0`" + ` candidate.
+Every entry in this retained inventory is an unpublished ` + "`0.1.0`" + ` candidate.
 Takosumi Cloud implementation is workload and first-host evidence only; it
 does not turn a Proposal into a portable standard or authorize publication.
 
