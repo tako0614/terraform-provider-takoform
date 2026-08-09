@@ -181,6 +181,12 @@ probe, concurrency/idempotency rules, stable errors, and required cross-repo
 black-box checks. The retained-lane provider client consumes this contract in
 adversarial HTTP tests.
 
+Every count this page states about a corpus — the size of a check matrix, of an
+error taxonomy, of a retryable set — is bound by `bun run check:public-surfaces`
+to the array in that corpus's `contract.json` that defines it. A number written
+here beside a number a machine already knows is a defect waiting to recur, so
+the gate names both values and fails when they part company.
+
 `portable-host-v3/` is the Host API v1alpha3 corpus consumed by the provider
 v2.1 client lane. It pins the v1alpha3 discovery/API paths, the closed
 26-code error taxonomy with its exact HTTP status map and 4-code retryable
@@ -198,7 +204,7 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 100-check matrix over real HTTP: exact discovery and
+drives the complete 102-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -263,12 +269,22 @@ once it has supplied the bytes itself. The plane those three surround is held to
 the same boundary by
 [decision 0028](../spec/decisions/0028-the-resource-plane-is-tenant-isolated.md):
 two tenants create one `{space, kind, name}` and get two resources with two uids,
-neither reads, updates, or deletes the other's — answered `resource_not_found`,
-indistinguishably from a name nobody created — a reference resolves only inside
-the referring tenant even when the name matches exactly, a `prepareDigest` minted
-by one tenant is not spendable by another, and one `Idempotency-Key` from two
-tenants is two operations rather than a replay. All seven are black box and all
-seven need the alternate-TENANT credential, which is why the runner requires it.
+neither reads, observes, updates, or deletes the other's — answered
+`resource_not_found`, indistinguishably from a name nobody created, message
+included — a reference resolves only inside the referring tenant even when the
+name matches exactly, a `prepareDigest` minted by one tenant is not spendable by
+another, and one `Idempotency-Key` from two tenants is two operations rather than
+a replay. `import` is the one surface whose absent answer is a SUCCESS, and it is
+measured as one: a second tenant adopting the name the first tenant holds is
+answered the 201 it would be answered for a name nobody holds anywhere — same
+status, same ETag, same document but for the minted uid and the name — while the
+holder's uid, generation, and revision do not move, and the fenced form of the
+same adoption is refused `resource_not_found`. The nine are enumerated by
+SURFACE rather than by intent: every route that takes a resource name is listed
+against the check measuring it, and that list is bound to the published route
+block and to the required-check list, so a name-addressed endpoint cannot be
+added without one. All nine are black box and all nine need the alternate-TENANT
+credential, which is why the runner requires it.
 Probing every stable error uses the runner-only
 `Takoform-Conformance-Probe` header (`error:<code>`, `async`,
 `touch-status`, `external-change`); it is disposable-adapter transport, never

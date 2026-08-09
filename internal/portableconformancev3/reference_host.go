@@ -408,6 +408,31 @@ func hostRequestAuth(request *http.Request) (hostAuthContext, bool) {
 	}
 }
 
+// resourcePlaneRoute names one PATH-addressed resource surface: the method,
+// and the action segment that follows the name (empty when the name is the last
+// segment).
+type resourcePlaneRoute struct {
+	Method string
+	Action string
+}
+
+// resourcePlaneHandlers is the complete set of routes this host serves under a
+// resource NAME. It is a table rather than a switch so that the set is data the
+// enumeration gate can read: every entry must appear in
+// nameAddressedResourceSurfaces with a tenant check against it, and every
+// path-addressed surface enumerated there must appear here. A name-addressed
+// endpoint therefore cannot be added to this host without also being measured
+// against the tenant boundary (spec/decisions/0028).
+var resourcePlaneHandlers = map[resourcePlaneRoute]func(
+	*ReferenceHost, http.ResponseWriter, *http.Request, string, string, string,
+){
+	{Method: http.MethodPut}:                     (*ReferenceHost).handleApply,
+	{Method: http.MethodGet}:                     (*ReferenceHost).handleRead,
+	{Method: http.MethodDelete}:                  (*ReferenceHost).handleDelete,
+	{Method: http.MethodPost, Action: "observe"}: (*ReferenceHost).handleObserve,
+	{Method: http.MethodPost, Action: "import"}:  (*ReferenceHost).handleImport,
+}
+
 func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -469,31 +494,31 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 		h.handleValidate(w, request)
 	case parts[0] == "resources" && len(parts) == 2 && parts[1] == "prepare" && request.Method == http.MethodPost:
 		h.handlePrepare(w, request)
+	// The two path-addressed cases are dispatched from resourcePlaneHandlers
+	// rather than from a switch of their own. The map is one half of the pair
+	// that makes the tenant matrix's coverage mechanical: a route this host
+	// serves and nameAddressedResourceSurfaces does not enumerate, or an
+	// enumerated surface this host does not serve, fails
+	// TestEveryNameAddressedSurfaceIsRouted. There is no refresh action in the
+	// v1alpha3 lane — observe is the one fenced read-only re-observation — so
+	// /refresh reaches no entry and is an unknown operation, exactly like any
+	// other action the lane does not define.
 	case parts[0] == "resources" && len(parts) == 5:
 		group, kind, name := groupOf(parts[1], parts[2]), parts[3], parts[4]
-		switch request.Method {
-		case http.MethodPut:
-			h.handleApply(w, request, group, kind, name)
-		case http.MethodGet:
-			h.handleRead(w, request, group, kind, name)
-		case http.MethodDelete:
-			h.handleDelete(w, request, group, kind, name)
-		default:
+		handler, defined := resourcePlaneHandlers[resourcePlaneRoute{Method: request.Method}]
+		if !defined {
 			h.writeError(w, "resource_not_found", "unknown operation")
+			return
 		}
+		handler(h, w, request, group, kind, name)
 	case parts[0] == "resources" && len(parts) == 6 && request.Method == http.MethodPost:
 		group, kind, name, action := groupOf(parts[1], parts[2]), parts[3], parts[4], parts[5]
-		switch action {
-		// There is no refresh action in the v1alpha3 lane: observe is the one
-		// fenced read-only re-observation. A request for /refresh is an unknown
-		// route, exactly like any other operation the lane does not define.
-		case "observe":
-			h.handleObserve(w, request, group, kind, name)
-		case "import":
-			h.handleImport(w, request, group, kind, name)
-		default:
+		handler, defined := resourcePlaneHandlers[resourcePlaneRoute{Method: http.MethodPost, Action: action}]
+		if !defined {
 			h.writeError(w, "resource_not_found", "unknown operation")
+			return
 		}
+		handler(h, w, request, group, kind, name)
 	case parts[0] == "operations" && len(parts) == 2 && request.Method == http.MethodGet:
 		h.handleOperationGet(w, request, parts[1])
 	case parts[0] == "operations" && len(parts) == 3 && parts[2] == "cancel" && request.Method == http.MethodPost:

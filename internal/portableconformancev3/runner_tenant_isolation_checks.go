@@ -13,6 +13,15 @@ package portableconformancev3
 // one tenant could not measure any of this, which is why the credential is
 // required rather than optional (RunEndpoint).
 //
+// The set of checks here is enumerated by SURFACE, not by intent: every
+// v1alpha3 endpoint that takes a resource name is listed in
+// nameAddressedResourceSurfaces (contract.go) beside the check that measures its
+// boundary, and three tests bind that list to the reference host's routes, to
+// the Lifecycle route block of the spec, and to requiredRunnerChecks. An
+// enumeration by intent is what left `observe` and `import` out: both take a
+// name, one hands back a whole representation and one mutates, and a host that
+// scoped GET, PUT and DELETE while resolving either host-wide passed everything.
+//
 // What a black box cannot see is the SHAPE of the address — that the key carries
 // the tenant rather than a filter being applied somewhere late — and it cannot
 // construct a cross-tenant derived-rendering dependency at all, precisely because
@@ -51,6 +60,8 @@ const (
 	tenantRelationAttach  = "tenant-relation-endpoint"
 	tenantPrepareName     = "tenant-prepare-probe"
 	tenantIdempotencyName = "tenant-idempotency-probe"
+	tenantImportHeldName  = "tenant-import-held-probe"
+	tenantImportFreeName  = "tenant-import-free-probe"
 )
 
 // checkTenantIsolatedResourcePlane drives the whole V3-012 sequence. It runs
@@ -62,7 +73,9 @@ func (r *v3Runner) checkTenantIsolatedResourcePlane() error {
 	for _, step := range []func(probeTarget) error{
 		r.checkResourceAddressIsTenantScoped,
 		r.checkResourceReadIsTenantIsolated,
+		r.checkResourceObserveIsTenantIsolated,
 		r.checkResourceUpdateIsTenantIsolated,
+		r.checkResourceImportIsTenantIsolated,
 		r.checkResourceDeleteIsTenantIsolated,
 		r.checkRelationResolutionIsTenantScoped,
 		r.checkPrepareIsTenantScoped,
@@ -236,6 +249,267 @@ func (r *v3Runner) checkResourceReadIsTenantIsolated(worker probeTarget) error {
 	return nil
 }
 
+// checkResourceObserveIsTenantIsolated proves the lane's other READ surface
+// stops at the tenant, to the same standard the plain read is held to.
+//
+// `observe` is a POST, it carries a generation fence and an Idempotency-Key, and
+// it answers a `{resource: …}` envelope rather than a bare resource — so a host
+// implementing it beside GET rather than through GET is the ordinary case, and
+// scoping one says nothing about the other. What it hands back is the WHOLE
+// representation: uid, generation, revision, the complete desired spec, and the
+// rendered status. A host resolving it host-wide therefore discloses strictly
+// more than a leaked GET would, and does it to any caller who can guess a name.
+//
+// The fence presented is the holder's REAL current generation, so nothing but
+// the address can refuse it — a host-wide resolver would find the resource, find
+// the fence exact, and answer 200. And the refusal is compared against the
+// refusal for a name nobody created, with the requestId and the echoed name
+// normalized out, because a 404 that reads differently is the same membership
+// oracle a 403 would be.
+func (r *v3Runner) checkResourceObserveIsTenantIsolated(worker probeTarget) error {
+	private := worker
+	private.Name = tenantPrivateName
+	held, err := r.readAs(r.token, private)
+	if err != nil {
+		return err
+	}
+	holder, err := decodeResource(held, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("the holding tenant reading before the foreign observe: %w", err)
+	}
+
+	foreign, err := r.statusActionAs(
+		r.alternateTenantToken, private, "observe",
+		holder.Metadata.Generation, "key-tenant-foreign-observe", nil,
+	)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(foreign, "resource_not_found"); err != nil {
+		return fmt.Errorf(
+			"another tenant observing %s at its exact generation %s: %w",
+			private.Name, holder.Metadata.Generation, err,
+		)
+	}
+
+	absent := worker
+	absent.Name = tenantAbsentName
+	nothing, err := r.statusActionAs(
+		r.alternateTenantToken, absent, "observe",
+		holder.Metadata.Generation, "key-tenant-absent-observe", nil,
+	)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(nothing, "resource_not_found"); err != nil {
+		return fmt.Errorf("observing a name nobody created: %w", err)
+	}
+	foreignMessage, err := comparableRefusal(foreign, private.Name)
+	if err != nil {
+		return err
+	}
+	absentMessage, err := comparableRefusal(nothing, absent.Name)
+	if err != nil {
+		return err
+	}
+	if foreignMessage != absentMessage {
+		return fmt.Errorf(
+			"an observe of another tenant's resource is refused with %q and of an absent one with %q; the two must "+
+				"be indistinguishable, or the difference is a membership oracle over every name on the host",
+			foreignMessage, absentMessage,
+		)
+	}
+
+	// The holder observes the same name, with the same fence, and is answered
+	// its own representation: the request shape and the fence were both valid,
+	// so what refused the other tenant was the address and nothing else. Without
+	// this leg a host that refused EVERY observe would pass the two above.
+	own, err := r.statusActionAs(
+		r.token, private, "observe", holder.Metadata.Generation, "key-tenant-holder-observe", nil,
+	)
+	if err != nil {
+		return err
+	}
+	observed, err := decodeResourceEnvelope(own)
+	if err != nil {
+		return fmt.Errorf("the holding tenant observing its own resource: %w", err)
+	}
+	if observed.Metadata.UID != holder.Metadata.UID {
+		return fmt.Errorf(
+			"the holder's own observe answered uid %s, want %s",
+			observed.Metadata.UID, holder.Metadata.UID,
+		)
+	}
+	r.complete("resource-observe-is-tenant-isolated")
+	return nil
+}
+
+// checkResourceImportIsTenantIsolated proves adoption addresses the caller's own
+// tenant, and it is the one surface where "absent-equivalent" is not a refusal.
+//
+// Import has its own answer for a name the caller does not hold: under
+// `If-None-Match: *` it ADOPTS, minting a fresh resource at generation 1. So the
+// rule for a name that exists only in another tenant is not "refuse" — it is
+// "behave exactly as though the name were free", and a check that accepted any
+// refusal would accept the very defect it is looking for. A host that resolves
+// import host-wide fails in one of two ways, and both are measured here:
+//
+//   - it sees the foreign record as an occupant and refuses the create with
+//     `generation_conflict` — a "that name is taken" oracle over the host; or
+//   - it takes the update path and adopts the foreign record, writing this
+//     tenant's desired state over another tenant's live resource. Adoption
+//     followed by a delete is the complete destruction of a stranger's state
+//     through a name.
+//
+// Absent-equivalence is asserted as an equality rather than as a status code:
+// the adoption of the foreign-held name and the adoption of a name nobody holds
+// anywhere must produce the same status, the same ETag, and the same document
+// once the two things that legitimately differ — the minted uid and the name —
+// are normalized out.
+//
+// The fenced form of import is the other half. An import carrying an update
+// generation fence names an EXISTING resource, so against a name only another
+// tenant holds it must fail `resource_not_found` (404), indistinguishably from
+// the same request against a name nobody created. That leg runs first, while the
+// second tenant still holds nothing under the name.
+func (r *v3Runner) checkResourceImportIsTenantIsolated(worker probeTarget) error {
+	held := worker
+	held.Name = tenantImportHeldName
+	created, err := r.applyAs(r.token, held, applyOptions{
+		Create: true, IdempotencyKey: "key-tenant-import-held-create",
+	})
+	if err != nil {
+		return err
+	}
+	holder, err := decodeResource(created, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("the holding tenant's create: %w", err)
+	}
+
+	// An import fenced at the holder's exact live generation. Nothing but the
+	// address refuses it.
+	fenced, err := r.importResourceAs(r.alternateTenantToken, held, importOptions{
+		NativeID:           "native-tenant-import-held",
+		IdempotencyKey:     "key-tenant-import-foreign-fenced",
+		ExpectedGeneration: holder.Metadata.Generation,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(fenced, "resource_not_found"); err != nil {
+		return fmt.Errorf(
+			"another tenant importing %s onto its exact generation %s: %w",
+			held.Name, holder.Metadata.Generation, err,
+		)
+	}
+	free := worker
+	free.Name = tenantImportFreeName
+	fencedAbsent, err := r.importResourceAs(r.alternateTenantToken, free, importOptions{
+		NativeID:           "native-tenant-import-free",
+		IdempotencyKey:     "key-tenant-import-absent-fenced",
+		ExpectedGeneration: holder.Metadata.Generation,
+	})
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(fencedAbsent, "resource_not_found"); err != nil {
+		return fmt.Errorf("a fenced import of a name nobody created: %w", err)
+	}
+	foreignMessage, err := comparableRefusal(fenced, held.Name)
+	if err != nil {
+		return err
+	}
+	absentMessage, err := comparableRefusal(fencedAbsent, free.Name)
+	if err != nil {
+		return err
+	}
+	if foreignMessage != absentMessage {
+		return fmt.Errorf(
+			"a fenced import onto another tenant's resource is refused with %q and onto an absent one with %q; the "+
+				"two must be indistinguishable, or the difference is a membership oracle over every name on the host",
+			foreignMessage, absentMessage,
+		)
+	}
+
+	// The create-intent adoption: the name is FREE in this tenant, so it lands.
+	adopted, err := r.importResourceAs(r.alternateTenantToken, held, importOptions{
+		NativeID: "native-tenant-import-held-adopt", IdempotencyKey: "key-tenant-import-foreign-adopt", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	adoptedResource, err := decodeResource(adopted, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf(
+			"a second tenant adopting the name %s: %w; the name is held by another tenant and is therefore free "+
+				"here, so adoption must succeed exactly as it does against a name nobody holds",
+			held.Name, err,
+		)
+	}
+	if adoptedResource.Metadata.UID == holder.Metadata.UID {
+		return fmt.Errorf(
+			"the second tenant's adoption answered the holder's uid %s; it adopted another tenant's record",
+			holder.Metadata.UID,
+		)
+	}
+	control, err := r.importResourceAs(r.alternateTenantToken, free, importOptions{
+		NativeID: "native-tenant-import-held-adopt", IdempotencyKey: "key-tenant-import-free-adopt", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	controlResource, err := decodeResource(control, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("adopting a name nobody holds: %w", err)
+	}
+	adoptedShape, err := comparableCreation(adopted, held.Name, adoptedResource.Metadata.UID)
+	if err != nil {
+		return err
+	}
+	controlShape, err := comparableCreation(control, free.Name, controlResource.Metadata.UID)
+	if err != nil {
+		return err
+	}
+	if adoptedShape != controlShape {
+		return fmt.Errorf(
+			"adopting a name another tenant holds answered %q and adopting a free name answered %q; a name held "+
+				"only in another tenant must be absent-equivalent, so the two must differ in nothing but uid and name",
+			adoptedShape, controlShape,
+		)
+	}
+
+	// The adoption landed in the second tenant's plane, and nowhere else.
+	adoptedUID, err := r.readUIDAs(r.alternateTenantToken, held, "the second tenant reading what it adopted")
+	if err != nil {
+		return err
+	}
+	if adoptedUID != adoptedResource.Metadata.UID {
+		return fmt.Errorf(
+			"the second tenant reads uid %s under the name it adopted, want %s",
+			adoptedUID, adoptedResource.Metadata.UID,
+		)
+	}
+	unmoved, err := r.readAs(r.token, held)
+	if err != nil {
+		return err
+	}
+	still, err := decodeResource(unmoved, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("a foreign import removed %s: %w", held.Name, err)
+	}
+	if still.Metadata.UID != holder.Metadata.UID ||
+		still.Metadata.Generation != holder.Metadata.Generation ||
+		still.Metadata.Revision != holder.Metadata.Revision {
+		return fmt.Errorf(
+			"a foreign import moved %s from uid %s generation %s revision %s to uid %s generation %s revision %s",
+			held.Name, holder.Metadata.UID, holder.Metadata.Generation, holder.Metadata.Revision,
+			still.Metadata.UID, still.Metadata.Generation, still.Metadata.Revision,
+		)
+	}
+	r.complete("resource-import-is-tenant-isolated")
+	return nil
+}
+
 // comparableRefusal reduces one error envelope to what two refusals of the same
 // class must agree on: the code, the retryable flag, and the message with the
 // resource name it may echo replaced by a placeholder. The requestId is dropped,
@@ -258,6 +532,23 @@ func comparableRefusal(response wireResponse, name string) (string, error) {
 		"%d %s retryable=%t hostCode=%q %s",
 		response.Status, envelope.Error.Code, envelope.Error.Retryable, envelope.Error.HostCode, message,
 	), nil
+}
+
+// comparableCreation is comparableRefusal for the one absent-equivalent answer
+// that is a SUCCESS: it reduces a 201 to its status, its ETag, and its exact
+// served bytes with the two values that legitimately differ between two
+// creations — the host-issued uid and the resource name — replaced by
+// placeholders. A rendered status may quote either (a Module Worker's
+// hostReason names both), so both are normalized everywhere they appear rather
+// than only in `metadata`.
+func comparableCreation(response wireResponse, name, uid string) (string, error) {
+	if uid == "" {
+		return "", errors.New("a creation with no host-issued uid cannot be compared")
+	}
+	body := strings.ReplaceAll(string(response.Body), uid, "{uid}")
+	body = strings.ReplaceAll(body, name, "{name}")
+	etag := strings.ReplaceAll(response.Header.Get("ETag"), uid, "{uid}")
+	return fmt.Sprintf("%d etag=%s %s", response.Status, etag, strings.TrimSpace(body)), nil
 }
 
 // checkResourceUpdateIsTenantIsolated proves a foreign tenant cannot move

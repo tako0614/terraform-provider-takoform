@@ -1,6 +1,23 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "vitepress";
 
+import { prepareSiteStatus, SITE_STATUS_ROUTE } from "./site-status.mjs";
+
 const github = "https://github.com/tako0614/terraform-provider-takoform";
+
+// The published/preview facts are derived from the repository once, here, at
+// build time. They reach the footer through themeConfig so every page states
+// them as static HTML, and they reach machines through the JSON document this
+// call writes. Every one of them is a pure function of committed repository
+// bytes, so a fresh build reproduces the whole published tree; no commit id
+// appears anywhere in it (see .vitepress/site-status.mjs).
+const siteDirectory = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const siteStatus = { ...prepareSiteStatus(siteDirectory), route: SITE_STATUS_ROUTE };
 
 const projectNavItems = [
   { text: "Proposals", link: "/proposals/" },
@@ -42,6 +59,7 @@ const edgeResourceItems = [
     text: "Worker custom domain",
     link: "/docs/resources/worker_custom_domain.html",
   },
+  { text: "Worker endpoint", link: "/docs/resources/worker_endpoint.html" },
   {
     text: "Worker cron trigger",
     link: "/docs/resources/worker_cron_trigger.html",
@@ -118,6 +136,7 @@ const edgeProposalItems = [
     text: "Worker custom domain",
     link: "/proposals/edge/worker-custom-domain.html",
   },
+  { text: "Worker endpoint", link: "/proposals/edge/worker-endpoint.html" },
   {
     text: "Worker cron trigger",
     link: "/proposals/edge/worker-cron-trigger.html",
@@ -154,21 +173,27 @@ const englishSidebar = {
         { text: "Glossary", link: "/docs/glossary.html" },
       ],
     },
-    { text: "Edge Platform Family (v1alpha3 lane)", items: edgeResourceItems },
-    { text: "Retained v2 resources", items: resourceItems },
+    {
+      text: "Current published — retained v2 resources",
+      items: resourceItems,
+    },
+    {
+      text: "Edge preview — Edge Platform Family (v1alpha3 lane)",
+      items: edgeResourceItems,
+    },
   ],
   "/spec/": specSidebar,
   "/proposals/": [
     {
-      text: "Edge Platform Family",
-      items: edgeProposalItems,
-    },
-    {
-      text: "Retained v2 proposals",
+      text: "Current published — retained v2 proposals",
       items: [
         { text: "Overview", link: "/proposals/" },
         ...proposalItems,
       ],
+    },
+    {
+      text: "Edge preview — Edge Platform Family",
+      items: edgeProposalItems,
     },
   ],
   "/forms/": [
@@ -197,8 +222,14 @@ const japaneseSidebar = {
         { text: "用語集 (英語のみ)", link: "/docs/glossary.html" },
       ],
     },
-    { text: "Edge Platform Family (v1alpha3 lane)", items: edgeResourceItems },
-    { text: "Retained v2 resources", items: resourceItems },
+    {
+      text: "Current published — retained v2 resources",
+      items: resourceItems,
+    },
+    {
+      text: "Edge preview — Edge Platform Family (v1alpha3 lane)",
+      items: edgeResourceItems,
+    },
   ],
   "/ja/spec/": [
     {
@@ -240,6 +271,7 @@ export default defineConfig({
     search: {
       provider: "local",
     },
+    siteStatus,
   },
   locales: {
     root: {
@@ -248,6 +280,7 @@ export default defineConfig({
       themeConfig: {
         nav: englishNav,
         sidebar: englishSidebar,
+        siteStatus,
       },
     },
     ja: {
@@ -257,6 +290,7 @@ export default defineConfig({
       themeConfig: {
         nav: japaneseNav,
         sidebar: japaneseSidebar,
+        siteStatus,
       },
     },
   },

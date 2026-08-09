@@ -123,7 +123,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 100-entry executed-check list every v3
+// requiredRunnerChecks is the closed 102-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -235,14 +235,104 @@ var requiredRunnerChecks = []string{
 	// The resource plane is tenant-isolated (spec/decisions/0028). Every one of
 	// these is driven black box, with the two credentials the runner input
 	// already carries: a runner that cannot authenticate as two tenants cannot
-	// measure any of them.
+	// measure any of them. The list is enumerated by SURFACE and bound to
+	// nameAddressedResourceSurfaces, so a name-addressed endpoint cannot be
+	// added without one.
 	"resource-address-is-tenant-scoped",
 	"resource-read-is-tenant-isolated",
+	"resource-observe-is-tenant-isolated",
 	"resource-update-is-tenant-isolated",
+	"resource-import-is-tenant-isolated",
 	"resource-delete-is-tenant-isolated",
 	"relation-resolution-is-tenant-scoped",
 	"prepare-is-tenant-scoped",
 	"idempotency-is-tenant-scoped",
+}
+
+// nameAddressedResourceSurface is one v1alpha3 surface that takes a resource
+// NAME, and what measures its tenant boundary.
+//
+// The tenant matrix was first enumerated by INTENT — read, update, delete,
+// relations, reviews, replay — and an enumeration by intent is complete only
+// until someone thinks of another intent. Two surfaces that take a name were
+// missed that way: `observe`, which returns a whole representation, and
+// `import`, which mutates. A host that scoped GET, PUT and DELETE while
+// resolving either of those host-wide passed the entire matrix.
+//
+// So the enumeration is by SURFACE, and it is this table. It is bound in three
+// directions by tests in tenant_isolation_test.go:
+//
+//   - to the routes the reference host serves (resourcePlaneHandlers), so a new
+//     endpoint cannot be routed without an entry here;
+//   - to the Lifecycle route block of spec/host-api/v1alpha3.md, so a new
+//     endpoint cannot be published without one either;
+//   - to requiredRunnerChecks, so an entry cannot name a check that does not
+//     exist, and cannot name none unless it states why.
+//
+// It deliberately stays in the Go corpus rather than in contract.json: a runner
+// consumes the JSON contract at run time and needs none of this, while what the
+// table protects is the completeness of the check list this repository ships.
+type nameAddressedResourceSurface struct {
+	// Method and Route are the surface exactly as the Lifecycle route block of
+	// spec/host-api/v1alpha3.md writes it.
+	Method string
+	Route  string
+	// Action is the segment after the name, empty when the name is last.
+	Action string
+	// NameInBody marks the two surfaces whose name travels in the request
+	// document rather than in the path, so they route by their own path and not
+	// through resourcePlaneHandlers.
+	NameInBody bool
+	// TenantChecks are the required checks that hold this surface to the
+	// boundary. Empty exactly when Unresolved says why none is owed.
+	TenantChecks []string
+	// Unresolved states why a surface that carries a name owes no tenant check.
+	Unresolved string
+}
+
+// nameAddressedResourceSurfaces is the closed set of v1alpha3 surfaces that
+// take a resource name.
+var nameAddressedResourceSurfaces = []nameAddressedResourceSurface{
+	{
+		Method: "POST", Route: "{api}/resources/validate", NameInBody: true,
+		// validate carries a name and resolves nothing: it answers diagnostics
+		// about the document it was handed and never reads the store, so it has
+		// no tenant-dependent answer to give and nothing to disclose. A host that
+		// made it report "that name is taken" would be adding a diagnostic this
+		// lane does not define, and would fail the closed-vocabulary rules first.
+		Unresolved: "resolves no stored resource; diagnostics are computed from the submitted document alone",
+	},
+	{
+		Method: "POST", Route: "{api}/resources/prepare", NameInBody: true,
+		TenantChecks: []string{"resource-update-is-tenant-isolated", "prepare-is-tenant-scoped"},
+	},
+	{
+		Method: "PUT", Route: "{api}/resources/{formGroup}/{formVersion}/{kind}/{name}",
+		TenantChecks: []string{
+			"resource-address-is-tenant-scoped",
+			"resource-update-is-tenant-isolated",
+			"relation-resolution-is-tenant-scoped",
+			"idempotency-is-tenant-scoped",
+		},
+	},
+	{
+		Method: "GET", Route: "{api}/resources/{formGroup}/{formVersion}/{kind}/{name}",
+		TenantChecks: []string{"resource-read-is-tenant-isolated"},
+	},
+	{
+		Method: "POST", Route: "{api}/resources/{formGroup}/{formVersion}/{kind}/{name}/import",
+		Action:       "import",
+		TenantChecks: []string{"resource-import-is-tenant-isolated"},
+	},
+	{
+		Method: "POST", Route: "{api}/resources/{formGroup}/{formVersion}/{kind}/{name}/observe",
+		Action:       "observe",
+		TenantChecks: []string{"resource-observe-is-tenant-isolated"},
+	},
+	{
+		Method: "DELETE", Route: "{api}/resources/{formGroup}/{formVersion}/{kind}/{name}",
+		TenantChecks: []string{"resource-delete-is-tenant-isolated"},
+	},
 }
 
 // FormRef is the exact four-field v1alpha3 Form identity.

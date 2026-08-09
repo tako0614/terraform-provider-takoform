@@ -46,18 +46,34 @@ import, exactly as the recorded exact FormRef is
 
 1. Two tenants may create one `{space, apiVersion, kind, name}` and get two
    resources with two host-issued uids. A name is taken within one tenant.
-2. Every resource surface addresses the caller's own tenant. A request naming
-   another tenant's resource fails `resource_not_found` (404), and is
-   indistinguishable from one naming a resource that never existed.
-3. Relations resolve only within the same tenant. A name only another tenant
+2. Every resource surface addresses the caller's own tenant — `read`, `observe`,
+   `prepare`, `apply`, `import`, and `delete`. A request naming another tenant's
+   resource is answered exactly as one naming a resource that never existed.
+   Where that answer is a refusal it is `resource_not_found` (404), and it is
+   indistinguishable from the refusal for a name nobody created.
+   `validate` carries a name and resolves none, so it has no tenant-dependent
+   answer to give.
+3. `import` is the one surface whose absent answer is not a refusal, so it is
+   stated exactly. An adoption under `If-None-Match: *` of a name the caller
+   does not hold mints a resource at generation 1, and a name held only by
+   another tenant is not held by the caller: that adoption SUCCEEDS, and answers
+   what the adoption of a name nobody holds anywhere answers — the same status,
+   the same ETag, and a document differing in nothing but the host-issued uid
+   and the name. An adoption carrying an update generation fence names an
+   existing resource, so against such a name it fails `resource_not_found`
+   (404). A host refusing the create-intent adoption with `generation_conflict`
+   answers "that name is taken" about a tenant the caller cannot see; one taking
+   the update path writes the caller's desired state over a stranger's live
+   resource.
+4. Relations resolve only within the same tenant. A name only another tenant
    holds is an absent target.
-4. A `prepareDigest` binds the minting tenant and is not spendable outside it.
+5. A `prepareDigest` binds the minting tenant and is not spendable outside it.
    An apply presenting a foreign review fails `invalid_argument` (400).
-5. An `Idempotency-Key` names one operation of one tenant. The same key from two
+6. An `Idempotency-Key` names one operation of one tenant. The same key from two
    tenants is two operations.
-6. A pass that renders one resource from others, and advances revisions, is
+7. A pass that renders one resource from others, and advances revisions, is
    scoped to the mutating tenant.
-7. **One exception, unchanged:** a `WorkerCustomDomain`'s canonical hostname is
+8. **One exception, unchanged:** a `WorkerCustomDomain`'s canonical hostname is
    unique across every space of one tenant, because DNS does not partition with
    spaces. That rule drops the space and keeps the tenant. Nothing reaches past
    the tenant.
@@ -73,13 +89,30 @@ those three surround. The taxonomy is closed and no code is added
 ([decision 0014](0014-published-schemas-are-structural-minima.md), rung 3: the
 host enforces it and required conformance checks prove a laxer host fails).
 
-Seven required conformance checks measure it, all black box:
+Nine required conformance checks measure it, all black box:
 `resource-address-is-tenant-scoped`, `resource-read-is-tenant-isolated`,
-`resource-update-is-tenant-isolated`, `resource-delete-is-tenant-isolated`,
+`resource-observe-is-tenant-isolated`, `resource-update-is-tenant-isolated`,
+`resource-import-is-tenant-isolated`, `resource-delete-is-tenant-isolated`,
 `relation-resolution-is-tenant-scoped`, `prepare-is-tenant-scoped`, and
 `idempotency-is-tenant-scoped`. The lane's runner therefore REQUIRES an
 alternate-tenant credential: a runner that can authenticate as one tenant can
 measure none of this.
+
+**The nine are enumerated by surface.** The first version of this record listed
+seven, and it listed them by intent — read it, change it, delete it, point at
+it, review it, replay it. An enumeration by intent is complete until the next
+intent, and two surfaces that take a resource name were already missing from it:
+`observe`, which hands back a whole representation under a fence, and `import`,
+which mutates. A host scoping `GET`, `PUT` and `DELETE` correctly while
+resolving either host-wide passed all seven — and leaked the foreign
+representation, or conflicted with and overwrote foreign state. So the
+enumeration axis is the surface: every route of the lane that takes a resource
+name is listed against the check measuring its boundary, and that list is bound
+by tests to the published route block of
+[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md), to the reference host's
+router, and to the required-check list. A name-addressed endpoint cannot be
+added to this lane without a tenant check, which is a stronger guarantee than
+remembering to think of one.
 
 ## Consequences
 
@@ -94,7 +127,11 @@ measure none of this.
   as evidence of isolation. It now expects the two legs to differ: the
   same-tenant principal still collides, and the second tenant is stopped by the
   review it carries rather than by a resource it does not have.
-- The required check list grows from 93 to 100.
+- The required check list grows from 93 to 102.
+- The reference host's resource-plane routes are a table rather than a `switch`,
+  so the set of name-addressed endpoints is data. Three tests read it: one binds
+  it to the published route block, one to the enumeration, and one binds the
+  enumeration to the required-check list.
 - Two obligations stay unproven by the lane and are stated as such in
   [`../host-api/v1alpha3.md`](../host-api/v1alpha3.md): that the tenant is in the
   address rather than in a late filter, and that an unscoped derived-rendering
@@ -110,6 +147,13 @@ measure none of this.
   contradicts the answer decision 0018 already fixed for the three handle-shaped
   surfaces. Two codes for one class of fact would also let two hosts differ on
   which they return.
+- **Measure `import` by accepting any refusal for another tenant's name.**
+  Rejected because it would accept the defect. Import's answer for a name the
+  caller does not hold is an adoption, not a refusal, so "the second tenant was
+  refused" is satisfied by exactly the `generation_conflict` a host-wide
+  resolver returns — the "that name is taken" oracle. The check therefore
+  requires the adoption to SUCCEED and to be byte-comparable to the adoption of
+  a free name, and holds the fenced form of import to the 404 instead.
 - **Keep the tenant as a field and filter at each call site.** Rejected because
   that is the state this decision corrects. The tenant WAS a field, and exactly
   one scan read it; every other lookup was correct only by the accident of a uid

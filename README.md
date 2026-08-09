@@ -12,6 +12,21 @@ and leaves only the vendor's identity, account, placement, and commerce
 outside the contract. Hosts are exchangeable; resource semantics are not
 ([decision 0008](spec/decisions/0008-forms-preserve-service-shape.md)).
 
+## What is published and what is preview
+
+Two tiers, and everything below says which one it belongs to.
+
+| Tier | What it is | How you get it |
+| --- | --- | --- |
+| **Current published** | Provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | installed from the Terraform Registry |
+| **Edge preview** | Provider `v2.1` source candidate and the unpublished `edge.forms.takoform.com/v1alpha1` family; no public host yet; publication blockers open | built from this repository's source only |
+
+The Edge preview tier is source, not a release. Its publication blockers are
+data in [`spec/publication-blockers.json`](spec/publication-blockers.json) and
+the freeze they enforce is [`spec/publication-freeze.md`](spec/publication-freeze.md).
+While any is open, no family Form, Interface, Binding, or provider release
+carrying them may be published.
+
 The specification has three explicit lanes:
 
 - `forms.takoform.com/v1alpha1` is the frozen **Legacy Epoch**. Its 34 published
@@ -27,10 +42,11 @@ The specification has three explicit lanes:
   ([spec/form-families.md](spec/form-families.md)). The first family is the
   Edge Platform Family, `edge.forms.takoform.com/v1alpha1`: `ModuleWorker`,
   `WorkerBundle`, `WorkerVersion`, `WorkerDeployment`, `WorkerCustomDomain`,
-  `WorkerCronTrigger`, `EdgeKVNamespace`, `ObjectBucket`, `SQLiteDatabase`,
-  `AtLeastOnceQueue`, and `QueueConsumer`, with exact Interface and typed
-  Binding contracts under `interfaces.takoform.com/v1alpha1` and
-  `bindings.takoform.com/v1alpha1`.
+  `WorkerEndpoint`, `WorkerCronTrigger`, `EdgeKVNamespace`, `ObjectBucket`,
+  `SQLiteDatabase`, `AtLeastOnceQueue`, and `QueueConsumer`, with exact
+  Interface and typed Binding contracts under
+  `interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha1`.
+  This is the Edge preview tier: source only, and unpublished.
 
 Retained v1alpha2 package envelopes use `packages.forms.takoform.com/v1alpha3`
 because a published v1alpha2 package schema already refers to Legacy FormRefs;

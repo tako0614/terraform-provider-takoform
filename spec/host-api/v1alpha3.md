@@ -172,14 +172,33 @@ Everything else follows from the address.
   tenant** — a host that let one tenant's name choice deny another's would make
   the whole name space a shared, first-come resource and a membership oracle
   besides.
-- `read`, `apply`, `import`, `observe`, and `delete` address the caller's own
-  tenant. A request naming another tenant's resource fails
-  `resource_not_found` (404) and MUST be **indistinguishable** from a request
-  naming a resource that was never created — the same code, the same status, and
-  a message that discloses nothing about the other tenant. `permission_denied`
+- Every surface that takes a resource name addresses the caller's own tenant:
+  `read`, `observe`, `prepare`, `apply`, `import`, and `delete`. A request
+  naming another tenant's resource is answered exactly as one naming a resource
+  that was never created. Where that answer is a refusal it is
+  `resource_not_found` (404), and it MUST be **indistinguishable** from the
+  refusal for a name nobody created — the same code, the same status, and a
+  message that discloses nothing about the other tenant. `permission_denied`
   (403) is the wrong answer and is forbidden here: it would confirm that a
   resource of that name exists somewhere on the host, which is the fact the
   boundary exists to withhold, to any caller who can guess a name.
+- `import` is the one surface whose absent answer is not a refusal, so the rule
+  is stated for it exactly. An adoption under `If-None-Match: *` of a name the
+  caller does not hold MINTS a resource at generation 1, and a name held only by
+  another tenant is not held by the caller — so that adoption MUST succeed, and
+  MUST answer what the same adoption of a name nobody holds anywhere answers:
+  the same status, the same ETag, and a document differing in nothing but the
+  host-issued uid and the name. An adoption carrying an update generation fence
+  names an existing resource instead, so against a name only another tenant
+  holds it fails `resource_not_found` (404) like any other absent target. A host
+  that refused the create-intent adoption with `generation_conflict` would be
+  answering "that name is taken" about a tenant the caller cannot see; one that
+  took the update path would write the caller's desired state over a stranger's
+  live resource, which — followed by a delete — destroys it through nothing but
+  a name.
+- `validate` carries a name and resolves none: it answers diagnostics about the
+  document it was handed and reads no stored resource, so it has no
+  tenant-dependent answer to give.
 - **Relations resolve only within the same tenant.** A reference is
   `{apiVersion, kind, name}` and carries neither a tenant nor a space, so it is
   resolved inside the referring resource's own scope. A name that only another
@@ -218,15 +237,26 @@ and DNS does not partition with them
 That rule drops the space and keeps the tenant. It does not reach past the
 tenant, and no rule in this lane does.
 
-Seven required conformance checks measure this, all of them black box, all of
+Nine required conformance checks measure this, all of them black box, all of
 them driven with two configured tenants' credentials:
 `resource-address-is-tenant-scoped`, `resource-read-is-tenant-isolated`,
-`resource-update-is-tenant-isolated`, `resource-delete-is-tenant-isolated`,
+`resource-observe-is-tenant-isolated`, `resource-update-is-tenant-isolated`,
+`resource-import-is-tenant-isolated`, `resource-delete-is-tenant-isolated`,
 `relation-resolution-is-tenant-scoped`, `prepare-is-tenant-scoped`, and
 `idempotency-is-tenant-scoped`. A runner that cannot authenticate as two tenants
 can measure none of them, which is why the lane's runner REQUIRES an
 alternate-tenant credential alongside the same-tenant alternate principal rather
 than treating it as optional.
+
+The nine are enumerated by SURFACE and not by intent. Every route of
+[Lifecycle](#lifecycle) that takes a resource name is listed against the check
+that measures it, and the list is bound to the published route block, to the
+reference host's router, and to the required-check list by tests, so a
+name-addressed endpoint cannot be added to this lane without one. An
+enumeration by intent is what left `observe` and `import` out of the first
+version of this section: both take a name, one returns a whole representation
+and one mutates, and a host that scoped `read`, `apply` and `delete` while
+resolving either host-wide satisfied every check there was.
 
 Two facts are host obligations this lane does NOT prove, because a black-box
 runner cannot observe them:

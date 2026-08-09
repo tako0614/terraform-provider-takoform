@@ -3,19 +3,175 @@ package portableconformancev3
 // tenant_isolation_test.go holds the reference host to the parts of
 // spec/decisions/0028 the black-box corpus cannot reach.
 //
-// The corpus drives seven required checks over real HTTP with two credentials,
+// The corpus drives nine required checks over real HTTP with two credentials,
 // and those cover everything a third-party host can be HELD to: two tenants
-// naming one resource, reads, updates, deletes, relation resolution, prepare
-// bindings, and idempotency. What it cannot see is the SHAPE of the address —
+// naming one resource, reads, observes, updates, imports, deletes, relation
+// resolution, prepare bindings, and idempotency. The nine are enumerated by
+// SURFACE, and the three enumeration tests at the end of this file are what
+// keeps that true. What it cannot see is the SHAPE of the address —
 // whether the tenant is in the key or in a filter someone remembered to write —
 // and it cannot construct a cross-tenant rendering dependency at all, precisely
 // because relation resolution is scoped. Those are host obligations, so they are
 // proved here against the host itself.
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
+
+// surfaceKey is one name-addressed surface reduced to what three independent
+// records of it must agree on.
+func surfaceKey(method, route string) string { return method + " " + route }
+
+func declaredNameAddressedSurfaces() []string {
+	keys := make([]string, 0, len(nameAddressedResourceSurfaces))
+	for _, surface := range nameAddressedResourceSurfaces {
+		keys = append(keys, surfaceKey(surface.Method, surface.Route))
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// TestEveryNameAddressedSurfaceIsMeasured is the gate the tenant matrix was
+// missing. The matrix was enumerated by intent, so `observe` and `import` — two
+// surfaces that take a resource name — were simply never thought of. The
+// enumeration is now by surface, and this holds it to that: a surface either
+// names the required checks that measure its boundary, or states why it owes
+// none.
+func TestEveryNameAddressedSurfaceIsMeasured(t *testing.T) {
+	required := map[string]bool{}
+	for _, check := range requiredRunnerChecks {
+		required[check] = true
+	}
+	seen := map[string]bool{}
+	for _, surface := range nameAddressedResourceSurfaces {
+		key := surfaceKey(surface.Method, surface.Route)
+		if seen[key] {
+			t.Fatalf("%s is enumerated twice", key)
+		}
+		seen[key] = true
+		if !strings.HasPrefix(surface.Route, "{api}/resources") {
+			t.Fatalf("%s is not a resource-plane route", key)
+		}
+		if len(surface.TenantChecks) == 0 {
+			if strings.TrimSpace(surface.Unresolved) == "" {
+				t.Fatalf(
+					"%s takes a resource name, names no tenant check, and states no reason; a name-addressed "+
+						"surface is measured against spec/decisions/0028 or says why it cannot be",
+					key,
+				)
+			}
+			continue
+		}
+		if surface.Unresolved != "" {
+			t.Fatalf("%s both names tenant checks and claims to resolve nothing", key)
+		}
+		for _, check := range surface.TenantChecks {
+			if !required[check] {
+				t.Fatalf("%s names tenant check %q, which is not in requiredRunnerChecks", key, check)
+			}
+		}
+	}
+}
+
+// TestEveryNameAddressedSurfaceIsRouted binds the enumeration to the routes the
+// reference host actually serves. Adding a name-addressed endpoint means adding
+// a resourcePlaneHandlers entry, and an entry with no enumerated surface fails
+// here — so the endpoint cannot reach a client without passing through
+// TestEveryNameAddressedSurfaceIsMeasured first.
+func TestEveryNameAddressedSurfaceIsRouted(t *testing.T) {
+	routed := make([]string, 0, len(resourcePlaneHandlers))
+	for route, handler := range resourcePlaneHandlers {
+		if handler == nil {
+			t.Fatalf("%s %q routes to no handler", route.Method, route.Action)
+		}
+		routed = append(routed, route.Method+" "+route.Action)
+	}
+	sort.Strings(routed)
+
+	declared := make([]string, 0, len(nameAddressedResourceSurfaces))
+	for _, surface := range nameAddressedResourceSurfaces {
+		if surface.NameInBody {
+			continue
+		}
+		declared = append(declared, surface.Method+" "+surface.Action)
+	}
+	sort.Strings(declared)
+
+	if strings.Join(routed, ", ") != strings.Join(declared, ", ") {
+		t.Fatalf(
+			"the reference host routes [%s] under a resource name, and the enumeration declares [%s]; "+
+				"every name-addressed route is enumerated and measured, or neither",
+			strings.Join(routed, ", "), strings.Join(declared, ", "),
+		)
+	}
+}
+
+// TestEveryNameAddressedSurfaceIsPublished binds the enumeration to the
+// PUBLISHED contract, which is what a third-party host implements. A surface
+// that appears in the Lifecycle route block and nowhere else is one this
+// repository is asking someone to build without measuring its tenant boundary.
+func TestEveryNameAddressedSurfaceIsPublished(t *testing.T) {
+	published, err := publishedResourceRoutes(filepath.Join("..", "..", "spec", "host-api", "v1alpha3.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared := declaredNameAddressedSurfaces()
+	if strings.Join(published, "\n") != strings.Join(declared, "\n") {
+		t.Fatalf(
+			"spec/host-api/v1alpha3.md publishes the resource routes\n  %s\nand the enumeration declares\n  %s",
+			strings.Join(published, "\n  "), strings.Join(declared, "\n  "),
+		)
+	}
+}
+
+// publishedResourceRoutes reads the `{api}/resources` lines of the one fenced
+// route block under the spec's Lifecycle heading.
+func publishedResourceRoutes(path string) ([]string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(raw), "\n")
+	start := -1
+	for index, line := range lines {
+		if strings.TrimSpace(line) == "## Lifecycle" {
+			start = index
+			break
+		}
+	}
+	if start < 0 {
+		return nil, fmt.Errorf("%s states no Lifecycle section", path)
+	}
+	inBlock := false
+	var routes []string
+	for _, line := range lines[start:] {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			if inBlock {
+				break
+			}
+			inBlock = true
+			continue
+		}
+		if !inBlock {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 || !strings.HasPrefix(fields[1], "{api}/resources") {
+			continue
+		}
+		routes = append(routes, surfaceKey(fields[0], fields[1]))
+	}
+	if len(routes) == 0 {
+		return nil, fmt.Errorf("%s publishes no resource routes under Lifecycle", path)
+	}
+	sort.Strings(routes)
+	return routes, nil
+}
 
 // TestResourceAddressCarriesTheTenant is the structural fact underneath every
 // black-box check: the store key is tenant, space, apiVersion, kind, and name,
