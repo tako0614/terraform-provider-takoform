@@ -45,6 +45,15 @@ const (
 	InterfaceName = "worker.runtime"
 	// InterfaceVersion is the exact Interface version this corpus measures.
 	InterfaceVersion = "1.0.0"
+	// ServiceInterfaceName is the second exact Interface this corpus reaches:
+	// worker-to-worker invocation, measured through the `module-worker.service`
+	// binding the deployment declares. It is pinned separately, and by digest,
+	// for the reason the runtime ABI is: its delivery model is a claim about
+	// bytes moving, and a corpus measuring a contract it does not name could
+	// go on measuring one that no longer exists.
+	ServiceInterfaceName = "worker.service"
+	// ServiceInterfaceVersion is the exact version of that contract.
+	ServiceInterfaceVersion = "1.0.0"
 )
 
 // The closed procedure vocabulary: one runner procedure decides each check.
@@ -79,10 +88,11 @@ var requiredChecks = []string{
 	"kv-binding-round-trips-bytes-through-env",
 	"request-body-streams-rather-than-buffering",
 	"response-body-streams-rather-than-buffering",
+	"service-request-body-streams-to-the-callee",
+	"service-response-body-streams-from-the-callee",
 	"wait-until-holds-the-isolate-and-a-rejection-leaves-the-response-alone",
 	"scheduled-invoked-by-the-host-cron-attachment",
 	"queue-batch-delivered-to-the-queue-handler",
-	"tail-trace-delivered-to-the-tail-handler",
 }
 
 var (
@@ -103,11 +113,12 @@ type InterfaceRef struct {
 
 // ProbeProtocol describes the observation surface the corpus module serves.
 type ProbeProtocol struct {
-	Protocol     string `json:"protocol"`
-	RoutePrefix  string `json:"routePrefix"`
-	KVBinding    string `json:"kvBinding"`
-	QueueBinding string `json:"queueBinding"`
-	Note         string `json:"note"`
+	Protocol       string `json:"protocol"`
+	RoutePrefix    string `json:"routePrefix"`
+	KVBinding      string `json:"kvBinding"`
+	QueueBinding   string `json:"queueBinding"`
+	ServiceBinding string `json:"serviceBinding"`
+	Note           string `json:"note"`
 }
 
 // LoaderProtocol describes the disposable adapter over a runtime's own module
@@ -125,6 +136,21 @@ type DeploymentBinding struct {
 	Interface string `json:"interface"`
 }
 
+// PeerContract is the SECOND worker an operator deploys: the callee the
+// deployment's `worker.service` binding addresses.
+//
+// It is a worker of its own rather than the measured worker under another name.
+// The binding projects a call to ANOTHER Module Worker, so a corpus that bound
+// the worker to itself would let a host pass by short-circuiting into its own
+// handler, and the two service checks would measure nothing the direct
+// streaming checks do not already measure. It runs the same byte-pinned bundle,
+// which is what lets one module answer both sides.
+type PeerContract struct {
+	Bundle           string   `json:"bundle"`
+	DeclaredHandlers []string `json:"declaredHandlers"`
+	Note             string   `json:"note"`
+}
+
 // DeploymentContract is the one worker a conforming run is measured against.
 // An operator reproduces it exactly; everything the run expects about `env`
 // and about host-driven invocation follows from it.
@@ -137,6 +163,7 @@ type DeploymentContract struct {
 	EnvironmentPropertyNames []string            `json:"environmentPropertyNames"`
 	Cron                     string              `json:"cron"`
 	Queue                    string              `json:"queue"`
+	Peer                     *PeerContract       `json:"peer,omitempty"`
 }
 
 // ModuleContract is one byte-pinned module of a corpus bundle.
@@ -253,6 +280,7 @@ type Check struct {
 type Contract struct {
 	Format             string             `json:"format"`
 	Interface          InterfaceRef       `json:"interface"`
+	ServiceInterface   InterfaceRef       `json:"serviceInterface"`
 	HandlerVocabulary  []string           `json:"handlerVocabulary"`
 	LoadableMediaTypes []string           `json:"loadableMediaTypes"`
 	GlobalsFloor       []string           `json:"globalsFloor"`
@@ -311,7 +339,7 @@ func (c Contract) WorkerDeployment() (workerbundle.Deployment, error) {
 			Name: binding.Name, Interface: binding.Interface,
 		})
 	}
-	return workerbundle.Deployment{
+	deployment := workerbundle.Deployment{
 		Bundle:           bundle.WorkerBundle(),
 		DeclaredHandlers: append([]string(nil), c.Deployment.DeclaredHandlers...),
 		Vars:             append([]string(nil), c.Deployment.Vars...),
@@ -319,7 +347,19 @@ func (c Contract) WorkerDeployment() (workerbundle.Deployment, error) {
 		Bindings:         bindings,
 		Cron:             c.Deployment.Cron,
 		Queue:            c.Deployment.Queue,
-	}, nil
+	}
+	if c.Deployment.Peer != nil {
+		peerBundle, ok := c.Bundle(c.Deployment.Peer.Bundle)
+		if !ok {
+			return workerbundle.Deployment{}, fmt.Errorf(
+				"runtime ABI corpus peer deployment names unknown bundle %q", c.Deployment.Peer.Bundle)
+		}
+		deployment.Peer = &workerbundle.Deployment{
+			Bundle:           peerBundle.WorkerBundle(),
+			DeclaredHandlers: append([]string(nil), c.Deployment.Peer.DeclaredHandlers...),
+		}
+	}
+	return deployment, nil
 }
 
 type manifest struct {
@@ -407,6 +447,13 @@ func validateContract(contract Contract) error {
 		contract.Interface.Version != InterfaceVersion ||
 		!digestPattern.MatchString(contract.Interface.SchemaDigest) {
 		return errors.New("runtime ABI conformance contract measures the wrong Interface identity")
+	}
+	if contract.ServiceInterface.APIVersion != InterfaceAPIVersion ||
+		contract.ServiceInterface.Name != ServiceInterfaceName ||
+		contract.ServiceInterface.Version != ServiceInterfaceVersion ||
+		!digestPattern.MatchString(contract.ServiceInterface.SchemaDigest) {
+		return errors.New(
+			"runtime ABI conformance contract measures the wrong worker-to-worker Interface identity")
 	}
 	if !reflect.DeepEqual(contract.HandlerVocabulary, workerbundle.HandlerVocabulary) {
 		return errors.New("runtime ABI handler vocabulary drifted from the ABI's declaredHandlers enum")
@@ -584,6 +631,7 @@ func validateDeployment(contract Contract) error {
 	}{
 		{contract.ProbeProtocol.KVBinding, "edge.kv"},
 		{contract.ProbeProtocol.QueueBinding, "edge.queue"},
+		{contract.ProbeProtocol.ServiceBinding, ServiceInterfaceName},
 	} {
 		binding, ok := deployment.BindingNamed(required.name)
 		if !ok || binding.Interface != required.contract {
@@ -594,6 +642,49 @@ func validateDeployment(contract Contract) error {
 	}
 	if contract.Deployment.Cron == "" || contract.Deployment.Queue == "" {
 		return errors.New("runtime ABI deployment must state the cron expression and queue its attachments carry")
+	}
+	return validatePeer(contract)
+}
+
+// validatePeer holds the second worker to the same honesty rules as the first.
+//
+// A `worker.service` binding addresses ANOTHER Module Worker, so the corpus
+// must say which one an operator deploys; a binding with no stated callee is a
+// deployment nobody can reproduce, and a stated callee no binding addresses is
+// a worker nobody would deploy. The peer must also export what it declares, or
+// the run would ask a conforming host to accept a version it has to refuse.
+func validatePeer(contract Contract) error {
+	peer := contract.Deployment.Peer
+	if peer == nil {
+		return errors.New(
+			"runtime ABI deployment declares a worker.service binding and no peer; " +
+				"the corpus must state the SECOND worker an operator deploys as its callee")
+	}
+	if peer.Note == "" {
+		return errors.New("runtime ABI peer deployment must say what it is for")
+	}
+	bundle, ok := contract.Bundle(peer.Bundle)
+	if !ok {
+		return fmt.Errorf("runtime ABI peer deployment names unknown bundle %q", peer.Bundle)
+	}
+	exported := map[string]bool{}
+	for _, handler := range bundle.ExportedHandlers {
+		exported[handler] = true
+	}
+	if len(peer.DeclaredHandlers) == 0 {
+		return errors.New("runtime ABI peer deployment must declare the handlers it serves")
+	}
+	for _, handler := range peer.DeclaredHandlers {
+		if !exported[handler] {
+			return fmt.Errorf(
+				"runtime ABI peer declares %q, which bundle %q does not export; no conforming runtime could accept it",
+				handler, bundle.Name)
+		}
+	}
+	if !exported["fetch"] {
+		return fmt.Errorf(
+			"runtime ABI peer bundle %q exports no fetch handler; a worker.service callee is invoked through fetch",
+			bundle.Name)
 	}
 	return nil
 }
@@ -626,6 +717,44 @@ func validateChecks(contract Contract) error {
 				owner, check.Name, check.Payload.NonceTemplate)
 		}
 		templates[check.Payload.NonceTemplate] = check.Name
+	}
+	return validateEveryDeclaredHandlerIsMeasured(contract)
+}
+
+// validateEveryDeclaredHandlerIsMeasured enforces the property the ABI now has
+// rather than describing it: every handler the contract DECLARES is exercised
+// by a check that can fail.
+//
+// The corpus previously carried `tail` as an explicitly unmeasured entry, which
+// was the honest thing to do about a handler nothing could invoke but was still
+// a statement rather than a mechanism — the next handler added without a check
+// would have been caught by review or not at all. Removing `tail` made "every
+// declared handler is measured" true; this gate is what keeps it true. It is
+// deliberately blind to which handler: it reads the vocabulary the loader
+// already holds to the ABI's own `declaredHandlers` enum, so widening that enum
+// without measuring the addition fails the corpus by name.
+//
+// An `unmeasured` check does not count. That is the whole point: the corpus can
+// still record an unmeasurable surface — the mechanism decision 0023 built is
+// intact and the load lane still reports itself unmeasured when no adapter is
+// supplied — but it can no longer discharge a HANDLER that way.
+func validateEveryDeclaredHandlerIsMeasured(contract Contract) error {
+	measured := map[string]bool{}
+	for _, check := range contract.Checks {
+		if check.Procedure == ProcedureUnmeasured {
+			continue
+		}
+		measured[check.Operation] = true
+	}
+	for _, handler := range contract.HandlerVocabulary {
+		if measured[handler] {
+			continue
+		}
+		return fmt.Errorf(
+			"runtime ABI corpus declares handler %q and no check measures it; "+
+				"a handler in a published-shaped contract that nothing reaches is a divergence between two hosts "+
+				"nothing can detect, so either measure it or remove it from the ABI",
+			handler)
 	}
 	return nil
 }

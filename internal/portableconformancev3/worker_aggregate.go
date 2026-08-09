@@ -651,7 +651,7 @@ func (h *ReferenceHost) runtimeContract() (interfaceContract, bool) {
 // are not the runtime ABI's, or "" when they are.
 //
 // `handlers` is the surface a host attaches inward activation to, and the ABI
-// is what says which handlers exist at all: fetch, scheduled, queue, and tail,
+// is what says which handlers exist at all: fetch, scheduled, and queue,
 // each with a fixed signature (spec/decisions/0019). Accepting anything else
 // would store a version claiming an entry point no conforming runtime can
 // invoke, and would let one host attach events to it while another could not —

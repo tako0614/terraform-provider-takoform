@@ -13,7 +13,6 @@ const handlers = {
   async fetch(request, env, ctx) { return new Response("ok"); },
   async scheduled(event, env) {},
   async queue(batch, env) {},
-  async tail(events, env) {},
 };
 export default handlers;
 `
@@ -56,7 +55,7 @@ func TestLoadModuleAnswersFromTheBytesItIsHanded(t *testing.T) {
 	if failure != nil {
 		t.Fatalf("the probe module must load: %+v", failure)
 	}
-	if strings.Join(exported, ",") != "fetch,scheduled,queue,tail" {
+	if strings.Join(exported, ",") != "fetch,scheduled,queue" {
 		t.Fatalf("exports = %v", exported)
 	}
 

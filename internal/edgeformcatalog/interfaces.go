@@ -1234,40 +1234,145 @@ func edgeQueueInterface() InterfaceDefinition {
 	}
 }
 
+// serviceMaxBodyBytes is the portable minimum total body every conforming host
+// accepts in each direction of a worker.service call. It is a FLOOR: a host
+// that accepts more has not made the excess portable, and a host may not accept
+// less.
+const (
+	serviceMaxBodyBytes    = 104857600
+	serviceMaxHeaders      = 64
+	serviceMaxHeaderBytes  = 16384
+	serviceMaxPathBytes    = 8192
+	serviceHeaderSlotCount = 128
+)
+
+// workerServiceInterface is worker-to-worker invocation, and it STREAMS.
+//
+// Its first version declared both bodies as JSON strings while the
+// module-worker.service Binding Definition said the projection streams request
+// to response in both directions and buffers neither. Both could not be true,
+// and buffering a body into a JSON member is the exact defect decision 0020
+// exists to prevent: it is the same mistake edge.objects made with a 5 GiB
+// ceiling, one order of magnitude down. The contract therefore moves to the
+// streaming model the binding already promised — the operation document says
+// whether a body exists and how many bytes it carries, and the bytes travel
+// beside it.
+//
+// Everything a portable caller can observe about that model is stated, because
+// an unstated one is a portability hole rather than a detail: an absent body
+// against an empty one, when each stream starts, backpressure, cancellation,
+// the two aborts, the floors, what a callee exception produces, and what a call
+// that never happened produces. The published meta-schema has a member for none
+// of it, so it is normative prose in the descriptions and fixtures where a
+// fixture can carry it (decision 0014).
 func workerServiceInterface() InterfaceDefinition {
-	headers := closedStringMap(128)
+	headers := closedStringMap(serviceHeaderSlotCount)
+	bodyLength := map[string]any{"type": "integer", "minimum": 0, "maximum": serviceMaxBodyBytes}
 	return InterfaceDefinition{
 		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
 		Name: "worker.service", Version: "1.0.0",
 		Title: "Worker-to-worker service invocation",
-		Description: "Direct HTTP-shaped request/response invocation of another Module Worker with " +
-			"read-after-write consistency toward the invoked worker's own state: a response reflects every " +
-			"effect the invoked handler completed before responding. The call never leaves the host.",
+		Description: "Direct HTTP-shaped invocation of another Module Worker, STREAMING in both directions, with " +
+			"read-after-write consistency toward the invoked worker's own state: a response reflects every effect " +
+			"the callee completed before responding. The call never leaves the host. " +
+			"NEITHER BODY IS A MEMBER OF THIS DOCUMENT. The document states whether a body exists and exactly how " +
+			"many bytes it carries; the bytes travel beside it as a stream, so no side ever buffers a body to " +
+			"produce a value. " +
+			"ABSENT IS NOT EMPTY. bodyStream false means there is no body at all and the callee's request.body is " +
+			"null; bodyStream true means a body exists and contentLength is exactly how many bytes it delivers, so " +
+			"bodyStream true with contentLength 0 is a PRESENT body that ends immediately. The two are observably " +
+			"different and a host MUST NOT collapse them, in either direction. " +
+			"WHEN A STREAM STARTS. The callee is invoked as soon as the request head — method, path, headers — has " +
+			"arrived, before any body byte is read, and the caller's call completes as soon as the response head — " +
+			"status, headers — has arrived, before any response byte is read. Neither side waits for the other's " +
+			"end of stream: a caller may still be writing while it reads, and a callee may answer without having " +
+			"consumed its request. " +
+			"BACKPRESSURE. Both streams are backpressured end to end: the reader's demand reaches the writer, and a " +
+			"producer that outruns its consumer is suspended rather than buffered without bound. A host MUST NOT " +
+			"read a whole body to decouple the two, which is the same statement as the first one and the reason it " +
+			"is measurable. " +
+			"CANCELLATION. Cancelling propagates to the other side. A caller that cancels the response stream " +
+			"cancels the callee's response stream; a callee that cancels the request stream fails the caller's " +
+			"remaining writes. A cancellation is neither a host fault nor retryable, and it is never reported as " +
+			"backend_unavailable. " +
+			"THE TWO ABORTS ARE DIFFERENT OUTCOMES, because they fall on different sides of the response head. " +
+			"request_aborted is a request stream that ended before contentLength bytes arrived: the callee sees an " +
+			"errored request body and MAY still answer with a status. response_aborted is a response stream that " +
+			"ended before contentLength bytes arrived AFTER the status was already delivered: the caller holds a " +
+			"status and an errored body, and the status is never retroactively rewritten. A caller can therefore " +
+			"tell a truncated answer from an unanswered call. " +
+			"LIMITS ARE FLOORS. maxRequestHeaders, maxRequestHeaderBytes, maxRequestBytes and their response " +
+			"counterparts are the portable minimum every conforming host accepts, not a host's ceiling; a host that " +
+			"accepts more has not made the excess portable, and a request above what the host accepts fails " +
+			"request_too_large before the callee is invoked. " +
+			"A CALLEE EXCEPTION IS A COMPLETE RESPONSE. An uncaught throw or unhandled rejection in the callee's " +
+			"fetch handler is a host-generated 500 with a status, headers and a terminated body — never a hung " +
+			"call, never a truncated connection with no status — and this operation SUCCEEDS with it. " +
+			"A CALL THAT NEVER HAPPENED IS NOT A 500. When the call could not be dispatched at all — no active " +
+			"deployment, no fetch handler, the callee unreachable — there is no status, and the operation FAILS " +
+			"backend_unavailable. The binding projects the difference as resolve versus reject, so a caller " +
+			"distinguishes a callee that failed from a call that did not happen without reading a body. " +
+			"Behavior fixtures address a callee that answers GET /health with 200 and throws on GET /throw.",
 		Semantics: InterfaceSemantics{Consistency: "read_after_write"},
-		Limits:    map[string]int64{"maxRequestBytes": 104857600},
+		Limits: map[string]int64{
+			"maxRequestBytes":        serviceMaxBodyBytes,
+			"maxResponseBytes":       serviceMaxBodyBytes,
+			"maxRequestHeaders":      serviceMaxHeaders,
+			"maxResponseHeaders":     serviceMaxHeaders,
+			"maxRequestHeaderBytes":  serviceMaxHeaderBytes,
+			"maxResponseHeaderBytes": serviceMaxHeaderBytes,
+		},
 		Operations: []InterfaceOperation{
 			{
-				Name:        "fetch",
-				Description: "Invoke the target worker's fetch handler with one request and return its response.",
-				InputSchema: operationObject([]string{"method", "path"}, map[string]any{
-					"method":  map[string]any{"type": "string", "enum": []any{"DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"}},
-					"path":    stringSchema(1, 8192),
-					"headers": headers,
-					"body":    map[string]any{"type": "string"},
+				Name: "fetch",
+				Description: "Invoke the target worker's fetch handler with one request and return its response. Both " +
+					"documents carry bodyStream and contentLength and NEITHER carries bytes: bodyStream says whether a " +
+					"body exists, contentLength is the exact byte count of the stream that accompanies it, and a stream " +
+					"delivering a different count is an abort rather than a short body. bodyStream false pairs with " +
+					"contentLength 0 and means no body; bodyStream true with contentLength 0 means an empty body that is " +
+					"nevertheless there. The response document is produced when the response HEAD arrives, so status and " +
+					"headers are readable while the body is still being written. request_too_large is refused before the " +
+					"callee is invoked; request_aborted and response_aborted are the two truncations, and only the second " +
+					"can carry a status; backend_unavailable is a call that produced no status at all. A callee that " +
+					"throws is not an error here: it is a 500 in status.",
+				InputSchema: operationObject([]string{"bodyStream", "contentLength", "method", "path"}, map[string]any{
+					"method":        map[string]any{"type": "string", "enum": []any{"DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"}},
+					"path":          stringSchema(1, serviceMaxPathBytes),
+					"headers":       headers,
+					"bodyStream":    map[string]any{"type": "boolean"},
+					"contentLength": bodyLength,
 				}),
-				OutputSchema: operationObject([]string{"status"}, map[string]any{
-					"status":  map[string]any{"type": "integer", "minimum": 100, "maximum": 599},
-					"headers": headers,
-					"body":    map[string]any{"type": "string"},
+				OutputSchema: operationObject([]string{"bodyStream", "contentLength", "status"}, map[string]any{
+					"status":        map[string]any{"type": "integer", "minimum": 100, "maximum": 599},
+					"headers":       headers,
+					"bodyStream":    map[string]any{"type": "boolean"},
+					"contentLength": bodyLength,
 				}),
-				Errors: []string{"backend_unavailable"},
+				Errors: []string{"request_too_large", "request_aborted", "response_aborted", "backend_unavailable"},
 			},
 		},
 		Fixtures: []InterfaceFixture{
 			{
-				Name: "fetch-roundtrip",
+				// A call with no body at all, which is the shape a GET takes and
+				// the one an "empty body" would be indistinguishable from if the
+				// contract had only contentLength to say it with.
+				Name: "fetch-roundtrip-carries-no-body",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "fetch", Input: map[string]any{"method": "GET", "path": "/health"}, Expected: map[string]any{"status": 200}},
+					{Operation: "fetch", Input: map[string]any{
+						"method": "GET", "path": "/health", "bodyStream": false, "contentLength": 0,
+					}, Expected: map[string]any{"status": 200, "bodyStream": true}},
+				},
+			},
+			{
+				// The callee throws and the CALL still succeeds, with a complete
+				// response. A trace is the only place this can be stated as a
+				// fact rather than as a sentence: an implementation that hung, or
+				// that reported the throw as a failed call, fails this step.
+				Name: "callee-uncaught-throw-is-a-complete-500",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "fetch", Input: map[string]any{
+						"method": "GET", "path": "/throw", "bodyStream": false, "contentLength": 0,
+					}, Expected: map[string]any{"status": 500, "bodyStream": true}},
 				},
 			},
 		},
@@ -1278,7 +1383,7 @@ func workerServiceInterface() InterfaceDefinition {
 // publishes through the loadModule operation. It is written once here and read
 // back through RuntimeHandlers, so the Form's `handlers` enum and the contract
 // can never disagree.
-var runtimeHandlerNames = []any{"fetch", "scheduled", "queue", "tail"}
+var runtimeHandlerNames = []any{"fetch", "scheduled", "queue"}
 
 // runtimeLoadableMediaTypes and runtimeAuxiliaryMediaTypes are the ABI's two
 // module classes, read out of the lane's single media-type statement
@@ -1360,7 +1465,7 @@ func workerRuntimeInterface() InterfaceDefinition {
 		Description: "The exact runtime ABI a conforming host provides to the code of one Module Worker, " +
 			"and the exact shape that code must present. The main module is an ES module whose DEFAULT EXPORT " +
 			"is a plain object; each portable handler is an OPTIONAL own property of that object named exactly " +
-			"fetch, scheduled, queue, or tail, and every handler the Worker Version declares MUST exist there " +
+			"fetch, scheduled, or queue, and every handler the Worker Version declares MUST exist there " +
 			"as a callable property — a declared handler that is absent fails the version, not the request. " +
 			"Every handler takes three arguments in this order: the event value, the binding environment env, " +
 			"and the invocation context ctx. A handler may be async; a returned promise is awaited. " +
@@ -1379,7 +1484,7 @@ func workerRuntimeInterface() InterfaceDefinition {
 			"The ABI is fixed by identity, not by a date: a runtime whose behavior differs is a different exact " +
 			"contract version, and a Form that wants that runtime is a different Form version. " +
 			"Behavior fixtures run against a conformance bundle of two modules: index.js, whose default export " +
-			"exposes all four handlers, answers GET /health with 200, throws on GET /throw, and throws from its " +
+			"exposes all three handlers, answers GET /health with 200, throws on GET /throw, and throws from its " +
 			"queue handler when a message body decodes to exactly the ASCII bytes fail; and fetch-only.js, whose " +
 			"default export exposes fetch alone.",
 		Semantics: InterfaceSemantics{Consistency: "read_after_write", Delivery: "at_least_once", Ordering: "none"},
@@ -1389,7 +1494,6 @@ func workerRuntimeInterface() InterfaceDefinition {
 			"maxQueueMessageBytes":   131072,
 			"maxEnvironmentEntries":  256,
 			"maxWaitUntilTasks":      32,
-			"maxTailEventsPerBatch":  100,
 			"maxModulesPerBundleSet": 512,
 		},
 		Operations: []InterfaceOperation{
@@ -1547,33 +1651,6 @@ func workerRuntimeInterface() InterfaceDefinition {
 				Errors:       []string{"handler_not_declared", "handler_failed", "backend_unavailable"},
 			},
 			{
-				Name: "tail",
-				Description: "Invokes tail(events, env, ctx) with the diagnostic trace of invocations this worker is " +
-					"attached to. Each event carries scriptName (the portable name of the worker that produced it), " +
-					"outcome, eventTimestamp in milliseconds since the Unix epoch, logs, and exceptions. Trace delivery is " +
-					"best effort and never changes the traced invocation: a failed tail handler never fails the " +
-					"invocation it observed. The handler returns nothing.",
-				InputSchema: operationObject([]string{"events"}, map[string]any{
-					"events": map[string]any{
-						"type": "array", "minItems": 1, "maxItems": 100,
-						"items": map[string]any{
-							"type":                 "object",
-							"additionalProperties": false,
-							"required":             []string{"eventTimestamp", "outcome", "scriptName"},
-							"properties": map[string]any{
-								"scriptName":     stringSchema(1, 63),
-								"outcome":        map[string]any{"type": "string", "enum": []any{"cancelled", "exceededCpu", "exception", "ok"}},
-								"eventTimestamp": map[string]any{"type": "integer", "minimum": 0},
-								"logs":           nameList(256, 8192),
-								"exceptions":     nameList(256, 8192),
-							},
-						},
-					},
-				}),
-				OutputSchema: empty,
-				Errors:       []string{"handler_not_declared", "handler_failed"},
-			},
-			{
 				Name: "waitUntil",
 				Description: "Registers one promise through ctx.waitUntil(promise). The host keeps the isolate alive until " +
 					"that promise settles, even after the handler returned and its response was sent, and never cancels the " +
@@ -1602,8 +1679,8 @@ func workerRuntimeInterface() InterfaceDefinition {
 					{Operation: RuntimeHandlerOperation, Input: map[string]any{
 						"mainModule":           "index.js",
 						"modules":              []any{map[string]any{"name": "index.js", "mediaType": "application/javascript+module"}},
-						RuntimeHandlerProperty: []any{"fetch", "scheduled", "queue", "tail"},
-					}, Expected: map[string]any{"exportedHandlers": []any{"fetch", "scheduled", "queue", "tail"}}},
+						RuntimeHandlerProperty: []any{"fetch", "scheduled", "queue"},
+					}, Expected: map[string]any{"exportedHandlers": []any{"fetch", "scheduled", "queue"}}},
 					{Operation: RuntimeHandlerOperation, Input: map[string]any{
 						"mainModule":           "fetch-only.js",
 						"modules":              []any{map[string]any{"name": "fetch-only.js", "mediaType": "application/javascript+module"}},
@@ -1625,7 +1702,7 @@ func workerRuntimeInterface() InterfaceDefinition {
 							map[string]any{"name": "index.js.map", "mediaType": "application/source-map+json"},
 						},
 						RuntimeHandlerProperty: []any{"fetch"},
-					}, Expected: map[string]any{"exportedHandlers": []any{"fetch", "scheduled", "queue", "tail"}}},
+					}, Expected: map[string]any{"exportedHandlers": []any{"fetch", "scheduled", "queue"}}},
 					{Operation: RuntimeHandlerOperation, Input: map[string]any{
 						"mainModule":            "index.js.map",
 						RuntimeLoadableProperty: []any{map[string]any{"name": "index.js", "mediaType": "application/javascript+module"}},

@@ -283,8 +283,7 @@
           "enum": [
             "fetch",
             "scheduled",
-            "queue",
-            "tail"
+            "queue"
           ],
           "type": "string"
         },
@@ -448,7 +447,7 @@
               "x-takoform-required-interface": {
                 "apiVersion": "interfaces.takoform.com/v1alpha1",
                 "name": "worker.service",
-                "schemaDigest": "sha256:8beedb6fa4399836c24afa0a7adb17fbe13e8bc705b86441dc210e7614c95507",
+                "schemaDigest": "sha256:37e676415b3e3a503fbd2031b1b4345ccb374410de73ef311397cd03388d3b31",
                 "version": "1.0.0"
               }
             }
@@ -560,7 +559,7 @@
         "x-takoform-required-interface": {
           "apiVersion": "interfaces.takoform.com/v1alpha1",
           "name": "worker.runtime",
-          "schemaDigest": "sha256:1db4c093befc3c8bb769361c26f26a582561c5ff0edae36a62f45143641a2152",
+          "schemaDigest": "sha256:48d5fe4ca3109d1235354fef99748f5d01b7e0c398f97a9354496a220dc7a579",
           "version": "1.0.0"
         }
       }
@@ -621,7 +620,7 @@
       "apiVersion": "bindings.takoform.com/v1alpha1",
       "name": "module-worker.service",
       "version": "1.0.0",
-      "schemaDigest": "sha256:b6dd3222c8616c91dfc43383fe199bb0471bac3e169e0979bfeeee7a938be8ec"
+      "schemaDigest": "sha256:086cd157adb9208f11edf54e65c254046838b94a106df52ffc8f6ea292aba8dc"
     }
   ],
   "conformanceFixtures": [

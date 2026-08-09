@@ -27,16 +27,25 @@ const (
 	// it (see CanonicalHostname). It admits no non-ASCII byte, so an
 	// internationalized name travels as its A-label.
 	PatternHostname = `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\.?$`
-	// PatternCanonicalHostname is PatternHostname less the spellings
-	// canonicalization removes: no trailing root dot. It is the grammar of a
-	// hostname a HOST produced rather than one an author wrote. Desired state
-	// admits the variant spellings because the host canonicalizes them
-	// (CanonicalHostname); an assigned value has already been through that, so
-	// admitting a trailing dot there would let a host publish a name its own
-	// canonical form forbids — and, where a Form also publishes a URL built
-	// from the hostname, would admit a pair whose two members cannot both be
-	// satisfied by one address.
-	PatternCanonicalHostname = `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
+	// PatternCanonicalHostname is PatternHostname less BOTH spellings
+	// canonicalization removes: no trailing root dot, and no uppercase letter.
+	// It is the grammar of a hostname a HOST produced rather than one an author
+	// wrote. Desired state admits the variant spellings because the host
+	// canonicalizes them (CanonicalHostname); an assigned value has already
+	// been through that, so admitting either spelling here would let a host
+	// publish a name its own canonical form forbids — and, where a Form also
+	// publishes a URL built from the hostname, would admit a pair whose two
+	// members cannot both be satisfied by one address.
+	//
+	// It is a NARROWING of this one constant rather than a third grammar
+	// beside it. CanonicalHostname performs two rewrites and this constant is
+	// named for their result, so a "canonical" pattern that admitted
+	// `A.Example.com` was not a second legitimate rule but this rule stated
+	// incompletely: it described half of what the function does. A third
+	// constant would leave two spellings of one idea in the model with nothing
+	// saying which an author of the next Form should reach for, and the laxer
+	// one carrying the better name.
+	PatternCanonicalHostname = `^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`
 	// PatternCanonicalSHA256 is the algorithm-prefixed lowercase digest used
 	// by every exact Takoform identity.
 	PatternCanonicalSHA256 = `^sha256:[0-9a-f]{64}$`

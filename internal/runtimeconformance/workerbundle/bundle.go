@@ -21,7 +21,7 @@ import (
 // HandlerVocabulary is the closed handler vocabulary of the ABI: the
 // `declaredHandlers` enum of `worker.runtime@1.0.0`'s loadModule operation,
 // which is the single source of truth for it.
-var HandlerVocabulary = []string{"fetch", "scheduled", "queue", "tail"}
+var HandlerVocabulary = []string{"fetch", "scheduled", "queue"}
 
 // LoadableMediaTypes is the closed set of module media types
 // `worker.runtime@1.0.0` loads. Anything else fails `unsupported_media_type` —
@@ -103,6 +103,13 @@ type Binding struct {
 // Deployment describes the one worker a runtime conformance run is measured
 // against: which bundle runs, which handlers the version declares, and exactly
 // what the ABI must project into `env`.
+//
+// Peer is the SECOND worker a `worker.service` binding addresses. The binding
+// projects a call to ANOTHER Module Worker, so a run that measured it against
+// the worker itself would measure a short circuit rather than the projection;
+// the peer is therefore its own deployment, of the same bundle, declaring
+// `fetch` and nothing else. A deployment with no `worker.service` binding
+// carries no peer.
 type Deployment struct {
 	Bundle           Bundle
 	DeclaredHandlers []string
@@ -111,6 +118,7 @@ type Deployment struct {
 	Bindings         []Binding
 	Cron             string
 	Queue            string
+	Peer             *Deployment
 }
 
 // EnvironmentPropertyNames is the complete set of own enumerable `env`

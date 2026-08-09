@@ -207,7 +207,7 @@ func TestVerifyRejectsABundleThatDoesNotExportTheVocabulary(t *testing.T) {
 				}
 				exported := []byte(`["fetch"]`)
 				if testCase.probe == "fetchOnlyBundle" {
-					exported = []byte(`["fetch","scheduled","queue","tail"]`)
+					exported = []byte(`["fetch","scheduled","queue"]`)
 				}
 				bundle["exportedHandlers"] = exported
 				drifted, err := json.Marshal(bundle)

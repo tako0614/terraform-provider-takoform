@@ -80,16 +80,21 @@ type Runtime struct {
 	exports          map[string]bool
 	queueDelay       time.Duration
 
+	// peer is the second worker the deployment's `worker.service` binding
+	// addresses. It is a Runtime of its own, loaded from its own deployment
+	// description, so a call through the binding crosses a worker boundary
+	// rather than re-entering this one.
+	peer *Runtime
+
 	mutex   sync.Mutex
 	kv      map[string][]byte
 	closed  bool
 	pending sync.WaitGroup
 	stop    chan struct{}
 
-	rejectedTasks  int
-	queueSequence  int
-	cronInvoked    int
-	tailDeliveries int
+	rejectedTasks int
+	queueSequence int
+	cronInvoked   int
 }
 
 // New loads one deployment. It refuses a deployment the ABI itself forbids —
@@ -141,6 +146,13 @@ func New(deployment workerbundle.Deployment, options Options) (*Runtime, error) 
 		kv:               map[string][]byte{},
 		stop:             make(chan struct{}),
 	}
+	if deployment.Peer != nil {
+		peer, err := New(*deployment.Peer, options)
+		if err != nil {
+			return nil, fmt.Errorf("the worker.service peer deployment: %w", err)
+		}
+		runtime.peer = peer
+	}
 	if exports["scheduled"] && deployment.Cron != "" {
 		runtime.startCron(options.CronPeriod)
 	}
@@ -160,6 +172,9 @@ func (r *Runtime) Close() {
 	r.mutex.Unlock()
 	close(r.stop)
 	r.pending.Wait()
+	if r.peer != nil {
+		r.peer.Close()
+	}
 }
 
 // holdIsolate registers host-held work the isolate stays alive for.

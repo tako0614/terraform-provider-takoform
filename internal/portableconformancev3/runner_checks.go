@@ -105,6 +105,9 @@ func (r *v3Runner) run() error {
 		// comparison needs on both sides (spec/decisions/0025).
 		r.checkFormDeclaredOutputsAreExact,
 		r.checkWorkerEndpointFollowsTheActiveDeployment,
+		// And the address is the same address afterwards, for the same uid,
+		// across every trigger a black-box runner can cause (decision 0024).
+		r.checkWorkerEndpointAddressIsStableForItsUID,
 		r.checkDeploymentChangePreservesDependents,
 		r.checkDeploymentDeleteBlockedByDependent,
 		// Readiness rendered from the deployment is the second half of the

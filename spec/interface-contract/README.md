@@ -96,10 +96,16 @@ against a Host API
 ([decision 0023](../decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
 Its reports state which subject was measured: a run against the repository's
 in-process stand-in proves the corpus, only a run against a deployed worker
-proves a runtime, and neither is ever publication evidence. Where a contract
-declares an operation nothing can currently invoke, the corpus records it as
-explicitly unmeasured and says what would close it, rather than leaving a
-member of a published-shaped contract that no check ever reaches.
+proves a runtime, and neither is ever publication evidence. Every handler
+`worker.runtime@1.0.0` declares is measured there, and the corpus ENFORCES that
+rather than stating it: a declared handler with no check naming it is refused at
+load, and an explicitly unmeasured entry does not discharge one. A handler
+nothing can invoke is therefore removed from the contract and returns with the
+attachment that makes it observable, in a new exact version
+([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
+An operation that genuinely cannot be observed may still be recorded as
+unmeasured with what would close it, which is what the load lane reports when a
+run has no module-loader adapter.
 
 ## Behavior fixtures
 
@@ -143,10 +149,17 @@ catalog refuses to render one.
 Where a value is bytes, the contract carries it in one shared encoded-bytes
 shape rather than as a bare string, so that a declared byte limit and a
 structural `maxLength` do not measure two different quantities. Where a payload
-is too large for JSON at all — an object body — the operation declares that it
-streams and states its exact length instead of carrying it. Both are decided in
-decision 0020 and stated in each definition's own descriptions, because the
-published meta-schema has no member for either.
+streams at all — an object body, a worker-to-worker request or response — the
+operation declares that it streams and states its exact length instead of
+carrying it, and the bytes travel beside the document. A contract that streams
+also has to say what a caller can OBSERVE about the stream: whether an absent
+body differs from an empty one, when it starts, how backpressure and
+cancellation behave, and how a truncation on each side is reported.
+`worker.service@1.0.0` is the worked example, and its first version is the
+counter-example — it declared bodies as JSON strings while the binding that
+projects it promised streaming, so the two halves of one contract disagreed.
+All of it is decided in decision 0020 and stated in each definition's own
+descriptions, because the published meta-schema has a member for none of it.
 
 ## Interface distribution
 

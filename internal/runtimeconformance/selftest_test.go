@@ -94,11 +94,14 @@ func TestSelfTestExecutesTheWholeMatrix(t *testing.T) {
 			t.Fatalf("check %q failed: %s (%s)", evidence.Name, evidence.Detail, evidence.Observed)
 		}
 	}
-	if report.Failed != 0 || report.Measured != len(contract.RequiredChecks)-1 || report.Unmeasured != 1 {
+	if report.Failed != 0 || report.Measured != len(contract.RequiredChecks) || report.Unmeasured != 0 {
 		t.Fatalf("measured/unmeasured accounting drifted: %+v", report)
 	}
-	if report.Completeness != "partial" {
-		t.Fatalf("a run carrying an unmeasured check must report partial completeness, got %q", report.Completeness)
+	// Every check in the corpus is now measurable, so a self-test with the
+	// loader adapter present is COMPLETE. It was partial while `tail` sat in the
+	// matrix as an entry nothing could reach.
+	if report.Completeness != "complete" {
+		t.Fatalf("a run that measured every check must report complete, got %q", report.Completeness)
 	}
 	if report.ContractDigest != contract.Digest() || report.Interface != contract.Interface {
 		t.Fatalf("the report must bind the corpus digest and the measured Interface: %+v", report)
@@ -112,24 +115,72 @@ func TestSelfTestExecutesTheWholeMatrix(t *testing.T) {
 	}
 }
 
-// TestTailIsRecordedAsUnmeasuredRatherThanOmitted pins the decision that a
-// handler nothing can invoke is stated, not quietly skipped.
-func TestTailIsRecordedAsUnmeasuredRatherThanOmitted(t *testing.T) {
+// TestEveryDeclaredHandlerIsMeasured is the property the ABI has now that
+// `tail` is gone, read off the committed corpus rather than asserted in prose.
+//
+// The corpus used to carry `tail` as an explicitly unmeasured entry, which was
+// the honest thing to say about a handler nothing could invoke. It is now true
+// that every declared handler is exercised by a check that can fail, and this
+// reads that off the corpus the same way a reviewer would.
+func TestEveryDeclaredHandlerIsMeasured(t *testing.T) {
 	contract := verifiedContract(t)
+	measured := map[string][]string{}
 	for _, check := range contract.Checks {
-		if check.Operation != "tail" {
+		if check.Procedure == ProcedureUnmeasured {
 			continue
 		}
-		if check.Procedure != ProcedureUnmeasured || check.Unmeasured == nil {
-			t.Fatalf("the tail check must be explicitly unmeasured: %+v", check)
-		}
-		if !strings.Contains(check.Unmeasured.Reason, "activates one") ||
-			check.Unmeasured.BlockerID != "V3-011" {
-			t.Fatalf("the tail entry must say why it is unreachable and name its blocker: %+v", check.Unmeasured)
-		}
-		return
+		measured[check.Operation] = append(measured[check.Operation], check.Name)
 	}
-	t.Fatalf("the corpus must account for every handler the ABI declares, including tail")
+	for _, handler := range contract.HandlerVocabulary {
+		if len(measured[handler]) == 0 {
+			t.Fatalf("handler %q is declared by the ABI and measured by no check", handler)
+		}
+	}
+	for _, check := range contract.Checks {
+		if check.Unmeasured != nil {
+			t.Fatalf("check %q states an unmeasured surface; the corpus has none left", check.Name)
+		}
+	}
+}
+
+// TestTheCorpusRefusesADeclaredHandlerNoCheckMeasures is the tooth under it.
+//
+// The property above is only worth stating if the corpus ENFORCES it, so this
+// widens the vocabulary by one handler — the shape a future ABI revision takes
+// — and requires the loader to refuse the corpus rather than run a matrix with
+// a hole in it. A bundle exporting the new handler comes with it, so what the
+// loader objects to is the missing CHECK and not an incoherent bundle.
+func TestTheCorpusRefusesADeclaredHandlerNoCheckMeasures(t *testing.T) {
+	contract := verifiedContract(t)
+	contract.HandlerVocabulary = append(append([]string(nil), contract.HandlerVocabulary...), "alarm")
+	err := validateEveryDeclaredHandlerIsMeasured(contract)
+	if err == nil {
+		t.Fatal("the corpus accepted a declared handler no check measures")
+	}
+	if !strings.Contains(err.Error(), "no check measures it") {
+		t.Fatalf("refusal %q does not say what is missing", err)
+	}
+}
+
+// TestAnUnmeasuredEntryCannotDischargeAHandler is the same tooth from the other
+// side: recording a handler as `unmeasured` is exactly what the corpus used to
+// do for `tail`, and it no longer counts as measuring one.
+func TestAnUnmeasuredEntryCannotDischargeAHandler(t *testing.T) {
+	contract := verifiedContract(t)
+	contract.HandlerVocabulary = append(append([]string(nil), contract.HandlerVocabulary...), "alarm")
+	contract.Checks = append(append([]Check(nil), contract.Checks...), Check{
+		Name:      "alarm-is-unmeasured",
+		Operation: "alarm",
+		Procedure: ProcedureUnmeasured,
+		Proves:    "nothing.",
+		Unmeasured: &UnmeasuredCase{
+			Reason: "nothing activates it", WouldUse: "/abi/alarm",
+			ClosedBy: "an attachment", BlockerID: "V3-999",
+		},
+	})
+	if err := validateEveryDeclaredHandlerIsMeasured(contract); err == nil {
+		t.Fatal("an unmeasured entry discharged a declared handler")
+	}
 }
 
 // TestRunEndpointRefusesAnEndpointItMustNotMeasure pins the transport contract

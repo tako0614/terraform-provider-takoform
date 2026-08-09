@@ -146,12 +146,14 @@
         "ModuleWorker",
         "WorkerVersion"
       ],
-      "status": "open",
+      "status": "closed",
       "issue": 115,
-      "rationale": "worker.runtime@1.0.0 declares a tail handler, and no resource in this family activates one: the three inward-activation attachments are WorkerCustomDomain (fetch), WorkerCronTrigger (scheduled) and QueueConsumer (queue). No deployment a portable author can write causes a host to invoke tail, so no conformance run can observe it and two hosts could implement it differently with nothing able to detect the divergence — the same defect as the runtime-selector field decision 0019 removed from WorkerVersion. The runtime corpus records it as explicitly unmeasured rather than silently unchecked. It closes by removing tail from the ABI's declaredHandlers vocabulary in a new exact Interface version, or by adding the Form that attaches a tail consumer; the removal changes Interface bytes and regenerates the Form chain, so it belongs to that regeneration (decision 0023).",
+      "rationale": "CLOSED by removal. worker.runtime@1.0.0 declared a tail handler no resource in this family could activate — the inward-activation attachments are WorkerCustomDomain (fetch), WorkerCronTrigger (scheduled), QueueConsumer (queue) and WorkerEndpoint (fetch) — so no portable deployment could cause a host to invoke it, no run could observe it, and two hosts could implement it differently with nothing able to detect the divergence. The handler, its maxTailEventsPerBatch limit, the WorkerVersion handlers enum entry, the runtime corpus probe route and fixtures, and the corpus's unmeasured entry are all gone; the vocabulary is fetch, scheduled, queue. The property that replaces it is enforced rather than described: the runtime corpus loader refuses a corpus in which a declared handler has no check measuring it, and an unmeasured entry does not discharge one, so re-adding tail without the attachment that makes it observable fails corpus verification by name. tail returns with that attachment and a new exact worker.runtime version, never as a bare handler (decision 0019).",
       "evidence": [
+        "interfaces/candidates/v1alpha1/worker.runtime/definition.json",
         "conformance/runtime-abi-v1/contract.json",
-        "spec/decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md"
+        "internal/runtimeconformance/contract.go",
+        "spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md"
       ]
     }
   ]

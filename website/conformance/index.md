@@ -198,7 +198,7 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 89-check matrix over real HTTP: exact discovery and
+drives the complete 94-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -226,8 +226,10 @@ beside its uid — import validated exactly like apply, cross-resource semantics
 enforce (WorkerDeployment weights summing to 10000; a cron trigger or queue
 consumer refused with `unsupported_capability` until some WorkerVersion
 declares the matching handler; a WorkerEndpoint answered with a complete HTTPS
-address the host assigned rather than the author, that address unchanged when
-the worker it serves is promoted to another version, and a second endpoint
+address the host assigned rather than the author, in canonical form — lowercase,
+no trailing root dot, and a url built from exactly that hostname — the same
+address still published, under the same uid, after a host-side status refresh,
+a promotion of the worker it serves, and a re-read, and a second endpoint
 against one worker refused; and `status.outputs` present with exactly the
 declared members for the one Form that declares an outputSchema and omitted for
 every Form that declares none), 202 Operation polling with
@@ -410,16 +412,21 @@ sha256 of every module byte it ships. It states, as data, the exact
 `worker.runtime` InterfaceRef it measures, the closed handler vocabulary, the
 closed loadable media-type set, the portable globals floor, the deployment an
 operator reproduces — bundle, declared handlers, vars, sensitive variable,
-`edge.kv` and `edge.queue` bindings, cron expression, queue — and for each of
-the 17 required checks its name, what it proves, the bundle it needs, and the
-request/expected-observation pairs that decide it.
+`edge.kv`, `edge.queue` and `worker.service` bindings, cron expression, queue,
+and the SECOND worker the service binding addresses — and for each of the 18
+required checks its name, what it proves, the bundle it needs, and the
+request/expected-observation pairs that decide it. It pins a second
+InterfaceRef beside the runtime ABI's, `worker.service@1.0.0`, because two of
+those checks are claims about that contract's delivery model and a corpus
+naming a contract it does not pin can go on measuring one that no longer
+exists.
 
 Five checks drive the module loader: a bundle whose bytes load and report the
 handler set THOSE BYTES export, a module media type outside the closed set, a
 `mainModule` the bundle does not carry, bytes that are not a compilable module,
 and a declared handler the module does not export — the last being exactly the
-obligation the Host API lane states it cannot prove for arbitrary bytes. Eleven
-drive a deployed worker over HTTP: the three-argument handler signature, a
+obligation the Host API lane states it cannot prove for arbitrary bytes.
+Thirteen drive a deployed worker over HTTP: the three-argument handler signature, a
 returned `Response`, an uncaught throw becoming a completed host-generated 500
 rather than a hung request, `env` projecting exactly the declared names, the
 globals floor, a byte round trip through the `edge.kv` binding, a request body
@@ -427,9 +434,20 @@ answered chunk by chunk before the next chunk is sent, a response body whose
 chunks arrive separated in time, `ctx.waitUntil` holding the isolate open while
 a rejected task leaves the sent response alone, a `scheduled` invocation from
 the cron attachment, and a queue batch delivered to the `queue` handler with the
-producer's exact bytes. The seventeenth is `tail`, recorded as explicitly
-unmeasured: the contract declares the handler and nothing in the family
-activates one, so the corpus says so rather than leaving it silently unchecked.
+producer's exact bytes. Two more take the streaming pair one worker further
+along: the same request-body and response-body observations, made THROUGH the
+`module-worker.service` binding into a second worker running the same bundle,
+which is what holds the projection to the streaming model `worker.service@1.0.0`
+states. A self-binding would let a host answer from its own handler without
+dispatching anything, so the corpus states a peer deployment and the loader
+refuses a service binding with no callee behind it.
+
+Every handler the ABI declares is measured, and the loader ENFORCES that rather
+than the corpus asserting it: a handler in `handlerVocabulary` with no check
+whose `operation` names it — or with only an `unmeasured` entry, which is what
+`tail` used to have — fails corpus verification by name. That is why `tail` left
+the ABI rather than staying as an entry nothing could reach
+([decision 0019](../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 
 The bundles carry module bytes and the handlers those bytes genuinely export,
 and loading the corpus recomputes every stated outcome from the bytes. A bundle
@@ -437,7 +455,7 @@ that claims an export its module does not have is refused, and so is a check
 expecting a failure the bytes cannot cause: a required check no correct runtime
 can pass, and one no incorrect runtime can fail, are the same defect.
 
-Three of those checks read back an observation the runtime stored for them —
+Three checks read back an observation the runtime stored for them —
 the `edge.kv` round trip, the queue delivery and the `ctx.waitUntil` marker —
 and the deployment they are measured against outlives the run, `edge.kv`
 namespace and all. A pinned constant cannot correlate a run and a per-run value

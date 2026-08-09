@@ -46,6 +46,20 @@ toward `maxRetries`, what the attempt count was after a dead-letter transfer, or
 whether one queue could have two consumers. Every one of those is a thing two
 conforming hosts could answer differently.
 
+**`worker.service` contradicted its own binding.** The Interface declared both
+the request body and the response body as JSON strings, while the
+`module-worker.service` Binding Definition that projects it said the call
+streams request to response in both directions and buffers neither. Both cannot
+be true, and the one that has to go is the JSON string: buffering a body into a
+document member is the exact defect this decision exists to correct, one order
+of magnitude down from the 5 GiB object body. The contract was also silent on
+everything a caller can observe about a stream — whether an absent body differs
+from an empty one, when either stream starts, what backpressure does, what
+cancelling does, what a truncation looks like on each side of the response head,
+what the portable floors are, what a callee exception produces, and what a call
+that never happened produces. Each of those is a thing two conforming hosts
+could answer differently.
+
 **The cron grammar rejected the schedules the Form exists for.** The enforced
 pattern was five single-value fields, so `* * * * *`, `0 * * * *`, and
 `*/5 * * * *` were all refused and the most frequent representable schedule was
@@ -113,6 +127,54 @@ missing, and a listing truncating at the requested limit. A trace declaring
 *i* mod 256, so every trace is byte-for-byte reproducible. Multipart assembly is
 a host obligation: its steps depend on part etags the host mints during the
 trace, which a static trace cannot carry.
+
+### `worker.service` streams, and says everything a caller can observe
+
+Request and response bodies are STREAMS. The operation document carries
+`bodyStream` and `contentLength` in each direction and no bytes at all, exactly
+as `edge.objects` does; the bytes travel beside it. That alone would leave the
+same holes the old contract had, so the whole observable surface is stated:
+
+- **An absent body is not an empty one.** `bodyStream: false` means there is no
+  body and the callee's `request.body` is null; `bodyStream: true` means a body
+  exists and `contentLength` is exactly how many bytes accompany it, so
+  `bodyStream: true` with `contentLength: 0` is a body that is present and ends
+  immediately. Both members are REQUIRED in both directions, because a boolean
+  a document may omit is the ambiguity the rule closes rather than a shorthand
+  for it.
+- **When each stream starts.** The callee is invoked as soon as the request head
+  has arrived, before any body byte is read; the call completes as soon as the
+  response head has arrived, before any response byte is read. Neither side
+  waits for the other's end of stream.
+- **Backpressure** reaches the writer from the reader, and a host MUST NOT read
+  a whole body to decouple them — which is the same sentence as the first rule
+  and the reason a runner can measure it.
+- **Cancellation** propagates: a caller cancelling the response cancels the
+  callee's response stream, a callee cancelling the request fails the caller's
+  remaining writes, and neither is a host fault or a retryable one.
+- **The two aborts are different observable outcomes**, because they fall on
+  different sides of the response head. `request_aborted` is a request stream
+  that ended short, and the callee MAY still answer with a status;
+  `response_aborted` is a response stream that ended short AFTER the status was
+  delivered, and the status is never retroactively rewritten. A caller can
+  therefore tell a truncated answer from an unanswered call.
+- **The limits are FLOORS.** `maxRequestHeaders`, `maxRequestHeaderBytes`,
+  `maxRequestBytes` and their response counterparts are the portable minimum
+  every conforming host accepts, never a host's ceiling; exceeding what the host
+  accepts is `request_too_large`, refused before the callee is invoked.
+- **A callee exception is a complete response.** An uncaught throw is a
+  host-generated 500 with a status, headers, and a terminated body, and the
+  operation SUCCEEDS with it — never a hung call and never a truncated
+  connection with no status.
+- **A call that never happened is not a 500.** When the call could not be
+  dispatched at all there is no status, and the operation fails
+  `backend_unavailable`. The binding already projected that difference as
+  resolve versus reject; now the Interface is what says so.
+
+Nothing here mints a schema identity: the members are ordinary schema members
+and the rest is normative prose in the descriptions, with the resolve-with-500
+rule carried as a fixture because a trace is the only place it can be stated as
+a fact rather than a sentence (decision 0014).
 
 ### `edge.sql` values are tagged by storage class
 
@@ -189,6 +251,21 @@ host diagnostics, not retried within the matched minute.
   `cron-grammar-enforced`, and `queue-single-consumer-enforced` — bringing the
   closed list to 79. They are exactly what a black-box Host API runner can
   prove; everything else these contracts state is listed as a host obligation.
+- `worker.service`'s streaming model is measured where it can be measured, which
+  is not the Host API lane: `conformance/runtime-abi-v1` gains
+  `service-request-body-streams-to-the-callee` and
+  `service-response-body-streams-from-the-callee`. They are the two direct
+  streaming observations taken one worker further along, through the
+  `module-worker.service` binding into a SECOND worker running the same corpus
+  bundle, and they observe separation in TIME rather than in framing — the
+  request side requires the callee to account for the first chunk while the
+  second exists nowhere but in the runner, and the response side requires
+  arrivals separated by at least half the gap the callee declared. A peer worker
+  rather than a self-binding, because the binding addresses ANOTHER Module
+  Worker and a self-call lets a host answer from its own handler without
+  dispatching anything. The corpus pins `worker.service@1.0.0` by digest beside
+  the runtime ABI's, so a contract that reverted to buffered bodies would fail
+  the corpus rather than leave two checks asserting a model nothing declares.
 - The catalog gains an authoring-time proof for EVERY Interface, not only the
   runtime ABI: operation names are unique and well formed, fixtures exercise
   declared operations, and a fixture expecting a failure names an error that
@@ -221,6 +298,21 @@ host diagnostics, not retried within the matched minute.
 - **JSON-string object bodies.** Rejected because the object ceiling is 5 GiB.
   Either the body model or the ceiling had to go, and shrinking an object store
   to what fits in a JSON string makes it not an object store.
+- **Keep `worker.service` bodies as JSON strings and correct the binding
+  instead.** Rejected because the binding was the half that was right. A
+  worker-to-worker call is the cheapest call an application makes and the one it
+  makes on every request; a projection that buffered both bodies would make a
+  100 MiB proxy hop allocate 100 MiB twice and would remove streaming from every
+  application built out of two workers rather than one. It would also have made
+  the family inconsistent with itself, since `edge.objects` streams for the same
+  reason at a larger size.
+- **State the streaming model and leave the observable details to hosts.**
+  Rejected because each unstated detail is a portability hole with a plausible
+  reading on both sides: a host may decide an empty body is no body, that a
+  stream starts at end of request, that cancellation is silent, or that a
+  truncated response is a 500. An author cannot write against a contract that
+  has not decided those, and a conformance run cannot fail a host over a
+  behaviour nothing states.
 - **Narrow `edge.objects` to a small-text store and rename it.** Rejected
   because decision 0008 names the strongly consistent object bucket as one of
   the family's proven service shapes; narrowing it would remove the shape rather

@@ -3,12 +3,12 @@
   "kind": "ModuleWorker",
   "definitionVersion": "0.1.0",
   "title": "Module Worker",
-  "description": "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES Module Worker ABI by identity, and states it exactly: the runtime contract worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, the fetch, scheduled, queue, and tail handler signatures, the binding environment, ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that exact digest; a runtime that behaves differently is a different contract version and a different Form version, never a compatibility date. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.",
+  "description": "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES Module Worker ABI by identity, and states it exactly: the runtime contract worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, the fetch, scheduled, and queue handler signatures, the binding environment, ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that exact digest; a runtime that behaves differently is a different contract version and a different Form version, never a compatibility date. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.",
   "role": "identity",
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
-    "description": "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES Module Worker ABI by identity, and states it exactly: the runtime contract worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, the fetch, scheduled, queue, and tail handler signatures, the binding environment, ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that exact digest; a runtime that behaves differently is a different contract version and a different Form version, never a compatibility date. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.",
+    "description": "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES Module Worker ABI by identity, and states it exactly: the runtime contract worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, the fetch, scheduled, and queue handler signatures, the binding environment, ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that exact digest; a runtime that behaves differently is a different contract version and a different Form version, never a compatibility date. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.",
     "properties": {},
     "title": "Module Worker desired state",
     "type": "object"
@@ -25,13 +25,13 @@
       "apiVersion": "interfaces.takoform.com/v1alpha1",
       "name": "worker.runtime",
       "version": "1.0.0",
-      "schemaDigest": "sha256:1db4c093befc3c8bb769361c26f26a582561c5ff0edae36a62f45143641a2152"
+      "schemaDigest": "sha256:48d5fe4ca3109d1235354fef99748f5d01b7e0c398f97a9354496a220dc7a579"
     },
     {
       "apiVersion": "interfaces.takoform.com/v1alpha1",
       "name": "worker.service",
       "version": "1.0.0",
-      "schemaDigest": "sha256:8beedb6fa4399836c24afa0a7adb17fbe13e8bc705b86441dc210e7614c95507"
+      "schemaDigest": "sha256:37e676415b3e3a503fbd2031b1b4345ccb374410de73ef311397cd03388d3b31"
     }
   ],
   "conformanceFixtures": [

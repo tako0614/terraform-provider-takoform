@@ -4,13 +4,18 @@
     "apiVersion": "interfaces.takoform.com/v1alpha1",
     "name": "worker.runtime",
     "version": "1.0.0",
-    "schemaDigest": "sha256:1db4c093befc3c8bb769361c26f26a582561c5ff0edae36a62f45143641a2152"
+    "schemaDigest": "sha256:48d5fe4ca3109d1235354fef99748f5d01b7e0c398f97a9354496a220dc7a579"
+  },
+  "serviceInterface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "worker.service",
+    "version": "1.0.0",
+    "schemaDigest": "sha256:37e676415b3e3a503fbd2031b1b4345ccb374410de73ef311397cd03388d3b31"
   },
   "handlerVocabulary": [
     "fetch",
     "scheduled",
-    "queue",
-    "tail"
+    "queue"
   ],
   "loadableMediaTypes": [
     "application/javascript+module",
@@ -44,7 +49,8 @@
     "routePrefix": "/abi/",
     "kvBinding": "CACHE",
     "queueBinding": "EVENTS",
-    "note": "The conformance bundle's main module answers these routes and carries no expectation of its own: every route reports what the RUNTIME supplied — the arguments of the invocation, the own property names of env, which of the names the runner asked about exist as globals, what the bindings returned, and what the host later delivered to the scheduled, queue and tail handlers. A probe that knew the answers could pass a runtime that does not implement the ABI. Correlation belongs to the runner too: every route that stores an observation stores it under the value the RUNNER sent and reports that value back, and the module never mints one of its own, because a probe that correlated itself would prove nothing about which run stored what."
+    "serviceBinding": "PEER",
+    "note": "The conformance bundle's main module answers these routes and carries no expectation of its own: every route reports what the RUNTIME supplied — the arguments of the invocation, the own property names of env, which of the names the runner asked about exist as globals, what the bindings returned, and what the host later delivered to the scheduled and queue handlers. The two PEER routes add nothing of their own either: each hands the callee the request stream it is still receiving and returns the callee's response body unread, so what they report is the projection's behaviour rather than the module's. A probe that knew the answers could pass a runtime that does not implement the ABI. Correlation belongs to the runner too: every route that stores an observation stores it under the value the RUNNER sent and reports that value back, and the module never mints one of its own, because a probe that correlated itself would prove nothing about which run stored what."
   },
   "loaderProtocol": {
     "protocol": "takoform.runtime-abi-loader@v1",
@@ -61,8 +67,7 @@
     "declaredHandlers": [
       "fetch",
       "scheduled",
-      "queue",
-      "tail"
+      "queue"
     ],
     "vars": [
       "LOG_LEVEL"
@@ -78,16 +83,28 @@
       {
         "name": "EVENTS",
         "interface": "edge.queue"
+      },
+      {
+        "name": "PEER",
+        "interface": "worker.service"
       }
     ],
     "environmentPropertyNames": [
       "API_SIGNING_TOKEN_NAME",
       "CACHE",
       "EVENTS",
-      "LOG_LEVEL"
+      "LOG_LEVEL",
+      "PEER"
     ],
     "cron": "* * * * *",
-    "queue": "runtime-abi-conformance"
+    "queue": "runtime-abi-conformance",
+    "peer": {
+      "bundle": "conformance-probe",
+      "declaredHandlers": [
+        "fetch"
+      ],
+      "note": "A worker.service binding addresses ANOTHER Module Worker, so a run needs two. The operator deploys these same bytes a second time as a plain fetch worker with no vars, no sensitive variable, no bindings and no attachments, and binds the measured worker's PEER to it. It is a separate worker rather than the measured worker under another name because a self-binding lets a host answer from its own handler without dispatching anything, which would leave the two service checks measuring what the direct streaming checks already measure. One bundle answers both sides: the peer serves /abi/echo-stream and /abi/stream, which touch no binding."
+    }
   },
   "bundles": [
     {
@@ -98,14 +115,13 @@
           "name": "index.js",
           "mediaType": "application/javascript+module",
           "source": "bundles/conformance-probe/index.js",
-          "sha256": "sha256:8514cba05d6fae0d9d32e0024f1100874954e38ce40b22693f5432aba32a63b7"
+          "sha256": "sha256:d6666fc0f1347d2465e8615b38b3e10c607d8cf26b18f98aaccf221e147705db"
         }
       ],
       "exportedHandlers": [
         "fetch",
         "scheduled",
-        "queue",
-        "tail"
+        "queue"
       ]
     },
     {
@@ -144,7 +160,7 @@
           "name": "index.js",
           "mediaType": "application/javascript+module",
           "source": "bundles/conformance-probe/index.js",
-          "sha256": "sha256:8514cba05d6fae0d9d32e0024f1100874954e38ce40b22693f5432aba32a63b7"
+          "sha256": "sha256:d6666fc0f1347d2465e8615b38b3e10c607d8cf26b18f98aaccf221e147705db"
         },
         {
           "name": "page.html",
@@ -163,7 +179,7 @@
           "name": "index.js",
           "mediaType": "application/javascript+module",
           "source": "bundles/conformance-probe/index.js",
-          "sha256": "sha256:8514cba05d6fae0d9d32e0024f1100874954e38ce40b22693f5432aba32a63b7"
+          "sha256": "sha256:d6666fc0f1347d2465e8615b38b3e10c607d8cf26b18f98aaccf221e147705db"
         }
       ],
       "unloadableError": "module_not_found"
@@ -180,14 +196,12 @@
         "declaredHandlers": [
           "fetch",
           "scheduled",
-          "queue",
-          "tail"
+          "queue"
         ],
         "expectExportedHandlers": [
           "fetch",
           "scheduled",
-          "queue",
-          "tail"
+          "queue"
         ]
       }
     },
@@ -373,6 +387,39 @@
       }
     },
     {
+      "name": "service-request-body-streams-to-the-callee",
+      "operation": "fetch",
+      "procedure": "requestStream",
+      "proves": "the module-worker.service projection streams the REQUEST toward the callee rather than buffering it, which is what worker.service@1.0.0 states and what its first version's JSON-string body model could not have delivered. The call crosses a worker boundary: the caller hands env.PEER the request stream it is still receiving, and the callee accounts for the first chunk while the second exists nowhere but in the runner. Separation is observed in TIME and not in framing — the runner accumulates the callee's answers until they account for the bytes it has actually sent, so a stack that splits one write across several reads passes and one that answers only at end of stream does not.",
+      "request": {
+        "method": "POST",
+        "path": "/abi/service-echo-stream"
+      },
+      "timing": {
+        "deadlineSeconds": 30,
+        "gapMillis": 250,
+        "requestChunkSize": [
+          4096,
+          8192
+        ]
+      }
+    },
+    {
+      "name": "service-response-body-streams-from-the-callee",
+      "operation": "fetch",
+      "procedure": "responseStream",
+      "proves": "the same projection streams the RESPONSE back from the callee. The callee separates its chunks in time and the caller returns the callee's body unread, so a binding that buffered either half would deliver them together. It is the response-head half of the contract too: the caller's call completes when the callee's status and headers arrive, before any body byte is read, which is the wait a buffering projection never ends.",
+      "request": {
+        "method": "GET",
+        "path": "/abi/service-stream"
+      },
+      "timing": {
+        "deadlineSeconds": 30,
+        "gapMillis": 250,
+        "chunks": 3
+      }
+    },
+    {
       "name": "wait-until-holds-the-isolate-and-a-rejection-leaves-the-response-alone",
       "operation": "waitUntil",
       "procedure": "waitUntil",
@@ -429,19 +476,6 @@
         "deadlineSeconds": 60,
         "pollMillis": 500
       }
-    },
-    {
-      "name": "tail-trace-delivered-to-the-tail-handler",
-      "operation": "tail",
-      "procedure": "unmeasured",
-      "proves": "nothing. This entry exists so the corpus does not silently leave a declared handler unchecked, which is the defect the compatibility date had.",
-      "unmeasured": {
-        "reason": "worker.runtime@1.0.0 declares a tail handler, but nothing in edge.forms.takoform.com/v1alpha1 activates one. The family has exactly three inward-activation attachments — WorkerCustomDomain (fetch), WorkerCronTrigger (scheduled) and QueueConsumer (queue) — so no deployment a portable author can write causes a host to invoke tail, and no run of this corpus can observe it. The handler is not hard to measure; it is unreachable.",
-        "wouldUse": "/abi/tail",
-        "closedBy": "either dropping tail from the ABI's declaredHandlers vocabulary in a new exact Interface version, or adding the Form that attaches a tail consumer so a deployment can cause an invocation.",
-        "blockerId": "V3-011",
-        "recommended": "drop tail from worker.runtime, and re-add it in the version that ships the attachment which makes it observable."
-      }
     }
   ],
   "requiredChecks": [
@@ -458,9 +492,10 @@
     "kv-binding-round-trips-bytes-through-env",
     "request-body-streams-rather-than-buffering",
     "response-body-streams-rather-than-buffering",
+    "service-request-body-streams-to-the-callee",
+    "service-response-body-streams-from-the-callee",
     "wait-until-holds-the-isolate-and-a-rejection-leaves-the-response-alone",
     "scheduled-invoked-by-the-host-cron-attachment",
-    "queue-batch-delivered-to-the-queue-handler",
-    "tail-trace-delivered-to-the-tail-handler"
+    "queue-batch-delivered-to-the-queue-handler"
   ]
 }

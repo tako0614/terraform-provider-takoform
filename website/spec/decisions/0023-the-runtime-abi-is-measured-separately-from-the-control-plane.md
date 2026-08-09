@@ -154,6 +154,15 @@ regeneration rather than beside it. New blocker V3-011 holds the decision, and
 obligations the Host API lane does not prove, marked unmeasurable rather than
 merely unproven.
 
+**Carried out in the regeneration this paragraph was waiting for.** `tail` is
+gone from `worker.runtime@1.0.0`, the corpus carries no unmeasured entry, and
+V3-011 is closed
+([decision 0019](0019-the-module-worker-abi-is-an-exact-contract.md)). The
+`unmeasured` mechanism stays exactly as designed and is now what the LOAD lane
+reports when an operator supplies no module-loader adapter; what it can no
+longer do is stand in for a declared handler, because the corpus loader refuses
+one that no check measures.
+
 ## Consequences
 
 - The seven obligations v1alpha3 lists as unproven now have an artifact that

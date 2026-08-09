@@ -542,9 +542,20 @@ in the same class as an account, a region, and a vendor subdomain
   and `url`, which is exactly `https://` + that hostname + `/`. The scheme is
   HTTPS and TLS is not optional; there is no port and no deeper path. The
   assigned `hostname` is in CANONICAL form — lowercase, no trailing root dot —
-  because a name a host produced has no earlier spelling to preserve; the two
-  members are held to one grammar, so a hostname no `url` could be built from is
-  not representable.
+  because a name a host produced has no earlier spelling to preserve, and the
+  Form's own output grammar admits only that form, so the rule and the pattern
+  a host is held to are one statement. The two members are held to that one
+  grammar, so a hostname no `url` could be built from is not representable. The
+  desired-state grammar of `WorkerCustomDomain` is deliberately laxer and stays
+  so: an author writes a name and the host canonicalizes it, which is a
+  different rule about a different value.
+- **The address is immutable for the lifetime of the endpoint's attachment
+  UID.** `hostname` and `url` MUST NOT change on deployment promotion, on status
+  refresh, on a host's internal placement change, or on a backend migration. A
+  host that needs to change the address deletes the endpoint and the author
+  creates a new one — a new attachment, with a new UID, which may legitimately
+  carry a new address. Without this rule the published address is a value a
+  consumer may read and never store, which is not an address.
 - A portable author may rely on three things and no others: that a value comes
   back, that it is HTTPS, and that it routes to the worker's ACTIVE DEPLOYMENT.
   The SHAPE of the address — which label, which subdomain, which apex, how long,
@@ -577,7 +588,12 @@ in the same class as an account, a region, and a vendor subdomain
 
 These are the required conformance checks
 `worker-endpoint-address-is-host-assigned`, `worker-endpoint-single-per-worker`,
-and `worker-endpoint-follows-the-active-deployment`.
+`worker-endpoint-follows-the-active-deployment`, and
+`worker-endpoint-address-is-stable-for-its-uid`, which drives the three triggers
+a black-box runner can cause — a host-side status refresh, a promotion of the
+worker, and a re-read — against one endpoint and compares the UID as well as the
+value. A placement change and a backend migration are not causable from outside
+a host and stay obligations below.
 
 ### Reverse validation and deletion
 
@@ -940,8 +956,10 @@ Proven by required checks:
 - every inward-activation attachment is gated on the handler its events invoke,
   in both directions;
 - a `WorkerEndpoint` is answered with a complete HTTPS address the host
-  assigned, that address survives a promotion of the worker it serves, and a
-  second endpoint against one worker is refused.
+  assigned, in canonical form and with the two published members built from one
+  hostname; that address is still the same address, under the same UID, after a
+  host-side status refresh, a promotion of the worker it serves, and a re-read;
+  and a second endpoint against one worker is refused.
 
 Obligations a conforming host MUST meet that this lane does NOT prove, because
 proving them means executing the module rather than driving the Host API:
@@ -970,17 +988,15 @@ proving them means executing the module rather than driving the Host API:
   `unsupported_capability` (422) for a host that cannot assign one is stated
   normatively and left to that host to honor.
 
-One further obligation is not merely unproven here but UNMEASURABLE anywhere
-today, and is listed rather than left implied:
-
-- the `tail` handler. The contract declares it, and no resource in this family
-  activates one: the three inward-activation attachments above are gated on
-  `fetch`, `scheduled`, and `queue`. No deployment a portable author can write
-  causes a host to invoke `tail`, so no conformance run can observe it. The
-  recommended remedy is to remove it from the ABI and re-add it with the
-  attachment that makes it observable; until then the runtime corpus carries it
-  as an explicitly unmeasured entry and blocker **V3-011** records the decision
-  ([decision 0023](../decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
+Nothing the ABI declares is unmeasurable any more. `worker.runtime@1.0.0` used
+to declare a `tail` handler no resource in this family could activate, so no
+run could observe it and two hosts could implement it differently with nothing
+able to detect the divergence; the handler was removed rather than left in a
+published-shaped contract nothing reaches, and the runtime corpus now REFUSES a
+declared handler with no check measuring it, so the property is enforced rather
+than described. `tail` returns with the attachment that makes it observable and
+a new exact runtime Interface version, never as a bare handler
+([decision 0019](../decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 
 Those are stated normatively in the contract's own descriptions and proven by
 its behavior fixtures, which a runtime conformance run executes against a real
@@ -994,8 +1010,14 @@ A host that passes this lane has not thereby proven it implements the ABI; it
 has proven it says which ABI it implements and holds desired state to it.
 
 The same split covers the four data-plane contracts —  `edge.kv`,
-`edge.objects`, `edge.sql`, and `edge.queue` — because this lane drives desired
-state and never moves a byte of application data
+`edge.objects`, `edge.sql`, and `edge.queue` — and `worker.service`, whose whole
+delivery model is a claim about bytes moving between two workers: that neither
+body is buffered, that an absent body is distinguishable from an empty one, that
+backpressure and cancellation propagate, that a request abort and a response
+abort are different observable outcomes, that a callee exception arrives as a
+complete host-generated 500 rather than a hung call, and that a call which could
+not be dispatched fails rather than answering with a status. This lane drives
+desired state and never moves a byte of application data
 ([decision 0020](../decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md)).
 
 Proven by required checks:

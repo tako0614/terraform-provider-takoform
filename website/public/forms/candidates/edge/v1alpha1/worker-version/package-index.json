@@ -5,15 +5,15 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "WorkerVersion",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:0d769a5d3d0d7d69cbf63ba10176cf6f48df2069ee600c313e920ac7847a1e07"
+    "schemaDigest": "sha256:1ae83cc19948849f4d63441cf6800701b745c7bb4688b35ef6c65e76a19a7d08"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 22787,
-      "digest": "sha256:4fc2e535a09ac42447361ffbc04d3ad3694323cfceef648f784e7caa6bd0e7f5"
+      "size": 22767,
+      "digest": "sha256:66344a365cbeea5532622b475efbf8472d8a82f93b9701c539e4c1c6c5570dd9"
     },
     {
       "path": "fixtures/desired.json",

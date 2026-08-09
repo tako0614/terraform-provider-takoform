@@ -11,6 +11,7 @@ package portableconformancev3
 // something no configuration could have supplied.
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -18,6 +19,14 @@ import (
 	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+)
+
+// The worker the endpoint group builds for itself, and the deployment that
+// serves it. Two checks address them by name across the group, so the names are
+// stated once.
+const (
+	endpointWorkerName     = "endpoint-worker"
+	endpointDeploymentName = "endpoint-deployment"
 )
 
 // checkWorkerEndpointAddressIsHostAssigned proves the one thing this Form
@@ -131,7 +140,7 @@ func (r *v3Runner) checkWorkerEndpointSinglePerWorker() error {
 func (r *v3Runner) checkWorkerEndpointFollowsTheActiveDeployment() error {
 	input := r.contract.RunnerInput
 	worker := r.target(input.ModuleWorker)
-	worker.Name = "endpoint-worker"
+	worker.Name = endpointWorkerName
 	if _, _, err := r.applyResource(worker, applyOptions{
 		Create: true, IdempotencyKey: "key-endpoint-worker",
 	}, http.StatusCreated); err != nil {
@@ -143,7 +152,7 @@ func (r *v3Runner) checkWorkerEndpointFollowsTheActiveDeployment() error {
 	}, http.StatusCreated); err != nil {
 		return fmt.Errorf("endpoint first version: %w", err)
 	}
-	deployment := r.deploymentOf("endpoint-deployment", worker.Name, first.Name)
+	deployment := r.deploymentOf(endpointDeploymentName, worker.Name, first.Name)
 	created, _, err := r.applyResource(deployment, applyOptions{
 		Create: true, IdempotencyKey: "key-endpoint-deployment",
 	}, http.StatusCreated)
@@ -209,7 +218,7 @@ func (r *v3Runner) checkWorkerEndpointFollowsTheActiveDeployment() error {
 	}, http.StatusCreated); err != nil {
 		return fmt.Errorf("endpoint second version: %w", err)
 	}
-	promoted := r.deploymentOf("endpoint-deployment", worker.Name, second.Name)
+	promoted := r.deploymentOf(endpointDeploymentName, worker.Name, second.Name)
 	if _, _, err := r.applyResource(promoted, applyOptions{
 		ExpectedGeneration: created.Metadata.Generation,
 		IdempotencyKey:     "key-endpoint-promotion",
@@ -249,6 +258,140 @@ func (r *v3Runner) checkWorkerEndpointFollowsTheActiveDeployment() error {
 		}
 	}
 	r.complete("worker-endpoint-follows-the-active-deployment")
+	return nil
+}
+
+// checkWorkerEndpointAddressIsStableForItsUID proves the address-stability rule
+// of decision 0024: an endpoint's hostname and URL are immutable for the
+// lifetime of its attachment UID.
+//
+// Nothing proved that rule before, and two checks around it proved something
+// weaker. `worker-endpoint-address-is-host-assigned` compares an apply against
+// the read that follows it, which a host caching one answer per request would
+// pass; `worker-endpoint-follows-the-active-deployment` shows the address
+// surviving a promotion as one clause of a claim about what the address routes
+// to. Neither says the address is the resource's identity to a client, and that
+// is the property a consumer stores the URL on the strength of.
+//
+// So this check drives the three triggers a black-box runner can actually
+// cause, against ONE endpoint, comparing against the UID as well as the value:
+// a host-side status refresh, a deployment promotion the author never applied
+// to the endpoint, and a plain re-read. Each of them is a moment a host might
+// re-derive an address from something that moved — a revision, a weighted
+// version, a placement — and each of them must not. The remaining two triggers
+// the rule names, an internal placement change and a backend migration, are not
+// causable from outside a host and stay host obligations beside the others
+// (spec/host-api/v1alpha3.md).
+//
+// The UID comparison is what makes it the stated rule rather than a weaker
+// neighbour of it. "Immutable for the lifetime of the attachment UID" is
+// satisfied by a host that deletes and re-creates — the address may legitimately
+// differ then, and decision 0024 says so — so a check that only compared
+// addresses would be asserting something the rule does not say, and one that
+// only compared addresses across a re-create would fail a conforming host.
+func (r *v3Runner) checkWorkerEndpointAddressIsStableForItsUID() error {
+	input := r.contract.RunnerInput
+	endpoint := r.target(input.WorkerEndpoint)
+	endpoint.Name = "stable-endpoint"
+	endpoint.Spec = cloneJSONMap(endpoint.Spec)
+	endpoint.Spec["worker"] = exactReference(r.target(input.ModuleWorker), endpointWorkerName)
+	created, _, err := r.applyResource(endpoint, applyOptions{
+		Create: true, IdempotencyKey: "key-stable-endpoint",
+	}, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("an endpoint to hold to one address: %w", err)
+	}
+	hostname, address, err := endpointAddress(created, "the created WorkerEndpoint")
+	if err != nil {
+		return err
+	}
+	uid := created.Metadata.UID
+
+	// A host-side status refresh. It advances the representation revision
+	// without the author touching the resource, which is exactly the moment a
+	// host that derived the address from its own current state would move it.
+	refreshResponse, err := r.statusAction(
+		endpoint, "observe", created.Metadata.Generation, "key-stable-endpoint-observe",
+		map[string]string{ErrorProbeHeader: ProbeTouchStatus},
+	)
+	if err != nil {
+		return err
+	}
+	refreshed, err := decodeResourceEnvelope(refreshResponse)
+	if err != nil {
+		return err
+	}
+	if refreshed.Metadata.Revision == created.Metadata.Revision {
+		return errors.New(
+			"the status refresh did not advance the endpoint's representation revision, so this check observed no refresh at all")
+	}
+	// The address is compared on a READ, which is what a consumer holding the
+	// URL actually does, rather than on the refresh's own answer.
+	afterRefresh, _, err := r.read(endpoint)
+	if err != nil {
+		return err
+	}
+	if err := endpointAddressUnchanged(afterRefresh, uid, hostname, address, "a host-side status refresh"); err != nil {
+		return err
+	}
+
+	// A promotion the author never applied to the endpoint. The worker's
+	// deployment moves back to its first version; the endpoint holds no version
+	// reference, so nothing about it was asked to change.
+	rollback := r.deploymentOf(endpointDeploymentName, endpointWorkerName, "endpoint-first-version")
+	current, _, err := r.read(rollback)
+	if err != nil {
+		return err
+	}
+	if _, _, err := r.applyResource(rollback, applyOptions{
+		ExpectedGeneration: current.Metadata.Generation,
+		IdempotencyKey:     "key-stable-endpoint-rollback",
+	}, http.StatusOK); err != nil {
+		return fmt.Errorf("rolling the endpoint's worker back to its first version: %w", err)
+	}
+	promoted, _, err := r.read(endpoint)
+	if err != nil {
+		return err
+	}
+	if err := endpointAddressUnchanged(promoted, uid, hostname, address, "a deployment promotion"); err != nil {
+		return err
+	}
+
+	// And a plain re-read, which is what every consumer of the URL does.
+	reread, _, err := r.read(endpoint)
+	if err != nil {
+		return err
+	}
+	if err := endpointAddressUnchanged(reread, uid, hostname, address, "a re-read"); err != nil {
+		return err
+	}
+
+	if err := r.deleteExisting(endpoint, "key-stable-endpoint-release"); err != nil {
+		return err
+	}
+	r.complete("worker-endpoint-address-is-stable-for-its-uid")
+	return nil
+}
+
+// endpointAddressUnchanged compares one later reading of an endpoint against
+// the address it was assigned, and says which trigger moved it.
+func endpointAddressUnchanged(resource wireResource, uid, hostname, address, trigger string) error {
+	observedHostname, observedURL, err := endpointAddress(resource, "the WorkerEndpoint after "+trigger)
+	if err != nil {
+		return err
+	}
+	if resource.Metadata.UID != uid {
+		return fmt.Errorf(
+			"%s changed the endpoint's uid %s -> %s; nothing here deleted or re-created it",
+			trigger, uid, resource.Metadata.UID,
+		)
+	}
+	if observedHostname != hostname || observedURL != address {
+		return fmt.Errorf(
+			"%s moved the assigned address %s -> %s; a WorkerEndpoint's address is immutable for the lifetime of its attachment uid, and a host that must change one deletes the endpoint instead",
+			trigger, address, observedURL,
+		)
+	}
 	return nil
 }
 
@@ -356,14 +499,23 @@ func validateDeclaredOutputs(schema *jsonschema.Schema, outputs map[string]any) 
 	return schema.Validate(document)
 }
 
-// endpointAddress reads and holds one Worker Endpoint's published address to
-// the one thing no schema can state: `url` is exactly `https://` + the
-// `hostname` this same document reports + `/`. A JSON Schema bounds each member
-// on its own, so a host could satisfy both patterns while publishing an address
-// whose two halves name different origins — which is a client holding one
+// endpointAddress reads one Worker Endpoint's published address and holds it to
+// the three things a schema either cannot state or states only per member.
+//
+// CANONICAL FORM, on the value the host actually returned. The assigned
+// hostname is lowercase and carries no trailing root dot. The Form's
+// outputSchema now says the same, and checkFormDeclaredOutputsAreExact holds
+// the host to that pattern — but a grammar is checked against one member in
+// isolation and this is the reading that names the rule, so a host that
+// answered `A.Example.` learns which rule it broke rather than only that a
+// pattern failed. It is also the assertion that survives a corpus whose pinned
+// schema is one release behind the catalog.
+//
+// AGREEMENT, which no schema can state at all: `url` is exactly `https://` +
+// the `hostname` THIS SAME DOCUMENT reports + `/`. A JSON Schema bounds each
+// member on its own, so a host could satisfy both patterns while publishing an
+// address whose two halves name different origins — a client holding one
 // resource that answers at two addresses, with nothing saying which is real.
-// The per-member types, patterns, and bounds are the declared outputSchema's to
-// enforce, and checkFormDeclaredOutputsAreExact enforces them there.
 func endpointAddress(resource wireResource, subject string) (hostname, address string, err error) {
 	if resource.Status == nil || len(resource.Status.Outputs) == 0 {
 		return "", "", fmt.Errorf("%s published no status.outputs; the assigned address is the Form's whole answer", subject)
@@ -372,6 +524,18 @@ func endpointAddress(resource wireResource, subject string) (hostname, address s
 	address, _ = resource.Status.Outputs["url"].(string)
 	if strings.TrimSpace(hostname) == "" {
 		return "", "", fmt.Errorf("%s published no hostname", subject)
+	}
+	if lowered := strings.ToLower(hostname); hostname != lowered {
+		return "", "", fmt.Errorf(
+			"%s published hostname %q; an ASSIGNED name is canonical, so it is lowercase (%q) — an author's spelling is what a host canonicalizes, and this name had none",
+			subject, hostname, lowered,
+		)
+	}
+	if strings.HasSuffix(hostname, ".") {
+		return "", "", fmt.Errorf(
+			"%s published hostname %q; an assigned name carries no trailing root dot, and no url could be built from one that did",
+			subject, hostname,
+		)
 	}
 	if want := "https://" + hostname + "/"; address != want {
 		return "", "", fmt.Errorf(

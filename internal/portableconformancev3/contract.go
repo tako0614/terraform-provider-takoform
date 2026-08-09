@@ -123,7 +123,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 89-entry executed-check list every v3
+// requiredRunnerChecks is the closed 94-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -229,6 +229,7 @@ var requiredRunnerChecks = []string{
 	"worker-endpoint-address-is-host-assigned",
 	"worker-endpoint-single-per-worker",
 	"worker-endpoint-follows-the-active-deployment",
+	"worker-endpoint-address-is-stable-for-its-uid",
 	// Declared outputs are a contract in both directions
 	// (spec/decisions/0025).
 	"form-declared-outputs-are-exact",

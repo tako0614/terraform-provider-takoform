@@ -39,12 +39,17 @@ type interfaceDefinition struct {
 
 func readInterfaceDefinition(t *testing.T, contract Contract) (interfaceDefinition, []byte) {
 	t.Helper()
+	return readCandidateDefinition(t, contract, InterfaceName)
+}
+
+func readCandidateDefinition(t *testing.T, contract Contract, name string) (interfaceDefinition, []byte) {
+	t.Helper()
 	repositoryRoot, err := filepath.Abs(filepath.Join(contract.Root(), "..", ".."))
 	if err != nil {
 		t.Fatalf("repository root: %v", err)
 	}
 	path := filepath.Join(
-		repositoryRoot, "interfaces", "candidates", "v1alpha1", "worker.runtime", "definition.json",
+		repositoryRoot, "interfaces", "candidates", "v1alpha1", name, "definition.json",
 	)
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -121,5 +126,53 @@ func TestCorpusMeasuresTheCommittedInterfaceBytes(t *testing.T) {
 				"canonicalizes to %s; re-pin the corpus interface.schemaDigest and the manifest sha256",
 			contract.Interface.SchemaDigest, digest,
 		)
+	}
+}
+
+// TestCorpusMeasuresTheCommittedServiceInterfaceBytes is the same coupling for
+// the second contract this corpus reaches.
+//
+// The two service checks are claims about worker.service@1.0.0's delivery
+// model, and that model is exactly what changed when the Interface stopped
+// carrying bodies as JSON strings. A corpus that named the contract without
+// pinning its bytes could go on asserting a streaming model against a
+// definition that had reverted to buffering.
+func TestCorpusMeasuresTheCommittedServiceInterfaceBytes(t *testing.T) {
+	contract := verifiedContract(t)
+	_, raw := readCandidateDefinition(t, contract, ServiceInterfaceName)
+	digest, err := formpackage.DigestCanonicalJSON(raw)
+	if err != nil {
+		t.Fatalf("digest the worker-to-worker contract: %v", err)
+	}
+	if digest != contract.ServiceInterface.SchemaDigest {
+		t.Fatalf(
+			"conformance/runtime-abi-v1 measures %s but the committed worker.service definition "+
+				"canonicalizes to %s; re-pin the corpus serviceInterface.schemaDigest and the manifest sha256",
+			contract.ServiceInterface.SchemaDigest, digest,
+		)
+	}
+}
+
+// TestTheServiceChecksAddressTheBindingTheDeploymentDeclares keeps the two
+// worker-to-worker checks pointed at a binding an operator actually deploys. A
+// check whose route calls `env.PEER` against a deployment that declares no such
+// binding is a check every conforming runtime fails.
+func TestTheServiceChecksAddressTheBindingTheDeploymentDeclares(t *testing.T) {
+	contract := verifiedContract(t)
+	deployment, err := contract.WorkerDeployment()
+	if err != nil {
+		t.Fatalf("deployment: %v", err)
+	}
+	binding, ok := deployment.BindingNamed(contract.ProbeProtocol.ServiceBinding)
+	if !ok || binding.Interface != ServiceInterfaceName {
+		t.Fatalf("the deployment declares no %s binding named %q",
+			ServiceInterfaceName, contract.ProbeProtocol.ServiceBinding)
+	}
+	if deployment.Peer == nil {
+		t.Fatal("the corpus states no peer for the service binding to address")
+	}
+	if deployment.Peer.Bundle.MainModule != deployment.Bundle.MainModule {
+		t.Fatalf("the peer runs %q and the measured worker runs %q; one bundle answers both sides",
+			deployment.Peer.Bundle.MainModule, deployment.Bundle.MainModule)
 	}
 }

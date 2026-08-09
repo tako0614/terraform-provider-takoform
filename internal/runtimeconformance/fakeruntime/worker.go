@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,8 +70,10 @@ func (r *Runtime) invokeFetch(writer http.ResponseWriter, request *http.Request,
 		r.serveScheduledObservation(writer, request)
 	case "queue":
 		r.serveQueue(writer, request)
-	case "tail":
-		r.serveTailObservation(writer)
+	case "service-echo-stream":
+		r.serveThroughPeer(writer, request, "/abi/echo-stream")
+	case "service-stream":
+		r.serveThroughPeer(writer, request, "/abi/stream")
 	default:
 		writeJSON(writer, http.StatusNotFound, map[string]any{
 			"probe": ProbeProtocol, "error": "unknown probe route", "route": route,
@@ -334,21 +337,32 @@ func (r *Runtime) moduleQueue(queue, identity string, attempts int, body []byte)
 	r.kvPut("queue:"+decoded.Nonce, marker)
 }
 
-// serveTailObservation reports trace deliveries. Nothing in the Edge Platform
-// Family attaches a tail consumer, so a conforming deployment of this corpus
-// observes none; the route exists so the day an attachment exists, the check
-// that measures it has somewhere to read from.
-func (r *Runtime) serveTailObservation(writer http.ResponseWriter) {
-	r.mutex.Lock()
-	deliveries := r.tailDeliveries
-	r.mutex.Unlock()
-	if deliveries == 0 {
-		writeJSON(writer, http.StatusOK, map[string]any{"probe": ProbeProtocol, "observed": false})
+// serveThroughPeer is the module calling `env.PEER.fetch(...)`: the caller hands
+// the callee the request body stream it is still receiving, and returns the
+// callee's response unread.
+//
+// Nothing between the two is buffered, which is the whole point. The peer is a
+// separate Runtime built from its own deployment description, so the bytes
+// really do cross a worker boundary, and the caller's own ResponseWriter is what
+// the callee writes into — the Go expression of "the caller returns the
+// callee's Response". A deployment with no `worker.service` binding has no peer
+// and this route says so rather than answering as though it had one.
+func (r *Runtime) serveThroughPeer(writer http.ResponseWriter, request *http.Request, peerPath string) {
+	if r.peer == nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]any{
+			"probe": ProbeProtocol,
+			"error": "the deployment declares no worker.service binding, so there is no callee",
+		})
 		return
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{
-		"probe": ProbeProtocol, "observed": true, "events": deliveries,
-	})
+	target := &url.URL{Scheme: "https", Host: "peer.invalid", Path: peerPath, RawQuery: request.URL.RawQuery}
+	peerRequest := &http.Request{
+		Method: request.Method,
+		URL:    target,
+		Header: request.Header.Clone(),
+		Body:   request.Body,
+	}
+	r.peer.WorkerHandler().ServeHTTP(writer, peerRequest.WithContext(request.Context()))
 }
 
 func writeJSON(writer http.ResponseWriter, status int, body map[string]any) {

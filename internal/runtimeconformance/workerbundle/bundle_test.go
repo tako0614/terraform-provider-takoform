@@ -29,14 +29,14 @@ func TestDeriveExportedHandlersReadsAnInlineLiteralAndQuotedKeys(t *testing.T) {
 export default {
   "fetch": function (request) {},
   scheduled: async () => {},
-  tail(events) {},
+  queue(batch) {},
 };
 `)
 	handlers, err := DeriveExportedHandlers(source, HandlerVocabulary)
 	if err != nil {
 		t.Fatalf("derive: %v", err)
 	}
-	if !reflect.DeepEqual(handlers, []string{"fetch", "scheduled", "tail"}) {
+	if !reflect.DeepEqual(handlers, []string{"fetch", "scheduled", "queue"}) {
 		t.Fatalf("handlers = %v", handlers)
 	}
 }

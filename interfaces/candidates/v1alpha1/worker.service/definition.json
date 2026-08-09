@@ -4,17 +4,22 @@
   "name": "worker.service",
   "version": "1.0.0",
   "title": "Worker-to-worker service invocation",
-  "description": "Direct HTTP-shaped request/response invocation of another Module Worker with read-after-write consistency toward the invoked worker's own state: a response reflects every effect the invoked handler completed before responding. The call never leaves the host.",
+  "description": "Direct HTTP-shaped invocation of another Module Worker, STREAMING in both directions, with read-after-write consistency toward the invoked worker's own state: a response reflects every effect the callee completed before responding. The call never leaves the host. NEITHER BODY IS A MEMBER OF THIS DOCUMENT. The document states whether a body exists and exactly how many bytes it carries; the bytes travel beside it as a stream, so no side ever buffers a body to produce a value. ABSENT IS NOT EMPTY. bodyStream false means there is no body at all and the callee's request.body is null; bodyStream true means a body exists and contentLength is exactly how many bytes it delivers, so bodyStream true with contentLength 0 is a PRESENT body that ends immediately. The two are observably different and a host MUST NOT collapse them, in either direction. WHEN A STREAM STARTS. The callee is invoked as soon as the request head — method, path, headers — has arrived, before any body byte is read, and the caller's call completes as soon as the response head — status, headers — has arrived, before any response byte is read. Neither side waits for the other's end of stream: a caller may still be writing while it reads, and a callee may answer without having consumed its request. BACKPRESSURE. Both streams are backpressured end to end: the reader's demand reaches the writer, and a producer that outruns its consumer is suspended rather than buffered without bound. A host MUST NOT read a whole body to decouple the two, which is the same statement as the first one and the reason it is measurable. CANCELLATION. Cancelling propagates to the other side. A caller that cancels the response stream cancels the callee's response stream; a callee that cancels the request stream fails the caller's remaining writes. A cancellation is neither a host fault nor retryable, and it is never reported as backend_unavailable. THE TWO ABORTS ARE DIFFERENT OUTCOMES, because they fall on different sides of the response head. request_aborted is a request stream that ended before contentLength bytes arrived: the callee sees an errored request body and MAY still answer with a status. response_aborted is a response stream that ended before contentLength bytes arrived AFTER the status was already delivered: the caller holds a status and an errored body, and the status is never retroactively rewritten. A caller can therefore tell a truncated answer from an unanswered call. LIMITS ARE FLOORS. maxRequestHeaders, maxRequestHeaderBytes, maxRequestBytes and their response counterparts are the portable minimum every conforming host accepts, not a host's ceiling; a host that accepts more has not made the excess portable, and a request above what the host accepts fails request_too_large before the callee is invoked. A CALLEE EXCEPTION IS A COMPLETE RESPONSE. An uncaught throw or unhandled rejection in the callee's fetch handler is a host-generated 500 with a status, headers and a terminated body — never a hung call, never a truncated connection with no status — and this operation SUCCEEDS with it. A CALL THAT NEVER HAPPENED IS NOT A 500. When the call could not be dispatched at all — no active deployment, no fetch handler, the callee unreachable — there is no status, and the operation FAILS backend_unavailable. The binding projects the difference as resolve versus reject, so a caller distinguishes a callee that failed from a call that did not happen without reading a body. Behavior fixtures address a callee that answers GET /health with 200 and throws on GET /throw.",
   "operations": [
     {
       "name": "fetch",
-      "description": "Invoke the target worker's fetch handler with one request and return its response.",
+      "description": "Invoke the target worker's fetch handler with one request and return its response. Both documents carry bodyStream and contentLength and NEITHER carries bytes: bodyStream says whether a body exists, contentLength is the exact byte count of the stream that accompanies it, and a stream delivering a different count is an abort rather than a short body. bodyStream false pairs with contentLength 0 and means no body; bodyStream true with contentLength 0 means an empty body that is nevertheless there. The response document is produced when the response HEAD arrives, so status and headers are readable while the body is still being written. request_too_large is refused before the callee is invoked; request_aborted and response_aborted are the two truncations, and only the second can carry a status; backend_unavailable is a call that produced no status at all. A callee that throws is not an error here: it is a 500 in status.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "body": {
-            "type": "string"
+          "bodyStream": {
+            "type": "boolean"
+          },
+          "contentLength": {
+            "maximum": 104857600,
+            "minimum": 0,
+            "type": "integer"
           },
           "headers": {
             "additionalProperties": {
@@ -47,6 +52,8 @@
           }
         },
         "required": [
+          "bodyStream",
+          "contentLength",
           "method",
           "path"
         ],
@@ -56,8 +63,13 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "body": {
-            "type": "string"
+          "bodyStream": {
+            "type": "boolean"
+          },
+          "contentLength": {
+            "maximum": 104857600,
+            "minimum": 0,
+            "type": "integer"
           },
           "headers": {
             "additionalProperties": {
@@ -78,11 +90,16 @@
           }
         },
         "required": [
+          "bodyStream",
+          "contentLength",
           "status"
         ],
         "type": "object"
       },
       "errors": [
+        "request_too_large",
+        "request_aborted",
+        "response_aborted",
         "backend_unavailable"
       ]
     }
@@ -91,20 +108,46 @@
     "consistency": "read_after_write"
   },
   "limits": {
-    "maxRequestBytes": 104857600
+    "maxRequestBytes": 104857600,
+    "maxRequestHeaderBytes": 16384,
+    "maxRequestHeaders": 64,
+    "maxResponseBytes": 104857600,
+    "maxResponseHeaderBytes": 16384,
+    "maxResponseHeaders": 64
   },
   "fixtures": [
     {
-      "name": "fetch-roundtrip",
+      "name": "fetch-roundtrip-carries-no-body",
       "steps": [
         {
           "operation": "fetch",
           "input": {
+            "bodyStream": false,
+            "contentLength": 0,
             "method": "GET",
             "path": "/health"
           },
           "expected": {
+            "bodyStream": true,
             "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "name": "callee-uncaught-throw-is-a-complete-500",
+      "steps": [
+        {
+          "operation": "fetch",
+          "input": {
+            "bodyStream": false,
+            "contentLength": 0,
+            "method": "GET",
+            "path": "/throw"
+          },
+          "expected": {
+            "bodyStream": true,
+            "status": 500
           }
         }
       ]

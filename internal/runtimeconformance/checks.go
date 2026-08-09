@@ -777,6 +777,17 @@ func newLineReader(body io.Reader) *lineReader {
 }
 
 func (l *lineReader) next(ctx context.Context, deadline time.Duration) ([]byte, error) {
+	// A line already in hand beats the terminal signal. The scanner goroutine
+	// reaches end of stream before a caller has drained what it queued, so a
+	// plain select over both channels reports EOF at random while observations
+	// are still waiting — which happens exactly when a whole body arrived at
+	// once, and turns "the body was buffered" into "EOF" in the report of the
+	// check that exists to say so.
+	select {
+	case line := <-l.lines:
+		return line, nil
+	default:
+	}
 	timer := time.NewTimer(deadline)
 	defer timer.Stop()
 	select {
