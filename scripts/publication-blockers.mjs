@@ -81,7 +81,7 @@ function mergedPullRequestNumbers(repositoryRoot) {
  * blocker unenforceable: an unknown status, a closed blocker with no evidence,
  * a duplicate identity, or an entry that names no affected Form.
  */
-export function parseBlockerLedger(document, repositoryRoot = null) {
+export function parseBlockerLedger(document, repositoryRoot = null, knownPullRequests = undefined) {
   if (document === null || typeof document !== "object" || Array.isArray(document)) {
     fail(`${BLOCKER_LEDGER} must be a JSON object`);
   }
@@ -99,7 +99,17 @@ export function parseBlockerLedger(document, repositoryRoot = null) {
 
   const seen = new Set();
   const issues = new Map();
-  const pullRequests = repositoryRoot === null ? null : mergedPullRequestNumbers(repositoryRoot);
+  // knownPullRequests lets a caller supply the refutation set instead of
+  // reading this repository's history. A test needs that: the history is
+  // ambient, and the one environment where it is absent — the deploy's frozen
+  // git-archive snapshot — is exactly where an ambient read cannot be asserted
+  // against.
+  const pullRequests =
+    knownPullRequests !== undefined
+      ? knownPullRequests
+      : repositoryRoot === null
+        ? null
+        : mergedPullRequestNumbers(repositoryRoot);
   const blockers = document.blockers.map((blocker, index) => {
     const at = `${BLOCKER_LEDGER} blocker ${index}`;
     if (blocker === null || typeof blocker !== "object" || Array.isArray(blocker)) {
@@ -258,6 +268,18 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
   }
 }
 
+/**
+ * summarizeTraceability states what the offline refutation actually covered.
+ * A run with no readable history says so rather than reporting a clean result
+ * it did not earn — the deploy publishes from a frozen git-archive snapshot, so
+ * that is a real environment and not a hypothetical one.
+ */
+export function summarizeTraceability(ledger) {
+  return ledger.pullRequestNumbersKnown === null
+    ? "no git history here, so no issue number was refuted"
+    : `${ledger.pullRequestNumbersKnown} pull-request numbers refuted against`;
+}
+
 function main() {
   const repositoryRoot = path.resolve(import.meta.dirname, "..");
   const mode = process.argv[2] ?? "--check";
@@ -277,9 +299,7 @@ function main() {
     byPriority.set(blocker.priority, (byPriority.get(blocker.priority) ?? 0) + 1);
   }
   const summary = [...byPriority.entries()].sort().map(([priority, count]) => `${priority}=${count}`).join(" ");
-  const traceability = ledger.pullRequestNumbersKnown === null
-    ? "no readable history, so no issue number was refuted"
-    : `${ledger.pullRequestNumbersKnown} pull-request numbers refuted against`;
+  const traceability = summarizeTraceability(ledger);
   console.log(
     `publication blockers OK: ${ledger.blockers.length} recorded, ${open.length} open (${summary || "none"}); ` +
       `${ledger.lane} stays frozen; ${traceability}`,
