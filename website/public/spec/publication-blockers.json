@@ -191,6 +191,26 @@
         "internal/portableconformancev3/reference_host.go",
         "conformance/portable-host-v3/contract.json"
       ]
+    },
+    {
+      "id": "V3-014",
+      "title": "A real backend proves an adoption adopts rather than mints",
+      "priority": "P0",
+      "affectedForms": [
+        "*"
+      ],
+      "status": "open",
+      "issue": 129,
+      "rationale": "import carries a nativeId, and the lane now holds a host to it: one live resource per native identity within a tenant, an immutable recorded claim, released with its holder, spanning every space of the tenant and stopping there (decision 0011, amended). That proves a host BINDS an adoption to the identity it was given and will not manage one backend object twice, which is what fails a host whose /import is a plain create. It does not prove that the object named existed before the call, or that the host did not also mint a fresh one beside it. Neither is reachable from a portable surface: a native identifier is host detail and stays off every response, the published wire documents are closed, and a black-box runner cannot name an object it knows a host already holds without depending on that host's identifier format. It closes on a terraform import against a real backend of an object that backend provisioned out of band, shown afterwards to be the same object rather than a duplicate, with a second import of it refused.",
+      "evidence": [
+        "spec/decisions/0011-resource-identity-generation-and-revision.md",
+        "spec/host-api/v1alpha3.md",
+        "spec/portability-boundary.md",
+        "internal/portableconformancev3/runner_checks.go",
+        "internal/portableconformancev3/reference_host.go",
+        "internal/portableconformancev3/divergent_host_test.go",
+        "conformance/portable-host-v3/contract.json"
+      ]
     }
   ]
 }

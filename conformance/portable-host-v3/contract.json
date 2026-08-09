@@ -94,7 +94,11 @@
         "import",
         "observe"
       ],
-      "desired": {}
+      "desired": {},
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-module-worker.json",
+        "sha256": "sha256:7d1c0a33f99fdf03f7b93e1c6d36d26eb57fcd48a19b149d77ec515644c57688"
+      }
     },
     "edgeKvNamespace": {
       "name": "edge-kv-probe",
@@ -114,7 +118,11 @@
         "import",
         "observe"
       ],
-      "desired": {}
+      "desired": {},
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-edge-kv-namespace.json",
+        "sha256": "sha256:6ae4b4cc712dbd445a131e0d3a8c464ef48070375ec3432dea599944c4c1bb5e"
+      }
     },
     "atLeastOnceQueue": {
       "name": "queue-probe",
@@ -137,6 +145,10 @@
       ],
       "desired": {
         "messageRetentionSeconds": 345600
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-at-least-once-queue.json",
+        "sha256": "sha256:111d38fd402a0131239d02bdb04e910ae9f5c4a7a28b9e08da347701120e563a"
       }
     },
     "workerVersion": {
@@ -183,6 +195,10 @@
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-worker-version.json",
+        "sha256": "sha256:c00d3f52189675c310f439cce1363375596ae5f1d816da52787755712db50574"
       }
     },
     "workerBundle": {
@@ -205,6 +221,10 @@
       ],
       "desired": {
         "manifestDigest": "sha256:7894acd88f49071805c5332b013bc0820d59830277767c9d5b68d5ba1a3a26c4"
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-worker-bundle.json",
+        "sha256": "sha256:4e2c13cee7c98401de522e6caf5b1a3f8f8d4fefffaaaf593e32b73da892d2c5"
       },
       "manifest": {
         "apiVersion": "artifacts.takoform.com/v1alpha1",
@@ -282,6 +302,10 @@
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-worker-deployment.json",
+        "sha256": "sha256:cb3b5bf5ae638a0a6b34af12b2ea1b2ec265ccc8d7b9266e527706627742f19a"
       }
     },
     "workerCustomDomain": {
@@ -309,6 +333,10 @@
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-worker-custom-domain.json",
+        "sha256": "sha256:9a8ca4d6327df18c445751a97def0c2eecd463c85e1d9fabb09cb1195f7d7a10"
       }
     },
     "workerEndpoint": {
@@ -320,7 +348,7 @@
           "definitionVersion": "0.1.0",
           "schemaDigest": "sha256:ba7ae77f85faa46a7dbbe14651ccdb938e6f20e77216bbabd0ef450044c1c68f"
         },
-        "packageDigest": "sha256:30791102f5390014fc40abb457d651c7e04b2ef725915f0935d962b4d7bf2748"
+        "packageDigest": "sha256:70401c3510312d3e3f9eb485b10acf0b0d9e22f25495464882a703bbab04be8a"
       },
       "lifecycleCapabilities": [
         "create",
@@ -360,6 +388,10 @@
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-worker-endpoint.json",
+        "sha256": "sha256:61a549041482d1027e7ec2a090a61c8af06709487764081118f752673c3d585a"
       }
     },
     "workerCronTrigger": {
@@ -388,6 +420,10 @@
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-worker-cron-trigger.json",
+        "sha256": "sha256:4331889f21ca954306e70abd850d4f1326ba06d7e02ba39d77fe3139ee5a50c0"
       }
     },
     "queueConsumer": {
@@ -425,6 +461,10 @@
           "kind": "ModuleWorker",
           "name": "module-worker-probe"
         }
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-queue-consumer.json",
+        "sha256": "sha256:404dbbde9731bf1caab8fe44de7a281c5ac2f7acc993fdf7896d4c560c2b2f2d"
       }
     },
     "syntheticSecondGroup": {
@@ -566,6 +606,8 @@
     "async-commit-binds-the-accepted-identity",
     "import-adopts-native-resource",
     "import-validates-like-apply",
+    "import-claims-its-native-identity",
+    "import-records-its-native-identity",
     "deployment-weight-sum-enforced",
     "deployment-single-active-per-worker",
     "deployment-version-ownership",

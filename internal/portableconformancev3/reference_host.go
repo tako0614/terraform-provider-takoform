@@ -131,6 +131,26 @@ type storedResource struct {
 	SpecDigest    string
 	StatusTouches int64
 	Imported      bool
+	// NativeID is the backend object this resource was ADOPTED onto, recorded
+	// at the adoption that named it and never rewritten afterwards. A resource
+	// this host created holds none until an import names one, which is the
+	// ordinary `terraform import` onto an address a configuration already
+	// manages; that import records a first claim rather than changing one.
+	//
+	// It is carried forward by every later mutation, because an update is not a
+	// release. The whole record is copied on update (nextResource), so this comes
+	// for free here; a host that rebuilt its stored resource from the request
+	// document would drop the claim on the next apply, and its import path would
+	// look perfectly correct while doing it.
+	//
+	// It never travels on the wire in either direction beyond the `nativeId` a
+	// client writes on `import`: a native identifier is host detail, outside the
+	// portable Form contract (spec/portability-boundary.md), so the only thing
+	// portable about it is that this host holds at most one resource per
+	// identity within one tenant — under any kind, in any space. That is what
+	// makes adoption observable at all without putting a vendor's identifier
+	// format in a portable author's path (spec/decisions/0011).
+	NativeID      string
 	PackageDigest string
 	// Relations is the resolved cross-resource reference set of this exact
 	// stored spec, pinned by target UID and by the target's exact FormRef.
@@ -1820,9 +1840,17 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 		h.writeHostError(w, hostErr)
 		return
 	}
+	// The adoption CLAIM, decided before any mutation like every other
+	// pre-mutation rule in this host (spec/decisions/0011).
+	nativeID := strings.TrimSpace(body.NativeID)
+	if hostErr := h.validateNativeIdentityClaim(scope, form, name, existing, nativeID); hostErr != nil {
+		h.writeHostError(w, hostErr)
+		return
+	}
 	next := h.nextResource(
 		form, existing, create, importer.Tenant, body.Metadata.Space, name, body.Spec, specDigest, true,
 	)
+	next.NativeID = nativeID
 	repinRelations(next, existing, relations)
 	h.storeResource(next)
 	status := http.StatusOK
@@ -1833,6 +1861,81 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 	etag := quotedRevision(next.Revision)
 	h.writeRaw(w, status, etag, response)
 	h.recordReplay(request, raw, body.Metadata.Space, status, etag, response, replayBinding{UID: next.UID})
+}
+
+// validateNativeIdentityClaim decides the two halves of an adoption claim
+// before anything is written (spec/decisions/0011).
+//
+// **One live resource per native identity.** A `nativeId` names a backend
+// object that exists already; two resources adopting one object would leave the
+// host managing one thing twice, with two desired states, two generations, and
+// no rule saying which one the object follows. A practitioner reaches it by
+// running `terraform import` a second time — after a state file is lost, or from
+// a second workspace — and a host that answered by minting a resource has
+// silently doubled the infrastructure they are paying for. The refusal is
+// `import_conflict` (409): the request is well formed and its adoption claim
+// collides with one this host already holds, which is exactly what that code in
+// the published closed taxonomy is for.
+//
+// **The recorded claim is immutable.** An import naming an EXISTING resource of
+// the caller under a different `nativeId` asks this host to move a managed
+// resource onto another backend object, which orphans the first one just as
+// surely from the other direction. A resource holding no claim yet — one this
+// host created — takes the one it is handed, because that is its first claim
+// rather than a change of one.
+//
+// The scope is the CALLER'S TENANT, both halves deliberately, exactly as the
+// hostname claim of decision 0026 is scoped (edge_semantics.go).
+//
+// It spans every space of that tenant, because spaces partition one tenant's
+// resources and a backend object does not partition with them: adopting one
+// object into two spaces is the same duplication as adopting it twice in one.
+//
+// It spans every FORM KIND of that tenant, which is why the scan filters on the
+// tenant and the identity and on nothing else. The tempting index is the one a
+// real datastore reaches for — the claim column on the table the resource
+// already lives in, keyed `(tenant, kind, nativeId)` — and it is wrong, because
+// what is claimed is the object rather than the row: one object adopted once as
+// a queue and once as a KV namespace is managed twice, with two desired states,
+// exactly as it is when two queues adopt it.
+//
+// It stops at the tenant, because a host-wide scan would answer "somebody
+// already holds this" to a caller who cannot see the holder — a membership
+// oracle over every identifier a stranger can guess, which is precisely what
+// spec/decisions/0028 refuses to let a refusal disclose. Two tenants naming one
+// identifier is not this contract's problem to adjudicate: whose account the
+// object lives in is authority this lane does not model. Within each tenant,
+// including every tenant that is not the first one to call, it binds in full.
+func (h *ReferenceHost) validateNativeIdentityClaim(
+	scope resourceScope,
+	form *InstalledForm,
+	name string,
+	existing *storedResource,
+	nativeID string,
+) *hostError {
+	if existing != nil && existing.NativeID != "" && existing.NativeID != nativeID {
+		return stableError(
+			"import_conflict",
+			"resource "+quoteText(name)+" was adopted onto native resource "+quoteText(existing.NativeID)+
+				" and is answered for that one; an adoption never moves a managed resource to another native identity",
+		)
+	}
+	selfKey := resourceKey(scope, form.Ref.APIVersion, form.Ref.Kind, name)
+	for _, candidate := range h.sortedResources() {
+		if candidate.Tenant != scope.Tenant || candidate.NativeID != nativeID {
+			continue
+		}
+		if candidate.key() == selfKey {
+			continue
+		}
+		return stableError(
+			"import_conflict",
+			"native resource "+quoteText(nativeID)+" is already under management as "+candidate.kind()+" "+
+				candidate.Name+" in space "+quoteText(candidate.Space)+
+				"; one native resource has one managed resource, so adopting it again would manage it twice",
+		)
+	}
+	return nil
 }
 
 func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Request, group, kind, name string) {

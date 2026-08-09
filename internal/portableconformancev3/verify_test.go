@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,22 +52,23 @@ func TestVerifyCorpus(t *testing.T) {
 
 // TestVerifyPinsRegistryIdentities proves the contract's probe FormRefs are
 // the exact generated Edge Family registry identities, byte for byte.
+//
+// It reads probeInventory rather than a list of its own. The list of its own is
+// what this test used to be, it omitted WorkerCustomDomain and WorkerEndpoint,
+// and the corpus's WorkerEndpoint packageDigest drifted from the registry with
+// nothing able to notice — the same "enumerated by hand, complete until someone
+// forgets" defect the tenant matrix already had to fix once.
 func TestVerifyPinsRegistryIdentities(t *testing.T) {
 	contract, err := Verify(corpusRoot(t))
 	if err != nil {
 		t.Fatalf("verify: %v", err)
 	}
-	probes := []ResourceProbe{
-		contract.RunnerInput.ModuleWorker,
-		contract.RunnerInput.EdgeKvNamespace,
-		contract.RunnerInput.AtLeastOnceQueue,
-		contract.RunnerInput.WorkerVersion,
-		contract.RunnerInput.WorkerBundle.ResourceProbe,
-		contract.RunnerInput.WorkerDeployment,
-		contract.RunnerInput.WorkerCronTrigger,
-		contract.RunnerInput.QueueConsumer,
+	inventory := probeInventory(&contract.RunnerInput)
+	if len(inventory) != 10 {
+		t.Fatalf("the corpus pins %d resource probes; the Edge Family lane drives ten", len(inventory))
 	}
-	for _, probe := range probes {
+	for _, entry := range inventory {
+		probe := entry.Probe
 		registered, err := currentformregistry.V3ForKind(probe.Identity.FormRef.APIVersion, probe.Identity.FormRef.Kind)
 		if err != nil {
 			t.Fatalf("registry lookup %s: %v", probe.Identity.FormRef.Kind, err)
@@ -74,32 +76,43 @@ func TestVerifyPinsRegistryIdentities(t *testing.T) {
 		if registered.SchemaDigest != probe.Identity.FormRef.SchemaDigest ||
 			registered.PackageDigest != probe.Identity.PackageDigest ||
 			registered.DefinitionVersion != probe.Identity.FormRef.DefinitionVersion {
-			t.Fatalf("probe %s drifted from the generated registry", probe.Identity.FormRef.Kind)
+			t.Fatalf(
+				"probe %s drifted from the generated registry: corpus %s/%s/%s, registry %s/%s/%s",
+				probe.Identity.FormRef.Kind,
+				probe.Identity.FormRef.DefinitionVersion, probe.Identity.FormRef.SchemaDigest,
+				probe.Identity.PackageDigest,
+				registered.DefinitionVersion, registered.SchemaDigest, registered.PackageDigest,
+			)
 		}
 	}
 }
 
+// copyCorpus reproduces the whole corpus directory, so a tamper test measures
+// the corpus as shipped. It walks rather than listing: a hand-written list would
+// silently stop copying whatever was added next, and the digest tests would then
+// pass on a corpus missing the file they were meant to protect.
 func copyCorpus(t *testing.T, destination string) {
 	t.Helper()
 	source := corpusRoot(t)
-	if err := os.MkdirAll(filepath.Join(destination, "fixtures"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	entries := []string{
-		"manifest.json",
-		"contract.json",
-		"fixtures/negative-module-worker-unexpected-property.json",
-		"fixtures/negative-queue-retention.json",
-		"fixtures/synthetic-module-worker-second-definition.json",
-	}
-	for _, entry := range entries {
-		raw, err := os.ReadFile(filepath.Join(source, filepath.FromSlash(entry)))
+	if err := filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
-		if err := os.WriteFile(filepath.Join(destination, filepath.FromSlash(entry)), raw, 0o644); err != nil {
-			t.Fatal(err)
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
 		}
+		target := filepath.Join(destination, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, raw, 0o644)
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 

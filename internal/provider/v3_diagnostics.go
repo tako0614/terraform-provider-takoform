@@ -119,7 +119,7 @@ var v3HostRepairs = map[string]string{
 	"form_identity_conflict": "The host holds a different definition under this Form line. Reconcile the host's installed identity with the one this provider build carries.",
 	"resource_not_found":     "Refresh so state reflects the host, then re-plan.",
 	"resource_busy":          "Another operation holds this resource. This is retryable: wait and re-run the same apply.",
-	"import_conflict":        "The resource is already under management, or another import claimed it. Remove the competing state entry, then import once.",
+	"import_conflict":        "Some resource on this host already manages the native resource this import names, or this address was adopted onto a different one. A native resource has exactly one managed resource: find the holder the message names and remove it — or import the address it already occupies — rather than importing again.",
 	"policy_denied":          "A host policy refuses this desired state. Change the configuration the message names, or have the policy amended.",
 	"backend_unavailable":    "The host's backend is unavailable. This is retryable: re-run the same apply.",
 	"internal_error":         "The host failed internally. Report the requestId above to the host operator; do not retry blindly.",
