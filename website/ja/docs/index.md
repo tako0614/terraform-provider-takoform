@@ -230,6 +230,7 @@ Edge Platform Family リソース (Edge preview、`v2.1.0` source candidate、�
 
 - [module_worker](/docs/resources/module_worker.html)
 - [worker_bundle](/docs/resources/worker_bundle.html)
+- [static_asset_bundle](/docs/resources/static_asset_bundle.html)
 - [worker_version](/docs/resources/worker_version.html)
 - [worker_deployment](/docs/resources/worker_deployment.html)
 - [worker_custom_domain](/docs/resources/worker_custom_domain.html)
@@ -238,6 +239,8 @@ Edge Platform Family リソース (Edge preview、`v2.1.0` source candidate、�
 - [edge_kv_namespace](/docs/resources/edge_kv_namespace.html)
 - [edge_object_bucket](/docs/resources/edge_object_bucket.html)
 - [sqlite_database](/docs/resources/sqlite_database.html)
+- [sqlite_migration_set](/docs/resources/sqlite_migration_set.html)
+- [sqlite_migration_application](/docs/resources/sqlite_migration_application.html)
 - [at_least_once_queue](/docs/resources/at_least_once_queue.html)
 - [queue_consumer](/docs/resources/queue_consumer.html)
 

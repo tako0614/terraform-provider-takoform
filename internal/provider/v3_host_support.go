@@ -400,7 +400,7 @@ func (r *v3FormResource) checkPlannedValues(
 	if diags.HasError() {
 		return
 	}
-	if r.form.Kind == workerBundleKind {
+	if v3ArtifactBackedRevision(r.form.Kind) {
 		r.checkArtifactCeiling(profile, codec, values, resp)
 		return
 	}
@@ -479,12 +479,18 @@ func (r *v3FormResource) checkArtifactCeiling(
 	if !published {
 		return
 	}
-	modules, ok := values.Fields["modules"].(types.List)
-	if !ok || modules.IsNull() || modules.IsUnknown() {
+	attributeName := "modules"
+	entryLabel := "modules"
+	if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+		attributeName = "files"
+		entryLabel = "files"
+	}
+	entries, ok := values.Fields[attributeName].(types.List)
+	if !ok || entries.IsNull() || entries.IsUnknown() {
 		return
 	}
 	var total int64
-	for _, element := range modules.Elements() {
+	for _, element := range entries.Elements() {
 		object, isObject := element.(types.Object)
 		if !isObject || object.IsNull() || object.IsUnknown() {
 			return
@@ -498,7 +504,7 @@ func (r *v3FormResource) checkArtifactCeiling(
 	if total <= ceiling {
 		return
 	}
-	attribute := path.Root("modules")
+	attribute := path.Root(attributeName)
 	resp.Diagnostics.Append(v3Diagnostic{
 		Summary:      "This bundle is larger than the host accepts",
 		ResourceType: r.form.ResourceType,
@@ -507,9 +513,9 @@ func (r *v3FormResource) checkArtifactCeiling(
 		Attribute:    &attribute,
 		Code:         v3CodeLimitExceeded,
 		Detail: fmt.Sprintf(
-			"The authored modules total %d bytes and the host publishes maximumBundleBytes = %d. "+
+			"The authored %s total %d bytes and the host publishes maximumBundleBytes = %d. "+
 				"The plan refuses before the upload rather than after it, so no bytes are sent.",
-			total, ceiling,
+			entryLabel, total, ceiling,
 		),
 		Repair: "Reduce the bundle below the ceiling above, or apply against a host that publishes a higher one.",
 	}.error())

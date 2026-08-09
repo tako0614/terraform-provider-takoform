@@ -24,6 +24,140 @@ const queueRelationPointer = "/queue"
 // that receives the messages the consumer exhausted.
 const deadLetterRelationPointer = "/deadLetterQueue"
 
+const (
+	assetBundleRelationPointer  = "/assets/bundle"
+	migrationDatabasePointer    = "/database"
+	migrationSetRelationPointer = "/migrationSet"
+)
+
+// migrationLedgerEntry is the portable identity of one applied migration.
+// SQL bytes remain in the content-addressed artifact store; durable database
+// history records only the ordered path and digest needed to detect a rewrite,
+// reorder, or removal.
+type migrationLedgerEntry struct {
+	Path   string
+	Digest string
+}
+
+func (h *ReferenceHost) relationTargetResource(
+	scope resourceScope, relations []storedRelation, pointer string,
+) *storedResource {
+	for _, relation := range relations {
+		if relation.Pointer != pointer {
+			continue
+		}
+		target := h.resources[resourceKey(scope, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
+		if target != nil && target.UID == relation.TargetUID && target.Ref == relation.TargetRef {
+			return target
+		}
+	}
+	return nil
+}
+
+// validateWorkerVersionAssets proves the one asset rule a desired-state schema
+// cannot see: SPA fallback requires index.html to exist in the exact referenced
+// StaticAssetBundle manifest. The ordinary relation resolver already proves
+// the exact FormRef and pins the bundle incarnation.
+func (h *ReferenceHost) validateWorkerVersionAssets(
+	caller hostAuthContext,
+	form *InstalledForm,
+	scope resourceScope,
+	spec map[string]any,
+	relations []storedRelation,
+) *hostError {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+		return nil
+	}
+	assets, present := spec["assets"].(map[string]any)
+	if !present {
+		return nil
+	}
+	bundle := h.relationTargetResource(scope, relations, assetBundleRelationPointer)
+	if bundle == nil {
+		return stableError("resource_not_found", "WorkerVersion assets relation does not resolve to its pinned StaticAssetBundle")
+	}
+	manifest, hostErr := h.requireReferencedArtifactManifest(caller, bundle.Spec, staticAssetBundleKind)
+	if hostErr != nil {
+		return hostErr
+	}
+	if handling, _ := assets["notFoundHandling"].(string); handling == "single_page_application" {
+		for _, file := range manifest.Files {
+			if file.Path == "index.html" {
+				return nil
+			}
+		}
+		return stableError("invalid_argument", "single_page_application requires index.html in the referenced StaticAssetBundle")
+	}
+	return nil
+}
+
+// sqliteMigrationPlan resolves one application to the exact database and
+// MigrationBundle it pins, then proves the durable database ledger is an exact
+// prefix of that ordered manifest. Anything else is a rewrite, reorder, or
+// removal of applied history and is never repaired by replaying SQL.
+func (h *ReferenceHost) sqliteMigrationPlan(
+	caller hostAuthContext,
+	form *InstalledForm,
+	scope resourceScope,
+	relations []storedRelation,
+) (string, []migrationLedgerEntry, *hostError) {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != sqliteMigrationApplicationKind {
+		return "", nil, nil
+	}
+	database := h.relationTargetResource(scope, relations, migrationDatabasePointer)
+	set := h.relationTargetResource(scope, relations, migrationSetRelationPointer)
+	if database == nil || set == nil {
+		return "", nil, stableError("resource_not_found", "SQLiteMigrationApplication relations do not resolve to their pinned resources")
+	}
+	manifest, hostErr := h.requireReferencedArtifactManifest(caller, set.Spec, migrationBundleKind)
+	if hostErr != nil {
+		return "", nil, hostErr
+	}
+	desired := make([]migrationLedgerEntry, 0, len(manifest.Files))
+	for _, file := range manifest.Files {
+		desired = append(desired, migrationLedgerEntry{Path: file.Path, Digest: file.Digest})
+	}
+	applied := h.migrationLedgers[database.UID]
+	if len(applied) > len(desired) {
+		return "", nil, stableError("migration_required", "the migration set removes already-applied database history")
+	}
+	for index, prior := range applied {
+		if desired[index] != prior {
+			return "", nil, stableError("migration_required", "the migration set rewrites or reorders already-applied database history")
+		}
+	}
+	return database.UID, desired, nil
+}
+
+func (h *ReferenceHost) validateSQLiteMigrationApplication(
+	caller hostAuthContext,
+	form *InstalledForm,
+	scope resourceScope,
+	relations []storedRelation,
+) *hostError {
+	_, _, hostErr := h.sqliteMigrationPlan(caller, form, scope, relations)
+	return hostErr
+}
+
+// applySQLiteMigrationSuffix records only the unapplied suffix. A production
+// host executes each file and appends its ledger entry in one database
+// transaction; this deterministic reference host has no SQL engine, so its
+// portable control-plane evidence is the prefix/suffix state machine itself.
+func (h *ReferenceHost) applySQLiteMigrationSuffix(
+	caller hostAuthContext,
+	form *InstalledForm,
+	scope resourceScope,
+	relations []storedRelation,
+) *hostError {
+	databaseUID, desired, hostErr := h.sqliteMigrationPlan(caller, form, scope, relations)
+	if hostErr != nil || databaseUID == "" {
+		return hostErr
+	}
+	prior := h.migrationLedgers[databaseUID]
+	h.migrationLedgers[databaseUID] = append(append([]migrationLedgerEntry(nil), prior...), desired[len(prior):]...)
+	return nil
+}
+
 // canonicalizeEdgeSpec rewrites the family's canonical spellings into one
 // desired spec, at the host's single materialization entry point, before the
 // spec is validated, digested, stored, or echoed.

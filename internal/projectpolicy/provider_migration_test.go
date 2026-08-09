@@ -203,15 +203,15 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Nine retained provider-v2 docs and the twelve Edge Platform Family docs
+	// Nine retained provider-v2 docs and the fifteen Edge Platform Family docs
 	// of the Host API v1alpha3 lane. There is no extra document: the generic
 	// exact-FormRef carrier was withdrawn (spec/decisions/0021), so every
 	// resource document now describes a resource backed by a Form — which is
 	// also why the package-digest exemption it needed is gone. Every doc, in
 	// either lane, must state the exact Form identity fields the state boundary
 	// fences on.
-	if len(resourceDocs) != 9+12 {
-		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), 9+12)
+	if len(resourceDocs) != 9+15 {
+		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), 9+15)
 	}
 	for _, filename := range resourceDocs {
 		raw, err := os.ReadFile(filename)

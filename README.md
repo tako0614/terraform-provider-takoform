@@ -41,9 +41,10 @@ The specification has three explicit lanes:
 - Current design work happens in namespaced **Form Families**
   ([spec/form-families.md](spec/form-families.md)). The first family is the
   Edge Platform Family, `edge.forms.takoform.com/v1alpha1`: `ModuleWorker`,
-  `WorkerBundle`, `WorkerVersion`, `WorkerDeployment`, `WorkerCustomDomain`,
-  `WorkerEndpoint`, `WorkerCronTrigger`, `EdgeKVNamespace`, `ObjectBucket`,
-  `SQLiteDatabase`, `AtLeastOnceQueue`, and `QueueConsumer`, with exact
+  `WorkerBundle`, `StaticAssetBundle`, `WorkerVersion`, `WorkerDeployment`,
+  `WorkerCustomDomain`, `WorkerEndpoint`, `WorkerCronTrigger`,
+  `EdgeKVNamespace`, `ObjectBucket`, `SQLiteDatabase`, `SQLiteMigrationSet`,
+  `SQLiteMigrationApplication`, `AtLeastOnceQueue`, and `QueueConsumer`, with exact
   Interface and typed Binding contracts under
   `interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha1`.
   This is the Edge preview tier: source only, and unpublished.

@@ -59,7 +59,12 @@ const (
 
 	// edgeFormsGroup is the one namespaced group whose cross-resource
 	// semantics this reference host enforces.
-	edgeFormsGroup = "edge.forms.takoform.com/v1alpha1"
+	edgeFormsGroup                 = "edge.forms.takoform.com/v1alpha1"
+	workerBundleKind               = "WorkerBundle"
+	staticAssetBundleKind          = "StaticAssetBundle"
+	sqliteMigrationSetKind         = "SQLiteMigrationSet"
+	sqliteMigrationApplicationKind = "SQLiteMigrationApplication"
+	migrationBundleKind            = "MigrationBundle"
 	// workerDeploymentWeightTotal is the exact basis-point sum a
 	// WorkerDeployment versions[] must carry. A desired-state schema cannot
 	// add numbers, so the sum is host-validated semantics.
@@ -311,6 +316,9 @@ type ReferenceHost struct {
 	blobs      map[string][]byte
 	manifests  map[string][]byte
 	operations map[string]*hostOperation
+	// migrationLedgers are database-local durable history. The key is the
+	// database UID, never its reusable name; entries pin both path and digest.
+	migrationLedgers map[string][]migrationLedgerEntry
 	// blobTenants and manifestTenants are the LOGICAL access facts layered over
 	// that dedup: which tenants hold each content address. A digest is a name for
 	// bytes, not an entitlement to them, so a caller reads a manifest or a blob
@@ -334,19 +342,20 @@ type ReferenceHost struct {
 // verified contract and an installed catalog.
 func NewReferenceHost(contract Contract, catalog *Catalog) *ReferenceHost {
 	host := &ReferenceHost{
-		contract:        contract,
-		catalog:         catalog,
-		resources:       map[string]*storedResource{},
-		relationHolders: map[string]map[string]struct{}{},
-		prepares:        map[string][]byte{},
-		replays:         map[string]recordedReplay{},
-		uploads:         map[string]*artifactUpload{},
-		blobs:           map[string][]byte{},
-		manifests:       map[string][]byte{},
-		operations:      map[string]*hostOperation{},
-		blobTenants:     map[string]map[string]bool{},
-		manifestTenants: map[string]map[string]bool{},
-		moduleExports:   map[string][]string{},
+		contract:         contract,
+		catalog:          catalog,
+		resources:        map[string]*storedResource{},
+		relationHolders:  map[string]map[string]struct{}{},
+		prepares:         map[string][]byte{},
+		replays:          map[string]recordedReplay{},
+		uploads:          map[string]*artifactUpload{},
+		blobs:            map[string][]byte{},
+		manifests:        map[string][]byte{},
+		operations:       map[string]*hostOperation{},
+		migrationLedgers: map[string][]migrationLedgerEntry{},
+		blobTenants:      map[string]map[string]bool{},
+		manifestTenants:  map[string]map[string]bool{},
+		moduleExports:    map[string][]string{},
 	}
 	input := contract.RunnerInput
 	host.declareModuleExports(input.WorkerBundle.ModuleSource, input.WorkerBundle.ExportedHandlers)
@@ -1103,10 +1112,16 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	if hostErr != nil {
 		return nil, hostErr
 	}
-	if form.Ref.Kind == "WorkerBundle" {
-		if hostErr := h.requireReferencedBundleManifest(caller, spec); hostErr != nil {
+	if expectedKind, artifactBacked := artifactManifestKindForForm(form.Ref.Kind); artifactBacked {
+		if _, hostErr := h.requireReferencedArtifactManifest(caller, spec, expectedKind); hostErr != nil {
 			return nil, hostErr
 		}
+	}
+	if hostErr := h.validateWorkerVersionAssets(caller, form, scope, spec, relations); hostErr != nil {
+		return nil, hostErr
+	}
+	if hostErr := h.validateSQLiteMigrationApplication(caller, form, scope, relations); hostErr != nil {
+		return nil, hostErr
 	}
 	// The Worker aggregate rules read the relations this apply just resolved,
 	// never the names in the spec: every one of them is a statement about one
@@ -1440,6 +1455,9 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 				"prepared review does not bind this exact resource at its current generation",
 			)
 		}
+		if hostErr := h.applySQLiteMigrationSuffix(caller, form, scope, relations); hostErr != nil {
+			return nil, false, hostErr
+		}
 		next := h.nextResource(form, existing, create, caller.Tenant, space, name, body.Spec, specDigest, false)
 		repinRelations(next, existing, relations)
 		h.storeResource(next)
@@ -1489,11 +1507,22 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 	h.recordReplay(request, raw, space, status, etag, response, replayBinding{UID: next.UID})
 }
 
-// requireReferencedBundleManifest resolves the ONE thing a WorkerBundle's
-// desired state carries — the manifest digest — and holds the manifest it
-// names to the artifact contract before anything is mutated. The manifest,
-// never the resource spec, describes the bundle's modules, so this is where a
-// host learns what it is being asked to run.
+func artifactManifestKindForForm(formKind string) (string, bool) {
+	switch formKind {
+	case workerBundleKind:
+		return workerBundleKind, true
+	case staticAssetBundleKind:
+		return staticAssetBundleKind, true
+	case sqliteMigrationSetKind:
+		return migrationBundleKind, true
+	default:
+		return "", false
+	}
+}
+
+// requireReferencedArtifactManifest resolves the one thing an artifact-backed
+// revision carries — manifestDigest — and holds the manifest it names to the
+// expected closed kind before anything is mutated.
 //
 // Resolution is per TENANT, exactly as the read surfaces are: a digest names
 // bytes and entitles nobody to them, so a manifest the caller's tenant does not
@@ -1501,32 +1530,37 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 // uncommitted digest gets (spec/decisions/0018). Distinguishing "exists but not
 // yours" from "does not exist" would make USING a leaked digest an existence
 // oracle over exactly what reading it already may not disclose.
-func (h *ReferenceHost) requireReferencedBundleManifest(caller hostAuthContext, spec map[string]any) *hostError {
+func (h *ReferenceHost) requireReferencedArtifactManifest(
+	caller hostAuthContext, spec map[string]any, expectedKind string,
+) (artifactManifest, *hostError) {
 	digest, _ := spec["manifestDigest"].(string)
 	if !formpackage.ValidDigest(digest) {
-		return stableError("artifact_invalid", "manifestDigest must be a lowercase sha256:<hex> digest")
+		return artifactManifest{}, stableError("artifact_invalid", "manifestDigest must be a lowercase sha256:<hex> digest")
 	}
 	raw := h.manifests[digest]
 	if raw == nil || !h.holdsManifest(caller.Tenant, digest) {
-		return stableError("artifact_missing", "manifestDigest names no committed artifact manifest")
+		return artifactManifest{}, stableError("artifact_missing", "manifestDigest names no committed artifact manifest")
 	}
 	// The content address is re-derived rather than trusted: a stored document
 	// that no longer canonicalizes to the digest it is filed under is not the
 	// manifest the client referenced.
 	stored, err := formpackage.DigestCanonicalJSON(raw)
 	if err != nil || stored != digest {
-		return stableError("artifact_invalid", "the stored manifest does not canonicalize to the referenced digest")
+		return artifactManifest{}, stableError("artifact_invalid", "the stored manifest does not canonicalize to the referenced digest")
 	}
 	var manifest artifactManifest
 	if err := formpackage.DecodeStrictIJSON(raw, &manifest); err != nil {
-		return stableError("artifact_invalid", "the stored manifest is not a decodable artifact manifest")
+		return artifactManifest{}, stableError("artifact_invalid", "the stored manifest is not a decodable artifact manifest")
 	}
-	if manifest.Kind != "WorkerBundle" {
-		return stableError("artifact_invalid", "manifestDigest names a "+manifest.Kind+" manifest, not a WorkerBundle")
+	if manifest.Kind != expectedKind {
+		return artifactManifest{}, stableError("artifact_invalid", "manifestDigest names a "+manifest.Kind+" manifest, not a "+expectedKind)
 	}
 	// The same closure the commit path enforces is re-proved here: a manifest
 	// committed by an older or laxer path must not become executable state.
-	return validateArtifactManifest(manifest)
+	if hostErr := validateArtifactManifest(manifest); hostErr != nil {
+		return artifactManifest{}, hostErr
+	}
+	return manifest, nil
 }
 
 // nextResource computes the post-mutation identity: uid minted on create,
@@ -1844,6 +1878,10 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 	// pre-mutation rule in this host (spec/decisions/0011).
 	nativeID := strings.TrimSpace(body.NativeID)
 	if hostErr := h.validateNativeIdentityClaim(scope, form, name, existing, nativeID); hostErr != nil {
+		h.writeHostError(w, hostErr)
+		return
+	}
+	if hostErr := h.applySQLiteMigrationSuffix(importer, form, scope, relations); hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
 	}
@@ -2272,6 +2310,9 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 		}
 		if !formpackage.ValidDigest(file.Digest) {
 			return stableError("artifact_invalid", "file digest grammar is invalid")
+		}
+		if manifest.Kind == migrationBundleKind && file.MediaType != "application/sql" {
+			return stableError("artifact_invalid", "a MigrationBundle file must use application/sql")
 		}
 	}
 	return nil

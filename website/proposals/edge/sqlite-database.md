@@ -35,9 +35,9 @@ what decision 0008 prohibits.
 ## What would require a separate Form
 
 A Postgres or MySQL database is a different Form in a managed-database
-family. Migration sets and their application are separate revision-shaped
-resources in the family plan (`SQLiteMigrationSet`,
-[spec/form-families.md](../../spec/form-families.md)).
+family. Migration bytes and applying their ordered history are separate
+`SQLiteMigrationSet` and `SQLiteMigrationApplication` resources; the database
+identity does not absorb schema rollout policy.
 
 ## Provided Interfaces
 

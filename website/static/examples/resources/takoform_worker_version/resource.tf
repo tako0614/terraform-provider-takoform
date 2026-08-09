@@ -21,6 +21,12 @@ resource "takoform_worker_version" "example" {
   vars_json               = jsonencode({ "LOG_LEVEL" = "info" })
   required_sensitive_vars = ["API_SIGNING_TOKEN_NAME"]
 
+  assets = {
+    bundle             = "static-asset-bundle"
+    run_worker_first   = true
+    not_found_handling = "single_page_application"
+  }
+
   kv_bindings = [
     {
       name        = "CACHE"

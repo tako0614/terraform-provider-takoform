@@ -137,6 +137,7 @@ long-running operations, and content-addressed artifact upload.
 | --- | --- | --- |
 | [`takoform_module_worker`](/docs/resources/module_worker.html) | identity | a JavaScript module-worker application identity |
 | [`takoform_worker_bundle`](/docs/resources/worker_bundle.html) | revision | an immutable uploaded code bundle (main module + modules) |
+| [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html) | revision | an immutable uploaded static-file inventory |
 | [`takoform_worker_version`](/docs/resources/worker_version.html) | revision | an immutable snapshot: bundle, handlers, vars, sensitive slots, typed bindings |
 | [`takoform_worker_deployment`](/docs/resources/worker_deployment.html) | deployment | which versions serve traffic, in basis points |
 | [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html) | attachment | a hostname whose origin is the worker |
@@ -145,6 +146,8 @@ long-running operations, and content-addressed artifact upload.
 | [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html) | identity | an eventually consistent edge KV namespace |
 | [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html) | identity | a strongly consistent object bucket |
 | [`takoform_sqlite_database`](/docs/resources/sqlite_database.html) | identity | a SQLite-semantics serverless database |
+| [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html) | revision | an immutable ordered SQL migration set |
+| [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | checksum-safe suffix application to one database |
 | [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html) | identity | at-least-once delivery with acknowledgement and retry |
 | [`takoform_queue_consumer`](/docs/resources/queue_consumer.html) | attachment | batch, retry, and dead-letter policy targeting one worker |
 

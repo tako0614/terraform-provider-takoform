@@ -30,6 +30,7 @@ Binding candidates in `interfaces/candidates/v1alpha1` and
 | --- | --- | --- | --- |
 | [ModuleWorker](module-worker.md) | identity | Logical identity of one ES Module Worker application; the ABI is fixed by identity. | A WASI function or container service is a different Form. |
 | [WorkerBundle](worker-bundle.md) | revision | Immutable content-addressed module bundle: main module plus digest-pinned modules. | A different linking or packaging model is a different Form. |
+| [StaticAssetBundle](static-asset-bundle.md) | revision | Immutable content-addressed static-file inventory. | Object storage or request routing is a separate Form. |
 | [WorkerVersion](worker-version.md) | revision | Immutable executable snapshot: bundle, handlers, vars, sensitive slots, typed bindings. | Mutable in-place code or config is not a version of this Form. |
 | [WorkerDeployment](worker-deployment.md) | deployment | Basis-point traffic split across up to eight Worker Versions of one worker. | Per-request routing rules or geographic steering is separate work. |
 | [WorkerCustomDomain](worker-custom-domain.md) | attachment | Serves one DNS hostname from a worker's active deployment over HTTPS. | Path-pattern routes are a separate attachment Form. |
@@ -38,6 +39,8 @@ Binding candidates in `interfaces/candidates/v1alpha1` and
 | [EdgeKVNamespace](edge-kv-namespace.md) | identity | Globally replicated key/value namespace with eventual consistency. | A linearizable or per-key-consistent store is a different Form. |
 | [ObjectBucket](object-bucket.md) | identity | Flat-namespace object store with read-after-write consistency and strong etags. | CORS/lifecycle/lock rules are separate policy Forms. |
 | [SQLiteDatabase](sqlite-database.md) | identity | Embedded SQLite database with serializable transactions. | A Postgres or MySQL database is a different Form. |
+| [SQLiteMigrationSet](sqlite-migration-set.md) | revision | Immutable ordered application/sql migration manifest. | Another dialect or declarative schema model is a different Form. |
+| [SQLiteMigrationApplication](sqlite-migration-application.md) | attachment | Applies only the checksum-safe suffix of one set to one database. | Rollback or destructive reset requires a separate authority-bearing Form. |
 | [AtLeastOnceQueue](at-least-once-queue.md) | identity | Queue with at-least-once delivery and no ordering guarantee. | A FIFO or exactly-once queue is a different Form. |
 | [QueueConsumer](queue-consumer.md) | attachment | Attaches one worker as the batch consumer of one queue, with retry and dead-lettering. | Pull-based consumption over an API is a different Form. |
 

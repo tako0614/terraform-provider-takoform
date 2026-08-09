@@ -132,6 +132,30 @@ var Forms = []model.Form{
 	},
 	{
 		Family: Family,
+		Kind:   "StaticAssetBundle", Slug: "static-asset-bundle", ResourceType: "takoform_static_asset_bundle",
+		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
+		Title: "Static Asset Bundle",
+		Description: "Immutable content-addressed set of files served beside one Worker Version. The whole " +
+			"portable desired state is the digest of a committed artifacts.takoform.com/v1alpha1 " +
+			"StaticAssetBundle manifest; the manifest is the sole ordered inventory of path, media type, exact " +
+			"size, and sha256 digest for every file. Raw file bytes, upload locations, backend identities, and " +
+			"serving policy never enter this resource. Serving order and not-found behavior belong to the " +
+			"Worker Version attachment so the same bytes can participate in different immutable versions without " +
+			"giving the bundle two meanings.",
+		Fields: []model.Field{
+			{HCL: "manifest_digest", Wire: "manifestDigest", Kind: model.KindString,
+				Required: true, Immutable: true,
+				Pattern: model.PatternCanonicalSHA256,
+				Doc: "Immutable identity of the committed StaticAssetBundle artifact manifest. Before mutation a host " +
+					"resolves it within the caller's tenant, verifies that its canonical digest matches, that its kind is " +
+					"StaticAssetBundle, and that every file path, media type, size, and blob digest is valid.",
+				Example:        "sha256:50ae1f6f1c6b121e8d64c4c5a83a3780c92d3a888765640a07bc20b20d71f4ef",
+				AltExample:     "sha256:7e17c82b43a95d76ce12454094647daf4b07a61c03890c441d6aa438de8970d7",
+				CounterExample: "sha256:not-a-canonical-manifest-digest"},
+		},
+	},
+	{
+		Family: Family,
 		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
 		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
 		Title: "Worker Version",
@@ -169,6 +193,37 @@ var Forms = []model.Form{
 				Target:  requiresExactForm,
 				Doc:     "Worker Bundle carrying the exact module bytes this version executes.",
 				Example: ref("WorkerBundle", "worker-bundle")},
+			{HCL: "assets", Wire: "assets", Kind: model.KindObject,
+				AbsenceIsSemantic: true,
+				Doc: "Optional static-asset attachment for this immutable version. Without it the host performs no " +
+					"asset lookup. When present, every member is required and the request order is closed: with " +
+					"runWorkerFirst=false the host tries the asset lookup before invoking fetch; with true it invokes " +
+					"fetch first and tries the asset lookup only when that invocation returns 404. An asset result wins; " +
+					"if both stages miss, the worker's 404 is preserved. The attachment never grants a hidden runtime " +
+					"binding and never mutates the referenced bundle.",
+				Fields: []model.Field{
+					{HCL: "bundle", Wire: "bundle", Kind: model.KindResourceRef, TargetKind: "StaticAssetBundle",
+						Target: requiresExactForm, Required: true,
+						Doc: "Static Asset Bundle whose exact manifest inventory this version serves."},
+					{HCL: "run_worker_first", Wire: "runWorkerFirst", Kind: model.KindBoolean, Required: true,
+						Doc: "Whether every request invokes the worker fetch handler before the asset lookup. False performs " +
+							"the lookup first and invokes fetch only when it misses; true performs the lookup only after fetch returns 404."},
+					{HCL: "not_found_handling", Wire: "notFoundHandling", Kind: model.KindStringEnum,
+						Required: true, Enum: []string{"none", "single_page_application"},
+						Doc: "Closed asset-miss behavior. none leaves a missing exact path as a miss. " +
+							"single_page_application serves the bundle's index.html for a missing path; a bundle without " +
+							"index.html is refused before this Worker Version is stored."},
+				},
+				Example: map[string]any{
+					"bundle":           ref("StaticAssetBundle", "static-asset-bundle"),
+					"runWorkerFirst":   true,
+					"notFoundHandling": "single_page_application",
+				},
+				CounterExample: map[string]any{
+					"bundle":           ref("StaticAssetBundle", "static-asset-bundle"),
+					"runWorkerFirst":   true,
+					"notFoundHandling": "backend_default",
+				}},
 			// The handler enum is not written here twice: it is the closed
 			// vocabulary the worker.runtime contract publishes, read back out of
 			// that contract so the Form and the ABI can never disagree.
@@ -432,6 +487,53 @@ var Forms = []model.Form{
 			"storage class, so a 64-bit INTEGER and a BLOB round-trip losslessly instead of being flattened " +
 			"into a JSON scalar (decision 0020).",
 		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "edge.sql", Version: "1.0.0"}},
+	},
+	{
+		Family: Family,
+		Kind:   "SQLiteMigrationSet", Slug: "sqlite-migration-set", ResourceType: "takoform_sqlite_migration_set",
+		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
+		Title: "SQLite Migration Set",
+		Description: "Immutable ordered SQLite migration history backed by one committed " +
+			"artifacts.takoform.com/v1alpha1 MigrationBundle manifest. The manifest files array is the migration " +
+			"order; every entry has a unique portable path, media type application/sql, exact size, and sha256 " +
+			"digest. SQL bytes travel only through the content-addressed artifact upload and never enter desired " +
+			"state. A new set may append entries, but an application refuses any set whose prefix rewrites, " +
+			"reorders, or removes an already applied path+digest pair.",
+		Fields: []model.Field{
+			{HCL: "manifest_digest", Wire: "manifestDigest", Kind: model.KindString,
+				Required: true, Immutable: true,
+				Pattern: model.PatternCanonicalSHA256,
+				Doc: "Immutable identity of the committed MigrationBundle artifact manifest. Before mutation a host " +
+					"resolves it within the caller's tenant and verifies its canonical digest, MigrationBundle kind, " +
+					"non-empty ordered files inventory, unique paths, application/sql media type, sizes, and blob digests.",
+				Example:        "sha256:344f4d30e8843b60598889c142ad26a7a9958ead6d26f50d787cd0fc32b02338",
+				AltExample:     "sha256:33ab512bb31a6488a351dc7e94d31e7208d23137453b524d5b94b8af5dfae8c5",
+				CounterExample: "sha256:not-a-canonical-manifest-digest"},
+		},
+	},
+	{
+		Family: Family,
+		Kind:   "SQLiteMigrationApplication", Slug: "sqlite-migration-application", ResourceType: "takoform_sqlite_migration_application",
+		Role: model.RoleAttachment, DefinitionVersion: edgeDefinitionVersion,
+		Title: "SQLite Migration Application",
+		Description: "Applies one exact SQLite Migration Set to one exact SQLite Database. Both relations are " +
+			"immutable and UID-pinned before mutation. The database's durable migration ledger records each " +
+			"applied manifest entry as its ordered path+digest pair. The requested set must extend that ledger " +
+			"exactly; a rewrite, reorder, or removal is refused before SQL executes, and only the unapplied suffix " +
+			"runs. Each file and its ledger append commit atomically, so an interrupted application retries the " +
+			"same suffix without replaying a recorded migration. Ready means the ledger equals the referenced set. " +
+			"Deleting this attachment only stops managing the application resource: it never runs down-migrations, " +
+			"rewrites the ledger, reverts schema, or deletes the database.",
+		Fields: []model.Field{
+			{HCL: "database", Wire: "database", Kind: model.KindResourceRef, TargetKind: "SQLiteDatabase",
+				Target: requiresExactForm, Required: true, Immutable: true,
+				Doc:     "Exact SQLite Database whose durable migration ledger and schema this application advances.",
+				Example: ref("SQLiteDatabase", "sqlite-database")},
+			{HCL: "migration_set", Wire: "migrationSet", Kind: model.KindResourceRef, TargetKind: "SQLiteMigrationSet",
+				Target: requiresExactForm, Required: true, Immutable: true,
+				Doc:     "Exact immutable SQLite Migration Set whose ordered manifest must extend the database ledger.",
+				Example: ref("SQLiteMigrationSet", "sqlite-migration-set")},
+		},
 	},
 	{
 		Family: Family,
@@ -1027,6 +1129,10 @@ func declaredReferenceCount(fields []model.Field) int {
 // here, which forces the review that decides whether it deserves the
 // exemption at all.
 var absenceSemanticExemptions = map[string]struct{}{
+	// There is no target resource that can mean "no assets". Materializing an
+	// object would attach a bundle the author did not name; absence is the
+	// closed no-asset behavior.
+	"WorkerVersion/assets":          {},
 	"QueueConsumer/deadLetterQueue": {},
 }
 

@@ -85,10 +85,9 @@ func TestV3DefaultedAttributesSurviveApplyWithoutDiff(t *testing.T) {
 	ctx := context.Background()
 	checked := 0
 	for _, form := range edgeformcatalog.Forms {
-		if form.Kind == workerBundleKind {
-			// A worker bundle's one declared field is projected through the
-			// provider-only authoring surface (manifest_digest plus the local
-			// main_module/modules inputs), not through v3FieldAttribute.
+		if v3ArtifactBackedRevision(form.Kind) {
+			// Artifact-backed revisions project manifestDigest through their
+			// provider-only local-file authoring surfaces.
 			continue
 		}
 		resource := &v3FormResource{form: form}
@@ -288,6 +287,8 @@ func v3AttributeRequiresReplace(attribute schema.Attribute) bool {
 	case schema.SetAttribute:
 		return len(typed.PlanModifiers) > 0
 	case schema.ListNestedAttribute:
+		return len(typed.PlanModifiers) > 0
+	case schema.SingleNestedAttribute:
 		return len(typed.PlanModifiers) > 0
 	default:
 		return false

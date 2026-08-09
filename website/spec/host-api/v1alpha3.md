@@ -1121,11 +1121,13 @@ The content-addressed upload API is
 [`../artifact-transport/`](../artifact-transport/index.md). The artifact
 endpoints share the lane's auth, idempotency, and error taxonomy.
 
-The desired state of a bundle-shaped revision resource is the **manifest
+The desired state of an artifact-backed revision resource is the **manifest
 digest and nothing else**: the committed artifact manifest describes the
 bytes, so the manifest and the desired spec are never two spellings of the
-same facts. A host MUST therefore resolve the referenced manifest before it
-mutates anything, on apply and on import alike, and fail closed when
+same facts. `WorkerBundle` requires manifest kind `WorkerBundle`,
+`StaticAssetBundle` requires `StaticAssetBundle`, and `SQLiteMigrationSet`
+requires `MigrationBundle`. A host MUST resolve the referenced manifest before
+it mutates anything, on apply and on import alike, and fail closed when
 
 - the digest names no committed manifest the caller's tenant holds —
   `artifact_missing` (404). Resolution is the same per-tenant question the
@@ -1166,6 +1168,67 @@ and proved by the required conformance check `bundle-main-module-is-loadable`.
 The corresponding runtime obligation — an import resolving to an auxiliary
 module fails `unsupported_media_type` — is behavior no desired-state runner
 observes, and stays a host obligation with the rest of the ABI.
+
+### Static assets on a Worker Version
+
+The rules here are decided by
+[decision 0033](../decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md).
+A `WorkerVersion` with no `assets` member performs no asset lookup. When the
+member is present it is one closed object with three required members:
+
+```json
+{
+  "bundle": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
+    "kind": "StaticAssetBundle",
+    "name": "static-assets"
+  },
+  "runWorkerFirst": true,
+  "notFoundHandling": "single_page_application"
+}
+```
+
+The bundle relation requires the target's exact FormRef and is UID-pinned like
+every other relation. `notFoundHandling` is exactly `none` or
+`single_page_application`.
+
+- With `runWorkerFirst=false`, the host performs asset lookup first and invokes
+  `fetch` only when that stage produces no response.
+- With `runWorkerFirst=true`, it invokes `fetch` first and performs asset lookup
+  only when the worker returns 404. An asset response wins; if asset lookup
+  misses, the worker's 404 is preserved.
+- `none` leaves a missing exact path as a miss.
+- `single_page_application` answers a missing path with `index.html`. The host
+  MUST resolve the exact referenced manifest and refuse the Worker Version with
+  `invalid_argument` (400), before mutation, when it contains no `index.html`.
+
+The attachment never grants a runtime binding and never changes the asset
+bundle. A provider may author the manifest from local files, but desired state
+and provider state carry no file bytes.
+
+### SQLite migration history
+
+A `MigrationBundle` is an ordered non-empty `files` list and every entry MUST
+use `application/sql`; other media types are `artifact_invalid` (400).
+`SQLiteMigrationApplication` pins exact `SQLiteDatabase` and
+`SQLiteMigrationSet` relations. The host keeps a durable ordered ledger in the
+database, whose entry identity is `(path, digest)`.
+
+Before mutation, and again when an accepted operation commits, the host MUST
+serialize against other migration applications for the database and prove the
+ledger is an exact prefix of the referenced manifest. An applied entry that is
+absent, moved, or has another digest is `migration_required` (409) and changes
+nothing. Only the unapplied suffix may execute. Each file's SQL execution and
+its ledger insertion are one SQLite transaction: failure rolls back both for
+that file, keeps earlier committed entries, and makes a retry resume at the
+same suffix boundary. Ready means the durable ledger equals the exact ordered
+set.
+
+Deleting `SQLiteMigrationApplication` removes the attachment and its relation
+holders only. It MUST NOT execute down SQL, remove ledger entries, reinterpret
+the schema, or delete the database. The database and set are protected by
+ordinary `dependency_in_use` while the attachment lives; database deletion
+after it is gone is a separate database policy, not migration rollback.
 
 ### Upload sessions are owned
 
@@ -1365,6 +1428,18 @@ Proven by required checks:
 Obligations a conforming host MUST meet that this lane does NOT prove, because
 proving them means exercising the data plane rather than driving the Host API:
 
+- **Static-asset routing.** That request paths resolve to the exact bytes in the
+  referenced `StaticAssetBundle`, that `runWorkerFirst` orders the asset and
+  worker stages as declared, and that SPA fallback serves those `index.html`
+  bytes rather than a host-owned document. The reference host proves the exact
+  relation and refuses an SPA bundle without that path; it serves no HTTP
+  application traffic.
+- **SQLite migration execution.** That each SQL file and its `(path, digest)`
+  ledger insertion commit in one real SQLite transaction, that a failed file
+  leaves neither schema effects nor a ledger record, and that concurrent
+  applications serialize on the same database. The reference host proves the
+  ordered prefix/suffix state machine and never pretends its in-memory ledger
+  executed SQL.
 - **`edge.kv` convergence.** That a write eventually becomes visible at every
   location. One client cannot observe cross-location convergence at all, which
   is why the contract's deterministic fixtures assert only facts no write has to

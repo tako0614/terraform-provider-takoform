@@ -30,6 +30,14 @@ JavaScript surface it projects, not just the operations it grants.
 `requiredSensitiveVars` declares only the names of sealed values the host must
 supply; values never enter portable state.
 
+`assets` is optional and absence is semantic: without it the host performs no
+asset lookup. When present it is one closed object containing an exact
+`StaticAssetBundle` reference, `runWorkerFirst`, and the closed
+`notFoundHandling` value `none` or `single_page_application`. Asset-first and
+worker-first request order, the 404 handoff, and the required `index.html` for
+SPA fallback are fixed by
+[decision 0033](../../spec/decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md).
+
 The field is named `requiredSensitiveVars`, not `secretRequirements`, because
 the Form Package data-only policy forbids the token `secret` in any field
 name (`formpackage` rejects the whole definition rather than the value), so
@@ -40,15 +48,6 @@ the declaration states the same fact in permitted vocabulary.
 A future runtime revision is a new exact `worker.runtime` version, published at
 its own digest. If it changes what this Form desires it is also a new definition
 version of this Form. It is never a new value of a date field, and never a flag.
-
-## Deferred: static assets
-
-This milestone has no `assets` field. Static assets served alongside a worker
-are the separate `StaticAssetBundle` Form of a later milestone
-(`spec/form-families.md`); `WorkerVersion` gains an `assets` reference to it
-when that Form lands, as one new optional field on a new definition version.
-Until then this Form cannot express an asset-serving worker, and no host
-should infer one.
 
 ## Why this is one Form
 

@@ -72,18 +72,25 @@ The authored first-milestone members are:
 
 ```text
 Compute      ModuleWorker, WorkerBundle, WorkerVersion, WorkerDeployment,
-             WorkerCustomDomain, WorkerEndpoint, WorkerCronTrigger
-Data         EdgeKVNamespace, ObjectBucket, SQLiteDatabase
+             StaticAssetBundle, WorkerCustomDomain, WorkerEndpoint,
+             WorkerCronTrigger
+Data         EdgeKVNamespace, ObjectBucket, SQLiteDatabase,
+             SQLiteMigrationSet, SQLiteMigrationApplication
 Messaging    AtLeastOnceQueue, QueueConsumer
 ```
 
 Later milestones add further members through their own proposals —
-`StaticAssetBundle`, `WorkerRoute`, `SQLiteMigrationSet`,
-`SQLiteMigrationApplication`, `DenseVectorIndex`, `VectorMetadataIndex`, and
+`WorkerRoute`, `DenseVectorIndex`, `VectorMetadataIndex`, and
 the bucket policy resources (`BucketCorsPolicy`, `BucketLifecyclePolicy`,
 `BucketLockPolicy`). Listing a planned member here reserves nothing: a Form
 exists only when its proposal, catalog declaration, and candidate package
 exist.
+
+Static files and SQLite migrations are artifact-backed rather than inline:
+`StaticAssetBundle` and `SQLiteMigrationSet` desired state is exactly one
+committed manifest digest, while `SQLiteMigrationApplication` attaches an
+ordered set to a database with append-only path+digest history
+([decision 0033](decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)).
 
 `ModuleWorker` fixes the ES Module Worker ABI by identity, and states what that
 ABI is: the exact Interface contract `worker.runtime@1.0.0` in its
@@ -111,15 +118,14 @@ incompleteness [`portability-boundary.md`](portability-boundary.md) forbids. The
 `handlers` vocabulary is the handler set the runtime contract defines, and a
 host refuses a handler that contract does not define before it mutates anything.
 
-Two authored first-milestone decisions are recorded here so neither is read as
+Three authored decisions are recorded here so none is read as
 an oversight:
 
-- `WorkerVersion` declares no `assets` field. Static assets served next to a
-  worker belong to the separate `StaticAssetBundle` member above;
-  `WorkerVersion` gains an `assets` reference to it when `StaticAssetBundle`
-  lands in the next milestone. Until then a version fixes code, runtime
-  behavior, configuration, and bindings only, and an asset-serving worker is
-  not yet fully expressible.
+- `WorkerVersion.assets` is one optional closed object referring to the
+  separate `StaticAssetBundle` member above. Absence means no asset lookup;
+  presence fixes request order and not-found handling without granting a
+  hidden runtime binding
+  ([decision 0033](decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)).
 - `WorkerVersion` names its sealed-value declaration `requiredSensitiveVars`
   rather than `secretRequirements`. The Form Package data-only policy rejects
   the token `secret` anywhere in a field name

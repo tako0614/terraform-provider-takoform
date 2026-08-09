@@ -460,6 +460,9 @@ func (h *v3FakeHost) serveUploadStart(w http.ResponseWriter, r *http.Request) {
 		Modules []struct {
 			Digest string `json:"digest"`
 		} `json:"modules"`
+		Files []struct {
+			Digest string `json:"digest"`
+		} `json:"files"`
 	}
 	if err := json.Unmarshal(request.Manifest, &manifest); err != nil {
 		h.t.Errorf("upload start manifest not JSON: %v", err)
@@ -468,6 +471,11 @@ func (h *v3FakeHost) serveUploadStart(w http.ResponseWriter, r *http.Request) {
 	for _, module := range manifest.Modules {
 		if _, held := h.blobs[module.Digest]; !held {
 			missing = append(missing, module.Digest)
+		}
+	}
+	for _, file := range manifest.Files {
+		if _, held := h.blobs[file.Digest]; !held {
+			missing = append(missing, file.Digest)
 		}
 	}
 	h.events = append(h.events, "artifact-start")

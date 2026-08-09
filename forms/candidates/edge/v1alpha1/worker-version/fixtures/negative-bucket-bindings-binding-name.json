@@ -1,4 +1,13 @@
 {
+  "assets": {
+    "bundle": {
+      "apiVersion": "edge.forms.takoform.com/v1alpha1",
+      "kind": "StaticAssetBundle",
+      "name": "static-asset-bundle"
+    },
+    "notFoundHandling": "single_page_application",
+    "runWorkerFirst": true
+  },
   "bucketBindings": [
     {
       "name": "1binding",

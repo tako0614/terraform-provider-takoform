@@ -44,6 +44,7 @@ const registryPath = path.join(
 const forms = [
   ["ModuleWorker", "module-worker", "identity"],
   ["WorkerBundle", "worker-bundle", "revision"],
+  ["StaticAssetBundle", "static-asset-bundle", "revision"],
   ["WorkerVersion", "worker-version", "revision"],
   ["WorkerDeployment", "worker-deployment", "deployment"],
   ["WorkerCustomDomain", "worker-custom-domain", "attachment"],
@@ -52,6 +53,8 @@ const forms = [
   ["EdgeKVNamespace", "edge-kv-namespace", "identity"],
   ["ObjectBucket", "object-bucket", "identity"],
   ["SQLiteDatabase", "sqlite-database", "identity"],
+  ["SQLiteMigrationSet", "sqlite-migration-set", "revision"],
+  ["SQLiteMigrationApplication", "sqlite-migration-application", "attachment"],
   ["AtLeastOnceQueue", "at-least-once-queue", "identity"],
   ["QueueConsumer", "queue-consumer", "attachment"],
 ];
@@ -108,7 +111,7 @@ function main() {
         [stagedRegistryPath, registryPath],
       ]);
       process.stdout.write(
-        "wrote twelve Edge Platform Family Form candidates, six interface candidates, five binding candidates, and the provider v3 registry\n",
+        `wrote ${forms.length} Edge Platform Family Form candidates, six interface candidates, five binding candidates, and the provider v3 registry\n`,
       );
     } finally {
       rmSync(stagingParent, { recursive: true, force: true });
@@ -377,7 +380,7 @@ function compareFile(expected, actualPath, label) {
 // the exact identities this build supports (keyed by the WHOLE ExactFormKey, so
 // two definition versions of one kind coexist) and the one create default per
 // group+kind. Today each group+kind has exactly one supported identity, so both
-// maps carry the same twelve entries; the shape is what lets that stop being
+// maps carry the same Form entries; the shape is what lets that stop being
 // true without a state migration
 // (spec/decisions/0017-provider-state-survives-form-evolution-and-interruption.md).
 function renderRegistry(manifest) {

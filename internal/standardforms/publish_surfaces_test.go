@@ -51,6 +51,31 @@ func TestCommittedPublishedSurfacesMatchCatalog(t *testing.T) {
 	}
 }
 
+func TestV3ObjectExampleUsesTerraformAttributeNames(t *testing.T) {
+	t.Parallel()
+
+	form, ok := edgeformcatalog.ByKind("WorkerVersion")
+	if !ok {
+		t.Fatal("WorkerVersion is absent from the Edge Form catalog")
+	}
+	rendered := v3ExampleHCL(form)
+	for _, want := range []string{
+		"assets = {",
+		`bundle             = "static-asset-bundle"`,
+		`not_found_handling = "single_page_application"`,
+		"run_worker_first   = true",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("WorkerVersion example omitted %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"notFoundHandling", "runWorkerFirst", "apiVersion"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Errorf("WorkerVersion example leaked wire member %q into Terraform HCL:\n%s", forbidden, rendered)
+		}
+	}
+}
+
 func TestPublishedSurfaceVerificationRejectsContentDrift(t *testing.T) {
 	t.Parallel()
 

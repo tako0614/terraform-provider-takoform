@@ -182,6 +182,64 @@
   "additionalProperties": false,
   "description": "Immutable executable snapshot of one Module Worker: a bundle, the handlers its module exports, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is not a field of this Form: it is fixed by the worker.runtime@1.0.0 contract the Module Worker identity provides, so a version carries no compatibility date and no compatibility flag (decision 0019).",
   "properties": {
+    "assets": {
+      "additionalProperties": false,
+      "description": "Optional static-asset attachment for this immutable version. Without it the host performs no asset lookup. When present, every member is required and the request order is closed: with runWorkerFirst=false the host tries the asset lookup before invoking fetch; with true it invokes fetch first and tries the asset lookup only when that invocation returns 404. An asset result wins; if both stages miss, the worker's 404 is preserved. The attachment never grants a hidden runtime binding and never mutates the referenced bundle.",
+      "properties": {
+        "bundle": {
+          "additionalProperties": false,
+          "description": "Static Asset Bundle whose exact manifest inventory this version serves.",
+          "properties": {
+            "apiVersion": {
+              "const": "edge.forms.takoform.com/v1alpha1",
+              "type": "string"
+            },
+            "kind": {
+              "const": "StaticAssetBundle",
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 63,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9-]{0,62}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "apiVersion",
+            "kind",
+            "name"
+          ],
+          "type": "object",
+          "x-takoform-target-formrefs": [
+            {
+              "apiVersion": "edge.forms.takoform.com/v1alpha1",
+              "definitionVersion": "0.1.0",
+              "kind": "StaticAssetBundle",
+              "schemaDigest": "sha256:364218ce5fadc0817eda8bfd334af95c77aa46d030a79be4c04ee4d4f203bd30"
+            }
+          ]
+        },
+        "notFoundHandling": {
+          "description": "Closed asset-miss behavior. none leaves a missing exact path as a miss. single_page_application serves the bundle's index.html for a missing path; a bundle without index.html is refused before this Worker Version is stored.",
+          "enum": [
+            "none",
+            "single_page_application"
+          ],
+          "type": "string"
+        },
+        "runWorkerFirst": {
+          "description": "Whether every request invokes the worker fetch handler before the asset lookup. False performs the lookup first and invokes fetch only when it misses; true performs the lookup only after fetch returns 404.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bundle",
+        "notFoundHandling",
+        "runWorkerFirst"
+      ],
+      "type": "object"
+    },
     "bucketBindings": {
       "default": [],
       "description": "Typed module-worker.object-bucket bindings projecting the edge.objects API. Omitting it declares no such binding.",

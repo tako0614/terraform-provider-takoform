@@ -53,6 +53,7 @@ const japaneseNav = [
 const edgeResourceItems = [
   { text: "Module worker", link: "/docs/resources/module_worker.html" },
   { text: "Worker bundle", link: "/docs/resources/worker_bundle.html" },
+  { text: "Static asset bundle", link: "/docs/resources/static_asset_bundle.html" },
   { text: "Worker version", link: "/docs/resources/worker_version.html" },
   { text: "Worker deployment", link: "/docs/resources/worker_deployment.html" },
   {
@@ -70,6 +71,11 @@ const edgeResourceItems = [
     link: "/docs/resources/edge_object_bucket.html",
   },
   { text: "SQLite database", link: "/docs/resources/sqlite_database.html" },
+  { text: "SQLite migration set", link: "/docs/resources/sqlite_migration_set.html" },
+  {
+    text: "SQLite migration application",
+    link: "/docs/resources/sqlite_migration_application.html",
+  },
   {
     text: "At-least-once queue",
     link: "/docs/resources/at_least_once_queue.html",
@@ -130,6 +136,7 @@ const edgeProposalItems = [
   { text: "Family overview", link: "/proposals/edge/" },
   { text: "Module worker", link: "/proposals/edge/module-worker.html" },
   { text: "Worker bundle", link: "/proposals/edge/worker-bundle.html" },
+  { text: "Static asset bundle", link: "/proposals/edge/static-asset-bundle.html" },
   { text: "Worker version", link: "/proposals/edge/worker-version.html" },
   { text: "Worker deployment", link: "/proposals/edge/worker-deployment.html" },
   {
@@ -144,6 +151,11 @@ const edgeProposalItems = [
   { text: "Edge KV namespace", link: "/proposals/edge/edge-kv-namespace.html" },
   { text: "Object bucket", link: "/proposals/edge/object-bucket.html" },
   { text: "SQLite database", link: "/proposals/edge/sqlite-database.html" },
+  { text: "SQLite migration set", link: "/proposals/edge/sqlite-migration-set.html" },
+  {
+    text: "SQLite migration application",
+    link: "/proposals/edge/sqlite-migration-application.html",
+  },
   {
     text: "At-least-once queue",
     link: "/proposals/edge/at-least-once-queue.html",

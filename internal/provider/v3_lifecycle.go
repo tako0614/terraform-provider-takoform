@@ -249,6 +249,7 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	var spec map[string]any
 	var bundle v3BundleAuthoring
+	var fileBundle v3FileBundleAuthoring
 	if r.form.Kind == workerBundleKind {
 		// A worker bundle is authored either by referencing a committed manifest
 		// or from local module files whose bytes travel through the
@@ -261,6 +262,14 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 		bundle = resolved
 		spec = bundle.Spec()
+	} else if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+		resolved, artifactDiags := r.fileBundleAuthoring(&values)
+		resp.Diagnostics.Append(artifactDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		fileBundle = resolved
+		spec = fileBundle.Spec()
 	} else {
 		var specDiags diag.Diagnostics
 		spec, specDiags = r.v3SpecFromValues(ctx, codec, values)
@@ -285,6 +294,14 @@ func (r *v3FormResource) Create(ctx context.Context, req resource.CreateRequest,
 		// The digest the commit RETURNED is the desired state: a client never
 		// asserts an artifact identity the host has not issued.
 		committed, ok := r.uploadWorkerBundle(opCtx, bundle, &resp.Diagnostics)
+		if !ok {
+			return
+		}
+		spec = map[string]any{"manifestDigest": committed}
+		values.Fields["manifest_digest"] = types.StringValue(committed)
+	}
+	if fileBundle.Local {
+		committed, ok := r.uploadFileBundle(opCtx, fileBundle, &resp.Diagnostics)
 		if !ok {
 			return
 		}
@@ -518,6 +535,8 @@ func (r *v3FormResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	v3PlanRelationRecovery(ctx, req.State, r.form.DeclaresUpdate(), resp)
 	if r.form.Kind == workerBundleKind {
 		r.modifyWorkerBundlePlan(ctx, req, resp)
+	} else if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+		r.modifyFileBundlePlan(ctx, req, resp)
 	}
 	r.v3PlanRevisionName(ctx, req, resp)
 	r.v3PlanImmutableRevisionSafety(ctx, req, resp)
@@ -670,6 +689,12 @@ func (r *v3FormResource) updateProviderSideTimeouts(ctx context.Context, req res
 			modules = types.ListNull(v3WorkerBundleModuleType())
 		}
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("modules"), modules)...)
+	} else if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+		files, ok := planValues.Fields["files"].(types.List)
+		if !ok || files.IsUnknown() {
+			files = types.ListNull(v3ArtifactFileType())
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("files"), files)...)
 	}
 }
 
@@ -693,6 +718,15 @@ func (r *v3FormResource) v3DesiredSpecUnchanged(ctx context.Context, codec v3For
 		// it. Re-deriving the prior side from the local files instead would
 		// compare the working tree against itself and call a real byte change no
 		// change at all.
+		recorded, ok := v3PlanKnownString(state.Fields["manifest_digest"])
+		return ok && planned.Digest == recorded
+	}
+	if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+		planned, plannedDiags := r.fileBundleAuthoring(&plan)
+		diags.Append(plannedDiags...)
+		if diags.HasError() {
+			return false
+		}
 		recorded, ok := v3PlanKnownString(state.Fields["manifest_digest"])
 		return ok && planned.Digest == recorded
 	}

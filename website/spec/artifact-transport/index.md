@@ -33,8 +33,8 @@ DELETE {api}/artifacts/uploads/{uploadId}           abandon an incomplete upload
    (size, digest, media type, path grammar, per-kind shape) and returns the
    immutable `manifestDigest`: the RFC 8785 canonical digest of the manifest
    bytes.
-5. Desired state (for example a `WorkerBundle` revision) references the
-   manifest digest only.
+5. Desired state (`WorkerBundle`, `StaticAssetBundle`, or
+   `SQLiteMigrationSet`) references the manifest digest only.
 
 Uploads are resumable: repeating step 2 with the same manifest returns the
 still-missing blob set, and committing an already-committed manifest is
@@ -109,6 +109,13 @@ is normative:
 - a `StaticAssetBundle` or `MigrationBundle` manifest carries `files` and MUST
   NOT carry `mainModule` or `modules`.
 
+For `StaticAssetBundle`, `files` is an inventory and its array order has no
+routing meaning. For `MigrationBundle`, array order is semantic migration order
+and every entry MUST use `application/sql`; a different order is a different
+manifest and a different migration set. The host and authoring provider both
+enforce the SQL media type. These two kinds share transport, not meaning
+([decision 0033](../decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)).
+
 A manifest carrying both shapes has two meanings, which a content-addressed
 identity must never have; violations are `artifact_invalid` (400). The
 published manifest schema is the structural minimum for this document and
@@ -118,13 +125,16 @@ host and proved by a required conformance check rather than by the schema
 
 ## Referencing a manifest from desired state
 
-A bundle-shaped revision resource carries the manifest digest as its whole
-desired state; the manifest, not the resource, describes the bytes. Before any
-mutation — apply and import alike — a host MUST resolve the referenced
-manifest and fail closed when the digest names no committed manifest the
-caller's tenant holds (`artifact_missing`, 404), when the stored document does
-not canonicalize to the referenced digest, when its `kind` is not the kind the
-Form requires, or when it violates any rule above (`artifact_invalid`, 400).
+An artifact-backed revision carries the manifest digest as its whole desired
+state; the manifest, not the resource, describes the bytes. A `WorkerBundle`
+requires manifest kind `WorkerBundle`, `StaticAssetBundle` requires
+`StaticAssetBundle`, and `SQLiteMigrationSet` requires `MigrationBundle`.
+Before any mutation — apply and import alike — a host MUST resolve the
+referenced manifest and fail closed when the digest names no committed
+manifest the caller's tenant holds (`artifact_missing`, 404), when the stored
+document does not canonicalize to the referenced digest, when its kind is not
+the kind the Form requires, or when it violates any rule above
+(`artifact_invalid`, 400).
 
 Resolving a manifest on behalf of a request is subject to the same per-tenant
 holding rule as reading one

@@ -105,6 +105,7 @@ yet published); the retained v2 resources above are unaffected:
 
 - [ModuleWorker](resources/module_worker.md)
 - [WorkerBundle](resources/worker_bundle.md)
+- [StaticAssetBundle](resources/static_asset_bundle.md)
 - [WorkerVersion](resources/worker_version.md)
 - [WorkerDeployment](resources/worker_deployment.md)
 - [WorkerCustomDomain](resources/worker_custom_domain.md)
@@ -113,6 +114,8 @@ yet published); the retained v2 resources above are unaffected:
 - [EdgeKVNamespace](resources/edge_kv_namespace.md)
 - [ObjectBucket (edge)](resources/edge_object_bucket.md)
 - [SQLiteDatabase](resources/sqlite_database.md)
+- [SQLiteMigrationSet](resources/sqlite_migration_set.md)
+- [SQLiteMigrationApplication](resources/sqlite_migration_application.md)
 - [AtLeastOnceQueue](resources/at_least_once_queue.md)
 - [QueueConsumer](resources/queue_consumer.md)
 

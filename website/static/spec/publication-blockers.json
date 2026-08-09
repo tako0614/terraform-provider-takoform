@@ -62,16 +62,20 @@
     },
     {
       "id": "V3-005",
-      "title": "A real backend materialises bundle, version and deployment",
+      "title": "A real backend materialises and serves the edge application revisions",
       "priority": "P0",
       "affectedForms": [
         "WorkerBundle",
+        "StaticAssetBundle",
         "WorkerVersion",
-        "WorkerDeployment"
+        "WorkerDeployment",
+        "SQLiteDatabase",
+        "SQLiteMigrationSet",
+        "SQLiteMigrationApplication"
       ],
       "status": "open",
       "issue": 106,
-      "rationale": "Immutable revisions and weighted traffic are these Forms' whole value. Until a real backend performs them, the state machine is asserted rather than demonstrated.",
+      "rationale": "Immutable code and asset revisions, weighted traffic, and transactional ordered SQLite migration history are these Forms' whole value. The reference host proves manifest closure, exact relations, asset fallback preconditions, and the append-only path-and-digest ledger state machine, but it serves no application traffic and executes no SQL. Until a real backend serves the referenced asset bytes with the declared worker ordering and commits each SQL file with its ledger record in one real SQLite transaction, those data-plane effects are asserted rather than demonstrated.",
       "evidence": []
     },
     {

@@ -87,6 +87,8 @@ func v3DocType(field model.Field) string {
 		return "Set of String"
 	case model.KindBindingList, model.KindObjectList:
 		return "List of Object"
+	case model.KindObject:
+		return "Object"
 	default:
 		return "String"
 	}
@@ -187,6 +189,12 @@ func v3FieldDocLine(form model.Form, field model.Field) string {
 		if field.MinItems > 0 && field.MaxItems > 0 {
 			doc += fmt.Sprintf(" The list must declare between %d and %d entries.", field.MinItems, field.MaxItems)
 		}
+	case model.KindObject:
+		members := make([]string, 0, len(field.Fields))
+		for _, member := range field.Fields {
+			members = append(members, "`"+member.HCL+"`")
+		}
+		doc += " The object declares " + strings.Join(members, ", ") + "; when the object is present, every member is required."
 	}
 	return fmt.Sprintf("- `%s` (%s, %s) — %s%s%s\n",
 		name, docType, v3DocRequirement(form, field), doc, v3DocConstraint(field), v3DocDefault(field))
@@ -470,6 +478,8 @@ provider "takoform" {
 				blocks = append(blocks, v3BindingBlockHCL(field))
 			case model.KindObjectList:
 				blocks = append(blocks, v3ObjectListHCL(field))
+			case model.KindObject:
+				blocks = append(blocks, v3ObjectHCL(field))
 			case model.KindJSONMap:
 				scalars = append(scalars, [2]string{field.HCL + "_json", v3JSONEncodeHCL(field.Example)})
 			case model.KindResourceRef:
@@ -560,6 +570,37 @@ func v3ObjectListHCL(field model.Field) string {
 		builder.WriteString("    },\n")
 	}
 	builder.WriteString("  ]\n")
+	return builder.String()
+}
+
+func v3ObjectHCL(field model.Field) string {
+	entry, _ := field.Example.(map[string]any)
+	lines := make([][2]string, 0, len(field.Fields))
+	width := 0
+	for _, member := range field.Fields {
+		value, present := entry[member.Wire]
+		if !present {
+			continue
+		}
+		var rendered string
+		if member.Kind == model.KindResourceRef {
+			ref, _ := value.(map[string]any)
+			name, _ := ref["name"].(string)
+			rendered = fmt.Sprintf("%q", name)
+		} else {
+			rendered = quoteHCL(value)
+		}
+		lines = append(lines, [2]string{member.HCL, rendered})
+		if len(member.HCL) > width {
+			width = len(member.HCL)
+		}
+	}
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "  %s = {\n", field.HCL)
+	for _, line := range lines {
+		fmt.Fprintf(&builder, "    %-*s = %s\n", width, line[0], line[1])
+	}
+	builder.WriteString("  }\n")
 	return builder.String()
 }
 

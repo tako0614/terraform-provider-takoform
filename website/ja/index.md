@@ -138,6 +138,7 @@ family ([Form Families](/spec/form-families.html)) で、UID/generation/revision
 | --- | --- | --- |
 | [`takoform_module_worker`](/docs/resources/module_worker.html) | identity | JavaScript module worker アプリの論理 identity |
 | [`takoform_worker_bundle`](/docs/resources/worker_bundle.html) | revision | アップロード済みの不変コードバンドル |
+| [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html) | revision | アップロード済みの不変 static file inventory |
 | [`takoform_worker_version`](/docs/resources/worker_version.html) | revision | bundle・handlers・vars・sensitive slots・typed bindings の不変 snapshot |
 | [`takoform_worker_deployment`](/docs/resources/worker_deployment.html) | deployment | どの version へどれだけ配信するか (basis points) |
 | [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html) | attachment | worker 自身を origin とする hostname |
@@ -146,6 +147,8 @@ family ([Form Families](/spec/form-families.html)) で、UID/generation/revision
 | [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html) | identity | eventually consistent な edge KV namespace |
 | [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html) | identity | 強整合な object bucket |
 | [`takoform_sqlite_database`](/docs/resources/sqlite_database.html) | identity | SQLite 意味論の serverless database |
+| [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html) | revision | 順序と checksum を固定した SQL migration set |
+| [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | 1つの database へ未適用 suffix だけを適用 |
 | [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html) | identity | acknowledgement と retry を持つ at-least-once 配信 |
 | [`takoform_queue_consumer`](/docs/resources/queue_consumer.html) | attachment | batch・retry・dead-letter policy を1つの worker へ向ける |
 

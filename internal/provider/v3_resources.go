@@ -35,6 +35,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
@@ -47,8 +49,10 @@ import (
 )
 
 const (
-	workerBundleKind     = "WorkerBundle"
-	workerDeploymentKind = "WorkerDeployment"
+	workerBundleKind       = "WorkerBundle"
+	staticAssetBundleKind  = "StaticAssetBundle"
+	sqliteMigrationSetKind = "SQLiteMigrationSet"
+	workerDeploymentKind   = "WorkerDeployment"
 
 	// workerDeploymentWeightSum is the exact basis-point total every
 	// WorkerDeployment versions list must reach.
@@ -66,6 +70,10 @@ func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 	attrs := v3CommonAttributes(r.form)
 	if r.form.Kind == workerBundleKind {
 		for name, attribute := range workerBundleAttributes() {
+			attrs[name] = attribute
+		}
+	} else if _, fileBundle := v3FileBundleManifestKind(r.form.Kind); fileBundle {
+		for name, attribute := range fileBundleAttributes(r.form.Kind) {
 			attrs[name] = attribute
 		}
 	} else {
@@ -467,6 +475,22 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 			attribute.PlanModifiers = []planmodifier.List{listplanmodifier.RequiresReplace()}
 		}
 		return attribute
+	case model.KindObject:
+		nested := map[string]schema.Attribute{}
+		for _, member := range field.Fields {
+			nested[member.HCL] = v3NestedMemberAttribute(member)
+		}
+		attribute := schema.SingleNestedAttribute{
+			Required: field.Required, Optional: optional, Computed: computed,
+			Description: description, Attributes: nested,
+		}
+		if computed {
+			attribute.Default = objectdefault.StaticValue(v3DefaultObject(field))
+		}
+		if replace {
+			attribute.PlanModifiers = []planmodifier.Object{objectplanmodifier.RequiresReplace()}
+		}
+		return attribute
 	default:
 		// KindString and KindStringEnum.
 		var validators []validator.String
@@ -669,11 +693,46 @@ func v3DefaultObjectList(field model.Field) types.List {
 	return types.ListValueMust(elementType, elements)
 }
 
+func v3DefaultObject(field model.Field) types.Object {
+	entry, _ := field.Default.(map[string]any)
+	memberValues := map[string]attr.Value{}
+	for _, member := range field.Fields {
+		memberValues[member.HCL] = v3FieldValueFromDefault(member, entry[member.Wire])
+	}
+	return types.ObjectValueMust(v3ObjectType(field).AttrTypes, memberValues)
+}
+
+func v3FieldValueFromDefault(field model.Field, raw any) attr.Value {
+	switch field.Kind {
+	case model.KindBoolean:
+		value, _ := raw.(bool)
+		return types.BoolValue(value)
+	case model.KindInteger:
+		return int64FromSpec(raw)
+	case model.KindResourceRef:
+		return types.StringValue(v3DefaultReferenceName(raw))
+	case model.KindObject:
+		nested, _ := raw.(map[string]any)
+		values := map[string]attr.Value{}
+		for _, member := range field.Fields {
+			values[member.HCL] = v3FieldValueFromDefault(member, nested[member.Wire])
+		}
+		return types.ObjectValueMust(v3ObjectType(field).AttrTypes, values)
+	default:
+		text, _ := raw.(string)
+		return types.StringValue(text)
+	}
+}
+
 // v3NestedMemberAttribute maps one object-list member field. A nested
 // resource reference flattens to the target's name string, mirroring the
 // top-level convention.
 func v3NestedMemberAttribute(member model.Field) schema.Attribute {
 	switch member.Kind {
+	case model.KindBoolean:
+		return schema.BoolAttribute{
+			Required: member.Required, Optional: !member.Required, Description: member.Doc,
+		}
 	case model.KindInteger:
 		var validators []validator.Int64
 		if member.Min != nil {
@@ -897,6 +956,34 @@ func v3FieldToWire(
 			return nil, diags
 		}
 		return out, diags
+	case model.KindObject:
+		object, ok := value.(types.Object)
+		if !ok || object.IsNull() || object.IsUnknown() {
+			diags.AddAttributeError(path.Root(attrName), "Unknown or null nested object",
+				attrName+" must be a wholly known object.")
+			return nil, diags
+		}
+		entry := map[string]any{}
+		for _, member := range field.Fields {
+			memberValue, present := object.Attributes()[member.HCL]
+			if !present || memberValue == nil || memberValue.IsNull() {
+				continue
+			}
+			if memberValue.IsUnknown() {
+				diags.AddAttributeError(path.Root(attrName), "Unknown nested value",
+					attrName+"."+member.HCL+" must be wholly known.")
+				return nil, diags
+			}
+			wire, memberDiags := v3FieldToWire(ctx, group, member, attrName+"."+member.HCL, memberValue)
+			diags.Append(memberDiags...)
+			if memberDiags.HasError() {
+				return nil, diags
+			}
+			if wire != nil {
+				entry[member.Wire] = wire
+			}
+		}
+		return entry, diags
 	default:
 		text := value.(types.String).ValueString()
 		if text == "" {
@@ -1026,6 +1113,19 @@ func v3FieldValueFromSpec(ctx context.Context, field model.Field, raw any, diags
 		list, listDiags := types.ListValue(elementType, elements)
 		diags.Append(listDiags...)
 		return list
+	case model.KindObject:
+		elementType := v3ObjectType(field)
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			return types.ObjectNull(elementType.AttrTypes)
+		}
+		memberValues := map[string]attr.Value{}
+		for _, member := range field.Fields {
+			memberValues[member.HCL] = v3FieldValueFromSpec(ctx, member, entry[member.Wire], diags)
+		}
+		object, objectDiags := types.ObjectValue(elementType.AttrTypes, memberValues)
+		diags.Append(objectDiags...)
+		return object
 	default:
 		return optionalStringFromAny(raw)
 	}
@@ -1039,11 +1139,19 @@ func v3BindingObjectType() types.ObjectType {
 }
 
 func v3ObjectListType(field model.Field) types.ObjectType {
+	return v3ObjectType(field)
+}
+
+func v3ObjectType(field model.Field) types.ObjectType {
 	memberTypes := map[string]attr.Type{}
 	for _, member := range field.Fields {
 		switch member.Kind {
+		case model.KindBoolean:
+			memberTypes[member.HCL] = types.BoolType
 		case model.KindInteger:
 			memberTypes[member.HCL] = types.Int64Type
+		case model.KindObject:
+			memberTypes[member.HCL] = v3ObjectType(member)
 		default:
 			memberTypes[member.HCL] = types.StringType
 		}

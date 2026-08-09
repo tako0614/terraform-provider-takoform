@@ -1497,7 +1497,7 @@ if (publicationTruth !== null) {
   );
 }
 
-// The Host API v1alpha3 lane: exactly the twelve Edge Platform Family
+// The Host API v1alpha3 lane: exactly the fifteen Edge Platform Family
 // resources, all rendered by internal/standardforms (doc name = resource type
 // minus the takoform_ prefix). They share the v2.1.0 source-candidate example
 // pin. There is deliberately no generic takoform_resource carrier: the lane
@@ -1512,6 +1512,11 @@ if (publicationTruth !== null) {
 const edgeFamilyRoster = [
   { kind: "ModuleWorker", slug: "module-worker", docName: "module_worker" },
   { kind: "WorkerBundle", slug: "worker-bundle", docName: "worker_bundle" },
+  {
+    kind: "StaticAssetBundle",
+    slug: "static-asset-bundle",
+    docName: "static_asset_bundle",
+  },
   { kind: "WorkerVersion", slug: "worker-version", docName: "worker_version" },
   {
     kind: "WorkerDeployment",
@@ -1536,6 +1541,16 @@ const edgeFamilyRoster = [
   },
   { kind: "ObjectBucket", slug: "object-bucket", docName: "edge_object_bucket" },
   { kind: "SQLiteDatabase", slug: "sqlite-database", docName: "sqlite_database" },
+  {
+    kind: "SQLiteMigrationSet",
+    slug: "sqlite-migration-set",
+    docName: "sqlite_migration_set",
+  },
+  {
+    kind: "SQLiteMigrationApplication",
+    slug: "sqlite-migration-application",
+    docName: "sqlite_migration_application",
+  },
   {
     kind: "AtLeastOnceQueue",
     slug: "at-least-once-queue",
