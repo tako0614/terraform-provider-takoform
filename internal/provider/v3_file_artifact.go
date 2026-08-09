@@ -29,7 +29,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
-	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
+	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
 const (
@@ -37,9 +37,8 @@ const (
 	artifactFileMaxBytes        = 268435456
 	artifactPathMaxBytes        = 240
 	artifactMediaTypeMaxBytes   = 255
+	artifactBundleMaxFiles      = 16384
 )
-
-var artifactFileMediaTypePattern = regexp.MustCompile(formcatalog.PatternMediaType)
 
 // v3FileBundleManifestKind maps a Form identity to the artifact-manifest kind
 // it admits. SQLiteMigrationSet intentionally commits a MigrationBundle: the
@@ -66,8 +65,8 @@ func v3ArtifactBackedRevision(formKind string) bool {
 
 func fileBundleAttributes(formKind string) map[string]schema.Attribute {
 	mediaValidators := []validator.String{StringMatches(
-		formcatalog.PatternMediaType,
-		"media_type must be a lowercase type/subtype token without parameters",
+		`^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$`,
+		"media_type must be a normalized v1alpha1 type/subtype token without parameters",
 	)}
 	if formKind == sqliteMigrationSetKind {
 		mediaValidators = []validator.String{StringOneOf("application/sql")}
@@ -117,7 +116,7 @@ func fileBundleAttributes(formKind string) map[string]schema.Attribute {
 					Description: "Canonical lowercase sha256 digest of the file bytes, computed from content_file.",
 				},
 			}},
-			Validators: []validator.List{v3ListSizeValidator{minItems: 1, maxItems: 16384}},
+			Validators: []validator.List{v3ListSizeValidator{minItems: 1, maxItems: artifactBundleMaxFiles}},
 			PlanModifiers: []planmodifier.List{
 				listplanmodifier.RequiresReplace(),
 			},
@@ -241,7 +240,7 @@ func v3AuthoredArtifactFiles(list types.List, formKind string) ([]v3ArtifactFile
 			return nil, diags
 		}
 		paths[filePath] = struct{}{}
-		if !artifactFileMediaTypePattern.MatchString(mediaType) || len(mediaType) > artifactMediaTypeMaxBytes {
+		if !model.ValidNormalizedMediaType(mediaType) || len(mediaType) > artifactMediaTypeMaxBytes {
 			diags.AddAttributeError(path.Root("files"), "Invalid artifact media type", fmt.Sprintf("file %q has invalid media type %q.", filePath, mediaType))
 			return nil, diags
 		}

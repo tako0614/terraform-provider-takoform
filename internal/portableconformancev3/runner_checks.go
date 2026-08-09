@@ -72,6 +72,8 @@ func (r *v3Runner) run() error {
 		r.checkUploadSessionOwnership,
 		r.checkArtifactDigestIsNotACapability,
 		func() error { return r.checkManifestReferenceIsNotACapability(bundle) },
+		r.checkStaticAssetSPAJourney,
+		r.checkSQLiteMigrationLedgerReadiness,
 		func() error { return r.checkWorkerVersionFlow(version, kv) },
 		func() error { return r.checkBindingContractVerified(version) },
 		func() error { return r.checkRelationIncarnationChange(version, kv) },
@@ -3547,6 +3549,35 @@ func (r *v3Runner) checkSupportProfiles() error {
 	}
 	if err := verifyWorkerVersionProfile(workerVersionProfile, r.contract.RunnerInput.SupportProbes.RuntimeContract); err != nil {
 		return err
+	}
+	artifactForms := []struct {
+		ref                FormRef
+		maximumBundleFiles int
+	}{
+		{ref: r.contract.RunnerInput.WorkerBundle.Identity.FormRef, maximumBundleFiles: maximumWorkerBundleModules},
+		{ref: r.contract.RunnerInput.StaticAssetBundle.Identity.FormRef, maximumBundleFiles: maximumBundleFiles},
+		{ref: r.contract.RunnerInput.SQLiteMigrationSet.Identity.FormRef, maximumBundleFiles: maximumBundleFiles},
+	}
+	for _, artifact := range artifactForms {
+		want := artifact.ref
+		var found map[string]any
+		for _, profile := range list.Profiles {
+			reference, _ := profile["formRef"].(map[string]any)
+			if reference != nil && reference["apiVersion"] == want.APIVersion &&
+				reference["kind"] == want.Kind && reference["definitionVersion"] == want.DefinitionVersion &&
+				reference["schemaDigest"] == want.SchemaDigest {
+				found = profile
+				break
+			}
+		}
+		if found == nil {
+			return fmt.Errorf("support profiles omit exact artifact Form %s", want.Kind)
+		}
+		limits, _ := found["limits"].(map[string]any)
+		if limits == nil || fmt.Sprintf("%v", limits["maximumBundleBytes"]) != fmt.Sprintf("%d", maximumBundleBytes) ||
+			fmt.Sprintf("%v", limits["maximumBundleFiles"]) != fmt.Sprintf("%d", artifact.maximumBundleFiles) {
+			return fmt.Errorf("%s support limits = %v, want maximumBundleBytes=%d maximumBundleFiles=%d", want.Kind, limits, maximumBundleBytes, artifact.maximumBundleFiles)
+		}
 	}
 	version := r.contract.RunnerInput.WorkerVersion.Identity.FormRef
 	oneURL := fmt.Sprintf(

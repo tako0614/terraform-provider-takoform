@@ -1,5 +1,10 @@
 package currentformmodel
 
+import (
+	"regexp"
+	"strings"
+)
+
 // artifact_media.go is the ONE statement of what a module inside a Worker
 // Bundle may be, for the whole v1alpha3 lane.
 //
@@ -50,6 +55,22 @@ var loadableModuleMediaTypes = []string{
 // evidence ABOUT another module, not code the graph links.
 var auxiliaryModuleMediaTypes = []string{
 	"application/source-map+json",
+}
+
+// normalizedMediaTypePattern is the published artifact-manifest v1alpha1
+// grammar for a concrete media type: the type and subtype are lowercase and
+// parameters (which would make one manifest entry mean more than one
+// representation) are absent. Static assets deliberately use this extensible
+// grammar rather than a closed allowlist; WorkerBundle modules keep their
+// separate closed set above and MigrationBundle is exactly application/sql.
+var normalizedMediaTypePattern = regexp.MustCompile("^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$")
+
+// ValidNormalizedMediaType reports whether value is one concrete normalized
+// RFC media type without parameters.  It intentionally does not know which
+// artifact kind is using the type: the WorkerBundle and MigrationBundle
+// policies are applied by their respective manifest validators.
+func ValidNormalizedMediaType(value string) bool {
+	return value != "" && value == strings.ToLower(value) && normalizedMediaTypePattern.MatchString(value)
 }
 
 // LoadableModuleMediaTypes returns the importable module media types, sorted.

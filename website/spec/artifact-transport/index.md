@@ -30,7 +30,8 @@ DELETE {api}/artifacts/uploads/{uploadId}           abandon an incomplete upload
 3. The client uploads only the missing blobs. Each `PUT` body is the exact
    blob; the host verifies its size and digest on receipt.
 4. `POST .../commit` re-verifies the manifest and every blob against it
-   (size, digest, media type, path grammar, per-kind shape) and returns the
+   (size, digest, media type, path grammar, per-kind shape, and the published
+   count/aggregate ceilings) and returns the
    immutable `manifestDigest`: the RFC 8785 canonical digest of the manifest
    bytes.
 5. Desired state (`WorkerBundle`, `StaticAssetBundle`, or
@@ -48,13 +49,23 @@ A host MUST reject, before commit:
 
 - duplicate module or file names;
 - absolute paths, `..` or `.` segments, backslashes, NUL, invalid UTF-8;
-- media types outside the manifest kind's closed set;
+- media types outside the manifest kind's policy: WorkerBundle modules use the
+  closed runtime set, StaticAssetBundle files use any normalized lowercase
+  type/subtype admitted by the published v1alpha1 grammar (with no parameters),
+  and MigrationBundle files are exactly `application/sql`;
 - size or digest mismatches between manifest and received bytes;
 - file-count or total-size overruns of the host's published limits;
 - a `WorkerBundle` whose `mainModule` is not listed in `modules`;
 - a `WorkerBundle` whose `mainModule` names an auxiliary module;
 - a source map whose target module is absent;
 - archive bombs — archives are transport only and never semantic identity.
+
+The v1alpha3 Host Support Profile for each artifact-backed Form publishes
+`limits.maximumBundleFiles` and `limits.maximumBundleBytes`. A provider SHOULD
+reject a known overrun during planning; the host MUST enforce the exact profile
+ceilings again at upload start and commit. The portable reference profile is
+4,096 modules for `WorkerBundle`, 16,384 files for `StaticAssetBundle` and
+`MigrationBundle`, and 10 MiB aggregate bytes for either shape.
 
 Rejections use `artifact_invalid` (400); a commit referencing a blob that was
 never uploaded uses `artifact_missing` (404).

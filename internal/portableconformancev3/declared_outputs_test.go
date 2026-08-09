@@ -228,7 +228,7 @@ func decodedOutputs(t *testing.T, raw string) map[string]any {
 // enumeration the contract keeps, so this comparison cannot quietly skip a
 // probe someone adds later.
 func allResourceProbes(input RunnerInput) []ResourceProbe {
-	probes := make([]ResourceProbe, 0, 10)
+	probes := make([]ResourceProbe, 0, 14)
 	for _, entry := range probeInventory(&input) {
 		probes = append(probes, *entry.Probe)
 	}

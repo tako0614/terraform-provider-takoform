@@ -44,6 +44,11 @@ are all required:
 - `runWorkerFirst` is a boolean;
 - `notFoundHandling` is exactly `none` or `single_page_application`.
 
+Static asset media types are extensible within the published artifact-manifest
+v1alpha1 normalized lowercase type/subtype grammar and carry no parameters;
+they are not a closed runtime allowlist. Migration files remain exactly
+`application/sql`.
+
 Absence means no asset lookup. With `runWorkerFirst=false`, the host looks up
 the request path first and invokes `fetch` only when that lookup produces no
 response. With `runWorkerFirst=true`, the host invokes `fetch` first and looks
@@ -53,6 +58,13 @@ exact path a miss. `single_page_application` serves `index.html` for a missing
 path, and the host MUST refuse the Worker Version before mutation when the
 referenced manifest has no `index.html`. The attachment grants no hidden
 runtime binding and does not mutate the asset bundle.
+
+Asset routing takes the runtime URL `pathname`, ignores its query and fragment,
+decodes percent escapes once as strict UTF-8, and strips exactly one leading
+`/`. Encoded separators, repeated or empty segments, dot segments, backslashes,
+controls, Unicode noncharacters, malformed escapes, and invalid UTF-8 are
+invalid paths. They fail closed and never enter SPA fallback; only a valid
+missing path may resolve to `index.html`.
 
 ### SQLite migrations
 
@@ -78,7 +90,9 @@ its ledger record; earlier committed entries remain, so retry resumes at the
 same suffix boundary. Hosts MUST serialize this prefix check and suffix apply
 per database and re-check it while holding that serialization boundary. The
 attachment is Ready only when the durable ledger equals the referenced ordered
-set.
+set. Multiple append-only applications may coexist: after a later superset is
+applied, an older shorter application remains stored but is not Ready until it
+is re-applied against its intended set.
 
 Deleting `SQLiteMigrationApplication` detaches management only. It MUST NOT
 execute down migrations, delete ledger records, reinterpret the schema, or

@@ -44,6 +44,10 @@ func (h *ReferenceHost) derivedConditions(resource *storedResource) []map[string
 		ready["status"] = "False"
 		ready["reason"] = reason
 		ready["hostReason"] = hostReason
+	} else if reason, hostReason, unavailable := h.sqliteMigrationApplicationUnavailable(resource); unavailable {
+		ready["status"] = "False"
+		ready["reason"] = reason
+		ready["hostReason"] = hostReason
 	} else if reason, hostReason, unavailable := h.workerServiceUnavailable(resource); unavailable {
 		// A Module Worker's readiness is a claim about SERVICE, and what serves
 		// is whatever its active deployment selects (spec/decisions/0016).

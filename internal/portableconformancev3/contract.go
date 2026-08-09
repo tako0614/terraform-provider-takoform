@@ -123,7 +123,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 114-entry executed-check list every v3
+// requiredRunnerChecks is the closed 116-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -213,6 +213,8 @@ var requiredRunnerChecks = []string{
 	"upload-session-bound-to-its-creating-principal",
 	"artifact-digest-is-not-a-capability",
 	"manifest-reference-is-not-a-capability",
+	"static-asset-spa-paths",
+	"sqlite-migration-ledger-readiness",
 	// The ES Module Worker ABI is an exact contract (spec/decisions/0019).
 	"module-worker-runtime-contract-advertised",
 	"undeclared-runtime-handler-rejected",
@@ -717,6 +719,10 @@ type RunnerInput struct {
 	AtLeastOnceQueue                 ResourceProbe            `json:"atLeastOnceQueue"`
 	WorkerVersion                    ResourceProbe            `json:"workerVersion"`
 	WorkerBundle                     WorkerBundleProbe        `json:"workerBundle"`
+	StaticAssetBundle                ResourceProbe            `json:"staticAssetBundle"`
+	SQLiteDatabase                   ResourceProbe            `json:"sqliteDatabase"`
+	SQLiteMigrationSet               ResourceProbe            `json:"sqliteMigrationSet"`
+	SQLiteMigrationApplication       ResourceProbe            `json:"sqliteMigrationApplication"`
 	FetchOnlyBundle                  ModuleBundleProbe        `json:"fetchOnlyBundle"`
 	WorkerDeployment                 ResourceProbe            `json:"workerDeployment"`
 	WorkerCustomDomain               ResourceProbe            `json:"workerCustomDomain"`
@@ -749,6 +755,10 @@ func probeInventory(input *RunnerInput) []probeEntry {
 		{"atLeastOnceQueue", "AtLeastOnceQueue", &input.AtLeastOnceQueue},
 		{"workerVersion", "WorkerVersion", &input.WorkerVersion},
 		{"workerBundle", "WorkerBundle", &input.WorkerBundle.ResourceProbe},
+		{"staticAssetBundle", "StaticAssetBundle", &input.StaticAssetBundle},
+		{"sqliteDatabase", "SQLiteDatabase", &input.SQLiteDatabase},
+		{"sqliteMigrationSet", "SQLiteMigrationSet", &input.SQLiteMigrationSet},
+		{"sqliteMigrationApplication", "SQLiteMigrationApplication", &input.SQLiteMigrationApplication},
 		{"workerDeployment", "WorkerDeployment", &input.WorkerDeployment},
 		{"workerCustomDomain", "WorkerCustomDomain", &input.WorkerCustomDomain},
 		{"workerEndpoint", "WorkerEndpoint", &input.WorkerEndpoint},
@@ -1455,6 +1465,23 @@ func validateCrossResourceProbes(input RunnerInput) error {
 	}
 	if nestedName(input.QueueConsumer.Desired, "queue") != input.AtLeastOnceQueue.Name {
 		return errors.New("portable host v3 queueConsumer probe must reference the atLeastOnceQueue probe")
+	}
+	if nestedName(input.SQLiteMigrationApplication.Desired, "database") != input.SQLiteDatabase.Name {
+		return errors.New("portable host v3 sqliteMigrationApplication probe must reference the sqliteDatabase probe")
+	}
+	if nestedName(input.SQLiteMigrationApplication.Desired, "migrationSet") != input.SQLiteMigrationSet.Name {
+		return errors.New("portable host v3 sqliteMigrationApplication probe must reference the sqliteMigrationSet probe")
+	}
+	for _, probe := range []struct {
+		label string
+		value ResourceProbe
+	}{
+		{label: "staticAssetBundle", value: input.StaticAssetBundle},
+		{label: "sqliteMigrationSet", value: input.SQLiteMigrationSet},
+	} {
+		if digest, _ := probe.value.Desired["manifestDigest"].(string); !formpackage.ValidDigest(digest) {
+			return fmt.Errorf("portable host v3 %s probe must pin a manifest digest", probe.label)
+		}
 	}
 	return nil
 }

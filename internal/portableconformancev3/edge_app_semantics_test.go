@@ -152,6 +152,14 @@ func TestSQLiteMigrationHistoryIsExactPrefixAndDeleteNeverRollsBack(t *testing.T
 	if len(want) != 2 {
 		t.Fatalf("ledger = %+v, want two ordered entries", want)
 	}
+	application := &storedResource{
+		Ref: applicationForm.Ref, Name: "application", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
+		UID: "uid-application", Generation: 1, Revision: 1, Spec: map[string]any{}, Relations: relations,
+	}
+	host.storeResource(application)
+	if condition := hMigrationReadyCondition(host, application); condition["status"] != "True" {
+		t.Fatalf("initial application Ready = %+v, want True", condition)
+	}
 	if hostErr := host.applySQLiteMigrationSuffix(referencePrimaryAuth, applicationForm, scope, relations); hostErr != nil {
 		t.Fatalf("idempotent re-application: %+v", hostErr)
 	}
@@ -171,9 +179,68 @@ func TestSQLiteMigrationHistoryIsExactPrefixAndDeleteNeverRollsBack(t *testing.T
 		t.Fatalf("refusal changed ledger: %+v", got)
 	}
 
-	application := storeEdgeAppResource(host, applicationForm, "application", "uid-application", map[string]any{})
 	delete(host.resources, application.key())
 	if got := host.migrationLedgers[database.UID]; len(got) != len(want) {
 		t.Fatalf("deleting attachment rolled back database history: %+v", got)
+	}
+}
+
+func hMigrationReadyCondition(host *ReferenceHost, application *storedResource) map[string]any {
+	conditions := host.derivedConditions(application)
+	return conditions[0]
+}
+
+func TestSQLiteMigrationApplicationReadinessTracksExactLedgerSet(t *testing.T) {
+	host, catalog := edgeAppReferenceHost(t)
+	databaseForm := edgeAppForm(t, catalog, "SQLiteDatabase")
+	setForm := edgeAppForm(t, catalog, sqliteMigrationSetKind)
+	applicationForm := edgeAppForm(t, catalog, sqliteMigrationApplicationKind)
+	scope := referencePrimaryAuth.scope("conformance")
+	database := storeEdgeAppResource(host, databaseForm, "readiness-database", "uid-readiness-database", map[string]any{})
+	digest1, _ := commitFileManifest(t, host, migrationBundleKind, []map[string]string{{
+		"path": "0001.sql", "mediaType": "application/sql", "body": "CREATE TABLE readiness(id TEXT);\n",
+	}})
+	set1 := storeEdgeAppResource(host, setForm, "readiness-set-1", "uid-readiness-set-1", map[string]any{"manifestDigest": digest1})
+	relations1 := []storedRelation{
+		{Pointer: migrationDatabasePointer, TargetAPIVersion: databaseForm.Ref.APIVersion, TargetKind: databaseForm.Ref.Kind, TargetName: database.Name, TargetUID: database.UID, TargetRef: database.Ref},
+		{Pointer: migrationSetRelationPointer, TargetAPIVersion: setForm.Ref.APIVersion, TargetKind: setForm.Ref.Kind, TargetName: set1.Name, TargetUID: set1.UID, TargetRef: set1.Ref},
+	}
+	if hostErr := host.applySQLiteMigrationSuffix(referencePrimaryAuth, applicationForm, scope, relations1); hostErr != nil {
+		t.Fatalf("apply first migration: %+v", hostErr)
+	}
+	app1 := &storedResource{
+		Ref: applicationForm.Ref, Name: "readiness-application-1", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
+		UID: "uid-readiness-application-1", Generation: 1, Revision: 1, Spec: map[string]any{}, Relations: relations1,
+	}
+	host.storeResource(app1)
+	if condition := hMigrationReadyCondition(host, app1); condition["status"] != "True" || condition["reason"] != "Available" {
+		t.Fatalf("first application condition = %+v, want Ready=True/Available", condition)
+	}
+
+	digest2, _ := commitFileManifest(t, host, migrationBundleKind, []map[string]string{
+		{"path": "0001.sql", "mediaType": "application/sql", "body": "CREATE TABLE readiness(id TEXT);\n"},
+		{"path": "0002.sql", "mediaType": "application/sql", "body": "ALTER TABLE readiness ADD COLUMN body TEXT;\n"},
+	})
+	set2 := storeEdgeAppResource(host, setForm, "readiness-set-2", "uid-readiness-set-2", map[string]any{"manifestDigest": digest2})
+	relations2 := []storedRelation{
+		{Pointer: migrationDatabasePointer, TargetAPIVersion: databaseForm.Ref.APIVersion, TargetKind: databaseForm.Ref.Kind, TargetName: database.Name, TargetUID: database.UID, TargetRef: database.Ref},
+		{Pointer: migrationSetRelationPointer, TargetAPIVersion: setForm.Ref.APIVersion, TargetKind: setForm.Ref.Kind, TargetName: set2.Name, TargetUID: set2.UID, TargetRef: set2.Ref},
+	}
+	if hostErr := host.applySQLiteMigrationSuffix(referencePrimaryAuth, applicationForm, scope, relations2); hostErr != nil {
+		t.Fatalf("apply superset migration: %+v", hostErr)
+	}
+	app2 := &storedResource{
+		Ref: applicationForm.Ref, Name: "readiness-application-2", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
+		UID: "uid-readiness-application-2", Generation: 1, Revision: 1, Spec: map[string]any{}, Relations: relations2,
+	}
+	host.storeResource(app2)
+	if condition := hMigrationReadyCondition(host, app2); condition["status"] != "True" || condition["reason"] != "Available" {
+		t.Fatalf("second application condition = %+v, want Ready=True/Available", condition)
+	}
+	if condition := hMigrationReadyCondition(host, app1); condition["status"] != "False" || condition["reason"] != "Reconciling" {
+		t.Fatalf("older application condition = %+v, want Ready=False/Reconciling", condition)
+	}
+	if host.resources[app1.key()] == nil || host.resources[app2.key()] == nil {
+		t.Fatal("a later migration application removed the older application resource")
 	}
 }

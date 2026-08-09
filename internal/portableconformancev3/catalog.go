@@ -678,6 +678,29 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 				"manifestDigest": map[string]any{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
 			},
 		}},
+		{contract.RunnerInput.StaticAssetBundle, "revision", map[string]any{
+			"type": "object", "additionalProperties": false,
+			"required": []any{"manifestDigest"},
+			"properties": map[string]any{
+				"manifestDigest": map[string]any{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+			},
+		}},
+		{contract.RunnerInput.SQLiteDatabase, "identity", emptyObject},
+		{contract.RunnerInput.SQLiteMigrationSet, "revision", map[string]any{
+			"type": "object", "additionalProperties": false,
+			"required": []any{"manifestDigest"},
+			"properties": map[string]any{
+				"manifestDigest": map[string]any{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+			},
+		}},
+		{contract.RunnerInput.SQLiteMigrationApplication, "revision", map[string]any{
+			"type": "object", "additionalProperties": false,
+			"required": []any{"database", "migrationSet"},
+			"properties": map[string]any{
+				"database":     typedRef("SQLiteDatabase", exactFormTarget(contract.RunnerInput.SQLiteDatabase.Identity.FormRef)),
+				"migrationSet": typedRef("SQLiteMigrationSet", exactFormTarget(contract.RunnerInput.SQLiteMigrationSet.Identity.FormRef)),
+			},
+		}},
 		{contract.RunnerInput.WorkerVersion, "revision", map[string]any{
 			"type": "object", "additionalProperties": false,
 			"required": []any{"bundle", "handlers", "worker"},

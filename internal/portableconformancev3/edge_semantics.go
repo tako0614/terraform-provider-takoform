@@ -1,8 +1,13 @@
 package portableconformancev3
 
 import (
+	"fmt"
+	"net/url"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
@@ -29,6 +34,87 @@ const (
 	migrationDatabasePointer    = "/database"
 	migrationSetRelationPointer = "/migrationSet"
 )
+
+// CanonicalStaticAssetPath maps one runtime URL pathname to the closed
+// manifest-path grammar. The input is the URL's escaped Pathname, not its
+// query or fragment; accepting those as arguments too is harmless because the
+// path component is cut at the first raw delimiter. Percent-decoding happens
+// exactly once and is deliberately stricter than url.PathUnescape: encoded
+// separators would otherwise let one URL name a different manifest segment
+// depending on which hop decoded it first.
+func CanonicalStaticAssetPath(escapedPath string) (string, bool) {
+	return canonicalStaticAssetPath(escapedPath)
+}
+
+func canonicalStaticAssetPath(escapedPath string) (string, bool) {
+	if cut := strings.IndexAny(escapedPath, "?#"); cut >= 0 {
+		escapedPath = escapedPath[:cut]
+	}
+	if escapedPath == "" || !strings.HasPrefix(escapedPath, "/") {
+		return "", false
+	}
+	lower := strings.ToLower(escapedPath)
+	if strings.Contains(lower, "%2f") || strings.Contains(lower, "%5c") || strings.Contains(escapedPath, "\\") {
+		return "", false
+	}
+	decoded, err := url.PathUnescape(escapedPath)
+	if err != nil || !utf8.ValidString(decoded) {
+		return "", false
+	}
+	for _, character := range decoded {
+		if unicode.IsControl(character) || isUnicodeNoncharacter(character) || character == '\\' {
+			return "", false
+		}
+	}
+	// The first slash is the URL root. A second one, an interior empty
+	// segment, and a trailing slash all fail closed rather than being silently
+	// normalized to the same asset.
+	decoded = strings.TrimPrefix(decoded, "/")
+	if decoded == "" {
+		return "", true
+	}
+	segments := strings.Split(decoded, "/")
+	for _, segment := range segments {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", false
+		}
+	}
+	if !artifactPathPattern.MatchString(decoded) || len(decoded) > 240 {
+		return "", false
+	}
+	return decoded, true
+}
+
+func isUnicodeNoncharacter(character rune) bool {
+	return character >= 0xFDD0 && character <= 0xFDEF ||
+		(character&0xFFFF) >= 0xFFFE && character <= 0x10FFFF
+}
+
+// resolveStaticAssetPath applies the one closed request-path policy to a
+// committed StaticAssetBundle. Invalid paths return an error and never enter
+// SPA fallback; a valid miss may use index.html only when the attachment's
+// notFoundHandling explicitly asks for it.
+func resolveStaticAssetPath(
+	manifest artifactManifest, escapedPath, notFoundHandling string,
+) (artifactFile, bool, *hostError) {
+	canonical, valid := canonicalStaticAssetPath(escapedPath)
+	if !valid {
+		return artifactFile{}, false, stableError("invalid_argument", "static asset URL pathname is invalid")
+	}
+	for _, file := range manifest.Files {
+		if file.Path == canonical {
+			return file, true, nil
+		}
+	}
+	if notFoundHandling == "single_page_application" {
+		for _, file := range manifest.Files {
+			if file.Path == "index.html" {
+				return file, true, nil
+			}
+		}
+	}
+	return artifactFile{}, false, nil
+}
 
 // migrationLedgerEntry is the portable identity of one applied migration.
 // SQL bytes remain in the content-addressed artifact store; durable database
@@ -137,6 +223,58 @@ func (h *ReferenceHost) validateSQLiteMigrationApplication(
 ) *hostError {
 	_, _, hostErr := h.sqliteMigrationPlan(caller, form, scope, relations)
 	return hostErr
+}
+
+// sqliteMigrationApplicationUnavailable is the derived readiness half of the
+// migration contract. Applying a later superset is allowed to leave an older
+// application resource live; its representation simply becomes not Ready
+// because the database ledger is no longer exactly the ordered set that
+// application declares. This is intentionally a comparison of full ordered
+// sets, not a one-live-application or name-based rule.
+func (h *ReferenceHost) sqliteMigrationApplicationUnavailable(
+	resource *storedResource,
+) (reason, hostReason string, unavailable bool) {
+	if resource.group() != edgeFormsGroup || resource.kind() != sqliteMigrationApplicationKind {
+		return "", "", false
+	}
+	database := h.relationTargetResource(resource.scope(), resource.Relations, migrationDatabasePointer)
+	set := h.relationTargetResource(resource.scope(), resource.Relations, migrationSetRelationPointer)
+	if database == nil || set == nil {
+		return "DependencyMissing", "migration application relation target is missing", true
+	}
+	digest, _ := set.Spec["manifestDigest"].(string)
+	raw := h.manifests[digest]
+	if !formpackage.ValidDigest(digest) || raw == nil || !h.holdsManifest(resource.Tenant, digest) {
+		return "DependencyMissing", "migration application manifest is not held by its tenant", true
+	}
+	var manifest artifactManifest
+	if err := formpackage.DecodeStrictIJSON(raw, &manifest); err != nil {
+		return "DependencyMissing", "migration application manifest is not decodable", true
+	}
+	if hostErr := validateArtifactManifest(manifest); hostErr != nil {
+		return "DependencyMissing", "migration application manifest is invalid", true
+	}
+	desired := make([]migrationLedgerEntry, 0, len(manifest.Files))
+	for _, file := range manifest.Files {
+		desired = append(desired, migrationLedgerEntry{Path: file.Path, Digest: file.Digest})
+	}
+	applied := h.migrationLedgers[database.UID]
+	if len(applied) == len(desired) {
+		matches := true
+		for index := range desired {
+			if desired[index] != applied[index] {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return "", "", false
+		}
+	}
+	return "Reconciling", fmt.Sprintf(
+		"SQLiteMigrationApplication %s declares %d ordered migrations while database uid %s ledger has %d; Ready requires exact ordered-set equality",
+		resource.Name, len(desired), database.UID, len(applied),
+	), true
 }
 
 // applySQLiteMigrationSuffix records only the unapplied suffix. A production

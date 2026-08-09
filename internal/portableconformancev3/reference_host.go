@@ -70,9 +70,15 @@ const (
 	// add numbers, so the sum is host-validated semantics.
 	workerDeploymentWeightTotal = 10000
 	// maximumBundleBytes is the published module-size ceiling of the
-	// WorkerVersion support profile. The artifact manifest validator enforces
-	// exactly the limit the support surface advertises.
+	// WorkerVersion and artifact-backed Form support profiles. The artifact
+	// manifest validator enforces exactly the limits those support surfaces
+	// advertise.
 	maximumBundleBytes = 10485760
+	// maximumBundleFiles is the published entry-count ceiling for file-backed
+	// artifact Forms. WorkerBundle modules retain the public manifest schema's
+	// 4096-entry ceiling; the provider and host enforce that separately.
+	maximumBundleFiles         = 16384
+	maximumWorkerBundleModules = 4096
 	// sourceMapMediaType names a module that is source-map evidence for
 	// another declared module rather than executable code.
 	sourceMapMediaType = "application/source-map+json"
@@ -2236,6 +2242,15 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 	default:
 		return stableError("artifact_invalid", "manifest kind is not a closed artifact kind")
 	}
+	entryCount := len(manifest.Modules)
+	entryLimit := maximumWorkerBundleModules
+	if len(manifest.Files) > 0 {
+		entryCount = len(manifest.Files)
+		entryLimit = maximumBundleFiles
+	}
+	if entryCount > entryLimit {
+		return stableError("artifact_invalid", "manifest entry count overruns the host's published bundle file limit")
+	}
 	names := map[string]bool{}
 	loadable := map[string]bool{}
 	moduleBytes := int64(0)
@@ -2297,6 +2312,7 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 		return stableError("artifact_invalid", "manifest module sizes overrun the host's published bundle limit")
 	}
 	paths := map[string]bool{}
+	fileBytes := int64(0)
 	for _, file := range manifest.Files {
 		if !artifactPathPattern.MatchString(file.Path) || len(file.Path) > 240 {
 			return stableError("artifact_invalid", "file path grammar is invalid")
@@ -2308,8 +2324,16 @@ func validateArtifactManifest(manifest artifactManifest) *hostError {
 		if err := validateArtifactSize(file.Size); err != nil {
 			return err
 		}
+		if size, _ := strconv.ParseInt(file.Size.String(), 10, 64); size > maximumBundleBytes-fileBytes {
+			return stableError("artifact_invalid", "manifest file sizes overrun the host's published bundle limit")
+		} else {
+			fileBytes += size
+		}
 		if !formpackage.ValidDigest(file.Digest) {
 			return stableError("artifact_invalid", "file digest grammar is invalid")
+		}
+		if manifest.Kind == staticAssetBundleKind && !currentformmodel.ValidNormalizedMediaType(file.MediaType) {
+			return stableError("artifact_invalid", "a StaticAssetBundle file must use a normalized v1alpha1 media type without parameters")
 		}
 		if manifest.Kind == migrationBundleKind && file.MediaType != "application/sql" {
 			return stableError("artifact_invalid", "a MigrationBundle file must use application/sql")
@@ -2699,6 +2723,15 @@ func (h *ReferenceHost) formSupportProfile(form *InstalledForm) map[string]any {
 		}
 		profile["supportedEnums"] = map[string]any{"handlers": handlers}
 		profile["limits"] = map[string]any{"maximumBundleBytes": maximumBundleBytes}
+	} else if artifactKind, artifactBacked := artifactManifestKindForForm(form.Ref.Kind); artifactBacked {
+		entryLimit := maximumBundleFiles
+		if artifactKind == workerBundleKind {
+			entryLimit = maximumWorkerBundleModules
+		}
+		profile["limits"] = map[string]any{
+			"maximumBundleBytes": maximumBundleBytes,
+			"maximumBundleFiles": entryLimit,
+		}
 	}
 	return profile
 }

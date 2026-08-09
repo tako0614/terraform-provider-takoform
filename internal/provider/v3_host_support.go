@@ -475,10 +475,6 @@ func (r *v3FormResource) checkPlannedValues(
 func (r *v3FormResource) checkArtifactCeiling(
 	profile v3SupportProfile, codec v3FormCodec, values v3Values, resp *resource.ModifyPlanResponse,
 ) {
-	ceiling, published := profile.limit("maximumBundleBytes")
-	if !published {
-		return
-	}
 	attributeName := "modules"
 	entryLabel := "modules"
 	if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
@@ -487,6 +483,27 @@ func (r *v3FormResource) checkArtifactCeiling(
 	}
 	entries, ok := values.Fields[attributeName].(types.List)
 	if !ok || entries.IsNull() || entries.IsUnknown() {
+		return
+	}
+	if ceiling, published := profile.limit("maximumBundleFiles"); published && int64(len(entries.Elements())) > ceiling {
+		attribute := path.Root(attributeName)
+		resp.Diagnostics.Append(v3Diagnostic{
+			Summary:      "This bundle has more files than the host accepts",
+			ResourceType: r.form.ResourceType,
+			Ref:          codec.Ref,
+			Pointer:      "/manifestDigest",
+			Attribute:    &attribute,
+			Code:         v3CodeLimitExceeded,
+			Detail: fmt.Sprintf(
+				"The authored %s count %d and the host publishes maximumBundleFiles = %d. The plan refuses before the upload rather than after it, so no bytes are sent.",
+				entryLabel, len(entries.Elements()), ceiling,
+			),
+			Repair: "Reduce the bundle below the file-count ceiling above, or apply against a host that publishes a higher one.",
+		}.error())
+		return
+	}
+	ceiling, published := profile.limit("maximumBundleBytes")
+	if !published {
 		return
 	}
 	var total int64

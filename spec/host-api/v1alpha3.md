@@ -1138,8 +1138,8 @@ it mutates anything, on apply and on import alike, and fail closed when
   requires — `artifact_invalid` (400);
 - the manifest violates any rule of
   [`../artifact-transport/`](../artifact-transport/README.md), including its
-  per-kind exclusivity, its closed media types, and the host's published
-  `limits` — `artifact_invalid` (400).
+  per-kind exclusivity, its media-type policy, entry-count or aggregate-byte
+  ceilings, and the host's published `limits` — `artifact_invalid` (400).
 
 A committed manifest and its blobs MUST remain readable while any resource
 references the manifest. Abandoning an unrelated upload session, or
@@ -1201,6 +1201,17 @@ every other relation. `notFoundHandling` is exactly `none` or
 - `single_page_application` answers a missing path with `index.html`. The host
   MUST resolve the exact referenced manifest and refuse the Worker Version with
   `invalid_argument` (400), before mutation, when it contains no `index.html`.
+
+Asset lookup maps the runtime URL `pathname` to a manifest path as one closed
+operation. Query strings and fragments are ignored; the escaped pathname is
+percent-decoded once as strict UTF-8, and exactly one leading `/` is removed.
+The host MUST reject encoded `/` or `\\`, repeated or empty interior segments,
+dot segments, backslashes, controls, Unicode noncharacters, malformed escapes,
+and invalid UTF-8. A valid path must still match the manifest's relative path
+grammar. Invalid paths fail closed and MUST NOT enter SPA fallback. A valid
+missing path is a miss under `none`, or resolves to `index.html` under
+`single_page_application`; the root pathname `/` is the canonical empty-path
+miss and follows that same fallback rule.
 
 The attachment never grants a runtime binding and never changes the asset
 bundle. A provider may author the manifest from local files, but desired state
@@ -1287,8 +1298,12 @@ Responses validate against
 [`../schemas/host-support-profile-v1alpha1.schema.json`](../schemas/host-support-profile-v1alpha1.schema.json).
 A profile declares supported exact refs, closed capability subsets
 (`supportedEnums`), inclusive ranges (`supportedRanges`), supported binding
-contracts, and numeric limits. Price, SKU, region, quota, and commercial
-policy MUST NOT appear; those remain Service Offering data outside this API.
+contracts, and numeric limits. Artifact-backed Forms publish
+`maximumBundleBytes` together with `maximumBundleFiles`: the portable profile
+uses 4,096 modules for `WorkerBundle` and 16,384 files for
+`StaticAssetBundle`/`SQLiteMigrationSet`. Price, SKU, region, quota, and
+commercial policy MUST NOT appear; those remain Service Offering data outside
+this API.
 
 A host that supports the Edge Platform Family's `ModuleWorker` MUST advertise
 the ES Module Worker runtime ABI contract `worker.runtime@1.0.0` at the exact

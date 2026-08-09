@@ -214,7 +214,7 @@ and "a host answers for the kind" are the same behavior and no check can tell
 them apart (same decision).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 114-check matrix over real HTTP: exact discovery and
+drives the complete 116-check matrix over real HTTP: exact discovery and
 availability, a credential that is REQUIRED — an absent `Authorization` header
 and a bearer credential naming nobody are both refused `unauthenticated` on a
 read surface and on a mutating one, and the identical requests under a real

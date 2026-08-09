@@ -246,6 +246,117 @@
         "queue"
       ]
     },
+    "staticAssetBundle": {
+      "name": "static-assets-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "StaticAssetBundle",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:364218ce5fadc0817eda8bfd334af95c77aa46d030a79be4c04ee4d4f203bd30"
+        },
+        "packageDigest": "sha256:9dac4c224ed1db4c567c14684bd3e7f4ee8d9ce23168aa905e160ac107b31374"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "manifestDigest": "sha256:cbe2b727409837573d4b24ee47f5796e187945e383609098b931f1b6d072c856"
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-static-asset-bundle.json",
+        "sha256": "sha256:0670c26c0886841012ec1a96f76dae74870255f2928a85d7e5830829fd30ba5d"
+      }
+    },
+    "sqliteDatabase": {
+      "name": "sqlite-database-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "SQLiteDatabase",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:7a88cb0a831050be300b5a2e8dbab4561507affe9aad6c14c600bdf5a39887d2"
+        },
+        "packageDigest": "sha256:33ecdd1346080469d2d1f4c0a5836dd0d15877f116b355ddfeec621f13ac547a"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {},
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-sqlite-database.json",
+        "sha256": "sha256:7d8a8f5ae98f97ff8fab84b7fcf04e0664dd2aca05c33993538ffaa975173944"
+      }
+    },
+    "sqliteMigrationSet": {
+      "name": "sqlite-migration-set-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "SQLiteMigrationSet",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:5edd0c38db66e8b70234dee8ea405eec4354de881ae5edf844d40718732cf454"
+        },
+        "packageDigest": "sha256:8e5e08c04be4dd457b498dd9f1354d49af194b91bf2224aec36257ba332e25db"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "manifestDigest": "sha256:6bba7147e303c69ca15b2870b7a2c43d2893c1ec76bb50c622e7d35157d2b858"
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-sqlite-migration-set.json",
+        "sha256": "sha256:ef6596d360b3c4e3ab692f8a5d5309a50e8f1d693ff300fe194675f2127439c8"
+      }
+    },
+    "sqliteMigrationApplication": {
+      "name": "sqlite-migration-application-probe",
+      "identity": {
+        "formRef": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "SQLiteMigrationApplication",
+          "definitionVersion": "0.1.0",
+          "schemaDigest": "sha256:c6f357a9ecb2be54a6a5def1fcb9d8c75779c19b452cb715105117fed46d9a64"
+        },
+        "packageDigest": "sha256:f134d42c33fa1eff03ddeb8bbae7c0c19a38b4f03f7d929d69bc6501ac1c5891"
+      },
+      "lifecycleCapabilities": [
+        "create",
+        "read",
+        "delete",
+        "import",
+        "observe"
+      ],
+      "desired": {
+        "database": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "SQLiteDatabase",
+          "name": "sqlite-database-probe"
+        },
+        "migrationSet": {
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "kind": "SQLiteMigrationSet",
+          "name": "sqlite-migration-set-probe"
+        }
+      },
+      "desiredSchema": {
+        "path": "fixtures/desired-schema-sqlite-migration-application.json",
+        "sha256": "sha256:ba9a8e738e4a259ad834ee14fceee07b3e4e6af0a16dde342bbc777f11edea58"
+      }
+    },
     "fetchOnlyBundle": {
       "name": "fetch-only-bundle-probe",
       "manifestDigest": "sha256:e0dcee65e62d1f28f94d8300fb0ddf04e521d1335ff3f170faea9b5daa5a12ef",
@@ -630,6 +741,8 @@
     "upload-session-bound-to-its-creating-principal",
     "artifact-digest-is-not-a-capability",
     "manifest-reference-is-not-a-capability",
+    "static-asset-spa-paths",
+    "sqlite-migration-ledger-readiness",
     "module-worker-runtime-contract-advertised",
     "undeclared-runtime-handler-rejected",
     "declared-handler-not-exported-rejected",
