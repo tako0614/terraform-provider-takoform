@@ -24,13 +24,24 @@ bun run website:dev    # local preview
 The writer is explicit; portable checks never rewrite the worktree.
 
 `website/public/` is the **committed build output** and the published byte
-set. Because VitePress/Vue scoped-style hashes depend on the absolute build
-path, a byte-for-byte rebuild comparison is impossible; instead
-`bun run check:website-snapshot` proves the committed output is not stale by
-building the committed source fresh (in a throwaway directory under the
-repository) and requiring every committed page's semantic content to be
-reproduced. The same gate runs again inside the deploy pipeline from a managed
-install home outside the frozen archive.
+set. `bun run check:website-snapshot` proves it is not stale by building the
+committed source fresh (in a throwaway directory under the repository) and
+comparing the whole tree, not only the pages:
+
+| Path class | Comparison |
+| --- | --- |
+| `*.html` | semantic content, with scripts, styles and tags stripped |
+| `hashmap.json` | same page set; every value names a committed asset that exists |
+| `assets/**` | same set of hash-stripped names, plus byte equality wherever the fresh build reproduces the exact hashed name |
+| everything else | **byte equality** — `/.well-known/takoform-site.json`, `sitemap.xml`, `robots.txt`, `tako.png`, `vp-icons.css` and every mirrored spec, forms, formpackage, release and conformance file |
+
+Outside `assets/` the file set must match exactly, so neither an extra
+published file nor a deleted one passes. HTML and `assets/**` cannot be
+compared byte-for-byte because VitePress/Vue scoped-style hashes and Rollup
+chunk names follow the absolute build path; that is the whole of what this
+gate cannot see, and everything production serves outside those two classes is
+compared exactly. The same gate runs again inside the deploy pipeline from a
+managed install home outside the frozen archive.
 
 ## Pages
 
@@ -96,9 +107,20 @@ shebang is used.
 
 Before any writer, the deploy re-derives the committed website output with a
 fresh pinned VitePress build (same pattern as `check:website-snapshot`, run in
-a managed install home outside the archive) and requires every committed page
-to be reproduced semantically. This keeps the published bytes equal to the
-committed bytes while proving they are current with the committed source.
+a managed install home outside the archive). Every committed page must be
+reproduced semantically, every other published file byte-for-byte, and the
+content-addressed `assets/` set by role, with no extra or missing published
+file. This keeps the published bytes equal to the committed bytes while
+proving they are current with the committed source.
+
+No published byte names a commit. A commit id written into the tree at commit
+time can only name the parent — the commit that carries the bytes does not
+exist while they are produced — and a commit id stamped at deploy time would
+be a byte no reviewer read and no checkout reproduces. The commit is bound to
+the deployed bytes by the Worker version message (`takoform.com <commit>`),
+which the entrypoint sets on upload, verifies on the uploaded version, and
+reads back with an ancestor check on the next deploy, alongside the per-asset
+digests in the deploy result.
 
 Publication is staged: `versions upload --strict` creates a non-public version,
 the source/deployment/domain fences and whole-tree digest are checked again,
