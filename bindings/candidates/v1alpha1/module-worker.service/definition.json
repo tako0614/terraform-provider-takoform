@@ -10,7 +10,7 @@
     "apiVersion": "interfaces.takoform.com/v1alpha1",
     "name": "worker.service",
     "version": "1.0.0",
-    "schemaDigest": "sha256:8beedb6fa4399836c24afa0a7adb17fbe13e8bc705b86441dc210e7614c95507"
+    "schemaDigest": "sha256:8024073e25413c8906c3e189555a7485b4c7a6656e8a537fb2801f9b9682536e"
   },
   "allowedTargetForms": [
     {

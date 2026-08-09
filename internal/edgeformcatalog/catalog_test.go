@@ -268,7 +268,7 @@ func TestModuleWorkerABIIsAnExactContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(handlers, []string{"fetch", "scheduled", "queue", "tail"}) {
+	if !slices.Equal(handlers, []string{"fetch", "scheduled", "queue"}) {
 		t.Fatalf("runtime handler vocabulary = %v", handlers)
 	}
 	definition, err := interfaceDefinitionByName(WorkerRuntimeInterfaceName)
@@ -282,7 +282,7 @@ func TestModuleWorkerABIIsAnExactContract(t *testing.T) {
 	slices.Sort(operations)
 	want := []string{
 		"environment", "fetch", "globals", "loadModule",
-		"queue", "scheduled", "tail", "waitUntil",
+		"queue", "scheduled", "waitUntil",
 	}
 	if !slices.Equal(operations, want) {
 		t.Fatalf("worker.runtime operations = %v, want %v", operations, want)

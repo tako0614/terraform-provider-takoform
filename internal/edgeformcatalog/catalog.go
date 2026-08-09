@@ -83,7 +83,7 @@ var Forms = []model.Form{
 		Description: "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES " +
 			"Module Worker ABI by identity, and states it exactly: the runtime contract " +
 			"worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, " +
-			"the fetch, scheduled, queue, and tail handler signatures, the binding environment, " +
+			"the fetch, scheduled, and queue handler signatures, the binding environment, " +
 			"ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module " +
 			"loading. A host supporting this Form implements that exact digest; a runtime that behaves " +
 			"differently is a different contract version and a different Form version, never a compatibility " +
@@ -322,7 +322,11 @@ var Forms = []model.Form{
 			"canonical, and the second is refused. The assigned address is published as outputs — a portable " +
 			"author may rely on a value being returned, on its scheme being https, and on it routing to the " +
 			"active deployment, and on nothing about its SHAPE: which subdomain, which apex, and how long the " +
-			"label is are host detail no portable configuration may parse or reconstruct.",
+			"label is are host detail no portable configuration may parse or reconstruct. The address is " +
+			"IMMUTABLE for the lifetime of the endpoint's attachment UID. It MUST NOT change on deployment " +
+			"promotion, on status refresh, on a host's internal placement change, or on a backend migration; a " +
+			"host that needs to change the address deletes the endpoint and the author creates a new one, which " +
+			"is a new attachment with a new UID.",
 		Fields: []model.Field{
 			moduleWorkerRef("worker", "worker",
 				"Module Worker whose active deployment answers requests at the assigned address. Changing it replaces the endpoint.",
@@ -337,17 +341,23 @@ var Forms = []model.Form{
 			{HCL: "hostname", Wire: "hostname", Kind: model.KindString,
 				Pattern: model.PatternCanonicalHostname, MaxLength: 253,
 				Doc: "Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where " +
-					"DNS is case-insensitive and no trailing root dot. An author's hostname admits those spellings " +
-					"because a host canonicalizes what it is given; an assigned name has no earlier spelling to " +
-					"preserve. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable " +
-					"configuration never parses it, never asserts a suffix, and never reconstructs it from the " +
-					"resource name."},
+					"DNS is case-insensitive and no trailing root dot. The GRAMMAR admits exactly that form, so the " +
+					"rule and the pattern say one thing. An author's hostname admits both variant spellings because a " +
+					"host canonicalizes what it is given; an assigned name has no earlier spelling to preserve. The " +
+					"value is IMMUTABLE for the lifetime of this endpoint's attachment UID: it does not change on " +
+					"deployment promotion, on status refresh, on a host's internal placement change, or on a backend " +
+					"migration, so a consumer may store it; a host that must change the address deletes the endpoint " +
+					"and the author creates a new one. Its VALUE is portable to read and pass on; its SHAPE is host " +
+					"detail, so a portable configuration never parses it, never asserts a suffix, and never " +
+					"reconstructs it from the resource name."},
 			{HCL: "url", Wire: "url", Kind: model.KindString,
-				Pattern:   `^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+/$`,
+				Pattern:   `^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$`,
 				MaxLength: 264,
 				Doc: "Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + " +
 					"`/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and " +
-					"no port, so a consumer composes deeper paths onto this value rather than deriving an origin."},
+					"no port, so a consumer composes deeper paths onto this value rather than deriving an origin. It " +
+					"admits exactly the hostnames the hostname member admits, and it is immutable for exactly as long, " +
+					"because it IS that hostname."},
 		},
 	},
 	{

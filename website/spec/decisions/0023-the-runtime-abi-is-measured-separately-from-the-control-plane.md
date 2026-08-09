@@ -78,6 +78,54 @@ deployment — the same discipline the host lane applies to its probe headers.
 A run without one reports the load lane `unmeasured` and itself `partial`,
 rather than counting an unmeasurable half as evidence.
 
+### A projection is proven only by an answer its own callee could give
+
+The corpus reaches one contract that is not the runtime ABI:
+`worker.service@1.0.0`, through the `module-worker.service` binding, in the two
+checks that hold its streaming model to a real dispatch. Measuring a projection
+raises a question measuring a runtime does not — WHO answered — and the first
+version of those checks could not tell.
+
+The corpus already refused a self-binding and required a peer worker, for the
+right reason: a self-call lets a host answer from its own handler without
+dispatching anything. But the peer ran the measured worker's own byte-pinned
+bundle, so the refusal was a statement about the deployment description rather
+than about anything a run observes. A host that short-circuited
+`env.PEER.fetch(...)` back into the caller's `fetch` handler produced the same
+routes, the same per-read accounting, the same chunk timing, and the same
+status as the projection it had never implemented. Both checks passed it, and
+the report said `complete`. That is the disqualifying half of the honesty rule
+this corpus applies everywhere else — a required check no incorrect
+implementation can fail — reached by a different road: not a check that expects
+nothing, but two things that should differ and do not.
+
+A run can only tell them apart on a fact that comes from BYTES. Everything else
+a short circuit still satisfies: it answers on the binding's name, at the
+callee's route, with the callee's shape, under the caller's deployment. So the
+peer runs its OWN bundle, `conformance-peer`, whose module declares an identity
+and stamps it on every observation it emits, and the runner credits a service
+check only for stamped answers. The caller's bundle is byte-pinned and does not
+contain the string, so the caller running its own bytes cannot produce a
+stamped answer however the host resolves the dispatch.
+
+Two loader rules make that a mechanism rather than a convention, and both are
+about bytes rather than declarations. The identity the corpus states must be
+DERIVABLE from the peer module an operator deploys — an identity the callee
+does not actually stamp would fail every conforming runtime — and it must
+appear in no other bundle of the corpus, because an identity the caller's bytes
+also carry is one a host can produce with no dispatch at all. Which checks
+require it is pinned in the runner beside the closed required-check list, so
+removing the marker fails corpus verification by name instead of quietly
+restoring two checks a self-binding passes.
+
+The same reasoning constrains the stand-in. It derives the identity from the
+main module bytes it was handed, exactly as it derives the exported handler
+set, and never from the deployment description or the corpus; a stand-in told
+which worker it is could stamp an identity its bytes do not carry, which is the
+answer the corpus refuses from a real host. A stand-in built with the
+short-circuit defect therefore fails the two service checks in this repository's
+own gate, which is how the rule is known to have teeth.
+
 ### An observation is evidence only for the run that caused it
 
 Three checks read back something the runtime stored for them: the `edge.kv`
@@ -154,15 +202,45 @@ regeneration rather than beside it. New blocker V3-011 holds the decision, and
 obligations the Host API lane does not prove, marked unmeasurable rather than
 merely unproven.
 
+**Carried out in the regeneration this paragraph was waiting for.** `tail` is
+gone from `worker.runtime@1.0.0`, the corpus carries no unmeasured entry, and
+V3-011 is closed
+([decision 0019](0019-the-module-worker-abi-is-an-exact-contract.md)). The
+`unmeasured` mechanism stays exactly as designed and is now what the LOAD lane
+reports when an operator supplies no module-loader adapter; what it can no
+longer do is stand in for a declared handler, because the corpus loader refuses
+one that no check measures.
+
 ## Consequences
 
 - The seven obligations v1alpha3 lists as unproven now have an artifact that
   measures them. Whether a host meets them is a question with an answer.
 - A runtime conformance run has a deployment prerequisite: the operator
   deploys the corpus bundle with the declared vars, sensitive variable,
-  `edge.kv` and `edge.queue` bindings, a cron trigger, and a queue consumer.
-  That is not an accident of the corpus — `scheduled` and `queue` are only
-  observable when a host has been asked to invoke them.
+  `edge.kv` and `edge.queue` bindings, a cron trigger, and a queue consumer,
+  plus the `conformance-peer` bundle as a second worker with no vars, no
+  bindings and no attachments. That is not an accident of the corpus —
+  `scheduled` and `queue` are only observable when a host has been asked to
+  invoke them, and a projection is only observable when there is a second
+  worker to project into that the first one cannot impersonate.
+- What the two service checks prove is a DISPATCH, not a route. A passing run
+  says the bytes reached a worker running the peer's module; it does not say
+  the host chose that worker by resolving the binding rather than by any other
+  means, which no black-box observation can distinguish and which no plausible
+  incorrect implementation gets right by accident.
+- Three checks in this corpus remain weaker than their names suggest, and the
+  weakness is the same shape as the one above rather than a new one. The
+  `edge.queue` round trip is satisfied by a producer binding that hands the
+  batch to the exported `queue` handler in process, with no durable queue and
+  no Queue Consumer attachment behind it; the `scheduled` observation is
+  satisfied by a host that invokes the handler on a timer with the right
+  expression rather than from the attachment; and the `edge.kv` round trip is a
+  byte-fidelity claim its own `proves` sentence already limits it to, which an
+  in-isolate map satisfies. None of them is closable the way the peer's is,
+  because there is no byte a correct implementation carries and an incorrect
+  one cannot: what would distinguish them is durability and provenance, which a
+  single run against one deployment cannot observe. They are recorded here
+  rather than left for the next reader to rediscover.
 - Three checks are timing-sensitive by nature: streaming is a claim about when
   bytes arrive, and `waitUntil` is a claim about work outliving a response.
   Their bounds are contract data, and each states the bound as a maximum a
@@ -227,6 +305,24 @@ merely unproven.
   Forms and packages are deliberately data-only, and it would make a green
   local gate read as ABI evidence. The stand-in is deliberately obvious about
   being a stand-in instead.
+- **Give the peer a distinguishing DEPLOYMENT instead of distinguishing
+  bytes.** Rejected because every property of the peer's deployment is one the
+  caller could also report. An empty `env`, a missing binding, a different
+  declared handler set: each of those is a value, and a worker answering for
+  itself can produce any value. What a short circuit cannot produce is a string
+  its own pinned module does not contain, which is why the identity lives in
+  bytes and why the loader refuses one that appears in more than one bundle.
+- **Have the RUNNER send the peer a token and require it back.** Rejected
+  because it proves the callee can echo, not that it is the callee. The caller
+  is on the path — it hands the peer the request and returns the peer's
+  response — so anything the runner sends toward the peer is a value the caller
+  has in hand, and a short circuit echoes it exactly as the peer would.
+- **Address the peer by a distinct route or hostname.** Rejected for the same
+  reason at a different layer: the route is in the caller's own bytes, and a
+  host that resolves `env.PEER` to the caller can serve the callee's route from
+  the caller just as easily. The corpus's peer routes are deliberately the same
+  two the direct checks use, so nothing about the address distinguishes them —
+  only what answered does.
 - **Drop `tail` from the ABI in this change.** Rejected here for sequencing,
   not on the merits: the Interface bytes feed the generated Form chain, so the
   removal belongs to the change that regenerates it. The decision is recorded

@@ -72,6 +72,31 @@ are normative; the operative text lives in
    it, and a contract whose two members cannot both be satisfied by one address
    is not one a host can conform to.
 
+   **The grammar says all of that, not half of it.** The rule above was stated
+   in the output's description while the `outputSchema` pattern still admitted
+   `A-Z`, so a host reading the contract as a machine does saw a laxer rule than
+   a host reading it as prose, and the grammar is what a host is held to. Both
+   published members now admit only the canonical form. The narrowing lands on
+   `PatternCanonicalHostname` itself rather than on a third constant beside it:
+   canonicalization performs TWO rewrites and that constant is named for their
+   result, so a pattern admitting an uppercase letter under that name was not a
+   second legitimate grammar but this one written incompletely. A third constant
+   would have left two spellings of one idea in the authoring model with nothing
+   saying which the next Form should reach for — and the laxer one holding the
+   better name. The DESIRED-state grammar of `WorkerCustomDomain` is untouched
+   and stays laxer on purpose: an author's spelling is a thing a host
+   canonicalizes, which is a different rule about a different value.
+
+   The address is also IMMUTABLE for the lifetime of the endpoint's attachment
+   UID. It MUST NOT change on deployment promotion, on status refresh, on a
+   host's internal placement change, or on a backend migration; a host that
+   needs to change the address deletes the endpoint and the author creates a new
+   one, which is a new attachment with a new UID and may legitimately carry a
+   new address. Nothing said this before, and everything about the Form assumed
+   it: publishing an address whose whole purpose is to be handed to a consumer,
+   while reserving the right to move it under a status refresh, would make the
+   value one a client may read and never store — which is not an address.
+
 3. **A portable author may rely on exactly three things**: that a value comes
    back, that it is HTTPS, and that it routes to the worker's ACTIVE DEPLOYMENT.
    The SHAPE of the address is host detail. Which label, which subdomain, which
@@ -135,9 +160,22 @@ are normative; the operative text lives in
 
 These are proven by the required conformance checks
 `worker-endpoint-address-is-host-assigned`, `worker-endpoint-single-per-worker`,
-and `worker-endpoint-follows-the-active-deployment`, and by
+`worker-endpoint-follows-the-active-deployment`, and
+`worker-endpoint-address-is-stable-for-its-uid`, and by
 `attachment-requires-active-deployment`, which now drives the endpoint probe
 alongside the other three attachments.
+
+The stability check drives the three triggers a black-box runner can cause
+against ONE endpoint — a host-side status refresh, a promotion of the worker the
+author never applied to the endpoint, and a plain re-read — and compares the UID
+alongside the value, because "immutable for the lifetime of the attachment UID"
+is satisfied by a host that deletes and re-creates. The two remaining triggers
+the rule names, an internal placement change and a backend migration, are not
+causable from outside a host and are listed as obligations. The canonical form
+is asserted on the value a host actually returned, in the same reading that
+holds the two members to one address, rather than only through the declared
+pattern: a grammar failure says a pattern did not match, and this says which
+rule the host broke.
 
 ## Consequences
 
@@ -155,9 +193,12 @@ alongside the other three attachments.
   would stop serving `fetch` is refused while an endpoint lives, and so is
   deleting that deployment. Both follow from the endpoint being an inward
   activation for `fetch` rather than from any endpoint-specific rule.
-- Because the address is `status` rather than `spec`, a host that reassigns it
-  moves the resource's `metadata.revision` and not its `metadata.generation`,
-  like every other representation change (decision 0011).
+- Because the address is `status` rather than `spec`, the only reassignment
+  this lane admits is the one that comes with a new UID. A host that re-derived
+  the address on a representation change would move `metadata.revision` and not
+  `metadata.generation` like any other status change (decision 0011) — and that
+  is precisely the mutation the stability rule forbids, which is why the
+  required check drives a status refresh rather than only a read.
 - The refusal branch of rule 6 is stated normatively and is NOT proven by the
   lane, because a black-box runner cannot take a capability away from the host
   under test. What the lane does close is the failure that branch exists to

@@ -1,6 +1,7 @@
 package runtimeconformance
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
+	"github.com/tako0614/terraform-provider-takoform/internal/runtimeconformance/workerbundle"
 )
 
 // interfaceDefinition is the fraction of the ABI contract this lane reads
@@ -39,12 +41,17 @@ type interfaceDefinition struct {
 
 func readInterfaceDefinition(t *testing.T, contract Contract) (interfaceDefinition, []byte) {
 	t.Helper()
+	return readCandidateDefinition(t, contract, InterfaceName)
+}
+
+func readCandidateDefinition(t *testing.T, contract Contract, name string) (interfaceDefinition, []byte) {
+	t.Helper()
 	repositoryRoot, err := filepath.Abs(filepath.Join(contract.Root(), "..", ".."))
 	if err != nil {
 		t.Fatalf("repository root: %v", err)
 	}
 	path := filepath.Join(
-		repositoryRoot, "interfaces", "candidates", "v1alpha1", "worker.runtime", "definition.json",
+		repositoryRoot, "interfaces", "candidates", "v1alpha1", name, "definition.json",
 	)
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -121,5 +128,98 @@ func TestCorpusMeasuresTheCommittedInterfaceBytes(t *testing.T) {
 				"canonicalizes to %s; re-pin the corpus interface.schemaDigest and the manifest sha256",
 			contract.Interface.SchemaDigest, digest,
 		)
+	}
+}
+
+// TestCorpusMeasuresTheCommittedServiceInterfaceBytes is the same coupling for
+// the second contract this corpus reaches.
+//
+// The two service checks are claims about worker.service@1.0.0's delivery
+// model, and that model is exactly what changed when the Interface stopped
+// carrying bodies as JSON strings. A corpus that named the contract without
+// pinning its bytes could go on asserting a streaming model against a
+// definition that had reverted to buffering.
+func TestCorpusMeasuresTheCommittedServiceInterfaceBytes(t *testing.T) {
+	contract := verifiedContract(t)
+	_, raw := readCandidateDefinition(t, contract, ServiceInterfaceName)
+	digest, err := formpackage.DigestCanonicalJSON(raw)
+	if err != nil {
+		t.Fatalf("digest the worker-to-worker contract: %v", err)
+	}
+	if digest != contract.ServiceInterface.SchemaDigest {
+		t.Fatalf(
+			"conformance/runtime-abi-v1 measures %s but the committed worker.service definition "+
+				"canonicalizes to %s; re-pin the corpus serviceInterface.schemaDigest and the manifest sha256",
+			contract.ServiceInterface.SchemaDigest, digest,
+		)
+	}
+}
+
+// TestTheServiceChecksAddressTheBindingTheDeploymentDeclares keeps the two
+// worker-to-worker checks pointed at a binding an operator actually deploys. A
+// check whose route calls `env.PEER` against a deployment that declares no such
+// binding is a check every conforming runtime fails.
+func TestTheServiceChecksAddressTheBindingTheDeploymentDeclares(t *testing.T) {
+	contract := verifiedContract(t)
+	deployment, err := contract.WorkerDeployment()
+	if err != nil {
+		t.Fatalf("deployment: %v", err)
+	}
+	binding, ok := deployment.BindingNamed(contract.ProbeProtocol.ServiceBinding)
+	if !ok || binding.Interface != ServiceInterfaceName {
+		t.Fatalf("the deployment declares no %s binding named %q",
+			ServiceInterfaceName, contract.ProbeProtocol.ServiceBinding)
+	}
+	if deployment.Peer == nil {
+		t.Fatal("the corpus states no peer for the service binding to address")
+	}
+	for _, name := range serviceBindingChecks {
+		if check := checkFor(t, contract, name); check.ThroughBinding != contract.ProbeProtocol.ServiceBinding {
+			t.Fatalf("check %q crosses %q, not the declared service binding %q",
+				name, check.ThroughBinding, contract.ProbeProtocol.ServiceBinding)
+		}
+	}
+}
+
+// TestThePeerIsDistinguishableFromTheCaller reads the property the two service
+// checks now rest on off the committed corpus, the way a reviewer would.
+//
+// The peer used to run the measured worker's own byte-pinned bundle, and that
+// made a self-binding observationally identical to the dispatch: the caller's
+// `/abi/echo-stream` answered `/abi/service-echo-stream` with the same
+// accounting and the same timing. What separates them now is bytes — the peer's
+// module declares an identity, the caller's does not, and no other bundle
+// carries the string — so an answer produced by the caller cannot be mistaken
+// for one produced by the callee.
+func TestThePeerIsDistinguishableFromTheCaller(t *testing.T) {
+	contract := verifiedContract(t)
+	deployment, err := contract.WorkerDeployment()
+	if err != nil {
+		t.Fatalf("deployment: %v", err)
+	}
+	if deployment.Peer.Bundle.Name == deployment.Bundle.Name {
+		t.Fatalf("the peer runs the measured worker's bundle %q; a peer nobody can tell apart from the caller "+
+			"measures no dispatch", deployment.Bundle.Name)
+	}
+	identity := contract.Deployment.Peer.Identity
+	peerMain, ok := deployment.Peer.Bundle.Module(deployment.Peer.Bundle.MainModule)
+	if !ok {
+		t.Fatal("the peer bundle carries no main module")
+	}
+	derived, err := workerbundle.DerivePeerIdentity(peerMain.Source)
+	if err != nil {
+		t.Fatalf("derive the peer identity: %v", err)
+	}
+	if derived != identity {
+		t.Fatalf("the corpus states peer identity %q and the peer's bytes declare %q", identity, derived)
+	}
+	callerMain, _ := deployment.Bundle.Module(deployment.Bundle.MainModule)
+	if bytes.Contains(callerMain.Source, []byte(identity)) {
+		t.Fatalf("the measured worker's bytes carry the peer identity %q; a host could stamp it without "+
+			"dispatching anything", identity)
+	}
+	callerIdentity, err := workerbundle.DerivePeerIdentity(callerMain.Source)
+	if err != nil || callerIdentity != "" {
+		t.Fatalf("the measured worker declares peer identity %q (%v); only a callee has one", callerIdentity, err)
 	}
 }

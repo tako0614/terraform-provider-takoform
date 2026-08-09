@@ -4,7 +4,7 @@
   "name": "worker.runtime",
   "version": "1.0.0",
   "title": "ES Module Worker runtime ABI",
-  "description": "The exact runtime ABI a conforming host provides to the code of one Module Worker, and the exact shape that code must present. The main module is an ES module whose DEFAULT EXPORT is a plain object; each portable handler is an OPTIONAL own property of that object named exactly fetch, scheduled, queue, or tail, and every handler the Worker Version declares MUST exist there as a callable property — a declared handler that is absent fails the version, not the request. Every handler takes three arguments in this order: the event value, the binding environment env, and the invocation context ctx. A handler may be async; a returned promise is awaited. Request and response bodies are STREAMS, never buffered strings: a host never requires a handler to read a request body before responding, and streams a response body out as the handler produces it. env is a plain object whose own enumerable properties are exactly the names the Worker Version declares — every vars key, every requiredSensitiveVars name, and every binding name — and nothing else portable; a sensitive-variable slot appears as the host-supplied value under its declared name, and that value never enters portable state. ctx.waitUntil(promise) registers work the host keeps the isolate alive for until the promise settles; a rejection is reported to host diagnostics only, never changes an already-sent response, and never turns a successful invocation into a failed one. An uncaught throw or unhandled rejection in fetch is a HOST-GENERATED 500 response, never a hung request; in scheduled and queue it is a failed invocation with the retry semantics the relevant contract already states. The ABI is fixed by identity, not by a date: a runtime whose behavior differs is a different exact contract version, and a Form that wants that runtime is a different Form version. Behavior fixtures run against a conformance bundle of two modules: index.js, whose default export exposes all four handlers, answers GET /health with 200, throws on GET /throw, and throws from its queue handler when a message body decodes to exactly the ASCII bytes fail; and fetch-only.js, whose default export exposes fetch alone.",
+  "description": "The exact runtime ABI a conforming host provides to the code of one Module Worker, and the exact shape that code must present. The main module is an ES module whose DEFAULT EXPORT is a plain object; each portable handler is an OPTIONAL own property of that object named exactly fetch, scheduled, or queue, and every handler the Worker Version declares MUST exist there as a callable property — a declared handler that is absent fails the version, not the request. Every handler takes three arguments in this order: the event value, the binding environment env, and the invocation context ctx. A handler may be async; a returned promise is awaited. Request and response bodies are STREAMS, never buffered strings: a host never requires a handler to read a request body before responding, and streams a response body out as the handler produces it. env is a plain object whose own enumerable properties are exactly the names the Worker Version declares — every vars key, every requiredSensitiveVars name, and every binding name — and nothing else portable; a sensitive-variable slot appears as the host-supplied value under its declared name, and that value never enters portable state. ctx.waitUntil(promise) registers work the host keeps the isolate alive for until the promise settles; a rejection is reported to host diagnostics only, never changes an already-sent response, and never turns a successful invocation into a failed one. An uncaught throw or unhandled rejection in fetch is a HOST-GENERATED 500 response, never a hung request; in scheduled and queue it is a failed invocation with the retry semantics the relevant contract already states. The ABI is fixed by identity, not by a date: a runtime whose behavior differs is a different exact contract version, and a Form that wants that runtime is a different Form version. Behavior fixtures run against a conformance bundle of two modules: index.js, whose default export exposes all three handlers, answers GET /health with 200, throws on GET /throw, and throws from its queue handler when a message body decodes to exactly the ASCII bytes fail; and fetch-only.js, whose default export exposes fetch alone.",
   "operations": [
     {
       "name": "loadModule",
@@ -44,12 +44,11 @@
               "enum": [
                 "fetch",
                 "scheduled",
-                "queue",
-                "tail"
+                "queue"
               ],
               "type": "string"
             },
-            "maxItems": 4,
+            "maxItems": 3,
             "type": "array",
             "uniqueItems": true
           },
@@ -105,12 +104,11 @@
               "enum": [
                 "fetch",
                 "scheduled",
-                "queue",
-                "tail"
+                "queue"
               ],
               "type": "string"
             },
-            "maxItems": 4,
+            "maxItems": 3,
             "type": "array",
             "uniqueItems": true
           }
@@ -444,84 +442,6 @@
       ]
     },
     {
-      "name": "tail",
-      "description": "Invokes tail(events, env, ctx) with the diagnostic trace of invocations this worker is attached to. Each event carries scriptName (the portable name of the worker that produced it), outcome, eventTimestamp in milliseconds since the Unix epoch, logs, and exceptions. Trace delivery is best effort and never changes the traced invocation: a failed tail handler never fails the invocation it observed. The handler returns nothing.",
-      "inputSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "events": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "eventTimestamp": {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "exceptions": {
-                  "items": {
-                    "maxLength": 8192,
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "maxItems": 256,
-                  "type": "array",
-                  "uniqueItems": true
-                },
-                "logs": {
-                  "items": {
-                    "maxLength": 8192,
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "maxItems": 256,
-                  "type": "array",
-                  "uniqueItems": true
-                },
-                "outcome": {
-                  "enum": [
-                    "cancelled",
-                    "exceededCpu",
-                    "exception",
-                    "ok"
-                  ],
-                  "type": "string"
-                },
-                "scriptName": {
-                  "maxLength": 63,
-                  "minLength": 1,
-                  "type": "string"
-                }
-              },
-              "required": [
-                "eventTimestamp",
-                "outcome",
-                "scriptName"
-              ],
-              "type": "object"
-            },
-            "maxItems": 100,
-            "minItems": 1,
-            "type": "array"
-          }
-        },
-        "required": [
-          "events"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {},
-        "type": "object"
-      },
-      "errors": [
-        "handler_not_declared",
-        "handler_failed"
-      ]
-    },
-    {
       "name": "waitUntil",
       "description": "Registers one promise through ctx.waitUntil(promise). The host keeps the isolate alive until that promise settles, even after the handler returned and its response was sent, and never cancels the work to reclaim the isolate earlier. taskOutcome is what the registered promise does. Settlement never rewrites an already-sent response, and a rejected task never turns a successful invocation into a failed one: it is reported to host diagnostics only. Calling waitUntil after the isolate has been reclaimed fails with context_expired.",
       "inputSchema": {
@@ -578,7 +498,6 @@
     "maxQueueBatchMessages": 100,
     "maxQueueMessageBytes": 131072,
     "maxRequestBytes": 104857600,
-    "maxTailEventsPerBatch": 100,
     "maxWaitUntilTasks": 32
   },
   "fixtures": [
@@ -591,8 +510,7 @@
             "declaredHandlers": [
               "fetch",
               "scheduled",
-              "queue",
-              "tail"
+              "queue"
             ],
             "mainModule": "index.js",
             "modules": [
@@ -606,8 +524,7 @@
             "exportedHandlers": [
               "fetch",
               "scheduled",
-              "queue",
-              "tail"
+              "queue"
             ]
           }
         },
@@ -657,8 +574,7 @@
             "exportedHandlers": [
               "fetch",
               "scheduled",
-              "queue",
-              "tail"
+              "queue"
             ]
           }
         },

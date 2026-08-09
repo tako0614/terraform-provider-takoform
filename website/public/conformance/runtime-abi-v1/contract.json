@@ -4,13 +4,18 @@
     "apiVersion": "interfaces.takoform.com/v1alpha1",
     "name": "worker.runtime",
     "version": "1.0.0",
-    "schemaDigest": "sha256:1db4c093befc3c8bb769361c26f26a582561c5ff0edae36a62f45143641a2152"
+    "schemaDigest": "sha256:48d5fe4ca3109d1235354fef99748f5d01b7e0c398f97a9354496a220dc7a579"
+  },
+  "serviceInterface": {
+    "apiVersion": "interfaces.takoform.com/v1alpha1",
+    "name": "worker.service",
+    "version": "1.0.0",
+    "schemaDigest": "sha256:8024073e25413c8906c3e189555a7485b4c7a6656e8a537fb2801f9b9682536e"
   },
   "handlerVocabulary": [
     "fetch",
     "scheduled",
-    "queue",
-    "tail"
+    "queue"
   ],
   "loadableMediaTypes": [
     "application/javascript+module",
@@ -44,7 +49,8 @@
     "routePrefix": "/abi/",
     "kvBinding": "CACHE",
     "queueBinding": "EVENTS",
-    "note": "The conformance bundle's main module answers these routes and carries no expectation of its own: every route reports what the RUNTIME supplied — the arguments of the invocation, the own property names of env, which of the names the runner asked about exist as globals, what the bindings returned, and what the host later delivered to the scheduled, queue and tail handlers. A probe that knew the answers could pass a runtime that does not implement the ABI. Correlation belongs to the runner too: every route that stores an observation stores it under the value the RUNNER sent and reports that value back, and the module never mints one of its own, because a probe that correlated itself would prove nothing about which run stored what."
+    "serviceBinding": "PEER",
+    "note": "The conformance bundle's main module answers these routes and carries no expectation of its own: every route reports what the RUNTIME supplied — the arguments of the invocation, the own property names of env, which of the names the runner asked about exist as globals, what the bindings returned, and what the host later delivered to the scheduled and queue handlers. The two PEER routes add nothing of their own either: each hands the callee the request stream it is still receiving and returns the callee's response body unread, so what they report is the projection's behaviour rather than the module's, and what comes back is stamped with the PEER's identity rather than the caller's, so an answer the caller produced for itself is refused. A probe that knew the answers could pass a runtime that does not implement the ABI. Correlation belongs to the runner too: every route that stores an observation stores it under the value the RUNNER sent and reports that value back, and the module never mints one of its own, because a probe that correlated itself would prove nothing about which run stored what."
   },
   "loaderProtocol": {
     "protocol": "takoform.runtime-abi-loader@v1",
@@ -61,8 +67,7 @@
     "declaredHandlers": [
       "fetch",
       "scheduled",
-      "queue",
-      "tail"
+      "queue"
     ],
     "vars": [
       "LOG_LEVEL"
@@ -78,16 +83,29 @@
       {
         "name": "EVENTS",
         "interface": "edge.queue"
+      },
+      {
+        "name": "PEER",
+        "interface": "worker.service"
       }
     ],
     "environmentPropertyNames": [
       "API_SIGNING_TOKEN_NAME",
       "CACHE",
       "EVENTS",
-      "LOG_LEVEL"
+      "LOG_LEVEL",
+      "PEER"
     ],
     "cron": "* * * * *",
-    "queue": "runtime-abi-conformance"
+    "queue": "runtime-abi-conformance",
+    "peer": {
+      "bundle": "conformance-peer",
+      "declaredHandlers": [
+        "fetch"
+      ],
+      "identity": "takoform-runtime-abi-peer-a3f172c9e08b4d56",
+      "note": "A worker.service binding addresses ANOTHER Module Worker, so a run needs two. The operator deploys the conformance-peer bundle as a plain fetch worker with no vars, no sensitive variable, no bindings and no attachments, and binds the measured worker's PEER to it; it serves /abi/echo-stream and /abi/stream and touches nothing else. It runs its OWN bundle rather than a second copy of the measured worker's, and that is the whole point: while both sides ran the same bytes a host could answer env.PEER.fetch(...) out of the caller's own fetch handler and produce exactly the expected accounting and timing, so the two service checks passed a runtime that never dispatched anything. The identity below is a literal the peer's module bytes carry and no other bundle's do; the peer stamps it on every observation it emits and the runner credits a service check only for stamped answers, so a short circuit into the caller — whose pinned bytes do not contain the string — fails by name. The loader enforces both halves: the identity must be derivable from the peer module, and it must appear in no other bundle."
+    }
   },
   "bundles": [
     {
@@ -98,14 +116,28 @@
           "name": "index.js",
           "mediaType": "application/javascript+module",
           "source": "bundles/conformance-probe/index.js",
-          "sha256": "sha256:8514cba05d6fae0d9d32e0024f1100874954e38ce40b22693f5432aba32a63b7"
+          "sha256": "sha256:af4bf6c8c65184cdf3cd00f97b10b56f844e06101a0909b6c8ff621ff81d96b7"
         }
       ],
       "exportedHandlers": [
         "fetch",
         "scheduled",
-        "queue",
-        "tail"
+        "queue"
+      ]
+    },
+    {
+      "name": "conformance-peer",
+      "mainModule": "peer.js",
+      "modules": [
+        {
+          "name": "peer.js",
+          "mediaType": "application/javascript+module",
+          "source": "bundles/conformance-peer/peer.js",
+          "sha256": "sha256:a45ecbe2d1b1477f8af20bd1a9263f1deaa1b3f0c4906c7bb3bf80df909ee1cf"
+        }
+      ],
+      "exportedHandlers": [
+        "fetch"
       ]
     },
     {
@@ -144,7 +176,7 @@
           "name": "index.js",
           "mediaType": "application/javascript+module",
           "source": "bundles/conformance-probe/index.js",
-          "sha256": "sha256:8514cba05d6fae0d9d32e0024f1100874954e38ce40b22693f5432aba32a63b7"
+          "sha256": "sha256:af4bf6c8c65184cdf3cd00f97b10b56f844e06101a0909b6c8ff621ff81d96b7"
         },
         {
           "name": "page.html",
@@ -163,7 +195,7 @@
           "name": "index.js",
           "mediaType": "application/javascript+module",
           "source": "bundles/conformance-probe/index.js",
-          "sha256": "sha256:8514cba05d6fae0d9d32e0024f1100874954e38ce40b22693f5432aba32a63b7"
+          "sha256": "sha256:af4bf6c8c65184cdf3cd00f97b10b56f844e06101a0909b6c8ff621ff81d96b7"
         }
       ],
       "unloadableError": "module_not_found"
@@ -180,14 +212,12 @@
         "declaredHandlers": [
           "fetch",
           "scheduled",
-          "queue",
-          "tail"
+          "queue"
         ],
         "expectExportedHandlers": [
           "fetch",
           "scheduled",
-          "queue",
-          "tail"
+          "queue"
         ]
       }
     },
@@ -343,7 +373,7 @@
       "name": "request-body-streams-rather-than-buffering",
       "operation": "fetch",
       "procedure": "requestStream",
-      "proves": "the request body arrives as a stream the handler consumes incrementally. The runner sends the first chunk, requires the worker to account for every byte of it BEFORE the second chunk exists, and only then sends the second: a host that buffers the body cannot produce that ordering. A ReadableStream read is not a transport frame, so the runner accumulates the worker's answers until they account for the bytes it has sent rather than demanding one read per write; what it refuses is an answer for bytes that have not been sent, and silence until the body ends.",
+      "proves": "the request body arrives as a stream the handler consumes incrementally. The runner sends the first chunk, requires the worker to account for every byte of it BEFORE the second chunk exists, and only then sends the second: a host that buffers the body cannot produce that ordering. The body declares no length — it is written as it is produced — so this is also the traffic a required exact contentLength could not have described. A ReadableStream read is not a transport frame, so the runner accumulates the worker's answers until they account for the bytes it has sent rather than demanding one read per write; what it refuses is an answer for bytes that have not been sent, and silence until the body ends.",
       "request": {
         "method": "POST",
         "path": "/abi/echo-stream"
@@ -361,10 +391,45 @@
       "name": "response-body-streams-rather-than-buffering",
       "operation": "fetch",
       "procedure": "responseStream",
-      "proves": "the response body is streamed out as the handler produces it. The module separates its chunks in time; a host that buffered the body would deliver them together.",
+      "proves": "the response body is streamed out as the handler produces it. The module separates its chunks in time; a host that buffered the body would deliver them together. The head is held to the body too: a body generated as it is written has no byte count when the head is answered, so a host that declared an exact length there must deliver exactly it, and one that read the whole body to learn a length fails the separation. Between them the two rules leave a host with the answer the contract wants — say the count when you know it, say unknown when you do not, and never buy a number by buffering.",
       "request": {
         "method": "GET",
         "path": "/abi/stream"
+      },
+      "timing": {
+        "deadlineSeconds": 30,
+        "gapMillis": 250,
+        "chunks": 3
+      }
+    },
+    {
+      "name": "service-request-body-streams-to-the-callee",
+      "operation": "fetch",
+      "procedure": "requestStream",
+      "throughBinding": "PEER",
+      "proves": "the module-worker.service projection streams the REQUEST toward the callee rather than buffering it, which is what worker.service@1.0.0 states and what its first version's JSON-string body model could not have delivered. The call crosses a worker boundary and is credited only if it did: the caller hands env.PEER the request stream it is still receiving, the callee accounts for the first chunk while the second exists nowhere but in the runner, and every answer carries the identity the PEER's bundle bytes stamp, which the caller's pinned bytes cannot produce. A host that short-circuits the call back into its own fetch handler therefore fails here rather than passing on an answer indistinguishable from the dispatch. Separation is observed in TIME and not in framing — the runner accumulates the callee's answers until they account for the bytes it has actually sent, so a stack that splits one write across several reads passes and one that answers only at end of stream does not. The body the runner writes declares no length at all, which is the case worker.service spells as a null contentLength: a host that demanded an exact count before invoking the callee could only obtain one by buffering, and would never send the response head this check waits for.",
+      "request": {
+        "method": "POST",
+        "path": "/abi/service-echo-stream"
+      },
+      "timing": {
+        "deadlineSeconds": 30,
+        "gapMillis": 250,
+        "requestChunkSize": [
+          4096,
+          8192
+        ]
+      }
+    },
+    {
+      "name": "service-response-body-streams-from-the-callee",
+      "operation": "fetch",
+      "procedure": "responseStream",
+      "throughBinding": "PEER",
+      "proves": "the same projection streams the RESPONSE back from the callee. The callee separates its chunks in time and the caller returns the callee's body unread, so a binding that buffered either half would deliver them together — and every chunk carries the PEER's own byte-carried identity, so a host answering out of the caller's /abi/stream is refused instead of credited. It is the response-head half of the contract too: the caller's call completes when the callee's status and headers arrive, before any body byte is read, which is the wait a buffering projection never ends. The callee's body is generated as it is written and has no byte count at that head, which is what worker.service's null contentLength is for; the runner holds the head to it from both sides, failing a host that buffered to learn a length and a host that declared one the body does not deliver.",
+      "request": {
+        "method": "GET",
+        "path": "/abi/service-stream"
       },
       "timing": {
         "deadlineSeconds": 30,
@@ -429,19 +494,6 @@
         "deadlineSeconds": 60,
         "pollMillis": 500
       }
-    },
-    {
-      "name": "tail-trace-delivered-to-the-tail-handler",
-      "operation": "tail",
-      "procedure": "unmeasured",
-      "proves": "nothing. This entry exists so the corpus does not silently leave a declared handler unchecked, which is the defect the compatibility date had.",
-      "unmeasured": {
-        "reason": "worker.runtime@1.0.0 declares a tail handler, but nothing in edge.forms.takoform.com/v1alpha1 activates one. The family has exactly three inward-activation attachments — WorkerCustomDomain (fetch), WorkerCronTrigger (scheduled) and QueueConsumer (queue) — so no deployment a portable author can write causes a host to invoke tail, and no run of this corpus can observe it. The handler is not hard to measure; it is unreachable.",
-        "wouldUse": "/abi/tail",
-        "closedBy": "either dropping tail from the ABI's declaredHandlers vocabulary in a new exact Interface version, or adding the Form that attaches a tail consumer so a deployment can cause an invocation.",
-        "blockerId": "V3-011",
-        "recommended": "drop tail from worker.runtime, and re-add it in the version that ships the attachment which makes it observable."
-      }
     }
   ],
   "requiredChecks": [
@@ -458,9 +510,10 @@
     "kv-binding-round-trips-bytes-through-env",
     "request-body-streams-rather-than-buffering",
     "response-body-streams-rather-than-buffering",
+    "service-request-body-streams-to-the-callee",
+    "service-response-body-streams-from-the-callee",
     "wait-until-holds-the-isolate-and-a-rejection-leaves-the-response-alone",
     "scheduled-invoked-by-the-host-cron-attachment",
-    "queue-batch-delivered-to-the-queue-handler",
-    "tail-trace-delivered-to-the-tail-handler"
+    "queue-batch-delivered-to-the-queue-handler"
   ]
 }

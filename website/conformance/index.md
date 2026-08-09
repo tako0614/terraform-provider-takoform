@@ -204,7 +204,7 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 102-check matrix over real HTTP: exact discovery and
+drives the complete 103-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -232,8 +232,10 @@ beside its uid — import validated exactly like apply, cross-resource semantics
 enforce (WorkerDeployment weights summing to 10000; a cron trigger or queue
 consumer refused with `unsupported_capability` until some WorkerVersion
 declares the matching handler; a WorkerEndpoint answered with a complete HTTPS
-address the host assigned rather than the author, that address unchanged when
-the worker it serves is promoted to another version, and a second endpoint
+address the host assigned rather than the author, in canonical form — lowercase,
+no trailing root dot, and a url built from exactly that hostname — the same
+address still published, under the same uid, after a host-side status refresh,
+a promotion of the worker it serves, and a re-read, and a second endpoint
 against one worker refused; and `status.outputs` present with exactly the
 declared members for the one Form that declares an outputSchema and omitted for
 every Form that declares none), 202 Operation polling with
@@ -436,16 +438,21 @@ sha256 of every module byte it ships. It states, as data, the exact
 `worker.runtime` InterfaceRef it measures, the closed handler vocabulary, the
 closed loadable media-type set, the portable globals floor, the deployment an
 operator reproduces — bundle, declared handlers, vars, sensitive variable,
-`edge.kv` and `edge.queue` bindings, cron expression, queue — and for each of
-the 17 required checks its name, what it proves, the bundle it needs, and the
-request/expected-observation pairs that decide it.
+`edge.kv`, `edge.queue` and `worker.service` bindings, cron expression, queue,
+and the SECOND worker the service binding addresses — and for each of the 18
+required checks its name, what it proves, the bundle it needs, and the
+request/expected-observation pairs that decide it. It pins a second
+InterfaceRef beside the runtime ABI's, `worker.service@1.0.0`, because two of
+those checks are claims about that contract's delivery model and a corpus
+naming a contract it does not pin can go on measuring one that no longer
+exists.
 
 Five checks drive the module loader: a bundle whose bytes load and report the
 handler set THOSE BYTES export, a module media type outside the closed set, a
 `mainModule` the bundle does not carry, bytes that are not a compilable module,
 and a declared handler the module does not export — the last being exactly the
-obligation the Host API lane states it cannot prove for arbitrary bytes. Eleven
-drive a deployed worker over HTTP: the three-argument handler signature, a
+obligation the Host API lane states it cannot prove for arbitrary bytes.
+Thirteen drive a deployed worker over HTTP: the three-argument handler signature, a
 returned `Response`, an uncaught throw becoming a completed host-generated 500
 rather than a hung request, `env` projecting exactly the declared names, the
 globals floor, a byte round trip through the `edge.kv` binding, a request body
@@ -453,9 +460,42 @@ answered chunk by chunk before the next chunk is sent, a response body whose
 chunks arrive separated in time, `ctx.waitUntil` holding the isolate open while
 a rejected task leaves the sent response alone, a `scheduled` invocation from
 the cron attachment, and a queue batch delivered to the `queue` handler with the
-producer's exact bytes. The seventeenth is `tail`, recorded as explicitly
-unmeasured: the contract declares the handler and nothing in the family
-activates one, so the corpus says so rather than leaving it silently unchecked.
+producer's exact bytes. Two more take the streaming pair one worker further
+along: the same request-body and response-body observations, made THROUGH the
+`module-worker.service` binding into a SECOND worker, which is what holds the
+projection to the streaming model `worker.service@1.0.0` states.
+
+That second worker has to be distinguishable from the first, and stating that
+it exists is not enough. While the peer ran the caller's own byte-pinned
+bundle, a host that answered `env.PEER.fetch(...)` out of the caller's fetch
+handler produced the same accounting, the same chunk timing and the same status
+as the dispatch it never performed, so both checks passed a runtime with no
+cross-worker projection at all — a required check no incorrect runtime can
+fail. The peer therefore runs its own bundle, `conformance-peer`, whose module
+declares an identity the caller's bytes do not contain and stamps it on every
+observation it emits; the runner credits a service check only for stamped
+answers. The loader enforces both halves of that: the identity must be
+derivable from the peer module an operator deploys, and it must appear in no
+other bundle of the corpus, so an answer the caller could have produced is
+refused. Which checks require it is pinned in the runner beside the required
+check list, so dropping the marker fails verification rather than quietly
+restoring the defect.
+
+The response-stream procedure also holds the response HEAD to the body that
+follows it. `worker.service` spells an unknown length as a null `contentLength`
+precisely because the call completes at the head, where a body still being
+generated has no byte count; the two ways a host can refuse to say so are both
+refused here. A host that BUFFERS the body to learn a count delivers chunks the
+producer separated in time all at once and fails the separation. A host that
+INVENTS one is held to it: the runner reads the body to its end and requires a
+declared length to be the length delivered.
+
+Every handler the ABI declares is measured, and the loader ENFORCES that rather
+than the corpus asserting it: a handler in `handlerVocabulary` with no check
+whose `operation` names it — or with only an `unmeasured` entry, which is what
+`tail` used to have — fails corpus verification by name. That is why `tail` left
+the ABI rather than staying as an entry nothing could reach
+([decision 0019](../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 
 The bundles carry module bytes and the handlers those bytes genuinely export,
 and loading the corpus recomputes every stated outcome from the bytes. A bundle
@@ -463,7 +503,7 @@ that claims an export its module does not have is refused, and so is a check
 expecting a failure the bytes cannot cause: a required check no correct runtime
 can pass, and one no incorrect runtime can fail, are the same defect.
 
-Three of those checks read back an observation the runtime stored for them —
+Three checks read back an observation the runtime stored for them —
 the `edge.kv` round trip, the queue delivery and the `ctx.waitUntil` marker —
 and the deployment they are measured against outlives the run, `edge.kv`
 namespace and all. A pinned constant cannot correlate a run and a per-run value
@@ -481,10 +521,14 @@ the first run's leftovers, and a conforming runtime failed because the
 
 `self-test` runs the whole matrix against an in-process stand-in shipped with
 this repository, so the corpus is exercised on every `bun run check`. The
-stand-in has no JavaScript engine and reimplements the probe module's behaviour
-in Go; what keeps it honest is that it is constructed from the deployment
-description and the module bytes and nothing else, so it never sees a check or
-an expected observation. A self-test report says this in the document itself:
+stand-in has no JavaScript engine and reimplements each corpus module's
+behaviour in Go; what keeps it honest is that it is constructed from the
+deployment description and the module bytes and nothing else, so it never sees
+a check or an expected observation. The peer's identity is part of that: the
+stand-in reads it out of the main module it was handed, the way it reads the
+exported handler set, so a stand-in wired to answer service calls from the
+caller stamps nothing and fails the two service checks exactly as a real host
+doing the same thing would. A self-test report says this in the document itself:
 its `classification` is `in-process-fake-runtime-self-test` and its `proves`
 member states that it proves the corpus and nothing about any runtime.
 

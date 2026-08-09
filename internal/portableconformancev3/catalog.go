@@ -688,7 +688,7 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 				),
 				"handlers": map[string]any{
 					"type": "array", "minItems": 1, "uniqueItems": true,
-					"items": map[string]any{"enum": []any{"fetch", "scheduled", "queue", "tail"}},
+					"items": map[string]any{"enum": []any{"fetch", "scheduled", "queue"}},
 				},
 				"kvBindings": bindingList(
 					"EdgeKVNamespace", fallbackBindingName, interfaceTarget(fallbackInterfaceRef),

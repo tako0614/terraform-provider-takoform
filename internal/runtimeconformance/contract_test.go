@@ -234,14 +234,51 @@ func TestTheCheckListIsClosed(t *testing.T) {
 // TestAnUnmeasuredCheckMustAccountForItself refuses the shape this whole
 // corpus exists to avoid: a declared surface nothing checks and nothing
 // explains.
+//
+// The corpus carries no unmeasured entry any more — `tail` left with the
+// handler — so the rule is driven by turning a measured check into an
+// unmeasured one that says nothing. The vehicle is an `environment` check
+// rather than a handler's, because a handler recorded as unmeasured is refused
+// one gate earlier now (TestAnUnmeasuredEntryCannotDischargeAHandler).
 func TestAnUnmeasuredCheckMustAccountForItself(t *testing.T) {
 	root := copyCorpus(t)
 	mutateCorpus(t, root, func(document map[string]any) {
-		check := checkNamed(document, "tail-trace-delivered-to-the-tail-handler")
-		delete(check, "unmeasured")
+		check := checkNamed(document, "environment-projects-exactly-the-declared-names")
+		check["procedure"] = "unmeasured"
+		delete(check, "request")
+		delete(check, "expect")
 	})
 	_, err := Verify(root)
 	if err == nil || !strings.Contains(err.Error(), "must say why") {
+		t.Fatalf("expected the corpus to be refused, got %v", err)
+	}
+}
+
+// TestTheCorpusMustPinTheWorkerServiceContractItMeasures keeps the second
+// pinned Interface an identity rather than a label, exactly as the runtime
+// ABI's own ref is.
+func TestTheCorpusMustPinTheWorkerServiceContractItMeasures(t *testing.T) {
+	root := copyCorpus(t)
+	mutateCorpus(t, root, func(document map[string]any) {
+		reference := document["serviceInterface"].(map[string]any)
+		reference["schemaDigest"] = "sha256:" + strings.Repeat("f", 64)
+		reference["name"] = "worker.services"
+	})
+	_, err := Verify(root)
+	if err == nil || !strings.Contains(err.Error(), "worker-to-worker Interface identity") {
+		t.Fatalf("expected the corpus to be refused, got %v", err)
+	}
+}
+
+// TestTheCorpusMustStateThePeerItsServiceBindingAddresses refuses a deployment
+// nobody could reproduce: a `worker.service` binding whose callee is unstated.
+func TestTheCorpusMustStateThePeerItsServiceBindingAddresses(t *testing.T) {
+	root := copyCorpus(t)
+	mutateCorpus(t, root, func(document map[string]any) {
+		delete(document["deployment"].(map[string]any), "peer")
+	})
+	_, err := Verify(root)
+	if err == nil || !strings.Contains(err.Error(), "SECOND worker") {
 		t.Fatalf("expected the corpus to be refused, got %v", err)
 	}
 }

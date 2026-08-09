@@ -90,9 +90,14 @@ ABI is: the exact Interface contract `worker.runtime@1.0.0` in its
 `providedInterfaces`
 ([decision 0019](decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 That contract fixes the module's default-export shape, the `fetch`, `scheduled`,
-`queue`, and `tail` signatures and what each event carries, the `env` object,
+and `queue` signatures and what each event carries, the `env` object,
 `ctx.waitUntil`, exception handling, request and response body streaming, the
-minimum Web API surface, and module loading. A host that supports `ModuleWorker`
+minimum Web API surface, and module loading. Its handler vocabulary is those
+three and nothing else: a handler no attachment in this family can activate is
+a member no run can reach and no divergence between two hosts can be detected
+in, so it does not belong in the contract until the attachment that makes it
+observable ships beside it, in a new exact version
+([decision 0019](decisions/0019-the-module-worker-abi-is-an-exact-contract.md)). A host that supports `ModuleWorker`
 implements that contract at its exact digest, and advertises it there; a Worker
 Version is the code that fills it.
 
