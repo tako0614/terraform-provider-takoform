@@ -7,7 +7,10 @@
   [0016](0016-the-worker-aggregate-has-one-active-deployment.md) rule 9 made a
   derived rendering move the revision and a teardown moves its own, and with it
   the `Idempotency-Key` composition (see "An operation's Idempotency-Key names
-  the incarnation"), because neither counter ever named an incarnation
+  the incarnation"), because neither counter ever named an incarnation; and
+  ADOPTION was given an identity of its own the same day (see "An adoption
+  claims the native identity it names"), because until then nothing in this lane
+  distinguished an import from a create
 - Date: 2026-08-06
 - Owners: Takoform maintainers
 
@@ -183,6 +186,70 @@ of its own ([decision 0017](0017-provider-state-survives-form-evolution-and-inte
 this rule is about the idempotency record and says nothing about polling an id a
 client already holds. Publication blocker **V3-013** records the item as P0 for
 every Form.
+
+### An adoption claims the native identity it names
+
+*Amended 2026-08-09.* A resource this host ADOPTED has a second identity beside
+its uid: the `nativeId` the adoption named — the host's own name for a backend
+object that already existed. A host MUST record it on the resource, and MUST
+hold at most one live resource per native identity within one tenant.
+
+- An `import` naming a native identity another live resource of the caller's
+  tenant already holds fails `import_conflict` (409) before any mutation, and
+  stores nothing.
+- A recorded claim is IMMUTABLE. An `import` addressing an existing resource of
+  the caller under a different `nativeId` fails `import_conflict` (409) the same
+  way; re-importing that resource under the identity it already holds is the
+  ordinary fenced import and answers the same incarnation. A resource this host
+  created holds no claim, so the first import naming it records one.
+- The claim is released with its holder: once the resource is deleted, the
+  identity is adoptable again.
+- It spans every space of one tenant and STOPS at the tenant, which is the same
+  scope, for the same two reasons, as the hostname claim of decision
+  [0026](0026-attachment-claims-are-canonical-and-acyclic.md). Spaces partition
+  one tenant's resources and a backend object does not partition with them. And
+  a host-wide claim would answer "somebody already manages that" to a caller who
+  cannot see the holder — a membership oracle over every identifier a stranger
+  can guess, which decision
+  [0028](0028-the-resource-plane-is-tenant-isolated.md) forbids a refusal to
+  disclose. Whose account an object lives in is authority this lane does not
+  model.
+
+Why this is an identity rule and not a nicety: `nativeId` was on the wire, was
+REQUIRED, and meant nothing. Everything else the lane asked of `import` — a
+minted uid, generation `1`, revision `1`, the full validation gauntlet, the
+attachment-claim scan — a plain create also satisfies, so a host whose `/import`
+handler was an alias for create passed all 112 required checks. What that host
+does to a practitioner is not subtle: `terraform import` mints a NEW backend
+object, the object being adopted is orphaned and still running, and the state
+file now describes something the operator never provisioned. A second import of
+the same object mints a third. None of it is visible until the bill or the
+outage.
+
+What makes it observable without breaking the portability boundary is that the
+identifier itself is never observed. A native id is host detail
+([`../portability-boundary.md`](../portability-boundary.md)) and the published
+wire documents are closed (decision 0014), so no response carries one and no
+portable author is made to know one — the rules above add no wire member and are
+rung 3 of the 0014 ladder. What a client and a corpus CAN see is what a host
+holding the claim can no longer do: adopt one object twice, or move a managed
+resource onto another object. Those are refusals in the published closed
+taxonomy, and `import_conflict` is the code that already meant exactly this and
+until now had no producer anywhere in the corpus except the error probe.
+
+This is deliberately weaker than "adoption adopts". The lane cannot prove that
+the object named existed before the call, or that the host did not also mint a
+fresh one beside it: no portable surface reports either, and a black-box runner
+cannot name an object it knows a host already holds without depending on that
+host's identifier format — which is the boundary this rule is built to respect.
+A smaller true claim beats a larger unverifiable one, and the remainder is
+recorded as publication blocker **V3-014**, closing on a real backend rather
+than on any check.
+
+The required conformance checks are `import-claims-its-native-identity` and
+`import-records-its-native-identity`; the tenant edge is a leg of
+`resource-import-is-tenant-isolated`, where the rest of that boundary already
+lives.
 - The Form semantic identity of a resource is its exact FormRef. The package
   digest used at creation may be recorded as audit evidence but never enters
   resource identity, queries, or update/delete fences. A host that installed
@@ -210,6 +277,12 @@ every Form.
   and a fenced import requires the uid of the incarnation it adopts for the same
   reason. Nothing is added to any request: the uid is a component of the
   `Idempotency-Key` the client already sent.
+- *(2026-08-09)* A host keeps one more field per RESOURCE — the native identity
+  it was adopted onto — and one tenant-scoped scan over it before an adoption
+  mutates anything. A host with a real datastore would more naturally hold it as
+  a unique index on `(tenant, nativeId)`; the reference host scans, because what
+  the lane measures is the answer. The corpus grows to 114 required checks, and
+  `import_conflict` gains its first organic producer.
 - *(2026-08-09)* A host that records replays keeps one more field per record —
   the incarnation the recorded answer reports, or the Operation it handed back —
   and consults it before replaying. The reference host stores it as
@@ -268,3 +341,31 @@ Rejected in the 2026-08-09 amendment:
   uid. The generation fence is required, the uid fence stays available beside
   it, and the accepted-delete commit path already resolves through the recorded
   uid before it looks at any fence.
+- **Echo the `nativeId` back on every representation, so adoption is directly
+  observable.** Rejected twice over. It puts a vendor's identifier format in
+  front of every portable author and every client that renders a resource, which
+  the portability boundary excludes from the Form contract by name; and the
+  published `resourceResponse` is closed with `unevaluatedProperties: false`, so
+  it is rung 4 of the decision 0014 ladder — a new schema generation minted to
+  expose exactly the fact that must not travel. The refusals prove the host holds
+  the identity without ever handing it out.
+- **Require an `import` of an UNKNOWN native identity to fail.** This is the
+  rule that would prove adoption really adopts, and it is not drivable black
+  box. The runner would have to name an object it knows the host already has,
+  which means either the corpus pinning a host's identifier format — the
+  boundary violation above — or the lane defining a provisioning side channel it
+  has no business owning. Stated as an obligation and left to V3-014 instead.
+- **Scope the claim host-wide rather than per tenant.** Rejected because it is
+  the membership oracle decision 0028 exists to close: a stranger who guesses an
+  identifier learns whether anyone on the host manages it. The duplication the
+  rule prevents is duplication WITHIN one payer's account, which is exactly
+  where the claim is scoped.
+- **Scope the claim per space.** Rejected because a backend object is not
+  partitioned by space. Two spaces of one tenant adopting one object is the same
+  double management as two resources in one space, and it is the likelier
+  accident: a second workspace importing what the first already manages.
+- **Refuse a re-import that names the identity a resource already holds.** It
+  would fall out of a host that kept a bare set of identifiers it had seen, and
+  it breaks the one thing a client can retry: an import re-run has nothing else
+  to send. The rule is about which resource holds an identity, not about how
+  many times the identity is mentioned.

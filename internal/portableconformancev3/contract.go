@@ -123,7 +123,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 112-entry executed-check list every v3
+// requiredRunnerChecks is the closed 114-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -183,6 +183,13 @@ var requiredRunnerChecks = []string{
 	"async-commit-binds-the-accepted-identity",
 	"import-adopts-native-resource",
 	"import-validates-like-apply",
+	// Adoption is distinguishable from creation (spec/decisions/0011, amended).
+	// These are also the corpus's only organic producers of `import_conflict`:
+	// before them the code was in the published closed taxonomy and reachable
+	// only through the error probe, which asks a host to synthesize a refusal
+	// rather than to earn one.
+	"import-claims-its-native-identity",
+	"import-records-its-native-identity",
 	"deployment-weight-sum-enforced",
 	"deployment-single-active-per-worker",
 	"deployment-version-ownership",
@@ -373,6 +380,31 @@ type ResourceProbe struct {
 	Identity              InstalledFormReference `json:"identity"`
 	LifecycleCapabilities []string               `json:"lifecycleCapabilities"`
 	Desired               map[string]any         `json:"desired"`
+	// DesiredSchema is this Form's desired-state contract at the exact pinned
+	// FormRef, carried as byte-digested corpus bytes.
+	//
+	// It is here because the runner MATERIALIZES this probe's spec against it.
+	// A runner that materialized against the schema the host under test served
+	// would agree with that host about every byte it then sent, so a host
+	// publishing a default of its own, or a bound of its own, would be
+	// self-consistent for a whole run and pass — while a real client,
+	// materializing the normative default, computes a different specDigest and
+	// has every prepare bound to a spec that host does not recognise. An oracle
+	// that adopts the subject's answer as the standard measures nothing.
+	//
+	// It cannot be re-derived from the pinned identity: `schemaDigest` addresses
+	// the canonical bytes of the WHOLE Definition, while the wire serves a subset
+	// of it, so no client holding the digest can reconstruct the served document.
+	// The corpus therefore states it, exactly as decision 0025 states the output
+	// contract, and TestCorpusPinsTheFormsOwnDesiredSchema compares these bytes
+	// against the installed Definition at the exact pinned FormRef so the two
+	// cannot drift.
+	//
+	// It is a byte-digested FILE rather than an inline document because a desired
+	// schema is the whole Form contract: inlining ten of them would treble the
+	// contract document a reader has to scan, for bytes no reader reads. The
+	// digest chain is the same either way — manifest to contract to fixture.
+	DesiredSchema PinnedSchema `json:"desiredSchema"`
 	// DeclaredOutputSchema is this Form's `outputSchema` — the WHOLE closed
 	// Draft 2020-12 contract its Definition declares — or absent when it
 	// declares none.
@@ -398,6 +430,17 @@ type ResourceProbe struct {
 	// compares these bytes against the installed Definition at the exact pinned
 	// FormRef.
 	DeclaredOutputSchema map[string]any `json:"declaredOutputSchema,omitempty"`
+}
+
+// PinnedSchema is one JSON Schema document the corpus carries as bytes under
+// its own digest. The contract states the path and the digest; the bytes are
+// hydrated and verified at load, never decoded out of the contract document.
+type PinnedSchema struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+
+	// Schema is hydrated from the byte-pinned corpus file.
+	Schema map[string]any `json:"-"`
 }
 
 // declaresOutputs reports whether this probe's Form publishes an output
@@ -686,6 +729,34 @@ type RunnerInput struct {
 	NegativeFixtures                 []NegativeFixture        `json:"negativeFixtures"`
 }
 
+// probeEntry is one pinned resource probe together with the contract member it
+// arrived under and the kind it must pin.
+type probeEntry struct {
+	Label string
+	Kind  string
+	Probe *ResourceProbe
+}
+
+// probeInventory is the ONE enumeration of the resource probes this corpus
+// pins. Contract validation, fixture hydration, the runner's pinned-schema map,
+// and the Form Definition comparison all read it, so a probe added to the
+// contract cannot be validated and then skipped by the oracle — which is the
+// shape of gap this file keeps closing.
+func probeInventory(input *RunnerInput) []probeEntry {
+	return []probeEntry{
+		{"moduleWorker", "ModuleWorker", &input.ModuleWorker},
+		{"edgeKvNamespace", "EdgeKVNamespace", &input.EdgeKvNamespace},
+		{"atLeastOnceQueue", "AtLeastOnceQueue", &input.AtLeastOnceQueue},
+		{"workerVersion", "WorkerVersion", &input.WorkerVersion},
+		{"workerBundle", "WorkerBundle", &input.WorkerBundle.ResourceProbe},
+		{"workerDeployment", "WorkerDeployment", &input.WorkerDeployment},
+		{"workerCustomDomain", "WorkerCustomDomain", &input.WorkerCustomDomain},
+		{"workerEndpoint", "WorkerEndpoint", &input.WorkerEndpoint},
+		{"workerCronTrigger", "WorkerCronTrigger", &input.WorkerCronTrigger},
+		{"queueConsumer", "QueueConsumer", &input.QueueConsumer},
+	}
+}
+
 // IdentityContract carries the normative uid/generation/revision semantics
 // strings.
 type IdentityContract struct {
@@ -763,6 +834,9 @@ func Verify(root string) (Contract, error) {
 	if err := hydrateSyntheticDefinition(root, &contract); err != nil {
 		return Contract{}, err
 	}
+	if err := hydrateDesiredSchemas(root, &contract); err != nil {
+		return Contract{}, err
+	}
 	if err := validateContract(contract); err != nil {
 		return Contract{}, err
 	}
@@ -802,24 +876,8 @@ func validateContract(contract Contract) error {
 		input.Space == input.AlternateSpace {
 		return errors.New("portable host v3 runner spaces are invalid")
 	}
-	probes := []struct {
-		label string
-		probe ResourceProbe
-		kind  string
-	}{
-		{"moduleWorker", input.ModuleWorker, "ModuleWorker"},
-		{"edgeKvNamespace", input.EdgeKvNamespace, "EdgeKVNamespace"},
-		{"atLeastOnceQueue", input.AtLeastOnceQueue, "AtLeastOnceQueue"},
-		{"workerVersion", input.WorkerVersion, "WorkerVersion"},
-		{"workerBundle", input.WorkerBundle.ResourceProbe, "WorkerBundle"},
-		{"workerDeployment", input.WorkerDeployment, "WorkerDeployment"},
-		{"workerCustomDomain", input.WorkerCustomDomain, "WorkerCustomDomain"},
-		{"workerEndpoint", input.WorkerEndpoint, "WorkerEndpoint"},
-		{"workerCronTrigger", input.WorkerCronTrigger, "WorkerCronTrigger"},
-		{"queueConsumer", input.QueueConsumer, "QueueConsumer"},
-	}
-	for _, entry := range probes {
-		if err := validateProbe(entry.label, entry.probe, entry.kind); err != nil {
+	for _, entry := range probeInventory(&contract.RunnerInput) {
+		if err := validateProbe(entry.Label, *entry.Probe, entry.Kind); err != nil {
 			return err
 		}
 	}
@@ -947,6 +1005,12 @@ func validateProbe(label string, probe ResourceProbe, kind string) error {
 	if probe.Desired == nil {
 		return fmt.Errorf("portable host v3 %s probe desired must be present", label)
 	}
+	// The pinned desired schema is what the runner materializes against and what
+	// a served Form Definition is compared to, so a probe without one would
+	// silently fall back to believing whatever the host said.
+	if err := validatePinnedDesiredSchema(label, probe.DesiredSchema); err != nil {
+		return err
+	}
 	// The pinned output contract is compiled at LOAD time. A corpus whose output
 	// schema does not compile, or that pins a schema no host could fail, must
 	// stop the run before it starts rather than pass every host it measures.
@@ -954,6 +1018,35 @@ func validateProbe(label string, probe ResourceProbe, kind string) error {
 		return fmt.Errorf("portable host v3 %s probe: %w", label, err)
 	}
 	return validateProbeCapabilities(label, probe.LifecycleCapabilities)
+}
+
+// validatePinnedDesiredSchema proves one probe's desired-state pin is a usable
+// contract rather than a placeholder.
+//
+// `additionalProperties: false` is required of it because that is what every
+// Form in this lane declares and what its negative fixtures depend on: a pin
+// that left the object open would be a contract no unexpected-property fixture
+// could fail, and the runner would materialize against it all the same.
+func validatePinnedDesiredSchema(label string, pin PinnedSchema) error {
+	if pin.Path == "" || !formpackage.ValidDigest(pin.SHA256) {
+		return fmt.Errorf(
+			"portable host v3 %s probe must pin its Form's desiredSchema as a byte-digested corpus file",
+			label,
+		)
+	}
+	if len(pin.Schema) == 0 {
+		return fmt.Errorf("portable host v3 %s probe desiredSchema was not hydrated", label)
+	}
+	if kind, _ := pin.Schema["type"].(string); kind != "object" {
+		return fmt.Errorf("portable host v3 %s probe desiredSchema is not an object schema", label)
+	}
+	if closed, ok := pin.Schema["additionalProperties"].(bool); !ok || closed {
+		return fmt.Errorf(
+			"portable host v3 %s probe desiredSchema is not closed: additionalProperties must be false",
+			label,
+		)
+	}
+	return nil
 }
 
 // baseCapabilities is the closed set every v1alpha3 Form must advertise; the
@@ -1419,6 +1512,24 @@ func hydrateNegativeFixtures(root string, contract *Contract) error {
 		}
 		if err := formpackage.DecodeStrictIJSON(raw, &fixture.Input); err != nil {
 			return fmt.Errorf("portable host v3 fixture %q: %w", fixture.Name, err)
+		}
+	}
+	return nil
+}
+
+// hydrateDesiredSchemas loads the byte-pinned desired-state contract of every
+// probe Form. The bytes are the corpus's, not the host's: they are what the
+// runner materializes against and what `form-definition-exact` holds a served
+// document to.
+func hydrateDesiredSchemas(root string, contract *Contract) error {
+	for _, entry := range probeInventory(&contract.RunnerInput) {
+		pin := &entry.Probe.DesiredSchema
+		raw, err := readPinnedCorpusFile(root, entry.Label+" desiredSchema", pin.Path, pin.SHA256)
+		if err != nil {
+			return err
+		}
+		if err := formpackage.DecodeStrictIJSON(raw, &pin.Schema); err != nil {
+			return fmt.Errorf("portable host v3 %s desiredSchema: %w", entry.Label, err)
 		}
 	}
 	return nil

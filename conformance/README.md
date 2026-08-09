@@ -196,15 +196,25 @@ condition-reason vocabulary, and exact Edge Family probe identities
 WorkerVersion, WorkerDeployment, WorkerCustomDomain, WorkerEndpoint,
 WorkerCronTrigger, QueueConsumer) with their
 registry package digests plus byte-pinned
-desired-negative fixtures. It also pins a byte-digested SECOND Form Definition
+desired-negative fixtures. It pins each of those ten Forms' DESIRED SCHEMA as
+byte-digested bytes as well, because the runner materializes every probe spec
+against the pin rather than against what the host under test serves: a runner
+that took its defaults from the subject agreed with that subject about every
+byte it then sent, so a host publishing a default of its own passed a whole run
+while a real client — materializing the normative default — computed a different
+`specDigest` and had every `prepare` refused. `form-definition-exact` compares
+what a host serves against those bytes, and a repository test recomputes them
+from the installed Definition at the exact pinned FormRef so the pin cannot
+drift
+([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
+It also pins a byte-digested SECOND Form Definition
 of the ModuleWorker line, so the lane can install two contracts of one group and
 kind at once; without it, "a host answers for the exact ref recorded in state"
 and "a host answers for the kind" are the same behavior and no check can tell
-them apart
-([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
+them apart (same decision).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 112-check matrix over real HTTP: exact discovery and
+drives the complete 114-check matrix over real HTTP: exact discovery and
 availability, a credential that is REQUIRED — an absent `Authorization` header
 and a bearer credential naming nobody are both refused `unauthenticated` on a
 read surface and on a mutating one, and the identical requests under a real
@@ -243,7 +253,20 @@ under the exact ref it was created under and `resource_not_found` under any
 other, and a relation refused before mutation when its target does not satisfy
 the contract the reference annotates, whether that is an exact Form identity or
 a required Interface, with the stored pin recording the target's exact FormRef
-beside its uid — import validated exactly like apply, cross-resource semantics the Forms declare in prose but only a host can
+beside its uid — import validated exactly like apply and DISTINGUISHABLE from a
+create: the `nativeId` an adoption names is a claim the host records on the
+resource and holds exclusively within the caller's tenant, so a second live
+resource adopting one native identity is refused `import_conflict` before any
+mutation (from any space of that tenant, and never across tenants, where a
+refusal would report what a stranger manages), a resource already adopted cannot
+be re-pointed at another native identity, and the claim is released when its
+holder is deleted. Everything else the lane asks of an import — a minted uid,
+generation 1, the whole validation gauntlet — a plain create also satisfies, and
+`terraform import` against such a host mints a new backend object and orphans
+the one being adopted
+([decision 0011](../spec/decisions/0011-resource-identity-generation-and-revision.md);
+these are also the corpus's only organic producers of `import_conflict`, which
+was otherwise reachable only through the error probe), cross-resource semantics the Forms declare in prose but only a host can
 enforce (WorkerDeployment weights summing to exactly 10000 — short and long are
 both refused, and a real two-version split at 1000/9000 is accepted, so a host
 that admits only one weighted entry has no traffic split and fails; one active

@@ -64,6 +64,12 @@ const (
 	tenantIdempotencyName = "tenant-idempotency-probe"
 	tenantImportHeldName  = "tenant-import-held-probe"
 	tenantImportFreeName  = "tenant-import-free-probe"
+
+	// The two names and the one native identity that measure the far edge of the
+	// adoption claim: one identity, adopted once in each tenant.
+	tenantSharedNativeName        = "tenant-native-claim-probe"
+	tenantSharedNativeForeignName = "tenant-native-claim-foreign-probe"
+	tenantSharedNativeID          = "native-tenant-shared-object"
 )
 
 // checkTenantIsolatedResourcePlane drives the whole V3-012 sequence. It runs
@@ -604,7 +610,7 @@ func (r *v3Runner) checkResourceImportIsTenantIsolated(worker probeTarget) error
 		)
 	}
 	control, err := r.importResourceAs(r.alternateTenantToken, free, importOptions{
-		NativeID: "native-tenant-import-held-adopt", IdempotencyKey: "key-tenant-import-free-adopt", Create: true,
+		NativeID: "native-tenant-import-free-adopt", IdempotencyKey: "key-tenant-import-free-adopt", Create: true,
 	})
 	if err != nil {
 		return err
@@ -656,6 +662,47 @@ func (r *v3Runner) checkResourceImportIsTenantIsolated(worker probeTarget) error
 			held.Name, holder.Metadata.UID, holder.Metadata.Generation, holder.Metadata.Revision,
 			still.Metadata.UID, still.Metadata.Generation, still.Metadata.Revision,
 		)
+	}
+	// And the adoption CLAIM stops at the tenant, exactly as the name does.
+	//
+	// One tenant holds a native identity; the other adopts the same identity and
+	// MUST be answered a resource of its own. A host enforcing the claim of
+	// spec/decisions/0011 host-wide would refuse here with `import_conflict`,
+	// which reads to a caller who can see nothing else as "somebody on this host
+	// already manages that object" — a membership oracle over every identifier a
+	// stranger can guess, and the same disclosure every other leg of this check
+	// exists to prevent. Whose account an object lives in is authority this lane
+	// does not model, so it is not this refusal's question to answer.
+	shared := worker
+	shared.Name = tenantSharedNativeName
+	firstAdoption, err := r.importResourceAs(r.token, shared, importOptions{
+		NativeID: tenantSharedNativeID, IdempotencyKey: "key-tenant-shared-native-adopt", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	firstHolder, err := decodeResource(firstAdoption, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("the first tenant adopting %s: %w", tenantSharedNativeID, err)
+	}
+	crossTenant := worker
+	crossTenant.Name = tenantSharedNativeForeignName
+	secondAdoption, err := r.importResourceAs(r.alternateTenantToken, crossTenant, importOptions{
+		NativeID: tenantSharedNativeID, IdempotencyKey: "key-tenant-shared-native-foreign", Create: true,
+	})
+	if err != nil {
+		return err
+	}
+	secondHolder, err := decodeResource(secondAdoption, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf(
+			"a second tenant adopting the native identity %s: %w; the claim is scoped to the caller's tenant, so a "+
+				"refusal here reports what another tenant manages to a caller who cannot see it",
+			tenantSharedNativeID, err,
+		)
+	}
+	if secondHolder.Metadata.UID == firstHolder.Metadata.UID {
+		return errors.New("two tenants adopting one native identity were answered one resource")
 	}
 	r.complete("resource-import-is-tenant-isolated")
 	return nil

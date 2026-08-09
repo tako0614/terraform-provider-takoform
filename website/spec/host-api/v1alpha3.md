@@ -161,6 +161,59 @@ verbatim. This is the required conformance check
   This is the required conformance check
   `exact-form-ref-fails-closed-on-unknown-definition`.
 
+### An adoption claims the native identity it names
+
+The rules of this section are decided by
+[decision 0011](../decisions/0011-resource-identity-generation-and-revision.md).
+
+`import` carries a `nativeId`: the host's own name for a backend object that
+already exists. It is a CLAIM, not a hint.
+
+- **A host RECORDS the `nativeId` of every adoption on the resource it adopts,
+  and holds it exclusively within the caller's tenant.** At most one live
+  resource of one tenant holds one native identity. An adoption naming an
+  identity another live resource of that tenant already holds fails
+  `import_conflict` (409) before any mutation and stores nothing.
+- **A recorded claim is immutable.** An `import` addressing an EXISTING resource
+  of the caller under a different `nativeId` fails `import_conflict` (409)
+  before any mutation. Re-importing that resource under the identity it already
+  holds is not a conflict: it is the ordinary fenced import and answers the same
+  incarnation. A resource this host created holds no claim, so the first
+  `import` naming it records one rather than changing one.
+- **The claim is released with its holder.** Once the resource holding an
+  identity is deleted, that identity is adoptable again — otherwise a
+  `destroy` would leave a backend object permanently unimportable.
+- **The claim spans every space of one tenant and stops at the tenant.** Spaces
+  partition one tenant's resources and a backend object does not partition with
+  them, so two spaces adopting one object is the same duplication as two
+  resources in one space. It stops at the tenant for the reason every refusal in
+  [Tenant isolation](#tenant-isolation) is shaped the way it is: a host-wide
+  claim would answer "somebody already manages that" to a caller who cannot see
+  the holder, which is a membership oracle over every identifier a stranger can
+  guess. Whose account an object lives in is authority this lane does not model.
+
+These are the required conformance checks `import-claims-its-native-identity`
+and `import-records-its-native-identity`, with the tenant edge driven by
+`resource-import-is-tenant-isolated`. They exist because every other thing this
+lane asks of `import` — a minted uid, generation `1`, the full validation
+gauntlet, the claim scan of [decision
+0026](../decisions/0026-attachment-claims-are-canonical-and-acyclic.md) — a plain
+create also satisfies. A host whose `/import` created would pass the rest of the
+corpus while `terraform import` against it minted a NEW backend object and
+orphaned the one being adopted.
+
+**The `nativeId` never appears in a response, and no rule above asks a portable
+author to know one.** A native identifier is host detail, outside the Form
+contract ([portability boundary](../portability-boundary.md)), and the published
+wire documents are closed
+([decision 0014](../decisions/0014-published-schemas-are-structural-minima.md)),
+so what is observable is not the identifier but what a host holding it can no
+longer do. What this lane therefore does NOT prove is that the object named
+existed before the call, or that the host did not also mint a fresh one beside
+it: no portable surface reports either, and a black-box runner cannot name an
+object it knows a host already has without depending on that host's identifier
+format. Publication blocker **V3-014** records that remainder.
+
 ### The installed set is keyed by the exact identity
 
 The rules of this section are decided by
@@ -178,6 +231,21 @@ The rules of this section are decided by
   another names no installed Definition and fails `form_unknown` (404) like any
   other unknown identity. This is the required conformance check
   `two-definition-versions-answer-independently`.
+- **The Form Definition surface answers with the Definition's own bytes.** For
+  an exact FormRef, `desiredSchema` MUST be the `desiredSchema` of the installed
+  Definition whose canonical bytes that `schemaDigest` addresses — every
+  declared default, bound, pattern, and enum, unchanged. Echoing the requested
+  identity is not enough: a host that answered a pinned FormRef with a schema of
+  its own would hand every client a different portable default, and a client
+  that materialized it would compute a `specDigest` no other client computes,
+  with `prepare` refusing what the author actually wrote and nothing on either
+  side able to say why. A client CANNOT re-derive the served document from the
+  pinned digest — the digest covers the whole Definition and this surface serves
+  a subset of it — so the conformance corpus pins the desired schema of every
+  Form it drives as bytes, and `form-definition-exact` compares what a host
+  serves against them. The runner materializes its probe specs from the PINNED
+  schema, never from the served one; measuring a host against defaults that host
+  supplied measures nothing.
 - A resource RECORDS the exact FormRef it was created under. That ref is written
   at create, carried forward unchanged by every update and import, and is the
   only identity the resource is answered about. A `read`, `observe`, `apply`,

@@ -1,6 +1,9 @@
 # 0022 — A host answers for an exact Form, and a relation pins its target's contract
 
-- Status: accepted
+- Status: accepted; rule 2 was amended on 2026-08-09 to say what a resolved
+  lookup must ANSWER with (see "An exact identity answers with the Definition's
+  own bytes" below), because resolving the right Definition and serving its
+  contract turned out to be two promises and the lane only measured the first
 - Date: 2026-08-08
 - Owners: Takoform maintainers
 
@@ -150,6 +153,59 @@ normative; the operative text lives in
    second drift mechanism and no new error code or condition reason: both
    published enums are closed.
 
+### An exact identity answers with the Definition's own bytes
+
+*Amended 2026-08-09.* Rule 2 says every lookup RESOLVES the whole identity or
+fails closed. It does not say what a resolved lookup answers with, and the two
+are different promises. A host MUST serve, for an exact FormRef, the
+`desiredSchema` of the installed Definition whose canonical bytes that
+`schemaDigest` addresses — every declared default, bound, pattern, and enum,
+unchanged.
+
+The gap this closes is in the oracle rather than in any host. The conformance
+runner read each Form Definition from the host under test and materialized every
+probe spec against what it was served. A host publishing a default of its own
+therefore agreed with itself about every byte the runner then sent, stored,
+digested, and compared: self-consistent for an entire run, and passing all 112
+required checks. The client this lane exists to protect materializes the
+NORMATIVE default instead, computes a different `specDigest`, and has every
+`prepare` bound to a spec that host does not recognise — a failure with no local
+symptom, at the surface a practitioner cannot inspect. An oracle that adopts the
+subject's answer as the standard it measures against is the defect this
+repository keeps finding, and it was here in its purest form.
+
+It cannot be closed by re-derivation. `schemaDigest` addresses the canonical
+bytes of the WHOLE Definition, while the wire serves a subset of it — identity,
+display name, description, and `desiredSchema` — so no party holding the digest
+can reconstruct the served document and compare. That was read once as "so the
+lane cannot check this", and it is the wrong conclusion: decision
+[0025](0025-declared-outputs-are-a-typed-contract.md) had already answered the
+same problem for the output contract by pinning it IN THE CORPUS, with a
+repository test binding those bytes to the installed Definition at the exact
+pinned FormRef. This does the same for the desired schema.
+
+- The corpus pins the desired schema of every Form its probes materialize a spec
+  against — the ten Edge Family probes — as byte-digested corpus files, and
+  `TestCorpusPinsTheFormsOwnDesiredSchema` recomputes them from the installed
+  Definition at that exact FormRef, so the pin cannot drift into a private
+  contract of the corpus's own.
+- `form-definition-exact` compares what a host serves against those bytes, for
+  every one of them, and for the synthetic second definition version out of the
+  Definition the corpus already pins whole. It previously drove two Forms and
+  compared nothing but the echoed identity.
+- The runner materializes probe specs from the PINNED schema. It is the half
+  that matters: a comparison alone would name the divergence while the run
+  continued to measure the host against its own defaults.
+
+Exactly the Forms the runner materializes against are pinned, and no others. A
+pin nothing uses is maintenance with no oracle value, and the two synthetic
+Forms this lane installs — the second-group `EdgeKVNamespace` and the second
+`ModuleWorker` definition version — are driven with a literal empty desired spec
+the runner writes itself, so no served schema can influence what is sent for
+them. The rule is the one that generalises: a Form whose spec the runner
+materializes MUST have a pin, which contract validation requires of every probe,
+so a probe added later cannot fall back to believing the subject.
+
 These are proven by the required conformance checks
 `two-definition-versions-answer-independently`,
 `resource-answers-only-under-its-recorded-form-ref`,
@@ -159,6 +215,14 @@ Definition of one kind as exact bytes.
 
 ## Consequences
 
+- *(2026-08-09)* The corpus pins ten more artifacts — one desired schema per
+  probe Form, byte-digested under `fixtures/` — and `form-definition-exact`
+  becomes a comparison rather than an echo. Widening it to every probe also
+  found a stale pin nothing else was looking at: the corpus's `WorkerEndpoint`
+  `packageDigest` had drifted from the generated registry, because the test that
+  binds probe identities to that registry enumerated eight of the ten probes by
+  hand. Both the pin and the enumeration are fixed, and the enumeration is now
+  the one list the contract keeps.
 - The conformance corpus grows to 84 required checks and pins one more artifact:
   a byte-digested second Form Definition of the `ModuleWorker` line. It differs
   from the first in exactly two places, and both are load-bearing — the
@@ -238,3 +302,31 @@ Definition of one kind as exact bytes.
   first would have written a record whose every later dependency and drift
   decision is unsound, and the remedy would be to delete something the client
   believed it had created.
+
+Rejected in the 2026-08-09 amendment:
+
+- **Serve the desired schema's own digest on the Form Definition surface and
+  have the client compare.** This is the shape that would need no corpus pin,
+  and it is unavailable: the published form-definition response is a closed
+  object and its bytes are immutable (decision 0014), so a `desiredSchemaDigest`
+  member is rung 4 of that ladder — a new schema generation, minted for one
+  comparison the corpus can make today.
+- **Pin the WHOLE Form Definition per probe instead of its desired schema.**
+  Attractive, because `schemaDigest` would then be re-derivable from the pinned
+  bytes and the corpus would verify itself without a repository checkout. It is
+  the right shape and the wrong change set: the corpus already pins each Form's
+  `outputSchema` inline under decision 0025, and pinning the whole Definition
+  beside it would state that contract twice with nothing keeping the two
+  agreeing. Folding both into one pinned Definition is a coherent follow-up and
+  belongs to its own change.
+- **Pin a desired schema for every installed Form rather than every probed
+  one.** Rejected as maintenance without oracle value. What a pin buys is a
+  comparison and a materialization source; a Form no probe drives supplies
+  neither, and the two synthetic Forms this lane installs are driven with a
+  literal spec the runner writes itself. The invariant kept instead is the one
+  that cannot rot: every Form the runner materializes against has a pin, checked
+  when the contract loads.
+- **Keep reading the served schema and merely warn on divergence.** Rejected
+  because the run would continue measuring the host against defaults the host
+  supplied. A divergence named in a report that still says `passed` is the same
+  oracle with a footnote.

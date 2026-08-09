@@ -129,6 +129,14 @@
     "deadLetterAcyclicity": "a-dead-letter-reference-resolving-to-the-consumers-own-queue-or-closing-a-cycle-of-any-length-is-invalid_argument/400-before-mutation",
     "commitRevalidation": "both-claims-re-verified-when-an-accepted-202-commits"
   },
+  "adoption": {
+    "nativeId": "host-detail; required-on-import; never-echoed-in-any-response",
+    "recordedOn": "the-resource-the-adoption-mints-or-addresses",
+    "exclusivity": "one-live-resource-per-native-identity-per-tenant-across-every-space; second-claim-is-import_conflict/409-before-mutation",
+    "claimImmutability": "an-import-addressing-an-existing-resource-under-another-nativeId-is-import_conflict/409-before-mutation; re-importing-under-the-recorded-one-answers-the-same-incarnation",
+    "claimRelease": "released-when-the-resource-holding-it-is-deleted",
+    "crossTenant": "not-a-conflict; a-host-wide-claim-would-disclose-another-tenants-holdings"
+  },
   "roleRules": {
     "revisionUpdate": "invalid_argument",
     "attachmentDeleteCascade": "never-deletes-parent",
@@ -143,7 +151,8 @@
     "carrier": "desiredSchema-properties-default",
     "materialization": "host-materializes-declared-defaults-at-the-entry-point-before-validation-and-digesting",
     "specDigest": "digest-of-the-materialized-spec",
-    "clientObligation": "accept-the-materialized-echo"
+    "clientObligation": "accept-the-materialized-echo",
+    "servedContract": "the-form-definition-surface-serves-the-installed-Definitions-own-desiredSchema-at-the-exact-formRef; declared-defaults-bounds-patterns-and-enums-unchanged"
   },
   "operations": [
     {

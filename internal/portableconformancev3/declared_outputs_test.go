@@ -224,13 +224,15 @@ func decodedOutputs(t *testing.T, raw string) map[string]any {
 	return outputs
 }
 
-// allResourceProbes is every probe the corpus pins, in one list.
+// allResourceProbes is every probe the corpus pins, read from the one
+// enumeration the contract keeps, so this comparison cannot quietly skip a
+// probe someone adds later.
 func allResourceProbes(input RunnerInput) []ResourceProbe {
-	return []ResourceProbe{
-		input.ModuleWorker, input.EdgeKvNamespace, input.AtLeastOnceQueue,
-		input.WorkerVersion, input.WorkerBundle.ResourceProbe, input.WorkerDeployment,
-		input.WorkerCustomDomain, input.WorkerEndpoint, input.WorkerCronTrigger, input.QueueConsumer,
+	probes := make([]ResourceProbe, 0, 10)
+	for _, entry := range probeInventory(&input) {
+		probes = append(probes, *entry.Probe)
 	}
+	return probes
 }
 
 // runAgainstRewrittenEndpointOutputs drives the complete matrix against the

@@ -190,9 +190,17 @@ type v3Runner struct {
 	httpClient           *http.Client
 	apiBase              string
 
-	// desiredSchemas is the served desiredSchema of every probe kind, keyed
-	// "<group>\x00<kind>". It carries the declared portable defaults.
-	desiredSchemas map[string]map[string]any
+	// desiredSchemas is the CORPUS-PINNED desiredSchema of every Form the lane
+	// drives a probe against, keyed by the whole exact FormRef.
+	//
+	// Pinned, because materializing against the served schema would make the
+	// host under test the author of the specs it is then measured on: it would
+	// agree with its own defaults and bounds for the length of a run, and the
+	// divergence would only appear at a real client. Keyed by the exact ref
+	// rather than by group and kind, because one Form line holds more than one
+	// contract in this lane (decision 0022) and a kind-keyed map would answer
+	// for whichever arrived first.
+	desiredSchemas map[FormRef]map[string]any
 
 	completed              map[string]bool
 	errorProbes            []ErrorProbeEvidence
@@ -282,39 +290,34 @@ func (r *v3Runner) target(probe ResourceProbe) probeTarget {
 	}
 }
 
+// materialize renders one probe's desired spec the way the Form Definition at
+// that exact ref declares it, from the corpus pin.
+//
+// A ref with no pin returns the spec unchanged, and that case is not a fallback
+// to the host: contract validation requires a pin for every probe, and the only
+// other targets this lane builds — the synthetic second group and the synthetic
+// second definition version — carry a literal empty spec the runner writes
+// itself and never materializes.
 func (r *v3Runner) materialize(ref FormRef, spec map[string]any) map[string]any {
-	schema, known := r.desiredSchemas[ref.APIVersion+"\x00"+ref.Kind]
-	if !known {
+	schema, pinned := r.desiredSchemas[ref]
+	if !pinned {
 		return spec
 	}
 	return currentformmodel.MaterializeDefaults(schema, spec)
 }
 
-// loadDesiredSchemas reads the exact Form Definition of every probe kind from
-// the host under test. It is the runner's only source of declared defaults:
-// the corpus pins what to send, the host states what an omitted property
-// means.
-func (r *v3Runner) loadDesiredSchemas() error {
+// pinDesiredSchemas loads the runner's declared defaults out of the CORPUS.
+//
+// It replaces a load that read them from the host under test. The corpus pins
+// what to send AND what an omitted property means; the host is asked what it
+// serves separately, by `form-definition-exact`, which compares the two. A
+// runner that took the answer from the subject had no comparison to make.
+func (r *v3Runner) pinDesiredSchemas() {
 	input := r.contract.RunnerInput
-	probes := []ResourceProbe{
-		input.ModuleWorker, input.EdgeKvNamespace, input.AtLeastOnceQueue,
-		input.WorkerVersion, input.WorkerBundle.ResourceProbe, input.WorkerDeployment,
-		input.WorkerCustomDomain, input.WorkerEndpoint, input.WorkerCronTrigger, input.QueueConsumer,
+	r.desiredSchemas = map[FormRef]map[string]any{}
+	for _, entry := range probeInventory(&input) {
+		r.desiredSchemas[entry.Probe.Identity.FormRef] = entry.Probe.DesiredSchema.Schema
 	}
-	r.desiredSchemas = map[string]map[string]any{}
-	for _, probe := range probes {
-		ref := probe.Identity.FormRef
-		key := ref.APIVersion + "\x00" + ref.Kind
-		if _, loaded := r.desiredSchemas[key]; loaded {
-			continue
-		}
-		definition, err := r.formDefinition(ref)
-		if err != nil {
-			return err
-		}
-		r.desiredSchemas[key] = definition.DesiredSchema
-	}
-	return nil
 }
 
 // wireFormDefinition is the served Form Definition surface the runner reads.
@@ -449,6 +452,21 @@ func (r *v3Runner) exactQuery(space string, ref FormRef) url.Values {
 }
 
 // ---- decode/assert helpers ----
+
+// canonicalJSON renders one decoded document as RFC 8785 bytes, so two
+// documents that say the same thing compare equal however each was spelled and
+// whichever loader decoded it.
+func canonicalJSON(value any) (string, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	canonical, err := formpackage.Canonicalize(raw)
+	if err != nil {
+		return "", err
+	}
+	return string(canonical), nil
+}
 
 func decodeStrictResponse(response wireResponse, target any) error {
 	if len(bytes.TrimSpace(response.Body)) == 0 {
