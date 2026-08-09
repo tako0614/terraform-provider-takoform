@@ -123,7 +123,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 89-entry executed-check list every v3
+// requiredRunnerChecks is the closed 100-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -232,6 +232,17 @@ var requiredRunnerChecks = []string{
 	// Declared outputs are a contract in both directions
 	// (spec/decisions/0025).
 	"form-declared-outputs-are-exact",
+	// The resource plane is tenant-isolated (spec/decisions/0028). Every one of
+	// these is driven black box, with the two credentials the runner input
+	// already carries: a runner that cannot authenticate as two tenants cannot
+	// measure any of them.
+	"resource-address-is-tenant-scoped",
+	"resource-read-is-tenant-isolated",
+	"resource-update-is-tenant-isolated",
+	"resource-delete-is-tenant-isolated",
+	"relation-resolution-is-tenant-scoped",
+	"prepare-is-tenant-scoped",
+	"idempotency-is-tenant-scoped",
 }
 
 // FormRef is the exact four-field v1alpha3 Form identity.

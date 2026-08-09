@@ -198,7 +198,7 @@ them apart
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
 `self-test --contract conformance/portable-host-v3`
 starts a deterministic reference host over the real candidate definitions and
-drives the complete 89-check matrix over real HTTP: exact discovery and
+drives the complete 100-check matrix over real HTTP: exact discovery and
 availability,
 validate/prepare with RFC 8785 prepare binding and substitution rejection
 (a prepare against an existing resource requires the update generation
@@ -259,7 +259,17 @@ rather than only reading one: a bundle whose desired state references a manifest
 the caller's tenant does not hold is refused `artifact_missing` before any
 mutation, on apply and on import, storing nothing, while a second principal of
 the holding tenant references it successfully and the other tenant references it
-once it has supplied the bytes itself. Probing every stable error uses the runner-only
+once it has supplied the bytes itself. The plane those three surround is held to
+the same boundary by
+[decision 0028](../spec/decisions/0028-the-resource-plane-is-tenant-isolated.md):
+two tenants create one `{space, kind, name}` and get two resources with two uids,
+neither reads, updates, or deletes the other's — answered `resource_not_found`,
+indistinguishably from a name nobody created — a reference resolves only inside
+the referring tenant even when the name matches exactly, a `prepareDigest` minted
+by one tenant is not spendable by another, and one `Idempotency-Key` from two
+tenants is two operations rather than a replay. All seven are black box and all
+seven need the alternate-TENANT credential, which is why the runner requires it.
+Probing every stable error uses the runner-only
 `Takoform-Conformance-Probe` header (`error:<code>`, `async`,
 `touch-status`, `external-change`); it is disposable-adapter transport, never
 a production surface. `external-change` performs one delete as an out-of-band

@@ -143,12 +143,106 @@ The rules of this section are decided by
   absent is a resource of that name under that contract. A response MUST NOT
   rewrite an older resource's recorded ref to a newer one. This is the required
   conformance check `resource-answers-only-under-its-recorded-form-ref`.
-- A resource NAME stays unique within one space, group, and kind. The definition
-  version decides what a request is answered about, never where a resource
-  lives: a reference is `{apiVersion, kind, name}` and carries no definition
-  version, so two same-named resources of one kind under different contracts
-  would leave every reference to that name unresolvable. A create therefore still
-  conflicts with a name taken under another contract of the same kind.
+- A resource NAME stays unique within one tenant, space, group, and kind. The
+  definition version decides what a request is answered about, never where a
+  resource lives: a reference is `{apiVersion, kind, name}` and carries no
+  definition version, so two same-named resources of one kind under different
+  contracts would leave every reference to that name unresolvable. A create
+  therefore still conflicts with a name taken under another contract of the same
+  kind — and never with a name taken by another TENANT, which is a different
+  address entirely ([Tenant isolation](#tenant-isolation)).
+
+## Tenant isolation
+
+The rules of this section are decided by
+[decision 0028](../decisions/0028-the-resource-plane-is-tenant-isolated.md).
+
+A host's **internal resource address MUST include the tenant, the space, the
+`apiVersion`, the `kind`, and the `name`.** The tenant is the AUTHENTICATED
+tenant of the request: no path segment, query key, reference, or `metadata`
+member names one, so it comes from the credential and from nowhere else. It is
+recorded when a resource is created and carried forward by every update and
+import, exactly like the recorded exact FormRef.
+
+Everything else follows from the address.
+
+- Two tenants MAY create one `{space, apiVersion, kind, name}`. They get two
+  resources with two host-issued uids, two generations, and two revisions.
+  Neither create conflicts with the other, because a name is taken **within one
+  tenant** — a host that let one tenant's name choice deny another's would make
+  the whole name space a shared, first-come resource and a membership oracle
+  besides.
+- `read`, `apply`, `import`, `observe`, and `delete` address the caller's own
+  tenant. A request naming another tenant's resource fails
+  `resource_not_found` (404) and MUST be **indistinguishable** from a request
+  naming a resource that was never created — the same code, the same status, and
+  a message that discloses nothing about the other tenant. `permission_denied`
+  (403) is the wrong answer and is forbidden here: it would confirm that a
+  resource of that name exists somewhere on the host, which is the fact the
+  boundary exists to withhold, to any caller who can guess a name.
+- **Relations resolve only within the same tenant.** A reference is
+  `{apiVersion, kind, name}` and carries neither a tenant nor a space, so it is
+  resolved inside the referring resource's own scope. A name that only another
+  tenant holds is an absent target and fails `resource_not_found` (404) like any
+  other. A host that resolved a reference across tenants would bind one tenant's
+  desired state to another tenant's resource and pin its uid into stored state,
+  which is the substitution
+  [decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md)
+  closes for incarnations, committed across a security boundary rather than a
+  naming one. Deletion protection, drift, and every Worker aggregate rule read
+  those pinned relations, so all of them stop at the tenant too.
+- A `prepareDigest` is minted for one tenant and is spendable by that tenant
+  alone. An apply presenting a review minted in another tenant fails
+  `invalid_argument` (400) before any mutation — the ordinary prepare-binding
+  refusal, because the resource being addressed is the caller's own and what is
+  untrue is the review. A create binding pins no uid and no generation, so
+  without the tenant two tenants preparing one name in one space would hold the
+  same digest, and a review — a value clients log, print in plans, and pass
+  between processes — would be a bearer token over another tenant's plane.
+- An `Idempotency-Key` names one operation **of one tenant**. The same key from
+  two tenants is two operations, and each tenant replays only its own recorded
+  response. Answering a second tenant with the first tenant's recorded success
+  would hand it another tenant's uid, generation, and ETag while performing no
+  mutation at all.
+- Anything a host renders from OTHER resources — the relation drift and Worker
+  readiness of [Resource identity](#resource-identity) — is computed from, and
+  advances the revision of, resources of the mutating tenant only. That pass
+  writes, so a host-wide one would move another tenant's ETag.
+
+There is **one deliberate exception**, and it is the one
+[decision 0026](../decisions/0026-attachment-claims-are-canonical-and-acyclic.md)
+already decided: a `WorkerCustomDomain`'s canonical hostname is unique across
+every space **of one tenant**, because spaces partition one tenant's resources
+and DNS does not partition with them
+([An attachment's claim is decided on canonical, resolved identity](#an-attachment-s-claim-is-decided-on-canonical-resolved-identity)).
+That rule drops the space and keeps the tenant. It does not reach past the
+tenant, and no rule in this lane does.
+
+Seven required conformance checks measure this, all of them black box, all of
+them driven with two configured tenants' credentials:
+`resource-address-is-tenant-scoped`, `resource-read-is-tenant-isolated`,
+`resource-update-is-tenant-isolated`, `resource-delete-is-tenant-isolated`,
+`relation-resolution-is-tenant-scoped`, `prepare-is-tenant-scoped`, and
+`idempotency-is-tenant-scoped`. A runner that cannot authenticate as two tenants
+can measure none of them, which is why the lane's runner REQUIRES an
+alternate-tenant credential alongside the same-tenant alternate principal rather
+than treating it as optional.
+
+Two facts are host obligations this lane does NOT prove, because a black-box
+runner cannot observe them:
+
+- that the tenant is part of the ADDRESS rather than a filter applied somewhere
+  late. The checks measure the consequences, which is what a third-party host can
+  be held to; a host that reaches the same answers by other means passes, and is
+  conforming.
+- that a host-wide derived-rendering pass would cross the tenant. Constructing
+  the case needs one tenant's resource to render from another's, and relation
+  resolution refuses to build it — so there is no request sequence that
+  distinguishes a scoped pass from an unscoped one.
+
+Publication blocker **V3-012** records this item; the reference host's own
+obligations are proved by host-side tests in
+`internal/portableconformancev3/tenant_isolation_test.go`.
 
 ## Lifecycle
 

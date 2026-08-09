@@ -226,7 +226,7 @@ func TestBundleDesiredStateResolvesItsManifestBeforeMutation(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		_, hostErr := host.validateDesiredSemantics(
-			referencePrimaryAuth, form, contract.RunnerInput.Space, "worker-bundle-probe", testCase.spec,
+			referencePrimaryAuth, form, referencePrimaryAuth.scope(contract.RunnerInput.Space), "worker-bundle-probe", testCase.spec,
 		)
 		switch {
 		case testCase.code == "" && hostErr != nil:
@@ -239,11 +239,11 @@ func TestBundleDesiredStateResolvesItsManifestBeforeMutation(t *testing.T) {
 	// uncommitted digest and another tenant's committed digest answer the same
 	// code and the same message.
 	_, unknownErr := host.validateDesiredSemantics(
-		referencePrimaryAuth, form, contract.RunnerInput.Space, "worker-bundle-probe",
+		referencePrimaryAuth, form, referencePrimaryAuth.scope(contract.RunnerInput.Space), "worker-bundle-probe",
 		map[string]any{"manifestDigest": formpackage.DigestBytes([]byte("never-committed"))},
 	)
 	_, foreignErr := host.validateDesiredSemantics(
-		referencePrimaryAuth, form, contract.RunnerInput.Space, "worker-bundle-probe",
+		referencePrimaryAuth, form, referencePrimaryAuth.scope(contract.RunnerInput.Space), "worker-bundle-probe",
 		map[string]any{"manifestDigest": foreign},
 	)
 	if unknownErr == nil || foreignErr == nil || *unknownErr != *foreignErr {
@@ -348,7 +348,9 @@ func TestForeignManifestReferenceFailsOnTheAsyncCommitPath(t *testing.T) {
 	if !terminal.Done || terminal.Result != nil || terminal.Error["code"] != "artifact_missing" {
 		t.Fatalf("async commit referencing an unheld manifest settled as %+v, want artifact_missing", terminal)
 	}
-	if host.resources[resourceKey(contract.RunnerInput.Space, bundleRef.APIVersion, bundleRef.Kind, name)] != nil {
+	if host.resources[resourceKey(
+		referencePrimaryAuth.scope(contract.RunnerInput.Space), bundleRef.APIVersion, bundleRef.Kind, name,
+	)] != nil {
 		t.Fatal("a refused async commit stored the resource")
 	}
 }
@@ -375,8 +377,9 @@ func TestCommittedManifestSurvivesUnrelatedAbandonedUpload(t *testing.T) {
 
 	bundleRef := contract.RunnerInput.WorkerBundle.Identity.FormRef
 	host.storeResource(&storedResource{
-		Ref:  bundleRef,
-		Name: "worker-bundle-probe", Space: contract.RunnerInput.Space,
+		Ref:    bundleRef,
+		Name:   "worker-bundle-probe",
+		Tenant: referencePrimaryAuth.Tenant, Space: contract.RunnerInput.Space,
 		UID: "uid-1", Generation: 1, Revision: 1,
 		Spec: map[string]any{"manifestDigest": referencedDigest},
 	})
@@ -427,7 +430,7 @@ func TestCommittedManifestSurvivesUnrelatedAbandonedUpload(t *testing.T) {
 	// And the resource that references the manifest still resolves it.
 	bundleForm := host.catalog.exact(bundleRef)
 	if _, hostErr := host.validateDesiredSemantics(
-		referencePrimaryAuth, bundleForm, contract.RunnerInput.Space, "worker-bundle-probe",
+		referencePrimaryAuth, bundleForm, referencePrimaryAuth.scope(contract.RunnerInput.Space), "worker-bundle-probe",
 		map[string]any{"manifestDigest": referencedDigest},
 	); hostErr != nil {
 		t.Fatalf("the referenced manifest stopped resolving: %+v", hostErr)

@@ -72,27 +72,30 @@ func canonicalizeEdgeSpec(form *InstalledForm, spec map[string]any) map[string]a
 //
 // It spans every space of that tenant, because spaces partition one tenant's
 // resources and DNS does not partition with them: two spaces claiming one
-// hostname is the same collision as two resources in one space.
+// hostname is the same collision as two resources in one space. This is the ONE
+// deliberate exception to the tenant-and-space address of spec/decisions/0028:
+// every other scan takes a whole resourceScope, and this one drops the space on
+// purpose and says so.
 //
 // It stops at the tenant, because what one tenant may claim is a question about
 // who controls the name — authority this contract does not pretend to answer —
-// so a hostname another tenant serves is none of this scan's business. That
-// boundary has to be passed IN. Every other cross-resource rule in this file is
-// decided on a host-issued uid, which already names one resource inside one
-// boundary; a hostname is a name DNS owns, so the comparison carries no
-// boundary of its own and a scan over the store key alone would silently
-// enforce the rule host-wide (spec/decisions/0026).
+// so a hostname another tenant serves is none of this scan's business. Every
+// other cross-resource rule in this file is decided on a host-issued uid, which
+// already names one resource inside one tenant; a hostname is a name DNS owns,
+// so the comparison carries no boundary of its own and a scan over the store
+// alone would silently enforce the rule host-wide (spec/decisions/0026).
 func (h *ReferenceHost) validateSingleHostnameClaim(
-	tenant, space, name string,
+	scope resourceScope,
+	name string,
 	spec map[string]any,
 ) *hostError {
 	hostname, _ := spec["hostname"].(string)
 	if hostname == "" {
 		return stableError("invalid_argument", "a WorkerCustomDomain requires a hostname")
 	}
-	selfKey := resourceKey(space, edgeFormsGroup, workerCustomDomainKind, name)
+	selfKey := resourceKey(scope, edgeFormsGroup, workerCustomDomainKind, name)
 	for _, candidate := range h.sortedResources() {
-		if candidate.Tenant != tenant {
+		if candidate.Tenant != scope.Tenant {
 			continue
 		}
 		if candidate.group() != edgeFormsGroup || candidate.kind() != workerCustomDomainKind {
@@ -135,17 +138,27 @@ func (h *ReferenceHost) validateSingleHostnameClaim(
 // pre-existing cycle a laxer state left behind therefore ends the walk instead
 // of running it forever.
 //
-// The successor map is built from every stored consumer and is deliberately
-// given no space or tenant filter of its own. Its keys are queue UIDs, and a uid
-// names ONE queue incarnation: a consumer that drains a queue outside this
-// walk's reach contributes edges between uids the walk can never arrive at, so
-// those edges are a disconnected component rather than a leak. Narrowing the
-// scan would not make the answer more correct — it would only hide the fact that
-// a cycle is decided on resolved identity, which is the whole of decision 0026.
-// The hostname claim is the one rule here that cannot borrow that property,
-// because it compares a name rather than a uid.
+// The successor map is built from every stored consumer OF THIS TENANT, and is
+// deliberately given no space filter of its own. Its keys are queue UIDs, and a
+// uid names ONE queue incarnation: the walk starts from a uid this caller's own
+// relation resolution produced, and every edge it can follow is an edge out of a
+// uid it has already arrived at, so a consumer in another space contributes edges
+// between uids the walk can never reach. Those are a disconnected component
+// rather than a leak. Narrowing to the space would not make the answer more
+// correct — it would only hide the fact that a cycle is decided on resolved
+// identity, which is the whole of decision 0026. The hostname claim is the one
+// rule here that cannot borrow that property, because it compares a name rather
+// than a uid.
+//
+// The TENANT filter is different and is not about correctness of the cycle. The
+// walk could not reach another tenant's edges anyway, because a relation resolves
+// inside its own tenant and no foreign consumer can pin a uid of this one
+// (spec/decisions/0028). It is here so that this scan does not READ another
+// tenant's stored relations to decide a question about this one — a scan that is
+// merely safe today is one refactor away from not being.
 func (h *ReferenceHost) validateDeadLetterAcyclic(
-	space, name string,
+	scope resourceScope,
+	name string,
 	relations []storedRelation,
 ) *hostError {
 	origin := relationTargetUID(relations, queueRelationPointer)
@@ -162,9 +175,12 @@ func (h *ReferenceHost) validateDeadLetterAcyclic(
 	}
 	// The consumer under test supersedes whatever it previously declared, so
 	// its own stored edge is replaced rather than walked.
-	selfKey := resourceKey(space, edgeFormsGroup, queueConsumerKind, name)
+	selfKey := resourceKey(scope, edgeFormsGroup, queueConsumerKind, name)
 	successor := map[string]string{origin: destination}
 	for _, candidate := range h.sortedResources() {
+		if candidate.Tenant != scope.Tenant {
+			continue
+		}
 		if candidate.group() != edgeFormsGroup || candidate.kind() != queueConsumerKind ||
 			candidate.key() == selfKey {
 			continue
@@ -251,21 +267,23 @@ func validateCronExpression(form *InstalledForm, spec map[string]any) *hostError
 // The lookup is by the queue's UID, never by the name a consumer's spec spells:
 // a name can be reused, and a consumer still pinned to a deleted queue is not a
 // consumer of the queue that exists now. That is also what scopes the rule: a
-// uid names one queue incarnation, so the space filter below narrows the scan
-// without deciding it, and no tenant filter belongs here at all — two consumers
-// of ONE queue are two consumers of one queue whoever applied them.
+// uid names one queue incarnation inside one tenant, so the scope filter below
+// narrows the scan without deciding it. Two consumers of ONE queue are two
+// consumers of one queue whoever applied them — and only one tenant can ever
+// hold a relation to that queue's uid, because relations resolve inside the
+// caller's own scope (spec/decisions/0028).
 func (h *ReferenceHost) validateSingleQueueConsumer(
-	space, name string,
+	scope resourceScope,
+	name string,
 	relations []storedRelation,
 ) *hostError {
 	queueUID := relationTargetUID(relations, queueRelationPointer)
 	if queueUID == "" {
 		return stableError("invalid_argument", "a QueueConsumer requires a target queue")
 	}
-	selfKey := resourceKey(space, edgeFormsGroup, queueConsumerKind, name)
-	for _, candidate := range h.sortedResources() {
-		if candidate.Space != space || candidate.group() != edgeFormsGroup ||
-			candidate.kind() != queueConsumerKind {
+	selfKey := resourceKey(scope, edgeFormsGroup, queueConsumerKind, name)
+	for _, candidate := range h.scopedResources(scope) {
+		if candidate.group() != edgeFormsGroup || candidate.kind() != queueConsumerKind {
 			continue
 		}
 		if candidate.key() == selfKey {

@@ -153,6 +153,24 @@
         "conformance/runtime-abi-v1/contract.json",
         "spec/decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md"
       ]
+    },
+    {
+      "id": "V3-012",
+      "title": "Resource plane is tenant-isolated",
+      "priority": "P0",
+      "affectedForms": [
+        "*"
+      ],
+      "status": "open",
+      "issue": 116,
+      "rationale": "A resource's internal address must carry the tenant. Until the contract states that and the corpus drives it, a host may ship an address of space, kind and name — so two tenants naming one resource in one space share one record, one tenant reads, updates and deletes another's, a reference resolves across the boundary and pins a foreign uid, one prepareDigest is spendable by anyone holding it, and one Idempotency-Key replays another tenant's success. This is the single most damaging host defect the lane could permit, and the reference host itself carried the shape of it. The lane now states the rule normatively and measures it with seven black-box checks driven from two configured tenants (spec/decisions/0028). What is NOT closed, and what this blocker is, is the same thing V3-004 is: no host outside this repository has been measured against it. It closes on a passed portable-host-v3 run, including the seven tenant checks, against a host this repository does not own.",
+      "evidence": [
+        "spec/decisions/0028-the-resource-plane-is-tenant-isolated.md",
+        "spec/host-api/v1alpha3.md",
+        "internal/portableconformancev3/runner_tenant_isolation_checks.go",
+        "internal/portableconformancev3/tenant_isolation_test.go",
+        "conformance/portable-host-v3/contract.json"
+      ]
     }
   ]
 }

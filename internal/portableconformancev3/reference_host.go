@@ -109,20 +109,19 @@ type storedResource struct {
 	// applied under, successfully, with nothing downstream able to detect it.
 	Ref  FormRef
 	Name string
-	// Tenant is the authenticated tenant this resource was CREATED by, recorded
-	// once and carried forward by every later update.
+	// Tenant is the authenticated tenant this resource belongs to, and the first
+	// member of its ADDRESS (spec/decisions/0028).
 	//
-	// It is not part of the resource's address and never travels on the wire: a
-	// reference carries `{apiVersion, kind, name}` and a request carries a space,
-	// so nothing a client writes names a tenant. It exists because one rule in
-	// this lane is decided across spaces — a hostname claim is unique per TENANT
-	// (spec/decisions/0026) — and a scan that answered it from the store key
-	// alone would answer it about every tenant this host serves, refusing a name
-	// the contract says another tenant may claim.
+	// It never travels on the wire: a reference carries `{apiVersion, kind, name}`
+	// and a request carries a space, so nothing a client writes names a tenant. It
+	// comes from the authenticated credential of the request instead, which is why
+	// it is written at create and copied forward rather than re-read from whatever
+	// mutation happens to be in flight — exactly like the exact ref.
 	//
-	// An update by another principal of another tenant does not re-file the
-	// resource: the record belongs to whoever created it, so the claim it holds
-	// keeps answering under one tenant for its whole life.
+	// Because it is part of the address, no request authenticated as another
+	// tenant can reach this record at all: a foreign read, update, fence, delete,
+	// relation resolution, prepare binding, or idempotency replay addresses a
+	// different key, which holds nothing.
 	Tenant        string
 	Space         string
 	UID           string
@@ -154,9 +153,14 @@ type storedResource struct {
 func (resource *storedResource) group() string { return resource.Ref.APIVersion }
 func (resource *storedResource) kind() string  { return resource.Ref.Kind }
 
+// scope is the boundary half of this resource's address.
+func (resource *storedResource) scope() resourceScope {
+	return resourceScope{Tenant: resource.Tenant, Space: resource.Space}
+}
+
 // key is this resource's store key.
 func (resource *storedResource) key() string {
-	return resourceKey(resource.Space, resource.group(), resource.kind(), resource.Name)
+	return resourceKey(resource.scope(), resource.group(), resource.kind(), resource.Name)
 }
 
 type recordedReplay struct {
@@ -232,23 +236,29 @@ type ReferenceHost struct {
 	contract Contract
 	catalog  *Catalog
 
-	// resources is keyed by space, group, kind, and name — the resource's
-	// ADDRESS, which carries no tenant, because nothing a client sends names one.
-	// This disposable host therefore serves both of its configured tenants out of
-	// one map, and each record remembers the tenant that created it
-	// (storedResource.Tenant) rather than being filed under it. That is enough
-	// for every rule the lane states, because a rule is either decided on a
-	// host-issued uid — which names one record — or scoped by an explicit tenant
-	// (validateSingleHostnameClaim). It is NOT a claim that this host isolates
-	// tenants on the resource plane: two tenants naming one resource in one space
-	// address one record here, which a real host partitions and the corpus never
-	// drives.
+	// resources is keyed by TENANT, space, group, kind, and name — the whole of a
+	// resource's address (spec/decisions/0028). The tenant is first because it is
+	// the outermost boundary: two tenants naming one resource in one space are two
+	// records with two uids, and no request authenticated as one of them can name
+	// the other's key at all.
+	//
+	// The tenant is not on the wire — a reference carries `{apiVersion, kind,
+	// name}` and a request carries a space — so it comes from the authenticated
+	// credential and is supplied to every lookup as a resourceScope. That is the
+	// point of the type: a key cannot be built without one, so a read, a fence, a
+	// delete, or a relation scan cannot silently address the whole host.
 	resources map[string]*storedResource
 	// relationHolders is the reverse index: target uid -> holder resource keys.
+	// Both halves are already tenant-scoped: a uid names one record inside one
+	// tenant, and a holder key carries its tenant.
 	relationHolders map[string]map[string]struct{}
-	prepares        map[string][]byte
-	replays         map[string]recordedReplay
-	uploads         map[string]*artifactUpload
+	// prepares maps a prepare binding to the canonical document it binds. The
+	// digest is computed over a payload that carries the minting TENANT, so a
+	// binding is spendable only by the tenant it was minted for; a digest that
+	// leaked to another tenant recomputes to a different payload and buys nothing.
+	prepares map[string][]byte
+	replays  map[string]recordedReplay
+	uploads  map[string]*artifactUpload
 	// blobs and manifests are content-addressed and PHYSICALLY deduplicated:
 	// one copy of the bytes, no matter how many tenants hold it.
 	blobs      map[string][]byte
@@ -334,8 +344,21 @@ func (h *ReferenceHost) grantManifest(tenant, digest string) {
 	h.manifestTenants[digest][tenant] = true
 }
 
-func resourceKey(space, group, kind, name string) string {
-	return strings.Join([]string{space, group, kind, name}, "\x00")
+// resourceScope is the boundary half of a resource's address: the authenticated
+// tenant the record belongs to, and the space inside it.
+//
+// It exists as one value rather than as two parameters so that the tenant
+// cannot be forgotten. Every store lookup, every store-wide scan, and every
+// derived-rendering pass takes a scope, so a host-wide question is not something
+// this code can ask by accident — which is exactly how a documented tenant
+// boundary becomes an unmeasured one (spec/decisions/0028).
+type resourceScope struct {
+	Tenant string
+	Space  string
+}
+
+func resourceKey(scope resourceScope, group, kind, name string) string {
+	return strings.Join([]string{scope.Tenant, scope.Space, group, kind, name}, "\x00")
 }
 
 // groupOf rejoins the two ordinary path segments a namespaced Form group
@@ -347,6 +370,13 @@ func groupOf(name, version string) string { return name + "/" + version }
 type hostAuthContext struct {
 	Tenant    string
 	Principal string
+}
+
+// scope is the resource address boundary one authenticated caller may address:
+// its own tenant, and the space the request named. Nothing else this host stores
+// is reachable through it.
+func (auth hostAuthContext) scope(space string) resourceScope {
+	return resourceScope{Tenant: auth.Tenant, Space: space}
 }
 
 // The three identities this host authenticates, named once so every ownership,
@@ -765,11 +795,20 @@ const (
 )
 
 // prepareBindingPayload is the canonical document the prepareDigest binds:
-// the exact spec digest, the exact identity, the CURRENT uid and generation
-// of the target resource (create markers when it does not exist), and a host
-// plan marker. The packageDigest is deliberately excluded because it is audit
-// evidence, not identity.
-func prepareBindingPayload(specDigest string, ref FormRef, name, space, uid, generation string) ([]byte, string, error) {
+// the exact spec digest, the exact ADDRESS — tenant and space included — the
+// CURRENT uid and generation of the target resource (create markers when it does
+// not exist), and a host plan marker. The packageDigest is deliberately excluded
+// because it is audit evidence, not identity.
+//
+// The tenant is in the payload for the same reason it is in the store key. A
+// prepare binding is a short-lived permission to mutate one exact resource, and
+// a binding minted inside one tenant must not be spendable by another: a create
+// binding carries no uid and no generation to distinguish it, so without the
+// tenant the two tenants' bindings for one name in one space are the same
+// digest, and a leaked digest would let a stranger spend it (spec/decisions/0028).
+func prepareBindingPayload(
+	specDigest string, ref FormRef, name string, scope resourceScope, uid, generation string,
+) ([]byte, string, error) {
 	payload := map[string]any{
 		"plan":              "deterministic-reference-host-plan",
 		"specDigest":        specDigest,
@@ -778,7 +817,8 @@ func prepareBindingPayload(specDigest string, ref FormRef, name, space, uid, gen
 		"definitionVersion": ref.DefinitionVersion,
 		"schemaDigest":      ref.SchemaDigest,
 		"name":              name,
-		"space":             space,
+		"tenant":            scope.Tenant,
+		"space":             scope.Space,
 		"uid":               uid,
 		"generation":        generation,
 	}
@@ -840,7 +880,12 @@ func (h *ReferenceHost) handlePrepare(w http.ResponseWriter, request *http.Reque
 	// generation are bound into the digest so a later apply at any other
 	// generation cannot reuse it. A create binds the create markers.
 	fence := request.Header.Get(expectedGenerationHeader)
-	current := h.resourceUnderExactRef(body.Metadata.Space, form.Ref, body.Metadata.Name)
+	// The target is resolved inside the CALLER'S tenant. A prepare that resolved
+	// host-wide would mint a create binding against another tenant's live
+	// resource, or refuse a create because a stranger holds the name.
+	caller, _ := hostRequestAuth(request)
+	scope := caller.scope(body.Metadata.Space)
+	current := h.resourceUnderExactRef(scope, form.Ref, body.Metadata.Name)
 	uid, generation := prepareCreateUID, prepareCreateGeneration
 	if current != nil {
 		if fence == "" {
@@ -862,7 +907,7 @@ func (h *ReferenceHost) handlePrepare(w http.ResponseWriter, request *http.Reque
 		h.writeError(w, "resource_not_found", "prepare generation fence names an absent resource")
 		return
 	}
-	payload, prepareDigest, err := prepareBindingPayload(specDigest, form.Ref, body.Metadata.Name, body.Metadata.Space, uid, generation)
+	payload, prepareDigest, err := prepareBindingPayload(specDigest, form.Ref, body.Metadata.Name, scope, uid, generation)
 	if err != nil {
 		h.writeError(w, "internal_error", err.Error())
 		return
@@ -910,17 +955,20 @@ func specOrEmpty(spec map[string]any) map[string]any {
 // resource's UID, so a deployment's worker version, a version's bundle, and an
 // attachment's worker are protected exactly as a typed binding is.
 //
-// The caller is carried in because two of these rules are decided per TENANT.
-// Resolving a referenced artifact manifest asks the same per-tenant holding
-// question the artifact read surfaces ask (spec/decisions/0018), and a hostname
-// claim is unique per tenant across every space of that tenant
-// (spec/decisions/0026). It is a value rather than a request so the async commit
-// path re-derives both from the caller the mutation was accepted from, long
-// after that request is gone.
+// The caller is carried in because every one of these rules is decided inside
+// the caller's TENANT. Relation resolution addresses the caller's own scope, so
+// a reference never reaches a resource another tenant holds under the same name
+// (spec/decisions/0028); resolving a referenced artifact manifest asks the same
+// per-tenant holding question the artifact read surfaces ask
+// (spec/decisions/0018); and a hostname claim is unique per tenant across every
+// space of that tenant (spec/decisions/0026). It is a value rather than a request
+// so the async commit path re-derives all of it from the caller the mutation was
+// accepted from, long after that request is gone.
 func (h *ReferenceHost) validateDesiredSemantics(
 	caller hostAuthContext,
 	form *InstalledForm,
-	space, name string,
+	scope resourceScope,
+	name string,
 	spec map[string]any,
 ) ([]storedRelation, *hostError) {
 	// Two pure spec-shape rules first: neither needs another resource, so
@@ -937,7 +985,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	if hostErr := validateCronExpression(form, spec); hostErr != nil {
 		return nil, hostErr
 	}
-	relations, hostErr := h.resolveRelations(form, space, spec)
+	relations, hostErr := h.resolveRelations(form, scope, spec)
 	if hostErr != nil {
 		return nil, hostErr
 	}
@@ -949,7 +997,7 @@ func (h *ReferenceHost) validateDesiredSemantics(
 	// The Worker aggregate rules read the relations this apply just resolved,
 	// never the names in the spec: every one of them is a statement about one
 	// worker INCARNATION (spec/decisions/0016).
-	if hostErr := h.validateWorkerAggregate(caller, form, space, name, spec, relations); hostErr != nil {
+	if hostErr := h.validateWorkerAggregate(form, scope, name, spec, relations); hostErr != nil {
 		return nil, hostErr
 	}
 	return relations, nil
@@ -1074,7 +1122,8 @@ func (h *ReferenceHost) acceptedIncarnation(target acceptedTarget) (*storedResou
 func (h *ReferenceHost) mutationFences(
 	fences mutationFence,
 	form *InstalledForm,
-	space, name string,
+	scope resourceScope,
+	name string,
 	bodyExpectedGeneration, expectedUID string,
 ) (existing *storedResource, create bool, hostErr *hostError) {
 	ifNoneMatch := fences.IfNoneMatch
@@ -1082,12 +1131,17 @@ func (h *ReferenceHost) mutationFences(
 		return nil, false, stableError("invalid_argument", "If-None-Match only supports *")
 	}
 	headerGeneration := fences.Generation
-	// The store key is per space, group, kind, and name; the RECORDED ref then
-	// decides whether this request addresses the resource at all. A create fence
-	// still sees a name that is taken under another contract, because a name is
-	// unique per kind — but an update, an observe, or a delete under a ref the
+	// The store key is per tenant, space, group, kind, and name; the RECORDED ref
+	// then decides whether this request addresses the resource at all. A create
+	// fence still sees a name that is taken under another contract, because a name
+	// is unique per kind — but an update, an observe, or a delete under a ref the
 	// resource was not applied under addresses nothing (decision 0022).
-	occupant := h.resources[resourceKey(space, form.Ref.APIVersion, form.Ref.Kind, name)]
+	//
+	// The name is taken WITHIN THE CALLER'S TENANT and nowhere else: a create
+	// fenced against a host-wide name would let one tenant deny another the use of
+	// a name, and would be a membership oracle over the whole host
+	// (decision 0028).
+	occupant := h.resources[resourceKey(scope, form.Ref.APIVersion, form.Ref.Kind, name)]
 	current := occupant
 	if current != nil && current.Ref != form.Ref {
 		current = nil
@@ -1182,21 +1236,22 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 	fences := mutationFenceOf(request)
 	prepareDigest := body.Review.PrepareDigest
 	// The authenticated caller is captured with the fences and for the same
-	// reason: the artifact this apply references is resolved against the tenant
-	// the mutation was accepted from, and the 202 path re-resolves it at commit
-	// time when the request no longer exists.
+	// reason: this mutation addresses ONE tenant's resource plane — its own — and
+	// the 202 path re-resolves every one of those lookups at commit time, when the
+	// request no longer exists.
 	caller, _ := hostRequestAuth(request)
+	scope := caller.scope(space)
 	// applyOnce is the complete pre-mutation gauntlet plus the commit. The
 	// synchronous path runs it inline; the 202 path runs the SAME function at
 	// poll time, so an accepted operation re-derives every precondition
 	// against the store as it is when the mutation actually lands.
 	applyOnce := func() (*storedResource, bool, *hostError) {
-		relations, hostErr := h.validateDesiredSemantics(caller, form, space, name, body.Spec)
+		relations, hostErr := h.validateDesiredSemantics(caller, form, scope, name, body.Spec)
 		if hostErr != nil {
 			return nil, false, hostErr
 		}
 		existing, create, hostErr := h.mutationFences(
-			fences, form, space, name, body.ExpectedGeneration, body.ExpectedUID,
+			fences, form, scope, name, body.ExpectedGeneration, body.ExpectedUID,
 		)
 		if hostErr != nil {
 			return nil, false, hostErr
@@ -1225,7 +1280,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 			expectedUID = existing.UID
 			expectedGeneration = strconv.FormatInt(existing.Generation, 10)
 		}
-		payload, _, err := prepareBindingPayload(specDigest, form.Ref, name, space, expectedUID, expectedGeneration)
+		payload, _, err := prepareBindingPayload(specDigest, form.Ref, name, scope, expectedUID, expectedGeneration)
 		if err != nil {
 			return nil, false, stableError("internal_error", err.Error())
 		}
@@ -1250,7 +1305,7 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 		// replacement satisfies says nothing about which resource it belongs to.
 		accepted := acceptedTarget{Fence: fences}
 		if fences.IfNoneMatch != "*" {
-			if current := h.resourceUnderExactRef(space, form.Ref, name); current != nil {
+			if current := h.resourceUnderExactRef(scope, form.Ref, name); current != nil {
 				accepted = acceptedTarget{Key: current.key(), Ref: current.Ref, UID: current.UID, Fence: fences}
 			}
 		}
@@ -1393,7 +1448,7 @@ func (h *ReferenceHost) storeResource(resource *storedResource) {
 		}
 		resource.DerivedRendering = rendered
 	}
-	h.advanceDerivedRevisions(resource.Space, key)
+	h.advanceDerivedRevisions(resource.scope(), key)
 }
 
 // removeResource deletes one resource and its reverse-index entries, and
@@ -1407,7 +1462,7 @@ func (h *ReferenceHost) removeResource(key string) {
 	}
 	h.unindexRelations(existing)
 	delete(h.resources, key)
-	h.advanceDerivedRevisions(existing.Space, key)
+	h.advanceDerivedRevisions(existing.scope(), key)
 }
 
 // renderResource serves one resource under the exact ref it RECORDS, never
@@ -1485,7 +1540,8 @@ func (h *ReferenceHost) exactCurrentResource(
 		h.writeError(w, "invalid_argument", "path and exact query identities differ")
 		return nil, false
 	}
-	resource := h.resourceUnderExactRef(space, form.Ref, name)
+	caller, _ := hostRequestAuth(request)
+	resource := h.resourceUnderExactRef(caller.scope(space), form.Ref, name)
 	if resource == nil {
 		h.writeError(w, "resource_not_found", "resource is absent")
 		return nil, false
@@ -1494,12 +1550,19 @@ func (h *ReferenceHost) exactCurrentResource(
 }
 
 // resourceUnderExactRef resolves one resource ADDRESSED BY the exact ref the
-// request named. A resource stored under a different exact ref is absent from
-// this query, not a near miss to be served anyway: state records one contract
-// per resource, and answering under another would reinterpret it as something
-// it was never applied under (decision 0022, decision 0017 rule 4).
-func (h *ReferenceHost) resourceUnderExactRef(space string, ref FormRef, name string) *storedResource {
-	resource := h.resources[resourceKey(space, ref.APIVersion, ref.Kind, name)]
+// request named, inside one scope. A resource stored under a different exact ref
+// is absent from this query, not a near miss to be served anyway: state records
+// one contract per resource, and answering under another would reinterpret it as
+// something it was never applied under (decision 0022, decision 0017 rule 4).
+//
+// A resource of ANOTHER TENANT is absent for a stronger reason: it is not at this
+// key at all, so there is nothing here to decide about. That is what makes the
+// refusal `resource_not_found` (404) rather than `permission_denied` (403) — a
+// foreign tenant's resource must be indistinguishable from one that was never
+// created, or the 403 itself would answer "a resource of that name exists
+// somewhere on this host" to anyone who asks (spec/decisions/0018, 0028).
+func (h *ReferenceHost) resourceUnderExactRef(scope resourceScope, ref FormRef, name string) *storedResource {
+	resource := h.resources[resourceKey(scope, ref.APIVersion, ref.Kind, name)]
 	if resource == nil || resource.Ref != ref {
 		return nil
 	}
@@ -1611,13 +1674,14 @@ func (h *ReferenceHost) handleImport(w http.ResponseWriter, request *http.Reques
 	// bytes, deployment weights, or handler gates a fresh apply would reject —
 	// and it may not adopt its way to an artifact its tenant does not hold.
 	importer, _ := hostRequestAuth(request)
-	relations, hostErr := h.validateDesiredSemantics(importer, form, body.Metadata.Space, name, body.Spec)
+	scope := importer.scope(body.Metadata.Space)
+	relations, hostErr := h.validateDesiredSemantics(importer, form, scope, name, body.Spec)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
 	}
 	existing, create, hostErr := h.mutationFences(
-		mutationFenceOf(request), form, body.Metadata.Space, name, body.Metadata.Generation, "",
+		mutationFenceOf(request), form, scope, name, body.Metadata.Generation, "",
 	)
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
