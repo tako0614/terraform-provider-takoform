@@ -69,10 +69,12 @@ func main() {
 		"verified non-publishable worker authoring evidence: %d CLIs, %d validated configurations, "+
 			"same-name replacement refused at plan, roll-forward serves throughout "+
 			"(%d Ready samples, %d not ready), two owners of identical output hold %d distinct revisions, "+
-			"heterogeneous vars keep their JSON types\n",
+			"heterogeneous vars keep their JSON types, destroy removes the %d-resource aggregate "+
+			"in dependency order and leaves %d behind\n",
 		len(matrix.Reports), len(first.Configurations),
 		first.ModuleDeploy.ReadySamples, first.ModuleDeploy.NotReadySamples,
 		len(first.TwoOwners.BundleNames)+len(first.TwoOwners.VersionNames),
+		len(first.ModuleDestroy.Mutations), len(first.ModuleDestroy.LeftBehind),
 	)
 }
 

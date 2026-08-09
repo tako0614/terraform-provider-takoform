@@ -202,7 +202,7 @@ func (r *v3Runner) checkWorkerEndpointFollowsTheActiveDeployment() error {
 	if err != nil {
 		return err
 	}
-	blocked, err := r.deleteResource(deployment, current.Metadata.Revision, "key-endpoint-deployment-blocked", nil)
+	blocked, err := r.deleteResource(deployment, current.Metadata.Generation, "key-endpoint-deployment-blocked", nil)
 	if err != nil {
 		return err
 	}

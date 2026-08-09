@@ -123,7 +123,7 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 103-entry executed-check list every v3
+// requiredRunnerChecks is the closed 106-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
@@ -143,6 +143,7 @@ var requiredRunnerChecks = []string{
 	"observe-fence-exact",
 	"status-change-bumps-revision-not-generation",
 	"spec-change-bumps-generation",
+	"delete-generation-fence",
 	"delete-revision-fence",
 	"stale-revision-rejected",
 	"delete-then-recreate-uid-changes",
@@ -191,6 +192,7 @@ var requiredRunnerChecks = []string{
 	"deployment-delete-blocked-by-dependent",
 	"deployment-delete-blocked-by-inbound-binding",
 	"dependent-revision-advances-with-rendering",
+	"delete-fence-survives-derived-rendering",
 	"artifact-manifest-reject-list",
 	"artifact-commit-binds-declared-size",
 	"artifact-manifest-kind-exclusive",
@@ -215,6 +217,7 @@ var requiredRunnerChecks = []string{
 	// (spec/decisions/0026).
 	"custom-domain-hostname-canonicalized",
 	"custom-domain-hostname-claim-unique",
+	"custom-domain-hostname-claim-stops-at-the-tenant",
 	"dead-letter-cycle-rejected",
 	// A host answers for the exact ref recorded in state, and a relation pins
 	// the target's contract rather than its incarnation alone
@@ -765,8 +768,8 @@ func validateContract(contract Contract) error {
 	}
 	wantIdentity := IdentityContract{
 		UID:           "host-issued-immutable; delete-and-recreate-changes-uid",
-		Generation:    "increments-only-on-portable-desired-spec-change; fence=expectedGeneration-or-Takoform-Expected-Generation; stale=generation_conflict/412",
-		Revision:      "increments-on-any-representation-change; etag=exactly-one-strong-quoted-revision; fence=If-Match; stale=revision_conflict/412",
+		Generation:    "increments-only-on-portable-desired-spec-change; fence=expectedGeneration-or-Takoform-Expected-Generation; required-on-update-observe-and-delete; stale=generation_conflict/412",
+		Revision:      "increments-on-any-representation-change; etag=exactly-one-strong-quoted-revision; fence=If-Match; optional-on-delete-and-never-required; stale=revision_conflict/412",
 		PackageDigest: "audit-evidence-only; never-identity-query-or-fence",
 	}
 	if contract.Identity != wantIdentity {

@@ -133,7 +133,7 @@ func v3CommonAttributes(form model.Form) map[string]schema.Attribute {
 		},
 		"revision": schema.StringAttribute{
 			Computed:    true,
-			Description: "Canonical decimal representation revision; increments whenever the full representation changes. Deletes fence on it via If-Match.",
+			Description: "Canonical decimal representation revision; increments whenever the full representation changes, including when a change to another resource re-renders this one. It is the strong ETag, not the delete fence.",
 		},
 		"conditions": v3ConditionsAttribute(),
 		"ready": schema.BoolAttribute{

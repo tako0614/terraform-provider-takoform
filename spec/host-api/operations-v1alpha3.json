@@ -46,6 +46,8 @@
       "maximum": "9223372036854775807",
       "increments": "only-on-portable-desired-spec-change",
       "fence": "expectedGeneration-or-Takoform-Expected-Generation",
+      "fenceRequiredOn": ["update", "observe", "prepare-on-existing", "delete"],
+      "absentFenceFailure": "invalid_argument",
       "staleFailure": "generation_conflict"
     },
     "revision": {
@@ -55,6 +57,7 @@
       "increments": "on-any-representation-change",
       "etag": "exactly-one-strong-quoted-revision",
       "fence": "If-Match",
+      "fenceOptionalOnDelete": "honored-when-sent; never-required; a-teardown-moves-revisions-it-does-not-own",
       "staleFailure": "revision_conflict"
     },
     "packageDigest": "audit-evidence-only; never-identity-query-or-fence"
@@ -241,7 +244,8 @@
       "method": "DELETE",
       "path": "/apis/forms.takoform.com/v1alpha3/resources/{formGroup}/{formVersion}/{kind}/{name}",
       "exactFormQuery": true,
-      "precondition": "revision-fence",
+      "precondition": "generation-fence",
+      "optionalPrecondition": "revision-fence",
       "idempotencyKey": true,
       "mutates": true,
       "successStatus": [202, 204]

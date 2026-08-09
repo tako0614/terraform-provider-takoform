@@ -433,6 +433,48 @@ var resourcePlaneHandlers = map[resourcePlaneRoute]func(
 	{Method: http.MethodPost, Action: "import"}:  (*ReferenceHost).handleImport,
 }
 
+// ResourceAddress is one stored resource's complete internal address: the
+// tenant, the space, and the exact group, kind, and name it is keyed by
+// (spec/decisions/0028).
+type ResourceAddress struct {
+	Tenant     string `json:"tenant"`
+	Space      string `json:"space"`
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+}
+
+// SnapshotResources is every resource this host currently holds, in stable key
+// order, across every tenant.
+//
+// No wire surface answers this, deliberately: the lane has no list route, so a
+// client can only ask about names it already knows. That is the right contract
+// and the wrong tool for one job — proving that a real `terraform destroy` left
+// NOTHING behind. Probing the names a configuration declared cannot see an
+// orphan, which is exactly the failure a teardown proof exists to exclude.
+//
+// It is a read-only view for the authoring harness
+// (internal/workerauthoring), and it is not a route. The v1alpha3 conformance
+// lane is black box by construction, so no required check may use it: a check
+// that reached into the store would be measuring this implementation instead of
+// the contract every other host is held to.
+func (h *ReferenceHost) SnapshotResources() []ResourceAddress {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	stored := h.sortedResources()
+	out := make([]ResourceAddress, 0, len(stored))
+	for _, resource := range stored {
+		out = append(out, ResourceAddress{
+			Tenant:     resource.Tenant,
+			Space:      resource.Space,
+			APIVersion: resource.group(),
+			Kind:       resource.kind(),
+			Name:       resource.Name,
+		})
+	}
+	return out
+}
+
 func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -1080,6 +1122,42 @@ func mutationFenceOf(request *http.Request) mutationFence {
 		IfNoneMatch: request.Header.Get("If-None-Match"),
 		Generation:  request.Header.Get(expectedGenerationHeader),
 	}
+}
+
+// deleteFenceStale decides one delete's preconditions against the incarnation
+// the delete resolved to. It is called twice for an asynchronous delete — once
+// at accept and once at commit — because the store moves in between.
+//
+// A delete is a DESIRED-STATE mutation: it withdraws the desired state
+// entirely. So it fences on the desired generation, exactly like every other
+// desired-state mutation of this lane, and a stale fence is
+// `generation_conflict` (spec/decisions/0011). The fence is REQUIRED; an
+// unfenced delete is refused, because a client that names no incarnation has
+// said nothing about which one it means to remove.
+//
+// `If-Match` on the representation revision is accepted and honored, and it is
+// NOT required. A revision moves for reasons the deleting client did not cause
+// and cannot see — a host-side status change, and above all the derived
+// rendering of decision 0016 rule 9, where removing a dependent re-renders the
+// resource that is about to be deleted next. Requiring it would make an
+// ordinary teardown fail on a revision the teardown itself moved, so a host
+// that demands it has broken `destroy` for every author. A client that means
+// "remove exactly the representation I read" may still say so, and is answered
+// `revision_conflict` when the representation moved.
+func deleteFenceStale(fence mutationFence, resource *storedResource) *hostError {
+	if fence.Generation == "" {
+		return stableError(
+			"invalid_argument",
+			"delete requires the "+expectedGenerationHeader+" fence",
+		)
+	}
+	if fence.Generation != strconv.FormatInt(resource.Generation, 10) {
+		return stableError("generation_conflict", "delete generation fence is stale")
+	}
+	if fence.IfMatch != "" && fence.IfMatch != quotedRevision(resource.Revision) {
+		return stableError("revision_conflict", "delete revision fence is stale")
+	}
+	return nil
 }
 
 // acceptedTarget is the exact resource incarnation ONE accepted mutation was
@@ -1749,12 +1827,8 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 		return
 	}
 	fences := mutationFenceOf(request)
-	if fences.IfMatch == "" {
-		h.writeError(w, "invalid_argument", "delete requires the If-Match revision fence")
-		return
-	}
-	if fences.IfMatch != quotedRevision(resource.Revision) {
-		h.writeError(w, "revision_conflict", "delete revision fence is stale")
+	if hostErr := deleteFenceStale(fences, resource); hostErr != nil {
+		h.writeHostError(w, hostErr)
 		return
 	}
 	// An out-of-band backend deletion is the ONE path that bypasses relation
@@ -1769,7 +1843,7 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 		}
 	}
 	// What this delete was accepted for: one incarnation, addressed under one
-	// exact contract, at one revision.
+	// exact contract, at one desired generation.
 	accepted := acceptedTarget{Key: resource.key(), Ref: resource.Ref, UID: resource.UID, Fence: fences}
 	if request.Header.Get(ErrorProbeHeader) == ProbeAsync {
 		h.acceptOperation(w, request, raw, request.URL.Query().Get("space"), &hostOperation{
@@ -1777,18 +1851,18 @@ func (h *ReferenceHost) handleDelete(w http.ResponseWriter, request *http.Reques
 			Accepted:     accepted,
 			commit: func() (map[string]any, *hostError) {
 				// Identity first, then the fence, then the live-binding scan. The
-				// order is the point: a revision fence cannot stand in for an
+				// order is the point: a generation fence cannot stand in for an
 				// identity, because a replacement created under ANY contract starts
-				// at revision 1 and satisfies the fence the original was accepted
+				// at generation 1 and satisfies the fence the original was accepted
 				// under. Only after the incarnation is proved to be the one this
-				// delete was accepted for does "has it been re-revised or re-bound
-				// since" mean anything.
+				// delete was accepted for does "has the desired state moved since"
+				// mean anything.
 				current, hostErr := h.acceptedIncarnation(accepted)
 				if hostErr != nil {
 					return nil, hostErr
 				}
-				if accepted.Fence.IfMatch != quotedRevision(current.Revision) {
-					return nil, stableError("revision_conflict", "delete revision fence is stale")
+				if hostErr := deleteFenceStale(accepted.Fence, current); hostErr != nil {
+					return nil, hostErr
 				}
 				if hostErr := h.dependencyInUse(current); hostErr != nil {
 					return nil, hostErr

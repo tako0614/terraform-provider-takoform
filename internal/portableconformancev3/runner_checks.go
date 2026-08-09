@@ -88,6 +88,10 @@ func (r *v3Runner) run() error {
 		// canonical spelling, the second proves nothing else may take it.
 		r.checkCustomDomainHostnameCanonicalized,
 		r.checkCustomDomainHostnameClaimUnique,
+		// And the far edge of the same scope: the claim reaches every space of
+		// one tenant and no further, which is the one rule of this lane whose
+		// correct answer is that the operation works.
+		r.checkCustomDomainHostnameClaimStopsAtTheTenant,
 		r.checkDeadLetterCycleRejected,
 		// The ABI closes the handler surface those attachments are gated on
 		// (spec/decisions/0019): first by vocabulary, then by what the code a
@@ -114,6 +118,10 @@ func (r *v3Runner) run() error {
 		// aggregate: what a worker SERVES changes when its deployment changes, so
 		// the representation the host hands out changes with it.
 		r.checkDependentRevisionAdvancesWithRendering,
+		// And the fence a teardown carries is not the revision that rendering
+		// moves, or removing an aggregate would fail on a change the removal
+		// itself caused (spec/decisions/0011, amended).
+		r.checkDeleteFenceSurvivesDerivedRendering,
 		r.checkRelationReapplyRepins,
 		func() error { return r.checkRelationDeletionProtection(version, bundle) },
 		func() error { return r.checkImportFlows(kv, version) },
@@ -1071,7 +1079,7 @@ func (r *v3Runner) checkSameKindTwoGroups() error {
 	if edgeRead.APIVersion != edge.Ref.APIVersion || otherRead.APIVersion != other.Ref.APIVersion {
 		return errors.New("group-scoped reads substituted the namespaced group")
 	}
-	deleteResponse, err := r.deleteResource(other, otherRead.Metadata.Revision, "key-two-group-other-delete", nil)
+	deleteResponse, err := r.deleteResource(other, otherRead.Metadata.Generation, "key-two-group-other-delete", nil)
 	if err != nil {
 		return err
 	}
@@ -1686,7 +1694,7 @@ func (r *v3Runner) checkWorkerVersionFlow(version, kv probeTarget) error {
 	if err != nil {
 		return err
 	}
-	boundDelete, err := r.deleteResource(kv, kvCurrent.Metadata.Revision, "key-kv-bound-delete", nil)
+	boundDelete, err := r.deleteResource(kv, kvCurrent.Metadata.Generation, "key-kv-bound-delete", nil)
 	if err != nil {
 		return err
 	}
@@ -1843,7 +1851,7 @@ func (r *v3Runner) checkRelationIncarnationChange(version, kv probeTarget) error
 	// The target vanishes out of band. The source must report it rather than
 	// carry on as if nothing happened.
 	removed, err := r.deleteResource(
-		target, created.Metadata.Revision, "key-incarnation-kv-delete",
+		target, created.Metadata.Generation, "key-incarnation-kv-delete",
 		map[string]string{ErrorProbeHeader: ProbeExternalChange},
 	)
 	if err != nil {
@@ -1945,7 +1953,7 @@ func (r *v3Runner) checkRelationReapplyRepins() error {
 	// The queue is destroyed out of band and the name comes back on a new
 	// incarnation, exactly the state the incarnation rule reports.
 	removed, err := r.deleteResource(
-		queue, created.Metadata.Revision, "key-repin-queue-delete",
+		queue, created.Metadata.Generation, "key-repin-queue-delete",
 		map[string]string{ErrorProbeHeader: ProbeExternalChange},
 	)
 	if err != nil {
@@ -2011,7 +2019,7 @@ func (r *v3Runner) checkRelationReapplyRepins() error {
 	// so leaving it live would keep that worker's deployment undeletable
 	// (spec/decisions/0016) and turn this check into a precondition of the
 	// relation-deletion checks that follow.
-	released, err := r.deleteResource(consumer, again.Metadata.Revision, "key-repin-consumer-delete", nil)
+	released, err := r.deleteResource(consumer, again.Metadata.Generation, "key-repin-consumer-delete", nil)
 	if err != nil {
 		return err
 	}
@@ -2043,7 +2051,7 @@ func (r *v3Runner) checkRelationDeletionProtection(version, bundle probeTarget) 
 	if err != nil {
 		return err
 	}
-	blocked, err := r.deleteResource(version, current.Metadata.Revision, "key-version-relation-delete", nil)
+	blocked, err := r.deleteResource(version, current.Metadata.Generation, "key-version-relation-delete", nil)
 	if err != nil {
 		return err
 	}
@@ -2057,7 +2065,7 @@ func (r *v3Runner) checkRelationDeletionProtection(version, bundle probeTarget) 
 	if err != nil {
 		return err
 	}
-	blockedBundle, err := r.deleteResource(bundle, bundleCurrent.Metadata.Revision, "key-bundle-relation-delete", nil)
+	blockedBundle, err := r.deleteResource(bundle, bundleCurrent.Metadata.Generation, "key-bundle-relation-delete", nil)
 	if err != nil {
 		return err
 	}
@@ -2072,7 +2080,7 @@ func (r *v3Runner) checkRelationDeletionProtection(version, bundle probeTarget) 
 		return err
 	}
 	released, err := r.deleteResource(
-		deployment, deploymentCurrent.Metadata.Revision, "key-deployment-delete", nil,
+		deployment, deploymentCurrent.Metadata.Generation, "key-deployment-delete", nil,
 	)
 	if err != nil {
 		return err
@@ -2266,21 +2274,40 @@ func (r *v3Runner) checkImportFlows(kv, version probeTarget) error {
 	return nil
 }
 
+// checkDeleteFences drives the lane's two delete preconditions, one on each
+// probe, because they are two rules and a host may hold one and not the other.
+//
+// The REQUIRED fence is the expected desired generation, exactly as for every
+// other desired-state mutation: a delete withdraws desired state, so it is one
+// (spec/decisions/0011). It is driven on `kv`, in all three verdicts — an
+// unfenced delete is refused, a stale one is refused with `generation_conflict`,
+// and a delete carrying nothing but a current generation SUCCEEDS. That last
+// leg is the one a host requiring `If-Match` fails, and requiring it is what
+// broke every teardown of an aggregate.
+//
+// The OPTIONAL fence is `If-Match` on the representation revision, driven on
+// `version`: a client may still say "remove exactly the representation I read",
+// and a host that ignored it would turn a precondition into a suggestion. Both
+// verdicts are driven, so neither ignoring the header nor refusing every delete
+// that carries one passes.
 func (r *v3Runner) checkDeleteFences(version, kv probeTarget) error {
+	// ---- The optional representation fence, on the Worker Version ----
 	current, _, err := r.read(version)
 	if err != nil {
 		return err
 	}
-	stale, err := r.deleteResource(version, current.Metadata.Revision+"9", "key-version-delete-stale", nil)
+	stale, err := r.deleteResource(version, current.Metadata.Generation, "key-version-delete-stale",
+		map[string]string{"If-Match": `"` + current.Metadata.Revision + `9"`})
 	if err != nil {
 		return err
 	}
 	if err := r.expectStableError(stale, "revision_conflict"); err != nil {
-		return fmt.Errorf("stale delete revision: %w", err)
+		return fmt.Errorf("a delete carrying a stale If-Match: %w", err)
 	}
 	r.complete("stale-revision-rejected")
 
-	deleted, err := r.deleteResource(version, current.Metadata.Revision, "key-version-delete", nil)
+	deleted, err := r.deleteResource(version, current.Metadata.Generation, "key-version-delete",
+		map[string]string{"If-Match": `"` + current.Metadata.Revision + `"`})
 	if err != nil {
 		return err
 	}
@@ -2292,18 +2319,40 @@ func (r *v3Runner) checkDeleteFences(version, kv probeTarget) error {
 	}
 	r.complete("delete-revision-fence")
 
-	// Delete and re-create of the same name must mint a NEW uid.
+	// ---- The required generation fence, on the KV namespace ----
 	kvCurrent, _, err := r.read(kv)
 	if err != nil {
 		return err
 	}
-	kvDeleted, err := r.deleteResource(kv, kvCurrent.Metadata.Revision, "key-kv-delete", nil)
+	unfenced, err := r.deleteResource(kv, "", "key-kv-delete-unfenced", nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(unfenced, "invalid_argument"); err != nil {
+		return fmt.Errorf("a delete carrying no fence at all: %w", err)
+	}
+	staleGeneration, err := r.deleteResource(kv, kvCurrent.Metadata.Generation+"9", "key-kv-delete-stale", nil)
+	if err != nil {
+		return err
+	}
+	if err := r.expectStableError(staleGeneration, "generation_conflict"); err != nil {
+		return fmt.Errorf("a delete carrying a stale generation fence: %w", err)
+	}
+	if _, _, err := r.read(kv); err != nil {
+		return fmt.Errorf("a refused delete removed the resource anyway: %w", err)
+	}
+	// Nothing but the current generation: no If-Match, and a host that demands
+	// one fails here.
+	kvDeleted, err := r.deleteResource(kv, kvCurrent.Metadata.Generation, "key-kv-delete", nil)
 	if err != nil {
 		return err
 	}
 	if kvDeleted.Status != http.StatusNoContent {
 		return fmt.Errorf("kv delete HTTP %d, want 204", kvDeleted.Status)
 	}
+	r.complete("delete-generation-fence")
+
+	// Delete and re-create of the same name must mint a NEW uid.
 	recreated, _, err := r.applyResource(kv, applyOptions{
 		Create: true, IdempotencyKey: "key-recreate-kv",
 	}, http.StatusCreated)
@@ -2541,7 +2590,7 @@ func (r *v3Runner) checkAsyncCommitRevalidates(kv, version probeTarget) error {
 	}
 	// A second request removes the binding target while the accepted apply is
 	// still pending. Nothing holds it: the pending resource is not committed.
-	deleted, err := r.deleteResource(target, created.Metadata.Revision, "key-revalidate-kv-delete", nil)
+	deleted, err := r.deleteResource(target, created.Metadata.Generation, "key-revalidate-kv-delete", nil)
 	if err != nil {
 		return err
 	}
@@ -2576,7 +2625,7 @@ func (r *v3Runner) checkAsyncCommitRevalidates(kv, version probeTarget) error {
 		return err
 	}
 	acceptedDelete, err := r.deleteResource(
-		held, heldCreated.Metadata.Revision, "key-revalidate-held-delete",
+		held, heldCreated.Metadata.Generation, "key-revalidate-held-delete",
 		map[string]string{ErrorProbeHeader: ProbeAsync},
 	)
 	if err != nil {
@@ -2652,7 +2701,7 @@ func (r *v3Runner) acceptDeleteAndReplace(
 	}
 	run.Created = created
 	acceptedDelete, err := r.deleteResource(
-		subject, created.Metadata.Revision, keyPrefix+"-async-delete",
+		subject, created.Metadata.Generation, keyPrefix+"-async-delete",
 		map[string]string{ErrorProbeHeader: ProbeAsync},
 	)
 	if err != nil {
@@ -2676,7 +2725,7 @@ func (r *v3Runner) acceptDeleteAndReplace(
 	// The resource leaves out of band, exactly as a backend deletion the host did
 	// not perform: relation protection is bypassed, the accepted operation is not.
 	removed, err := r.deleteResource(
-		subject, created.Metadata.Revision, keyPrefix+"-external-delete",
+		subject, created.Metadata.Generation, keyPrefix+"-external-delete",
 		map[string]string{ErrorProbeHeader: ProbeExternalChange},
 	)
 	if err != nil {

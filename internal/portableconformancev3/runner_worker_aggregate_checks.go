@@ -145,13 +145,34 @@ func (r *v3Runner) refuseUpdate(target probeTarget, generation, code, key, subje
 	return nil
 }
 
-// deleteExisting removes one resource at its current revision.
+// deleteExisting removes one resource at the desired generation it currently
+// holds, which is the fence a delete carries (spec/decisions/0011).
 func (r *v3Runner) deleteExisting(target probeTarget, key string) error {
-	current, _, err := r.read(target)
+	return r.deleteExistingAs(r.token, target, key)
+}
+
+// deleteExistingAs is deleteExisting under a named credential, so a check can
+// tear down what a SECOND TENANT created. Both the read and the delete
+// authenticate as that tenant: a resource is addressed inside the caller's own
+// plane, so a generation read as one tenant means nothing to another
+// (spec/decisions/0028).
+func (r *v3Runner) deleteExistingAs(token string, target probeTarget, key string) error {
+	read, err := r.readAs(token, target)
 	if err != nil {
 		return err
 	}
-	response, err := r.deleteResource(target, current.Metadata.Revision, key, nil)
+	current, err := decodeResource(read, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("reading %s before deleting it: %w", target.Name, err)
+	}
+	response, err := r.requestWithToken(
+		token, http.MethodDelete,
+		r.resourceURL(target.Ref, target.Name, "", r.exactQuery(target.Space, target.Ref)),
+		map[string]string{
+			expectedGenerationHeader: current.Metadata.Generation,
+			"Idempotency-Key":        key,
+		}, nil,
+	)
 	if err != nil {
 		return err
 	}
@@ -571,7 +592,7 @@ func (r *v3Runner) checkDeploymentDeleteBlockedByDependent() error {
 			return err
 		}
 		blocked, err := r.deleteResource(
-			deployment, current.Metadata.Revision,
+			deployment, current.Metadata.Generation,
 			"key-deployment-blocked-"+attachment.Ref.Kind, nil,
 		)
 		if err != nil {
@@ -627,7 +648,7 @@ func (r *v3Runner) checkDeploymentDeleteBlockedByDependent() error {
 		return err
 	}
 	blocked, err := r.deleteResource(
-		deployment, current.Metadata.Revision, "key-deployment-blocked-inbound-binding", nil,
+		deployment, current.Metadata.Generation, "key-deployment-blocked-inbound-binding", nil,
 	)
 	if err != nil {
 		return err

@@ -49,7 +49,12 @@ type harness struct {
 	env      []string
 	server   *httptest.Server
 	host     *recordingHost
-	cleanup  []func()
+	// store is the same reference host the recorder wraps, kept typed so a
+	// teardown scenario can ask what is LEFT. The wire has no list route, so
+	// nothing else can answer "nothing was left behind" rather than "the names
+	// I remembered are gone".
+	store   *portableconformancev3.ReferenceHost
+	cleanup []func()
 }
 
 // harnessOptions selects which Forms the disposable host answers support for.
@@ -80,9 +85,8 @@ func startHarness(ctx context.Context, repoRoot, cliPath string, options harness
 	}
 	h.cleanup = append(h.cleanup, func() { _ = os.RemoveAll(temp) })
 
-	h.host = newRecordingHost(
-		portableconformancev3.NewReferenceHost(contract, catalog), options.unsupportedKinds,
-	)
+	h.store = portableconformancev3.NewReferenceHost(contract, catalog)
+	h.host = newRecordingHost(h.store, options.unsupportedKinds)
 	h.server = httptest.NewServer(h.host)
 	h.cleanup = append(h.cleanup, h.server.Close)
 

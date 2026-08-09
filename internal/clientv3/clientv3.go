@@ -513,13 +513,52 @@ func waitForRetry(ctx context.Context, attempt int, retryAfter time.Duration) er
 }
 
 // mutationKey derives the deterministic Idempotency-Key for one lifecycle
-// mutation from (operation, group, kind, name, space, fence, body digest).
-// The host namespaces the key by tenant, principal, and space, so equal keys
-// from different principals never collide.
+// mutation from the values it is given. The host namespaces the key by tenant,
+// principal, and space, so equal keys from different principals never collide
+// (spec/host-api/operations-v1alpha3.json: idempotency.namespace).
 func mutationKey(values ...any) string {
 	raw, _ := json.Marshal(values)
 	digest := sha256.Sum256(raw)
 	return fmt.Sprintf("takoform-%x", digest[:])
+}
+
+// incarnationKey is the Idempotency-Key of one resource-lifecycle operation:
+// (operation, exact FormRef, name, space, UID, generation, body digest).
+//
+// The uid is in the key because neither counter distinguishes incarnations. A
+// name is reusable and a re-created resource starts at generation 1 exactly as
+// it starts at revision 1, so a key built from a counter alone is the same key
+// for two different resources that merely shared a name. The host replays a
+// recorded response BEFORE it resolves the resource the request addresses —
+// that is what an idempotency record is for — so the second operation would be
+// answered with the first one's terminal result and never happen at all. For a
+// delete that means Terraform drops the resource from state while the host
+// leaves it running.
+//
+// Putting the uid in the key is decision 0015 rule 10 — an accepted mutation is
+// bound to the incarnation it was accepted for — applied to the key instead of
+// to the commit. It stays a client-side derivation: the uid is not sent on the
+// wire, no host behaviour changes, and the uid fence remains the MAY that
+// decision 0011 left it. It also keeps the key deterministic, which is the
+// whole point of having one: the SAME operation on the SAME incarnation, retried
+// after a lost response, still derives the same key and still replays its
+// terminal answer instead of executing twice.
+//
+// Two operations legitimately pass an empty uid, because at the moment they
+// build the request no incarnation exists to name: a create, and a new-adoption
+// import. Both are fenced against the free NAME rather than against an
+// incarnation (decision 0015 rule 10), and for both the deterministic key is
+// the only answer to a lost response — the required check
+// apply-idempotency-replay measures it, and without it If-None-Match: * turns
+// the retry into already_exists and hands the operator an import. What that
+// leaves open is a create replayed across an incarnation boundary, and no
+// client can close it: the discriminator would have to be the deletion the host
+// performed in between, which the client does not know about and which is not
+// part of its request. It closes at the host, by retiring a record whose
+// incarnation is gone, and that is a normative host rule this lane has not
+// stated.
+func incarnationKey(operation string, ref FormRef, name, space, uid, generation, body string) string {
+	return mutationKey(operation, ref.APIVersion, ref.Kind, name, space, uid, generation, body)
 }
 
 func bodyDigest(raw []byte) string {

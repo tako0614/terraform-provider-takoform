@@ -235,7 +235,7 @@ func (r *v3Runner) checkResourceAnswersOnlyUnderItsRecordedFormRef() error {
 	if err := r.expectStableError(update, "resource_not_found"); err != nil {
 		return fmt.Errorf("an apply under the other definition version reached the stored resource: %w", err)
 	}
-	remove, err := r.deleteResource(other, created.Metadata.Revision, "key-recorded-ref-delete", nil)
+	remove, err := r.deleteResource(other, created.Metadata.Generation, "key-recorded-ref-delete", nil)
 	if err != nil {
 		return err
 	}
@@ -415,7 +415,7 @@ func (r *v3Runner) checkRelationPinRecordsTargetFormRef() error {
 	}
 
 	removed, err := r.deleteResource(
-		worker, created.Metadata.Revision, "key-pin-ref-worker-delete",
+		worker, created.Metadata.Generation, "key-pin-ref-worker-delete",
 		map[string]string{ErrorProbeHeader: ProbeExternalChange},
 	)
 	if err != nil {

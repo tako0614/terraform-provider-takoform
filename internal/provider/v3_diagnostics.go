@@ -134,8 +134,8 @@ var v3HostRepairs = map[string]string{
 	"unsupported_capability": "This host does not offer the capability the message names. Remove what needs it, or apply against a host whose Host Support Profile declares it.",
 	"migration_required":     "The host requires an explicit migration for this resource. Follow the host's migration path; the provider will not migrate state implicitly.",
 	"uid_mismatch":           "The host holds a different incarnation than state records. Refresh, then either import the incarnation that exists or restore the one state names.",
-	"revision_conflict":      "The representation moved under the delete fence. Refresh and re-plan.",
-	"generation_conflict":    "The desired generation moved under the update fence. Refresh and re-plan.",
+	"revision_conflict":      "The representation moved under an If-Match precondition. Refresh and re-plan; a delete fences on the generation, so only a caller that asked about the representation sees this.",
+	"generation_conflict":    "The desired generation moved under the update or delete fence. Refresh and re-plan.",
 }
 
 // v3Diagnostic is one rendered lane diagnostic.

@@ -10,7 +10,8 @@ A provider diagnostic is the only thing a practitioner sees when an apply stops,
 and this lane's whole vocabulary is what makes one actionable. Decision
 [0011](0011-resource-identity-generation-and-revision.md) gave every resource a
 UID, a generation, and a revision, and made desired mutations fence on the
-generation and deletes on the revision. Decision
+generation and deletes on the revision — the delete half of which that record
+has since amended to the generation, for reasons of its own. Decision
 [0017](0017-provider-state-survives-form-evolution-and-interruption.md) made the
 exact FormRef the identity every read, update, and delete addresses, and made
 `pending_operation_id` load-bearing. The wire error envelope carries a code from
@@ -72,8 +73,13 @@ for a genuinely nil provider data — a provider bug, and labelled as one.
 ## Consequences
 
 - The audited sites now render the fences they send. A `generation_conflict` on
-  update shows the generation that was sent; a `revision_conflict` on delete
-  shows the revision.
+  update shows the generation that was sent, and so does one on delete, since
+  the delete fence became the generation
+  ([0011](0011-resource-identity-generation-and-revision.md), amended
+  2026-08-09). `revision_conflict` keeps its repair: the code stays in the
+  published taxonomy and stays reachable for a caller that supplies the optional
+  representation fence, and the repair test is over the published codes rather
+  than over the ones this client happens to provoke.
 - The interface data source reports `Takoform v1alpha2 lane unavailable` with
   the endpoint's own reason, symmetric with the v2 resources and the v3
   resources.

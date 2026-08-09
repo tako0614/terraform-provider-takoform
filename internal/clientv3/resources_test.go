@@ -258,7 +258,7 @@ func TestObserveResourceFenceMismatchRejected(t *testing.T) {
 		}
 		return false
 	})
-	_, err := client.ObserveResource(context.Background(), testSpace, testRef, "app", "4")
+	_, err := client.ObserveResource(context.Background(), testSpace, testRef, "app", "uid-1", "4")
 	if err == nil || !contains(err, "changed the generation protected by the fence") {
 		t.Fatalf("expected fence mismatch rejection, got %v", err)
 	}
@@ -275,7 +275,7 @@ func TestObserveResourceHonorsFence(t *testing.T) {
 		}
 		return false
 	})
-	out, err := client.ObserveResource(context.Background(), testSpace, testRef, "app", "4")
+	out, err := client.ObserveResource(context.Background(), testSpace, testRef, "app", "uid-1", "4")
 	if err != nil {
 		t.Fatalf("observe: %v", err)
 	}
@@ -284,11 +284,17 @@ func TestObserveResourceHonorsFence(t *testing.T) {
 	}
 }
 
-func TestDeleteResourceRevisionFence(t *testing.T) {
+func TestDeleteResourceGenerationFence(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) bool {
 		if r.Method == http.MethodDelete && r.URL.EscapedPath() == splitGroupResourcePath("app", "") {
-			if r.Header.Get("If-Match") != `"9"` {
-				t.Errorf("delete must fence with If-Match on the quoted revision, got %q", r.Header.Get("If-Match"))
+			if r.Header.Get(expectedGenerationHeader) != "9" {
+				t.Errorf("delete must fence on the expected generation, got %q", r.Header.Get(expectedGenerationHeader))
+			}
+			// And never on the representation: a teardown moves revisions it
+			// does not own, so a delete that carried If-Match would refuse
+			// itself (spec/decisions/0011).
+			if got := r.Header.Get("If-Match"); got != "" {
+				t.Errorf("delete must not fence on the representation revision, got If-Match %q", got)
 			}
 			if r.Header.Get("Idempotency-Key") == "" {
 				t.Errorf("delete must send an Idempotency-Key")
@@ -301,7 +307,7 @@ func TestDeleteResourceRevisionFence(t *testing.T) {
 		}
 		return false
 	})
-	if err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "9"); err != nil {
+	if err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 }
@@ -329,7 +335,7 @@ func TestDeleteResourceOperationNotFoundMapsToErrNotFound(t *testing.T) {
 		}
 		return false
 	})
-	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "9")
+	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9")
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound from terminal operation, got %v", err)
 	}
@@ -349,7 +355,7 @@ func TestDeleteRetriesOnStableBackendUnavailable(t *testing.T) {
 		}
 		return false
 	})
-	if err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "9"); err != nil {
+	if err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9"); err != nil {
 		t.Fatalf("delete after retry: %v", err)
 	}
 	if calls != 2 {
@@ -368,7 +374,7 @@ func TestDeleteDoesNotRetryProtocolInvalidBody(t *testing.T) {
 		}
 		return false
 	})
-	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "9")
+	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9")
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) || !apiErr.ProtocolInvalid {
 		t.Fatalf("expected protocol-invalid error, got %v", err)

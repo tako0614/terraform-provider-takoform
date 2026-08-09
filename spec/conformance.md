@@ -51,7 +51,9 @@ additionally MUST: issue immutable UIDs and change them across
 delete/recreate; increment `generation` only on desired-spec change and
 `revision` on any representation change, serving the quoted revision as the
 strong ETag; reject stale generation and revision fences with
-`generation_conflict` and `revision_conflict`; keep the package digest out of
+`generation_conflict` and `revision_conflict`; fence a delete on the expected
+generation and never require the revision, which a client's own teardown moves;
+keep the package digest out of
 resource identity, queries, and fences; enforce role rules (no in-place
 revision update, `dependency_in_use` for bound targets); complete accepted
 mutations either synchronously or through resumable Operations; verify
