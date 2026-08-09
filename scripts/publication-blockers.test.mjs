@@ -8,6 +8,7 @@ import {
   openBlockers,
   parseBlockerLedger,
   assertLaneStillUnpublished,
+  summarizeTraceability,
 } from "./publication-blockers.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
@@ -136,18 +137,43 @@ describe("an issue number traces to an issue", () => {
   // resolves the pull request and answers. Nothing offline can confirm a
   // number IS an issue, but the repository's own history can REFUTE one: a
   // number it landed as a pull request is not an issue.
+  // The refutation set is supplied rather than read from this repository's own
+  // history, so the assertion means the same thing everywhere. The one place
+  // the history is absent is the deploy's frozen git-archive snapshot, which is
+  // precisely where a test written against the ambient history cannot hold.
+  const landedAsPullRequests = new Map([
+    [116, "Give V3-011 the issue every other blocker has (#116)"],
+  ]);
+
   test("a number this repository landed as a pull request is refused", () => {
     expect(() =>
-      parseBlockerLedger(ledger([blocker({ issue: 116 })]), repositoryRoot),
+      parseBlockerLedger(ledger([blocker({ issue: 116 })]), repositoryRoot, landedAsPullRequests),
     ).toThrow(/records #116 as a pull request/);
   });
 
-  test("the committed ledger names no pull request number", () => {
+  test("a number no commit subject claims is left alone", () => {
+    const parsed = parseBlockerLedger(
+      ledger([blocker({ issue: 121 })]),
+      repositoryRoot,
+      landedAsPullRequests,
+    );
+    expect(parsed.pullRequestNumbersKnown).toBe(1);
+  });
+
+  test("the committed ledger names no number this history landed as a pull request", () => {
     const parsed = loadBlockerLedger(repositoryRoot);
-    expect(parsed.pullRequestNumbersKnown).toBeGreaterThan(0);
     for (const entry of parsed.blockers) {
       expect(typeof entry.issue).toBe("number");
     }
+    // Where the history is readable the refutation ran and the ledger survived
+    // it. Where it is not — the deploy's frozen snapshot — the contract is that
+    // the validator reports it did not run rather than reporting a clean
+    // result it did not earn. Both are assertions; neither is a skip.
+    if (parsed.pullRequestNumbersKnown === null) {
+      expect(summarizeTraceability(parsed)).toContain("no git history");
+      return;
+    }
+    expect(parsed.pullRequestNumbersKnown).toBeGreaterThan(0);
   });
 
   test("two blockers may not name one issue", () => {
