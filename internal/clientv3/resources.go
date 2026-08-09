@@ -267,6 +267,15 @@ type applyReview struct {
 // the applyRequest carrying the prepareDigest under the fence's
 // preconditions. A 202 response is polled to its terminal Operation and the
 // result resource is returned.
+//
+// An UPDATE names its incarnation in the Idempotency-Key twice over: through
+// the caller's expectedUid, and through the prepareDigest inside the body,
+// which the host mints against the target's CURRENT uid and generation
+// (spec/host-api/operations-v1alpha3.json: prepareBinding.prepareDigest). Two
+// incarnations of one name therefore cannot share an update key even when the
+// caller supplies no uid. A CREATE cannot name one, because none exists yet:
+// its prepare binds the create markers, which are the same for every
+// incarnation. See incarnationKey.
 func (c *Client) ApplyResource(ctx context.Context, resource *Resource, fence Fence) (*Resource, error) {
 	if err := c.requireReady(); err != nil {
 		return nil, err
@@ -303,8 +312,8 @@ func (c *Client) ApplyResource(ctx context.Context, resource *Resource, fence Fe
 		return nil, fmt.Errorf("takoform: encoding apply request: %w", err)
 	}
 	headers := map[string]string{
-		"Idempotency-Key": mutationKey(
-			"apply", ref.APIVersion, ref.Kind, resource.Metadata.Name, resource.Metadata.Space,
+		"Idempotency-Key": incarnationKey(
+			"apply", ref, resource.Metadata.Name, resource.Metadata.Space,
 			fence.ExpectedUID, fence.ExpectedGeneration, bodyDigest(raw),
 		),
 	}
@@ -430,17 +439,19 @@ func (c *Client) GetResource(ctx context.Context, space string, ref FormRef, nam
 	return &out, nil
 }
 
-// ObserveResource performs a read-only observation under a generation fence;
-// the response must reflect exactly the fenced generation.
-func (c *Client) ObserveResource(ctx context.Context, space string, ref FormRef, name, generation string) (*Resource, error) {
-	return c.fencedStatusAction(ctx, "observe", space, ref, name, generation)
+// ObserveResource performs a read-only observation of the incarnation named by
+// uid, under a generation fence; the response must reflect exactly the fenced
+// generation. The uid names the incarnation in the Idempotency-Key
+// (incarnationKey); it is not sent on the wire.
+func (c *Client) ObserveResource(ctx context.Context, space string, ref FormRef, name, uid, generation string) (*Resource, error) {
+	return c.fencedStatusAction(ctx, "observe", space, ref, name, uid, generation)
 }
 
 // fencedStatusAction performs one fenced, read-only status action. observe is
 // the lane's only such action: v1alpha3 has no refresh operation, because two
 // fenced read-only re-observations with the same contract were one operation
 // spelled two ways.
-func (c *Client) fencedStatusAction(ctx context.Context, action, space string, ref FormRef, name, generation string) (*Resource, error) {
+func (c *Client) fencedStatusAction(ctx context.Context, action, space string, ref FormRef, name, uid, generation string) (*Resource, error) {
 	if err := c.requireReady(); err != nil {
 		return nil, err
 	}
@@ -456,10 +467,13 @@ func (c *Client) fencedStatusAction(ctx context.Context, action, space string, r
 	if !validCanonicalDecimal(generation) {
 		return nil, fmt.Errorf("takoform: %s requires a canonical decimal generation fence", action)
 	}
+	if !uidPattern.MatchString(uid) {
+		return nil, fmt.Errorf("takoform: %s requires the recorded metadata.uid of the incarnation being observed", action)
+	}
 	headers := map[string]string{
 		expectedGenerationHeader: generation,
-		"Idempotency-Key": mutationKey(
-			action, ref.APIVersion, ref.Kind, name, space, generation, "",
+		"Idempotency-Key": incarnationKey(
+			action, ref, name, space, uid, generation, "",
 		),
 	}
 	fullURL := c.resourceURL(ref, name, action, exactFormQuery(space, ref))
@@ -494,7 +508,8 @@ func (c *Client) fencedStatusAction(ctx context.Context, action, space string, r
 	return &out, nil
 }
 
-// DeleteResource deletes under the expected-generation fence.
+// DeleteResource deletes the incarnation named by uid, under the
+// expected-generation fence.
 //
 // A delete withdraws desired state, so it fences like every other desired-state
 // mutation of this lane and NOT on the representation revision. The revision
@@ -505,9 +520,15 @@ func (c *Client) fencedStatusAction(ctx context.Context, action, space string, r
 // fenced on the revision would be refused by a revision its own teardown moved,
 // with a plan already computed and nothing left to do but waive the fence.
 //
+// The uid is REQUIRED, and it names the incarnation in the Idempotency-Key
+// rather than on the wire (incarnationKey). It costs nothing to supply: a
+// generation is only ever read off a verified representation, and such a
+// representation always carries a uid (verifyResourceResponse), so a caller
+// that can name the fence can name the incarnation.
+//
 // A direct 404 or a terminal delete Operation failing resource_not_found
 // returns ErrNotFound so callers can treat "already gone" deliberately.
-func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, name, generation string) error {
+func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, name, uid, generation string) error {
 	if err := c.requireReady(); err != nil {
 		return err
 	}
@@ -523,10 +544,13 @@ func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, 
 	if !validCanonicalDecimal(generation) {
 		return errors.New("takoform: delete requires a canonical decimal generation fence")
 	}
+	if !uidPattern.MatchString(uid) {
+		return errors.New("takoform: delete requires the recorded metadata.uid of the incarnation being removed")
+	}
 	headers := map[string]string{
 		expectedGenerationHeader: generation,
-		"Idempotency-Key": mutationKey(
-			"delete", ref.APIVersion, ref.Kind, name, space, generation, "",
+		"Idempotency-Key": incarnationKey(
+			"delete", ref, name, space, uid, generation, "",
 		),
 	}
 	fullURL := c.resourceURL(ref, name, "", exactFormQuery(space, ref))
@@ -566,6 +590,12 @@ type importRequestBody struct {
 // desired resource. New adoptions carry If-None-Match: *; a resource whose
 // metadata.generation is set is fenced as an existing-resource import. A 202
 // response is polled to its terminal Operation.
+//
+// A fenced import addresses an incarnation the caller has already read, so
+// metadata.uid names it in the Idempotency-Key (incarnationKey) and a second
+// incarnation of the name cannot be answered with the first one's record. A new
+// adoption names no incarnation because none exists yet; see incarnationKey for
+// what that leaves open.
 func (c *Client) ImportResource(ctx context.Context, resource *Resource, nativeID string) (*Resource, error) {
 	if err := c.requireReady(); err != nil {
 		return nil, err
@@ -580,6 +610,13 @@ func (c *Client) ImportResource(ctx context.Context, resource *Resource, nativeI
 	if generation != "" && !validCanonicalDecimal(generation) {
 		return nil, errors.New("takoform: import generation fence must be canonical decimal in 1..9223372036854775807")
 	}
+	uid := resource.Metadata.UID
+	if uid != "" && !uidPattern.MatchString(uid) {
+		return nil, errors.New("takoform: import metadata.uid is not a valid UID")
+	}
+	if generation != "" && uid == "" {
+		return nil, errors.New("takoform: a fenced import requires the recorded metadata.uid of the incarnation being adopted")
+	}
 	ref := resource.Form.FormRef
 	request := importRequestBody{
 		resourceRequestBody: requestBodyFor(resource),
@@ -590,9 +627,9 @@ func (c *Client) ImportResource(ctx context.Context, resource *Resource, nativeI
 		return nil, fmt.Errorf("takoform: encoding import request: %w", err)
 	}
 	headers := map[string]string{
-		"Idempotency-Key": mutationKey(
-			"import", ref.APIVersion, ref.Kind, resource.Metadata.Name, resource.Metadata.Space,
-			generation, bodyDigest(raw),
+		"Idempotency-Key": incarnationKey(
+			"import", ref, resource.Metadata.Name, resource.Metadata.Space,
+			uid, generation, bodyDigest(raw),
 		),
 	}
 	if generation == "" {

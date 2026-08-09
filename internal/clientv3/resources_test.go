@@ -258,7 +258,7 @@ func TestObserveResourceFenceMismatchRejected(t *testing.T) {
 		}
 		return false
 	})
-	_, err := client.ObserveResource(context.Background(), testSpace, testRef, "app", "4")
+	_, err := client.ObserveResource(context.Background(), testSpace, testRef, "app", "uid-1", "4")
 	if err == nil || !contains(err, "changed the generation protected by the fence") {
 		t.Fatalf("expected fence mismatch rejection, got %v", err)
 	}
@@ -275,7 +275,7 @@ func TestObserveResourceHonorsFence(t *testing.T) {
 		}
 		return false
 	})
-	out, err := client.ObserveResource(context.Background(), testSpace, testRef, "app", "4")
+	out, err := client.ObserveResource(context.Background(), testSpace, testRef, "app", "uid-1", "4")
 	if err != nil {
 		t.Fatalf("observe: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestDeleteResourceGenerationFence(t *testing.T) {
 		}
 		return false
 	})
-	if err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "9"); err != nil {
+	if err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 }
@@ -335,7 +335,7 @@ func TestDeleteResourceOperationNotFoundMapsToErrNotFound(t *testing.T) {
 		}
 		return false
 	})
-	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "9")
+	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9")
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound from terminal operation, got %v", err)
 	}
@@ -355,7 +355,7 @@ func TestDeleteRetriesOnStableBackendUnavailable(t *testing.T) {
 		}
 		return false
 	})
-	if err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "9"); err != nil {
+	if err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9"); err != nil {
 		t.Fatalf("delete after retry: %v", err)
 	}
 	if calls != 2 {
@@ -374,7 +374,7 @@ func TestDeleteDoesNotRetryProtocolInvalidBody(t *testing.T) {
 		}
 		return false
 	})
-	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "9")
+	err := client.DeleteResource(context.Background(), testSpace, testRef, "app", "uid-1", "9")
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) || !apiErr.ProtocolInvalid {
 		t.Fatalf("expected protocol-invalid error, got %v", err)

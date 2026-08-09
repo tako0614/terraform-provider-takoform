@@ -735,8 +735,15 @@ func (r *v3FormResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	// made, the revision the plan read is routinely stale through this very
 	// destroy (spec/decisions/0011, 0016 rule 9). The generation is not: it
 	// moves only when some client changes desired state.
+	//
+	// The recorded uid travels with it. It is not a second fence — it names the
+	// incarnation in the delete's Idempotency-Key, so a host still holding the
+	// record of an earlier delete of this NAME cannot answer this one with it
+	// (clientv3.incarnationKey). State always has one here: uid and generation
+	// are written from the same verified representation.
 	err := r.data.clientV3.DeleteResource(
-		opCtx, space, clientFormRef(codec.Ref), values.Name.ValueString(), values.Generation.ValueString(),
+		opCtx, space, clientFormRef(codec.Ref), values.Name.ValueString(),
+		v3StateStringValue(values.UID), values.Generation.ValueString(),
 	)
 	if err != nil && !errors.Is(err, clientv3.ErrNotFound) {
 		resp.Diagnostics.Append(v3HostCallDiagnostic("Failed to delete "+r.form.Kind, err, v3Diagnostic{

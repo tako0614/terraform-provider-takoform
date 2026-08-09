@@ -218,7 +218,8 @@ func runSameNameDeadlock(ctx context.Context, repoRoot, cliPath string) (Deadloc
 		return DeadlockEvidence{}, CLIIdentity{}, fmt.Errorf("read the applied bundle: %w", err)
 	}
 	deleteErr := client.DeleteResource(
-		ctx, harnessSpace, clientFormRef3(bundleRef), workerName+"-bundle", stored.Metadata.Generation)
+		ctx, harnessSpace, clientFormRef3(bundleRef), workerName+"-bundle",
+		stored.Metadata.UID, stored.Metadata.Generation)
 	code, status, ok := stableErrorOf(deleteErr)
 	if !ok {
 		return DeadlockEvidence{}, CLIIdentity{}, fmt.Errorf(
