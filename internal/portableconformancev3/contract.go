@@ -123,10 +123,11 @@ func isPortableConditionReason(reason string) bool {
 	return false
 }
 
-// requiredRunnerChecks is the closed 106-entry executed-check list every v3
+// requiredRunnerChecks is the closed 112-entry executed-check list every v3
 // runner invocation must complete.
 var requiredRunnerChecks = []string{
 	"discovery-exact",
+	"unauthenticated-request-refused",
 	"forms-exact-availability",
 	"form-definition-exact",
 	"validate-accepts-canonical",
@@ -136,6 +137,7 @@ var requiredRunnerChecks = []string{
 	"apply-create-uid-minted",
 	"apply-headers-required",
 	"apply-idempotency-replay",
+	"replay-record-retires-with-its-incarnation",
 	"create-conflict-when-exists",
 	"update-generation-fence",
 	"stale-generation-rejected",
@@ -219,6 +221,9 @@ var requiredRunnerChecks = []string{
 	"custom-domain-hostname-claim-unique",
 	"custom-domain-hostname-claim-stops-at-the-tenant",
 	"dead-letter-cycle-rejected",
+	"attachment-claim-decided-on-import",
+	"attachment-claim-revalidated-at-commit",
+	"custom-domain-u-label-refused",
 	// A host answers for the exact ref recorded in state, and a relation pins
 	// the target's contract rather than its incarnation alone
 	// (spec/decisions/0022).
@@ -251,6 +256,10 @@ var requiredRunnerChecks = []string{
 	"relation-resolution-is-tenant-scoped",
 	"prepare-is-tenant-scoped",
 	"idempotency-is-tenant-scoped",
+	// And the permissive half of the whole matrix: the second tenant's plane is
+	// one it can WRITE. Nine boundary checks are all satisfied by a host that is
+	// create-and-read-only for every tenant but the first.
+	"each-tenant-mutates-its-own-plane",
 }
 
 // nameAddressedResourceSurface is one v1alpha3 surface that takes a resource
@@ -317,6 +326,7 @@ var nameAddressedResourceSurfaces = []nameAddressedResourceSurface{
 			"resource-update-is-tenant-isolated",
 			"relation-resolution-is-tenant-scoped",
 			"idempotency-is-tenant-scoped",
+			"each-tenant-mutates-its-own-plane",
 		},
 	},
 	{
@@ -335,7 +345,7 @@ var nameAddressedResourceSurfaces = []nameAddressedResourceSurface{
 	},
 	{
 		Method: "DELETE", Route: "{api}/resources/{formGroup}/{formVersion}/{kind}/{name}",
-		TenantChecks: []string{"resource-delete-is-tenant-isolated"},
+		TenantChecks: []string{"resource-delete-is-tenant-isolated", "each-tenant-mutates-its-own-plane"},
 	},
 }
 

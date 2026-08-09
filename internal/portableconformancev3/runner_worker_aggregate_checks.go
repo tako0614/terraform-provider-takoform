@@ -274,7 +274,6 @@ func (r *v3Runner) checkDeploymentIntegrity() error {
 	); err != nil {
 		return err
 	}
-	r.complete("deployment-single-active-per-worker")
 
 	// A separate worker with its own version, so ownership and duplication can
 	// be driven without colliding with the single-deployment rule above.
@@ -300,6 +299,55 @@ func (r *v3Runner) checkDeploymentIntegrity() error {
 		return err
 	}
 	r.complete("deployment-version-ownership")
+
+	// A REAL weighted split, and the only one in the corpus. Every other
+	// deployment the lane ever accepts weights exactly one version at 10000, so
+	// "the weights sum to 10000" was never a sum and "one version appears once"
+	// was never a comparison: a host refusing any `versions` array longer than one
+	// passed the weight rule, the duplicate rule below, and the every-weighted-
+	// version handler gate, while making canary and gradual rollout — the entire
+	// reason a deployment carries weights — unrepresentable. So the accepted split
+	// runs FIRST, and the duplicate refusal after it means what it says.
+	secondVersion := r.workerVersionOf("other-version-b", other.Name, fetchHandler)
+	secondVersion.Spec["vars"] = map[string]any{"ROLLOUT": "canary"}
+	if _, _, err := r.applyResource(secondVersion, applyOptions{
+		Create: true, IdempotencyKey: "key-other-version-b",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("a second version of the same worker: %w", err)
+	}
+	split := r.deploymentOf("split-deployment", other.Name, otherVersion.Name, secondVersion.Name)
+	if _, _, err := r.applyResource(split, applyOptions{
+		Create: true, IdempotencyKey: "key-split-deployment",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf(
+			"a deployment weighting two distinct versions of one worker to exactly 10000: %w; the weights are "+
+				"basis points because traffic is split, and a host that admits only one entry has no split",
+			err,
+		)
+	}
+
+	// One deployment per worker is a rule about what is LIVE, so releasing the
+	// live one must make the next one representable. Nothing in the corpus ever
+	// replaced a deployment it deleted, so a host setting a one-shot "this worker
+	// is deployed" flag it never clears passed the refusal above and left every
+	// torn-down worker undeployable forever.
+	if err := r.deleteExisting(split, "key-split-deployment-delete"); err != nil {
+		return err
+	}
+	replacement := r.deploymentOf("replacement-deployment", other.Name, otherVersion.Name)
+	if _, _, err := r.applyResource(replacement, applyOptions{
+		Create: true, IdempotencyKey: "key-replacement-deployment",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf(
+			"deploying a worker again after its deployment was released: %w; the rule is one ACTIVE deployment, "+
+				"and a worker that can never be redeployed has been retired rather than torn down",
+			err,
+		)
+	}
+	if err := r.deleteExisting(replacement, "key-replacement-deployment-delete"); err != nil {
+		return err
+	}
+	r.complete("deployment-single-active-per-worker")
 
 	duplicate := r.deploymentOf("duplicate-deployment", other.Name, otherVersion.Name, otherVersion.Name)
 	if err := r.refuseCreate(

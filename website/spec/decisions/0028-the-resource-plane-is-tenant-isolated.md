@@ -1,6 +1,7 @@
 # 0028 — The resource plane is tenant-isolated, by address
 
-- Status: accepted
+- Status: accepted; amended 2026-08-09 — the matrix is measured in the
+  PERMISSIVE direction as well (see "A boundary has two sides" below)
 - Date: 2026-08-09
 - Owners: Takoform maintainers
 
@@ -89,14 +90,81 @@ those three surround. The taxonomy is closed and no code is added
 ([decision 0014](0014-published-schemas-are-structural-minima.md), rung 3: the
 host enforces it and required conformance checks prove a laxer host fails).
 
-Nine required conformance checks measure it, all black box:
+Ten required conformance checks measure it, all black box:
 `resource-address-is-tenant-scoped`, `resource-read-is-tenant-isolated`,
 `resource-observe-is-tenant-isolated`, `resource-update-is-tenant-isolated`,
 `resource-import-is-tenant-isolated`, `resource-delete-is-tenant-isolated`,
-`relation-resolution-is-tenant-scoped`, `prepare-is-tenant-scoped`, and
-`idempotency-is-tenant-scoped`. The lane's runner therefore REQUIRES an
-alternate-tenant credential: a runner that can authenticate as one tenant can
-measure none of this.
+`relation-resolution-is-tenant-scoped`, `prepare-is-tenant-scoped`,
+`idempotency-is-tenant-scoped`, and `each-tenant-mutates-its-own-plane`. The
+lane's runner therefore REQUIRES an alternate-tenant credential: a runner that
+can authenticate as one tenant can measure none of this.
+
+### A boundary has two sides
+
+*Amended 2026-08-09.* Rule 2 says every surface addresses the caller's **own**
+tenant. The first version of this record measured only the half where the answer
+is a refusal, and a rule proven only in the direction where a host refuses is
+half a rule: a host that refuses everything passes it. Four concrete hosts got
+through, and none of them is exotic.
+
+1. **The second tenant never wrote anything of its own.** Across the whole
+   corpus it created and read; a host that is create-and-read-only for every
+   tenant but the first — `resource_not_found` to each update and each delete of
+   the second tenant's OWN resources — satisfied all nine while breaking rule 2
+   outright. That is the ordinary shape of a tenant column bolted onto a
+   single-tenant store whose write paths still resolve through the original
+   owner, and the failure is silent, because a 404 for your own resource reads
+   like a resource you never made. `each-tenant-mutates-its-own-plane` drives an
+   update and a delete inside the second tenant's plane, against a name the first
+   tenant also holds, and holds the first tenant's uid, generation, and revision
+   still across both.
+2. **The update and delete boundaries proved non-destruction and not
+   availability.** "The resource survived a foreign attempt" is also true of a
+   host that answers a stranger's request by locking the record, and an operator
+   who cannot change or destroy what they created has lost it just as completely,
+   only slower. Both checks now end with the HOLDER performing the same
+   operation, under the same fences, successfully. `observe` and `import` were
+   already two-sided; these two now match them.
+3. **Relation resolution never reached a successful apply**, so the stored pin
+   was never inspected and a host that gated correctly and then pinned the OTHER
+   tenant's uid passed. The pin is what deletion protection, drift, and every
+   aggregate rule read afterwards, so a foreign pin means one tenant's resource
+   is protected from its own owner by a stranger's reference. The check now lands
+   the apply and reads the pin the only way a black box can — by what it
+   protects: the first tenant's identically-named resource must delete freely,
+   the second tenant's source must stay Ready when it does, and the second
+   tenant's own target must be refused `dependency_in_use`.
+4. **Idempotency never read the second tenant's resource back**, so a host that
+   answered a key it had already seen from another tenant by synthesizing a
+   fresh-uid 201 and storing nothing passed — including the byte-identical
+   "replay", which is the same synthesis twice. The check now reads it back.
+
+A fifth follows from the same reading and is not about tenants at all: a review
+is bound to the minting TENANT, and only the foreign spend was driven, so a host
+binding it to the minting PRINCIPAL was indistinguishable — while refusing the
+ordinary plan-in-one-identity, apply-in-another split
+[decision 0018](0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)
+assumes. `prepare-is-tenant-scoped` now spends one review from a second
+principal of the tenant that minted it, and requires that to succeed.
+
+### The credential the tenant comes from
+
+*Amended 2026-08-09.* Everything above is downstream of one fact this record
+asserted and the corpus never drove: the tenant is the **authenticated** tenant,
+and nothing on the wire names one. Every request in the matrix carried one of
+three valid credentials, and the only `unauthenticated` (401) the lane ever
+produced came from the runner-only error probe — so a host whose credential
+lookup failed OPEN, answering an unauthenticated request as some default tenant,
+passed the entire matrix while exposing every tenant's plane to anyone who can
+reach the port. That is not an exotic bug; it is what "auth is wired in later"
+looks like. `unauthenticated-request-refused` drives two shapes, because they
+fail differently — an ABSENT `Authorization` header, which a framework may route
+past authentication entirely, and a well-formed bearer credential naming nobody,
+which a lookup returning a zero value turns into a valid caller — on a read
+surface and on a mutating one, and requires `unauthenticated` for both and never
+`permission_denied`: the caller has not been identified, so there is nothing yet
+to deny. The identical requests under a real credential must succeed, so a host
+cannot pass by refusing the route.
 
 **The nine are enumerated by surface.** The first version of this record listed
 seven, and it listed them by intent — read it, change it, delete it, point at
@@ -127,7 +195,8 @@ remembering to think of one.
   as evidence of isolation. It now expects the two legs to differ: the
   same-tenant principal still collides, and the second tenant is stopped by the
   review it carries rather than by a resource it does not have.
-- The required check list grows from 93 to 102.
+- The required check list grows from 93 to 102, and to 103 with
+  `each-tenant-mutates-its-own-plane` *(2026-08-09)*.
 - The reference host's resource-plane routes are a table rather than a `switch`,
   so the set of name-addressed endpoints is data. Three tests read it: one binds
   it to the published route block, one to the enumeration, and one binds the
@@ -154,6 +223,13 @@ remembering to think of one.
   resolver returns — the "that name is taken" oracle. The check therefore
   requires the adoption to SUCCEED and to be byte-comparable to the adoption of
   a free name, and holds the fenced form of import to the 404 instead.
+- **Measure the permissive half by adding one "the second tenant can write"
+  check and leaving the nine as they were.** Rejected as half the correction. The
+  new check answers item 1 above and nothing else: it says the second tenant's
+  plane is writable, not that a resource stays writable by its owner after a
+  stranger reaches for it, not what a stored relation pinned, and not that an
+  answered create was executed. Each of those is a property of the surface its own
+  check names, so each is stated there.
 - **Keep the tenant as a field and filter at each call site.** Rejected because
   that is the state this decision corrects. The tenant WAS a field, and exactly
   one scan read it; every other lookup was correct only by the accident of a uid

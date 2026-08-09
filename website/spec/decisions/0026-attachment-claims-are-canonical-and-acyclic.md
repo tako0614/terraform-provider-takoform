@@ -1,8 +1,10 @@
 # 0026 — An attachment's claim is decided on canonical, resolved identity
 
 - Status: accepted; amended 2026-08-09 — the tenant half of the claim scope is
-  now MEASURED, and the acyclic half of the dead-letter rule is measured for a
-  shape other than one chain
+  now MEASURED, the acyclic half of the dead-letter rule is measured for a shape
+  other than one chain, and the two SURFACES this record always named besides
+  `apply` — `import`, and the commit of an accepted `202` — are measured too,
+  along with the U-label refusal rule 1 states
 - Date: 2026-08-08
 - Owners: Takoform maintainers
 
@@ -166,10 +168,12 @@ cycle, so the author can act on it without a second request.
   "exhausted messages come to rest" a checkable claim rather than an intention.
   Building a two-queue mutual dead-letter pair is unrepresentable; a chain
   A -> B -> C is not.
-- Four required conformance checks join the v1alpha3 runner list:
+- Seven required conformance checks join the v1alpha3 runner list:
   `custom-domain-hostname-canonicalized`, `custom-domain-hostname-claim-unique`,
-  `custom-domain-hostname-claim-stops-at-the-tenant`, and
-  `dead-letter-cycle-rejected`. Each drives a configuration a laxer host accepts
+  `custom-domain-hostname-claim-stops-at-the-tenant`,
+  `dead-letter-cycle-rejected`, `attachment-claim-decided-on-import`,
+  `attachment-claim-revalidated-at-commit`, and
+  `custom-domain-u-label-refused`. Each drives a configuration a laxer host accepts
   and proves nothing was stored, and each also drives the accepting case so a
   host cannot pass by refusing everything. Three of them drive the SCOPE of the
   rule and not only the rule: the claim check builds a second space with its own
@@ -219,6 +223,37 @@ cycle, so the author can act on it without a second request.
   outgoing edge (decision 0020), and nothing bounds how many chains end at one
   queue. The check now closes a diamond as well, so two acyclic chains meeting
   is accepted and the shortcut fails.
+- **Both rules are measured on all three surfaces this record names** *(amended
+  2026-08-09)*. "On `apply` and on `import` alike, and re-verified when an
+  accepted `202` commits" was stated here from the beginning and driven on
+  `apply` alone, so a host validating the whole gauntlet on apply and treating
+  the other two as "write what was already agreed" passed everything. Neither is
+  a formality. `import` is the surface that mints a resource for something
+  already running, which is exactly where nobody is watching: adoption is how a
+  second attachment lands on a hostname the host already answers, or a consumer
+  that closes a dead-letter loop enters the store. And a claim is a statement
+  about the STORE, which is why the precedent cited above exists at all — between
+  accept and commit the store moves, and each of the two requests that produce
+  the collision was correct when it was made.
+  `attachment-claim-decided-on-import` drives both rules through adoption in both
+  polarities, so a host cannot pass by refusing every adoption;
+  `attachment-claim-revalidated-at-commit` accepts a `202` while the store makes
+  it legal, moves the store with a synchronous request that is itself legal, and
+  requires the commit to terminate `invalid_argument`, commit nothing, and leave
+  the synchronous resource alive.
+- **The U-label refusal of rule 1 is measured** *(amended 2026-08-09)*. Rule 1
+  says an internationalized name travels as its A-label and that this is a
+  refusal rather than a conversion, and nothing drove it — so a host performing
+  IDNA/UTS-46 mapping, which is one library call and looks like a kindness,
+  conformed. What that imports is the host's Unicode table version into a
+  portable contract: two conforming hosts on two tables canonicalize one U-label
+  to two different names, so one desired state would claim two different
+  hostnames depending on where it was applied.
+  `custom-domain-u-label-refused` drives the refusal while the name is FREE, so
+  nothing but the Form's own grammar can produce it, at both pre-mutation gates;
+  and it drives the same name written as its A-label, which must be accepted and
+  stored byte-for-byte, so a host that refuses anything unusual — or that
+  rewrites an A-label into something else — fails instead.
 
 ## Rejected alternatives
 

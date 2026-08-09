@@ -1,7 +1,9 @@
 # 0011 — Resource identity: UID, generation, and revision
 
 - Status: accepted; the DELETE fence was amended on 2026-08-09 (see "A delete
-  fences on the generation" below), because decision
+  fences on the generation" below), and a replay record's LIFETIME was stated the
+  same day (see "A replay record does not outlive the incarnation it reports"),
+  because decision
   [0016](0016-the-worker-aggregate-has-one-active-deployment.md) rule 9 made a
   derived rendering move the revision and a teardown moves its own, and with it
   the `Idempotency-Key` composition (see "An operation's Idempotency-Key names
@@ -133,9 +135,54 @@ alone turns the retry into `already_exists` and hands the operator an import.
 What that leaves is a create replayed across an incarnation boundary, and no
 client can close it: the discriminator would have to be the deletion the host
 performed in between, which is not part of the client's request and not
-something the client knows. It closes at the host — by retiring a record whose
-incarnation is gone — and that is a host rule this lane has not stated and this
-record does not state.
+something the client knows. It closes at the host, and the next section is that
+host rule.
+
+### A replay record does not outlive the incarnation it reports
+
+*Amended 2026-08-09.* A host MUST NOT answer a request from a recorded replay
+once the incarnation that recording reports as LIVE no longer exists. Such a
+record is **retired**: it stops answering, and the request is executed as the new
+request it is.
+
+A record is **bound** to one incarnation when the answer it would replay reports
+a resource that exists — the `metadata.uid` in the recorded document. A create,
+an update, an adoption, and an observe all report one. A record whose recorded
+answer reports NO live incarnation is bound to nothing and is retired by nothing
+here: that is exactly a successful **delete**, whose `204` reports the
+incarnation gone, and every refusal, which created nothing and claims nothing
+exists. An accepted `202` carries no uid at accept time, so it is bound to its
+**Operation** and follows that operation's outcome: a commit that leaves a
+resource live binds the record to that uid, and a commit that removed one, or
+failed, leaves it bound to nothing. Nothing else retires a record. Retirement is
+by INCARNATION and not by name — a later resource taking the same name retires
+nothing — and a host MAY expire records by age or capacity as it always could,
+which is a different question.
+
+Both halves are load-bearing and both are wrong on their own. Without
+retirement, `terraform destroy` followed by `terraform apply` of an unchanged
+configuration is answered the old `201`, reports success, creates nothing, and
+never converges: the next read 404s, the plan proposes the create again, and it
+replays again. Retire too much — bind a delete's record to what it removed, or
+key retirement on the name — and the retried delete of a lost response is
+EXECUTED instead of replayed, against whichever incarnation holds the name now.
+That is the same destruction the uid-in-the-key composition above closes,
+reintroduced by the fix for its sibling.
+
+This changes no wire shape, adds no code to the closed taxonomy, and asks
+nothing of a client ([decision 0014](0014-published-schemas-are-structural-minima.md),
+rung 3: the host enforces it and a required conformance check proves a laxer
+host fails). The required check is
+`replay-record-retires-with-its-incarnation`, and it drives all three edges: the
+lost-response retry still replays while the resource is present, the re-create
+after a delete is a NEW create with a new uid that reads back, the first
+incarnation's delete still replays its `204` and leaves the replacement alive,
+and the accepted `202` of a byte-identical async create is not the settled
+operation again. An Operation's own record is a different thing with a lifetime
+of its own ([decision 0017](0017-provider-state-survives-form-evolution-and-interruption.md));
+this rule is about the idempotency record and says nothing about polling an id a
+client already holds. Publication blocker **V3-013** records the item as P0 for
+every Form.
 - The Form semantic identity of a resource is its exact FormRef. The package
   digest used at creation may be recorded as audit evidence but never enters
   resource identity, queries, or update/delete fences. A host that installed
@@ -163,6 +210,12 @@ record does not state.
   and a fenced import requires the uid of the incarnation it adopts for the same
   reason. Nothing is added to any request: the uid is a component of the
   `Idempotency-Key` the client already sent.
+- *(2026-08-09)* A host that records replays keeps one more field per record —
+  the incarnation the recorded answer reports, or the Operation it handed back —
+  and consults it before replaying. The reference host stores it as
+  `replayBinding` and resolves the uid against its own store; a host with a real
+  datastore would more naturally cascade the retirement from the deletion. Either
+  is conforming, because what the lane measures is the answer.
 
 ## Rejected alternatives
 
@@ -196,6 +249,17 @@ Rejected in the 2026-08-09 amendment:
   exactly the generation, which the lane already has and already serves. And it
   puts the decision in the client anyway, which is the previous alternative with
   a hint attached.
+- **Retire a replay record when the NAME it addressed changes hands.** Cheaper
+  to implement, because it needs no uid on the record — and it breaks the delete.
+  A delete's record is the one that must survive its resource, since the resource
+  being gone is what the record says; keying on the name retires it the moment
+  anything takes the name back, and the next retry of that delete is executed
+  against a resource it was never issued against.
+- **Have the client discriminate instead.** Rejected because it cannot. The
+  discriminator is the deletion the host performed between the two creates, which
+  is not in the request and not something the client knows; the only thing a
+  client could add is a nonce, and a nonce is exactly the determinism
+  `apply-idempotency-replay` requires it not to add.
 - **Require `expectedUid` on a delete instead of any counter.** Attractive,
   because uid is what actually names an incarnation, and rejected as the wrong
   scope for this record: `expectedUid` is a MAY across every mutation of the
