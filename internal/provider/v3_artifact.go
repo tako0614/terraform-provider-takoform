@@ -370,11 +370,15 @@ func readWorkerBundleModule(module *v3BundleModule) error {
 // An unreadable content_file leaves the computed values unknown instead of
 // erroring the plan.
 func (r *v3FormResource) modifyWorkerBundlePlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
-	// A create resolves its bytes at apply time and a destroy has no planned
-	// modules; only an existing resource can carry stale byte identity.
-	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+	// A destroy has no planned modules. A CREATE does, and it is resolved here
+	// as well: the bundle's derived revision name follows its manifest digest,
+	// so the digest has to be known in the plan for the name to be, and an
+	// author reading `terraform plan` should see the identity the apply will
+	// commit rather than "(known after apply)".
+	if req.Plan.Raw.IsNull() {
 		return
 	}
+	creating := req.State.Raw.IsNull()
 	var planned types.List
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("modules"), &planned)...)
 	if resp.Diagnostics.HasError() {
@@ -387,9 +391,12 @@ func (r *v3FormResource) modifyWorkerBundlePlan(ctx context.Context, req resourc
 		return
 	}
 	var plannedMain, plannedDigest, priorDigest types.String
+	priorDigest = types.StringNull()
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("main_module"), &plannedMain)...)
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("manifest_digest"), &plannedDigest)...)
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("manifest_digest"), &priorDigest)...)
+	if !creating {
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("manifest_digest"), &priorDigest)...)
+	}
 	// A configuration that pins manifest_digest owns that value. Terraform
 	// always supplies the configuration here; an absent one is a direct-call
 	// harness, where "nothing was configured" is the honest reading.
@@ -464,6 +471,11 @@ func (r *v3FormResource) modifyWorkerBundlePlan(ctx context.Context, req resourc
 		}
 		plannedDigest = computed
 	}
+	if creating {
+		// A create has nothing to replace; the resolved digest is the whole point
+		// of running here.
+		return
+	}
 	if plannedDigest.Equal(priorDigest) {
 		resp.RequiresReplace = v3WithoutPaths(resp.RequiresReplace,
 			path.Root("main_module"), path.Root("modules"))
@@ -513,7 +525,15 @@ func (r *v3FormResource) uploadWorkerBundle(
 ) (string, bool) {
 	committed, err := r.data.clientV3.UploadArtifact(ctx, authoring.Manifest, authoring.Blobs)
 	if err != nil {
-		diags.AddError("Worker bundle upload failed", err.Error())
+		diags.Append(v3HostCallDiagnostic("Worker bundle upload failed", err, v3Diagnostic{
+			ResourceType: r.form.ResourceType,
+			Pointer:      "/manifestDigest",
+			Detail: fmt.Sprintf(
+				"The content-addressed upload of artifact manifest %s (%d module blob(s)) did not commit, "+
+					"so no %s desired state was sent. Nothing was mutated.",
+				authoring.Digest, len(authoring.Blobs), r.form.Kind,
+			),
+		}))
 		return "", false
 	}
 	return committed, true

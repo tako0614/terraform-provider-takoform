@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // SupportProfileAPIVersion is the closed identity of every Host Support
@@ -56,6 +57,59 @@ func (c *Client) ListFormSupport(ctx context.Context) ([]map[string]any, error) 
 		}
 	}
 	return response.Profiles, nil
+}
+
+// GetInterfaceSupport reads the support profile of one exact Interface
+// contract line. A host that implements the contract answers with an
+// InterfaceSupport profile naming it; a host that does not answers 404, which
+// is the fact a client needs before it plans a resource whose Form requires
+// that contract.
+func (c *Client) GetInterfaceSupport(ctx context.Context, name, version string) (map[string]any, error) {
+	return c.contractSupport(ctx, "interfaces", "InterfaceSupport", "interfaceRef", name, version)
+}
+
+// GetBindingSupport reads the support profile of one exact Binding contract
+// line, on the same terms.
+func (c *Client) GetBindingSupport(ctx context.Context, name, version string) (map[string]any, error) {
+	return c.contractSupport(ctx, "bindings", "BindingSupport", "bindingRef", name, version)
+}
+
+// contractSupport is the shared read of the two contract support routes. The
+// answer must be the closed profile kind for the route that was asked, and it
+// must name the contract line the caller asked about: a profile describing a
+// different contract is a fail-closed protocol fault, not an answer.
+func (c *Client) contractSupport(ctx context.Context, route, kind, refKey, name, version string) (map[string]any, error) {
+	if err := c.requireReady(); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(version) == "" {
+		return nil, errors.New("takoform: contract support requires a name and a version")
+	}
+	fullURL := fmt.Sprintf("%s/support/%s/%s/%s", c.apiBase, route, url.PathEscape(name), url.PathEscape(version))
+	_, _, data, err := c.do(ctx, http.MethodGet, fullURL, nil, nil, false, http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
+	var profile map[string]any
+	if err := decodeBody(data, fullURL, &profile); err != nil {
+		return nil, err
+	}
+	if err := validateSupportProfile(profile); err != nil {
+		return nil, err
+	}
+	if got, _ := profile["kind"].(string); got != kind {
+		return nil, fmt.Errorf("takoform: host support profile kind %q is not %s", got, kind)
+	}
+	reference, present := profile[refKey].(map[string]any)
+	if !present {
+		return nil, fmt.Errorf("takoform: %s profile omits %s", kind, refKey)
+	}
+	gotName, _ := reference["name"].(string)
+	gotVersion, _ := reference["version"].(string)
+	if gotName != name || gotVersion != version {
+		return nil, errors.New("takoform: host support profile names a different contract line")
+	}
+	return profile, nil
 }
 
 // GetFormSupport reads the support profile for one exact FormRef line

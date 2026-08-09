@@ -94,7 +94,7 @@ func TestV3ReservedAttributesCoverTheEnvelope(t *testing.T) {
 	for _, name := range model.ReservedResourceAttributes {
 		reserved[name] = true
 	}
-	for name := range v3CommonAttributes(true) {
+	for name := range v3CommonAttributes(model.Form{Kind: "Probe", Role: model.RoleIdentity, Fields: []model.Field{{HCL: "probe", Wire: "probe", Kind: model.KindString}}}) {
 		if !reserved[name] {
 			t.Errorf(
 				"the v3 resource surface carries %q, which currentformmodel.ReservedResourceAttributes does not list; "+
@@ -364,7 +364,7 @@ func TestV3FormsWithoutOutputsDeclareNoOutputAttributes(t *testing.T) {
 		if response.Diagnostics.HasError() {
 			t.Fatalf("%s schema: %v", form.Kind, response.Diagnostics)
 		}
-		want := len(v3CommonAttributes(form.DeclaresUpdate()))
+		want := len(v3CommonAttributes(form))
 		if form.Kind == workerBundleKind {
 			want += len(workerBundleAttributes())
 		} else {

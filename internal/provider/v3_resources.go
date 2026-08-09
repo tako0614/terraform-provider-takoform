@@ -63,7 +63,7 @@ const (
 func v3AttributeName(field model.Field) string { return field.AttributeName() }
 
 func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attrs := v3CommonAttributes(r.form.DeclaresUpdate())
+	attrs := v3CommonAttributes(r.form)
 	if r.form.Kind == workerBundleKind {
 		for name, attribute := range workerBundleAttributes() {
 			attrs[name] = attribute
@@ -95,6 +95,7 @@ func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 	description := r.form.Description +
 		" Role: " + string(r.form.Role) + " (Host API v1alpha3 lane)."
 	resp.Schema = schema.Schema{
+		Version:     v3SchemaVersion,
 		Description: description,
 		Attributes:  attrs,
 	}
@@ -105,17 +106,10 @@ func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 // the exact Form identity, readiness, typed outputs, and operation timeouts.
 // The packageDigest is deliberately NOT part of state identity; it is an
 // audit-only computed attribute (spec/decisions/0011).
-func v3CommonAttributes(hasUpdate bool) map[string]schema.Attribute {
+func v3CommonAttributes(form model.Form) map[string]schema.Attribute {
+	hasUpdate := form.DeclaresUpdate()
 	attrs := map[string]schema.Attribute{
-		"name": schema.StringAttribute{
-			Required:    true,
-			Description: "Portable resource name (metadata.name). Changing it replaces the resource.",
-			Validators: []validator.String{StringMatches(
-				model.PatternResourceName,
-				"name must start with a lowercase letter and contain only lowercase letters, digits, or hyphens",
-			)},
-			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
-		},
+		"name": v3NameAttribute(form),
 		"space": schema.StringAttribute{
 			Optional:    true,
 			Computed:    true,
@@ -190,6 +184,12 @@ func v3CommonAttributes(hasUpdate bool) map[string]schema.Attribute {
 			Validators:  []validator.String{v3DurationValidator{}},
 		},
 	}
+	// Only a revision-role Form derives its name, so only a revision-role Form
+	// has an owner to declare. Declaring the attribute anywhere else would offer
+	// a knob that decides nothing.
+	if form.Role == model.RoleRevision {
+		attrs[v3RevisionOwnerAttribute] = v3RevisionOwnerSchemaAttribute(form)
+	}
 	// A Form that declares no update capability has no update to bound: the
 	// attribute is not declared at all, so a configuration that sets it fails
 	// at validate time instead of silently naming a deadline nothing observes.
@@ -201,6 +201,67 @@ func v3CommonAttributes(hasUpdate bool) map[string]schema.Attribute {
 		}
 	}
 	return attrs
+}
+
+// v3RevisionOwnerSchemaAttribute declares who owns a derived revision.
+//
+// It is provider-side authoring input, never portable desired state: no wire
+// member carries it and the host never sees it. What it decides is the derived
+// NAME. A content digest names the bytes, so two independent resources built
+// from identical bytes derive one name — and one host address with two
+// Terraform owners is an address whose destroy breaks the other owner. The
+// owner is what separates them, and it cannot be inferred: the framework never
+// shows a provider its own resource address, and the content says nothing about
+// who declared it (spec/decisions/0029).
+func v3RevisionOwnerSchemaAttribute(form model.Form) schema.StringAttribute {
+	return schema.StringAttribute{
+		Optional: true,
+		Description: "Stable name of whatever owns this revision — the `takoform_module_worker` it belongs to " +
+			"is the usual answer. Required whenever `name` is omitted, because the derived name is a function " +
+			"of this revision's content and two owners built from identical content would otherwise derive one " +
+			"name and manage one host address. It is folded into the derived name as \"" +
+			v3RevisionNamePrefix(form) + "-<content digest prefix>-<owner digest prefix>\", never sent to the " +
+			"host, and never part of the portable desired spec. Changing it names a different revision, so it " +
+			"replaces this one.",
+		Validators:    []validator.String{StringToken()},
+		PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+	}
+}
+
+// v3NameAttribute declares the portable resource name.
+//
+// It is Required on every Form whose name is the author's own stable handle,
+// and Optional+Computed on a `revision`-role Form, whose name is derived from
+// the revision's content and declared owner when the author omits it
+// (v3_revision_names.go). There is deliberately NO UseStateForUnknown modifier
+// on the derived case: holding the prior name known across a content change is
+// precisely the deadlock this derivation exists to remove, and the plan
+// computes the new name itself rather than leaving it unknown.
+func v3NameAttribute(form model.Form) schema.StringAttribute {
+	validators := []validator.String{StringMatches(
+		model.PatternResourceName,
+		"name must start with a lowercase letter and contain only lowercase letters, digits, or hyphens",
+	)}
+	if form.Role != model.RoleRevision {
+		return schema.StringAttribute{
+			Required:      true,
+			Description:   "Portable resource name (metadata.name). Changing it replaces the resource.",
+			Validators:    validators,
+			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+		}
+	}
+	return schema.StringAttribute{
+		Optional: true,
+		Computed: true,
+		Description: "Portable resource name (metadata.name). Omit it and set `" + v3RevisionOwnerAttribute +
+			"` instead: this Form is an immutable revision, so the provider derives \"" +
+			v3RevisionNamePrefix(form) + "-<content digest prefix>-<owner digest prefix>\" from the revision's own " +
+			"content and its declared owner, and changed content is therefore a new revision beside the old one. " +
+			"Setting it pins the name, and the provider then refuses at plan time any change that would replace " +
+			"this revision under it.",
+		Validators:    validators,
+		PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+	}
 }
 
 // v3PendingOperationIDAttribute declares the internal-recovery-only record of
@@ -663,7 +724,10 @@ func (r *v3FormResource) v3SpecFromValues(
 	values v3Values,
 ) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	if values.Name.IsUnknown() || values.Name.IsNull() {
+	// A revision Form's name is DERIVED from the spec this function builds, so
+	// it cannot be required before it. The caller resolves it afterwards
+	// (v3EnsureRevisionName) and refuses an apply that still has none.
+	if !r.derivesRevisionName() && (values.Name.IsUnknown() || values.Name.IsNull()) {
 		diags.AddAttributeError(
 			path.Root("name"),
 			"Unknown "+r.form.Kind+" name",

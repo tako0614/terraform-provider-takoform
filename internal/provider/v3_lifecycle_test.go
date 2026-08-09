@@ -37,6 +37,12 @@ func v3SchemaOf(t *testing.T, candidate frameworkresource.Resource) frameworkres
 	return schemaResponse
 }
 
+// v3TestRevisionOwner is the owner a test declares for a revision whose name
+// the provider derives. Every derived name is a function of content AND owner,
+// so a test that omits the owner is asking the provider to hand one host
+// address to whoever else builds the same bytes.
+const v3TestRevisionOwner = "counter"
+
 func v3PlanWith(t *testing.T, ctx context.Context, schemaResponse frameworkresource.SchemaResponse, values map[string]attr.Value) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)}
@@ -345,10 +351,13 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	workerFile := v3BundleFile(t, dir, "worker.mjs", originalBytes)
 	originalManifest := v3ExpectedManifestDigest(t, "worker.mjs", workerFile, originalBytes)
 
+	// The name is deliberately NOT written: a revision Form derives it from its
+	// own content and its declared owner, so the bundle's identity and its host
+	// name move together.
 	createPlan := v3PlanWith(t, ctx, schemaResponse, map[string]attr.Value{
-		"name":        types.StringValue("worker-bundle"),
-		"main_module": types.StringValue("worker.mjs"),
-		"modules":     v3BundleModulesValue("worker.mjs", workerFile),
+		"main_module":            types.StringValue("worker.mjs"),
+		"modules":                v3BundleModulesValue("worker.mjs", workerFile),
+		v3RevisionOwnerAttribute: types.StringValue(v3TestRevisionOwner),
 	})
 	createResponse := frameworkresource.CreateResponse{
 		State: tfsdk.State{Schema: schemaResponse.Schema, Raw: v3EmptyRaw(t, ctx, schemaResponse)},
@@ -359,6 +368,10 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	}
 	if got := v3StateString(t, ctx, createResponse.State, "manifest_digest").ValueString(); got != originalManifest {
 		t.Fatalf("created state manifest_digest = %q, want %q", got, originalManifest)
+	}
+	originalName := v3StateString(t, ctx, createResponse.State, "name").ValueString()
+	if want, _ := v3DerivedRevisionName("bundle", v3TestRevisionOwner, originalManifest); originalName != want {
+		t.Fatalf("created state name = %q, want the derived %q", originalName, want)
 	}
 
 	// Rewrite the module bytes at the SAME path.
@@ -374,9 +387,15 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	// state; without plan-time byte identity this plan would claim no change.
 	proposed := tfsdk.Plan{Schema: schemaResponse.Schema, Raw: createResponse.State.Raw}
 	modifyResponse := frameworkresource.ModifyPlanResponse{Plan: proposed}
+	authored := v3ConfigWith(t, ctx, schemaResponse, map[string]attr.Value{
+		"main_module":            types.StringValue("worker.mjs"),
+		"modules":                v3BundleModulesValue("worker.mjs", workerFile),
+		v3RevisionOwnerAttribute: types.StringValue(v3TestRevisionOwner),
+	})
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
-		State: createResponse.State,
-		Plan:  proposed,
+		State:  createResponse.State,
+		Plan:   proposed,
+		Config: authored,
 	}, &modifyResponse)
 	if modifyResponse.Diagnostics.HasError() {
 		t.Fatalf("modify plan: %v", modifyResponse.Diagnostics)
@@ -405,6 +424,19 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	if !modifyResponse.RequiresReplace.Contains(path.Root("manifest_digest")) {
 		t.Fatalf("changed module bytes did not force replacement: %v", modifyResponse.RequiresReplace)
 	}
+	// The derived name moves with the bytes, which is what makes the
+	// replacement land beside the old revision instead of on top of it.
+	var plannedName types.String
+	if diags := modifyResponse.Plan.GetAttribute(ctx, path.Root("name"), &plannedName); diags.HasError() {
+		t.Fatalf("planned name: %v", diags)
+	}
+	wantName, _ := v3DerivedRevisionName("bundle", v3TestRevisionOwner, wantManifestDigest)
+	if plannedName.ValueString() != wantName || plannedName.ValueString() == originalName {
+		t.Fatalf("planned name = %q, want the derived %q (prior %q)", plannedName.ValueString(), wantName, originalName)
+	}
+	if !modifyResponse.RequiresReplace.Contains(path.Root("name")) {
+		t.Fatalf("a changed derived name did not force replacement: %v", modifyResponse.RequiresReplace)
+	}
 
 	// Restoring the original bytes removes the diff: the proposed plan (prior
 	// state identity) is left untouched and no replacement is forced.
@@ -414,8 +446,9 @@ func TestV3WorkerBundleModifyPlanDetectsChangedBytes(t *testing.T) {
 	unchangedProposed := tfsdk.Plan{Schema: schemaResponse.Schema, Raw: createResponse.State.Raw}
 	unchangedResponse := frameworkresource.ModifyPlanResponse{Plan: unchangedProposed}
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
-		State: createResponse.State,
-		Plan:  unchangedProposed,
+		State:  createResponse.State,
+		Plan:   unchangedProposed,
+		Config: authored,
 	}, &unchangedResponse)
 	if unchangedResponse.Diagnostics.HasError() {
 		t.Fatalf("unchanged modify plan: %v", unchangedResponse.Diagnostics)
@@ -487,6 +520,9 @@ func TestV3WorkerBundleImportRestoresManifestDigest(t *testing.T) {
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
 		State: readResponse.State,
 		Plan:  sameDigest,
+		// An imported bundle's name came from the import ID, so the configuration
+		// that adopts it pins that name rather than deriving one.
+		Config: tfsdk.Config{Schema: schemaResponse.Schema, Raw: readResponse.State.Raw},
 	}, &sameResponse)
 	if sameResponse.Diagnostics.HasError() {
 		t.Fatalf("same-digest plan: %v", sameResponse.Diagnostics)
@@ -510,8 +546,9 @@ func TestV3WorkerBundleImportRestoresManifestDigest(t *testing.T) {
 		RequiresReplace: path.Paths{path.Root("main_module"), path.Root("modules")},
 	}
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
-		State: readResponse.State,
-		Plan:  local,
+		State:  readResponse.State,
+		Plan:   local,
+		Config: tfsdk.Config{Schema: schemaResponse.Schema, Raw: readResponse.State.Raw},
 	}, &localResponse)
 	if localResponse.Diagnostics.HasError() {
 		t.Fatalf("local-authoring plan: %v", localResponse.Diagnostics)

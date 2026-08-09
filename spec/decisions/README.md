@@ -31,3 +31,7 @@ record does not replace them.
 - [0025 — A Form's declared outputs are a typed contract, not a JSON blob](0025-declared-outputs-are-a-typed-contract.md)
 - [0026 — An attachment's claim is decided on canonical, resolved identity](0026-attachment-claims-are-canonical-and-acyclic.md)
 - [0028 — The resource plane is tenant-isolated, by address](0028-the-resource-plane-is-tenant-isolated.md)
+- [0029 — An immutable revision is named by its content](0029-immutable-revisions-are-named-by-their-content.md)
+- [0030 — A Form line moves; a Terraform resource type may not](0030-a-form-line-moves-a-terraform-resource-type-may-not.md)
+- [0031 — Host capability is decided at plan time](0031-host-capability-is-decided-at-plan-time.md)
+- [0032 — A provider diagnostic states identity, fence, code, and repair](0032-a-diagnostic-states-identity-fence-code-and-repair.md)

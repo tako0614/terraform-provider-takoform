@@ -15,6 +15,7 @@ import (
 
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
+	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
@@ -129,7 +130,8 @@ func TestV3RelationConditionWarnsAndNamesTheRemedy(t *testing.T) {
 				Status: &clientv3.Status{Conditions: []clientv3.Condition{testCase.condition}},
 			}
 			v3ReportRelationCondition(
-				"WorkerVersion", "conformance", "worker-version", res, testCase.declaresUpdate, &diags,
+				"WorkerVersion", "takoform_worker_version", "conformance", "worker-version",
+				currentformregistry.V3Ref{}, res, testCase.declaresUpdate, &diags,
 			)
 			if diags.HasError() {
 				t.Fatalf("a relation report failed the read: %v", diags)
@@ -216,10 +218,8 @@ func TestV3ReadOfBrokenRelationKeepsStateAndPlansReplacement(t *testing.T) {
 	resource.ModifyPlan(ctx, frameworkresource.ModifyPlanRequest{
 		State: readResponse.State,
 		Plan:  proposed,
-		Config: tfsdk.Config{
-			Schema: schemaResponse.Schema,
-			Raw:    v3EmptyRaw(t, ctx, schemaResponse),
-		},
+		// The configuration is what the author wrote, and it pins the name.
+		Config: v3ConfigWith(t, ctx, schemaResponse, configured),
 	}, &modifyResponse)
 	if modifyResponse.Diagnostics.HasError() {
 		t.Fatalf("plan: %v", modifyResponse.Diagnostics)
