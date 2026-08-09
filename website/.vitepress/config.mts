@@ -10,9 +10,9 @@ const github = "https://github.com/tako0614/terraform-provider-takoform";
 // The published/preview facts are derived from the repository once, here, at
 // build time. They reach the footer through themeConfig so every page states
 // them as static HTML, and they reach machines through the JSON document this
-// call writes. The source commit is deliberately absent from themeConfig: a
-// page that named it could not be rebuilt to itself
-// (see .vitepress/site-status.mjs).
+// call writes. Every one of them is a pure function of committed repository
+// bytes, so a fresh build reproduces the whole published tree; no commit id
+// appears anywhere in it (see .vitepress/site-status.mjs).
 const siteDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",

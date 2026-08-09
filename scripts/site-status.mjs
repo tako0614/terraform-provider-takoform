@@ -2,95 +2,76 @@
 
 // site-status.mjs — the gate for /.well-known/takoform-site.json.
 //
-//   bun scripts/site-status.mjs --write          # re-derive the document
-//   bun scripts/site-status.mjs --check          # facts must match the repository
-//   bun scripts/site-status.mjs --check-commit   # sourceCommit must be a real ancestor
+//   bun scripts/site-status.mjs --write   # re-derive the document
+//   bun scripts/site-status.mjs --check   # both copies must match the repository
 //
 // The document is written by the website build (website/.vitepress/config.mts
-// calls the same derivation), so a rebuild always refreshes it. These checks
-// exist so a committed document cannot quietly disagree with the repository it
+// calls the same derivation), so a rebuild always refreshes it. This check
+// exists so a committed document cannot quietly disagree with the repository it
 // claims to describe.
 //
-// The two modes are split on purpose. --check reads only files and therefore
-// runs everywhere, including the deploy path's Git-free archive. --check-commit
-// needs Git metadata, so it is a separate top-level step of `bun run check` and
-// never runs inside that archive.
+// There are two committed copies and BOTH are checked. website/static/... is
+// the source VitePress copies from; website/public/... is the build output the
+// deploy uploads and production serves. Checking only the source would leave
+// the served bytes free to drift, which is exactly the hole this gate closes
+// alongside scripts/check-website-dist.mjs.
+//
+// The check reads only files and therefore runs everywhere, including the
+// deploy path's Git-free archive. It consults Git for nothing: the document
+// records no commit, because a commit id inside the published tree cannot be
+// both the commit that carries the bytes and reproducible from it (see
+// website/.vitepress/site-status.mjs).
 
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 import {
-  COMMIT_PATTERN,
   SITE_STATUS_FIELDS,
+  SITE_STATUS_PUBLISHED_PATH,
   SITE_STATUS_REPOSITORY_PATH,
   deriveSiteStatusFacts,
   prepareSiteStatus,
   renderSiteStatusDocument,
-  resolveSourceCommit,
 } from "../website/.vitepress/site-status.mjs";
 import { loadPublicationTruth } from "./publication-truth.mjs";
 
-export { SITE_STATUS_REPOSITORY_PATH };
+export { SITE_STATUS_PUBLISHED_PATH, SITE_STATUS_REPOSITORY_PATH };
 
-function documentPath(repositoryRoot) {
-  return path.join(repositoryRoot, SITE_STATUS_REPOSITORY_PATH);
-}
+// Both copies are compared against the same derivation, so neither can be
+// corrected by editing the other.
+const SITE_STATUS_COPIES = [
+  SITE_STATUS_REPOSITORY_PATH,
+  SITE_STATUS_PUBLISHED_PATH,
+];
 
-function readDocument(repositoryRoot, failures) {
-  const filePath = documentPath(repositoryRoot);
+function readDocument(repositoryRoot, relativePath, failures) {
+  const filePath = path.join(repositoryRoot, relativePath);
   if (!existsSync(filePath)) {
-    failures.push(
-      `${SITE_STATUS_REPOSITORY_PATH}: missing; run bun run website:build`,
-    );
+    failures.push(`${relativePath}: missing; run bun run website:build`);
     return null;
   }
   try {
     return JSON.parse(readFileSync(filePath, "utf8"));
   } catch (error) {
-    failures.push(`${SITE_STATUS_REPOSITORY_PATH}: invalid JSON (${error.message})`);
+    failures.push(`${relativePath}: invalid JSON (${error.message})`);
     return null;
   }
 }
 
-/**
- * verifySiteStatusDocument re-derives every published/preview fact and compares
- * it with the committed document. It never consults Git: the source commit is
- * only checked for shape here, and bound to real history by
- * verifySiteStatusCommit.
- *
- * `truth` is the evidence-derived publication truth when the caller already has
- * it; passing it binds providerCurrent to the signed Registry readback rather
- * than to the release descriptor alone.
- */
-export function verifySiteStatusDocument(repositoryRoot, truth = null) {
-  const failures = [];
-  const document = readDocument(repositoryRoot, failures);
-  if (document === null) {
-    return failures;
-  }
-
+function verifyOneCopy(document, relativePath, facts, truth, failures) {
   const actualFields = Object.keys(document);
   if (JSON.stringify(actualFields) !== JSON.stringify(SITE_STATUS_FIELDS)) {
     failures.push(
-      `${SITE_STATUS_REPOSITORY_PATH}: fields are ${actualFields.join(", ")}; ` +
+      `${relativePath}: fields are ${actualFields.join(", ")}; ` +
         `want exactly ${SITE_STATUS_FIELDS.join(", ")} in that order`,
     );
-  }
-
-  let facts;
-  try {
-    facts = deriveSiteStatusFacts(repositoryRoot);
-  } catch (error) {
-    failures.push(`${SITE_STATUS_REPOSITORY_PATH}: cannot derive (${error.message})`);
-    return failures;
   }
 
   for (const [field, derived] of Object.entries(facts)) {
     if (document[field] !== derived) {
       failures.push(
-        `${SITE_STATUS_REPOSITORY_PATH}: ${field} = ${JSON.stringify(document[field])}, ` +
+        `${relativePath}: ${field} = ${JSON.stringify(document[field])}, ` +
           `but the repository derives ${JSON.stringify(derived)}; run bun run website:build`,
       );
     }
@@ -98,75 +79,60 @@ export function verifySiteStatusDocument(repositoryRoot, truth = null) {
 
   if (truth !== null && document.providerCurrent !== truth.providerVersion) {
     failures.push(
-      `${SITE_STATUS_REPOSITORY_PATH}: providerCurrent = ${JSON.stringify(document.providerCurrent)}, ` +
+      `${relativePath}: providerCurrent = ${JSON.stringify(document.providerCurrent)}, ` +
         `but the retained Registry readback evidence names v${truth.providerVersion}`,
     );
   }
-
-  if (
-    typeof document.sourceCommit !== "string" ||
-    !COMMIT_PATTERN.test(document.sourceCommit)
-  ) {
-    failures.push(
-      `${SITE_STATUS_REPOSITORY_PATH}: sourceCommit must be a 40-character commit id`,
-    );
-  }
-
-  return failures;
-}
-
-function git(repositoryRoot, args) {
-  return execFileSync("git", args, {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
 }
 
 /**
- * verifySiteStatusCommit binds the recorded commit to real history: it must be
- * a commit this repository has, and it must be an ancestor of HEAD.
+ * verifySiteStatusDocument re-derives every published/preview fact and compares
+ * it with both committed copies: the VitePress source under website/static and
+ * the build output under website/public that the deploy uploads.
  *
- * An ancestor is the strongest true statement available. A page cannot name the
- * commit that contains it, so the recorded commit is the one the build ran
- * against — necessarily an ancestor of the commit that carries the built bytes.
- * Staleness beyond that is caught elsewhere: check-website-dist proves the
- * pages are not stale, and --check proves the facts are not.
+ * `truth` is the evidence-derived publication truth when the caller already has
+ * it; passing it binds providerCurrent to the signed Registry readback rather
+ * than to the release descriptor alone.
  */
-export function verifySiteStatusCommit(repositoryRoot) {
+export function verifySiteStatusDocument(repositoryRoot, truth = null) {
   const failures = [];
-  const document = readDocument(repositoryRoot, failures);
-  if (document === null) {
+  const documents = SITE_STATUS_COPIES.map((relativePath) => ({
+    document: readDocument(repositoryRoot, relativePath, failures),
+    relativePath,
+  })).filter(({ document }) => document !== null);
+  if (documents.length === 0) {
     return failures;
   }
-  const commit = document.sourceCommit;
-  if (typeof commit !== "string" || !COMMIT_PATTERN.test(commit)) {
+
+  let facts;
+  try {
+    facts = deriveSiteStatusFacts(repositoryRoot);
+  } catch (error) {
     failures.push(
-      `${SITE_STATUS_REPOSITORY_PATH}: sourceCommit must be a 40-character commit id`,
+      `${SITE_STATUS_REPOSITORY_PATH}: cannot derive (${error.message})`,
     );
     return failures;
   }
-  try {
-    if (git(repositoryRoot, ["cat-file", "-t", commit]) !== "commit") {
+
+  for (const { document, relativePath } of documents) {
+    verifyOneCopy(document, relativePath, facts, truth, failures);
+  }
+
+  // The two copies must also be byte-identical: VitePress copies static/
+  // verbatim into public/, so any difference means one of them was written by
+  // something other than the build.
+  if (documents.length === SITE_STATUS_COPIES.length) {
+    const [source, published] = SITE_STATUS_COPIES.map((relativePath) =>
+      readFileSync(path.join(repositoryRoot, relativePath)),
+    );
+    if (!source.equals(published)) {
       failures.push(
-        `${SITE_STATUS_REPOSITORY_PATH}: sourceCommit ${commit} is not a commit in this repository`,
+        `${SITE_STATUS_PUBLISHED_PATH}: bytes differ from ${SITE_STATUS_REPOSITORY_PATH}; ` +
+          "the served copy is not the one the build produced; run bun run website:build",
       );
-      return failures;
     }
-  } catch {
-    failures.push(
-      `${SITE_STATUS_REPOSITORY_PATH}: sourceCommit ${commit} is not an object in this repository`,
-    );
-    return failures;
   }
-  try {
-    git(repositoryRoot, ["merge-base", "--is-ancestor", commit, "HEAD"]);
-  } catch {
-    failures.push(
-      `${SITE_STATUS_REPOSITORY_PATH}: sourceCommit ${commit} is not an ancestor of HEAD; ` +
-        "the committed site was built from history this branch does not contain",
-    );
-  }
+
   return failures;
 }
 
@@ -176,29 +142,22 @@ function main() {
 
   if (mode === "--write") {
     const facts = prepareSiteStatus(path.join(repositoryRoot, "website"));
-    const commit = resolveSourceCommit(
-      repositoryRoot,
-      JSON.parse(readFileSync(documentPath(repositoryRoot), "utf8")),
-    );
     process.stdout.write(
-      `${SITE_STATUS_REPOSITORY_PATH} written: ${renderSiteStatusDocument(facts, commit)}`,
+      `${SITE_STATUS_REPOSITORY_PATH} written: ${renderSiteStatusDocument(facts)}`,
     );
     return;
   }
 
-  let failures;
-  if (mode === "--check") {
-    failures = verifySiteStatusDocument(repositoryRoot, loadPublicationTruth(repositoryRoot));
-  } else if (mode === "--check-commit") {
-    failures = verifySiteStatusCommit(repositoryRoot);
-  } else {
-    process.stderr.write(
-      "usage: bun scripts/site-status.mjs [--write|--check|--check-commit]\n",
-    );
+  if (mode !== "--check") {
+    process.stderr.write("usage: bun scripts/site-status.mjs [--write|--check]\n");
     process.exitCode = 1;
     return;
   }
 
+  const failures = verifySiteStatusDocument(
+    repositoryRoot,
+    loadPublicationTruth(repositoryRoot),
+  );
   if (failures.length > 0) {
     for (const failure of failures) {
       process.stderr.write(`- ${failure}\n`);
@@ -207,9 +166,7 @@ function main() {
     return;
   }
   process.stdout.write(
-    mode === "--check"
-      ? `site status OK: ${SITE_STATUS_REPOSITORY_PATH} states the repository's own published and preview facts\n`
-      : `site status OK: the recorded source commit is an ancestor of HEAD\n`,
+    `site status OK: ${SITE_STATUS_COPIES.join(" and ")} state the repository's own published and preview facts\n`,
   );
 }
 

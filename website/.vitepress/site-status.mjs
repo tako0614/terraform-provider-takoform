@@ -10,15 +10,25 @@
 //   - scripts/site-status.mjs re-derives them in the gate and refuses a
 //     committed document that disagrees with the repository.
 //
-// The source commit is the ONE value that may not enter a page.
-// scripts/check-website-dist.mjs requires a fresh build to reproduce every
-// committed page semantically, and a page that names the commit it was built
-// from can never rebuild to itself: the commit that contains the page does not
-// exist while the page is being produced. The commit therefore lives only in
-// the JSON document, which is not a page and is not compared by that gate, and
-// the footer reads it from there at runtime. Its meaning is exact: the
-// repository commit this build was produced from, always an ancestor of the
-// commit that carries the built bytes.
+// The document records no commit, and that is a decision rather than an
+// omission.
+//
+// A commit id inside the published tree can only be one of two things. If it
+// is written when the tree is committed, it names the parent — the commit that
+// carries the bytes does not exist while they are produced — so the one link a
+// reader would use to reproduce the bytes points at a tree that cannot produce
+// them. If instead the deploy stamped it, the value would be right but the
+// byte would be one no reviewer read and no checkout reproduces, and
+// scripts/check-website-dist.mjs would then be comparing a document production
+// does not serve. Both defeat the purpose of recording provenance at all.
+//
+// So every field here is a pure function of committed repository bytes, and
+// the whole published tree is therefore reproducible from the commit that
+// carries it: scripts/check-website-dist.mjs proves a fresh build reproduces
+// it. The commit is recorded where a commit can be true — the takoform-website
+// Worker version message (`takoform.com <commit>`), which scripts/deploy.mjs
+// writes, verifies on upload, and reads back with an ancestor check on the
+// next deploy, alongside the per-asset digests in its deploy result.
 //
 // This file lives under website/ rather than scripts/ on purpose. The deploy
 // path re-derives the committed site from a copy that contains only
@@ -27,7 +37,6 @@
 // and the committed document stands unchanged, which is exactly right: that
 // copy is frozen at one commit and has nothing newer to say.
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -36,6 +45,10 @@ export const SITE_STATUS_ROUTE = "/.well-known/takoform-site.json";
 export const SITE_STATUS_SITE_PATH = "static/.well-known/takoform-site.json";
 export const SITE_STATUS_REPOSITORY_PATH =
   "website/static/.well-known/takoform-site.json";
+// The build output copy is the one production actually serves. VitePress
+// copies static/ verbatim into public/, so the two must be byte-identical.
+export const SITE_STATUS_PUBLISHED_PATH =
+  "website/public/.well-known/takoform-site.json";
 
 // The Edge Platform Family rides an unpublished provider source candidate.
 // This is the single JS-side declaration of that line; check-public-surfaces
@@ -50,15 +63,12 @@ const BLOCKER_LEDGER = "spec/publication-blockers.json";
 const RELEASE_VERSION = "release/version.json";
 
 export const SITE_STATUS_FIELDS = [
-  "sourceCommit",
   "providerCurrent",
   "edgePreviewProvider",
   "edgeFamilyStatus",
   "candidateSetDigest",
   "openPublicationBlockers",
 ];
-
-export const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 
 const ROOT_MARKERS = [BLOCKER_LEDGER, FAMILY_CANDIDATE_SET, RELEASE_VERSION];
 
@@ -92,7 +102,8 @@ function readJson(repositoryRoot, relativePath) {
 
 /**
  * deriveSiteStatusFacts reads every published/preview fact out of the
- * repository. Nothing here is a literal a human keeps in step by hand.
+ * repository. Nothing here is a literal a human keeps in step by hand, and
+ * nothing here depends on when or where the build ran.
  */
 export function deriveSiteStatusFacts(repositoryRoot) {
   const releaseVersion = readJson(repositoryRoot, RELEASE_VERSION);
@@ -129,47 +140,8 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   };
 }
 
-/**
- * resolveSourceCommit prefers an explicit build input, then the repository's
- * own HEAD, then the commit the committed document already records. A build
- * that can reach none of them fails rather than inventing provenance.
- */
-export function resolveSourceCommit(repositoryRoot, committed = null) {
-  const declared = process.env.TAKOFORM_SITE_COMMIT;
-  if (typeof declared === "string" && COMMIT_PATTERN.test(declared.trim())) {
-    return declared.trim();
-  }
-  try {
-    const head = execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: repositoryRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    if (COMMIT_PATTERN.test(head)) {
-      return head;
-    }
-  } catch {
-    // No Git metadata reachable; fall through to the committed record.
-  }
-  if (
-    committed !== null &&
-    typeof committed.sourceCommit === "string" &&
-    COMMIT_PATTERN.test(committed.sourceCommit)
-  ) {
-    return committed.sourceCommit;
-  }
-  throw new Error(
-    "cannot determine the source commit: set TAKOFORM_SITE_COMMIT, build inside " +
-      "the Git repository, or keep the committed status document",
-  );
-}
-
-export function renderSiteStatusDocument(facts, sourceCommit) {
-  if (!COMMIT_PATTERN.test(String(sourceCommit))) {
-    throw new Error(`sourceCommit must be a 40-character commit id, got ${sourceCommit}`);
-  }
+export function renderSiteStatusDocument(facts) {
   const document = {
-    sourceCommit,
     providerCurrent: facts.providerCurrent,
     edgePreviewProvider: facts.edgePreviewProvider,
     edgeFamilyStatus: facts.edgeFamilyStatus,
@@ -194,15 +166,15 @@ function readCommitted(filePath) {
  * prepareSiteStatus is the build-time entry point. `siteDirectory` is the
  * VitePress source root (the directory holding .vitepress/ and static/).
  *
- * It returns the facts the footer renders. The commit is deliberately NOT part
- * of that return value: it must not reach a page.
+ * It returns the facts the footer renders, which are exactly the facts the
+ * JSON document states.
  */
 export function prepareSiteStatus(siteDirectory) {
   const statusPath = path.join(siteDirectory, SITE_STATUS_SITE_PATH);
-  const committed = readCommitted(statusPath);
   const repositoryRoot = findRepositoryRoot(siteDirectory);
 
   if (repositoryRoot === null) {
+    const committed = readCommitted(statusPath);
     if (committed === null) {
       throw new Error(
         `${SITE_STATUS_SITE_PATH} is missing and no repository root is reachable ` +
@@ -221,9 +193,7 @@ export function prepareSiteStatus(siteDirectory) {
   }
 
   const facts = deriveSiteStatusFacts(repositoryRoot);
-  const sourceCommit = resolveSourceCommit(repositoryRoot, committed);
-  const rendered = renderSiteStatusDocument(facts, sourceCommit);
   mkdirSync(path.dirname(statusPath), { recursive: true });
-  writeFileSync(statusPath, rendered);
+  writeFileSync(statusPath, renderSiteStatusDocument(facts));
   return facts;
 }

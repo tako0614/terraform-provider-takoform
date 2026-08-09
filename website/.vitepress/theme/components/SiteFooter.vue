@@ -1,14 +1,17 @@
 <script setup lang="ts">
-// Every page states which tier it belongs to and which repository commit
-// produced it.
+// Every page states which tier it belongs to.
 //
 // The tier facts come from themeConfig, derived from the repository at build
 // time (.vitepress/site-status.mjs), so they are static HTML and cannot rot
-// against the repository. The source commit is fetched from the same document
-// the site serves at /.well-known/takoform-site.json, because a page that
-// contained the commit it was built from could never be rebuilt to itself and
-// scripts/check-website-dist.mjs requires exactly that.
-import { computed, onMounted, ref } from "vue";
+// against the repository. The footer links the same facts as machine-readable
+// JSON at /.well-known/takoform-site.json.
+//
+// No commit is displayed. A commit id inside these bytes could only name the
+// parent of the commit that carries them, and scripts/check-website-dist.mjs
+// requires a fresh build to reproduce every published byte. The commit that
+// produced a deployment is recorded in the takoform-website Worker version
+// message instead, where it can be true.
+import { computed } from "vue";
 import { useData } from "vitepress";
 
 type SiteStatus = {
@@ -22,26 +25,6 @@ type SiteStatus = {
 
 const { lang, theme } = useData();
 const status = computed<SiteStatus>(() => theme.value.siteStatus as SiteStatus);
-const sourceCommit = ref("");
-const shortCommit = computed(() => sourceCommit.value.slice(0, 12));
-
-onMounted(async () => {
-  try {
-    const response = await fetch(status.value.route, { cache: "no-cache" });
-    if (!response.ok) {
-      return;
-    }
-    const record = await response.json();
-    if (
-      typeof record?.sourceCommit === "string" &&
-      /^[0-9a-f]{40}$/.test(record.sourceCommit)
-    ) {
-      sourceCommit.value = record.sourceCommit;
-    }
-  } catch {
-    // The link below still reaches the document directly.
-  }
-});
 </script>
 
 <template>
@@ -61,10 +44,9 @@ onMounted(async () => {
         edge family {{ status.edgeFamilyStatus }},
         {{ status.openPublicationBlockers }} publication blockers open.
       </p>
-      <p class="site-status-footer__provenance">
-        <span v-if="lang === 'ja'">この build の source commit</span>
-        <span v-else>Built from source commit</span>
-        <code v-if="sourceCommit">{{ shortCommit }}</code>
+      <p class="site-status-footer__data">
+        <span v-if="lang === 'ja'">同じ事実を機械可読で</span>
+        <span v-else>The same facts as data</span>
         <a :href="status.route">takoform-site.json</a>
       </p>
     </div>
@@ -89,13 +71,8 @@ onMounted(async () => {
   margin: 0;
 }
 
-.site-status-footer__provenance {
+.site-status-footer__data {
   margin-top: 4px;
-}
-
-.site-status-footer code {
-  font-size: 12px;
-  margin-left: 6px;
 }
 
 .site-status-footer a {
