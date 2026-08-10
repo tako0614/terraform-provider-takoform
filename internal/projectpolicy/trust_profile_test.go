@@ -367,6 +367,54 @@ func TestReleaseWorkflowsPinTheReviewedCLIMatrix(t *testing.T) {
 	}
 }
 
+func TestProviderReleaseWorkflowsPinReviewedBunToolchain(t *testing.T) {
+	root := repositoryRoot(t)
+	const (
+		bunAction  = "- uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2"
+		bunVersion = "bun-version: 1.3.14"
+	)
+	for _, path := range []string{
+		".github/workflows/provider-release-tag.yml",
+		".github/workflows/release.yml",
+	} {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			workflow := readText(t, filepath.Join(root, filepath.FromSlash(path)))
+			if strings.Count(workflow, "oven-sh/setup-bun@") != 1 {
+				t.Fatalf("workflow must contain exactly one setup-bun action")
+			}
+			if !strings.Contains(workflow, bunAction) {
+				t.Fatalf("workflow must use the immutable setup-bun action pin %q", bunAction)
+			}
+			if strings.Count(workflow, bunVersion) != 1 {
+				t.Fatalf("workflow must contain exactly one Bun version pin %q", bunVersion)
+			}
+
+			bun := strings.Index(workflow, bunAction)
+			goSetup := strings.Index(workflow, "actions/setup-go@")
+			tofuSetup := strings.Index(workflow, "opentofu/setup-opentofu@")
+			if goSetup < 0 || tofuSetup < 0 || bun <= goSetup || bun >= tofuSetup {
+				t.Fatalf("setup-bun must run after setup-go and before setup-opentofu")
+			}
+			markers := []string{"go test ./..."}
+			if filepath.Base(path) == "release.yml" {
+				markers = []string{
+					"go -C release-source/cmd/provider-release test ./...",
+					"goreleaser/goreleaser-action@",
+				}
+			}
+			for _, marker := range markers {
+				candidate := strings.Index(workflow, marker)
+				if candidate < 0 {
+					t.Fatalf("workflow lacks candidate execution marker %q", marker)
+				}
+				if bun >= candidate {
+					t.Fatalf("setup-bun must precede candidate execution marker %q", marker)
+				}
+			}
+		})
+	}
+}
+
 func TestReleaseWorkflowsOnlyPrepareChecksumClosedCandidates(t *testing.T) {
 	root := repositoryRoot(t)
 	workflows := []struct {
