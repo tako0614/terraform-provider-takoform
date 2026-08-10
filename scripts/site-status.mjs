@@ -27,6 +27,7 @@ import path from "node:path";
 import process from "node:process";
 
 import {
+  SITE_STATUS_DEPRECATED_FIELDS,
   SITE_STATUS_FIELDS,
   SITE_STATUS_PUBLISHED_PATH,
   SITE_STATUS_REPOSITORY_PATH,
@@ -68,6 +69,14 @@ function verifyOneCopy(document, relativePath, facts, truth, failures) {
     );
   }
 
+  for (const field of Object.keys(SITE_STATUS_DEPRECATED_FIELDS)) {
+    if (!SITE_STATUS_FIELDS.includes(field)) {
+      failures.push(
+        `${relativePath}: deprecated field ${field} is not represented in the status schema`,
+      );
+    }
+  }
+
   for (const [field, derived] of Object.entries(facts)) {
     if (document[field] !== derived) {
       failures.push(
@@ -77,11 +86,51 @@ function verifyOneCopy(document, relativePath, facts, truth, failures) {
     }
   }
 
-  if (truth !== null && document.providerCurrent !== truth.providerVersion) {
+  // These invariants make the maturity/publication axes mechanically
+  // independent. A stale document that labels the family Experimental can no
+  // longer pass merely because the candidate set still says its definitions
+  // are Experimental.
+  if (document.formFamilyMaturity !== "beta") {
     failures.push(
-      `${relativePath}: providerCurrent = ${JSON.stringify(document.providerCurrent)}, ` +
-        `but the retained Registry readback evidence names v${truth.providerVersion}`,
+      `${relativePath}: formFamilyMaturity must be "beta" for the current ` +
+        "Edge Form Family; definition maturity is formMaturity",
     );
+  }
+  if (document.formMaturity !== "experimental") {
+    failures.push(
+      `${relativePath}: formMaturity must be "experimental" for the current ` +
+        "15 Form definitions",
+    );
+  }
+  if (document.formFamilyMaturity === document.formMaturity) {
+    failures.push(
+      `${relativePath}: formFamilyMaturity and formMaturity are conflated; ` +
+        "the family and its definitions are independent axes",
+    );
+  }
+  if (
+    document.formPackageStatus !== document.formPackagePublicationStatus ||
+    document.edgeFamilyStatus !== document.formPackagePublicationStatus
+  ) {
+    failures.push(
+      `${relativePath}: deprecated package aliases must equal ` +
+        "formPackagePublicationStatus and must not describe Form Family maturity",
+    );
+  }
+
+  if (truth !== null) {
+    for (const field of ["providerPublished", "providerCurrent"]) {
+      if (document[field] !== truth.providerVersion) {
+        const label =
+          field === "providerCurrent"
+            ? `${field} (deprecated alias of providerPublished)`
+            : field;
+        failures.push(
+          `${relativePath}: ${label} = ${JSON.stringify(document[field])}, ` +
+            `but the retained Registry readback evidence names v${truth.providerVersion}`,
+        );
+      }
+    }
   }
 }
 
@@ -91,9 +140,9 @@ function verifyOneCopy(document, relativePath, facts, truth, failures) {
  * the build output under website/public that the deploy uploads.
  *
  * `truth` is the evidence-derived publication truth when the caller already has
- * it; passing it confirms providerCurrent against the independently retained
- * signed Registry readback. The release descriptor may name a newer
- * candidate-only provider release target.
+ * it; passing it confirms providerPublished (and its deprecated providerCurrent
+ * alias) against the independently retained signed Registry readback. The
+ * release descriptor may name a newer candidate-only provider release target.
  */
 export function verifySiteStatusDocument(repositoryRoot, truth = null) {
   const failures = [];

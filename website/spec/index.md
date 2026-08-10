@@ -10,18 +10,22 @@ is a protocol compatibility identity independent of any nested Form group.
 
 | Surface | Identity |
 | --- | --- |
-| Current Form Family | `edge.forms.takoform.com/v1beta1` (15 Experimental `0.1.0` Forms) |
+| Current Form Family | `edge.forms.takoform.com/v1beta1` (Beta family; 15 Experimental `0.1.0` Forms) |
 | Current Host API wire | `forms.takoform.com/v1beta1`, discovered at `/.well-known/takoform/v1beta1` |
 | Current package envelope | `packages.forms.takoform.com/v1alpha4` |
 | Retained provider-v2 FormRef | `forms.takoform.com/v1alpha2`, wire discovered at `/.well-known/takoform/v1alpha2` |
 | Retained provider-v2 package envelope | `packages.forms.takoform.com/v1alpha3` |
 | Legacy FormRef | `forms.takoform.com/v1alpha1` (frozen) |
-| Provider | `v2.0.0` current published · `v1.0.3` Legacy · stable `v2.1.1` release target (`candidate-only` until owner publication) |
+| Provider distribution | **Provider 2.1.1** Registry-published stable distribution (descriptor `candidate-only` metadata by design) · **Provider 2.0.0** published compatibility predecessor · **Provider 1.0.3** Legacy |
 
 The `forms.takoform.com/v1alpha2` epoch and its nine `0.1.0` candidates are
 retained provider-v2 preview source; they are not the basis for new
 specification work. The provider's SemVer is independent of every API
 identity.
+
+The 34 published Form Package identities are immutable Legacy history. There
+is no current central approval or admission derived from that historical
+package count.
 
 ## Current-lane contracts
 
@@ -45,7 +49,7 @@ Published at `forms.takoform.com/schemas/...`. Current Beta identities:
 - [host-api-wire v1beta1](/schemas/v1beta1/host-api-wire.schema.json)
 - [package-index v1alpha4](/schemas/v1alpha4/package-index.schema.json)
 
-Retained provider-v2 lane:
+Retained provider-v2 compatibility schemas:
 
 - [form-ref v1alpha2](/schemas/v1alpha2/form-ref.schema.json)
 - [form-definition v1alpha2](/schemas/v1alpha2/form-definition.schema.json)

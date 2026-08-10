@@ -206,9 +206,10 @@ operator and are never committed here.
 ## Content policy
 
 The site must claim nothing beyond signed, committed evidence in this
-repository. The current public truth is: provider `v2.0.0` is the published,
-Registry-verified current client; provider `v1.0.3` is the published Legacy
-client; Takoform is an Experimental specification project; and the 34
+repository. The current public truth is: provider `v2.1.1` is the published,
+Registry readback-verified current client; provider `v2.0.0` is the published
+compatibility predecessor; provider `v1.0.3` is the published Legacy client;
+Takoform is an Experimental specification project; and the 34
 published Form Package identities are immutable Legacy evidence. There is no
 current central Takoform approval or admission. The current
 `forms.takoform.com/v1alpha2` epoch contains exactly nine retained `0.1.0`
@@ -221,10 +222,10 @@ current Beta family packages use `packages.forms.takoform.com/v1alpha4`, and pub
 v1alpha1/v1alpha2 package indexes remain immutable Legacy evidence.
 
 `release/version.json` names stable `v2.1.1` as the Beta release target and
-keeps `publicationStatus: candidate-only` until the release owner publishes
-it; the descriptor must not be presented as live publication state. Retained
-signed release and Registry evidence independently establish `v2.0.0` as the
-current published provider. Any later
+keeps `publicationStatus: candidate-only` as descriptor metadata after the
+release owner publishes it; the descriptor must not be presented as live
+publication state. Retained signed release and Registry evidence independently
+establish `v2.1.1` as the current published provider. Any later
 publication, lifecycle, Host Support, or revocation claim still requires the corresponding
 retained evidence. See
 [`../release/README.md`](../release/README.md), [`../spec/README.md`](../spec/README.md),

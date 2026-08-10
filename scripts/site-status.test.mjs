@@ -10,6 +10,7 @@ import {
 } from "./site-status.mjs";
 import {
   FAMILY_CANDIDATE_SET,
+  SITE_STATUS_DEPRECATED_FIELDS,
   SITE_STATUS_FIELDS,
   deriveSiteStatusFacts,
 } from "../website/.vitepress/site-status.mjs";
@@ -59,6 +60,26 @@ describe("the committed status document", () => {
     const document = read(repositoryRoot, SITE_STATUS_REPOSITORY_PATH);
     expect(Object.keys(document)).toEqual(SITE_STATUS_FIELDS);
     expect(document.sourceCommit).toBeUndefined();
+  });
+
+  test("publishes independent family, definition, and package axes", () => {
+    const document = read(repositoryRoot, SITE_STATUS_REPOSITORY_PATH);
+    expect(document.formFamilyMaturity).toBe("beta");
+    expect(document.formMaturity).toBe("experimental");
+    expect(document.formPackagePublicationStatus).toBe("unpublished");
+    expect(document.formFamilyMaturity).not.toBe(document.formMaturity);
+    expect(document.formPackageStatus).toBe(
+      document.formPackagePublicationStatus,
+    );
+    expect(document.edgeFamilyStatus).toBe(
+      document.formPackagePublicationStatus,
+    );
+    expect(Object.keys(SITE_STATUS_DEPRECATED_FIELDS)).toEqual([
+      "providerCurrent",
+      "edgePreviewProvider",
+      "edgeFamilyStatus",
+      "formPackageStatus",
+    ]);
   });
 
   test("is byte-identical in the source and the published copy", () => {
@@ -154,6 +175,33 @@ describe("the gate refuses", () => {
       ).toBe(true);
     }
   });
+
+  test("rejects a document that conflates family and definition maturity", () => {
+    const failures = fixture((root) => {
+      for (const relativePath of [
+        SITE_STATUS_REPOSITORY_PATH,
+        SITE_STATUS_PUBLISHED_PATH,
+      ]) {
+        const document = read(root, relativePath);
+        write(root, relativePath, {
+          ...document,
+          formFamilyMaturity: "experimental",
+          formMaturity: "experimental",
+        });
+      }
+      return verifySiteStatusDocument(root);
+    });
+    expect(
+      failures.filter((failure) =>
+        failure.includes("formFamilyMaturity must be \"beta\""),
+      ),
+    ).toHaveLength(2);
+    expect(
+      failures.filter((failure) =>
+        failure.includes("formFamilyMaturity and formMaturity are conflated"),
+      ),
+    ).toHaveLength(2);
+  });
 });
 
 describe("the derivation", () => {
@@ -173,9 +221,26 @@ describe("the derivation", () => {
       });
       return deriveSiteStatusFacts(root);
     });
+    expect(changed.formFamilyMaturity).toBe("beta");
+    expect(changed.formMaturity).toBe("experimental");
+    expect(changed.formPackagePublicationStatus).toBe("still-unpublished");
+    expect(changed.formPackageStatus).toBe("still-unpublished");
     expect(changed.edgeFamilyStatus).toBe("still-unpublished");
     expect(changed.candidateSetDigest).not.toBe(
       deriveSiteStatusFacts(repositoryRoot).candidateSetDigest,
     );
+  });
+
+  test("rejects a candidate set that relabels definitions outside Experimental", () => {
+    expect(() =>
+      fixture((root) => {
+        const candidateSet = read(root, FAMILY_CANDIDATE_SET);
+        write(root, FAMILY_CANDIDATE_SET, {
+          ...candidateSet,
+          formMaturity: "beta",
+        });
+        return deriveSiteStatusFacts(root);
+      }),
+    ).toThrow("current Form definitions must be experimental");
   });
 });

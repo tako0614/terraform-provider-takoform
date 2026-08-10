@@ -1,156 +1,55 @@
 # ドキュメント
 
-Terraform / OpenTofu で Takoform を使うための手順と、3 つの利用経路 (lane) の説明です。
+このページは現在の design target — Provider 2.1.1、Host API v1beta1、Edge Form
+Family v1beta1 — から始まります。互換性・移行・履歴は下の collapsed section に
+置き、旧 contract も到達可能なまま current stack と混同しないようにします。
 
-| Tier | 対象 | 入手方法 |
-| --- | --- | --- |
-| **公開済み (Current published)** | provider `v2.0.0` と、保持される 9 つの `forms.takoform.com/v1alpha2` リソース | `terraform init` が Registry からインストール |
-| **Beta release candidate** | stable provider target `v2.1.1` と、Experimental な `edge.forms.takoform.com/v1beta1` family 15種 | owner 公開までは source からビルド |
+## Current design target — Provider 2.1.1 / Host API v1beta1
 
-下のクイックスタートは公開済み tier です。
-[Beta release candidate](#beta-edge-platform-family) はこのページの後半にあり、candidate で
-あることを常に明示しています。
+| Axis                  | Current identity                       | 意味と利用可能性                                                                                                       |
+| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Provider              | **Provider 2.1.1**                     | Registry 公開済みの stable client distribution。repository descriptor は owner publication 後も設計上 `candidate-only` metadata として残ります。 |
+| Host API              | **Host API v1beta1**                   | discovery、exact Form availability、operation、fence、error の Beta protocol。                                         |
+| Form Family           | **Edge Form Family v1beta1**           | Beta family。現在の 15 個の Form definition は Experimental です。                                                      |
+| Form definition       | **definition 0.1.0**                   | 現在の Form ごとの exact definition version。                                                                          |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha4` | provider や Host API と独立した package/distribution schema identifier。package artifact は unpublished。              |
 
-## クイックスタート
+provider target、Host API の maturity、Form family の maturity、package publication は
+別の事実です。Provider 2.1.1 を Beta と呼びません。Beta は Host API の
+protocol、15 Form は Experimental です。Registry readback が Provider の公開状態を
+示し、repository descriptor は owner publication 後も設計上 `candidate-only`
+metadata として残ります。
 
-provider `v2.0.0` が公開済みの client で、インストールできる経路です。保持される
-provider-v2 の 9 リソースを提供します。provider と 9 種類のリソースをまとめて
-動かすには、リポジトリの conformance matrix を使います:
+Takoform is an Experimental specification project. Provider 2.1.1 is the
+Registry-published stable client distribution; its descriptor remains
+`candidate-only` metadata after owner publication. The 34 published Form
+Package identities belong to immutable Legacy history. No current central
+Takoform-wide approval or admission is implied by that historical publication set.
 
-```sh
-bun run check:current-form-candidates
-go run ./cmd/provider-lifecycle-conformance matrix \
-  --opentofu tofu --terraform terraform
-```
+## Current design target — Edge Form Family v1beta1 (15 Experimental Forms) {#beta-edge-platform-family}
 
-この matrix は、実ホストに触れずに、exact な v1alpha2 契約に対して
-preview/apply/observe/refresh/delete を検証します。実ホスト相手に試す場合は、
-そのホストが versioned discovery 経路 (`/.well-known/takoform/v1alpha2`) で
-exact な v1alpha2 FormRef を公開していることを先に確認してください。
+Family は Host API v1beta1 を話し、`/.well-known/takoform/v1beta1` で discovery します。
+UID/generation/revision identity、long-running operation、content-addressed artifact
+upload を備えます。
 
-### 公開済み provider のピン留め
-
-保持される provider-v2 レーンを使うには provider `v2.0.0` をピン留めします。
-`init` で Registry からインストールされます。
+worker が到達可能になるまでは 1 resource ではなく連鎖です。identity、module bytes の
+不変 bundle、その bytes が export する handler を宣言する不変 version、traffic を
+送る deployment、host が address を与える attachment で構成します。active deployment
+のない endpoint は Ready になりません。
 
 ```hcl
+# Provider 2.1.1 is Registry-published; release/version.json remains
+# candidate-only metadata by design after owner publication.
+
 terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
-    }
-  }
-}
-```
-
-### 実ホストに対して使う
-
-matrix は in-process の参照ホストに対して provider を検証します。実ホストを
-動かすには、ホストから 3 つの値をもらいます: API の `endpoint`、対象の
-`space`、bearer `token` です。provider 設定に書くか、環境変数
-`TAKOFORM_ENDPOINT`・`TAKOFORM_SPACE`・`TAKOFORM_TOKEN` で渡せます。
-
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
+      version = "= 2.1.1"
     }
   }
 }
 
-provider "takoform" {
-  endpoint = "https://host.example.com"
-  space    = "prod"
-}
-
-resource "takoform_edge_worker" "example" {
-  name                = "edge-worker"
-  artifact_media_type = "application/vnd.takoform.edge-worker+tar"
-  artifact_sha256     = "sha256:0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37"
-  artifact_url        = "https://artifacts.portable-conformance.invalid/edge-worker.tar"
-  entrypoint          = "worker.mjs"
-  runtime             = "javascript"
-  runtime_version     = "2026.1"
-  configuration       = { "LOG_LEVEL" = "info" }
-}
-```
-
-```console
-terraform init
-terraform plan
-terraform apply
-```
-
-provider が mutation を発行する前に、ホストは `/.well-known/takoform/v1alpha2`
-で exact な v1alpha2 FormRef を公開していなければなりません。exact な identity
-を返せないホストは fail closed します。この repository は hosted service の live
-availability を主張しません。endpoint・Space・token は選んだ host から取得して
-ください。artifact の digest と URL は実際に取得できるものを使ってください。
-上の値は形だけの例です。
-
-## 3 つの利用経路
-
-provider の address は `registry.terraform.io/tako0614/takoform` の 1 つだけで、
-利用経路は 3 つです。
-
-| 経路 | 用途 | インストール |
-| --- | --- | --- |
-| **v1.0.3** (公開済み) | 既存の Legacy state の保守・delete・recovery | Registry から |
-| **v2.0.0** (公開済み・現在の client) | 保持される provider-v2 の 9 契約 | Registry から |
-| **v2.1.1** (stable release target、owner 公開まで `candidate-only`) | [Experimental Edge Platform Family](#beta-edge-platform-family) on v1beta1 | owner 公開までは source からビルド |
-
-### 公開済み Legacy の保守
-
-既存の v1 state には、公開済みの provider `v1.0.3` をピン留めしてください。
-この provider が state を v2 の意味論に自動変換することはありません。
-
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.3"
-    }
-  }
-}
-```
-
-### v1 からの移行
-
-移行は明示的な create/import で行います。state が自動的に書き換わることは
-なく、provider v2 は provider-v1 の state を拒否します。
-
-1. provider v1 をピン留めし、Legacy resource を refresh する。
-2. secret を除く desired configuration と、必要な public output を記録する。
-3. exact な v1alpha2 FormRef で新規作成するか、ホストの conformance が証明された
-   resource だけを import する。
-4. consumer を切り替えて observe し、rollback が不要になった時点で、v1 を使って
-   Legacy を delete する。
-
-## Beta: Edge Platform Family {#beta-edge-platform-family}
-
-::: warning Beta provider release candidate
-`edge.forms.takoform.com/v1beta1` family は stable provider target `v2.1.1`
-に乗ります。owner が公開するまで descriptor は `candidate-only` なので、現在は
-source からビルドします。15種の exact `0.1.0` Form は Experimental で provider
-identity ledger に固定済みですが、package artifact は未公開です。open obligation
-は package/public service と将来の Stable/GA qualification に残ります。
-:::
-
-family のリソースは `forms.takoform.com/v1beta1` Host API を話し、discovery は
-`/.well-known/takoform/v1beta1` です。UID/generation/revision による識別、
-long-running operation、content-addressed な artifact upload を備えます。
-
-worker が到達可能になるまでは 1 リソースではなく連鎖です。identity、モジュール
-バイト列の不変 bundle、その bytes が export する handler を宣言する不変 version、
-トラフィックを送る deployment、そしてアドレスを与える attachment。active な
-deployment を持たない worker の endpoint は Ready になりません。したがって
-連鎖全体で 1 つの構成です。
-
-```hcl
 provider "takoform" {
   endpoint = "https://host.example.com"
   space    = "prod"
@@ -199,32 +98,14 @@ resource "takoform_worker_endpoint" "api" {
 }
 ```
 
-各リソースの個別ページには `v2.1.1` の source-candidate ピンを含む単体の例と、
-同じ source のみの警告があります。version への能力付与は typed binding で行い、
-外からの起動 — custom domain・cron trigger・queue consumer — は常に別の
-attachment リソースです。
+各 resource の個別ページには同じ source-candidate pin と境界があります。version
+への capability は typed binding で追加し、custom domain・cron trigger・queue
+consumer など外からの activation は別の attachment resource にします。
 
-## リソースリファレンス {#resource-reference}
+## Current resource reference {#resource-reference}
 
-※ 各リソースの詳細ページ（引数・interface・import の説明）は英語のみです。
-
-各リソースの引数・read-only 属性・宣言 interface・import の挙動は、次のページに
-まとまっています。
-
-保持される provider-v2 リソース (公開済み `v2.0.0`):
-
-- [edge_worker](/docs/resources/edge_worker.html)
-- [relational_database](/docs/resources/relational_database.html)
-- [object_bucket](/docs/resources/object_bucket.html)
-- [key_value_store](/docs/resources/key_value_store.html)
-- [queue](/docs/resources/queue.html)
-- [schedule](/docs/resources/schedule.html)
-- [container_service](/docs/resources/container_service.html)
-- [stateful_entity](/docs/resources/stateful_entity.html)
-- [vector_index](/docs/resources/vector_index.html)
-- [interface data source](/docs/data-sources/interface.html)
-
-Experimental Edge Platform Family リソース (`v2.1.1` stable target、descriptor は `candidate-only`):
+現在の Edge Form Family の exact な 15 typed resource です。すべて definition 0.1.0
+の Experimental Form です（詳細ページは英語のみ）。
 
 - [module_worker](/docs/resources/module_worker.html)
 - [worker_bundle](/docs/resources/worker_bundle.html)
@@ -242,17 +123,115 @@ Experimental Edge Platform Family リソース (`v2.1.1` stable target、descrip
 - [at_least_once_queue](/docs/resources/at_least_once_queue.html)
 - [queue_consumer](/docs/resources/queue_consumer.html)
 
-v1beta1 surface はこれで全部です。provider が組み込んでいない Form を
-運ぶ汎用リソースはありません。組み込んでいない FormRef を client が検証する
-手段がこの lane に無いためで、第三者 Form への対応は設定値ではなく provider
-build の話になります
+provider が compile していない Form を運ぶ generic carrier はありません。typed
+surface が client に検証できる exact FormRef だけを提供するためです
 ([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html))。
 
-## ホストとの境界
+## Published compatibility / Migration / History {#lanes}
 
-Takoform が所有するのは、workload semantics、schema、exact identity、package、
-conformance だけです。capability support、配置、ルーティング、スケーリング、
-資格情報、復旧はホストが、マネージドの容量・課金・クォータ・SLA は
-各 host または managed service が所有します。
+<details>
+<summary>Published compatibility: Provider 2.0.0、保持される v1alpha2、Legacy Provider 1.0.3</summary>
+
+### Provider 2.0.0 / Host API v1alpha2 の quick start
+
+Provider 2.0.0 は retained Host API boundary
+`forms.takoform.com/v1alpha2` 上の Registry 公開済み compatibility client です。
+保持される provider-v2 の 9 resource を提供します。provider と 9 種類をまとめて検証するには
+repository の conformance matrix を使います。
+
+```sh
+bun run check:current-form-candidates
+go run ./cmd/provider-lifecycle-conformance matrix \
+  --opentofu tofu --terraform terraform
+```
+
+matrix は実ホストに触れず exact v1alpha2 contract の preview/apply/observe/refresh/delete
+を検証します。実ホストでは、先に `/.well-known/takoform/v1alpha2` で exact FormRef を
+公開していることを確認してください。
+
+#### 公開済み Provider 2.0.0 の pin
+
+```hcl
+terraform {
+  required_providers {
+    takoform = {
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 2.0.0"
+    }
+  }
+}
+```
+
+実ホストを動かすには、host から API `endpoint`、対象 `space`、bearer `token` を取得
+します。provider 設定か `TAKOFORM_ENDPOINT`、`TAKOFORM_SPACE`、`TAKOFORM_TOKEN` に
+渡してください。mutation 前に host が exact v1alpha2 identity を提供できなければ
+fail closed します。この repository は hosted service の live availability を主張
+しません。
+
+### Provider 2.0.0 の retained resource
+
+次の 9 resource URL は compatibility surface として保持されます。
+
+- [edge_worker](/docs/resources/edge_worker.html)
+- [relational_database](/docs/resources/relational_database.html)
+- [object_bucket](/docs/resources/object_bucket.html)
+- [key_value_store](/docs/resources/key_value_store.html)
+- [queue](/docs/resources/queue.html)
+- [schedule](/docs/resources/schedule.html)
+- [container_service](/docs/resources/container_service.html)
+- [stateful_entity](/docs/resources/stateful_entity.html)
+- [vector_index](/docs/resources/vector_index.html)
+- [interface data source](/docs/data-sources/interface.html)
+
+retained package envelope は `packages.forms.takoform.com/v1alpha3` です。
+
+### Provider 1.0.3 / Host API v1alpha1
+
+既存 v1 state には公開済み Legacy Provider 1.0.3 を pin してください。この provider は
+state を v2 semantics に自動変換しません。v1 Host API boundary は
+`forms.takoform.com/v1alpha1`、discovery は `/.well-known/takoform/v1alpha1`、公開済み
+v1 Form Package identity は不変の履歴です。
+
+```hcl
+terraform {
+  required_providers {
+    takoform = {
+      source  = "registry.terraform.io/tako0614/takoform"
+      # 公開済み Legacy Provider 1.0.3（既存 v1 state 用）。
+      version = "= 1.0.3"
+    }
+  }
+}
+```
+
+### Provider 1.0.3 からの migration
+
+移行は自動 state rewrite ではなく明示的な create/import です。
+
+1. Provider 1.0.3 を pin して Legacy resource を refresh する。
+2. secret ではない desired configuration と必要な public output を記録する。
+3. Provider 2.0.0 で exact v1alpha2 FormRef の下に create するか、host conformance
+   の証明がある場合だけ import する。
+4. consumer を切り替えて observe し、rollback が不要になってから Provider 1.0.3
+   で Legacy を delete する。
+
+[Provider 1 から 2 への migration guide](/release/migrations/v1-to-v2.html) も参照して
+ください。
+
+</details>
+
+## その他の project surface
+
+- [Form Proposals](/proposals/) — 公開 FormRef をまだ得ていない Form の設計資料
+- [Form inventory](/forms/) — 現在の 15 Form と retained compatibility identity
+- [Conformance evidence](/conformance/) — compatibility の証明方法
+- [Release](/release/) — provider publication boundary、Form Package、migration
+- [Glossary](/docs/glossary.html) — この documentation の用語
+
+## Host boundary
+
+Takoform は workload semantics、schema、exact identity、package、conformance を所有
+します。capability support、配置、routing、scaling、資格情報、recovery、managed
+service の live catalog、billing、quota、SLA は host が所有します。
 
 <StatusNote />

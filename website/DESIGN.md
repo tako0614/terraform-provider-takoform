@@ -82,16 +82,20 @@ card padding is not part of this system.
 
 - The Takoform wordmark, dark aka-red palette, fonts, navigation, footer, focus
   treatment, and status vocabulary.
-- The facts: project `Experimental`; provider `v2.0.0` is the published,
-  Registry-verified current client; provider `v1.0.3` is published Legacy; 34
-  pre-reset Form identities are immutable `Legacy`; no current central
-  approval/admission subset exists; provider v1 retains the frozen Host wire
-  `forms.takoform.com/v1alpha1`; provider v2 uses the current Host wire and
-  exact FormRef group `forms.takoform.com/v1alpha2` through a separate
-  versioned discovery path; retained provider-v2 Form Package indexes use
-  `packages.forms.takoform.com/v1alpha3`, while current family packages use
-  `packages.forms.takoform.com/v1alpha4`. Host implementation source and live
-  service availability are different evidence.
+- The facts: project `Experimental`; the current design target is Provider
+  `2.1.1` (human SemVer, Registry-published stable distribution), Host API
+  `v1beta1` (Beta protocol), and Edge Form Family `v1beta1` (15 Experimental
+  Forms at definition `0.1.0`). The `release/version.json` descriptor remains
+  `candidate-only` metadata by design after owner publication. The current
+  package envelope is `packages.forms.takoform.com/v1alpha4` and package
+  artifacts remain unpublished. Distribution is separate: Provider `2.0.0` is
+  the published compatibility predecessor over retained Host API
+  `forms.takoform.com/v1alpha2` resources, and Provider `1.0.3` is published
+  Legacy over `forms.takoform.com/v1alpha1`; retained package indexes use
+  `packages.forms.takoform.com/v1alpha3`. 34 pre-reset Form identities are
+  immutable `Legacy`; no current central approval/admission subset exists.
+  Host implementation source and live service availability are different
+  evidence.
 
 ## What pages may differ on
 

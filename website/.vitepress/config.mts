@@ -17,7 +17,10 @@ const siteDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const siteStatus = { ...prepareSiteStatus(siteDirectory), route: SITE_STATUS_ROUTE };
+const siteStatus = {
+  ...prepareSiteStatus(siteDirectory),
+  route: SITE_STATUS_ROUTE,
+};
 
 const projectNavItems = [
   { text: "Proposals", link: "/proposals/" },
@@ -26,9 +29,27 @@ const projectNavItems = [
   { text: "Release", link: "/release/" },
 ];
 
+// Current design target comes before historical compatibility in every sidebar.
+const compatibilityNavItems = [
+  { text: "Versions & compatibility", link: "/docs/versions.html" },
+  { text: "Migration guide", link: "/release/migrations/v1-to-v2.html" },
+  {
+    text: "Provider 2.0.0 / Host API v1alpha2",
+    link: "/docs/versions.html#provider-2-0-0",
+  },
+  {
+    text: "Provider 1.0.3 / Host API v1alpha1",
+    link: "/docs/versions.html#provider-1-0-3",
+  },
+];
+
 const englishNav = [
-  { text: "Docs", link: "/docs/" },
+  { text: "Current", link: "/docs/" },
   { text: "Spec", link: "/spec/" },
+  {
+    text: "Compatibility",
+    items: compatibilityNavItems,
+  },
   { text: "Project", items: projectNavItems },
   { text: "GitHub", link: github },
 ];
@@ -43,9 +64,29 @@ const japaneseProjectNavItems = [
   { text: "Release (英語のみ)", link: "/release/" },
 ];
 
+const japaneseCompatibilityNavItems = [
+  { text: "Versions & compatibility (英語のみ)", link: "/docs/versions.html" },
+  {
+    text: "Migration guide (英語のみ)",
+    link: "/release/migrations/v1-to-v2.html",
+  },
+  {
+    text: "Provider 2.0.0 / Host API v1alpha2 (英語のみ)",
+    link: "/docs/versions.html#provider-2-0-0",
+  },
+  {
+    text: "Provider 1.0.3 / Host API v1alpha1 (英語のみ)",
+    link: "/docs/versions.html#provider-1-0-3",
+  },
+];
+
 const japaneseNav = [
-  { text: "Docs", link: "/ja/docs/" },
+  { text: "Current", link: "/ja/docs/" },
   { text: "Spec", link: "/ja/spec/" },
+  {
+    text: "Compatibility",
+    items: japaneseCompatibilityNavItems,
+  },
   { text: "Project", items: japaneseProjectNavItems },
   { text: "GitHub", link: github },
 ];
@@ -53,7 +94,10 @@ const japaneseNav = [
 const edgeResourceItems = [
   { text: "Module worker", link: "/docs/resources/module_worker.html" },
   { text: "Worker bundle", link: "/docs/resources/worker_bundle.html" },
-  { text: "Static asset bundle", link: "/docs/resources/static_asset_bundle.html" },
+  {
+    text: "Static asset bundle",
+    link: "/docs/resources/static_asset_bundle.html",
+  },
   { text: "Worker version", link: "/docs/resources/worker_version.html" },
   { text: "Worker deployment", link: "/docs/resources/worker_deployment.html" },
   {
@@ -71,7 +115,10 @@ const edgeResourceItems = [
     link: "/docs/resources/edge_object_bucket.html",
   },
   { text: "SQLite database", link: "/docs/resources/sqlite_database.html" },
-  { text: "SQLite migration set", link: "/docs/resources/sqlite_migration_set.html" },
+  {
+    text: "SQLite migration set",
+    link: "/docs/resources/sqlite_migration_set.html",
+  },
   {
     text: "SQLite migration application",
     link: "/docs/resources/sqlite_migration_application.html",
@@ -85,7 +132,10 @@ const edgeResourceItems = [
 
 const resourceItems = [
   { text: "Edge worker", link: "/docs/resources/edge_worker.html" },
-  { text: "Relational database", link: "/docs/resources/relational_database.html" },
+  {
+    text: "Relational database",
+    link: "/docs/resources/relational_database.html",
+  },
   { text: "Object bucket", link: "/docs/resources/object_bucket.html" },
   { text: "Key value store", link: "/docs/resources/key_value_store.html" },
   { text: "Queue", link: "/docs/resources/queue.html" },
@@ -95,6 +145,11 @@ const resourceItems = [
   { text: "Vector index", link: "/docs/resources/vector_index.html" },
   { text: "Interface data source", link: "/docs/data-sources/interface.html" },
 ];
+
+// The current stack is listed first. Retained provider-v2 resources stay in
+// the compatibility group below so the first read of the sidebar answers
+// "what is current?" before showing migration and history.
+const currentStackResourceItems = edgeResourceItems;
 
 const specSidebar = [
   {
@@ -118,10 +173,9 @@ const specSidebar = [
   {
     text: "Contracts",
     items: [
+      { text: "Host API v1beta1", link: "/spec/host-api/v1beta1.html" },
       { text: "Form Definition", link: "/spec/form-definition/" },
       { text: "Form Package", link: "/spec/form-package/" },
-      { text: "Host API (retained v1alpha2)", link: "/spec/host-api/" },
-      { text: "Host API v1beta1", link: "/spec/host-api/v1beta1.html" },
       { text: "Interface contracts", link: "/spec/interface-contract/" },
       { text: "Binding contracts", link: "/spec/binding-contract/" },
       { text: "Artifact transport", link: "/spec/artifact-transport/" },
@@ -130,13 +184,25 @@ const specSidebar = [
       { text: "Decisions", link: "/spec/decisions/" },
     ],
   },
+  {
+    text: "Published compatibility / Migration / History",
+    collapsed: true,
+    items: [
+      { text: "Versions & compatibility", link: "/docs/versions.html" },
+      { text: "Host API (retained v1alpha2)", link: "/spec/host-api/" },
+      { text: "Migration guide", link: "/release/migrations/v1-to-v2.html" },
+    ],
+  },
 ];
 
 const edgeProposalItems = [
   { text: "Family overview", link: "/proposals/edge/" },
   { text: "Module worker", link: "/proposals/edge/module-worker.html" },
   { text: "Worker bundle", link: "/proposals/edge/worker-bundle.html" },
-  { text: "Static asset bundle", link: "/proposals/edge/static-asset-bundle.html" },
+  {
+    text: "Static asset bundle",
+    link: "/proposals/edge/static-asset-bundle.html",
+  },
   { text: "Worker version", link: "/proposals/edge/worker-version.html" },
   { text: "Worker deployment", link: "/proposals/edge/worker-deployment.html" },
   {
@@ -151,7 +217,10 @@ const edgeProposalItems = [
   { text: "Edge KV namespace", link: "/proposals/edge/edge-kv-namespace.html" },
   { text: "Object bucket", link: "/proposals/edge/object-bucket.html" },
   { text: "SQLite database", link: "/proposals/edge/sqlite-database.html" },
-  { text: "SQLite migration set", link: "/proposals/edge/sqlite-migration-set.html" },
+  {
+    text: "SQLite migration set",
+    link: "/proposals/edge/sqlite-migration-set.html",
+  },
   {
     text: "SQLite migration application",
     link: "/proposals/edge/sqlite-migration-application.html",
@@ -178,34 +247,45 @@ const proposalItems = [
 const englishSidebar = {
   "/docs/": [
     {
-      text: "Docs",
+      text: "Current design target — Provider 2.1.1 / Host API v1beta1",
       items: [
         { text: "Quick start", link: "/docs/" },
+        { text: "Versions & compatibility", link: "/docs/versions.html" },
         { text: "Reference", link: "/docs/reference.html" },
         { text: "Glossary", link: "/docs/glossary.html" },
       ],
     },
     {
-      text: "Current published — retained v2 resources",
-      items: resourceItems,
+      text: "Current design target — Edge Form Family v1beta1 (15 Experimental Forms)",
+      items: currentStackResourceItems,
     },
     {
-      text: "Beta — Experimental Edge Platform Family",
-      items: edgeResourceItems,
+      text: "Published compatibility / Migration / History",
+      collapsed: true,
+      items: [
+        {
+          text: "Provider 2.0.0 / Host API v1alpha2 — retained resources",
+          collapsed: true,
+          items: resourceItems,
+        },
+        {
+          text: "Provider 1.0.3 / Host API v1alpha1 — Legacy",
+          link: "/docs/versions.html#provider-1-0-3",
+        },
+        { text: "Migration guide", link: "/release/migrations/v1-to-v2.html" },
+      ],
     },
   ],
   "/spec/": specSidebar,
   "/proposals/": [
     {
-      text: "Current published — retained v2 proposals",
-      items: [
-        { text: "Overview", link: "/proposals/" },
-        ...proposalItems,
-      ],
+      text: "Current design target — Edge Form Family v1beta1 proposals",
+      items: [...edgeProposalItems],
     },
     {
-      text: "Edge preview — Edge Platform Family",
-      items: edgeProposalItems,
+      text: "Published compatibility / Migration / History — retained proposals",
+      collapsed: true,
+      items: [{ text: "Overview", link: "/proposals/" }, ...proposalItems],
     },
   ],
   "/forms/": [
@@ -228,19 +308,38 @@ const englishSidebar = {
 const japaneseSidebar = {
   "/ja/docs/": [
     {
-      text: "Docs",
+      text: "Current design target — Provider 2.1.1 / Host API v1beta1",
       items: [
         { text: "クイックスタート", link: "/ja/docs/" },
+        {
+          text: "Versions & compatibility (英語のみ)",
+          link: "/ja/docs/versions.html",
+        },
         { text: "用語集 (英語のみ)", link: "/docs/glossary.html" },
       ],
     },
     {
-      text: "Current published — retained v2 resources",
-      items: resourceItems,
+      text: "Current design target — Edge Form Family v1beta1 (15 Experimental Forms)",
+      items: currentStackResourceItems,
     },
     {
-      text: "Beta — Experimental Edge Platform Family",
-      items: edgeResourceItems,
+      text: "Published compatibility / Migration / History",
+      collapsed: true,
+      items: [
+        {
+          text: "Provider 2.0.0 / Host API v1alpha2 — retained resources",
+          collapsed: true,
+          items: resourceItems,
+        },
+        {
+          text: "Provider 1.0.3 / Host API v1alpha1 — Legacy",
+          link: "/ja/docs/versions.html#provider-1-0-3",
+        },
+        {
+          text: "Migration guide (英語のみ)",
+          link: "/release/migrations/v1-to-v2.html",
+        },
+      ],
     },
   ],
   "/ja/spec/": [

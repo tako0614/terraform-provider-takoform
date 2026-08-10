@@ -2,7 +2,8 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # stable v2.1.1 release target; descriptor remains candidate-only until owner publication.
+      # Provider v2.1.1 is Registry-published; release/version.json remains
+      # candidate-only descriptor metadata after owner publication.
       version = "= 2.1.1"
     }
   }

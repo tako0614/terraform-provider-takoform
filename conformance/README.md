@@ -1,15 +1,17 @@
 # Conformance
 
-The retained v1alpha2 candidate compatibility evidence is executable Go
-characterization:
+The retained v1alpha2 compatibility evidence is executable Go
+characterization for the published Provider 2.0.0 predecessor, while the
+current Registry-published Provider 2.1.1 carries the Beta family:
 
-- `internal/provider/*_test.go` asserts that the published provider v2.0.0
+- `internal/provider/*_test.go` asserts that the published compatibility
+  provider v2.0.0
   exposes exactly the
   nine independently authored v1alpha2 candidates, and covers typed schema
   behavior, validation, CRUD, import, state refresh, and the absence of
-  plan-time remote mutation; the source tree additionally registers exactly the
-  v1beta1 Edge Platform Family resources for the stable v2.1.1 provider release
-  target — and no generic carrier, which is itself asserted
+  plan-time remote mutation; the Registry-published v2.1.1 provider source
+  additionally registers exactly the v1beta1 Edge Platform Family resources —
+  and no generic carrier, which is itself asserted
   ([decision 0035](../spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md),
   [decision 0021](../spec/decisions/0021-third-party-forms-and-contract-distribution.md));
 - `internal/client/client_test.go` asserts discovery, capability negotiation, preview/apply evidence, error envelopes, observation, and deletion;

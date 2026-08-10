@@ -7,34 +7,112 @@ hero:
   tagline: ポータブルでホスト中立な、Terraform / OpenTofu 用のリソース契約
   actions:
     - theme: brand
-      text: はじめる
+      text: 現在の stack を見る
       link: /ja/docs/
     - theme: alt
       text: 仕様を読む
       link: /ja/spec/
 ---
 
-## 公開済みと preview
+## Current design target — Provider 2.1.1 / Host API v1beta1
 
-このプロジェクトは 2 つの tier で出荷されます。どのページも、自分がどちらの
-tier を説明しているかを明示し、両者を混ぜません。
+Takoform は Experimental specification project です。provider の人間向け
+SemVer、ホスト protocol、Form の identity を別々の軸として示し、一つの version
+を別の maturity と取り違えないようにします。
 
-| Tier | 対象 | 入手方法 |
-| --- | --- | --- |
-| **公開済み (Current published)** | provider `v2.0.0` と、保持される 9 つの `forms.takoform.com/v1alpha2` リソース | `terraform init` が Registry からインストール |
-| **Beta release candidate** | stable provider target `v2.1.1` と、Experimental な `edge.forms.takoform.com/v1beta1` family 15種 | owner 公開までは source からビルド |
+| 軸                    | 現在の identity                        | 意味と利用可能性                                                                                                       |
+| --------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Provider              | **Provider 2.1.1**                     | Registry 公開済みの stable client distribution。repository descriptor は owner publication 後も設計上 `candidate-only` metadata として残ります。 |
+| Host API              | **Host API v1beta1**                   | discovery、exact Form availability、operation、fence、error の Beta protocol。                                         |
+| Form Family           | **Edge Form Family v1beta1**           | Beta family。現在の 15 個の Form definition は Experimental です。                                                      |
+| Form definition       | **definition 0.1.0**                   | 現在の Form ごとの exact definition version。                                                                          |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha4` | provider や Host API と独立した package/distribution schema identifier。package artifact は unpublished。              |
 
-`v2.1.1` descriptor は owner が公開するまで `candidate-only` です。15種の exact
-Beta FormRef/digest は provider compatibility identity として固定済みで、package
-artifact は未公開です。open obligation は package/public service と将来の
-Stable/GA qualification に残ります。
-[機械可読なステータス](/.well-known/takoform-site.json) が両 tier をデータとして
-述べています。
+Provider 2.1.1 は Registry 公開済みの current client distribution です。
+repository の `release/version.json` descriptor は owner publication 後も設計上
+`candidate-only` metadata として残ります。この metadata は公開済み client を取り消しません。
+Provider の distribution availability は下の compatibility section と
+[機械可読なステータス](/.well-known/takoform-site.json)で別に示します。
+[現在の quick start](/ja/docs/) には適用できる構成があります。
 
-## コード例
+Provider 2.1.1 is Registry-published; its descriptor remains `candidate-only`
+metadata after owner publication. The 34 published Form Package identities
+belong to immutable Legacy history. No current central Takoform-wide approval
+or admission is implied by that historical publication set.
 
-これは**公開済み** tier です。Registry からの provider `v2.0.0` と、それが
-公開している保持 v2 リソースです。
+```hcl
+terraform {
+  required_providers {
+    takoform = {
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 2.1.1"
+    }
+  }
+}
+```
+
+## Current design target — Edge Form Family v1beta1 (15 Experimental Forms)
+
+Host API v1beta1 の上で Edge Form Family v1beta1
+([Form Families](/spec/form-families.html)) が動きます。15 個すべてが
+Experimental Form で、definition 0.1.0 を使います。worker は identity、module
+bytes、handler を宣言する version、traffic deployment、host が割り当てる address
+への attachment という不変 resource の連鎖で到達可能になります。
+
+※ 各リソースの詳細ページは英語のみです。
+
+| Resource                                                                                     | Role       | 宣言するもの                                                            |
+| -------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------- |
+| [`takoform_module_worker`](/docs/resources/module_worker.html)                               | identity   | JavaScript module worker アプリの論理 identity                          |
+| [`takoform_worker_bundle`](/docs/resources/worker_bundle.html)                               | revision   | アップロード済みの不変コードバンドル                                    |
+| [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html)                   | revision   | アップロード済みの不変 static file inventory                            |
+| [`takoform_worker_version`](/docs/resources/worker_version.html)                             | revision   | bundle・handlers・vars・sensitive slots・typed bindings の不変 snapshot |
+| [`takoform_worker_deployment`](/docs/resources/worker_deployment.html)                       | deployment | どの version へどれだけ配信するか (basis points)                        |
+| [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html)                 | attachment | worker 自身を origin とする hostname                                    |
+| [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html)                           | attachment | host が割り当てるアドレスでの HTTPS 到達性                              |
+| [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html)                   | attachment | scheduled handler を起動する UTC cron                                   |
+| [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html)                       | identity   | eventually consistent な edge KV namespace                              |
+| [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html)                     | identity   | 強整合な object bucket                                                  |
+| [`takoform_sqlite_database`](/docs/resources/sqlite_database.html)                           | identity   | SQLite 意味論の serverless database                                     |
+| [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html)                 | revision   | 順序と checksum を固定した SQL migration set                            |
+| [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | 1つの database へ未適用 suffix だけを適用                               |
+| [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html)                   | identity   | acknowledgement と retry を持つ at-least-once 配信                      |
+| [`takoform_queue_consumer`](/docs/resources/queue_consumer.html)                             | attachment | batch・retry・dead-letter policy を1つの worker へ向ける                |
+
+::: warning Provider distribution boundary
+Provider 2.1.1 は Registry 公開済みの stable distribution です。
+repository descriptor は owner publication 後も設計上 `candidate-only` metadata として
+残り、15 Form Package artifact は unpublished です。target の SemVer、Host API の
+Beta protocol、Form family の Beta maturity、15 Form definition の Experimental
+maturity は別々の事実です。
+[release-policy obligations](/spec/publication-freeze.html)は別の公開義務です。
+:::
+
+worker の capability は exact な
+[Interface contracts](/spec/interface-contract/) と
+[Binding contracts](/spec/binding-contract/) に裏付けられた typed binding で利用します。
+外からの activation は別の attachment resource です
+([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html))。
+
+## 形状を保存する Form
+
+Takoform は複数クラウドの最小公倍数へ薄めた汎用リソースを定義しません。
+各 Form は実績あるサービスプリミティブのアプリケーションから見える意味論 —
+実行 ABI・整合性・配信保証・更新単位 — を完全に固定し、ベンダーの名前・
+アカウント・配置・商務だけを契約の外に置きます。意味論が異なる実装は別の
+Form であり、交換可能なのはホストであって意味ではありません
+([decision 0008](/spec/decisions/0008-forms-preserve-service-shape.html))。
+
+## Published compatibility / Migration / History
+
+<details>
+<summary>Published compatibility: Provider 2.0.0、保持される v1alpha2、Legacy Provider 1.0.3</summary>
+
+### Provider 2.0.0 / Host API v1alpha2
+
+Provider 2.0.0 は retained `forms.takoform.com/v1alpha2` surface の Registry
+公開済み compatibility client です。次の 9 resource を保持します
+([decision 0035](/spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.html))。
 
 ```hcl
 terraform {
@@ -84,90 +162,52 @@ resource "takoform_edge_worker" "api" {
 }
 ```
 
-資格情報・配置・価格は書きません。これらはホストが決めることで、state には
-入りません。`v1.0.3` は既存 v1 state 向けの公開済み Legacy client のままです。
-[docs](/ja/docs/) で使い方を確認してください。
-
-## 形状を保存する Form
-
-Takoform は複数クラウドの最小公倍数へ薄めた汎用リソースを定義しません。
-各 Form は実績あるサービスプリミティブのアプリケーションから見える意味論 —
-実行 ABI・整合性・配信保証・更新単位 — を完全に固定し、ベンダーの名前・
-アカウント・配置・商務だけを契約の外に置きます。意味論が異なる実装は別の
-Form であり、交換可能なのはホストであって意味ではありません
-([decision 0008](/spec/decisions/0008-forms-preserve-service-shape.html))。
-
-## 公開済み: 保持される v2 リソース
-
-`forms.takoform.com/v1alpha2` の 9 種 `0.1.0` 候補は、公開済み provider
-`v2.0.0` の面としてそのまま保持されます
+Provider 2.0.0 は `/.well-known/takoform/v1alpha2` で exact な retained FormRef
+を discovery し、package index は `packages.forms.takoform.com/v1alpha3` です
 ([decision 0035](/spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.html))。
 
-| Resource | 宣言するもの |
-| --- | --- |
-| [`takoform_edge_worker`](/docs/resources/edge_worker.html) | ダイジェストを固定した artifact から動く request/event アプリ |
-| [`takoform_relational_database`](/docs/resources/relational_database.html) | open engine token で識別する relational database |
-| [`takoform_object_bucket`](/docs/resources/object_bucket.html) | オブジェクトストレージ |
-| [`takoform_key_value_store`](/docs/resources/key_value_store.html) | key/value ストア |
-| [`takoform_queue`](/docs/resources/queue.html) | at-least-once でメッセージを配信するキュー |
-| [`takoform_schedule`](/docs/resources/schedule.html) | 接続したリソースを1つ呼び出す cron |
-| [`takoform_container_service`](/docs/resources/container_service.html) | OCI イメージのダイジェストから動くサービス |
-| [`takoform_stateful_entity`](/docs/resources/stateful_entity.html) | 参照可能な永続エンティティ |
-| [`takoform_vector_index`](/docs/resources/vector_index.html) | 次元を固定したベクターインデックス |
+| Resource                                                                   | 宣言するもの                                                  |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [`takoform_edge_worker`](/docs/resources/edge_worker.html)                 | ダイジェストを固定した artifact から動く request/event アプリ |
+| [`takoform_relational_database`](/docs/resources/relational_database.html) | open engine token で識別する relational database              |
+| [`takoform_object_bucket`](/docs/resources/object_bucket.html)             | オブジェクトストレージ                                        |
+| [`takoform_key_value_store`](/docs/resources/key_value_store.html)         | key/value ストア                                              |
+| [`takoform_queue`](/docs/resources/queue.html)                             | at-least-once でメッセージを配信するキュー                    |
+| [`takoform_schedule`](/docs/resources/schedule.html)                       | 接続したリソースを1つ呼び出す cron                            |
+| [`takoform_container_service`](/docs/resources/container_service.html)     | OCI イメージのダイジェストから動くサービス                    |
+| [`takoform_stateful_entity`](/docs/resources/stateful_entity.html)         | 参照可能な永続エンティティ                                    |
+| [`takoform_vector_index`](/docs/resources/vector_index.html)               | 次元を固定したベクターインデックス                            |
 
-## Beta: Experimental Edge Platform Family
+### Provider 1.0.3 / Host API v1alpha1
 
-::: warning Beta provider release candidate
-このセクションは stable provider `v2.1.1` release target に乗ります。owner 公開
-までは descriptor が `candidate-only` です。15 Form は Experimental で、Beta は
-API/family channel であって Stable/GA claim ではありません。適用できる構成は
-[Beta クイックスタート](/ja/docs/#beta-edge-platform-family) にあります。
-断片だけでは apply できないため、このページには置きません。
-:::
+Provider 1.0.3 は既存 v1 state のための公開済み Legacy client です。refresh、
+delete、recovery、v1 wire が残る移行手順では pin してください。discovery 境界は
+`forms.takoform.com/v1alpha1` の `/.well-known/takoform/v1alpha1` で、v1 Form
+Package identity は不変の履歴です。
 
-現在の設計 channel は namespaced な `edge.forms.takoform.com/v1beta1`
-family ([Form Families](/spec/form-families.html)) で、UID/generation/revision
-識別・long-running operation・content-addressed artifact upload を備えた
-`forms.takoform.com/v1beta1` Host API 上で動きます。
+### 移行
 
-※ 各リソースの詳細ページは英語のみです。
+移行は明示的な create/import で行います。自動 state rewrite はありません。
 
-| Resource | Role | 宣言するもの |
-| --- | --- | --- |
-| [`takoform_module_worker`](/docs/resources/module_worker.html) | identity | JavaScript module worker アプリの論理 identity |
-| [`takoform_worker_bundle`](/docs/resources/worker_bundle.html) | revision | アップロード済みの不変コードバンドル |
-| [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html) | revision | アップロード済みの不変 static file inventory |
-| [`takoform_worker_version`](/docs/resources/worker_version.html) | revision | bundle・handlers・vars・sensitive slots・typed bindings の不変 snapshot |
-| [`takoform_worker_deployment`](/docs/resources/worker_deployment.html) | deployment | どの version へどれだけ配信するか (basis points) |
-| [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html) | attachment | worker 自身を origin とする hostname |
-| [`takoform_worker_endpoint`](/docs/resources/worker_endpoint.html) | attachment | host が割り当てるアドレスでの HTTPS 到達性 |
-| [`takoform_worker_cron_trigger`](/docs/resources/worker_cron_trigger.html) | attachment | scheduled handler を起動する UTC cron |
-| [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html) | identity | eventually consistent な edge KV namespace |
-| [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html) | identity | 強整合な object bucket |
-| [`takoform_sqlite_database`](/docs/resources/sqlite_database.html) | identity | SQLite 意味論の serverless database |
-| [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html) | revision | 順序と checksum を固定した SQL migration set |
-| [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | 1つの database へ未適用 suffix だけを適用 |
-| [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html) | identity | acknowledgement と retry を持つ at-least-once 配信 |
-| [`takoform_queue_consumer`](/docs/resources/queue_consumer.html) | attachment | batch・retry・dead-letter policy を1つの worker へ向ける |
+1. Provider 1.0.3 を pin して Legacy resource を refresh する。
+2. secret ではない desired configuration と必要な public output を記録する。
+3. Provider 2.0.0 で exact な v1alpha2 FormRef の下に create するか、host
+   conformance の証明がある場合だけ import する。
+4. consumer を切り替えて observe し、rollback が不要になってから Legacy を
+   delete する。
 
-worker からの能力利用は typed binding (`kv_bindings`、`bucket_bindings`、
-`sqlite_bindings`、`queue_producer_bindings`、`service_bindings`) で、exact な
-[Interface contracts](/spec/interface-contract/) と
-[Binding contracts](/spec/binding-contract/) に裏付けられます。外からの起動
-(route・domain・cron・consumption) は常に別の attachment リソースです。
-v1beta1 surface はこの typed リソースだけで、provider が組み込んでいない Form を
-運ぶ汎用リソースはありません。組み込んでいない FormRef を client が検証する
-手段がこの lane には無いためです
-([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html))。
+[Provider 1 から 2 への migration guide](/release/migrations/v1-to-v2.html) も参照して
+ください。
+
+</details>
 
 ## どう動くか
 
 1. **宣言する** — 必要なサービス形状のポータブルなフィールドだけを書きます。
    bundle、handlers、vars、sensitive slots、typed bindings、retention。
 2. **ホストが実装する** — provider は versioned な経路でホストを探し、
-   validate/prepare/apply、observe、delete を UID・generation・
-   revision の fence 付きで実行します。実装・配置・容量・資格情報・
-   ルーティングはホストが決めます。
+   validate/prepare/apply、observe、delete を UID・generation・revision の fence
+   付きで実行します。実装・配置・容量・資格情報・ルーティングはホストが決めます。
 3. **束ねる** — revision が typed binding で能力を持ち、attachment が外界を
    routing します。ホストは対応範囲を Host Support Profile で公開します。
 
