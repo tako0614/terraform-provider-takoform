@@ -1,6 +1,6 @@
 package provider
 
-// v3_codec.go carries the per-exact-FormRef codecs of the Host API v1alpha3
+// v3_codec.go carries the per-exact-FormRef codecs of the Host API v1beta1
 // resource lane.
 //
 // A FormRef recorded in state is a contract identity, and knowing the identity
@@ -30,6 +30,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
@@ -51,17 +52,22 @@ type v3CodecTable struct {
 }
 
 // v3Codecs is the table this provider build carries. Every supported exact ref
-// of the Edge Platform Family resolves to the catalog Form of its kind: today
-// the registry holds exactly one definition version per kind, so the current
-// declarations ARE that ref's field set.
+// resolves to the catalog Form with the same complete identity. It must not
+// use ByKind: that helper intentionally returns the current default and would
+// reinterpret a retained Beta ref as a future stable catalog entry when a
+// Form line advances.
 var v3Codecs = sync.OnceValue(func() *v3CodecTable {
-	registry := currentformregistry.V3Current()
+	return newV3CodecTable(currentformregistry.V3Current())
+})
+
+func newV3CodecTable(registry *currentformregistry.V3Registry) *v3CodecTable {
 	table := &v3CodecTable{
 		registry: registry,
 		codecs:   map[currentformregistry.ExactFormKey]model.Form{},
 	}
+	rendered, renderErr := edgeformcatalog.RenderForms()
 	for _, ref := range registry.SupportedRefs() {
-		form, declared := edgeformcatalog.ByKind(ref.Kind)
+		form, declared := formForExactRef(ref, rendered, renderErr)
 		if !declared {
 			// A supported identity whose field set is not compiled into this
 			// build has no codec. It stays out of the table, so state bound to
@@ -72,7 +78,34 @@ var v3Codecs = sync.OnceValue(func() *v3CodecTable {
 		table.codecs[ref.ExactKey()] = form
 	}
 	return table
-})
+}
+
+// formForExactRef keeps the Form declaration selected by the same exact
+// identity as provider state. A future stable catalog may contain a second
+// declaration with the same kind; matching the family, definition version,
+// and rendered schema digest preserves the retained Beta declaration instead
+// of letting the catalog's current ByKind default overwrite it.
+func formForExactRef(
+	ref currentformregistry.V3Ref,
+	rendered []edgeformcatalog.RenderedForm,
+	renderErr error,
+) (model.Form, bool) {
+	if renderErr != nil || len(rendered) != len(edgeformcatalog.Forms) {
+		return model.Form{}, false
+	}
+	for index, candidate := range edgeformcatalog.Forms {
+		if candidate.Family.APIVersion() == ref.APIVersion &&
+			candidate.Kind == ref.Kind &&
+			candidate.DefinitionVersion == ref.DefinitionVersion {
+			digest, err := formpackage.DigestCanonicalJSON([]byte(rendered[index].DefinitionJSON))
+			if err != nil || digest != ref.SchemaDigest {
+				continue
+			}
+			return candidate, true
+		}
+	}
+	return model.Form{}, false
+}
 
 // withCodec returns a copy of the table that also supports ref, decoded and
 // encoded by form. asDefaultCreate makes it the create target of its

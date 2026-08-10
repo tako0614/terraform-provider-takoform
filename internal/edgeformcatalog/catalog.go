@@ -1,7 +1,8 @@
 // Package edgeformcatalog declares, as data, the Edge Platform Family:
-// the first official Form Family (edge.forms.takoform.com/v1alpha1, decision
-// 0009) together with its exact Interface and Binding contracts (decision
-// 0010). Every member fixes the application-visible semantics of one proven
+// the current public Beta Form Family (edge.forms.takoform.com/v1beta1,
+// decisions 0009 and 0035) together with its exact Interface and Binding
+// contracts (decision 0010). Every member fixes the application-visible
+// semantics of one proven
 // edge service primitive completely (decision 0008); no field selects a
 // vendor, an account, a region, or an implementation.
 package edgeformcatalog
@@ -16,7 +17,7 @@ import (
 )
 
 // Family is the Edge Platform Family group.
-var Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"}
+var Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1beta1"}
 
 // edgeDefinitionVersion is the definition SemVer every MVP member starts at.
 const edgeDefinitionVersion = "0.1.0"

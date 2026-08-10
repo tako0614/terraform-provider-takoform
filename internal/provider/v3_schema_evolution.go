@@ -48,7 +48,7 @@ package provider
 // The version below is the other half of the same rule: the schema version is
 // what lets a resource type outlive a change to its own state layout, and a
 // state upgrader is how state written at an earlier version becomes readable
-// at the current one. The v1alpha3 lane needs one registered even while the
+// at the current one. The v1beta1 lane needs one registered even while the
 // upgrade is an identity, because the day it is not an identity is the day it
 // is too late to add the mechanism.
 
@@ -60,12 +60,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-// v3SchemaVersion is the persisted state layout of every v1alpha3-lane
+// v3SchemaVersion is the persisted state layout of every v1beta1-lane
 // resource.
 //
-// Version 1 is the first numbered layout of this lane. The lane ships in
-// provider v2.1.0, an unpublished source candidate, so no user state exists at
-// version 0 outside development; registering the upgrader anyway is what makes
+// Version 1 is the first numbered layout of this channel. It ships in the
+// stable provider v2.1.0 release target; the descriptor remains candidate-only
+// until owner publication, so no public user state exists at version 0.
+// Registering the upgrader anyway is what makes
 // the mechanism real rather than aspirational, and it is exercised by
 // TestV3StateUpgraderRoundTrip.
 const v3SchemaVersion int64 = 1
@@ -75,7 +76,7 @@ var _ resource.ResourceWithUpgradeState = (*v3FormResource)(nil)
 // UpgradeState carries state written under an earlier layout of this resource
 // type forward to the current one.
 //
-// The version 0 upgrade is a whole-value carry: the v1alpha3 state model did
+// The version 0 upgrade is a whole-value carry: the v1beta1 state model did
 // not change shape between the two versions, so every attribute keeps its name,
 // its type, and its meaning, and the honest upgrade is the identity. It is
 // declared with a PriorSchema so the framework decodes the old value against a

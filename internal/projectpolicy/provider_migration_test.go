@@ -204,7 +204,7 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Nine retained provider-v2 docs and the fifteen Edge Platform Family docs
-	// of the Host API v1alpha3 lane. There is no extra document: the generic
+	// of the Host API v1beta1 channel. There is no extra document: the generic
 	// exact-FormRef carrier was withdrawn (spec/decisions/0021), so every
 	// resource document now describes a resource backed by a Form — which is
 	// also why the package-digest exemption it needed is gone. Every doc, in

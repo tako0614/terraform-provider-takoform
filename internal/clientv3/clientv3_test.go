@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	testGroup        = "edge.forms.takoform.com/v1alpha1"
+	testGroup        = "edge.forms.takoform.com/v1beta1"
 	testKind         = "Worker"
 	testSpace        = "team-a"
 	testSchemaDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -220,11 +220,11 @@ func TestDiscoverRejectsMissingRequiredFeature(t *testing.T) {
 // TestDiscoverRejectsPercentEncodedEndpointPaths proves the client refuses a
 // discovery document whose advertised endpoints are not the lane's ordinary
 // path shape. The escaped form is compared, so a host advertising
-// "%2Fv1alpha3" cannot pass as "/v1alpha3" — the exact substitution a decoded
+// "%2Fv1beta1" cannot pass as "/v1beta1" — the exact substitution a decoded
 // comparison would accept and an intermediary would then disagree about
 // (spec/decisions/0018).
 func TestDiscoverRejectsPercentEncodedEndpointPaths(t *testing.T) {
-	encodedAPIRoot := "/apis/forms.takoform.com%2Fv1alpha3"
+	encodedAPIRoot := "/apis/forms.takoform.com%2Fv1beta1"
 	for _, test := range []struct {
 		name     string
 		mutate   func(doc map[string]any, origin string)

@@ -1,6 +1,6 @@
 // Package workerauthoring drives the Edge Platform Family authoring surface —
-// the raw v1alpha3 resources and the official `worker-app` module — through a
-// REAL Terraform-compatible CLI against the deterministic v1alpha3 reference
+// the raw v1beta1 resources and the official `worker-app` module — through a
+// REAL Terraform-compatible CLI against the deterministic v1beta1 reference
 // host.
 //
 // It exists because two of the properties the authoring surface promises are

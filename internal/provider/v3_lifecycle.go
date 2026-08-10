@@ -1,8 +1,8 @@
 package provider
 
-// v3_lifecycle.go is the shared lifecycle core of the Host API v1alpha3
+// v3_lifecycle.go is the shared lifecycle core of the Host API v1beta1
 // resource lane (spec/decisions/0013): every typed Edge Family resource
-// drives the same create/read/update/delete/import flow over the v1alpha3
+// drives the same create/read/update/delete/import flow over the v1beta1
 // client.
 // State identity is space/apiVersion/kind/uid (spec/decisions/0011); desired
 // mutations fence on the expected generation, deletes fence on the revision,
@@ -38,7 +38,7 @@ const (
 )
 
 // v3FormResource implements one typed Edge Platform Family Form over the
-// shared v1alpha3 lifecycle core. The Form declaration is data
+// shared v1beta1 lifecycle core. The Form declaration is data
 // (internal/edgeformcatalog); a new family member is a new catalog entry.
 type v3FormResource struct {
 	form model.Form
@@ -68,7 +68,7 @@ func NewV3FormResource(form model.Form) func() resource.Resource {
 //
 // There is deliberately no generic exact-FormRef carrier. A resource that
 // accepts an arbitrary third-party FormRef and an opaque JSON spec can back
-// none of what an exact reference promises: the v1alpha3 Form Definition
+// none of what an exact reference promises: the v1beta1 Form Definition
 // response is a closed envelope carrying only identity, display name,
 // description, and desiredSchema, so a client can neither recompute the
 // canonical definition digest the FormRef pins nor read the Form's role.
@@ -101,7 +101,7 @@ func (r *v3FormResource) Configure(_ context.Context, req resource.ConfigureRequ
 	r.data = data
 }
 
-// assertV3Configured requires the v1alpha3 lane. When the endpoint only
+// assertV3Configured requires the v1beta1 lane. When the endpoint only
 // negotiated v1alpha2, the recorded per-lane negotiation error is the
 // diagnostic, so the user sees why this resource cannot work while the v2
 // resources can.
@@ -122,7 +122,7 @@ func assertV3Lane(data *providerData, resourceType string, diags *diag.Diagnosti
 		return false
 	}
 	if data.clientV3 == nil {
-		diags.Append(v3LaneDiagnostic(resourceType, "v1alpha3", data.v3Err))
+		diags.Append(v3LaneDiagnostic(resourceType, "v1beta1", data.v3Err))
 		return false
 	}
 	return true
@@ -189,11 +189,11 @@ func (r *v3FormResource) v3StateCodec(identity v3StateIdentity, diags *diag.Diag
 	got, ok := identity.formRef()
 	if !ok {
 		diags.Append(v3Diagnostic{
-			Summary:      "State has no exact v1alpha3 Form identity",
+			Summary:      "State has no exact v1beta1 Form identity",
 			ResourceType: r.form.ResourceType,
 			Pointer:      "/form",
 			Code:         v3CodeStateRefMissing,
-			Detail: "The v1alpha3 resource lane fails closed on state without a complete exact FormRef, because " +
+			Detail: "The v1beta1 resource lane fails closed on state without a complete exact FormRef, because " +
 				"every read, update, and delete addresses the resource under the identity it was applied under.",
 			Repair: "Retained v2-lane state is never transformed in place. Perform an explicit create or import " +
 				"migration onto this lane.",

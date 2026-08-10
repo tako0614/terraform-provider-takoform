@@ -191,7 +191,7 @@
           "description": "Static Asset Bundle whose exact manifest inventory this version serves.",
           "properties": {
             "apiVersion": {
-              "const": "edge.forms.takoform.com/v1alpha1",
+              "const": "edge.forms.takoform.com/v1beta1",
               "type": "string"
             },
             "kind": {
@@ -213,10 +213,10 @@
           "type": "object",
           "x-takoform-target-formrefs": [
             {
-              "apiVersion": "edge.forms.takoform.com/v1alpha1",
+              "apiVersion": "edge.forms.takoform.com/v1beta1",
               "definitionVersion": "0.1.0",
               "kind": "StaticAssetBundle",
-              "schemaDigest": "sha256:364218ce5fadc0817eda8bfd334af95c77aa46d030a79be4c04ee4d4f203bd30"
+              "schemaDigest": "sha256:9cdfa58d6701e571d41c42281e2de770c989d3c0dd3fb642533c43fa897eb348"
             }
           ]
         },
@@ -255,7 +255,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1alpha1",
+                "const": "edge.forms.takoform.com/v1beta1",
                 "type": "string"
               },
               "kind": {
@@ -299,7 +299,7 @@
       "description": "Worker Bundle carrying the exact module bytes this version executes.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1alpha1",
+          "const": "edge.forms.takoform.com/v1beta1",
           "type": "string"
         },
         "kind": {
@@ -321,10 +321,10 @@
       "type": "object",
       "x-takoform-target-formrefs": [
         {
-          "apiVersion": "edge.forms.takoform.com/v1alpha1",
+          "apiVersion": "edge.forms.takoform.com/v1beta1",
           "definitionVersion": "0.1.0",
           "kind": "WorkerBundle",
-          "schemaDigest": "sha256:d7fd1bfc966a90b9f15ebfc6530c2465ee19b14fed3fef91c72502e799539f74"
+          "schemaDigest": "sha256:8891abff562e0725c96aaaf2014bd2ded6cd0e8697ffa2fe227342363a6537b1"
         }
       ]
     },
@@ -357,7 +357,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1alpha1",
+                "const": "edge.forms.takoform.com/v1beta1",
                 "type": "string"
               },
               "kind": {
@@ -411,7 +411,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1alpha1",
+                "const": "edge.forms.takoform.com/v1beta1",
                 "type": "string"
               },
               "kind": {
@@ -475,7 +475,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1alpha1",
+                "const": "edge.forms.takoform.com/v1beta1",
                 "type": "string"
               },
               "kind": {
@@ -529,7 +529,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1alpha1",
+                "const": "edge.forms.takoform.com/v1beta1",
                 "type": "string"
               },
               "kind": {
@@ -587,7 +587,7 @@
       "description": "Module Worker identity this version belongs to.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1alpha1",
+          "const": "edge.forms.takoform.com/v1beta1",
           "type": "string"
         },
         "kind": {

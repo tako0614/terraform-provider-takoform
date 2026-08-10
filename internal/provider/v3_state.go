@@ -1,6 +1,6 @@
 package provider
 
-// v3_state.go carries the state model of the Host API v1alpha3 resource
+// v3_state.go carries the state model of the Host API v1beta1 resource
 // lane: reading plan/state values generically, and projecting host responses
 // back into Terraform state. State identity is space/apiVersion/kind/uid;
 // the packageDigest is audit evidence only and never identity

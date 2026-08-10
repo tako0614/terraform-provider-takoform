@@ -35,6 +35,29 @@ const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
 const SOURCE_REPOSITORY = `https://github.com/${GITHUB_REPOSITORY}.git`;
 const PROVIDER_ADDRESS = "registry.terraform.io/tako0614/takoform";
 const PROVIDER_SIGNER = "3510E75E05BBCC303B92D77934FC18AC897FB709";
+const PROVIDER_VERSION = "2.1.0";
+const PROVIDER_HOST_API = "forms.takoform.com/v1beta1";
+const PROVIDER_FORM_FAMILY = "edge.forms.takoform.com/v1beta1";
+const PROVIDER_IDENTITY_LEDGER = "release/provider-form-identities.json";
+const PROVIDER_CANDIDATE_SET =
+  "forms/candidates/edge/v1beta1/candidate-set.json";
+const PROVIDER_FORM_KINDS = Object.freeze({
+  takoform_module_worker: "ModuleWorker",
+  takoform_worker_bundle: "WorkerBundle",
+  takoform_static_asset_bundle: "StaticAssetBundle",
+  takoform_worker_version: "WorkerVersion",
+  takoform_worker_deployment: "WorkerDeployment",
+  takoform_worker_custom_domain: "WorkerCustomDomain",
+  takoform_worker_endpoint: "WorkerEndpoint",
+  takoform_worker_cron_trigger: "WorkerCronTrigger",
+  takoform_edge_kv_namespace: "EdgeKVNamespace",
+  takoform_edge_object_bucket: "ObjectBucket",
+  takoform_sqlite_database: "SQLiteDatabase",
+  takoform_sqlite_migration_set: "SQLiteMigrationSet",
+  takoform_sqlite_migration_application: "SQLiteMigrationApplication",
+  takoform_at_least_once_queue: "AtLeastOnceQueue",
+  takoform_queue_consumer: "QueueConsumer",
+});
 const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const TRUSTED_ROOT = "admission/v4/trust/trusted-root.json";
 const PINNED_GH_VERSION = "2.96.0";
@@ -1086,7 +1109,166 @@ function parsePrettyCandidateMetadata(raw, label) {
   });
 }
 
-function readProviderDescriptor(repo) {
+export function validateProviderIdentityLedger(repo, descriptor) {
+  const ledger = readJSON(
+    join(repo, PROVIDER_IDENTITY_LEDGER),
+    "provider Form identity ledger",
+  );
+  requireExactKeys(ledger, ["format", "releases"], "provider Form identity ledger");
+  if (
+    ledger.format !== "takoform.provider-form-identities@v1" ||
+    !Array.isArray(ledger.releases) ||
+    ledger.releases.length === 0
+  ) {
+    throw new Error("provider Form identity ledger has an invalid envelope");
+  }
+  const providerVersions = new Set();
+  const formRefs = new Set();
+  let current;
+  for (const [releaseIndex, release] of ledger.releases.entries()) {
+    requireExactKeys(
+      release,
+      ["family", "formMaturity", "forms", "portableApiVersion", "providerVersion"],
+      `provider Form identity ledger release ${releaseIndex}`,
+    );
+    if (
+      typeof release.providerVersion !== "string" ||
+      !PROVIDER_TAG.test(`v${release.providerVersion}`) ||
+      typeof release.portableApiVersion !== "string" ||
+      typeof release.family !== "string" ||
+      release.formMaturity !== "experimental" ||
+      !Array.isArray(release.forms) ||
+      release.forms.length === 0
+    ) {
+      throw new Error(
+        `provider Form identity ledger release ${releaseIndex} is invalid`,
+      );
+    }
+    if (providerVersions.has(release.providerVersion)) {
+      throw new Error(
+        `provider Form identity ledger duplicates ${release.providerVersion}`,
+      );
+    }
+    providerVersions.add(release.providerVersion);
+    if (release.providerVersion === descriptor.version) current = release;
+    for (const [formIndex, form] of release.forms.entries()) {
+      requireExactKeys(
+        form,
+        ["formRef", "packageDigest", "resourceType"],
+        `${release.providerVersion} provider-embedded Form identity ${formIndex}`,
+      );
+      requireExactKeys(
+        form.formRef,
+        ["apiVersion", "definitionVersion", "kind", "schemaDigest"],
+        `${release.providerVersion} provider-embedded FormRef ${formIndex}`,
+      );
+      if (
+        typeof form.resourceType !== "string" ||
+        !/^takoform_[a-z0-9_]+$/u.test(form.resourceType) ||
+        !SHA256.test(form.packageDigest ?? "") ||
+        typeof form.formRef.apiVersion !== "string" ||
+        form.formRef.apiVersion !== release.family ||
+        !/^[A-Z][A-Za-z0-9]{0,63}$/u.test(form.formRef.kind ?? "") ||
+        !PROVIDER_TAG.test(`v${form.formRef.definitionVersion ?? ""}`) ||
+        !SHA256.test(form.formRef.schemaDigest ?? "")
+      ) {
+        throw new Error(
+          `${release.providerVersion}: invalid provider-embedded Form identity`,
+        );
+      }
+      const refKey = JSON.stringify([
+        form.formRef.apiVersion,
+        form.formRef.kind,
+        form.formRef.definitionVersion,
+        form.formRef.schemaDigest,
+      ]);
+      if (formRefs.has(refKey)) {
+        throw new Error(
+          `${release.providerVersion}: duplicate provider-embedded FormRef`,
+        );
+      }
+      formRefs.add(refKey);
+    }
+  }
+  if (
+    current === undefined ||
+    current.portableApiVersion !== descriptor.versioning?.portableApiVersion ||
+    current.portableApiVersion !== PROVIDER_HOST_API ||
+    current.family !== PROVIDER_FORM_FAMILY ||
+    current.formMaturity !== "experimental" ||
+    current.forms.length !== Object.keys(PROVIDER_FORM_KINDS).length
+  ) {
+    throw new Error(
+      "provider Form identity ledger has no exact 15-entry release for the descriptor",
+    );
+  }
+  const resourceTypes = new Set();
+  for (const [formIndex, form] of current.forms.entries()) {
+    const expectedKind = PROVIDER_FORM_KINDS[form.resourceType];
+    if (
+      expectedKind === undefined ||
+      resourceTypes.has(form.resourceType) ||
+      form.formRef.kind !== expectedKind ||
+      form.formRef.apiVersion !== PROVIDER_FORM_FAMILY ||
+      form.formRef.definitionVersion !== "0.1.0"
+    ) {
+      throw new Error(
+        `provider v2.1 embedded Form identity ${formIndex} is not an exact Beta family entry`,
+      );
+    }
+    resourceTypes.add(form.resourceType);
+  }
+  if (resourceTypes.size !== Object.keys(PROVIDER_FORM_KINDS).length) {
+    throw new Error(
+      "provider v2.1 identity ledger does not contain the exact 15 resource types",
+    );
+  }
+
+  const candidate = readJSON(
+    join(repo, PROVIDER_CANDIDATE_SET),
+    "provider Beta candidate set",
+  );
+  requireExactKeys(
+    candidate,
+    [
+      "authoringPolicy",
+      "authoringSource",
+      "family",
+      "formMaturity",
+      "format",
+      "forms",
+      "packageApiVersion",
+      "publicationStatus",
+    ],
+    "provider Beta candidate set",
+  );
+  if (
+    candidate.format !== "takoform.form-family-candidates@v1" ||
+    candidate.family !== PROVIDER_FORM_FAMILY ||
+    candidate.formMaturity !== "experimental" ||
+    candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha4" ||
+    candidate.publicationStatus !== "unpublished" ||
+    !Array.isArray(candidate.forms) ||
+    candidate.forms.length !== current.forms.length
+  ) {
+    throw new Error("provider Beta candidate set is not the exact 15-entry family set");
+  }
+  const candidateProjection = candidate.forms.map(
+    ({ resourceType, formRef, packageDigest }) => ({
+      resourceType,
+      formRef,
+      packageDigest,
+    }),
+  );
+  if (JSON.stringify(candidateProjection) !== JSON.stringify(current.forms)) {
+    throw new Error(
+      "provider v2.1 identity ledger differs from the exact Beta candidate set",
+    );
+  }
+  return ledger;
+}
+
+export function readProviderDescriptor(repo) {
   const descriptor = readJSON(
     join(repo, "release/version.json"),
     "provider release descriptor",
@@ -1094,16 +1276,64 @@ function readProviderDescriptor(repo) {
   if (
     typeof descriptor !== "object" ||
     descriptor === null ||
+    descriptor.version !== PROVIDER_VERSION ||
     !PROVIDER_TAG.test(descriptor.tag) ||
     descriptor.tag !== `v${descriptor.version}` ||
+    descriptor.sourceRepository !== `github.com/${GITHUB_REPOSITORY}` ||
     descriptor.providerAddress !== PROVIDER_ADDRESS ||
+    descriptor.goModule !== `github.com/${GITHUB_REPOSITORY}` ||
     descriptor.signingFingerprint !== PROVIDER_SIGNER ||
     descriptor.publicationStatus !== "candidate-only" ||
     !Array.isArray(descriptor.platforms) ||
-    descriptor.platforms.length !== 5
+    JSON.stringify([...descriptor.platforms].sort()) !==
+      JSON.stringify(
+        [
+          "darwin_amd64",
+          "darwin_arm64",
+          "linux_amd64",
+          "linux_arm64",
+          "windows_amd64",
+        ].sort(),
+      )
   ) {
     throw new Error("provider release descriptor identity is invalid");
   }
+  requireExactKeys(
+    descriptor.versioning,
+    [
+      "formDefinitionVersions",
+      "formPackageVersions",
+      "portableApiVersion",
+      "providerCompatibility",
+    ],
+    "provider release descriptor versioning",
+  );
+  if (
+    descriptor.versioning.providerCompatibility !== "semver-major" ||
+    descriptor.versioning.portableApiVersion !== PROVIDER_HOST_API ||
+    descriptor.versioning.formDefinitionVersions !==
+      "independent-immutable-semver" ||
+    descriptor.versioning.formPackageVersions !==
+      "content-addressed-current-retained-legacy-semver"
+  ) {
+    throw new Error("provider release descriptor conflates independent version streams");
+  }
+  if (
+    !Array.isArray(descriptor.cliMatrix) ||
+    descriptor.cliMatrix.length !== 2 ||
+    descriptor.cliMatrix.some(
+      (entry) =>
+        !entry ||
+        entry.providerAddress !== PROVIDER_ADDRESS ||
+        !["OpenTofu", "Terraform"].includes(entry.product) ||
+        typeof entry.version !== "string" ||
+        entry.version === "",
+    ) ||
+    new Set(descriptor.cliMatrix.map((entry) => entry.product)).size !== 2
+  ) {
+    throw new Error("provider release descriptor CLI/FQN matrix is invalid");
+  }
+  validateProviderIdentityLedger(repo, descriptor);
   return descriptor;
 }
 
@@ -3269,6 +3499,7 @@ function verifyProviderCandidate(
     tagObjectOid,
   },
 ) {
+  validateProviderIdentityLedger(context.repo, descriptor);
   const metadata = verifyCandidateRoot(root, {
     metadataProfile: "pretty-required-lf",
   });
@@ -3415,9 +3646,21 @@ function publicAssets(root, names) {
 }
 
 export function providerReleaseBody(descriptor) {
+  if (
+    descriptor?.version !== PROVIDER_VERSION ||
+    descriptor?.tag !== `v${PROVIDER_VERSION}` ||
+    descriptor?.versioning?.portableApiVersion !== PROVIDER_HOST_API
+  ) {
+    throw new Error(
+      "provider release body requires the exact v2.1.0 Beta Host API descriptor",
+    );
+  }
   return (
-    "Signed deterministic Takoform provider release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from provider v1: provider v2 uses the forms.takoform.com/v1alpha2 epoch and rejects provider-v1 state instead of rewriting it. Follow the explicit create/import/cutover migration guide: " +
-    `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v1-to-v2.md`
+    "Signed deterministic Takoform provider v2.1.0 release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from provider v1: Provider v2.1.0 retains the published provider-v2 state compatibility lane and its historical Host API epoch forms.takoform.com/v1alpha2. Provider-v1 state remains a breaking boundary and is rejected instead of being rewritten; follow the explicit create/import/cutover migration guide: " +
+    `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v1-to-v2.md` +
+    "\n\nThis provider release targets the Beta Host API `forms.takoform.com/v1beta1` and the Edge Platform Family `edge.forms.takoform.com/v1beta1`. Provider SemVer, Host API, Form Family, Form definition, and Form Package versions are independent axes. The exact 15 Experimental 0.1.0 FormRefs and package digests are locked in " +
+    `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/${PROVIDER_IDENTITY_LEDGER}` +
+    "."
   );
 }
 
@@ -3546,11 +3789,16 @@ function providerPublish(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
   const releaseBody = providerReleaseBody(descriptor);
   if (
+    !releaseBody.includes("Provider v2.1.0") ||
+    !releaseBody.includes(PROVIDER_HOST_API) ||
+    !releaseBody.includes(PROVIDER_FORM_FAMILY) ||
+    !releaseBody.includes(PROVIDER_IDENTITY_LEDGER) ||
+    !releaseBody.includes("15 Experimental") ||
+    !releaseBody.includes("release/migrations/v1-to-v2.md") ||
     !releaseBody.includes("Breaking upgrade from provider v1") ||
-    !releaseBody.includes("forms.takoform.com/v1alpha2") ||
-    !releaseBody.includes("release/migrations/v1-to-v2.md")
+    !releaseBody.includes("forms.takoform.com/v1alpha2")
   ) {
-    throw new Error("provider release body omits the exact v1-to-v2 migration guide");
+    throw new Error("provider release body omits the exact v2.1 Beta identity contract");
   }
   assertCurrentProtectedMain(context, expectedCommit);
   const localObject = localTagOID(context, descriptor.tag);
@@ -3871,6 +4119,7 @@ function readProviderPublicRelease(
   temporaryRoot,
   releaseCommit,
 ) {
+  validateProviderIdentityLedger(context.repo, descriptor);
   const names = providerAssetNames(descriptor);
   const release = getRelease(context, descriptor.tag);
   if (!release || !Array.isArray(release.assets)) {
@@ -4080,6 +4329,7 @@ function verifyRegistryCandidate(
   root,
   { descriptor, expectedCommit, runId, runAttempt, requestId },
 ) {
+  validateProviderIdentityLedger(context.repo, descriptor);
   verifyLocalReleaseToolchain(context);
   const expectedFiles = [
     "SHA256SUMS",
@@ -6027,6 +6277,8 @@ export const releaseDeployTestHooks = Object.freeze({
   parsePrettyCandidateMetadata,
   publishReleaseLocally,
   providerAssetNames,
+  readProviderDescriptor,
+  validateProviderIdentityLedger,
   pushExactTag,
   reportTagFailure,
   resumeDraftReleaseLocally,

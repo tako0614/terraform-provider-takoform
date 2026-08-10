@@ -6,7 +6,7 @@ import (
 )
 
 // artifact_media.go is the ONE statement of what a module inside a Worker
-// Bundle may be, for the whole v1alpha3 lane.
+// Bundle may be, for the whole v1beta1 channel.
 //
 // Four surfaces describe the same bytes: the runtime ABI contract
 // (`worker.runtime`, which says what the module graph can import), the

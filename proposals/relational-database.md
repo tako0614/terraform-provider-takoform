@@ -6,9 +6,9 @@ FormRef or public release identity exists yet.
 
 ## Need and boundary
 
-Takosumi Cloud provides a relational database lifecycle and a query Interface.
-The candidate Form describes engine compatibility, optional digest-bound
-schema material, lifecycle identity, and observable query capability.
+The candidate Form describes a relational database lifecycle and a query
+Interface, including engine compatibility, optional digest-bound schema
+material, lifecycle identity, and observable query capability.
 Credentials, storage size, size class, topology, replica implementation,
 network placement, backup machinery, capacity, and price stay with the host.
 

@@ -608,18 +608,17 @@ function checkTerraformProviderExample(filePath, providerVersion) {
   }
 }
 
-// The Edge Platform Family examples pin the SOURCE CANDIDATE, which is
-// deliberately NOT the published release version: v2.0.0 does not contain
-// these resources, so pinning it would be a false availability claim. The
-// example must state the unpublished source-candidate status and must never
-// pin the published release.
+// The Edge Platform Family examples pin the stable v2.1.0 release target. The
+// descriptor remains candidate-only until the owner publishes it, so an
+// example must state that boundary without turning the SemVer into a
+// prerelease or claiming Registry availability.
 //
 // The version is the same constant the site serves as `edgePreviewProvider`,
 // so the Edge preview tier is declared once and this check binds that single
 // declaration to the bytes the generator produces.
 const edgeFamilySourceCandidateVersion = EDGE_PREVIEW_PROVIDER_VERSION;
 
-function checkEdgeFamilyProviderExample(filePath, publishedVersion) {
+function checkEdgeFamilyProviderExample(filePath) {
   const source = read(filePath);
   if (!source.includes("registry.terraform.io/tako0614/takoform")) {
     fail(`${relative(filePath)}: missing canonical provider source`);
@@ -630,14 +629,12 @@ function checkEdgeFamilyProviderExample(filePath, publishedVersion) {
       `${relative(filePath)}: Edge Family example must contain version = "= ${edgeFamilySourceCandidateVersion}"`,
     );
   }
-  if (!source.includes("unpublished source candidate")) {
+  if (
+    !source.includes("stable v2.1.0 release target") ||
+    !source.includes("candidate-only until owner publication")
+  ) {
     fail(
-      `${relative(filePath)}: Edge Family example must state the unpublished source-candidate status`,
-    );
-  }
-  if (hasExactProviderPin(source, publishedVersion)) {
-    fail(
-      `${relative(filePath)}: Edge Family example must not pin the published release version ${publishedVersion}`,
+      `${relative(filePath)}: Edge Family example must state the stable target and candidate-only owner-publication boundary`,
     );
   }
 }
@@ -826,10 +823,12 @@ function checkRetainedPublicationTruthCopy(truth) {
       fail(`${relative(filePath)}: missing v1alpha1 API boundary`);
     }
     if (!text.includes("forms.takoform.com/v1alpha2")) {
-      fail(`${relative(filePath)}: missing current v1alpha2 Form boundary`);
+      fail(`${relative(filePath)}: missing retained provider-v2 v1alpha2 boundary`);
     }
     if (!text.includes("packages.forms.takoform.com/v1alpha3")) {
-      fail(`${relative(filePath)}: missing current v1alpha3 package boundary`);
+      fail(
+        `${relative(filePath)}: missing retained provider-v2 v1alpha3 package boundary`,
+      );
     }
   }
 
@@ -852,22 +851,17 @@ function checkRetainedPublicationTruthCopy(truth) {
     if (staleProvider.test(text)) {
       fail(`${relative(filePath)}: contains stale provider publication status`);
     }
-    if (descriptorFiles.has(filePath)) {
-      for (const match of text.matchAll(/\bcandidate-only\b/gi)) {
-        const context = text.slice(
-          Math.max(0, match.index - 220),
-          Math.min(text.length, match.index + 320),
+    if (descriptorFiles.has(filePath) && /\bcandidate-only\b/i.test(text)) {
+      if (
+        !/\bv?2\.1\.0\b/i.test(text) ||
+        !/(?:release target|stable provider)/i.test(text) ||
+        !/(?:descriptor|release\/version\.json)/i.test(text) ||
+        !/(?:owner[^.。]{0,80}publish|owner[^.。]{0,80}公開)/i.test(text)
+      ) {
+        fail(
+          `${relative(filePath)}: candidate-only is not bound to the stable ` +
+            "v2.1.0 release target and owner-publication boundary",
         );
-        if (
-          !/(?:release\/version\.json|source descriptor)/i.test(context) ||
-          !/\bmetadata\b/i.test(context) ||
-          !/\blive\b/i.test(context)
-        ) {
-          fail(
-            `${relative(filePath)}: candidate-only appears outside the ` +
-              "release descriptor metadata explanation",
-          );
-        }
       }
     }
   }
@@ -885,47 +879,57 @@ function checkRetainedPublicationTruthCopy(truth) {
   }
 }
 
-function checkCurrentEpochDocumentation(currentSet) {
+function checkContractLaneDocumentation(retainedSet) {
   const legacyHostWire = "forms.takoform.com/v1alpha1";
-  const currentHostWire = "forms.takoform.com/v1alpha2";
-  const currentForm = currentSet.formApiVersion;
-  const currentPackage = currentSet.packageApiVersion;
+  const retainedHostWire = "forms.takoform.com/v1alpha2";
+  const retainedForm = retainedSet.formApiVersion;
+  const retainedPackage = retainedSet.packageApiVersion;
+  const currentHostWire = "forms.takoform.com/v1beta1";
+  const currentFamily = "edge.forms.takoform.com/v1beta1";
+  const currentPackage = "packages.forms.takoform.com/v1alpha4";
   const documents = [
     {
       file: path.join(repositoryRoot, "spec", "README.md"),
       required: [
         legacyHostWire,
+        retainedHostWire,
         currentHostWire,
+        currentFamily,
+        retainedPackage,
         currentPackage,
-        "/.well-known/takoform/v1alpha2",
+        "/.well-known/takoform/v1beta1",
         "protocol compatibility identity",
       ],
     },
     {
       file: path.join(repositoryRoot, "spec", "form-definition", "README.md"),
       required: [
-        currentForm,
-        "form-definition-v1alpha2.schema.json",
-        "form-ref-v1alpha2.schema.json",
+        currentFamily,
+        retainedForm,
+        "form-definition-v1beta1.schema.json",
+        "form-ref-v1beta1.schema.json",
         "retained v1alpha1 Legacy profiles",
       ],
     },
     {
       file: path.join(repositoryRoot, "spec", "form-package", "README.md"),
       required: [
-        currentForm,
+        retainedForm,
+        retainedPackage,
         currentPackage,
-        "package-index-v1alpha2.schema.json",
-        "cannot carry a current v1alpha2 Form",
+        "package-index-v1alpha4.schema.json",
       ],
     },
     {
       file: path.join(repositoryRoot, "spec", "versioning.md"),
       required: [
         legacyHostWire,
+        retainedHostWire,
         currentHostWire,
+        currentFamily,
+        retainedPackage,
         currentPackage,
-        "/.well-known/takoform/v1alpha2",
+        "/.well-known/takoform/v1beta1",
         "Form epoch",
       ],
     },
@@ -933,14 +937,21 @@ function checkCurrentEpochDocumentation(currentSet) {
       file: path.join(repositoryRoot, "release", "README.md"),
       required: [
         legacyHostWire,
+        retainedHostWire,
         currentHostWire,
+        currentFamily,
+        retainedPackage,
         currentPackage,
         "outer Host API wire",
       ],
     },
     {
       file: path.join(repositoryRoot, "proposals", "README.md"),
-      required: ["v1alpha2 `0.x` Form", "v1alpha3 package"],
+      required: [
+        "retained v1alpha2 Proposal set",
+        "v1alpha3 package",
+        "forms/candidates/edge/v1beta1/candidate-set.json",
+      ],
     },
   ];
 
@@ -949,28 +960,151 @@ function checkCurrentEpochDocumentation(currentSet) {
     const normalized = source.replace(/\s+/gu, " ");
     for (const text of required) {
       if (!normalized.includes(text.replace(/\s+/gu, " "))) {
-        fail(`${relative(file)}: missing current epoch boundary ${JSON.stringify(text)}`);
+        fail(`${relative(file)}: missing retained/current lane boundary ${JSON.stringify(text)}`);
       }
     }
   }
 
   const staleClaims = [
     [
-      path.join(repositoryRoot, "spec", "README.md"),
-      "The project identity is `forms.takoform.com/v1alpha1`",
+      path.join(repositoryRoot, "spec", "form-definition", "README.md"),
+      "The current family profile is\n[`form-definition-v1alpha3.schema.json`",
     ],
     [
-      path.join(repositoryRoot, "spec", "form-package", "README.md"),
-      "The current index has the fixed identity\n`packages.forms.takoform.com/v1alpha2`",
+      path.join(repositoryRoot, "release", "README.md"),
+      "release/version.json continues to describe provider v2.0.0",
     ],
     [
-      path.join(repositoryRoot, "spec", "versioning.md"),
-      "Current `packages.forms.takoform.com/v1alpha2` packages",
+      path.join(repositoryRoot, "release", "README.md"),
+      "until release assigns 2.1.0",
     ],
   ];
   for (const [file, stale] of staleClaims) {
     if (read(file).includes(stale)) {
-      fail(`${relative(file)}: retains stale current-epoch claim ${JSON.stringify(stale)}`);
+      fail(`${relative(file)}: retains stale current-lane claim ${JSON.stringify(stale)}`);
+    }
+  }
+}
+
+// Published alpha schemas, frozen candidate trees, and historical ADRs are
+// intentionally retained. Current Host API/family implementation code is a
+// different class: an alpha identity there is semantic drift, not history.
+// Keep this list narrow so a future compatibility reader must be added as an
+// explicit retained exception instead of silently becoming the current lane.
+function checkCurrentLaneSemanticResidue() {
+  const currentCodeRoots = [
+    "internal/clientv3",
+    "internal/currentformmodel",
+    "internal/currentformregistry",
+    "internal/edgeformcatalog",
+    "internal/portableconformancev3",
+    "internal/provider",
+    "internal/runtimeconformance",
+    "internal/workerauthoring",
+    "cmd/portable-host-conformance",
+    "cmd/worker-authoring-conformance",
+  ].map((entry) => path.join(repositoryRoot, entry));
+  const retainedCodeFiles = new Set([
+    path.join(
+      repositoryRoot,
+      "internal",
+      "currentformregistry",
+      "frozen_retained_lane_test.go",
+    ),
+  ]);
+  const currentCodeFiles = currentCodeRoots.flatMap((root) =>
+    walkFiles(root, (filePath) =>
+      (filePath.endsWith(".go") || filePath.endsWith(".mjs")) &&
+      !retainedCodeFiles.has(filePath),
+    ),
+  );
+  for (const filePath of currentCodeFiles) {
+    const source = read(filePath);
+    for (const stale of [
+      "forms.takoform.com/v1alpha3",
+      "edge.forms.takoform.com/v1alpha1",
+      "v1alpha3 client",
+      "v1alpha3 reference host",
+      "Host API v1alpha3 lane",
+      "raw v1alpha3 resources",
+    ]) {
+      if (source.includes(stale)) {
+        fail(
+          `${relative(filePath)}: current Beta implementation contains stale alpha semantic ${JSON.stringify(stale)}`,
+        );
+      }
+    }
+  }
+
+  const currentDocumentation = [
+    "README.md",
+    "docs/index.md",
+    "release/README.md",
+    "spec/README.md",
+    "spec/conformance.md",
+    "spec/form-definition/README.md",
+    "spec/host-api/README.md",
+    "spec/host-api/v1beta1.md",
+    "spec/schemas/README.md",
+    "spec/versioning.md",
+  ].map((entry) => path.join(repositoryRoot, entry));
+  const staleDocumentationPatterns = [
+    /The current family profile is[\s\S]{0,180}v1alpha3/i,
+    /\bcurrent Host API[^\n]{0,100}\bv1alpha3\b/i,
+    /\bcurrent family[^\n]{0,100}\bv1alpha3\b/i,
+    /\bv1alpha3 (?:client|reference host|lane)\b/i,
+    /release\/version\.json continues[\s\S]{0,160}\b2\.0\.0\b/i,
+    /\b2\.0\.0 until release assigns 2\.1\.0\b/i,
+  ];
+  for (const filePath of currentDocumentation) {
+    const source = read(filePath);
+    for (const pattern of staleDocumentationPatterns) {
+      if (pattern.test(source)) {
+        fail(
+          `${relative(filePath)}: current Beta documentation contains stale alpha/provider semantics matching ${pattern}`,
+        );
+      }
+    }
+  }
+
+  const currentInventoryFiles = [
+    "README.md",
+    "docs/index.md",
+    "forms/README.md",
+    "website/index.md",
+    "website/docs/index.md",
+    "website/forms/index.md",
+    "website/ja/index.md",
+    "website/ja/docs/index.md",
+    path.join("website", "public", "forms", "index.html"),
+    ...walkFiles(path.join(publicRoot, "assets"), (filePath) =>
+      /(?:^|[\\/])forms_index\.md\.[^./]+\.js$/.test(filePath),
+    ).map((filePath) => path.relative(repositoryRoot, filePath)),
+  ].map((entry) => path.join(repositoryRoot, entry));
+  for (const filePath of currentInventoryFiles) {
+    const source = read(filePath);
+    const comparable = filePath.endsWith(".html")
+      ? visibleHtmlText(source)
+      : source;
+    for (const pattern of [
+      /Takosumi Cloud (?:provides|offers|runs all nine)/i,
+      /Cloud provides all nine/i,
+      /first production-shaped host/i,
+      new RegExp(
+        ["Resources", "currently", "operated", "by", "Takosumi", "Cloud"].join(
+          "\\s+",
+        ),
+        "i",
+      ),
+      /currently (?:implemented|offered|operated|provided|run) by Takosumi Cloud/i,
+      /Takosumi Cloud (?:implementation|service|host)[^.\n]{0,140}\b(?:currently|now|first[- ]host|first host|workload evidence|starting point)\b/i,
+      /\b(?:first[- ]host|first host|workload evidence|first[- ]workload)\b[^.\n]{0,140}\b(?:Takosumi Cloud|Takosumi deployment)\b/i,
+    ]) {
+      if (pattern.test(comparable)) {
+        fail(
+          `${relative(filePath)}: current inventory claims Cloud availability matching ${pattern}`,
+        );
+      }
     }
   }
 }
@@ -1236,19 +1370,19 @@ function checkConformanceCorpusCounts() {
   const text = read(file).replace(/\s+/gu, " ");
   const claims = [
     {
-      label: "the Host API v1alpha3 check matrix size",
+      label: "the Host API v1beta1 check matrix size",
       pattern: /(\d+)-check matrix/g,
       corpus: "conformance/portable-host-v3/contract.json",
       field: ["requiredRunnerChecks"],
     },
     {
-      label: "the v1alpha3 error taxonomy size",
+      label: "the v1beta1 error taxonomy size",
       pattern: /(\d+)-code error taxonomy/g,
       corpus: "conformance/portable-host-v3/contract.json",
       field: ["errorEnvelope", "codes"],
     },
     {
-      label: "the v1alpha3 automatically-retryable set size",
+      label: "the v1beta1 automatically-retryable set size",
       pattern: /(\d+)-code retryable set/g,
       corpus: "conformance/portable-host-v3/contract.json",
       field: ["errorEnvelope", "automaticallyRetryable"],
@@ -1286,6 +1420,79 @@ function checkConformanceCorpusCounts() {
         );
       }
     }
+  }
+
+  const hostContractPath = path.join(
+    repositoryRoot,
+    "conformance",
+    "portable-host-v3",
+    "contract.json",
+  );
+  const hostContract = readJson(hostContractPath);
+  const runnerInput = hostContract?.runnerInput ?? {};
+  const drivenKinds = Object.entries(runnerInput)
+    .filter(
+      ([, probe]) =>
+        probe !== null &&
+        typeof probe === "object" &&
+        probe.identity?.formRef?.kind &&
+        probe.desiredSchema !== undefined,
+    )
+    .map(([, probe]) => probe.identity.formRef.kind);
+  const uniqueDrivenKinds = new Set(drivenKinds);
+  if (drivenKinds.length !== 14 || uniqueDrivenKinds.size !== 14) {
+    fail(
+      `${hostContractPath}: portable-host-v3 must drive exactly 14 distinct ` +
+        `Form probes, found ${drivenKinds.length} (${[...uniqueDrivenKinds].join(", ")})`,
+    );
+  }
+
+  const familyCandidateSet = readJson(
+    path.join(repositoryRoot, FAMILY_CANDIDATE_SET),
+  );
+  const familyKinds = Array.isArray(familyCandidateSet.forms)
+    ? familyCandidateSet.forms.map((entry) => entry?.kind).filter(Boolean)
+    : [];
+  const unprobedKinds = familyKinds.filter(
+    (kind) => !uniqueDrivenKinds.has(kind),
+  );
+  if (
+    familyKinds.length !== 15 ||
+    unprobedKinds.length !== 1 ||
+    unprobedKinds[0] !== "ObjectBucket"
+  ) {
+    fail(
+      `${FAMILY_CANDIDATE_SET}: portable-host-v3 coverage must leave exactly ` +
+        `ObjectBucket unprobed (family=${familyKinds.length}, ` +
+        `unprobed=${unprobedKinds.join(", ") || "none"})`,
+    );
+  }
+
+  const schemaCoverageClaims = [
+    ...text.matchAll(/pins each of those (\d+) Forms' DESIRED SCHEMA/gi),
+  ];
+  if (schemaCoverageClaims.length === 0) {
+    fail(
+      "conformance/README.md: portable-host-v3 Form schema coverage count is not stated",
+    );
+  } else {
+    for (const match of schemaCoverageClaims) {
+      if (Number(match[1]) !== drivenKinds.length) {
+        fail(
+          `conformance/README.md: portable-host-v3 schema coverage is written as ${match[1]}, ` +
+            `but the runner drives ${drivenKinds.length} Forms`,
+        );
+      }
+    }
+  }
+  if (
+    !/\bObjectBucket\b[^.]{0,220}\b(?:intentionally unprobed|unprobed by this corpus)\b/i.test(
+      text,
+    )
+  ) {
+    fail(
+      "conformance/README.md: portable-host-v3 must state the intentional ObjectBucket coverage exception",
+    );
   }
 }
 
@@ -1384,34 +1591,36 @@ const legacyKinds = legacyPackages.map((entry, index) => {
   return typeof kind === "string" ? kind : "";
 });
 
-const currentSetPath = path.join(
+const retainedProviderV2SetPath = path.join(
   repositoryRoot,
   "forms",
   "candidates",
   "v1alpha2",
   "candidate-set.json",
 );
-const currentSet = readJson(currentSetPath);
+const retainedProviderV2Set = readJson(retainedProviderV2SetPath);
 if (
-  currentSet.format !== "takoform.current-form-candidates@v2" ||
-  currentSet.formApiVersion !== "forms.takoform.com/v1alpha2" ||
-  currentSet.packageApiVersion !== "packages.forms.takoform.com/v1alpha3" ||
-  currentSet.authoringSource !== "internal/currentformcatalog" ||
-  currentSet.authoringPolicy !== "independent-semantic-contract" ||
-  currentSet.publicationStatus !== "unpublished" ||
-  currentSet.lifecycleAuthority !== "forms/lifecycle.json" ||
-  Object.hasOwn(currentSet, "classification") ||
-  Object.hasOwn(currentSet, "targetLifecycleState") ||
-  Object.hasOwn(currentSet, "publicationReady")
+  retainedProviderV2Set.format !== "takoform.current-form-candidates@v2" ||
+  retainedProviderV2Set.formApiVersion !== "forms.takoform.com/v1alpha2" ||
+  retainedProviderV2Set.packageApiVersion !== "packages.forms.takoform.com/v1alpha3" ||
+  retainedProviderV2Set.authoringSource !== "internal/currentformcatalog" ||
+  retainedProviderV2Set.authoringPolicy !== "independent-semantic-contract" ||
+  retainedProviderV2Set.publicationStatus !== "unpublished" ||
+  retainedProviderV2Set.lifecycleAuthority !== "forms/lifecycle.json" ||
+  Object.hasOwn(retainedProviderV2Set, "classification") ||
+  Object.hasOwn(retainedProviderV2Set, "targetLifecycleState") ||
+  Object.hasOwn(retainedProviderV2Set, "publicationReady")
 ) {
-  fail("forms/candidates/v1alpha2/candidate-set.json: invalid current candidate boundary");
+  fail("forms/candidates/v1alpha2/candidate-set.json: invalid retained provider-v2 candidate boundary");
 }
-const currentEntries = Array.isArray(currentSet.forms) ? currentSet.forms : [];
-if (currentEntries.length !== 9) {
+const retainedProviderV2Entries = Array.isArray(retainedProviderV2Set.forms)
+  ? retainedProviderV2Set.forms
+  : [];
+if (retainedProviderV2Entries.length !== 9) {
   fail(`forms/candidates/v1alpha2/candidate-set.json: forms must contain exactly 9 independently authored candidates`);
 }
 
-const forms = currentEntries.map((entry, index) => {
+const forms = retainedProviderV2Entries.map((entry, index) => {
   const pathValue = typeof entry.path === "string" ? entry.path : "";
   const slug = path.posix.basename(pathValue);
   const kind = entry.formRef?.kind;
@@ -1421,7 +1630,7 @@ const forms = currentEntries.map((entry, index) => {
     version !== "0.1.0"
   ) {
     fail(
-      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] must be current v1alpha2 definition 0.1.0`,
+      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] must be retained provider-v2 definition 0.1.0`,
     );
   }
   if (typeof kind !== "string" || kind === "" || entry.kind !== kind) {
@@ -1455,12 +1664,12 @@ const forms = currentEntries.map((entry, index) => {
   };
 });
 compareExact(
-  "current v1alpha2 Form slugs",
+  "retained provider-v2 Form slugs",
   forms.map(({ slug }) => slug),
   new Set(forms.map(({ slug }) => slug)),
 );
 compareExact(
-  "current v1alpha2 Form kinds",
+  "retained provider-v2 Form kinds",
   forms.map(({ kind }) => kind),
   new Set(forms.map(({ kind }) => kind)),
 );
@@ -1497,9 +1706,9 @@ if (publicationTruth !== null) {
   );
 }
 
-// The Host API v1alpha3 lane: exactly the fifteen Edge Platform Family
+// The Host API v1beta1 channel: exactly the fifteen Edge Platform Family
 // resources, all rendered by internal/standardforms (doc name = resource type
-// minus the takoform_ prefix). They share the v2.1.0 source-candidate example
+// minus the takoform_ prefix). They share the stable v2.1.0 release-target example
 // pin. There is deliberately no generic takoform_resource carrier: the lane
 // exposes no resource that is not a Form (spec/decisions/0021), so this exact
 // set is also the assertion that the carrier has not come back.
@@ -1617,9 +1826,9 @@ for (const example of resourceExampleFiles) {
     .relative(exampleResourceDirectory, example)
     .split(path.sep)[0];
   if (edgeFamilyExampleDirectories.has(directoryName)) {
-    checkEdgeFamilyProviderExample(example, releaseVersion.version);
+    checkEdgeFamilyProviderExample(example);
   } else {
-    checkTerraformProviderExample(example, releaseVersion.version);
+    checkTerraformProviderExample(example, publicationTruth?.providerVersion ?? "");
   }
 }
 
@@ -1649,7 +1858,7 @@ compareExact(
   ["takoform_interface/data-source.tf"],
 );
 for (const example of dataSourceExampleFiles) {
-  checkTerraformProviderExample(example, releaseVersion.version);
+  checkTerraformProviderExample(example, publicationTruth?.providerVersion ?? "");
 }
 
 const docsIndexPath = path.join(repositoryRoot, "docs", "index.md");
@@ -1686,7 +1895,8 @@ checkDocsPageLinks(formDocNames);
 checkStaleWebsiteContent();
 checkPublishedProviderExamples(publicationTruth);
 checkRetainedPublicationTruthCopy(publicationTruth);
-checkCurrentEpochDocumentation(currentSet);
+checkContractLaneDocumentation(retainedProviderV2Set);
+checkCurrentLaneSemanticResidue();
 checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
 checkPublicSchemas();

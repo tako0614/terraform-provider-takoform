@@ -1,6 +1,6 @@
 package currentformmodel
 
-// defaults.go is the single portable-default implementation of the v1alpha3
+// defaults.go is the single portable-default implementation of the v1beta1
 // lane. It answers exactly two questions, and every surface answers them
 // through this file so no two of them can drift:
 //

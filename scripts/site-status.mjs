@@ -91,8 +91,9 @@ function verifyOneCopy(document, relativePath, facts, truth, failures) {
  * the build output under website/public that the deploy uploads.
  *
  * `truth` is the evidence-derived publication truth when the caller already has
- * it; passing it binds providerCurrent to the signed Registry readback rather
- * than to the release descriptor alone.
+ * it; passing it confirms providerCurrent against the independently retained
+ * signed Registry readback. The release descriptor may name a newer
+ * candidate-only provider release target.
  */
 export function verifySiteStatusDocument(repositoryRoot, truth = null) {
   const failures = [];

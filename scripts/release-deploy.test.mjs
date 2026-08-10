@@ -85,12 +85,34 @@ function memoryIO() {
   };
 }
 
-test("provider v2 release body names the exact fail-closed migration boundary", () => {
-  const body = providerReleaseBody({ tag: "v2.0.0" });
+test("provider v2.1 release body names independent Beta identities and migration boundary", () => {
+  const descriptor = JSON.parse(
+    readFileSync(join(repositoryRoot, "release/version.json"), "utf8"),
+  );
+  const body = providerReleaseBody(descriptor);
+  expect(body).toContain("Provider v2.1.0");
+  expect(body).toContain("forms.takoform.com/v1beta1");
+  expect(body).toContain("edge.forms.takoform.com/v1beta1");
+  expect(body).toContain("15 Experimental 0.1.0 FormRefs");
+  expect(body).toContain("release/provider-form-identities.json");
+  expect(body).toContain("Provider SemVer, Host API, Form Family");
   expect(body).toContain("Breaking upgrade from provider v1");
   expect(body).toContain("forms.takoform.com/v1alpha2");
   expect(body).toContain("release/migrations/v1-to-v2.md");
-  expect(body).not.toContain("v0.2.1-to-v1.0.1");
+});
+
+test("provider descriptor and identity ledger are exact Beta release inputs", () => {
+  const descriptor = releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
+  expect(descriptor.version).toBe("2.1.0");
+  expect(descriptor.versioning.portableApiVersion).toBe(
+    "forms.takoform.com/v1beta1",
+  );
+  expect(
+    releaseDeployTestHooks.validateProviderIdentityLedger(
+      repositoryRoot,
+      descriptor,
+    ).releases[0].forms,
+  ).toHaveLength(15);
 });
 
 describe("current Form release authority", () => {

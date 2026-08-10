@@ -3,17 +3,21 @@
 This page carries both inventories this repository renders, and it is generated
 from the same declarations the packages are built from. The first is the
 retained provider-v2 candidate set under `forms.takoform.com/v1alpha2`; the
-second is the Edge Platform Family source candidate set under
-`edge.forms.takoform.com/v1alpha1`. Neither is published, Experimental,
-Stable, centrally approved, or guaranteed commercially available.
+second is the Experimental Edge Platform Family Beta set under
+`edge.forms.takoform.com/v1beta1`. The Beta Form Packages remain
+unpublished. Experimental is Form maturity; it is not Stable, GA, central
+approval, or a commercial-availability claim.
 
 ## Retained v1alpha2 Form candidates
 
 This is the provider-v2 source candidate inventory for the nine Form-backed
-Resources currently operated by Takosumi Cloud. Every entry is a local
-Proposal-derived publication candidate under `forms.takoform.com/v1alpha2`,
-awaiting an explicit lifecycle transition before Experimental; none is published, Experimental, Stable,
-centrally approved, or guaranteed commercially available.
+Resources retained from the v1alpha2 reset. That dated reset was evaluated
+against a Takosumi-hosted preview, but it is provenance only: it does not claim
+that a hosted product provides or runs these Resources now, or that any host is
+the first host. Every entry is a local Proposal-derived publication candidate
+under `forms.takoform.com/v1alpha2`, awaiting an explicit lifecycle transition
+before Experimental; none is published, Experimental, Stable, centrally
+approved, or guaranteed commercially available.
 Each contract describes what a caller wants without
 naming a target, credential, placement, price, or implementation. A host may
 publish support and activate an exact FormRef under its own policy.
@@ -81,24 +85,26 @@ fields; the protocol lifecycle proves both.
 ### Status
 
 Every entry in this retained inventory is an unpublished `0.1.0` candidate.
-Takosumi Cloud implementation is workload and first-host evidence only; it
-does not turn a Proposal into a portable standard or authorize publication.
+Takoform owns maturity and publication authority. An independent host
+implementation or workload — possibly a Takosumi deployment — is one
+conformance/adoption evidence source only; it does not establish current
+availability, first-host status, or maturity.
 
 The earlier ten-package generation is also retired, not erased. Its immutable
 bytes and admission evidence stay verifiable through
 [`retired-package-set.json`](retired-package-set.json). Neither retained
 set may be rewritten, re-signed, promoted, or used to derive a current approved
-subset. Current lifecycle truth comes only from
-[`lifecycle.json`](lifecycle.json); Host Support and activation remain
-separate host-owned facts.
+subset. Current maturity truth comes from the applicable scoped lifecycle or
+family candidate record; Host Support and activation remain separate host-owned
+facts.
 
-## Edge Platform Family (edge.forms.takoform.com/v1alpha1)
+## Edge Platform Family (edge.forms.takoform.com/v1beta1)
 
 The first official Form Family fixes the shape of a proven edge developer
 platform without naming its vendor (spec/form-families.md). Its members are
-source candidates for the Host API v1alpha3 resource lane; the typed
-resources require provider v2.1.0 or later (source candidate; not yet
-published). Roles come from the closed v1alpha3 role enum and decide
+Experimental Forms for the Host API v1beta1 resource lane; their package
+artifacts remain unpublished. The typed resources require provider v2.1.0 or
+later. Roles come from the closed v1beta1 role enum and decide
 lifecycle mechanics: revisions are immutable, deployments move traffic,
 attachments activate inward events.
 
@@ -120,10 +126,10 @@ attachments activate inward events.
 | `AtLeastOnceQueue` | `takoform_at_least_once_queue` | `identity` | `0.1.0` | Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form. Message bodies are opaque bytes, a message identity is stable across redeliveries, and a queue has AT MOST ONE consumer — two would split the stream between two retry policies and two dead-letter destinations, which leaves the queue's own behavior unstatable (decision 0020). |
 | `QueueConsumer` | `takoform_queue_consumer` | `attachment` | `0.1.0` | Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking its queue handler with message batches and redelivering messages that were not acknowledged. Consumption is inward activation and therefore an attachment, never a binding. One queue has at most one consumer, so a second attachment against the same queue is refused. A handler that returns normally without settling anything acknowledges the whole batch; one that throws retries every message it had not already acknowledged. maxRetries counts REDELIVERIES only — the first delivery does not count toward it — so a message is delivered at most 1 + maxRetries times, and a message that exhausts them moves to dead_letter_queue when one is declared and is dropped otherwise. The dead-letter copy is a new message there: new identity, new acceptance timestamp, and an attempt count starting again at 1 (decision 0020). Because that transfer resets the attempt count, dead_letter_queue MUST NOT lead back: a destination resolving to the queue this consumer drains, or closing a cycle of any length through the dead-letter graph, is refused before any mutation, because an exhausted message would circulate forever instead of coming to rest (decision 0026). |
 
-The provider exposes exactly these typed resources on the v1alpha3 lane, and no
+The provider exposes exactly these typed resources on the v1beta1 lane, and no
 generic carrier for a Form it was not built against: nothing in the lane lets a
 client verify a FormRef it did not compile in, so a carrier would offer reach
 with no verification behind it (spec/decisions/0021). Family membership grants
-no maturity: these members are tracked in the family candidate set, a lifecycle
-record begins only at an Experimental transition, and hosts state their
-supported subset in their Host Support Profiles.
+no Stable maturity: the generated family candidate set records all 15 as
+Experimental 0.1.0 Forms, and hosts state their supported subset in their Host
+Support Profiles. Beta is the API/family channel, not Form stability.

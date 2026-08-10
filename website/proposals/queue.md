@@ -6,8 +6,8 @@ FormRef or public release identity exists yet.
 
 ## Need and boundary
 
-Takosumi Cloud provides durable message queues for connected producers and
-consumers. The candidate Form describes queue lifecycle, narrow delivery
+The candidate Form describes durable message queues for connected producers and
+consumers: queue lifecycle, narrow delivery
 intent, retention constraints, and messaging capability. Broker choice,
 consumer materialization, batching, retries, visibility leases, delivery delay,
 credentials, placement, capacity, and price remain host-owned.

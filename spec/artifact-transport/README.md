@@ -1,6 +1,6 @@
 # Content-addressed artifact transport (artifacts.takoform.com/v1alpha1)
 
-The v1alpha3 lane replaces external credential-free artifact URLs with a
+The v1beta1 channel replaces external credential-free artifact URLs with a
 content-addressed upload API owned by the host
 ([decision 0012](../decisions/0012-artifacts-use-content-addressed-upload.md)).
 Desired state references only immutable manifest digests; raw code bytes,
@@ -9,7 +9,7 @@ upload endpoints, and transport details never enter client state.
 ## Endpoints
 
 Relative to the discovered `endpoints.api` base
-(`/apis/forms.takoform.com/v1alpha3`):
+(`/apis/forms.takoform.com/v1beta1`):
 
 ```
 POST   {api}/artifacts/uploads                      start an upload; body carries the manifest
@@ -60,7 +60,7 @@ A host MUST reject, before commit:
 - a source map whose target module is absent;
 - archive bombs — archives are transport only and never semantic identity.
 
-The v1alpha3 Host Support Profile for each artifact-backed Form publishes
+The v1beta1 Host Support Profile for each artifact-backed Form publishes
 `limits.maximumBundleFiles` and `limits.maximumBundleBytes`. A provider SHOULD
 reject a known overrun during planning; the host MUST enforce the exact profile
 ceilings again at upload start and commit. The portable reference profile is

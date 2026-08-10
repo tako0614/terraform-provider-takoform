@@ -1,95 +1,84 @@
-# Publication freeze: the v1alpha3 lane
+# Beta and provider release policy
 
-The Host API `forms.takoform.com/v1alpha3` lane and the
-`edge.forms.takoform.com/v1alpha1` Edge Platform Family are
-**publication-frozen**.
+The current portable contracts are the Host API
+`forms.takoform.com/v1beta1` and the Edge Platform Family
+`edge.forms.takoform.com/v1beta1`. The API and family are public **Beta**
+channels. The 15 Form Definitions remain **Experimental**, each at
+`definitionVersion: 0.1.0`; Beta does not make a Form Stable.
 
-While this freeze holds, the project MUST NOT:
+Provider versioning is independent. Provider `v2.1.0` is a stable SemVer
+release candidate targeting the Beta Host API. Its descriptor remains
+`candidate-only` until the owning deploy actually publishes it. This is not a
+provider prerelease and it is not a claim that any hosted service, Takosumi
+Cloud, or Form Package is GA.
 
-- publish a Form Package for any family Form;
-- publish an Interface Definition or Binding Definition, in any envelope. No
-  Interface Package or Binding Package identity exists to publish one in; those
-  contracts are documents distributed with this repository
-  ([decision 0021](decisions/0021-third-party-forms-and-contract-distribution.md));
-- release provider `v2.1.0`, or any provider version that exposes the family
-  resource types, to the Terraform Registry;
-- transition any family Form to Experimental, Stable, or any other lifecycle
-  state in [`../forms/lifecycle.json`](../forms/lifecycle.json);
-- describe a family Form, Interface, Binding, or the provider v2.1 line as
-  published, Experimental, Stable, standard, admitted, or approved.
+## Provider-first release is allowed
 
-The freeze does not restrict repository work. Definitions, schemas, exact
-FormRef digests, provider surfaces, and conformance may still change
-incompatibly, because nothing in the lane has a published identity to
-preserve.
+Open records in
+[`publication-blockers.json`](publication-blockers.json) do **not** block the
+provider v2.1 release. The provider release gate instead locks all of these
+facts:
 
-## Why the lane is frozen
+- exactly 15 Terraform resource schemas and resource type names;
+- exactly 15 `edge.forms.takoform.com/v1beta1` FormRefs, Definition digests,
+  and package digests in
+  [`release/provider-form-identities.json`](../release/provider-form-identities.json);
+- fake-host and reference-host conformance against
+  `forms.takoform.com/v1beta1`;
+- exact state compatibility: read, update, import, and delete dispatch on the
+  FormRef recorded in state;
+- Beta state remains readable after a future `edge.forms.takoform.com/v1`
+  create default is added; refresh never upgrades it implicitly;
+- append-only public schema identities and no overwrite of retained
+  `v1alpha3` bytes.
 
-Every family Form is `publicationStatus: unpublished`
-([`../forms/candidates/edge/v1alpha1/candidate-set.json`](../forms/candidates/edge/v1alpha1/candidate-set.json)),
-so today a defect can be corrected by regenerating a digest. After
-publication the same defect becomes a compatibility obligation. The
-publication blockers are exactly the invariants a consumer would otherwise
-have to live with forever.
+The provider identity ledger is independent of package artifact publication.
+Once provider v2.1 embeds a Beta FormRef, Definition digest, and package digest,
+that tuple is immutable even while the corresponding Form Package remains
+unpublished. A correction that breaks any Beta contract mints a new
+`v1beta2` Host/family identity and new FormRef; it never edits the Beta 1
+bytes.
 
-## What is already published, and therefore immutable
+## What remains blocked
 
-Publication is per artifact, not per lane. The lane's **schema documents**
-are published and immutable even though no Form is:
+While any obligation in `publication-blockers.json` is open, this repository
+must not:
 
-| Published | Consequence |
-| --- | --- |
-| the schema `$id` URLs recorded in [`../release/public-schema-identities.json`](../release/public-schema-identities.json) | their bytes can never change; a contract change mints a **new** identity |
-| provider `v1.0.3` and `v2.0.0` | their Registry releases, tags, and state contracts are fixed |
-| the 34 Legacy Form Packages and the retained admission evidence | retained byte-for-byte |
+- publish the Beta Form Packages;
+- independently publish the Interface or Binding Definitions;
+- claim a production public Host API service is ready;
+- call the family Forms Stable or claim Takosumi/Takosumi Cloud GA;
+- claim independent-host, real-backend, or third-party ecosystem
+  interoperability without the evidence the obligation names.
 
-A change to the frozen lane therefore has two different costs. Changing a
-Form Definition, a generated candidate, or a provider surface is free.
-Changing a published schema document is impossible: the append-only ledger
-and the deploy no-overwrite guard both reject it, so the change must mint a
-new schema identity instead. Prefer expressing a contract addition through
-data the published schema already admits — for example a JSON Schema
-`default` inside a Form's desired schema — over minting a new identity.
+`bun run assert:publishable` is intentionally this stricter Form
+Package/public-service assertion. It is not part of the provider-first release
+path. Closing an obligation still requires real evidence; a passing local gate,
+an empty evidence array, or an invented path cannot close one.
 
-## Publication blockers
+Independent host implementations, real backend behavior, hosted operations,
+and third-party ecosystem use are later Stable/GA qualification obligations
+owned by Takoform's lifecycle authority. They remain open until measured. A
+Takosumi deployment may be one independent adopter, but it is not a maturity
+or publication authority. The local reference host proves contract coherence
+only.
 
-A blocker is an invariant that is cheap to fix now and expensive to fix after
-publication. The machine authority is
-[`publication-blockers.json`](publication-blockers.json); each entry is also
-tracked as an issue labelled `v1alpha3-publication-blocker`. The freeze lifts
-for a given Form only when every blocker that touches it is closed, its
-evidence exists under [`project-lifecycle.md`](project-lifecycle.md), and a
-real host has implemented it end to end.
+## Existing immutable history
 
-Prose cannot stop a release, so the ledger is enforced rather than described.
-`bun run check` validates its shape on every change and, while any blocker is
-open, additionally requires the state the repository would not be in had the
-lane published: the family candidate set must still declare itself
-`unpublished`, and no family Form may hold a lifecycle record.
+Publication is per identity, not per product lane.
 
-A blocker closes by recording evidence that exists. An entry marked closed
-with an empty evidence list fails, and so does one naming a path that is not
-in the repository, so the freeze cannot be lifted by editing a status field or
-by inventing a filename. `bun run assert:publishable` is the assertion a future
-lane-publishing path calls; today it refuses and names every open blocker.
+- Every schema identity in
+  [`release/public-schema-identities.json`](../release/public-schema-identities.json)
+  is append-only. Published `v1alpha3` schema bytes stay served unchanged;
+  Beta schemas use new `v1beta1` URLs.
+- Provider `v1.0.3` and `v2.0.0`, their tags, and their persisted state
+  contracts remain immutable.
+- The 34 Legacy Form Packages and retained admission evidence remain
+  byte-for-byte history.
+- The old `edge.forms.takoform.com/v1alpha1` candidate tree is retained as
+  source history. The Beta family was minted in a new directory and identity.
 
-The freeze is **scoped to this lane's own artifacts**. It is deliberately not
-wired into `check:release-owner-gate`, because that gate also serves the
-retained v1alpha1/v1alpha2 packages and the append-only security revocation
-path in [`trust/`](trust/). An urgent revocation for an already-published
-package must never wait on this lane's product readiness; freezing new
-publication and blocking a security withdrawal are opposite obligations.
-
-The first Forms proposed for Experimental publication are the Worker and edge
-KV vertical slice: `ModuleWorker`, `WorkerBundle`, `WorkerVersion`,
-`WorkerDeployment`, `WorkerCustomDomain`, and `EdgeKVNamespace`. The queue and
-schedule Forms follow. `ObjectBucket` and `SQLiteDatabase` come last, because
-they carry the largest data-plane compatibility surfaces. The unpublished
-`edge.sql` candidate was reset under
-[decision 0034](decisions/0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md),
-but that source correction is not real-backend evidence and does not close
-`V3-005`.
-
-Lifting the freeze is a separate reviewed decision. Passing local gates is not
-publication authority, and this document is not evidence that any blocker has
-been closed.
+Only contracts that have satisfied the recorded qualification obligations may
+be promoted to stable `v1`/`1.0.0` identities by a Takoform lifecycle
+decision. Promotion adds identities and create defaults; it does not rewrite
+or auto-migrate Beta state.

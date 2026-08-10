@@ -1,6 +1,6 @@
 # Edge Platform Family proposals
 
-The Edge Platform Family, `edge.forms.takoform.com/v1alpha1`, is the first
+The Edge Platform Family, `edge.forms.takoform.com/v1beta1`, is the first
 official Form Family ([decision 0009](../../spec/decisions/0009-form-families-and-namespaced-api-versions.md)).
 Its members fix, completely, the application-visible semantics of a proven
 edge developer platform without naming its vendor
@@ -15,7 +15,7 @@ No free semantic token is admitted; a difference in semantics is a different
 Form, never a selector value. Outward capability use is a digest-bound
 Binding held by a revision resource; inward activation is an attachment
 resource ([decision 0010](../../spec/decisions/0010-exact-interface-and-binding-contracts.md)).
-Desired schemas carry no `name` or envelope plumbing: the v1alpha3 resource
+Desired schemas carry no `name` or envelope plumbing: the v1beta1 resource
 envelope owns identity and status
 ([decision 0011](../../spec/decisions/0011-resource-identity-generation-and-revision.md)).
 

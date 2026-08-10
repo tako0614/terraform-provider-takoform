@@ -29,7 +29,13 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-const descriptorPath = "release/version.json"
+const (
+	descriptorPath             = "release/version.json"
+	providerIdentityLedgerPath = "release/provider-form-identities.json"
+	providerCandidateSetPath   = "forms/candidates/edge/v1beta1/candidate-set.json"
+	providerFamilyAPIVersion   = "edge.forms.takoform.com/v1beta1"
+	providerHostAPIVersion     = "forms.takoform.com/v1beta1"
+)
 
 var (
 	semverPattern    = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
@@ -47,6 +53,41 @@ type versioningPolicy struct {
 	PortableAPIVersion     string `json:"portableApiVersion"`
 	FormDefinitionVersions string `json:"formDefinitionVersions"`
 	FormPackageVersions    string `json:"formPackageVersions"`
+}
+
+type providerIdentityLedger struct {
+	Format   string                    `json:"format"`
+	Releases []providerIdentityRelease `json:"releases"`
+}
+
+type providerIdentityRelease struct {
+	ProviderVersion    string           `json:"providerVersion"`
+	PortableAPIVersion string           `json:"portableApiVersion"`
+	Family             string           `json:"family"`
+	FormMaturity       string           `json:"formMaturity"`
+	Forms              []providerFormID `json:"forms"`
+}
+
+type providerFormID struct {
+	ResourceType  string          `json:"resourceType"`
+	FormRef       providerFormRef `json:"formRef"`
+	PackageDigest string          `json:"packageDigest"`
+}
+
+type providerFormRef struct {
+	APIVersion        string `json:"apiVersion"`
+	Kind              string `json:"kind"`
+	DefinitionVersion string `json:"definitionVersion"`
+	SchemaDigest      string `json:"schemaDigest"`
+}
+
+type providerCandidateSet struct {
+	Format            string           `json:"format"`
+	Family            string           `json:"family"`
+	FormMaturity      string           `json:"formMaturity"`
+	PackageAPIVersion string           `json:"packageApiVersion"`
+	PublicationStatus string           `json:"publicationStatus"`
+	Forms             []providerFormID `json:"forms"`
 }
 
 type descriptor struct {
@@ -1066,6 +1107,9 @@ func loadDescriptor(repo string) (descriptor, error) {
 		}
 		seen[platform] = true
 	}
+	if _, err := loadProviderIdentityLedger(repo, value); err != nil {
+		return value, err
+	}
 	return value, nil
 }
 
@@ -1090,12 +1134,112 @@ func validateCLIMatrix(matrix []cliCompatibility) error {
 
 func validateVersioningPolicy(policy versioningPolicy) error {
 	if policy.ProviderCompatibility != "semver-major" ||
-		policy.PortableAPIVersion != "forms.takoform.com/v1alpha2" ||
+		policy.PortableAPIVersion != providerHostAPIVersion ||
 		policy.FormDefinitionVersions != "independent-immutable-semver" ||
 		policy.FormPackageVersions != "content-addressed-current-retained-legacy-semver" {
 		return errors.New("release descriptor conflates independent version streams")
 	}
 	return nil
+}
+
+var providerFamilyResourceKinds = map[string]string{
+	"takoform_module_worker":                "ModuleWorker",
+	"takoform_worker_bundle":                "WorkerBundle",
+	"takoform_static_asset_bundle":          "StaticAssetBundle",
+	"takoform_worker_version":               "WorkerVersion",
+	"takoform_worker_deployment":            "WorkerDeployment",
+	"takoform_worker_custom_domain":         "WorkerCustomDomain",
+	"takoform_worker_endpoint":              "WorkerEndpoint",
+	"takoform_worker_cron_trigger":          "WorkerCronTrigger",
+	"takoform_edge_kv_namespace":            "EdgeKVNamespace",
+	"takoform_edge_object_bucket":           "ObjectBucket",
+	"takoform_sqlite_database":              "SQLiteDatabase",
+	"takoform_sqlite_migration_set":         "SQLiteMigrationSet",
+	"takoform_sqlite_migration_application": "SQLiteMigrationApplication",
+	"takoform_at_least_once_queue":          "AtLeastOnceQueue",
+	"takoform_queue_consumer":               "QueueConsumer",
+}
+
+func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityLedger, error) {
+	var ledger providerIdentityLedger
+	raw, err := os.ReadFile(filepath.Join(repo, providerIdentityLedgerPath))
+	if err != nil {
+		return ledger, fmt.Errorf("read provider Form identity ledger: %w", err)
+	}
+	if err := decodeStrictJSON(raw, &ledger); err != nil {
+		return ledger, fmt.Errorf("decode provider Form identity ledger: %w", err)
+	}
+	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) == 0 {
+		return ledger, errors.New("provider Form identity ledger has an invalid envelope")
+	}
+	seenProviderVersions := map[string]bool{}
+	seenFormRefs := map[string]bool{}
+	var current *providerIdentityRelease
+	for index := range ledger.Releases {
+		release := &ledger.Releases[index]
+		if !semverPattern.MatchString(release.ProviderVersion) ||
+			release.PortableAPIVersion == "" ||
+			release.Family == "" ||
+			release.FormMaturity == "" ||
+			len(release.Forms) == 0 {
+			return ledger, fmt.Errorf("provider Form identity ledger release %d is invalid", index)
+		}
+		if seenProviderVersions[release.ProviderVersion] {
+			return ledger, fmt.Errorf("provider Form identity ledger duplicates %s", release.ProviderVersion)
+		}
+		seenProviderVersions[release.ProviderVersion] = true
+		if release.ProviderVersion == desc.Version {
+			current = release
+		}
+		for formIndex, form := range release.Forms {
+			if !regexp.MustCompile(`^takoform_[a-z0-9_]+$`).MatchString(form.ResourceType) ||
+				!regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(form.PackageDigest) ||
+				!regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`).MatchString(form.FormRef.Kind) ||
+				!semverPattern.MatchString(form.FormRef.DefinitionVersion) ||
+				!regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(form.FormRef.SchemaDigest) ||
+				form.FormRef.APIVersion != release.Family {
+				return ledger, fmt.Errorf("%s: invalid provider-embedded Form identity at index %d", release.ProviderVersion, formIndex)
+			}
+			key := fmt.Sprintf("%s|%s|%s|%s", form.FormRef.APIVersion, form.FormRef.Kind, form.FormRef.DefinitionVersion, form.FormRef.SchemaDigest)
+			if seenFormRefs[key] {
+				return ledger, fmt.Errorf("%s: duplicate provider-embedded FormRef %s", release.ProviderVersion, key)
+			}
+			seenFormRefs[key] = true
+		}
+	}
+	if current == nil || current.PortableAPIVersion != desc.Versioning.PortableAPIVersion ||
+		current.PortableAPIVersion != providerHostAPIVersion || current.Family != providerFamilyAPIVersion ||
+		current.FormMaturity != "experimental" || len(current.Forms) != len(providerFamilyResourceKinds) {
+		return ledger, errors.New("provider Form identity ledger has no exact 15-entry release for the descriptor")
+	}
+	seenResourceTypes := map[string]bool{}
+	for index, form := range current.Forms {
+		wantKind, known := providerFamilyResourceKinds[form.ResourceType]
+		if !known || seenResourceTypes[form.ResourceType] || wantKind != form.FormRef.Kind ||
+			form.FormRef.APIVersion != providerFamilyAPIVersion || form.FormRef.DefinitionVersion != "0.1.0" {
+			return ledger, fmt.Errorf("provider v2.1 embedded Form identity %d is not an exact Beta family entry", index)
+		}
+		seenResourceTypes[form.ResourceType] = true
+	}
+	if len(seenResourceTypes) != len(providerFamilyResourceKinds) {
+		return ledger, errors.New("provider v2.1 identity ledger does not contain the exact 15 resource types")
+	}
+
+	var candidate providerCandidateSet
+	candidateRaw, err := os.ReadFile(filepath.Join(repo, providerCandidateSetPath))
+	if err != nil {
+		return ledger, fmt.Errorf("read provider Beta candidate set: %w", err)
+	}
+	if err := json.Unmarshal(candidateRaw, &candidate); err != nil {
+		return ledger, fmt.Errorf("decode provider Beta candidate set: %w", err)
+	}
+	if candidate.Format != "takoform.form-family-candidates@v1" || candidate.Family != providerFamilyAPIVersion ||
+		candidate.FormMaturity != "experimental" || candidate.PackageAPIVersion != "packages.forms.takoform.com/v1alpha4" ||
+		candidate.PublicationStatus != "unpublished" || len(candidate.Forms) != len(current.Forms) ||
+		!reflect.DeepEqual(candidate.Forms, current.Forms) {
+		return ledger, errors.New("provider v2.1 identity ledger differs from the exact Beta candidate set")
+	}
+	return ledger, nil
 }
 
 func inspectSource(repo string, desc descriptor, allowDirty, allowUntagged bool) (sourceEvidence, error) {

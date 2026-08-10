@@ -59,7 +59,7 @@ const (
 // `unsupported_capability` (422). That branch is not driven here, because a
 // black-box runner cannot take a capability away from the host under test; it
 // is stated normatively and listed among the obligations the lane does not
-// prove (spec/host-api/v1alpha3.md). What this check does close is the failure
+// prove (spec/host-api/v1beta1.md). What this check does close is the failure
 // that branch exists to prevent: a host that accepts the endpoint and then
 // answers with an address it did not assign, an incomplete one, or a plaintext
 // one fails here rather than being discovered by whoever tried the URL.
@@ -281,7 +281,7 @@ func (r *v3Runner) checkWorkerEndpointFollowsTheActiveDeployment() error {
 // version, a placement — and each of them must not. The remaining two triggers
 // the rule names, an internal placement change and a backend migration, are not
 // causable from outside a host and stay host obligations beside the others
-// (spec/host-api/v1alpha3.md).
+// (spec/host-api/v1beta1.md).
 //
 // The UID comparison is what makes it the stated rule rather than a weaker
 // neighbour of it. "Immutable for the lifetime of the attachment UID" is
@@ -399,7 +399,7 @@ func endpointAddressUnchanged(resource wireResource, uid, hostname, address, tri
 // proved before: `status.outputs` is present exactly for a Form whose
 // Definition declares an outputSchema, VALIDATES against that schema, carries
 // exactly its members, and is OMITTED for every other Form
-// (spec/schemas/host-api-wire-v1alpha3.schema.json).
+// (spec/schemas/host-api-wire-v1beta1.schema.json).
 //
 // Both halves matter and they fail different hosts. A host that returned an
 // empty outputs object everywhere would pass a "the outputs I declared are

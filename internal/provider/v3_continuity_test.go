@@ -1,6 +1,6 @@
 package provider
 
-// v3_continuity_test.go covers the state-continuity contract of the v1alpha3
+// v3_continuity_test.go covers the state-continuity contract of the v1beta1
 // lane (spec/decisions/0017): per-exact-ref codecs, the fail-closed rule for an
 // identity this build cannot decode, the exact-identity import forms, a UID
 // mismatch that preserves state, and pending-operation resumption against a
@@ -8,6 +8,9 @@ package provider
 
 import (
 	"context"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -38,6 +41,66 @@ func v3SeedStateRef(t *testing.T, ctx context.Context, state tfsdk.State, ref cu
 		}
 	}
 	return state
+}
+
+// TestFutureStableCodecDoesNotImplicitlyUpgradeBetaState proves the provider
+// dispatch half of the GA rule through the generated family build path. A
+// future stable identity may reuse the same Terraform resource type, but exact
+// Beta state still resolves the Beta codec and Beta FormRef; adding the stable
+// create target is not a state migration.
+func TestFutureStableCodecDoesNotImplicitlyUpgradeBetaState(t *testing.T) {
+	assertGeneratedFamilyBuild(t)
+	beta, err := currentformregistry.V3ForKind(edgeformcatalog.Family.APIVersion(), "ModuleWorker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stable := currentformregistry.V3Ref{
+		APIVersion:        "edge.forms.takoform.com/v1",
+		Kind:              beta.Kind,
+		DefinitionVersion: "1.0.0",
+		SchemaDigest:      "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+		PackageDigest:     "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+	}
+	stableForm, ok := edgeformcatalog.ByKind("ModuleWorker")
+	if !ok {
+		t.Fatal("ModuleWorker is not declared")
+	}
+	stableForm.Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1"}
+	stableForm.DefinitionVersion = "1.0.0"
+	futureRegistry, err := currentformregistry.V3Current().Register(stable, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	future, err := newV3CodecTable(futureRegistry).withCodec(stable, stableForm, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := future.registry.DefaultCreate(stable.ExactKey().GroupKind()); err != nil || got != stable {
+		t.Fatalf("future stable create target = %#v (err %v)", got, err)
+	}
+	codec, ok := future.forStateKey(beta.ExactKey())
+	if !ok || codec.Ref != beta || codec.Form.Family.APIVersion() != "edge.forms.takoform.com/v1beta1" {
+		t.Fatalf("Beta state implicitly upgraded: codec=%#v ok=%t", codec, ok)
+	}
+}
+
+// assertGeneratedFamilyBuild runs the same deterministic generator check used
+// by the release gate. A unit test that only hand-registers a stable ref can
+// pass while registry_v3_generated.go has already dropped the retained Beta
+// entry; this check makes the continuity proof exercise the actual rebuild
+// output first.
+func assertGeneratedFamilyBuild(t *testing.T) {
+	t.Helper()
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed while locating the repository root")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(source), "../.."))
+	command := exec.Command("bun", "scripts/current-form-families.mjs", "--check")
+	command.Dir = root
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("generated family rebuild is not reproducible: %v\n%s", err, output)
+	}
 }
 
 // TestV3PerRefCodecEncodesTheStateRefFieldSet proves the codec, not the current
@@ -260,7 +323,7 @@ func TestV3ImportIdentityForms(t *testing.T) {
 		for _, id := range []string{
 			"",
 			"{",
-			`{"name":"module-worker","apiVersion":"edge.forms.takoform.com/v1alpha1"}`,
+			`{"name":"module-worker","apiVersion":"edge.forms.takoform.com/v1beta1"}`,
 			`{"name":"Module-Worker"}`,
 			`{"name":"module-worker","space":"bad/space"}`,
 			`{"name":"module-worker","unknown":"member"}`,

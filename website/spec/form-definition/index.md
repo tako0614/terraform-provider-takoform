@@ -5,9 +5,9 @@ service shape. Requirement keywords are used as described in
 [`../conformance.md`](../conformance.md).
 
 The current family profile is
-[`form-definition-v1alpha3.schema.json`](/schemas/v1alpha3/form-definition.schema.json)
+[`form-definition-v1beta1.schema.json`](/schemas/v1beta1/form-definition.schema.json)
 with
-[`form-ref-v1alpha3.schema.json`](/schemas/v1alpha3/form-ref.schema.json):
+[`form-ref-v1beta1.schema.json`](/schemas/v1beta1/form-ref.schema.json):
 its `apiVersion` is a namespaced Form Family group
 ([decision 0009](../decisions/0009-form-families-and-namespaced-api-versions.md)),
 it declares a required closed `role`
@@ -35,7 +35,7 @@ extensions:
 
 ```json
 {
-  "apiVersion": "forms.takoform.com/v1alpha2",
+  "apiVersion": "edge.forms.takoform.com/v1beta1",
   "kind": "ExampleStore",
   "definitionVersion": "0.1.0",
   "schemaDigest": "sha256:<64 lowercase hexadecimal characters>"
@@ -67,16 +67,16 @@ A definition contains:
   and negative schema fixtures in the same package, with independent maxima of
   32 positive fixtures and 32 negative fixtures.
 
-The retained v1alpha2 structure deliberately has no maturity or deprecation
-field. Proposal, Experimental, Stable, and Legacy state is owned only by the
-external lifecycle record defined in
+The current family structure deliberately has no maturity or deprecation
+field. Proposal, Experimental, Stable, and Legacy state is owned outside the
+immutable definition as defined in
 [`../project-lifecycle.md`](../project-lifecycle.md). This keeps one mutable
 authority for a fact that can change while immutable Definition bytes cannot.
 
 Published v1alpha1 Definitions retain their historical document-local
 `compatibility-candidate`, `standard`, or `deprecated` field. A verifier MUST
 preserve those bytes, but current tooling MUST NOT infer maturity from them or
-copy the field into v1alpha2.
+copy the field into a current family definition.
 
 Negative fixtures name their validation stage. Host Support evidence executes
 `desired` negatives in the host role; provider compatibility evidence executes

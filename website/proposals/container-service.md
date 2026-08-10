@@ -6,9 +6,9 @@ FormRef or public release identity exists yet.
 
 ## Need and boundary
 
-Takosumi Cloud runs immutable OCI images as long-lived services. The candidate
-Form describes a digest-pinned image, non-secret configuration, connections,
-and an `http.request@1` Interface. Runtime, ports, public routing, probes,
+An intended host may run immutable OCI images as long-lived services. The
+candidate Form describes a digest-pinned image, non-secret configuration,
+connections, and an `http.request@1` Interface. Runtime, ports, public routing, probes,
 scaling, placement, networking, credentials, secret injection, capacity, and
 price are host decisions.
 

@@ -32,6 +32,7 @@
 // every exit path and never touches the committed `website/public`.
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -43,6 +44,13 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import {
+  FROZEN_EXTRA_ASSETS,
+  FROZEN_HASHMAP_ENTRIES,
+  FROZEN_PUBLIC_IDENTITIES,
+  FROZEN_PUBLIC_PAGES,
+} from "./frozen-public-identities.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -92,12 +100,14 @@ function semanticText(html) {
 }
 
 function collectFiles(directory, relative = "") {
-  const entries = readdirSync(directory, { withFileTypes: true })
-    .sort((left, right) => left.name.localeCompare(right.name));
+  const entries = readdirSync(directory, { withFileTypes: true }).sort(
+    (left, right) => left.name.localeCompare(right.name),
+  );
   const files = [];
   for (const entry of entries) {
     const entryPath = path.join(directory, entry.name);
-    const relativePath = relative === "" ? entry.name : `${relative}/${entry.name}`;
+    const relativePath =
+      relative === "" ? entry.name : `${relative}/${entry.name}`;
     if (entry.isDirectory()) {
       files.push(...collectFiles(entryPath, relativePath));
     } else if (entry.isFile()) {
@@ -186,10 +196,42 @@ function verifyCommittedCompleteness() {
       }
     }
   }
+  for (const [page, expectedHash] of FROZEN_HASHMAP_ENTRIES) {
+    if (hashmap[page] !== expectedHash) {
+      fail(
+        `frozen hashmap route ${page} must stay pinned to ${expectedHash} (got ${hashmap[page] ?? "missing"})`,
+      );
+    }
+    for (const suffix of [".js", ".lean.js"]) {
+      const name = `${page}.${expectedHash}${suffix}`;
+      const assetPath = path.join(committedRoot, "assets", name);
+      if (!existsSync(assetPath) || !statSync(assetPath).isFile()) {
+        fail(`frozen hashmap asset is missing: assets/${name}`);
+      }
+    }
+  }
   return hashmap;
 }
 
 const committedHashmap = verifyCommittedCompleteness();
+for (const file of collectFiles(committedRoot)) {
+  if (!file.endsWith(".html") || FROZEN_PUBLIC_IDENTITIES.has(file)) {
+    continue;
+  }
+  const html = readFileSync(path.join(committedRoot, file), "utf8");
+  if (/[ \t]+$/mu.test(html)) {
+    fail(`committed generated HTML has trailing whitespace: ${file}`);
+  }
+}
+for (const [file, expectedDigest] of FROZEN_PUBLIC_IDENTITIES) {
+  const bytes = readFileSync(path.join(committedRoot, file));
+  const actualDigest = createHash("sha256").update(bytes).digest("hex");
+  if (actualDigest !== expectedDigest) {
+    fail(
+      `immutable public page ${file} digest ${actualDigest} != ${expectedDigest}`,
+    );
+  }
+}
 
 if (!existsSync(vitepressBinary)) {
   fail("vitepress is not installed; run bun install before this gate");
@@ -224,7 +266,9 @@ try {
   // 1. The published file set, outside the content-addressed assets/ tree.
   const freshNamed = freshFiles.filter((file) => !isAsset(file));
   const committedNamed = committedFiles.filter((file) => !isAsset(file));
-  const uncommitted = freshNamed.filter((file) => !committedNamed.includes(file));
+  const uncommitted = freshNamed.filter(
+    (file) => !committedNamed.includes(file),
+  );
   const unbuilt = committedNamed.filter((file) => !freshNamed.includes(file));
   if (uncommitted.length > 0 || unbuilt.length > 0) {
     fail(
@@ -235,8 +279,14 @@ try {
   }
 
   // 2. The content-addressed assets/ tree, compared by role.
-  const freshRoles = freshFiles.filter(isAsset).map(assetRole).sort();
-  const committedRoles = committedFiles.filter(isAsset).map(assetRole).sort();
+  const freshRoles = freshFiles
+    .filter((file) => isAsset(file) && !FROZEN_EXTRA_ASSETS.has(file))
+    .map(assetRole)
+    .sort();
+  const committedRoles = committedFiles
+    .filter((file) => isAsset(file) && !FROZEN_EXTRA_ASSETS.has(file))
+    .map(assetRole)
+    .sort();
   const uncommittedAssets = multisetDifference(committedRoles, freshRoles);
   const unbuiltAssets = multisetDifference(freshRoles, committedRoles);
   if (uncommittedAssets.length > 0 || unbuiltAssets.length > 0) {
@@ -252,6 +302,9 @@ try {
   const semanticDrift = [];
   const byteDrift = [];
   for (const file of committedFiles) {
+    if (FROZEN_PUBLIC_IDENTITIES.has(file)) {
+      continue;
+    }
     if (file === "hashmap.json") {
       // Values are build-path derived; the key set and asset closure are not.
       const freshHashmap = JSON.parse(
@@ -304,12 +357,17 @@ try {
     );
   }
 
-  const htmlCount = committedFiles.filter((file) => file.endsWith(".html")).length;
+  const htmlCount = committedFiles.filter(
+    (file) => file.endsWith(".html") && !FROZEN_PUBLIC_PAGES.has(file),
+  ).length;
   const byteCount = committedFiles.filter(
-    (file) => !file.endsWith(".html") && !isAsset(file) && file !== "hashmap.json",
+    (file) =>
+      !file.endsWith(".html") && !isAsset(file) && file !== "hashmap.json",
   ).length;
   process.stdout.write(
     `website dist OK: fresh build reproduces ${htmlCount} committed pages semantically, ` +
+      `${FROZEN_PUBLIC_PAGES.size} immutable published page and ` +
+      `${FROZEN_PUBLIC_IDENTITIES.size - FROZEN_PUBLIC_PAGES.size} asset dependencies byte-for-byte, ` +
       `${byteCount} non-HTML published files byte-for-byte, and ${committedRoles.length} content-addressed assets by role\n`,
   );
 } finally {

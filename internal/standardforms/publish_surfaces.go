@@ -88,7 +88,7 @@ func renderPublishedSurfaces() []publishedSurface {
 			},
 		)
 	}
-	// The Host API v1alpha3 lane surfaces render from the family catalog; the
+	// The Host API v1beta1 lane surfaces render from the family catalog; the
 	// retained v2 renderer above stays byte-identical.
 	surfaces = append(surfaces, v3PublishedSurfaces()...)
 	surfaces = append(surfaces, publishedSurface{
@@ -587,17 +587,21 @@ func formInventoryDoc() string {
 This page carries both inventories this repository renders, and it is generated
 from the same declarations the packages are built from. The first is the
 retained provider-v2 candidate set under ` + "`forms.takoform.com/v1alpha2`" + `; the
-second is the Edge Platform Family source candidate set under
-` + "`edge.forms.takoform.com/v1alpha1`" + `. Neither is published, Experimental,
-Stable, centrally approved, or guaranteed commercially available.
+second is the Experimental Edge Platform Family Beta set under
+` + "`edge.forms.takoform.com/v1beta1`" + `. The Beta Form Packages remain
+unpublished. Experimental is Form maturity; it is not Stable, GA, central
+approval, or a commercial-availability claim.
 
 ## Retained v1alpha2 Form candidates
 
 This is the provider-v2 source candidate inventory for the nine Form-backed
-Resources currently operated by Takosumi Cloud. Every entry is a local
-Proposal-derived publication candidate under ` + "`forms.takoform.com/v1alpha2`" + `,
-awaiting an explicit lifecycle transition before Experimental; none is published, Experimental, Stable,
-centrally approved, or guaranteed commercially available.
+Resources retained from the v1alpha2 reset. That dated reset was evaluated
+against a Takosumi-hosted preview, but it is provenance only: it does not claim
+that a hosted product provides or runs these Resources now, or that any host is
+the first host. Every entry is a local Proposal-derived publication candidate
+under ` + "`forms.takoform.com/v1alpha2`" + `, awaiting an explicit lifecycle transition
+before Experimental; none is published, Experimental, Stable, centrally
+approved, or guaranteed commercially available.
 Each contract describes what a caller wants without
 naming a target, credential, placement, price, or implementation. A host may
 publish support and activate an exact FormRef under its own policy.
@@ -656,16 +660,18 @@ fields; the protocol lifecycle proves both.
 ### Status
 
 Every entry in this retained inventory is an unpublished ` + "`0.1.0`" + ` candidate.
-Takosumi Cloud implementation is workload and first-host evidence only; it
-does not turn a Proposal into a portable standard or authorize publication.
+Takoform owns maturity and publication authority. An independent host
+implementation or workload — possibly a Takosumi deployment — is one
+conformance/adoption evidence source only; it does not establish current
+availability, first-host status, or maturity.
 
 The earlier ten-package generation is also retired, not erased. Its immutable
 bytes and admission evidence stay verifiable through
 [` + "`retired-package-set.json`" + `](retired-package-set.json). Neither retained
 set may be rewritten, re-signed, promoted, or used to derive a current approved
-subset. Current lifecycle truth comes only from
-[` + "`lifecycle.json`" + `](lifecycle.json); Host Support and activation remain
-separate host-owned facts.
+subset. Current maturity truth comes from the applicable scoped lifecycle or
+family candidate record; Host Support and activation remain separate host-owned
+facts.
 `)
 	return builder.String()
 }

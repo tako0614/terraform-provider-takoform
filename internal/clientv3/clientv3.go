@@ -1,6 +1,6 @@
-// Package clientv3 is the Host API v1alpha3 client lane
-// (forms.takoform.com/v1alpha3, spec/decisions/0013). It is deliberately
-// transport-only: it speaks the v1alpha3 resource envelope
+// Package clientv3 is the Host API v1beta1 client lane
+// (forms.takoform.com/v1beta1, spec/decisions/0035). It is deliberately
+// transport-only: it speaks the v1beta1 resource envelope
 // (apiVersion/kind/form/metadata/spec/status) over I-JSON, carries the
 // UID/generation/revision identity fences of spec/decisions/0011, polls
 // long-running Operations, uploads content-addressed artifacts, and reads
@@ -9,12 +9,12 @@
 //
 // # Namespaced groups travel as two ordinary path segments
 //
-// v1alpha3 Form groups are namespaced apiVersions such as
-// "edge.forms.takoform.com/v1alpha1", which contain a slash. Wherever a URL
+// v1beta1 Form groups are namespaced apiVersions such as
+// "edge.forms.takoform.com/v1beta1", which contain a slash. Wherever a URL
 // path template names a group, this client sends the group NAME and the group
 // VERSION as two separate, ordinary path segments:
 //
-//	/apis/forms.takoform.com/v1alpha3/resources/edge.forms.takoform.com/v1alpha1/ModuleWorker/app
+//	/apis/forms.takoform.com/v1beta1/resources/edge.forms.takoform.com/v1beta1/ModuleWorker/app
 //
 // No path segment this client builds ever percent-encodes a slash. Proxies,
 // gateways, and web frameworks disagree about whether %2F inside a path
@@ -22,7 +22,7 @@
 // required it could not be deployed behind ordinary infrastructure
 // (spec/decisions/0018). The exact FormRef apiVersion string is unchanged
 // everywhere else: request bodies, responses, and the "group" query key still
-// carry "edge.forms.takoform.com/v1alpha1" verbatim.
+// carry "edge.forms.takoform.com/v1beta1" verbatim.
 //
 // The retained v1alpha2 client in internal/client is frozen; this lane
 // shares its proven mechanics (strict I-JSON decoding, same-origin endpoint
@@ -48,19 +48,18 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-// API constants for the v1alpha3 lane. The retained v1alpha1/v1alpha2 lanes
-// keep their own discovery paths; a v1alpha3 client can never select an old
-// lane accidentally.
+// API constants for the v1beta1 lane. Older lanes keep their own discovery
+// paths; a v1beta1 client can never select one accidentally.
 const (
-	APIVersion    = "forms.takoform.com/v1alpha3"
-	DiscoveryPath = "/.well-known/takoform/v1alpha3"
-	APIRootPath   = "/apis/forms.takoform.com/v1alpha3"
+	APIVersion    = "forms.takoform.com/v1beta1"
+	DiscoveryPath = "/.well-known/takoform/v1beta1"
+	APIRootPath   = "/apis/forms.takoform.com/v1beta1"
 
 	defaultUserAgent     = "terraform-provider-takoform"
 	maxResponseBodyBytes = 8 * 1024 * 1024
 )
 
-// requiredFeatures are the discovery capabilities every v1alpha3 host must
+// requiredFeatures are the discovery capabilities every v1beta1 host must
 // advertise as true.
 var requiredFeatures = []string{
 	"service_forms",
@@ -92,7 +91,7 @@ type Endpoints struct {
 // HasFeature reports whether a named server capability is advertised.
 func (d Discovery) HasFeature(name string) bool { return d.Features[name] }
 
-// Client is a thin Host API v1alpha3 HTTP client.
+// Client is a thin Host API v1beta1 HTTP client.
 type Client struct {
 	endpoint        string // normalized origin, no trailing slash
 	token           string
@@ -155,7 +154,7 @@ func NewWithOptions(endpoint, token string, httpClient *http.Client, options Opt
 // Endpoint returns the normalized endpoint origin.
 func (c *Client) Endpoint() string { return c.endpoint }
 
-// Discover performs GET {endpoint}{DiscoveryPath}, validates the v1alpha3
+// Discover performs GET {endpoint}{DiscoveryPath}, validates the v1beta1
 // discovery contract, and caches the negotiated API base.
 func (c *Client) Discover(ctx context.Context) (Discovery, error) {
 	if _, err := c.configuredOrigin(); err != nil {
@@ -234,14 +233,14 @@ func (c *Client) validAdvertisedEndpoint(raw, expectedPath string) (string, erro
 		return "", errors.New("endpoint must not contain userinfo, query, or fragment")
 	}
 	// The advertised path is compared in its ESCAPED form and must carry no
-	// percent-encoding at all. Every segment of a v1alpha3 path is an ordinary
+	// percent-encoding at all. Every segment of a v1beta1 path is an ordinary
 	// segment, so a host advertising an escaped one — most of all a
 	// percent-encoded slash — is describing a shape this lane does not have and
 	// that intermediaries would not agree on (spec/decisions/0018). Comparing the
-	// decoded path instead would let "%2Fv1alpha3" pass as "/v1alpha3".
+	// decoded path instead would let "%2Fv1beta1" pass as "/v1beta1".
 	if strings.Contains(advertised.EscapedPath(), "%") {
 		return "", errors.New(
-			"endpoint path must not percent-encode any character; v1alpha3 paths are ordinary segments",
+			"endpoint path must not percent-encode any character; v1beta1 paths are ordinary segments",
 		)
 	}
 	if advertised.EscapedPath() != expectedPath {
@@ -309,7 +308,7 @@ func isLoopbackHostname(hostname string) bool {
 
 func (c *Client) requireReady() error {
 	if c.apiBase == "" {
-		return errors.New("takoform: Discover must complete before using the v1alpha3 API")
+		return errors.New("takoform: Discover must complete before using the v1beta1 API")
 	}
 	return nil
 }
@@ -515,7 +514,7 @@ func waitForRetry(ctx context.Context, attempt int, retryAfter time.Duration) er
 // mutationKey derives the deterministic Idempotency-Key for one lifecycle
 // mutation from the values it is given. The host namespaces the key by tenant,
 // principal, and space, so equal keys from different principals never collide
-// (spec/host-api/operations-v1alpha3.json: idempotency.namespace).
+// (spec/host-api/operations-v1beta1.json: idempotency.namespace).
 func mutationKey(values ...any) string {
 	raw, _ := json.Marshal(values)
 	digest := sha256.Sum256(raw)

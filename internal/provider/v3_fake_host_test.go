@@ -1,6 +1,6 @@
 package provider
 
-// v3_fake_host_test.go is an in-package fake Host API v1alpha3 host: just
+// v3_fake_host_test.go is an in-package fake Host API v1beta1 host: just
 // enough of discovery, form availability, prepare/apply/read/delete, one
 // 202-Operation path, and the content-addressed artifact upload to drive the
 // v3-lane resources end to end. Conventions: a namespaced group travels as TWO
@@ -26,7 +26,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
-const v3TestAPIRoot = "/apis/forms.takoform.com/v1alpha3"
+const v3TestAPIRoot = "/apis/forms.takoform.com/v1beta1"
 
 // v3ExpectedGenerationHeader is the desired-state fence every mutation of this
 // lane carries, deletes included.
@@ -109,7 +109,7 @@ type v3FakeHost struct {
 	// assignedOutputs is the status.outputs document every applied record is
 	// created with. It stands for the values a host COMPUTES rather than the
 	// author writing them — a host-assigned endpoint address is the case the
-	// v1alpha3 lane has — so a test can prove the provider types them without
+	// v1beta1 lane has — so a test can prove the provider types them without
 	// pretending the configuration supplied anything.
 	assignedOutputs map[string]any
 }
@@ -391,7 +391,7 @@ func (h *v3FakeHost) reassignOutputs(kind, name string, outputs map[string]any) 
 }
 
 // unescapeSegment decodes one ordinary path segment. It deliberately refuses a
-// percent-encoded slash: no v1alpha3 path carries one, and a fake host that
+// percent-encoded slash: no v1beta1 path carries one, and a fake host that
 // decoded it would let a client regression pass unnoticed
 // (spec/decisions/0018).
 func unescapeSegment(segment string) (string, error) {
@@ -677,12 +677,12 @@ func (h *v3FakeHost) eventPrefixIndex(prefix string) int {
 	return -1
 }
 
-// newV3TestProviderData negotiates the fake host's v1alpha3 lane.
+// newV3TestProviderData negotiates the fake host's v1beta1 lane.
 func newV3TestProviderData(t *testing.T, host *v3FakeHost) *providerData {
 	t.Helper()
 	c := clientv3.NewWithOptions(host.server.URL, "test-token", host.server.Client(), clientv3.Options{})
 	if _, err := c.Discover(context.Background()); err != nil {
-		t.Fatalf("v1alpha3 discovery: %v", err)
+		t.Fatalf("v1beta1 discovery: %v", err)
 	}
 	return &providerData{clientV3: c, defaultSpace: "prod"}
 }

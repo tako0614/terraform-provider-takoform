@@ -56,7 +56,7 @@ var workerBundleMediaTypes = model.BundleModuleMediaTypes()
 // ceiling.
 const workerBundleMaxModuleBytes = 268435456
 
-// These are the portable minimum ceilings the v1alpha3 Host Support Profile
+// These are the portable minimum ceilings the v1beta1 Host Support Profile
 // publishes for every artifact-backed Form.  A host may advertise a higher
 // byte ceiling, but the provider always checks the exact profile at plan time
 // before upload; the per-entry size remains bounded by the manifest schema.

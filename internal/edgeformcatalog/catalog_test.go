@@ -43,7 +43,7 @@ func TestCatalogIsExactFifteenFormFamily(t *testing.T) {
 			t.Fatalf("form[%d] = %s@%s", index, form.Kind, form.DefinitionVersion)
 		}
 	}
-	if Family.APIVersion() != "edge.forms.takoform.com/v1alpha1" {
+	if Family.APIVersion() != "edge.forms.takoform.com/v1beta1" {
 		t.Fatalf("family apiVersion = %q", Family.APIVersion())
 	}
 }
@@ -137,7 +137,7 @@ func TestRoleRules(t *testing.T) {
 // TestLifecycleCapabilityTable pins the exact capability set of every family
 // member. update is a claim about what an in-place apply can move, so a Form
 // with nothing mutable must not advertise it, and no Form of any role
-// advertises refresh in the v1alpha3 lane.
+// advertises refresh in the v1beta1 lane.
 func TestLifecycleCapabilityTable(t *testing.T) {
 	t.Parallel()
 	base := []string{"create", "read", "delete", "import", "observe"}
@@ -168,7 +168,7 @@ func TestLifecycleCapabilityTable(t *testing.T) {
 			t.Errorf("%s capabilities = %v, want %v", form.Kind, got, want[form.Kind])
 		}
 		if slices.Contains(got, "refresh") {
-			t.Errorf("%s declares refresh; the v1alpha3 lane has no refresh capability", form.Kind)
+			t.Errorf("%s declares refresh; the v1beta1 lane has no refresh capability", form.Kind)
 		}
 		if form.Role == model.RoleRevision && slices.Contains(got, "update") {
 			t.Errorf("%s is a revision but declares update", form.Kind)

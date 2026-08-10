@@ -41,9 +41,9 @@ func discoveryHandler(t *testing.T, serviceForms bool) http.HandlerFunc {
 func versionedDiscoveryHandler(t *testing.T, discoveryVersion string, serviceForms bool) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/.well-known/takoform/v1alpha3" {
+		if r.URL.Path == "/.well-known/takoform/v1beta1" {
 			// Configure probes both Host API lanes; a v2-only host answers the
-			// v1alpha3 probe with a plain 404 and the provider records the
+			// v1beta1 probe with a plain 404 and the provider records the
 			// per-lane error instead of failing.
 			http.NotFound(w, r)
 			return
@@ -209,12 +209,12 @@ func TestProviderStateExcludesBackendCredentialAndPriceAuthority(t *testing.T) {
 			}
 		}
 		if _, isV2 := v2Types[metadata.TypeName]; !isV2 {
-			// The Host API v1alpha3 lane splits the single resource_version
+			// The Host API v1beta1 lane splits the single resource_version
 			// into the generation/revision fence pair and starts fresh state
 			// (no v2 schema-version guard applies).
 			for _, fence := range []string{"uid", "generation", "revision"} {
 				if _, ok := schemaResponse.Schema.Attributes[fence]; !ok {
-					t.Errorf("%s omits the v1alpha3 %s identity attribute", metadata.TypeName, fence)
+					t.Errorf("%s omits the v1beta1 %s identity attribute", metadata.TypeName, fence)
 				}
 			}
 			continue
@@ -509,7 +509,7 @@ func currentProviderResourceTypeNames() []string {
 	return names
 }
 
-// v3ProviderResourceTypeNames is the Host API v1alpha3 lane: exactly the typed
+// v3ProviderResourceTypeNames is the Host API v1beta1 lane: exactly the typed
 // Edge Platform Family resources. The lane ships no generic exact-FormRef
 // carrier — `takoform_resource` was withdrawn by spec/decisions/0021 because
 // nothing in the lane lets a client verify a FormRef it did not compile in.

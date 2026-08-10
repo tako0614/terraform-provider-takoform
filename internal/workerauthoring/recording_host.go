@@ -20,7 +20,7 @@ type mutation struct {
 	Status int    `json:"status"`
 }
 
-// recordingHost is a disposable decorator over the v1alpha3 reference host.
+// recordingHost is a disposable decorator over the v1beta1 reference host.
 //
 // It does two things the reference host must not do itself. It RECORDS the
 // resource mutations in order, which is how a scenario proves that a

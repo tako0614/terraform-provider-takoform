@@ -71,7 +71,7 @@ func acceptedMutation(operationID, uid string, err error) error {
 	return &AcceptedError{OperationID: operationID, UID: uid, Err: err}
 }
 
-// APIError is the typed form of the v1alpha3 error envelope for non-2xx
+// APIError is the typed form of the v1beta1 error envelope for non-2xx
 // responses and for terminal Operation errors. The wire envelope is nested:
 //
 //	{ "error": { "code": "<code>", "message": "<msg>", "requestId": "<id>", "retryable": false } }
@@ -95,8 +95,8 @@ type APIError struct {
 	Details json.RawMessage
 }
 
-// stableErrorHTTPStatusByCode is the closed v1alpha3 taxonomy, exactly
-// spec/host-api/operations-v1alpha3.json errorEnvelope.httpStatusByCode.
+// stableErrorHTTPStatusByCode is the closed v1beta1 taxonomy, exactly
+// spec/host-api/operations-v1beta1.json errorEnvelope.httpStatusByCode.
 var stableErrorHTTPStatusByCode = map[string]int{
 	"invalid_argument":       http.StatusBadRequest,
 	"unauthenticated":        http.StatusUnauthorized,

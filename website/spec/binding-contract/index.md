@@ -66,7 +66,7 @@ A consumer resource declares instances as typed data. The wire shape is a
 {
   "name": "CACHE",
   "resource": {
-    "apiVersion": "edge.forms.takoform.com/v1alpha1",
+    "apiVersion": "edge.forms.takoform.com/v1beta1",
     "kind": "EdgeKVNamespace",
     "name": "cache"
   }
@@ -83,7 +83,7 @@ A consumer resource declares instances as typed data. The wire shape is a
   re-created under the same name is a different resource, and the source is NOT
   re-bound to it; neither is a target whose Form has since moved to a different
   exact contract
-  ([`../host-api/v1alpha3.md`](../host-api/v1alpha3.md),
+  ([`../host-api/v1beta1.md`](../host-api/v1beta1.md),
   [decision 0015](../decisions/0015-cross-resource-references-are-uid-pinned-relations.md),
   [decision 0022](../decisions/0022-relations-pin-the-target-contract.md)).
   Re-applying the source is what re-pins it.
@@ -216,6 +216,6 @@ resource. The two directions never share a mechanism.
 The official provider renders each binding type as its own typed list
 attribute — `kv_bindings`, `bucket_bindings`, `sqlite_bindings`,
 `queue_producer_bindings`, `service_bindings` — whose elements carry `name`
-and `target_name`. There is no generic connection block in the v1alpha3
+and `target_name`. There is no generic connection block in the v1beta1
 lane. (Decision 0010 names the block concept in the singular; the
 implemented attribute names are these plural lists.)

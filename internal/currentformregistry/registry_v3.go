@@ -7,7 +7,7 @@ import (
 )
 
 // V3Ref identifies one exact Form Family candidate Definition and package for
-// the provider-v3 (v1alpha3 wire) lane. Unlike the v1alpha2 Ref, its
+// the provider-v3 (v1beta1 wire) lane. Unlike the v1alpha2 Ref, its
 // APIVersion is a namespaced family group, so one kind name can exist in
 // several groups without colliding.
 type V3Ref struct {

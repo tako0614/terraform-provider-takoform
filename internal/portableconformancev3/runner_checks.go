@@ -13,7 +13,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
-// run executes the complete ordered v1alpha3 matrix. Every named required
+// run executes the complete ordered v1beta1 matrix. Every named required
 // check is marked completed exactly where its evidence was actually
 // exercised over real HTTP.
 func (r *v3Runner) run() error {
@@ -456,16 +456,19 @@ func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
 //
 // What it does NOT measure, stated so it is not mistaken for coverage: the
 // published rule is about every exact FormRef a host serves, and this compares
-// the eleven documents the corpus pins. A host serving a desired schema of its
-// own for an installed Form no probe drives passes, and a client of that Form
-// has exactly the specDigest problem above. It is deliberate rather than
-// forgotten — a pin nothing materializes against is maintenance with no oracle
-// value (spec/decisions/0022) — and it is the reason the pin is required of
-// every probe rather than of a hand-written list, so the coverage grows with the
-// probes. The residual is that the lane's word covers the Forms it drives, which
-// is what a report of this corpus says; closing it for the whole catalog would
-// mean pinning every installed Definition's desired schema, and nothing in this
-// lane needs those bytes for anything else.
+// the fifteen documents the corpus pins: fourteen distinct probe Forms plus the
+// synthetic second ModuleWorker definition. A host serving a desired schema of
+// its own for an installed Form no probe drives passes, and a client of that
+// Form has exactly the specDigest problem above. The family's fifteenth Form,
+// ObjectBucket, is intentionally outside this runner inventory; its absence is
+// a declared coverage exception, not an omitted check. A pin nothing
+// materializes against is maintenance with no oracle value (spec/decisions/0022),
+// and it is the reason the pin is required of every probe rather than of a
+// hand-written list, so the measured coverage grows with the probes. The
+// residual is that the lane's word covers the Forms it drives, which is what a
+// report of this corpus says; closing it for the whole catalog would mean
+// pinning every installed Definition's desired schema, and nothing in this lane
+// needs those bytes for anything else.
 func (r *v3Runner) checkFormDefinitions() error {
 	input := r.contract.RunnerInput
 	type pinnedDefinition struct {

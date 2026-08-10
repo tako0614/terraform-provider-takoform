@@ -3,7 +3,7 @@ package provider
 // v3_resources.go derives the typed HCL surface of every Edge Platform
 // Family resource from its single catalog declaration
 // (internal/edgeformcatalog) and maps values between that surface and the
-// portable v1alpha3 wire spec.
+// portable v1beta1 wire spec.
 //
 // Surface conventions of the v3 lane:
 //   - resource references (worker, bundle, queue, ...) are the target's
@@ -101,7 +101,7 @@ func (r *v3FormResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 		attrs[name] = v3OutputAttribute(output)
 	}
 	description := r.form.Description +
-		" Role: " + string(r.form.Role) + " (Host API v1alpha3 lane)."
+		" Role: " + string(r.form.Role) + " (Host API v1beta1 lane)."
 	resp.Schema = schema.Schema{
 		Version:     v3SchemaVersion,
 		Description: description,
@@ -304,7 +304,7 @@ const v3RelationDriftAttribute = "relation_drift_reason"
 // empty, and an empty plan offers no apply to run. Recording the reason gives
 // ModifyPlan the one fact it needs to propose the apply that re-pins the
 // relation. It is provider-side recovery bookkeeping, never portable desired
-// state: no v1alpha3 wire member carries it, and configurations must not
+// state: no v1beta1 wire member carries it, and configurations must not
 // depend on it.
 func v3RelationDriftReasonAttribute() schema.StringAttribute {
 	return schema.StringAttribute{

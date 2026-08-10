@@ -7,7 +7,7 @@ package clientv3
 // host over real HTTP, because the defect only exists in the presence of a host
 // that RETAINS replay records — and retaining them is exactly what the record
 // is for. A hand-written stub could be written to agree with whatever the
-// client did; the reference host is the implementation the whole v1alpha3
+// client did; the reference host is the implementation the whole v1beta1
 // corpus is measured against, and it replays a recorded response before it
 // resolves the resource the request addresses (ReferenceHost.tryReplay).
 
@@ -216,7 +216,7 @@ func TestObserveKeyDistinguishesTwoIncarnationsOfOneName(t *testing.T) {
 // the host-driven probes above.
 func TestIncarnationKeyComposition(t *testing.T) {
 	ref := FormRef{
-		APIVersion:        "edge.forms.takoform.com/v1alpha1",
+		APIVersion:        "edge.forms.takoform.com/v1beta1",
 		Kind:              "AtLeastOnceQueue",
 		DefinitionVersion: "0.1.0",
 		SchemaDigest:      "sha256:" + "ab",

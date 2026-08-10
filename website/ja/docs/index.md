@@ -5,10 +5,10 @@ Terraform / OpenTofu で Takoform を使うための手順と、3 つの利用�
 | Tier | 対象 | 入手方法 |
 | --- | --- | --- |
 | **公開済み (Current published)** | provider `v2.0.0` と、保持される 9 つの `forms.takoform.com/v1alpha2` リソース | `terraform init` が Registry からインストール |
-| **Edge preview** | provider `v2.1` の source candidate と、未公開の `edge.forms.takoform.com/v1alpha1` family | リポジトリの source から provider をビルド。Registry インストールなし |
+| **Beta release candidate** | stable provider target `v2.1.0` と、Experimental な `edge.forms.takoform.com/v1beta1` family 15種 | owner 公開までは source からビルド |
 
 下のクイックスタートは公開済み tier です。
-[Edge preview](#edge-preview-v1alpha3) はこのページの後半にあり、preview で
+[Beta release candidate](#beta-edge-platform-family) はこのページの後半にあり、candidate で
 あることを常に明示しています。
 
 ## クイックスタート
@@ -86,9 +86,9 @@ terraform apply
 
 provider が mutation を発行する前に、ホストは `/.well-known/takoform/v1alpha2`
 で exact な v1alpha2 FormRef を公開していなければなりません。exact な identity
-を返せないホストは fail closed します。Takosumi Cloud は最初のホストで、9 種類の
-kind すべてを実装しています — endpoint・Space・token はアカウントコンソールで
-確認できます。artifact の digest と URL は実際に取得できるものを使ってください。
+を返せないホストは fail closed します。この repository は hosted service の live
+availability を主張しません。endpoint・Space・token は選んだ host から取得して
+ください。artifact の digest と URL は実際に取得できるものを使ってください。
 上の値は形だけの例です。
 
 ## 3 つの利用経路
@@ -100,7 +100,7 @@ provider の address は `registry.terraform.io/tako0614/takoform` の 1 つだ�
 | --- | --- | --- |
 | **v1.0.3** (公開済み) | 既存の Legacy state の保守・delete・recovery | Registry から |
 | **v2.0.0** (公開済み・現在の client) | 保持される provider-v2 の 9 契約 | Registry から |
-| **v2.1.0** (Edge preview、source candidate、未公開) | [v1alpha3 レーンの Edge Platform Family](#edge-preview-v1alpha3) | source からビルド。Registry インストールなし |
+| **v2.1.0** (stable release target、owner 公開まで `candidate-only`) | [Experimental Edge Platform Family](#beta-edge-platform-family) on v1beta1 | owner 公開までは source からビルド |
 
 ### 公開済み Legacy の保守
 
@@ -130,20 +130,18 @@ terraform {
 4. consumer を切り替えて observe し、rollback が不要になった時点で、v1 を使って
    Legacy を delete する。
 
-## Edge preview: v1alpha3 レーン {#edge-preview-v1alpha3}
+## Beta: Edge Platform Family {#beta-edge-platform-family}
 
-::: warning Edge preview — source のみ
-`edge.forms.takoform.com/v1alpha1` family は provider `v2.1.0` に乗ります。
-これは未公開の source candidate です。Registry インストールも公開ホストも
-ありません。リポジトリの source から provider をビルドしてください。family の
-Form・Interface・Binding はどれも公開されておらず lifecycle 記録も持ちません。
-[publication blocker](/spec/publication-freeze.html) が open の間、この lane は
-凍結されたままです。インストールできる経路は、上の公開済み `v2.0.0`
-クイックスタートのままです。
+::: warning Beta provider release candidate
+`edge.forms.takoform.com/v1beta1` family は stable provider target `v2.1.0`
+に乗ります。owner が公開するまで descriptor は `candidate-only` なので、現在は
+source からビルドします。15種の exact `0.1.0` Form は Experimental で provider
+identity ledger に固定済みですが、package artifact は未公開です。open obligation
+は package/public service と将来の Stable/GA qualification に残ります。
 :::
 
-family のリソースは `forms.takoform.com/v1alpha3` Host API を話し、discovery は
-`/.well-known/takoform/v1alpha3` です。UID/generation/revision による識別、
+family のリソースは `forms.takoform.com/v1beta1` Host API を話し、discovery は
+`/.well-known/takoform/v1beta1` です。UID/generation/revision による識別、
 long-running operation、content-addressed な artifact upload を備えます。
 
 worker が到達可能になるまでは 1 リソースではなく連鎖です。identity、モジュール
@@ -226,7 +224,7 @@ attachment リソースです。
 - [vector_index](/docs/resources/vector_index.html)
 - [interface data source](/docs/data-sources/interface.html)
 
-Edge Platform Family リソース (Edge preview、`v2.1.0` source candidate、未公開):
+Experimental Edge Platform Family リソース (`v2.1.0` stable target、descriptor は `candidate-only`):
 
 - [module_worker](/docs/resources/module_worker.html)
 - [worker_bundle](/docs/resources/worker_bundle.html)
@@ -244,7 +242,7 @@ Edge Platform Family リソース (Edge preview、`v2.1.0` source candidate、�
 - [at_least_once_queue](/docs/resources/at_least_once_queue.html)
 - [queue_consumer](/docs/resources/queue_consumer.html)
 
-v1alpha3 lane の surface はこれで全部です。provider が組み込んでいない Form を
+v1beta1 surface はこれで全部です。provider が組み込んでいない Form を
 運ぶ汎用リソースはありません。組み込んでいない FormRef を client が検証する
 手段がこの lane に無いためで、第三者 Form への対応は設定値ではなく provider
 build の話になります
@@ -255,6 +253,6 @@ build の話になります
 Takoform が所有するのは、workload semantics、schema、exact identity、package、
 conformance だけです。capability support、配置、ルーティング、スケーリング、
 資格情報、復旧はホストが、マネージドの容量・課金・クォータ・SLA は
-Takosumi Cloud が所有します。
+各 host または managed service が所有します。
 
 <StatusNote />

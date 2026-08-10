@@ -22,11 +22,15 @@ wins.
 | [`host-api-wire.schema.json`](host-api-wire.schema.json) | the frozen provider-v1 Resource and Interface wire envelopes |
 | [`host-discovery-v1alpha2.schema.json`](host-discovery-v1alpha2.schema.json) | the retained provider-v2 host discovery document |
 | [`host-api-wire-v1alpha2.schema.json`](host-api-wire-v1alpha2.schema.json) | the retained provider-v2 Resource, lifecycle response, Interface projection, and error envelopes |
-| [`form-ref-v1alpha3.schema.json`](form-ref-v1alpha3.schema.json) | the current namespaced-group four-field immutable Form reference |
-| [`form-definition-v1alpha3.schema.json`](form-definition-v1alpha3.schema.json) | the current data-only Form Definition with roles, exact Interfaces, and typed Bindings |
+| [`form-ref-v1alpha3.schema.json`](form-ref-v1alpha3.schema.json) | the retained immutable v1alpha3 namespaced-group Form reference |
+| [`form-definition-v1alpha3.schema.json`](form-definition-v1alpha3.schema.json) | the retained immutable v1alpha3 data-only Form Definition |
+| [`form-ref-v1beta1.schema.json`](form-ref-v1beta1.schema.json) | the current Beta namespaced-group four-field immutable Form reference |
+| [`form-definition-v1beta1.schema.json`](form-definition-v1beta1.schema.json) | the current Beta data-only Form Definition with roles, exact Interfaces, and typed Bindings |
 | [`package-index-v1alpha4.schema.json`](package-index-v1alpha4.schema.json) | the current content-addressed package profile for namespaced-group FormRefs |
-| [`host-discovery-v1alpha3.schema.json`](host-discovery-v1alpha3.schema.json) | the current v1alpha3 host discovery document |
-| [`host-api-wire-v1alpha3.schema.json`](host-api-wire-v1alpha3.schema.json) | the current UID/generation/revision Resource, condition, operation, artifact, and error envelopes |
+| [`host-discovery-v1alpha3.schema.json`](host-discovery-v1alpha3.schema.json) | the retained immutable v1alpha3 host discovery document |
+| [`host-api-wire-v1alpha3.schema.json`](host-api-wire-v1alpha3.schema.json) | the retained immutable v1alpha3 wire envelopes |
+| [`host-discovery-v1beta1.schema.json`](host-discovery-v1beta1.schema.json) | the current Beta host discovery document |
+| [`host-api-wire-v1beta1.schema.json`](host-api-wire-v1beta1.schema.json) | the current Beta UID/generation/revision Resource, condition, operation, artifact, and error envelopes |
 | [`interface-ref-v1alpha1.schema.json`](interface-ref-v1alpha1.schema.json) | the exact digest-bound Interface reference |
 | [`interface-definition-v1alpha1.schema.json`](interface-definition-v1alpha1.schema.json) | the exact data-only Interface Definition with operations, semantics, and behavior fixtures |
 | [`binding-ref-v1alpha1.schema.json`](binding-ref-v1alpha1.schema.json) | the exact digest-bound Binding reference |

@@ -16,6 +16,7 @@ import (
 const (
 	hostAPI        = "forms.takoform.com/v1alpha2"
 	currentFormAPI = "forms.takoform.com/v1alpha2"
+	providerAPI    = "forms.takoform.com/v1beta1"
 	providerFQN    = "registry.terraform.io/tako0614/takoform"
 )
 
@@ -124,14 +125,14 @@ func TestNormativeIdentitiesAgree(t *testing.T) {
 			t.Errorf("%s = %q, want %q", source, got, hostAPI)
 		}
 	}
-	currentIdentities := map[string]string{
-		"release API lock": release.Versioning.PortableAPI,
-		"FormRef schema":   formRefSchemaAPI(t),
-	}
+	currentIdentities := map[string]string{"FormRef schema": formRefSchemaAPI(t)}
 	for source, got := range currentIdentities {
 		if got != currentFormAPI {
 			t.Errorf("%s = %q, want %q", source, got, currentFormAPI)
 		}
+	}
+	if release.Versioning.PortableAPI != providerAPI {
+		t.Errorf("release API lock = %q, want %q", release.Versioning.PortableAPI, providerAPI)
 	}
 	if currentInventory.FormAPIVersion != formpackage.CurrentFormAPIVersion {
 		t.Errorf("current candidate Form API = %q, want %q", currentInventory.FormAPIVersion, formpackage.CurrentFormAPIVersion)
@@ -177,7 +178,7 @@ func TestNormativeIdentitiesAgree(t *testing.T) {
 	if host.DiscoveryPath != conformance.DiscoveryPath {
 		t.Errorf("discovery path disagrees: host=%q conformance=%q", host.DiscoveryPath, conformance.DiscoveryPath)
 	}
-	if release.Version != "2.0.0" || release.Tag != "v"+release.Version || release.PublicationStatus != "candidate-only" {
+	if release.Version != "2.1.0" || release.Tag != "v"+release.Version || release.PublicationStatus != "candidate-only" {
 		t.Errorf("provider candidate lock disagrees: version=%q tag=%q status=%q", release.Version, release.Tag, release.PublicationStatus)
 	}
 	products := map[string]bool{}

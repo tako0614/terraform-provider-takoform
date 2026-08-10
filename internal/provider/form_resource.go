@@ -532,7 +532,7 @@ func (r *formResource) toResource(ctx context.Context, values formValues) (*clie
 
 func (r *formResource) assertConfigured(diags *diag.Diagnostics) bool {
 	if r.data != nil && r.data.client == nil && r.data.v2Err != nil {
-		// The provider configured, but only the v1alpha3 lane negotiated.
+		// The provider configured, but only the v1beta1 lane negotiated.
 		// Surface the recorded v1alpha2 negotiation error for this v2-lane
 		// resource instead of a generic wiring failure.
 		diags.AddError(

@@ -1,20 +1,16 @@
-// publication-blockers.mjs — the machine authority for the v1alpha3 publication
-// freeze.
+// publication-blockers.mjs — the machine authority for scoped Beta release
+// policy.
 //
 //   bun scripts/publication-blockers.mjs --check
 //
-// spec/publication-freeze.md names the blockers that must close before this
-// lane publishes anything. Prose cannot stop a release, so the same facts live
-// here as data. A blocker closes by naming evidence that exists, never by
-// editing a status field alone.
+// spec/publication-freeze.md names later Stable/GA qualification obligations.
+// They still block Form Package and public-service publication, but they do not
+// block provider v2.1.0 from carrying the locally proven Beta contracts.
 //
-// The freeze is scoped to this lane's own artifacts. It is deliberately NOT
-// wired into the shared release-owner gate: that gate also serves the retained
-// v1alpha1/v1alpha2 packages and the append-only security revocation path, and
-// an urgent revocation for an already-published package must never wait on this
-// lane's product readiness. What the check enforces instead is the state that
-// would exist if the lane had published: an unpublished candidate set and an
-// empty family lifecycle.
+// The check therefore proves two separate facts: provider v2.1's exact Beta
+// identity set is coherent, while the Form Package candidate set remains
+// unpublished until the stricter obligations close. An urgent revocation for
+// an already-published package also never waits on these obligations.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -211,15 +207,14 @@ export function loadBlockerLedger(repositoryRoot) {
   return parseBlockerLedger(JSON.parse(readFileSync(file, "utf8")), repositoryRoot);
 }
 
-/** openBlockers returns every blocker that still forbids publication. */
+/** openBlockers returns every obligation still blocking package/service publication. */
 export function openBlockers(ledger) {
   return ledger.blockers.filter((blocker) => blocker.status === "open");
 }
 
 /**
- * assertPublicationAllowed is what a release path calls. It refuses while any
- * blocker is open, and names them, so the refusal is actionable rather than a
- * bare exit code.
+ * assertPublicationAllowed is the strict Form Package/public-service gate.
+ * Provider publication deliberately does not call it.
  */
 export function assertPublicationAllowed(ledger) {
   const open = openBlockers(ledger);
@@ -228,25 +223,23 @@ export function assertPublicationAllowed(ledger) {
   }
   const lines = open.map((blocker) => `  ${blocker.id} [${blocker.priority}] ${blocker.title}`);
   fail(
-    `the ${ledger.lane} lane is publication-frozen: ${open.length} blocker${open.length === 1 ? "" : "s"} open\n` +
+    `Form Package/public-service publication for ${ledger.lane} is blocked: ${open.length} obligation${open.length === 1 ? "" : "s"} open\n` +
       `${lines.join("\n")}\n` +
       `see ${BLOCKER_LEDGER} and spec/publication-freeze.md`,
   );
 }
 
 /**
- * assertLaneStillUnpublished is the half of the freeze with teeth today. A
- * status field says what someone intended; these two files say what the
- * repository actually did. While a blocker is open, the family candidate set
- * must still declare itself unpublished and no family Form may hold a lifecycle
- * record, because either would mean the lane published while frozen.
+ * assertLaneStillUnpublished keeps the package publication claim honest while
+ * stricter obligations remain. Experimental Form maturity and provider
+ * embedding are independent and are therefore allowed.
  */
 export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
   if (open.length === 0) {
     return;
   }
   const candidateSet = JSON.parse(
-    readFileSync(path.join(repositoryRoot, "forms/candidates/edge/v1alpha1/candidate-set.json"), "utf8"),
+    readFileSync(path.join(repositoryRoot, "forms/candidates/edge/v1beta1/candidate-set.json"), "utf8"),
   );
   if (candidateSet.publicationStatus !== "unpublished") {
     fail(
@@ -254,18 +247,61 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
         `while ${open.length} publication blocker${open.length === 1 ? " is" : "s are"} open`,
     );
   }
-  const lifecycle = JSON.parse(readFileSync(path.join(repositoryRoot, "forms/lifecycle.json"), "utf8"));
-  const familyPrefix = `${ledger.family.split("/")[0]}/`;
-  const published = (lifecycle.currentForms ?? []).filter((record) =>
-    String(record?.formRef?.apiVersion ?? "").startsWith(familyPrefix),
+}
+
+// assertProviderReleaseCandidate proves the provider-first lane without using
+// package/GA obligations as a proxy. It locks v2.1.0 to the 15 Experimental
+// Beta FormRefs and package digests recorded in the append-only provider
+// identity ledger. Candidate-only is a publication fact, not a prerelease
+// version: the owner deploy changes it only after the real release exists.
+export function assertProviderReleaseCandidate(repositoryRoot) {
+  const descriptor = JSON.parse(
+    readFileSync(path.join(repositoryRoot, "release/version.json"), "utf8"),
   );
-  if (published.length > 0) {
-    const names = published.map((record) => `${record.formRef.kind}@${record.formRef.definitionVersion}`);
-    fail(
-      `${names.join(", ")} hold a lifecycle record while ${open.length} publication blocker` +
-        `${open.length === 1 ? " is" : "s are"} open; the ${ledger.lane} lane is frozen`,
-    );
+  const candidate = JSON.parse(
+    readFileSync(
+      path.join(repositoryRoot, "forms/candidates/edge/v1beta1/candidate-set.json"),
+      "utf8",
+    ),
+  );
+  const identities = JSON.parse(
+    readFileSync(path.join(repositoryRoot, "release/provider-form-identities.json"), "utf8"),
+  );
+  if (
+    descriptor.version !== "2.1.0" ||
+    descriptor.tag !== "v2.1.0" ||
+    descriptor.publicationStatus !== "candidate-only" ||
+    descriptor.versioning?.portableApiVersion !== "forms.takoform.com/v1beta1"
+  ) {
+    fail("provider release descriptor is not candidate-only v2.1.0 on Host API v1beta1");
   }
+  if (
+    candidate.family !== "edge.forms.takoform.com/v1beta1" ||
+    candidate.formMaturity !== "experimental" ||
+    candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha4" ||
+    candidate.publicationStatus !== "unpublished" ||
+    candidate.forms?.length !== 15
+  ) {
+    fail("provider v2.1 candidate must carry exactly 15 Experimental Beta Forms in v1alpha4 package envelopes");
+  }
+  const embedded = identities.releases?.find(
+    (entry) => entry.providerVersion === descriptor.version,
+  );
+  const expected = candidate.forms.map(({ resourceType, formRef, packageDigest }) => ({
+    resourceType,
+    formRef,
+    packageDigest,
+  }));
+  if (
+    identities.format !== "takoform.provider-form-identities@v1" ||
+    embedded?.portableApiVersion !== descriptor.versioning.portableApiVersion ||
+    embedded?.family !== candidate.family ||
+    embedded?.formMaturity !== candidate.formMaturity ||
+    JSON.stringify(embedded?.forms) !== JSON.stringify(expected)
+  ) {
+    fail("provider v2.1 embedded Beta FormRefs/digests drifted from the generated family set");
+  }
+  return { formCount: expected.length, version: descriptor.version };
 }
 
 /**
@@ -294,6 +330,7 @@ function main() {
   }
   const open = openBlockers(ledger);
   assertLaneStillUnpublished(repositoryRoot, ledger, open);
+  const provider = assertProviderReleaseCandidate(repositoryRoot);
   const byPriority = new Map();
   for (const blocker of open) {
     byPriority.set(blocker.priority, (byPriority.get(blocker.priority) ?? 0) + 1);
@@ -301,8 +338,8 @@ function main() {
   const summary = [...byPriority.entries()].sort().map(([priority, count]) => `${priority}=${count}`).join(" ");
   const traceability = summarizeTraceability(ledger);
   console.log(
-    `publication blockers OK: ${ledger.blockers.length} recorded, ${open.length} open (${summary || "none"}); ` +
-      `${ledger.lane} stays frozen; ${traceability}`,
+    `Beta release policy OK: provider v${provider.version} locks ${provider.formCount} exact Experimental Forms; ` +
+      `${open.length} later package/Stable/GA obligation${open.length === 1 ? "" : "s"} remain (${summary || "none"}); ${traceability}`,
   );
 }
 

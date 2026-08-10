@@ -8,9 +8,9 @@ characterization:
   nine independently authored v1alpha2 candidates, and covers typed schema
   behavior, validation, CRUD, import, state refresh, and the absence of
   plan-time remote mutation; the source tree additionally registers exactly the
-  v1alpha3-lane Edge Platform Family resources for the unpublished v2.1 source
-  candidate — and no generic carrier, which is itself asserted
-  ([decision 0013](../spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md),
+  v1beta1 Edge Platform Family resources for the stable v2.1.0 provider release
+  target — and no generic carrier, which is itself asserted
+  ([decision 0035](../spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md),
   [decision 0021](../spec/decisions/0021-third-party-forms-and-contract-distribution.md));
 - `internal/client/client_test.go` asserts discovery, capability negotiation, preview/apply evidence, error envelopes, observation, and deletion;
 - `examples/resources/` contains one formatted HCL example for every registered resource, with no exceptions: every provider resource is derived from a Form, so every one has an example.
@@ -187,16 +187,17 @@ to the array in that corpus's `contract.json` that defines it. A number written
 here beside a number a machine already knows is a defect waiting to recur, so
 the gate names both values and fails when they part company.
 
-`portable-host-v3/` is the Host API v1alpha3 corpus consumed by the provider
-v2.1 client lane. It pins the v1alpha3 discovery/API paths, the closed
+`portable-host-v3/` is the Host API v1beta1 corpus consumed by the provider
+v2.1 client lane. It pins the v1beta1 discovery/API paths, the closed
 26-code error taxonomy with its exact HTTP status map and 4-code retryable
 set, the uid/generation/revision identity rules, the closed portable
 condition-reason vocabulary, and exact Edge Family probe identities
-(ModuleWorker, EdgeKVNamespace, AtLeastOnceQueue, WorkerBundle,
-WorkerVersion, WorkerDeployment, WorkerCustomDomain, WorkerEndpoint,
-WorkerCronTrigger, QueueConsumer) with their
-registry package digests plus byte-pinned
-desired-negative fixtures. It pins each of those ten Forms' DESIRED SCHEMA as
+(ModuleWorker, EdgeKVNamespace, AtLeastOnceQueue, WorkerVersion, WorkerBundle,
+StaticAssetBundle, SQLiteDatabase, SQLiteMigrationSet,
+SQLiteMigrationApplication, WorkerDeployment, WorkerCustomDomain,
+WorkerEndpoint, WorkerCronTrigger, QueueConsumer) with their registry package
+digests plus byte-pinned desired-negative fixtures. It pins each of those
+14 Forms' DESIRED SCHEMA as
 byte-digested bytes as well, because the runner materializes every probe spec
 against the pin rather than against what the host under test serves: a runner
 that took its defaults from the subject agreed with that subject about every
@@ -207,6 +208,10 @@ what a host serves against those bytes, and a repository test recomputes them
 from the installed Definition at the exact pinned FormRef so the pin cannot
 drift
 ([decision 0022](../spec/decisions/0022-relations-pin-the-target-contract.md)).
+The family has one additional current Form: `ObjectBucket` is the one 15th Form
+intentionally unprobed by this corpus. Its wire rules remain normative, but
+causal host evidence for that Form requires a separate exact package fixture;
+this corpus makes no coverage claim for it.
 It also pins a byte-digested SECOND Form Definition
 of the ModuleWorker line, so the lane can install two contracts of one group and
 kind at once; without it, "a host answers for the exact ref recorded in state"
@@ -489,12 +494,12 @@ Ready Resource, and disappear after deletion. When present, `resourceUri` must
 pass the shared credential-free HTTPS grammar; the adversarial runner rejects
 userinfo, query, fragment, plaintext HTTP, and Unicode-hostname substitutions.
 
-The selected ObjectBucket fixture has one required descriptor at one version,
-so this runner does not claim that it induced multi-version identity ambiguity,
-optional-descriptor omission, or activation rejection on a feature-disabled
-host. Their wire rules remain normative, and the stable ambiguity error
-envelopes are exercised, but causal host evidence for those cases needs a
-separate exact package fixture.
+The unprobed `ObjectBucket` Form has one required descriptor at one version in
+its retained fixture, so this runner does not claim that it induced
+multi-version identity ambiguity, optional-descriptor omission, or activation
+rejection on a feature-disabled host. Its wire rules remain normative, and the
+stable ambiguity error envelopes are exercised, but causal host evidence for
+those cases needs a separate exact package fixture.
 
 It treats drift only as validated observed evidence and defines no drift
 operation or portable audit endpoint.
@@ -502,11 +507,11 @@ operation or portable audit endpoint.
 ## Runtime ABI evidence
 
 `runtime-abi-v1/` measures a different subject from every corpus above. Those
-drive a control plane; this one drives a **runtime**. The Host API v1alpha3
+drive a control plane; this one drives a **runtime**. The Host API v1beta1
 lane can prove that a host advertises `worker.runtime@1.0.0` at the exact
 pinned digest and refuses a `WorkerVersion` that names a handler the ABI does
 not define, and
-[`../spec/host-api/v1alpha3.md`](../spec/host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation)
+[`../spec/host-api/v1beta1.md`](../spec/host-api/v1beta1.md#what-the-lane-proves-and-what-stays-a-host-obligation)
 lists what it cannot prove, because proving it means executing the module
 rather than driving the API. This corpus executes it
 ([decision 0023](../spec/decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).

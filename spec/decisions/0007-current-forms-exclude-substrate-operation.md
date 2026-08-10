@@ -12,11 +12,13 @@ description. This mechanically carried fields such as concurrency, replicas,
 CPU, memory, size class, high availability, routing, health checks, storage
 class, consumer retry policy, and provider compatibility into the reset line.
 
-Several current concepts resemble Cloudflare products because Takosumi Cloud
-is the first real workload and host. That resemblance is not itself a defect:
-edge execution, key/value storage, queues, schedules, and addressable stateful
-entities are useful general abstractions. The defect is allowing one
-substrate's operating model to determine the portable desired schema.
+Several current concepts resemble Cloudflare products because the first
+v1alpha2 reset was evaluated against a Takosumi-hosted workload. That dated
+evaluation is provenance, not a current host, first-workload, or maturity
+claim. The resemblance is not itself a defect: edge execution, key/value
+storage, queues, schedules, and addressable stateful entities are useful
+general abstractions. The defect is allowing one substrate's operating model to
+determine the portable desired schema.
 
 ## Decision
 
@@ -55,8 +57,9 @@ are executable tests.
 - `StatefulEntity` uses a generic artifact entrypoint and persistence
   capability; provider-shaped class and migration controls do not enter the
   Form.
-- Takosumi Cloud can continue to implement these Forms with Cloudflare or
-  another substrate without making that substrate part of Takoform.
+- A Takosumi deployment may implement these Forms with Cloudflare or another
+  substrate as one independent adopter, without making that substrate part of
+  Takoform or giving it maturity authority.
 
 ## Rejected alternatives
 

@@ -85,7 +85,7 @@ anything is stored. Everything the contract fixes about invocation is proven by
 its behavior fixtures against a real isolate: handler signatures, streaming
 bodies, `env`'s exact property set, `waitUntil`, exception outcomes, and the
 `globals` floor. The exact split for `worker.runtime@1.0.0` is written down in
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation),
+[`../host-api/v1beta1.md`](../host-api/v1beta1.md#what-the-lane-proves-and-what-stays-a-host-obligation),
 because a reader deciding whether a passing conformance report means "this host
 runs my code correctly" is entitled to know which half it covers.
 

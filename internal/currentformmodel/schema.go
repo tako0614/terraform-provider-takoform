@@ -12,7 +12,7 @@ import (
 // are declared locally on purpose: the v1alpha2 catalog is retained prior art
 // and the family lane must not inherit silent edits from it.
 const (
-	// PatternResourceName is the metadata.name grammar of the v1alpha3
+	// PatternResourceName is the metadata.name grammar of the v1beta1
 	// envelope, reused wherever a Form references another resource by name.
 	PatternResourceName = `^[a-z][a-z0-9-]{0,62}$`
 	// PatternBindingName is the JavaScript identifier grammar worker-family
@@ -113,7 +113,7 @@ type TargetContractResolver interface {
 }
 
 // DesiredSchema derives the Draft 2020-12 closed desired schema of a Form.
-// It never contains a "name" property: the v1alpha3 envelope owns
+// It never contains a "name" property: the v1beta1 envelope owns
 // metadata.name (decision 0011).
 //
 // Every reference-shaped node it emits carries exactly one target-contract
@@ -162,7 +162,7 @@ func (f Form) DesiredSchema(resolver TargetContractResolver) (map[string]any, er
 // that publishes no output returns nil, and its Definition carries no
 // outputSchema at all — which is what the published wire schema reads to decide
 // that `status.outputs` must then be OMITTED rather than empty
-// (spec/schemas/host-api-wire-v1alpha3.schema.json).
+// (spec/schemas/host-api-wire-v1beta1.schema.json).
 //
 // Every declared output is required and the object is closed, in both
 // directions on purpose. Required, because an output a host may omit is an

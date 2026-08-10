@@ -1,5 +1,5 @@
-// Package portableconformancev3 is the Host API v1alpha3 conformance lane:
-// a deterministic reference host speaking the complete v1alpha3 wire, a
+// Package portableconformancev3 is the Host API v1beta1 conformance lane:
+// a deterministic reference host speaking the complete v1beta1 wire, a
 // black-box runner, and the loader for the conformance/portable-host-v3
 // corpus. Passing this lane is local implementation evidence only; it is
 // never publication, admission, support, or maturity evidence.
@@ -25,19 +25,19 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-// Wire identity of the v1alpha3 lane. These mirror internal/clientv3 without
+// Wire identity of the v1beta1 lane. These mirror internal/clientv3 without
 // importing it, so the conformance lane stays black-box with respect to the
 // client implementation.
 const (
 	ContractFormat = "takoform.portable-host-conformance@v3"
 	ManifestFormat = "takoform.portable-host-conformance-manifest@v3"
-	APIVersion     = "forms.takoform.com/v1alpha3"
-	DiscoveryPath  = "/.well-known/takoform/v1alpha3"
-	APIPath        = "/apis/forms.takoform.com/v1alpha3"
+	APIVersion     = "forms.takoform.com/v1beta1"
+	DiscoveryPath  = "/.well-known/takoform/v1beta1"
+	APIPath        = "/apis/forms.takoform.com/v1beta1"
 )
 
-// stableErrorHTTPStatusByCode is the closed 26-code v1alpha3 taxonomy,
-// exactly spec/host-api/operations-v1alpha3.json errorEnvelope.
+// stableErrorHTTPStatusByCode is the closed 26-code v1beta1 taxonomy,
+// exactly spec/host-api/operations-v1beta1.json errorEnvelope.
 var stableErrorHTTPStatusByCode = map[string]int{
 	"invalid_argument":       http.StatusBadRequest,
 	"unauthenticated":        http.StatusUnauthorized,
@@ -96,7 +96,7 @@ func isAutomaticallyRetryable(code string) bool {
 
 // portableConditionReasons is the closed portable condition reason
 // vocabulary of $defs/condition/properties/reason in
-// spec/schemas/host-api-wire-v1alpha3.schema.json. Two conforming hosts must
+// spec/schemas/host-api-wire-v1beta1.schema.json. Two conforming hosts must
 // name the same state with the same reason; host-specific detail belongs in
 // the free-form hostReason.
 var portableConditionReasons = []string{
@@ -271,7 +271,7 @@ var requiredRunnerChecks = []string{
 	"each-tenant-mutates-its-own-plane",
 }
 
-// nameAddressedResourceSurface is one v1alpha3 surface that takes a resource
+// nameAddressedResourceSurface is one v1beta1 surface that takes a resource
 // NAME, and what measures its tenant boundary.
 //
 // The tenant matrix was first enumerated by INTENT — read, update, delete,
@@ -286,7 +286,7 @@ var requiredRunnerChecks = []string{
 //
 //   - to the routes the reference host serves (resourcePlaneHandlers), so a new
 //     endpoint cannot be routed without an entry here;
-//   - to the Lifecycle route block of spec/host-api/v1alpha3.md, so a new
+//   - to the Lifecycle route block of spec/host-api/v1beta1.md, so a new
 //     endpoint cannot be published without one either;
 //   - to requiredRunnerChecks, so an entry cannot name a check that does not
 //     exist, and cannot name none unless it states why.
@@ -296,7 +296,7 @@ var requiredRunnerChecks = []string{
 // table protects is the completeness of the check list this repository ships.
 type nameAddressedResourceSurface struct {
 	// Method and Route are the surface exactly as the Lifecycle route block of
-	// spec/host-api/v1alpha3.md writes it.
+	// spec/host-api/v1beta1.md writes it.
 	Method string
 	Route  string
 	// Action is the segment after the name, empty when the name is last.
@@ -312,7 +312,7 @@ type nameAddressedResourceSurface struct {
 	Unresolved string
 }
 
-// nameAddressedResourceSurfaces is the closed set of v1alpha3 surfaces that
+// nameAddressedResourceSurfaces is the closed set of v1beta1 surfaces that
 // take a resource name.
 var nameAddressedResourceSurfaces = []nameAddressedResourceSurface{
 	{
@@ -358,7 +358,7 @@ var nameAddressedResourceSurfaces = []nameAddressedResourceSurface{
 	},
 }
 
-// FormRef is the exact four-field v1alpha3 Form identity.
+// FormRef is the exact four-field v1beta1 Form identity.
 type FormRef struct {
 	APIVersion        string `json:"apiVersion"`
 	Kind              string `json:"kind"`
@@ -1059,8 +1059,8 @@ func validatePinnedDesiredSchema(label string, pin PinnedSchema) error {
 	return nil
 }
 
-// baseCapabilities is the closed set every v1alpha3 Form must advertise; the
-// only permitted addition is update. refresh is not a v1alpha3 capability.
+// baseCapabilities is the closed set every v1beta1 Form must advertise; the
+// only permitted addition is update. refresh is not a v1beta1 capability.
 var baseCapabilities = []string{"create", "read", "delete", "import", "observe"}
 
 func validateProbeCapabilities(label string, capabilities []string) error {
@@ -1072,7 +1072,7 @@ func validateProbeCapabilities(label string, capabilities []string) error {
 		switch capability {
 		case "create", "read", "update", "delete", "import", "observe":
 		case "refresh":
-			return fmt.Errorf("portable host v3 %s probe pins refresh; the v1alpha3 lane has no refresh capability", label)
+			return fmt.Errorf("portable host v3 %s probe pins refresh; the v1beta1 lane has no refresh capability", label)
 		default:
 			return fmt.Errorf("portable host v3 %s probe pins unknown capability %q", label, capability)
 		}

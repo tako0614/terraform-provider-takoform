@@ -23,7 +23,7 @@ package portableconformancev3
 // them moves its generation — no desired spec changed.
 
 // derivedConditions renders the `status.conditions` of one resource: the ONLY
-// part of a v1alpha3 representation this host computes from resources other
+// part of a v1beta1 representation this host computes from resources other
 // than the one being rendered. Everything else renderResource emits comes from
 // the resource's own stored identity, spec, and status counters.
 //

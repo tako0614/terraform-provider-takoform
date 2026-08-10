@@ -64,7 +64,7 @@ type takoformProvider struct {
 
 // providerData is shared with every resource via Configure. It carries both
 // negotiated Host API lanes: the retained v1alpha2 client for the nine v2
-// resources, and the v1alpha3 client for the Edge Family lane. At least one
+// resources, and the v1beta1 client for the Edge Family lane. At least one
 // lane must have negotiated; each resource asserts its own lane and reports
 // the recorded per-lane negotiation error otherwise.
 type providerData struct {
@@ -79,7 +79,7 @@ type providerData struct {
 	// and delete. A state FormRef only needs membership here; it does not have
 	// to be the current default, so a future Form bump never strands state.
 	supported []client.InstalledFormReference
-	// support caches the v1alpha3 Host Support Profiles the plan decides
+	// support caches the v1beta1 Host Support Profiles the plan decides
 	// against. It is per provider configuration because a profile is a static
 	// statement about one host, and a plan asks the same questions once per
 	// resource (v3_host_support.go).
@@ -195,7 +195,7 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 
 	// Negotiate both Host API lanes against the same endpoint and token. At
 	// least one must succeed; a host may legitimately serve only v1alpha2
-	// (the retained v2 resources) or only v1alpha3 (the Edge Family lane).
+	// (the retained v2 resources) or only v1beta1 (the Edge Family lane).
 	// Each resource asserts its own lane and surfaces the recorded per-lane
 	// error, so a v2-only host still runs v2 resources while v3 resources
 	// explain exactly why they cannot.
@@ -205,7 +205,7 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 			"Takoform configuration failed",
 			"Neither Host API lane negotiated at "+endpoint+".\n\n"+
 				"v1alpha2: "+v2Err.Error()+"\n\n"+
-				"v1alpha3: "+v3Err.Error(),
+				"v1beta1: "+v3Err.Error(),
 		)
 		return
 	}
@@ -240,8 +240,8 @@ func (p *takoformProvider) Resources(_ context.Context) []func() resource.Resour
 	for _, kind := range currentformcatalog.Kinds {
 		resources = append(resources, NewFormResource(kind))
 	}
-	// The Host API v1alpha3 lane: the eleven typed Edge Platform Family
-	// resources plus the generic exact-FormRef carrier.
+	// The Host API v1beta1 lane: exactly the fifteen typed Edge Platform Family
+	// resources, one for each catalog Form. There is no generic carrier.
 	resources = append(resources, newV3FormResources()...)
 	return resources
 }
@@ -326,14 +326,14 @@ func configureClient(ctx context.Context, endpoint, token string, httpClient *ht
 	return c, nil
 }
 
-// configureClientV3 negotiates the Host API v1alpha3 lane against the same
-// endpoint and token. The v1alpha3 discovery contract is strict (closed
+// configureClientV3 negotiates the Host API v1beta1 lane against the same
+// endpoint and token. The v1beta1 discovery contract is strict (closed
 // api_versions, required features, same-origin endpoints), so a successful
 // Discover is the whole gate.
 func configureClientV3(ctx context.Context, endpoint, token string, httpClient *http.Client) (*clientv3.Client, error) {
 	c := clientv3.NewWithOptions(endpoint, token, httpClient, clientv3.Options{})
 	if _, err := c.Discover(ctx); err != nil {
-		return nil, fmt.Errorf("discovering Takoform v1alpha3 endpoint %q: %w", endpoint, err)
+		return nil, fmt.Errorf("discovering Takoform v1beta1 endpoint %q: %w", endpoint, err)
 	}
 	return c, nil
 }

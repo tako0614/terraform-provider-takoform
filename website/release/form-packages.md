@@ -183,8 +183,9 @@ are independent host decisions.
 
 ## Package source and tag
 
-A current release source is one already-valid closed v1alpha3 package carrying
-an exact v1alpha2 FormRef:
+A retained provider-v2 release source is one already-valid closed v1alpha3
+package carrying an exact v1alpha2 FormRef. Current Beta family packages use
+the v1alpha4 envelope and remain unpublished under the scoped release policy:
 
 ```text
 forms/releases/<release-id>/sha256-<64-lowercase-hex>/

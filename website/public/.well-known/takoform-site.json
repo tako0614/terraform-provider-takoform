@@ -1,7 +1,7 @@
 {
   "providerCurrent": "2.0.0",
-  "edgePreviewProvider": "2.1.0-source",
+  "edgePreviewProvider": "2.1.0-candidate-only",
   "edgeFamilyStatus": "unpublished",
-  "candidateSetDigest": "sha256:46a54a3648e6d8ddbd134b247fee26ad784ac6d0a01fb01a4f43f5332fc11eb5",
+  "candidateSetDigest": "sha256:79e0b5eb940b5667d733b2e04fb63fc03a9a8486c740c6728856c3e265ee1eae",
   "openPublicationBlockers": 12
 }

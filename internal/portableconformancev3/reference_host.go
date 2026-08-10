@@ -59,7 +59,7 @@ const (
 
 	// edgeFormsGroup is the one namespaced group whose cross-resource
 	// semantics this reference host enforces.
-	edgeFormsGroup                 = "edge.forms.takoform.com/v1alpha1"
+	edgeFormsGroup                 = "edge.forms.takoform.com/v1beta1"
 	workerBundleKind               = "WorkerBundle"
 	staticAssetBundleKind          = "StaticAssetBundle"
 	sqliteMigrationSetKind         = "SQLiteMigrationSet"
@@ -285,7 +285,7 @@ type hostOperation struct {
 	terminalBody []byte
 }
 
-// ReferenceHost is a deliberately small, deterministic v1alpha3 host used to
+// ReferenceHost is a deliberately small, deterministic v1beta1 host used to
 // prove the runner over real HTTP. It is not a reusable host and its reports
 // are never publication-ready.
 type ReferenceHost struct {
@@ -516,7 +516,7 @@ type ResourceAddress struct {
 // orphan, which is exactly the failure a teardown proof exists to exclude.
 //
 // It is a read-only view for the authoring harness
-// (internal/workerauthoring), and it is not a route. The v1alpha3 conformance
+// (internal/workerauthoring), and it is not a route. The v1beta1 conformance
 // lane is black box by construction, so no required check may use it: a check
 // that reached into the store would be measuring this implementation instead of
 // the contract every other host is held to.
@@ -604,7 +604,7 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 	// serves and nameAddressedResourceSurfaces does not enumerate, or an
 	// enumerated surface this host does not serve, fails
 	// TestEveryNameAddressedSurfaceIsRouted. There is no refresh action in the
-	// v1alpha3 lane — observe is the one fenced read-only re-observation — so
+	// v1beta1 lane — observe is the one fenced read-only re-observation — so
 	// /refresh reaches no entry and is an unknown operation, exactly like any
 	// other action the lane does not define.
 	case parts[0] == "resources" && len(parts) == 5:
@@ -824,7 +824,7 @@ func (h *ReferenceHost) resolveResourceWire(body *resourceWire) (*InstalledForm,
 }
 
 // validSpaceID ports $defs/spaceId of
-// spec/schemas/host-api-wire-v1alpha3.schema.json into the host: a SpaceID is
+// spec/schemas/host-api-wire-v1beta1.schema.json into the host: a SpaceID is
 // valid UTF-8 of 1..255 Unicode code points, carries no leading or trailing
 // Unicode White_Space code point or U+FEFF, and contains no C0/C1 control
 // character and no slash. The value is opaque and case-sensitive: the host

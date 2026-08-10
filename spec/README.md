@@ -33,9 +33,9 @@ Takoform has five public contract interfaces:
    projection. Focused contracts such as the Legacy
    [`data.indexed@1`](data-indexed/) only define the descriptor data the
    declaring Form actually declares.
-4. **Current-lane (Edge Platform Family) contract surfaces.**
-   [`host-api/v1alpha3.md`](host-api/v1alpha3.md) defines the current Host API
-   lane with UID/generation/revision resource identity, long-running
+4. **Current Beta (Edge Platform Family) contract surfaces.**
+   [`host-api/v1beta1.md`](host-api/v1beta1.md) defines the current Host API
+   channel with UID/generation/revision resource identity, long-running
    Operations, and Host Support Profiles.
    [`form-families.md`](form-families.md) defines namespaced Form Family
    groups. [`interface-contract/`](interface-contract/) defines exact
@@ -69,12 +69,16 @@ lane, and the signed append-only checkpoint delivery lane are implemented.
 
 Current Form design work uses namespaced Form Family groups
 ([`form-families.md`](form-families.md)); the first family is
-`edge.forms.takoform.com/v1alpha1` and its packages use
-`packages.forms.takoform.com/v1alpha4`. The `forms.takoform.com/v1alpha2`
+`edge.forms.takoform.com/v1beta1`. Its exact 15 `0.1.0` definitions are
+Experimental and its packages use `packages.forms.takoform.com/v1alpha4`.
+Package publication and Form maturity are independent. The
+`forms.takoform.com/v1alpha2`
 epoch and its nine `0.1.0` source candidates are retained provider-v2 preview
 source under the `packages.forms.takoform.com/v1alpha3` envelope
-([decision 0013](decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md));
-they are not the basis for new specification work. A repository
+([decision 0035](decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md));
+they are not the basis for new specification work. The published v1alpha3
+schema, operation, documentation, and public-mirror identities are retained
+unchanged history rather than rewritten as Beta. A repository
 implementation or local passing gate is not Form publication, Host Support,
 activation, or live Cloud availability.
 
@@ -104,14 +108,17 @@ their proofs with a new provider or maturity identity.
 
 The frozen Legacy Host API wire remains `forms.takoform.com/v1alpha1`, and
 the retained provider-v2 wire remains `forms.takoform.com/v1alpha2` at
-`/.well-known/takoform/v1alpha2`. The current Host API wire is
-`forms.takoform.com/v1alpha3`, reached through its own discovery path
-`/.well-known/takoform/v1alpha3` so retained clients cannot select the
-current API accidentally. The Host API group is a protocol compatibility
-identity independent of any nested Form group. The current package envelope
-is `packages.forms.takoform.com/v1alpha4`. The Terraform provider identity is
-`registry.terraform.io/tako0614/takoform`; its SemVer is independent from all
-of these API identities.
+`/.well-known/takoform/v1alpha2`. The v1alpha3 public identities are retained
+unchanged. The current Host API wire is `forms.takoform.com/v1beta1`, reached
+through `/.well-known/takoform/v1beta1` with API root
+`/apis/forms.takoform.com/v1beta1`, so retained clients cannot select it
+accidentally. The Host API group is a protocol compatibility identity
+independent of any nested Form group. The current package envelope is
+`packages.forms.takoform.com/v1alpha4`; Interface and Binding refs remain
+`interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha1`. The
+Terraform provider identity is `registry.terraform.io/tako0614/takoform`; its
+stable `v2.1.0` release target is independent from all of these API identities
+and remains `candidate-only` until the release owner publishes it.
 
 ## Normative consistency audit
 

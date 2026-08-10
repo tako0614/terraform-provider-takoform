@@ -179,7 +179,7 @@ func (c *Client) ValidateResource(ctx context.Context, resource *Resource) (*Val
 // short-lived prepareDigest. The response must echo the requested identity
 // and spec byte-for-byte at the RFC 8785 canonical level. An update prepare
 // carries the generation fence as Takoform-Expected-Generation
-// (spec/host-api/operations-v1alpha3.json: "generation-fence-when-updating");
+// (spec/host-api/operations-v1beta1.json: "generation-fence-when-updating");
 // the host binds the current resource's uid and generation into the digest
 // itself, so the client sends no uid channel.
 func (c *Client) PrepareResource(ctx context.Context, resource *Resource, fence Fence) (*PrepareResult, error) {
@@ -271,7 +271,7 @@ type applyReview struct {
 // An UPDATE names its incarnation in the Idempotency-Key twice over: through
 // the caller's expectedUid, and through the prepareDigest inside the body,
 // which the host mints against the target's CURRENT uid and generation
-// (spec/host-api/operations-v1alpha3.json: prepareBinding.prepareDigest). Two
+// (spec/host-api/operations-v1beta1.json: prepareBinding.prepareDigest). Two
 // incarnations of one name therefore cannot share an update key even when the
 // caller supplies no uid. A CREATE cannot name one, because none exists yet:
 // its prepare binds the create markers, which are the same for every
@@ -448,7 +448,7 @@ func (c *Client) ObserveResource(ctx context.Context, space string, ref FormRef,
 }
 
 // fencedStatusAction performs one fenced, read-only status action. observe is
-// the lane's only such action: v1alpha3 has no refresh operation, because two
+// the lane's only such action: v1beta1 has no refresh operation, because two
 // fenced read-only re-observations with the same contract were one operation
 // spelled two ways.
 func (c *Client) fencedStatusAction(ctx context.Context, action, space string, ref FormRef, name, uid, generation string) (*Resource, error) {

@@ -6,9 +6,11 @@ FormRef or public release identity exists yet.
 
 ## Need
 
-Takosumi Cloud runs immutable edge applications and is the first host. The portable contract must describe the application a consumer
-wants without exposing Cloudflare, placement, routing, credentials, billing,
-or a host's runtime manager.
+The v1alpha2 reset evaluated immutable edge applications on one host. That
+historical evaluation is not a current host or first-host claim. The portable
+contract describes the application a consumer wants without exposing
+Cloudflare, placement, routing, credentials, billing, or a host's runtime
+manager.
 
 ## Portable boundary
 
@@ -46,7 +48,8 @@ placement.
 
 ## Experimental exit evidence
 
-Takosumi Cloud supplies the real workload and first host only. Canonical
-definition, positive/negative fixtures, compatibility and migration analysis,
-security review, provider-v2 behavior, package signature, and public readback
-remain required before `EdgeWorker@0.1.0` exists.
+An independent adopter (which may include Takosumi) supplies one workload
+evidence source only; it does not decide maturity. Canonical definition,
+positive/negative fixtures, compatibility and migration analysis, security
+review, provider-v2 behavior, package signature, and public readback remain
+required before `EdgeWorker@0.1.0` exists.

@@ -24,7 +24,7 @@ const contractPath = path.join(corpusRoot, "contract.json");
 const manifestPath = path.join(corpusRoot, "manifest.json");
 
 const forms = readJSON(
-  path.join(repositoryRoot, "forms", "candidates", "edge", "v1alpha1", "candidate-set.json"),
+  path.join(repositoryRoot, "forms", "candidates", "edge", "v1beta1", "candidate-set.json"),
 );
 const interfaces = readJSON(
   path.join(repositoryRoot, "interfaces", "candidates", "v1alpha1", "candidate-set.json"),
@@ -44,8 +44,14 @@ const formsByFamily = new Map(
     candidate,
   ]),
 );
+const formsByKind = new Map(
+  forms.forms.map((candidate) => [candidate.formRef.kind, candidate]),
+);
 if (formsByFamily.size !== forms.forms.length) {
   throw new Error("unpublished Form candidate set contains a duplicate family");
+}
+if (formsByKind.size !== forms.forms.length) {
+  throw new Error("unpublished Form candidate set contains a duplicate kind");
 }
 const interfacesByIdentity = new Map(
   interfaces.interfaces.map((candidate) => [
@@ -63,7 +69,14 @@ let pinnedForms = 0;
 for (const probe of Object.values(contract.runnerInput)) {
   const ref = probe?.identity?.formRef;
   if (ref === undefined) continue;
-  const candidate = formsByFamily.get(formFamily(ref));
+  // The one-time alpha-to-Beta mint keeps the corpus's behavior and Kind
+  // roster while replacing every exact identity. Once --write completes all
+  // refs match by family and this retained-alpha fallback is no longer used.
+  const candidate =
+    formsByFamily.get(formFamily(ref)) ??
+    (ref.apiVersion === "edge.forms.takoform.com/v1alpha1"
+      ? formsByKind.get(ref.kind)
+      : undefined);
   if (candidate === undefined) {
     throw new Error(
       `portable-host-v3 references unknown current Form family ${ref.apiVersion}/${ref.kind}`,

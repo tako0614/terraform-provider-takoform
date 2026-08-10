@@ -31,7 +31,7 @@ import (
 // Everything else the contracts state — convergence, streaming bodies, safe
 // SQLite value conversion and rollback-only effects, attempt counts, and
 // dead-letter transfer — is a host obligation, listed as such in
-// spec/host-api/v1alpha3.md rather than pretended to be proven here.
+// spec/host-api/v1beta1.md rather than pretended to be proven here.
 
 // checkEdgeInterfaceContractsAdvertised proves the host implements each pinned
 // data-plane Interface at the EXACT contract the lane names.

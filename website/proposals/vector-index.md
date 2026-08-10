@@ -6,9 +6,9 @@ FormRef or public release identity exists yet.
 
 ## Need and boundary
 
-Takosumi Cloud provides vector indexing. The candidate Form describes fixed
-dimension and metric compatibility, lifecycle identity, and a vector-index
-Interface. Engine, placement, capacity, replication, credentials, data plane,
+The candidate Form describes vector indexing with fixed dimension and metric
+compatibility, lifecycle identity, and a vector-index Interface. Engine,
+placement, capacity, replication, credentials, data plane,
 and price remain host-owned.
 
 ## Substrate-neutrality review

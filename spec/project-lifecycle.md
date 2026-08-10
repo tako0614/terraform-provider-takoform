@@ -11,14 +11,20 @@ and the evidence required to change maturity. Exact version compatibility is
 defined in [`versioning.md`](versioning.md); package and implementation
 conformance are defined in [`conformance.md`](conformance.md).
 
-The machine authority is [`../forms/lifecycle.json`](../forms/lifecycle.json).
-Its repository-local authoring schema is
+Machine authority is scoped by identity family. The retained central epochs
+and their proposals are recorded in
+[`../forms/lifecycle.json`](../forms/lifecycle.json). Its repository-local authoring schema is
 [`../forms/lifecycle.schema.json`](../forms/lifecycle.schema.json), and
 `standard-form-conformance verify` is the fail-closed semantic validator. The
 JSON Schema documents shape; the validator additionally verifies referenced
 files, exact package bytes, transition order, owner continuity, independent
 maintainers, and the pinned Legacy inventory. The authoring schema has no
-public `$id` and is not a published Form contract.
+public `$id` and is not a published Form contract. Current family maturity and
+exact identity are recorded in the generated family candidate set; for the
+Beta Edge family that is
+[`../forms/candidates/edge/v1beta1/candidate-set.json`](../forms/candidates/edge/v1beta1/candidate-set.json).
+The provider compatibility copy is independently locked in
+[`../release/provider-form-identities.json`](../release/provider-form-identities.json).
 
 ## Independent facts
 
@@ -37,24 +43,26 @@ No package, provider release, generated catalog entry, host report, activation,
 or Service Offering MAY by itself promote Form maturity. A host implementation
 MUST NOT describe its support decision as Takoform approval or certification.
 
-The v1alpha3 lane and the Edge Platform Family are additionally
-**publication-frozen** while their publication blockers are open; the freeze,
-what it forbids, and what is already immutable are recorded in
-[`publication-freeze.md`](publication-freeze.md).
+The Beta Host API and provider v2.1 path follow the scoped release policy in
+[`publication-freeze.md`](publication-freeze.md). Open independent-host,
+third-party-ecosystem, and Cloud-GA evidence remains required for later
+Stable/GA claims and Form Package/public-service publication, but does not
+block a stable provider release that embeds the exact Beta identities.
 
 ## Form Families
 
 Forms are grouped into named Form Families with namespaced API groups
 ([`form-families.md`](form-families.md),
 [decision 0009](decisions/0009-form-families-and-namespaced-api-versions.md)).
-A family is a catalog and namespace fact only. It carries no maturity: family
-members are tracked in the family candidate set, a member Form gains its own
-lifecycle record only at its Experimental transition — no family member has
-made that transition, so no family member has a lifecycle record — and adding
-a Form to a family, or publishing one family member, promotes nothing else.
-The retained
+A family is a catalog and namespace fact only; its API channel does not confer
+Form maturity. Each member still has an explicit maturity classification. The
+current `edge.forms.takoform.com/v1beta1` candidate set contains exactly 15
+`0.1.0` Forms and classifies all of them Experimental. Its unpublished
+`packages.forms.takoform.com/v1alpha4` artifacts are a separate publication
+fact. Adding a Form to a family, or publishing one family member, promotes
+nothing else. The retained
 `forms.takoform.com/v1alpha2` candidates are superseded provider-v2 preview
-source ([decision 0013](decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md));
+source ([decision 0035](decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md));
 they are not a published current Form line and are not the basis for new
 specification work.
 
@@ -118,14 +126,19 @@ A Proposal MAY become Experimental only when all of the following are present:
 - compatibility classification and a migration or rollback note;
 - security-boundary review;
 - generated reference and narrative documentation that agree;
-- immutable package provenance, signature, and public readback plan.
+- immutable FormRef and canonical Definition identity;
+- package provenance, signature, and public readback plan before package
+  publication.
 
 Passing these checks prepares a publication. It does not authorize one.
 
-The immutable v1alpha2 Definition contains no maturity field. The lifecycle
-record is the sole authority for Experimental, Stable, and later Legacy
+An immutable Definition contains no maturity field. The scoped lifecycle or
+family record is the authority for Experimental, Stable, and later Legacy
 transitions, so a maturity change never requires rewriting or duplicating a
-fact inside published package bytes.
+fact inside Definition or package bytes. A provider-first release may lock an
+Experimental FormRef and Definition/package digest before the package artifact
+is published; that lock is still immutable and package publication remains a
+separate operation.
 
 ### Stable
 
@@ -151,6 +164,11 @@ An Experimental Form MUST NOT become Stable until:
 Stable commits Takoform to the stable SemVer rules in
 [`versioning.md`](versioning.md). It does not guarantee that every host supports
 the Form or that a commercial platform offers it.
+
+Takosumi GA is a qualification checkpoint, not an automatic transition. At
+that checkpoint only contracts with the required evidence above may mint a
+Stable `1.0.0` identity; all others remain Experimental/Beta without being
+renamed or overwritten.
 
 The machine record requires the exact transition history `proposal →
 experimental → stable`, two distinct host subjects with two independently
@@ -194,10 +212,11 @@ to replace their historical status field. Reader-facing tools MUST project the
 current Legacy classification alongside the original document truth.
 
 The top-level `legacy` object pins that pre-reset line by a canonical digest of
-every exact public release identity. `currentForms` contains only post-reset
-Form lifecycle records; it is empty until a real Proposal earns an Experimental
-publication. This separation prevents the old generated catalog or admission
-subset from being silently reinterpreted as new maturity evidence.
+every exact public release identity. `currentForms` is scoped to the retained
+central post-reset epoch; current namespaced families use their own generated
+candidate-set maturity record. This separation prevents the old generated
+catalog or admission subset from being silently reinterpreted as new maturity
+evidence.
 
 ## Change authority
 
@@ -207,7 +226,7 @@ Every public Form change MUST update, in the same reviewed change set:
 - compatibility classification and migration effect;
 - lifecycle and security risks;
 - generated reference documentation;
-- current maturity record;
+- the applicable scoped maturity record;
 - provider compatibility only when provider behavior changes;
 - Host Support only when the named host's evidence changes.
 

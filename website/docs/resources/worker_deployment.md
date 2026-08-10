@@ -2,7 +2,7 @@
 page_title: "takoform_worker_deployment Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Worker Deployment (edge.forms.takoform.com/v1alpha1, role deployment).
+  Worker Deployment (edge.forms.takoform.com/v1beta1, role deployment).
 ---
 
 # takoform_worker_deployment
@@ -11,8 +11,9 @@ Selects which Worker Versions of one Module Worker serve traffic and in what pro
 
 This is a `deployment` resource: the only mutable path for traffic movement and rollback. It selects which revisions are active.
 
-This resource speaks the Host API v1alpha3 lane and requires provider v2.1.0 or
-later (source candidate; not yet published). The configured host selects and
+This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.0 or
+later. Provider v2.1.0 is the stable release target; its source descriptor stays
+candidate-only until the owner publishes it. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](../../examples/resources/takoform_worker_deployment/resource.tf).
 
@@ -84,7 +85,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_worker_deployment.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1alpha1","kind":"WorkerDeployment","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"WorkerDeployment","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

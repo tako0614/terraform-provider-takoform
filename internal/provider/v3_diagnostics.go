@@ -1,6 +1,6 @@
 package provider
 
-// v3_diagnostics.go is the one renderer every v1alpha3-lane diagnostic goes
+// v3_diagnostics.go is the one renderer every v1beta1-lane diagnostic goes
 // through.
 //
 // A provider diagnostic is the only thing a practitioner sees when an apply
@@ -13,8 +13,8 @@ package provider
 // reconstruct the rest.
 //
 // Two vocabularies meet here and are deliberately kept apart. A HOST error
-// carries a code from the closed v1alpha3 taxonomy
-// (spec/host-api/operations-v1alpha3.json); it is rendered verbatim and marked
+// carries a code from the closed v1beta1 taxonomy
+// (spec/host-api/operations-v1beta1.json); it is rendered verbatim and marked
 // as the host's, because that enum is published and this provider does not
 // extend it. A PROVIDER error carries a code from the closed set below, in its
 // own `takoform.provider/` namespace, because a refusal the provider makes
@@ -260,7 +260,7 @@ func (d v3Diagnostic) repair() string {
 			return repair
 		}
 		if d.Host.ProtocolInvalid {
-			return "The host's error response is not the closed v1alpha3 envelope, so it carries no portable " +
+			return "The host's error response is not the closed v1beta1 envelope, so it carries no portable " +
 				"meaning. Report it to the host operator; the provider will not guess a remedy from it."
 		}
 	}

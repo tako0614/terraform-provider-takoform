@@ -1,7 +1,7 @@
 package standardforms
 
 // publish_surfaces_v3.go renders the human-facing surfaces of the Host API
-// v1alpha3 resource lane — one reference document and one example per Edge
+// v1beta1 resource lane — one reference document and one example per Edge
 // Platform Family resource — from the single catalog declaration in
 // internal/edgeformcatalog. Generation and verification share these exact
 // bytes, exactly like the retained v2 renderer above them.
@@ -259,8 +259,9 @@ description: |-
 
 `, form.ResourceType, form.Title+" ("+edgeformcatalog.Family.APIVersion()+", role "+string(form.Role)+").", form.ResourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This resource speaks the Host API v1alpha3 lane and requires provider v2.1.0 or\n" +
-		"later (source candidate; not yet published). The configured host selects and\n" +
+	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.0 or\n" +
+		"later. Provider v2.1.0 is the stable release target; its source descriptor stays\n" +
+		"candidate-only until the owner publishes it. The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
 		"price, or implementation. See the [complete example](../../examples/resources/" +
 		form.ResourceType + "/resource.tf).\n")
@@ -437,7 +438,7 @@ func v3ExampleHCL(form model.Form) string {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # provider v2.1.0 is an unpublished source candidate; build the provider from source.
+      # stable v2.1.0 release target; descriptor remains candidate-only until owner publication.
       version = "= 2.1.0"
     }
   }
@@ -630,9 +631,9 @@ func v3FormInventorySection() string {
 
 The first official Form Family fixes the shape of a proven edge developer
 platform without naming its vendor (spec/form-families.md). Its members are
-source candidates for the Host API v1alpha3 resource lane; the typed
-resources require provider v2.1.0 or later (source candidate; not yet
-published). Roles come from the closed v1alpha3 role enum and decide
+Experimental Forms for the Host API v1beta1 resource lane; their package
+artifacts remain unpublished. The typed resources require provider v2.1.0 or
+later. Roles come from the closed v1beta1 role enum and decide
 lifecycle mechanics: revisions are immutable, deployments move traffic,
 attachments activate inward events.
 
@@ -644,13 +645,13 @@ attachments activate inward events.
 			form.Kind, form.ResourceType, form.Role, form.DefinitionVersion, form.Description)
 	}
 	builder.WriteString(`
-The provider exposes exactly these typed resources on the v1alpha3 lane, and no
+The provider exposes exactly these typed resources on the v1beta1 lane, and no
 generic carrier for a Form it was not built against: nothing in the lane lets a
 client verify a FormRef it did not compile in, so a carrier would offer reach
 with no verification behind it (spec/decisions/0021). Family membership grants
-no maturity: these members are tracked in the family candidate set, a lifecycle
-record begins only at an Experimental transition, and hosts state their
-supported subset in their Host Support Profiles.
+no Stable maturity: the generated family candidate set records all 15 as
+Experimental 0.1.0 Forms, and hosts state their supported subset in their Host
+Support Profiles. Beta is the API/family channel, not Form stability.
 `)
 	return builder.String()
 }

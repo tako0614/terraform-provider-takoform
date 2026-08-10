@@ -194,7 +194,7 @@ func v3SupportUnreadable(resourceType, subject string, err error) diag.Diagnosti
 		Detail: "The plan therefore decides nothing about this capability, and apply remains the place the " +
 			"host answers. Nothing has been refused.",
 		Repair: "If this keeps happening, check that the endpoint serves the Host Support Profile routes the " +
-			"v1alpha3 lane requires; capacity, price, region, and SLA are Service Offering facts and are never " +
+			"v1beta1 lane requires; capacity, price, region, and SLA are Service Offering facts and are never " +
 			"part of that surface.",
 	}.warning()
 }

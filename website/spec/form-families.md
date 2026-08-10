@@ -13,7 +13,7 @@ the semantic rule every member Form must satisfy is
 Each family owns a DNS-like API group with its own version:
 
 ```text
-edge.forms.takoform.com/v1alpha1
+edge.forms.takoform.com/v1beta1
 containers.forms.takoform.com/v1alpha1   (future)
 forms.example.com/v1alpha1               (third party)
 ```
@@ -52,7 +52,7 @@ A family that splits one running thing across these roles owes a statement of
 what holds them together. For the Edge Platform Family that statement is
 [decision 0016](decisions/0016-the-worker-aggregate-has-one-active-deployment.md),
 normatively stated in
-[`host-api/v1alpha3.md`](host-api/v1alpha3.md#the-worker-aggregate): an identity
+[`host-api/v1beta1.md`](host-api/v1beta1.md#the-worker-aggregate): an identity
 has at most ONE deployment resource; that deployment selects revisions of its
 own identity, each named once, with weights summing to exactly 10000; every
 attachment is admitted against the deployment rather than against any stored
@@ -66,7 +66,7 @@ its ETag, while leaving its generation alone.
 
 ## Edge Platform Family
 
-`edge.forms.takoform.com/v1alpha1` is the first official family. Its members
+`edge.forms.takoform.com/v1beta1` is the first official family. Its members
 fix the shape of a proven edge developer platform without naming its vendor.
 The authored first-milestone members are:
 
@@ -165,9 +165,10 @@ container designs are separate family work with their own proposals.
 
 - It does not merge packages: one Form Package still contains exactly one
   Form Definition.
-- It does not grant maturity: family candidates are tracked in the family
-  candidate set, and a member Form gains its own lifecycle record at its
-  Experimental transition (no family member has made that transition yet).
+- It does not grant maturity: the current family candidate set explicitly
+  classifies its exact 15 `0.1.0` members as Experimental. The Beta family
+  channel does not make them Stable, and their package artifacts remain a
+  separate unpublished fact.
 - It does not constrain hosts: a host may support any subset of a family and
   states that subset in its Host Support Profile.
 - It does not admit vendor identity: adapter profiles map family Forms to

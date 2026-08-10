@@ -1,7 +1,7 @@
 package provider
 
 // v3_continuity.go carries the two state-continuity rules of the Host API
-// v1alpha3 resource lane (spec/decisions/0017): what a read does when the
+// v1beta1 resource lane (spec/decisions/0017): what a read does when the
 // host serves a DIFFERENT incarnation than the one state names, and what a
 // read does when state records a mutation the host accepted but has not
 // finished.

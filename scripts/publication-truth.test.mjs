@@ -29,8 +29,8 @@ function fixture() {
     releaseVersion: {
       providerAddress: "registry.terraform.io/tako0614/takoform",
       publicationStatus: "candidate-only",
-      tag: "v2.0.0",
-      version: "2.0.0",
+      tag: "v2.1.0",
+      version: "2.1.0",
     },
     providerIdentities: {
       format: "takoform.provider-release-identities@v1",
@@ -58,6 +58,7 @@ describe("publication truth", () => {
     expect(truth.publishedCount).toBe(1);
     expect(truth.providerVersion).toBe("2.0.0");
     expect(truth.legacyProviderVersion).toBe("1.0.1");
+    expect(truth.providerVersion).not.toBe(fixture().releaseVersion.version);
     expect(truth).not.toHaveProperty("admittedCount");
     expect(truth).not.toHaveProperty("admissionTag");
   });

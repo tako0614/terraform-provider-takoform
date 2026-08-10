@@ -117,14 +117,14 @@ func TestEveryNameAddressedSurfaceIsRouted(t *testing.T) {
 // that appears in the Lifecycle route block and nowhere else is one this
 // repository is asking someone to build without measuring its tenant boundary.
 func TestEveryNameAddressedSurfaceIsPublished(t *testing.T) {
-	published, err := publishedResourceRoutes(filepath.Join("..", "..", "spec", "host-api", "v1alpha3.md"))
+	published, err := publishedResourceRoutes(filepath.Join("..", "..", "spec", "host-api", "v1beta1.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	declared := declaredNameAddressedSurfaces()
 	if strings.Join(published, "\n") != strings.Join(declared, "\n") {
 		t.Fatalf(
-			"spec/host-api/v1alpha3.md publishes the resource routes\n  %s\nand the enumeration declares\n  %s",
+			"spec/host-api/v1beta1.md publishes the resource routes\n  %s\nand the enumeration declares\n  %s",
 			strings.Join(published, "\n  "), strings.Join(declared, "\n  "),
 		)
 	}

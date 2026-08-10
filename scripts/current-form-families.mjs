@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
 // Deterministic builder for the Form Family candidate lane (spec decisions
-// 0008..0013): Edge Platform Family Form Packages (package-index v1alpha4,
-// form-definition v1alpha3), the exact Interface and Binding candidate sets,
+// 0008..0035): Edge Platform Family Form Packages (package-index v1alpha4,
+// form-definition v1beta1), the exact Interface and Binding candidate sets,
 // and the provider v3 registry. Mirrors scripts/current-form-candidates.mjs:
 // stage, verify, then install atomically; --check regenerates into a
 // temporary tree and compares.
@@ -28,10 +28,10 @@ const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const FAMILY = "edge.forms.takoform.com/v1alpha1";
+const FAMILY = "edge.forms.takoform.com/v1beta1";
 const PACKAGE_API_VERSION = "packages.forms.takoform.com/v1alpha4";
 const trackedTargets = {
-  forms: path.join(repositoryRoot, "forms", "candidates", "edge", "v1alpha1"),
+  forms: path.join(repositoryRoot, "forms", "candidates", "edge", "v1beta1"),
   interfaces: path.join(repositoryRoot, "interfaces", "candidates", "v1alpha1"),
   bindings: path.join(repositoryRoot, "bindings", "candidates", "v1alpha1"),
 };
@@ -41,6 +41,26 @@ const registryPath = path.join(
   "currentformregistry",
   "registry_v3_generated.go",
 );
+const providerIdentityLedgerPath = path.join(
+  repositoryRoot,
+  "release",
+  "provider-form-identities.json",
+);
+const releaseDescriptorPath = path.join(repositoryRoot, "release", "version.json");
+// v2.1.0 is already published as the provider's immutable compatibility
+// commitment. The candidate ledger and the generated catalog may evolve only
+// by appending a new provider release; changing this entry in both places must
+// fail instead of being accepted as a self-consistent rebuild.
+export const FROZEN_PROVIDER_RELEASES = new Map([
+  [
+    "2.1.0",
+    Object.freeze({
+      tag: "v2.1.0",
+      ledgerDigest:
+        "sha256:a3252479c294bd05bd64339ff300c38548fe26fe7b734ee71f7e0502dfde686e",
+    }),
+  ],
+]);
 const forms = [
   ["ModuleWorker", "module-worker", "identity"],
   ["WorkerBundle", "worker-bundle", "revision"],
@@ -96,14 +116,15 @@ function main() {
     );
     try {
       const stagedRoots = {
-        forms: path.join(stagingParent, "forms-v1alpha1"),
+        forms: path.join(stagingParent, "forms-v1beta1"),
         interfaces: path.join(stagingParent, "interfaces-v1alpha1"),
         bindings: path.join(stagingParent, "bindings-v1alpha1"),
       };
       const stagedRegistryPath = path.join(stagingParent, "registry_v3_generated.go");
       const manifest = generate(stagedRoots);
       verifyPackages(stagedRoots.forms);
-      writeFileSync(stagedRegistryPath, renderRegistry(manifest));
+      const embeddedIdentities = loadProviderIdentityLedger(manifest);
+      writeFileSync(stagedRegistryPath, renderRegistry(manifest, embeddedIdentities));
       installGeneratedOutputs(stagingParent, [
         [stagedRoots.forms, trackedTargets.forms],
         [stagedRoots.interfaces, trackedTargets.interfaces],
@@ -122,16 +143,21 @@ function main() {
   const temporary = mkdtempSync(path.join(tmpdir(), "takoform-form-families-"));
   try {
     const generatedRoots = {
-      forms: path.join(temporary, "forms-v1alpha1"),
+      forms: path.join(temporary, "forms-v1beta1"),
       interfaces: path.join(temporary, "interfaces-v1alpha1"),
       bindings: path.join(temporary, "bindings-v1alpha1"),
     };
     const manifest = generate(generatedRoots);
+    const embeddedIdentities = loadProviderIdentityLedger(manifest);
     for (const [key, generatedRoot] of Object.entries(generatedRoots)) {
       compareTrees(generatedRoot, trackedTargets[key], key);
     }
     verifyPackages(trackedTargets.forms);
-    compareFile(renderRegistry(manifest), registryPath, "provider v3 registry");
+    compareFile(
+      renderRegistry(manifest, embeddedIdentities),
+      registryPath,
+      "provider v3 registry",
+    );
     process.stdout.write("Form Family candidates are reproducible and valid\n");
   } finally {
     rmSync(temporary, { recursive: true, force: true });
@@ -146,6 +172,7 @@ function generate(outputRoots) {
   const manifest = {
     format: "takoform.form-family-candidates@v1",
     family: FAMILY,
+    formMaturity: "experimental",
     packageApiVersion: PACKAGE_API_VERSION,
     publicationStatus: "unpublished",
     authoringSource: "internal/edgeformcatalog",
@@ -163,7 +190,8 @@ function generate(outputRoots) {
       definition.kind !== kind ||
       definition.apiVersion !== FAMILY ||
       definition.definitionVersion !== "0.1.0" ||
-      definition.role !== role
+      definition.role !== role ||
+      !/^takoform_[a-z0-9_]+$/u.test(rendered.resourceType)
     ) {
       throw new Error(`${slug}: family catalog emitted an invalid candidate identity`);
     }
@@ -171,7 +199,7 @@ function generate(outputRoots) {
       throw new Error(`${slug}: every family candidate must carry a negative fixture`);
     }
     if (Object.hasOwn(definition.desiredSchema?.properties ?? {}, "name")) {
-      throw new Error(`${slug}: v1alpha3 desired schemas must not declare a name property`);
+      throw new Error(`${slug}: v1beta1 desired schemas must not declare a name property`);
     }
 
     const destinationRoot = path.join(outputRoots.forms, slug);
@@ -228,7 +256,8 @@ function generate(outputRoots) {
     manifest.forms.push({
       kind,
       role,
-      path: `forms/candidates/edge/v1alpha1/${slug}`,
+      resourceType: rendered.resourceType,
+      path: `forms/candidates/edge/v1beta1/${slug}`,
       formRef,
       packageDigest: digestCanonicalJSON(indexPath),
     });
@@ -383,25 +412,25 @@ function compareFile(expected, actualPath, label) {
 // maps carry the same Form entries; the shape is what lets that stop being
 // true without a state migration
 // (spec/decisions/0017-provider-state-survives-form-evolution-and-interruption.md).
-function renderRegistry(manifest) {
+function renderRegistry(manifest, supportedIdentities) {
   const exactKey = (entry) =>
     `{APIVersion: ${JSON.stringify(entry.formRef.apiVersion)}, ` +
-    `Kind: ${JSON.stringify(entry.kind)}, ` +
+    `Kind: ${JSON.stringify(entry.formRef.kind)}, ` +
     `DefinitionVersion: ${JSON.stringify(entry.formRef.definitionVersion)}, ` +
     `SchemaDigest: ${JSON.stringify(entry.formRef.schemaDigest)}}`;
   const defaults = manifest.forms
     .map(
       (entry) =>
         `\t{APIVersion: ${JSON.stringify(entry.formRef.apiVersion)}, ` +
-        `Kind: ${JSON.stringify(entry.kind)}}: ${exactKey(entry)},`,
+        `Kind: ${JSON.stringify(entry.formRef.kind)}}: ${exactKey(entry)},`,
     )
     .join("\n");
-  const supported = manifest.forms
+  const supported = supportedIdentities
     .map(
       (entry) =>
         `\t${exactKey(entry)}: {` +
         `APIVersion: ${JSON.stringify(entry.formRef.apiVersion)}, ` +
-        `Kind: ${JSON.stringify(entry.kind)}, ` +
+        `Kind: ${JSON.stringify(entry.formRef.kind)}, ` +
         `DefinitionVersion: ${JSON.stringify(entry.formRef.definitionVersion)}, ` +
         `SchemaDigest: ${JSON.stringify(entry.formRef.schemaDigest)}, ` +
         `PackageDigest: ${JSON.stringify(entry.packageDigest)}},`,
@@ -425,6 +454,127 @@ function renderRegistry(manifest) {
     throw new Error(`generated provider v3 registry formatting failed\n${formatted.stderr}`);
   }
   return formatted.stdout;
+}
+
+// The provider identity ledger is independent of package publication. Once a
+// provider release embeds an exact Beta FormRef and package digest, the entry
+// remains in v3Supported forever, even after a later family becomes the create
+// default. This is the source-level state-compatibility fence for existing
+// Beta resources; release/provider-form-identities.json is never regenerated.
+function loadProviderIdentityLedger(manifest) {
+  const ledger = JSON.parse(readFileSync(providerIdentityLedgerPath, "utf8"));
+  const release = JSON.parse(readFileSync(releaseDescriptorPath, "utf8"));
+  if (
+    ledger?.format !== "takoform.provider-form-identities@v1" ||
+    !Array.isArray(ledger.releases) ||
+    ledger.releases.length === 0
+  ) {
+    throw new Error("provider Form identity ledger has an invalid envelope");
+  }
+  if (
+    release?.version !== "2.1.0" ||
+    release?.tag !== `v${release.version}` ||
+    release?.publicationStatus !== "candidate-only" ||
+    release?.versioning?.portableApiVersion !== "forms.takoform.com/v1beta1"
+  ) {
+    throw new Error("provider release descriptor must name candidate-only v2.1.0 on Host API v1beta1");
+  }
+  assertFrozenProviderReleaseDescriptor(release);
+
+  const supported = [];
+  const exactKeys = new Set();
+  const providerVersions = new Set();
+  let currentRelease;
+  for (const entry of ledger.releases) {
+    if (
+      entry === null ||
+      typeof entry !== "object" ||
+      Object.keys(entry).sort().join(",") !==
+        "family,formMaturity,forms,portableApiVersion,providerVersion" ||
+      typeof entry.providerVersion !== "string" ||
+      typeof entry.portableApiVersion !== "string" ||
+      typeof entry.family !== "string" ||
+      entry.formMaturity !== "experimental" ||
+      !Array.isArray(entry.forms) ||
+      entry.forms.length === 0
+    ) {
+      throw new Error("provider Form identity ledger contains an invalid release");
+    }
+    if (providerVersions.has(entry.providerVersion)) {
+      throw new Error(`provider Form identity ledger duplicates ${entry.providerVersion}`);
+    }
+    providerVersions.add(entry.providerVersion);
+    assertFrozenProviderRelease(entry);
+    if (entry.providerVersion === release.version) currentRelease = entry;
+
+    for (const form of entry.forms) {
+      if (
+        form === null ||
+        typeof form !== "object" ||
+        Object.keys(form).sort().join(",") !== "formRef,packageDigest,resourceType" ||
+        !/^takoform_[a-z0-9_]+$/u.test(form.resourceType) ||
+        !/^sha256:[0-9a-f]{64}$/u.test(form.packageDigest) ||
+        form.formRef === null ||
+        typeof form.formRef !== "object" ||
+        Object.keys(form.formRef).sort().join(",") !==
+          "apiVersion,definitionVersion,kind,schemaDigest" ||
+        form.formRef.apiVersion !== entry.family ||
+        !/^[A-Z][A-Za-z0-9]{0,63}$/u.test(form.formRef.kind) ||
+        !/^sha256:[0-9a-f]{64}$/u.test(form.formRef.schemaDigest)
+      ) {
+        throw new Error(`${entry.providerVersion}: invalid provider-embedded Form identity`);
+      }
+      const exactKey = canonicalJson(form.formRef);
+      if (exactKeys.has(exactKey)) {
+        throw new Error(`${entry.providerVersion}: duplicate provider-embedded FormRef ${exactKey}`);
+      }
+      exactKeys.add(exactKey);
+      supported.push(form);
+    }
+  }
+  if (
+    currentRelease === undefined ||
+    currentRelease.portableApiVersion !== release.versioning.portableApiVersion ||
+    currentRelease.family !== manifest.family ||
+    currentRelease.formMaturity !== manifest.formMaturity
+  ) {
+    throw new Error("provider Form identity ledger has no exact entry for the release descriptor");
+  }
+  const currentManifest = manifest.forms.map(
+    ({ resourceType, formRef, packageDigest }) => ({
+      resourceType,
+      formRef,
+      packageDigest,
+    }),
+  );
+  if (canonicalJson(currentRelease.forms) !== canonicalJson(currentManifest)) {
+    throw new Error(
+      "provider v2.1 embedded FormRefs/digests drifted; mint a new family identity and provider release instead of changing the ledger",
+    );
+  }
+  return supported;
+}
+
+// Keep the check as a pure exported helper so the direct script test can prove
+// that mutating a retained ledger entry is rejected even when a candidate
+// catalog is regenerated alongside it.
+export function assertFrozenProviderRelease(entry) {
+  const frozen = FROZEN_PROVIDER_RELEASES.get(entry?.providerVersion);
+  if (frozen === undefined) return;
+  const actual = digestCanonicalValue(entry);
+  if (actual !== frozen.ledgerDigest) {
+    throw new Error(
+      `immutable provider ${entry.providerVersion} identity ledger entry changed: ${actual} != ${frozen.ledgerDigest}`,
+    );
+  }
+}
+
+export function assertFrozenProviderReleaseDescriptor(release) {
+  const frozen = FROZEN_PROVIDER_RELEASES.get(release?.version);
+  if (frozen === undefined || release.tag === frozen.tag) return;
+  throw new Error(
+    `immutable provider ${release.version} release tag changed: ${release.tag} != ${frozen.tag}`,
+  );
 }
 
 function inventory(root) {
@@ -481,4 +631,8 @@ function canonicalJson(value) {
     .sort()
     .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
     .join(",")}}`;
+}
+
+function digestCanonicalValue(value) {
+  return `sha256:${createHash("sha256").update(canonicalJson(value)).digest("hex")}`;
 }

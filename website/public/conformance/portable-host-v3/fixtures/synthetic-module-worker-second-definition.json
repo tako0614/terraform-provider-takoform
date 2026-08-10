@@ -1,5 +1,5 @@
 {
-  "apiVersion": "edge.forms.takoform.com/v1alpha1",
+  "apiVersion": "edge.forms.takoform.com/v1beta1",
   "kind": "ModuleWorker",
   "definitionVersion": "0.2.0",
   "title": "Module Worker (conformance-only second definition version)",
