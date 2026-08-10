@@ -12,8 +12,8 @@ Globally replicated key/value namespace of opaque BYTES with eventual consistenc
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
 This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or
-later. Provider v2.1.1 is the stable release target; its source descriptor stays
-candidate-only until the owner publishes it. The configured host selects and
+later. Provider v2.1.1 is Registry-published; release/version.json retains
+candidate-only descriptor metadata after owner publication. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](../../examples/resources/takoform_edge_kv_namespace/resource.tf).
 

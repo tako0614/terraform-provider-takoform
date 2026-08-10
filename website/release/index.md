@@ -23,17 +23,19 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-Provider `v2.0.0` is the current published release. Provider `v1.0.3` is the
+Provider `v2.1.1` is the current Registry-published release. Provider `v2.0.0`
+is the published compatibility predecessor and Provider `v1.0.3` is the
 published Legacy `v1` release. Their signed tags, immutable GitHub Releases,
 and canonical Terraform Registry listings exist.
 
 `release/version.json` now describes the stable provider release target
 `v2.1.1`, tag `v2.1.1`, carrying Host API
 `forms.takoform.com/v1beta1`. Its `publicationStatus` remains
-`candidate-only`: no source descriptor, local gate, or candidate build claims
-that the release owner has created the signed tag, GitHub Release, or Registry
-version. Those become publication facts only through the owner flow and
-readback evidence below.
+`candidate-only` as descriptor metadata: a source descriptor, local gate, or
+candidate build does not itself establish signed-release or Registry
+publication. The retained owner-flow readback evidence below establishes that
+the Provider 2.1.1 bytes are published; the descriptor value remains
+`candidate-only` by design.
 
 Provider v2.1.1 embeds exactly 15 Experimental `0.1.0` Forms in
 `edge.forms.takoform.com/v1beta1`. Their exact FormRefs and definition/package
@@ -59,10 +61,10 @@ the exact same 15 Beta FormRefs, schema/package digests, Host API
 `forms.takoform.com/v1beta1`, and family `edge.forms.takoform.com/v1beta1`;
 only provider release identity and tooling changed. The current
 `provider-form-identities.json` entry is re-keyed to `v2.1.1` without changing
-any nested Form identity or digest. Neither `v2.1.0` nor `v2.1.1` may be added
-to `release/provider-release-identities.json` before exact Registry readback;
-the descriptor remains `candidate-only` and this repository makes no
-publication claim before that readback.
+any nested Form identity or digest. The exact Provider 2.1.1 Registry readback
+is now retained in `release/provider-release-identities.json`; the descriptor
+remains `candidate-only` metadata by design and no publication claim is made
+for a future version without its own readback.
 
 `release/provider-release-identities.json` retains the exact six-file signed
 Registry readback closure for current provider releases as canonical base64.

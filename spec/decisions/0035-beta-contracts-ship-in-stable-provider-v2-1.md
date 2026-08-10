@@ -33,9 +33,10 @@ These identities advance independently:
   `interfaces.takoform.com/v1alpha1` and
   `bindings.takoform.com/v1alpha1`.
 
-Provider v2.1.0 is a stable provider release targeting Beta contracts. The
-provider descriptor stays `candidate-only` until the owner deployment has
-actually published it. That descriptor status is publication truth, not SemVer
+Provider v2.1.1 is the stable provider release targeting these Beta contracts
+and is now Registry-published under its immutable release identity. The
+provider descriptor stays `candidate-only` as metadata after owner publication;
+that descriptor status is not Provider availability and is not SemVer
 prerelease syntax.
 
 ### New Beta identities

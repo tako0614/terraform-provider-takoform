@@ -12,25 +12,29 @@ and leaves only the vendor's identity, account, placement, and commerce
 outside the contract. Hosts are exchangeable; resource semantics are not
 ([decision 0008](spec/decisions/0008-forms-preserve-service-shape.md)).
 
-## What is published and what is a release candidate
+## What is published and what remains independent
 
 Provider publication, contract channel, Form maturity, and package publication
 are independent facts. Everything below names each fact explicitly.
 
 | Tier | What it is | How you get it |
 | --- | --- | --- |
-| **Current published** | Provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | installed from the Terraform Registry |
-| **Beta release candidate** | Stable provider target `v2.1.1`, carrying the Beta Host API `forms.takoform.com/v1beta1` and 15 exact Experimental Forms in `edge.forms.takoform.com/v1beta1`; descriptor status is `candidate-only` until the release owner publishes it | built from this repository's source only |
+| **Current published provider** | Provider `v2.1.1`, carrying the Beta Host API `forms.takoform.com/v1beta1` and 15 exact Experimental Forms in `edge.forms.takoform.com/v1beta1` | installed from the Terraform Registry |
+| **Published compatibility predecessor** | Provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | installed from the Terraform Registry with an exact compatibility pin |
+| **Published Legacy** | Provider `v1.0.3` and the frozen `forms.takoform.com/v1alpha1` state line | installed from the Terraform Registry for recovery and migration |
 
-The provider release candidate is source, not evidence of Registry publication.
-Its 15 embedded Beta FormRefs and definition/package digests are already locked
-as provider compatibility identities in
+Registry readback proves the immutable `v2.1.1` provider publication. The
+stable `v2.1.1` release target's `release/version.json` descriptor intentionally
+remains `candidate-only` metadata after owner publication; that value is not
+live availability state and does not make the published SemVer a prerelease.
+Its 15 embedded Beta FormRefs and definition/package digests are locked as
+provider compatibility identities in
 [`release/provider-form-identities.json`](release/provider-form-identities.json).
 The open obligations in
 [`spec/publication-blockers.json`](spec/publication-blockers.json) still block
 Form Package or public-service publication and remain later Stable/GA
-qualification obligations; they do not turn a stable provider version into a
-prerelease. The scoped policy is
+qualification obligations; provider publication does not grant Form maturity,
+Host Support, activation, or Cloud availability. The scoped policy is
 [`spec/publication-freeze.md`](spec/publication-freeze.md).
 
 The specification has three explicit lanes:
@@ -90,15 +94,14 @@ establish publication.
 
 - Provider `v1.0.3` is published and Registry-verified. It is the Legacy
   `v1alpha1` client. Existing Legacy state must pin provider v1.
-- Provider `v2.0.0` is published and Registry-verified as the retained
-  `v1alpha2` client. The published provider v2.0.0 exposes exactly the
+- Provider `v2.0.0` is the published, Registry-verified compatibility
+  predecessor for the retained `v1alpha2` client. It exposes exactly the
   retained nine Form candidates, which are superseded for new design work.
-  Its publication is proved by retained signed Registry-readback evidence,
-  not inferred from the current source release descriptor.
-- Provider `v2.1.1` is the stable release target for the Beta Host API and the
-  exact 15 Experimental Edge Platform Forms. Its descriptor remains
-  `candidate-only` until the release owner actually publishes the provider
-  ([decision 0035](spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
+- Provider `v2.1.1` is the current published, Registry-verified provider for
+  the Beta Host API and the exact 15 Experimental Edge Platform Forms. Its
+  descriptor remains `candidate-only` metadata by design; publication does not
+  promote the Host API or Forms, publish their packages, or establish a hosted
+  service ([decision 0035](spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
   A future `1.0.0` Form line is a new exact identity: refresh never silently
   rewrites Beta state or its codec to that identity.
 - Provider v2 fails closed on provider-v1 state. Migration is an explicit
@@ -124,7 +127,7 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
+      version = "= 2.1.1"
     }
   }
 }
@@ -138,6 +141,20 @@ provider "takoform" {
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
+The published `v2.0.0` compatibility predecessor remains available for the
+retained v1alpha2 lane:
+
+```hcl
+terraform {
+  required_providers {
+    takoform = {
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 2.0.0"
+    }
+  }
+}
+```
+
 ## Retained v1alpha2 Forms and host responsibility
 
 The retained provider-v2 inventory is generated from the exact nine-candidate
@@ -149,7 +166,8 @@ manifest:
 - [Lifecycle authority](forms/lifecycle.json)
 - [Epoch decision](spec/decisions/0006-v1alpha2-restarts-form-lines.md)
 
-Provider v2.0.0 retains the nine typed resource schemas. Using them requires a
+Provider v2.0.0 retains the nine typed resource schemas as a compatibility
+predecessor. Using them requires a
 compatible host that independently advertises exact support and availability;
 this repository does not own or assert any hosted service's live catalog. Host
 evidence, when recorded, does not grant Takoform maturity, publication, or

@@ -1,5 +1,5 @@
-// site-status.mjs — the one derivation of "what is published and what is
-// preview", used by every surface that states it.
+// site-status.mjs — the one derivation of the independent Provider, Host API,
+// Form Family and Form-definition status axes used by public surfaces.
 //
 // Two callers share this module so no surface can hand-maintain a fact the
 // repository already knows:
@@ -50,11 +50,14 @@ export const SITE_STATUS_REPOSITORY_PATH =
 export const SITE_STATUS_PUBLISHED_PATH =
   "website/public/.well-known/takoform-site.json";
 
-// The Beta Edge Platform Family rides the stable provider v2.1.1 release
-// target. Its descriptor remains candidate-only until the release owner
-// publishes it. This is the single JS-side declaration of that target;
-// check-public-surfaces binds it to the generated examples.
-export const EDGE_PREVIEW_PROVIDER_VERSION = "2.1.1";
+// This constant pins generated examples to the provider release target. It is
+// deliberately named as a Provider SemVer, not as an API lane: Provider,
+// Host API, Form Family and Form-definition versions are independent axes.
+export const PROVIDER_RELEASE_TARGET_VERSION = "2.1.1";
+// Retain the legacy field name/value for consumers that still describe the
+// Edge preview descriptor. It is metadata only: providerTargetStatus below is
+// the independent Registry availability fact.
+export const EDGE_PREVIEW_PROVIDER_VERSION = PROVIDER_RELEASE_TARGET_VERSION;
 export const EDGE_PREVIEW_PROVIDER = `${EDGE_PREVIEW_PROVIDER_VERSION}-candidate-only`;
 
 export const FAMILY_CANDIDATE_SET =
@@ -64,12 +67,41 @@ const RELEASE_VERSION = "release/version.json";
 const PROVIDER_RELEASE_IDENTITIES = "release/provider-release-identities.json";
 
 export const SITE_STATUS_FIELDS = [
+  // Keep the v1 field prefix byte/order-compatible for tolerant existing
+  // readers. New readers should use the explicit axes below.
   "providerCurrent",
   "edgePreviewProvider",
   "edgeFamilyStatus",
   "candidateSetDigest",
   "openPublicationBlockers",
+  "format",
+  "providerPublished",
+  "providerTarget",
+  "providerTargetStatus",
+  "hostApiCurrent",
+  "hostApiMaturity",
+  "formFamilyCurrent",
+  "formFamilyMaturity",
+  "formPackageApiCurrent",
+  "formPackageStatus",
+  "currentFormCount",
+  // Canonical current-lane axes. These are appended so readers that only
+  // understand the original v2 prefix keep receiving the same keys/order.
+  "formMaturity",
+  "formPackagePublicationStatus",
 ];
+
+// These names remain in the JSON document for tolerant, older readers. They
+// are compatibility aliases or descriptor metadata, never publication or
+// maturity authority. New code must use the explicit fields above.
+export const SITE_STATUS_DEPRECATED_FIELDS = Object.freeze({
+  providerCurrent: "alias of providerPublished",
+  edgePreviewProvider:
+    "descriptor metadata only; providerTargetStatus is availability authority",
+  edgeFamilyStatus:
+    "alias of formPackagePublicationStatus; not Form Family maturity",
+  formPackageStatus: "alias of formPackagePublicationStatus",
+});
 
 const ROOT_MARKERS = [
   BLOCKER_LEDGER,
@@ -107,20 +139,36 @@ function readJson(repositoryRoot, relativePath) {
 }
 
 /**
- * deriveSiteStatusFacts reads every published/preview fact out of the
- * repository. Nothing here is a literal a human keeps in step by hand, and
- * nothing here depends on when or where the build ran.
+ * deriveSiteStatusFacts reads every release, protocol, family and package fact
+ * out of the repository. Nothing here is a literal a human keeps in step by
+ * hand, and nothing here depends on when or where the build ran.
  */
 export function deriveSiteStatusFacts(repositoryRoot) {
   const releaseVersion = readJson(repositoryRoot, RELEASE_VERSION);
   const providerReleaseTarget = releaseVersion.version;
   if (
-    providerReleaseTarget !== EDGE_PREVIEW_PROVIDER_VERSION ||
-    releaseVersion.publicationStatus !== "candidate-only"
+    providerReleaseTarget !== PROVIDER_RELEASE_TARGET_VERSION ||
+    typeof releaseVersion.publicationStatus !== "string" ||
+    releaseVersion.publicationStatus === ""
   ) {
     throw new Error(
-      `${RELEASE_VERSION}: expected stable target ${EDGE_PREVIEW_PROVIDER_VERSION} ` +
-        "with publicationStatus candidate-only",
+      `${RELEASE_VERSION}: expected provider target ${PROVIDER_RELEASE_TARGET_VERSION} ` +
+        "with a non-empty publicationStatus",
+    );
+  }
+
+  const hostApiCurrent = releaseVersion.versioning?.portableApiVersion;
+  if (typeof hostApiCurrent !== "string" || hostApiCurrent === "") {
+    throw new Error(
+      `${RELEASE_VERSION}: versioning.portableApiVersion must be a non-empty string`,
+    );
+  }
+  const hostApiMaturityMatch = hostApiCurrent.match(/\/v\d+(alpha|beta)\d+$/);
+  const hostApiMaturity = hostApiMaturityMatch?.[1] ??
+    (/\/v\d+$/.test(hostApiCurrent) ? "stable" : null);
+  if (hostApiMaturity === null) {
+    throw new Error(
+      `${RELEASE_VERSION}: cannot derive Host API maturity from ${JSON.stringify(hostApiCurrent)}`,
     );
   }
 
@@ -128,22 +176,72 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   const publishedEntries = Array.isArray(releaseIdentities.entries)
     ? releaseIdentities.entries.filter((entry) => entry?.registryReadback)
     : [];
-  const providerCurrent = publishedEntries.at(-1)?.version;
-  if (typeof providerCurrent !== "string" || providerCurrent === "") {
+  const providerPublished = publishedEntries.at(-1)?.version;
+  if (typeof providerPublished !== "string" || providerPublished === "") {
     throw new Error(
       `${PROVIDER_RELEASE_IDENTITIES}: no retained Registry-readback release`,
     );
   }
+  const providerTargetStatus = publishedEntries.some(
+    (entry) => entry?.version === providerReleaseTarget,
+  )
+    ? "registry-published"
+    : releaseVersion.publicationStatus;
 
   const candidateSetBytes = readFileSync(
     path.join(repositoryRoot, FAMILY_CANDIDATE_SET),
   );
   const candidateSet = JSON.parse(candidateSetBytes.toString("utf8"));
-  const edgeFamilyStatus = candidateSet.publicationStatus;
-  if (typeof edgeFamilyStatus !== "string" || edgeFamilyStatus === "") {
+  const formPackagePublicationStatus = candidateSet.publicationStatus;
+  if (
+    typeof formPackagePublicationStatus !== "string" ||
+    formPackagePublicationStatus === ""
+  ) {
     throw new Error(
       `${FAMILY_CANDIDATE_SET}: publicationStatus must be a non-empty string`,
     );
+  }
+  const formFamilyCurrent = candidateSet.family;
+  const formFamilyMaturityMatch =
+    typeof formFamilyCurrent === "string"
+      ? formFamilyCurrent.match(/\/v\d+(alpha|beta)\d+$/)
+      : null;
+  const formFamilyMaturity = formFamilyMaturityMatch?.[1] ?? null;
+  const formMaturity = candidateSet.formMaturity;
+  const formPackageApiCurrent = candidateSet.packageApiVersion;
+  if (typeof formFamilyCurrent !== "string" || formFamilyCurrent === "") {
+    throw new Error(`${FAMILY_CANDIDATE_SET}: family must be a non-empty string`);
+  }
+  if (formFamilyMaturity === null) {
+    throw new Error(
+      `${FAMILY_CANDIDATE_SET}: family must end in a version with alpha/beta maturity`,
+    );
+  }
+  if (formFamilyMaturity !== "beta") {
+    throw new Error(
+      `${FAMILY_CANDIDATE_SET}: Form Family maturity must be beta, derived from ${JSON.stringify(formFamilyCurrent)}`,
+    );
+  }
+  if (typeof formMaturity !== "string" || formMaturity === "") {
+    throw new Error(
+      `${FAMILY_CANDIDATE_SET}: formMaturity must be a non-empty string`,
+    );
+  }
+  if (formMaturity !== "experimental") {
+    throw new Error(
+      `${FAMILY_CANDIDATE_SET}: current Form definitions must be experimental`,
+    );
+  }
+  if (
+    typeof formPackageApiCurrent !== "string" ||
+    formPackageApiCurrent === ""
+  ) {
+    throw new Error(
+      `${FAMILY_CANDIDATE_SET}: packageApiVersion must be a non-empty string`,
+    );
+  }
+  if (!Array.isArray(candidateSet.forms) || candidateSet.forms.length === 0) {
+    throw new Error(`${FAMILY_CANDIDATE_SET}: forms must be a non-empty array`);
   }
 
   const ledger = readJson(repositoryRoot, BLOCKER_LEDGER);
@@ -154,23 +252,38 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     (blocker) => blocker?.status === "open",
   ).length;
 
-  return {
-    providerCurrent,
-    edgePreviewProvider: EDGE_PREVIEW_PROVIDER,
-    edgeFamilyStatus,
+  const facts = {
+    format: "takoform.site-status@v2",
+    providerPublished,
+    providerTarget: providerReleaseTarget,
+    providerTargetStatus,
+    hostApiCurrent,
+    hostApiMaturity,
+    formFamilyCurrent,
+    formFamilyMaturity,
+    formPackageApiCurrent,
+    formPackageStatus: formPackagePublicationStatus,
+    currentFormCount: candidateSet.forms.length,
+    formMaturity,
+    formPackagePublicationStatus,
     candidateSetDigest: `sha256:${createHash("sha256").update(candidateSetBytes).digest("hex")}`,
     openPublicationBlockers,
+    providerCurrent: providerPublished,
+    // The release descriptor intentionally remains candidate-only even after
+    // the Provider bytes are Registry-published. Keep this legacy field
+    // explicit so callers cannot mistake descriptor metadata for availability.
+    edgePreviewProvider: EDGE_PREVIEW_PROVIDER,
+    edgeFamilyStatus: formPackagePublicationStatus,
   };
+  return Object.fromEntries(
+    SITE_STATUS_FIELDS.map((field) => [field, facts[field]]),
+  );
 }
 
 export function renderSiteStatusDocument(facts) {
-  const document = {
-    providerCurrent: facts.providerCurrent,
-    edgePreviewProvider: facts.edgePreviewProvider,
-    edgeFamilyStatus: facts.edgeFamilyStatus,
-    candidateSetDigest: facts.candidateSetDigest,
-    openPublicationBlockers: facts.openPublicationBlockers,
-  };
+  const document = Object.fromEntries(
+    SITE_STATUS_FIELDS.map((field) => [field, facts[field]]),
+  );
   return `${JSON.stringify(document, null, 2)}\n`;
 }
 
@@ -206,13 +319,9 @@ export function prepareSiteStatus(siteDirectory) {
     }
     // A frozen copy of website/ alone: the committed document is the only
     // truth available and re-deriving it here would be a fabrication.
-    return {
-      providerCurrent: committed.providerCurrent,
-      edgePreviewProvider: committed.edgePreviewProvider,
-      edgeFamilyStatus: committed.edgeFamilyStatus,
-      candidateSetDigest: committed.candidateSetDigest,
-      openPublicationBlockers: committed.openPublicationBlockers,
-    };
+    return Object.fromEntries(
+      SITE_STATUS_FIELDS.map((field) => [field, committed[field]]),
+    );
   }
 
   const facts = deriveSiteStatusFacts(repositoryRoot);

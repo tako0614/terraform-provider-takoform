@@ -93,7 +93,7 @@ func renderPublishedSurfaces() []publishedSurface {
 	surfaces = append(surfaces, v3PublishedSurfaces()...)
 	surfaces = append(surfaces, publishedSurface{
 		path:    "forms/README.md",
-		content: []byte(formInventoryDoc() + v3FormInventorySection()),
+		content: []byte(formInventoryDoc()),
 	})
 	sort.Slice(surfaces, func(left, right int) bool {
 		return surfaces[left].path < surfaces[right].path
@@ -277,7 +277,7 @@ func exampleHCL(kind formcatalog.Kind) string {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
+      version = "= 2.1.1"
     }
   }
 }
@@ -581,20 +581,38 @@ func generateRetiredInventory(root string) error {
 // list of Forms can never disagree with the declaration the packages are built
 // from.
 func formInventoryDoc() string {
+	return `# Form inventory
+
+The current design target has five independent version axes. They are never a
+single maturity label:
+
+| Axis | Current design target | Meaning |
+| --- | --- | --- |
+| Provider | **Provider 2.1.1** | Registry-published stable-distribution SemVer for Terraform and OpenTofu clients. |
+| Host API | ` + "`forms.takoform.com/v1beta1`" + ` | Beta HTTP protocol identifier. |
+| Form Family | ` + "`edge.forms.takoform.com/v1beta1`" + ` | Beta family namespace and membership contract. |
+| Form definition | ` + "`0.1.0`" + ` | Independent immutable version; each current Form is Experimental. |
+| Form Package API | ` + "`packages.forms.takoform.com/v1alpha4`" + ` | Package-envelope schema identifier; current package artifacts remain unpublished. |
+
+Provider 2.1.1 is the current Registry-published client; Provider 2.0.0 is
+the published compatibility predecessor and Provider 1.0.3 is published
+Legacy. The repository release descriptor remains ` + "`candidate-only`" + ` metadata by
+design after owner publication. The Beta label does not apply to Provider 2.1.1.
+Conversely, shipping a Form through a stable Provider SemVer does not make that
+Form Stable. The 15 current Form Packages remain unpublished until their own
+publication authority advances them.
+` + v3FormInventorySection() + retainedFormInventorySection()
+}
+
+// retainedFormInventorySection renders compatibility and historical evidence
+// after the current Edge family. The bytes remain generated and verifiable,
+// but old lines no longer define the first thing a reader sees as current.
+func retainedFormInventorySection() string {
 	var builder strings.Builder
-	builder.WriteString(`# Form inventory
+	builder.WriteString(`
+## Compatibility: Provider 2.0.0 / retained v1alpha2 Form candidates
 
-This page carries both inventories this repository renders, and it is generated
-from the same declarations the packages are built from. The first is the
-retained provider-v2 candidate set under ` + "`forms.takoform.com/v1alpha2`" + `; the
-second is the Experimental Edge Platform Family Beta set under
-` + "`edge.forms.takoform.com/v1beta1`" + `. The Beta Form Packages remain
-unpublished. Experimental is Form maturity; it is not Stable, GA, central
-approval, or a commercial-availability claim.
-
-## Retained v1alpha2 Form candidates
-
-This is the provider-v2 source candidate inventory for the nine Form-backed
+This is the Provider 2.0.0 source candidate inventory for the nine Form-backed
 Resources retained from the v1alpha2 reset. That dated reset was evaluated
 against a Takosumi-hosted preview, but it is provenance only: it does not claim
 that a hosted product provides or runs these Resources now, or that any host is
@@ -676,8 +694,9 @@ facts.
 	return builder.String()
 }
 
-// GenerateCurrentPublishedSurfaces writes only provider-v2 current docs and
-// examples. Legacy package/release verification remains read-only elsewhere.
+// GenerateCurrentPublishedSurfaces writes the generated current and
+// compatibility docs and examples. Legacy package/release verification remains
+// read-only elsewhere.
 func GenerateCurrentPublishedSurfaces(root string) error {
 	return generatePublishedSurfaces(root)
 }

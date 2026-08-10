@@ -1,6 +1,6 @@
 ---
 page_title: "Takoform provider"
-description: "Published provider v2.0.0 retained resources, provider v2.1.1 Beta release target, and provider v1 Legacy recovery"
+description: "Published provider v2.1.1, published v2.0.0 compatibility predecessor, and provider v1 Legacy recovery"
 ---
 
 # Takoform provider
@@ -10,7 +10,7 @@ frozen Legacy Epoch is `forms.takoform.com/v1alpha1`. The
 `forms.takoform.com/v1alpha2` epoch is retained as the provider-v2
 compatibility surface; its packages keep the retained
 `packages.forms.takoform.com/v1alpha3` envelope. Current design work is the
-Experimental Edge Platform Family (`edge.forms.takoform.com/v1beta1`) on the
+Beta Edge Platform Family (`edge.forms.takoform.com/v1beta1`) on the
 `forms.takoform.com/v1beta1` Host API channel, whose packages use
 `packages.forms.takoform.com/v1alpha4`.
 
@@ -20,12 +20,14 @@ path, `/.well-known/takoform/v1beta1`. The unversioned well-known path is
 retained only for provider-v1 Legacy compatibility.
 
 The 34 published Form Package identities from v1alpha1 are immutable **Legacy**
-evidence. There is no current central approval or admission. The nine `0.1.0`
-v1alpha2 candidates are retained provider-v2 preview candidates, exposed by
-the published provider `v2.0.0`; using them requires a compatible host. This
-repository does not assert a hosted service's live availability. Stable
-provider `v2.1.1` is the release target for the Beta Edge family; its source
-descriptor remains `candidate-only` until the release owner publishes it.
+evidence. There is no current central approval or admission. Provider `v2.1.1`
+is the current Registry-published provider for the Beta lane and carries the
+exact 15 Experimental Edge Forms. Provider `v2.0.0` remains the published
+compatibility predecessor for the retained nine `0.1.0` v1alpha2 candidates;
+using either lane requires a compatible host. This repository does not assert a
+hosted service's live availability. The stable `v2.1.1` release target's source
+descriptor remains `candidate-only` metadata after owner publication. The 15
+Beta Form Packages remain unpublished.
 
 ## Choose the provider line
 
@@ -42,7 +44,7 @@ terraform {
 }
 ```
 
-Provider `v2.0.0` is the published current client. Terraform and OpenTofu can
+Provider `v2.1.1` is the current published client. Terraform and OpenTofu can
 install this exact pin from the canonical Registry address:
 
 ```hcl
@@ -50,7 +52,7 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
+      version = "= 2.1.1"
     }
   }
 }
@@ -65,6 +67,21 @@ Provider v2 rejects provider-v1 state rather than guessing a migration. Pin v1
 to recover or remove Legacy resources; create/import the v1alpha2 resource
 explicitly when migration is intended. See [the migration boundary](../release/migrations/v1-to-v2.md).
 
+Provider `v2.0.0` remains published as the compatibility predecessor for the
+retained v1alpha2 lane. Keep this exact pin when reproducing that predecessor's
+client identity:
+
+```hcl
+terraform {
+  required_providers {
+    takoform = {
+      source  = "registry.terraform.io/tako0614/takoform"
+      version = "= 2.0.0"
+    }
+  }
+}
+```
+
 ## Verify the published current provider
 
 Availability is verified, not declared by this immutable documentation.
@@ -73,15 +90,17 @@ Availability is verified, not declared by this immutable documentation.
 curl -fsS https://registry.terraform.io/v1/providers/tako0614/takoform/versions
 git clone https://github.com/tako0614/terraform-provider-takoform.git
 cd terraform-provider-takoform
-git checkout --detach v2.0.0
+git checkout --detach v2.1.1
 ```
 
 A source tag, documentation page, or local build alone is not Registry publication or installation evidence.
 
 ## Retained v2 resources
 
-Published provider v2.0.0 exposes exactly these nine retained candidates. A
-compatible host must independently advertise the exact FormRef it supports:
+Published provider v2.1.1 carries exactly these nine retained v1alpha2
+candidates alongside the Beta family. Provider v2.0.0 is the published
+compatibility predecessor. A compatible host must independently advertise the
+exact FormRef it supports:
 
 - [EdgeWorker](resources/edge_worker.md)
 - [RelationalDatabase](resources/relational_database.md)
@@ -101,9 +120,10 @@ authorization and carries no credential.
 
 The `edge.forms.takoform.com/v1beta1` Form Family rides the Beta Host API,
 discovered at `/.well-known/takoform/v1beta1`. Its 15 typed resources are
-Experimental `0.1.0` Forms and require provider v2.1.1 or later. The provider
-release descriptor remains `candidate-only`; the retained v2 resources above
-are unaffected:
+Experimental `0.1.0` Forms and require the published provider v2.1.1 or later.
+The provider release descriptor remains `candidate-only` metadata. The Form
+Package v1alpha4 artifacts remain unpublished, and the retained v2 resources
+above are unaffected:
 
 - [ModuleWorker](resources/module_worker.md)
 - [WorkerBundle](resources/worker_bundle.md)

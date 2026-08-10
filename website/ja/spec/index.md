@@ -9,13 +9,13 @@ Host API group はどの Form group からも独立した protocol 互換性 ide
 
 | Surface | Identity |
 | --- | --- |
-| 現在の Form Family | `edge.forms.takoform.com/v1beta1` (Experimental `0.1.0` 15種) |
+| 現在の Form Family | `edge.forms.takoform.com/v1beta1` (Beta family; Experimental `0.1.0` 15種) |
 | 現在の Host API wire | `forms.takoform.com/v1beta1` (discovery は `/.well-known/takoform/v1beta1`) |
 | 現在の package envelope | `packages.forms.takoform.com/v1alpha4` |
 | 保持される provider-v2 FormRef | `forms.takoform.com/v1alpha2` (wire discovery は `/.well-known/takoform/v1alpha2`) |
 | 保持される provider-v2 package envelope | `packages.forms.takoform.com/v1alpha3` |
 | Legacy FormRef | `forms.takoform.com/v1alpha1` (凍結) |
-| Provider | `v2.0.0` 現在の公開済み · `v1.0.3` Legacy · stable `v2.1.1` release target (owner 公開まで `candidate-only`) |
+| Provider distribution | `v2.1.1` Registry 公開済みの current stable distribution（descriptor は owner 公開後も `candidate-only` metadata） · `v2.0.0` 公開済み compatibility predecessor · `v1.0.3` Legacy |
 
 `forms.takoform.com/v1alpha2` epoch と 9 種の `0.1.0` 候補は provider-v2 の
 互換面として保持されるもので、新しい仕様作業の基盤ではありません。provider の

@@ -260,8 +260,8 @@ description: |-
 `, form.ResourceType, form.Title+" ("+edgeformcatalog.Family.APIVersion()+", role "+string(form.Role)+").", form.ResourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
 	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or\n" +
-		"later. Provider v2.1.1 is the stable release target; its source descriptor stays\n" +
-		"candidate-only until the owner publishes it. The configured host selects and\n" +
+		"later. Provider v2.1.1 is Registry-published; release/version.json retains\n" +
+		"candidate-only descriptor metadata after owner publication. The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
 		"price, or implementation. See the [complete example](../../examples/resources/" +
 		form.ResourceType + "/resource.tf).\n")
@@ -438,7 +438,8 @@ func v3ExampleHCL(form model.Form) string {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # stable v2.1.1 release target; descriptor remains candidate-only until owner publication.
+      # Provider v2.1.1 is Registry-published; release/version.json remains
+      # candidate-only descriptor metadata after owner publication.
       version = "= 2.1.1"
     }
   }

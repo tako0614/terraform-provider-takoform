@@ -4,7 +4,8 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # provider v2.1.1 is an unpublished source candidate; build the provider from source.
+      # Provider v2.1.1 is Registry-published; release/version.json remains
+      # candidate-only descriptor metadata after owner publication.
       version = ">= 2.1.1"
     }
   }

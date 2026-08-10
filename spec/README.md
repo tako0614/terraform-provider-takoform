@@ -117,8 +117,9 @@ independent of any nested Form group. The current package envelope is
 `packages.forms.takoform.com/v1alpha4`; Interface and Binding refs remain
 `interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha1`. The
 Terraform provider identity is `registry.terraform.io/tako0614/takoform`; its
-stable `v2.1.1` release target is independent from all of these API identities
-and remains `candidate-only` until the release owner publishes it.
+  Registry-published stable `v2.1.1` release is independent from all of these
+  API identities. Its `release/version.json` descriptor remains
+  `candidate-only` metadata by design after owner publication.
 
 ## Normative consistency audit
 

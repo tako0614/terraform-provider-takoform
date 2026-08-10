@@ -1,23 +1,23 @@
 <script setup lang="ts">
-// Every page states which tier it belongs to.
-//
-// The tier facts come from themeConfig, derived from the repository at build
-// time (.vitepress/site-status.mjs), so they are static HTML and cannot rot
-// against the repository. The footer links the same facts as machine-readable
-// JSON at /.well-known/takoform-site.json.
-//
-// No commit is displayed. A commit id inside these bytes could only name the
-// parent of the commit that carries them, and scripts/check-website-dist.mjs
-// requires a fresh build to reproduce every published byte. The commit that
-// produced a deployment is recorded in the takoform-website Worker version
-// message instead, where it can be true.
+// The footer renders the same status axes as StatusNote. Distribution
+// availability is stated separately from the current design target so a
+// candidate descriptor is never presented as a Registry publication.
 import { computed } from "vue";
 import { useData } from "vitepress";
 
 type SiteStatus = {
-  providerCurrent: string;
-  edgePreviewProvider: string;
-  edgeFamilyStatus: string;
+  format: string;
+  providerPublished: string;
+  providerTarget: string;
+  providerTargetStatus: string;
+  hostApiCurrent: string;
+  hostApiMaturity: string;
+  formFamilyCurrent: string;
+  formFamilyMaturity: string;
+  formPackageApiCurrent: string;
+  currentFormCount: number;
+  formMaturity: string;
+  formPackagePublicationStatus: string;
   candidateSetDigest: string;
   openPublicationBlockers: number;
   route: string;
@@ -25,24 +25,66 @@ type SiteStatus = {
 
 const { lang, theme } = useData();
 const status = computed<SiteStatus>(() => theme.value.siteStatus as SiteStatus);
+
+const apiVersion = (value: string) => value.split("/").at(-1) ?? value;
+const maturityLabel = (value: string) =>
+  value.length === 0 ? value : `${value[0].toUpperCase()}${value.slice(1)}`;
+const hostApiVersion = computed(() => apiVersion(status.value.hostApiCurrent));
+const hostApiMaturity = computed(() =>
+  maturityLabel(status.value.hostApiMaturity),
+);
+const formFamilyVersion = computed(() =>
+  apiVersion(status.value.formFamilyCurrent),
+);
+const formFamilyMaturity = computed(() =>
+  maturityLabel(status.value.formFamilyMaturity),
+);
+const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
+const providerTargetStatus = computed(() =>
+  status.value.providerTargetStatus === "registry-published"
+    ? "Registry-published"
+    : status.value.providerTargetStatus + " until Registry readback",
+);
 </script>
 
 <template>
   <footer v-if="status" class="site-status-footer">
     <div class="site-status-footer__inner">
       <p v-if="lang === 'ja'">
-        <strong>公開済み</strong>: provider v{{ status.providerCurrent }}、保持される
-        v1alpha2 リソース。
-        <strong>Edge preview</strong>: provider {{ status.edgePreviewProvider }}、Edge
-        Family は {{ status.edgeFamilyStatus }}、公開ブロッカー
-        {{ status.openPublicationBlockers }} 件が open。
+        <strong>Current design target</strong>: Provider
+        {{ status.providerTarget }} ({{ providerTargetStatus }}, descriptor
+        metadata candidate-only); Host API
+        {{ hostApiVersion }} ({{ hostApiMaturity }}); Edge Form Family
+        {{ formFamilyVersion }} ({{ formFamilyMaturity }} family,
+        {{ status.currentFormCount }} {{ formMaturity }} Form definitions,
+        definition 0.1.0).
+        Form Package {{ status.formPackageApiCurrent }} is
+        {{ status.formPackagePublicationStatus }}.
       </p>
       <p v-else>
-        <strong>Current published</strong>: provider v{{ status.providerCurrent }},
-        retained v1alpha2 resources.
-        <strong>Edge preview</strong>: provider {{ status.edgePreviewProvider }},
-        edge family {{ status.edgeFamilyStatus }},
-        {{ status.openPublicationBlockers }} publication blockers open.
+        <strong>Current design target</strong>: Provider
+        {{ status.providerTarget }} ({{ providerTargetStatus }}, descriptor
+        metadata candidate-only); Host API
+        {{ hostApiVersion }} ({{ hostApiMaturity }}); Edge Form Family
+        {{ formFamilyVersion }} ({{ formFamilyMaturity }} family,
+        {{ status.currentFormCount }} {{ formMaturity }} Form definitions,
+        definition 0.1.0).
+        Form Package {{ status.formPackageApiCurrent }} is
+        {{ status.formPackagePublicationStatus }}.
+      </p>
+      <p class="site-status-footer__distribution">
+        <span v-if="lang === 'ja'">
+          Distribution availability: Provider {{ status.providerPublished }} は
+          Registry readback 済みの current distribution、Provider 2.0.0 は
+          公開済み compatibility predecessor、Provider 1.0.3 は公開済み
+          Legacy です。
+        </span>
+        <span v-else>
+          Distribution availability: Provider {{ status.providerPublished }} is
+          the current Registry-readback distribution; Provider 2.0.0 is the
+          published compatibility predecessor and Provider 1.0.3 is published
+          Legacy.
+        </span>
       </p>
       <p class="site-status-footer__data">
         <span v-if="lang === 'ja'">同じ事実を機械可読で</span>
@@ -71,6 +113,7 @@ const status = computed<SiteStatus>(() => theme.value.siteStatus as SiteStatus);
   margin: 0;
 }
 
+.site-status-footer__distribution,
 .site-status-footer__data {
   margin-top: 4px;
 }

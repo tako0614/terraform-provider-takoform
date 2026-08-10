@@ -1,14 +1,44 @@
-# Portable Form host API v1alpha2
+# Portable Form Host APIs
 
-The provider uses a versioned, provider-neutral HTTP boundary. A host owns
-placement and execution; this protocol owns exact Form identity, portable
-desired state, optimistic concurrency, mutation replay, and stable errors.
+## Current design target: Host API v1beta1
 
-This document specifies the retained provider-v2 lane,
-`forms.takoform.com/v1alpha2`, which continues to govern the published
-provider v2.0.0. The current Host API channel is
-[`v1beta1.md`](v1beta1.md)
+The current protocol is the literal `forms.takoform.com/v1beta1` **Host API**
+([`v1beta1.md`](v1beta1.md)). It is a Beta protocol channel with its own
+discovery and operation documents:
+
+- discovery: `GET /.well-known/takoform/v1beta1`;
+- API root: `/apis/forms.takoform.com/v1beta1`;
+- wire schema: [`host-api-wire-v1beta1.schema.json`](/schemas/v1beta1/host-api-wire.schema.json);
+- operation table: [`operations-v1beta1.json`](operations-v1beta1.json).
+
+Human Provider 2.1.1 is the Registry-published stable-distribution SemVer that
+carries this protocol. `release/version.json` intentionally remains
+`publicationStatus: candidate-only` descriptor metadata after owner
+publication; the retained signed Registry readback is the Provider availability
+evidence. The Beta label here belongs to the Host API, not to Provider 2.1.1
 ([decision 0035](../decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
+
+The current protocol serves the literal Edge Form Family
+`edge.forms.takoform.com/v1beta1`: 15 individual `0.1.0` Form definitions,
+each Experimental. Their current Form Package envelope is the literal
+`packages.forms.takoform.com/v1alpha4`; package artifacts remain unpublished.
+The nested `interfaces.takoform.com/v1alpha1` and
+`bindings.takoform.com/v1alpha1` identifiers are independent contracts, not
+Host API maturity labels.
+
+For the complete current contract, read [`v1beta1.md`](v1beta1.md) first. The
+remainder of this file is the long retained compatibility contract below.
+
+## Published compatibility: Host API v1alpha2
+
+The retained Provider 2.0.0 compatibility lane is literal
+`forms.takoform.com/v1alpha2`. It
+continues to govern published Provider 2.0.0 and its retained nine Forms. The
+provider uses a versioned, provider-neutral HTTP boundary. A host owns
+placement and execution; this compatibility protocol owns exact Form identity,
+portable desired state, optimistic concurrency, mutation replay, and stable
+errors.
+
 The v1alpha3 specification and schema identities are retained unchanged
 history.
 The retained lane's contract is frozen EXCEPT for the two recorded errata
@@ -29,13 +59,13 @@ The published v1alpha1 wire remains immutable in
 [`operations-v1alpha1.json`](operations-v1alpha1.json),
 [`../schemas/host-api-wire.schema.json`](/schemas/v1alpha1/host-api-wire.schema.json),
 and [`../schemas/host-discovery.schema.json`](/schemas/host-discovery.schema.json).
-Provider v1 uses `/.well-known/takoform` and `/apis/forms.takoform.com/v1alpha1`.
-Provider v2 uses only the retained provider-v2 lane's endpoints below; the
+Provider 1.0.3 uses `/.well-known/takoform` and `/apis/forms.takoform.com/v1alpha1`.
+Provider 2.0.0 uses only the retained compatibility lane's endpoints below; the
 two epochs are never negotiated through one ambiguous `endpoints.api` value.
 
-## Retained-lane errata
+### Retained-lane errata
 
-Two normative rules of this lane were corrected after provider v2.0.0
+Two normative rules of this lane were corrected after Provider 2.0.0
 shipped. Both correct defects in how the *distribution* digest was treated as
 *identity*; the rationale is
 [decision 0011](../decisions/0011-resource-identity-generation-and-revision.md),
@@ -69,7 +99,7 @@ relaxes nothing a host must do — a host MUST still return the quoted
 `resourceVersion` as the ETag on this lane — and only widens what a client
 tolerates.
 
-## Discovery and endpoint selection
+### Discovery and endpoint selection
 
 A conforming host MUST answer `GET /.well-known/takoform/v1alpha2` with:
 
@@ -88,7 +118,7 @@ A conforming host MUST answer `GET /.well-known/takoform/v1alpha2` with:
 A provider MUST send bearer credentials only to same-origin advertised URLs
 and MUST use the exact retained-lane v1alpha2 paths above. A provider MUST reject a discovery
 document that adds another API version or points any endpoint at the frozen
-Legacy lane: there is no negotiation or unversioned downgrade in provider v2.
+Legacy lane: there is no negotiation or unversioned downgrade in Provider 2.0.0.
 
 [`../schemas/host-discovery-v1alpha2.schema.json`](/schemas/v1alpha2/host-discovery.schema.json)
 closes the discovery object and enforces the absolute HTTP(S) shape of `api`,
@@ -98,7 +128,7 @@ and MUST reject `forms` or `interfaces` unless its scheme, host, and effective
 port equal those of `api`. Userinfo, query, and fragment components are
 forbidden. Plain HTTP is allowed only for a loopback development origin.
 
-## Exact identity
+### Exact identity
 
 Every typed provider resource MUST be compiled against one release-owned
 `InstalledFormReference`: `apiVersion`, `kind`, `definitionVersion`,
@@ -121,15 +151,15 @@ kind, name, and exact Form in another Space is an independent Resource: reads
 MUST NOT return the first Space's state, and lifecycle mutations or deletions
 MUST NOT change it.
 
-Provider v2's exact v1alpha2 source-candidate references are pinned by
+Provider 2.0.0's exact v1alpha2 source-candidate references are pinned by
 [`forms/candidates/v1alpha2/candidate-set.json`](../../forms/candidates/v1alpha2/candidate-set.json).
-Provider v1's exact v1alpha1 compatibility references remain pinned by the
+Provider 1.0.3's exact v1alpha1 compatibility references remain pinned by the
 historical
 [`forms/standard-package-set.json`](../../forms/standard-package-set.json).
 Neither manifest grants Form maturity. A host independently reports support
 and availability for each exact reference.
 
-## Space identity
+### Space identity
 
 `SpaceID` is the portable scope identity used by Resource bodies, exact Form
 and Resource query parameters, Interface reads, idempotency scope, provider
@@ -157,7 +187,7 @@ override, Interface data-source selector, Terraform/OpenTofu state, and import
 identifier. Import uses either `NAME` with a configured default or
 `SPACE/NAME`; forbidding `/` in `SpaceID` makes that split unambiguous.
 
-## Versioned wire envelopes
+### Versioned wire envelopes
 
 [`../schemas/host-api-wire-v1alpha2.schema.json`](/schemas/v1alpha2/host-api-wire.schema.json)
 is the normative machine-readable wire schema. Every operation in
@@ -204,7 +234,7 @@ FormRef field, package digest, generation, or desired spec MUST fail as
 identity, credentials, quotes, and native plan details are not portable
 preview or apply fields.
 
-## Resource lifecycle
+### Resource lifecycle
 
 The API base is `/apis/forms.takoform.com/v1alpha2` on the reference host:
 
@@ -314,7 +344,7 @@ or waive this check. A required denied Connection cannot be Ready. Cross-Space
 composition, if offered, is a host-owned contract outside portable Resource
 desired state and does not change this resolution rule.
 
-## Interface declarations
+### Interface declarations
 
 A host MAY expose the OPTIONAL surface defined by
 [`spec/interface-declaration`](../interface-declaration/index.md):
@@ -442,7 +472,7 @@ Provider diagnostics MAY expose the stable code and request ID. Provider state
 MUST NOT contain credentials, prices, quotes, backend selection, target
 identity, or manager authority.
 
-## Cross-repo conformance
+### Cross-repo conformance
 
 [`conformance/portable-host-v2/contract.json`](../../conformance/portable-host-v2/contract.json)
 is the digest-pinned input for any neutral black-box host runner. The contract

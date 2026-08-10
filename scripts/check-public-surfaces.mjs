@@ -17,8 +17,8 @@ import {
 } from "./publication-truth.mjs";
 import { verifySiteStatusDocument } from "./site-status.mjs";
 import {
-  EDGE_PREVIEW_PROVIDER_VERSION,
   FAMILY_CANDIDATE_SET,
+  PROVIDER_RELEASE_TARGET_VERSION,
 } from "../website/.vitepress/site-status.mjs";
 
 const repositoryRoot = path.resolve(
@@ -608,15 +608,14 @@ function checkTerraformProviderExample(filePath, providerVersion) {
   }
 }
 
-// The Edge Platform Family examples pin the stable v2.1.1 release target. The
-// descriptor remains candidate-only until the owner publishes it, so an
-// example must state that boundary without turning the SemVer into a
-// prerelease or claiming Registry availability.
+// The Edge Platform Family examples pin the Registry-published v2.1.1
+// distribution. The release descriptor intentionally remains candidate-only
+// metadata after owner publication, so an example must state both independent
+// facts without treating descriptor metadata as Provider availability.
 //
-// The version is the same constant the site serves as `edgePreviewProvider`,
-// so the Edge preview tier is declared once and this check binds that single
-// declaration to the bytes the generator produces.
-const edgeFamilySourceCandidateVersion = EDGE_PREVIEW_PROVIDER_VERSION;
+// Keep the example pin bound to the canonical Provider target. The retained
+// edgePreviewProvider field is descriptor metadata only and is not authority.
+const edgeFamilySourceCandidateVersion = PROVIDER_RELEASE_TARGET_VERSION;
 
 function checkEdgeFamilyProviderExample(filePath) {
   const source = read(filePath);
@@ -630,11 +629,12 @@ function checkEdgeFamilyProviderExample(filePath) {
     );
   }
   if (
-    !source.includes(`stable v${EDGE_PREVIEW_PROVIDER_VERSION} release target`) ||
-    !source.includes("candidate-only until owner publication")
+    !source.includes(`Provider v${PROVIDER_RELEASE_TARGET_VERSION} is Registry-published`) ||
+    !source.includes("candidate-only descriptor metadata after owner publication")
   ) {
     fail(
-      `${relative(filePath)}: Edge Family example must state the stable target and candidate-only owner-publication boundary`,
+      `${relative(filePath)}: Edge Family example must state Registry-published Provider ` +
+        "availability and candidate-only descriptor metadata after owner publication",
     );
   }
 }
@@ -710,6 +710,38 @@ function checkImmutableProviderTagDocs(source, truth) {
   }
 }
 
+function deriveHistoricalLegacyProviderVersion() {
+  const ledger = readJson(
+    path.join(repositoryRoot, "release", "provider-release-identities.json"),
+  );
+  const entries = Array.isArray(ledger.entries) ? ledger.entries : [];
+  const candidates = entries.filter((entry) => {
+    const version = typeof entry?.version === "string" ? entry.version : "";
+    const [major, minor, patch] = version.split(".").map(Number);
+    return (
+      entry?.status === "assigned" &&
+      Number.isInteger(major) &&
+      major === 1 &&
+      Number.isInteger(minor) &&
+      Number.isInteger(patch) &&
+      entry?.tag === `v${version}` &&
+      typeof entry?.tagObject === "string" &&
+      entry.tagObject !== "" &&
+      typeof entry?.commit === "string" &&
+      entry.commit !== "" &&
+      typeof entry?.signingFingerprint === "string" &&
+      entry.signingFingerprint !== ""
+    );
+  });
+  candidates.sort((left, right) => {
+    const parse = (value) => value.split(".").map(Number);
+    const a = parse(left.version);
+    const b = parse(right.version);
+    return b[0] - a[0] || b[1] - a[1] || b[2] - a[2];
+  });
+  return candidates[0]?.version ?? null;
+}
+
 function handAuthoredPages() {
   return walkFiles(publicRoot, (filePath) => {
     if (!filePath.endsWith(".html")) {
@@ -727,6 +759,14 @@ function handAuthoredPages() {
 
 function checkPublishedProviderExamples(truth) {
   if (truth === null) {
+    return;
+  }
+  const historicalLegacyProviderVersion =
+    deriveHistoricalLegacyProviderVersion();
+  if (historicalLegacyProviderVersion === null) {
+    fail(
+      "release/provider-release-identities.json: missing an assigned, signed major-1 Legacy provider identity",
+    );
     return;
   }
   const docsIndex = path.join(repositoryRoot, "docs", "index.md");
@@ -748,6 +788,7 @@ function checkPublishedProviderExamples(truth) {
   const htmlFiles = handAuthoredPages();
   let sawPublished = false;
   let sawLegacy = false;
+  let sawHistoricalLegacy = false;
   for (const filePath of htmlFiles) {
     const source = read(filePath);
     const blocks = providerCodeBlocksFromHtml(source);
@@ -757,18 +798,40 @@ function checkPublishedProviderExamples(truth) {
     for (const [index, block] of blocks.entries()) {
       const published = hasExactProviderPin(block, truth.providerVersion);
       const legacy = hasExactProviderPin(block, truth.legacyProviderVersion);
+      const historicalLegacy = hasExactProviderPin(
+        block,
+        historicalLegacyProviderVersion,
+      );
       sawPublished ||= published;
       sawLegacy ||= legacy;
-      if (!published && !legacy) {
+      sawHistoricalLegacy ||= historicalLegacy;
+      if (
+        historicalLegacy &&
+        !/(?:published\s+Legacy|Legacy\s+Provider|公開済み[^\n]*Legacy)/i.test(
+          block,
+        )
+      ) {
+        fail(
+          `${relative(filePath)}: provider example ${index + 1} must label ` +
+            `v${historicalLegacyProviderVersion} as published Legacy`,
+        );
+      }
+      if (!published && !legacy && !historicalLegacy) {
         fail(
           `${relative(filePath)}: provider example ${index + 1} must contain ` +
-            `a current v${truth.providerVersion} or Legacy v${truth.legacyProviderVersion} exact pin`,
+            `a current v${truth.providerVersion}, compatibility v${truth.legacyProviderVersion}, ` +
+            `or published Legacy v${historicalLegacyProviderVersion} exact pin`,
         );
       }
     }
   }
   if (!sawPublished || !sawLegacy) {
     fail("website/public: provider examples must distinguish published current v2 from published Legacy v1");
+  }
+  if (!sawHistoricalLegacy) {
+    fail(
+      `website/public: provider examples must include published Legacy v${historicalLegacyProviderVersion}`,
+    );
   }
 }
 
@@ -853,14 +916,15 @@ function checkRetainedPublicationTruthCopy(truth) {
     }
     if (descriptorFiles.has(filePath) && /\bcandidate-only\b/i.test(text)) {
       if (
-        !new RegExp(`\\bv?${escapeRegExp(EDGE_PREVIEW_PROVIDER_VERSION)}\\b`, "i").test(text) ||
+        !new RegExp(`\\bv?${escapeRegExp(PROVIDER_RELEASE_TARGET_VERSION)}\\b`, "i").test(text) ||
         !/(?:release target|stable provider)/i.test(text) ||
         !/(?:descriptor|release\/version\.json)/i.test(text) ||
-        !/(?:owner[^.。]{0,80}publish|owner[^.。]{0,80}公開)/i.test(text)
+        !/(?:owner[^.。]{0,80}(?:publish(?:es|ed)?|publication)|owner[^.。]{0,80}公開)/i.test(text) ||
+        !/(?:Registry[- ](?:published|readback)|公開済み)/i.test(text)
       ) {
         fail(
           `${relative(filePath)}: candidate-only is not bound to the stable ` +
-            `${EDGE_PREVIEW_PROVIDER_VERSION} release target and owner-publication boundary`,
+            `${PROVIDER_RELEASE_TARGET_VERSION} release target and owner-publication boundary`,
         );
       }
     }

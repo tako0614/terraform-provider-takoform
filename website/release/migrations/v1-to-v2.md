@@ -6,12 +6,15 @@ different Form epochs.
 | Provider | Form epoch | Status | Purpose |
 | --- | --- | --- | --- |
 | `1.x` | `forms.takoform.com/v1alpha1` | published Legacy | recovery and existing state |
-| `2.x` | `forms.takoform.com/v1alpha2` | published current | retained nine-Form v1alpha2 line |
+| `2.0.0` | `forms.takoform.com/v1alpha2` | published compatibility predecessor | retained nine-Form v1alpha2 line |
+| `2.1.1` | `forms.takoform.com/v1beta1` | Registry-published current provider; Beta Host API and Experimental Forms | current Edge Form Family line |
 
 Provider v2.1 and later additionally carry the current Experimental Edge
 Platform Family over Beta Host API `forms.takoform.com/v1beta1`. Provider
-v2.1.1 is a stable release target whose descriptor remains `candidate-only`
-until the release owner publishes it
+v2.1.1 is the Registry-published current provider. v2.1.1 is a stable release target whose descriptor remains `candidate-only` after owner
+publication; its Registry publication is independently verified by readback.
+The `release/version.json` descriptor remains candidate-only metadata by design
+after owner publication
 ([decision 0035](../../spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
 Existing Beta state remains bound to its exact Beta FormRef and codec when a
 future Stable `1.0.0` identity becomes the create default; refresh never

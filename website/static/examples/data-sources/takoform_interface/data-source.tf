@@ -2,7 +2,7 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
+      version = "= 2.1.1"
     }
   }
 }
