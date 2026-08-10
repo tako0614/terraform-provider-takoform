@@ -215,6 +215,8 @@ func TestProviderTagWorkflowExportsReadOnlySignedObject(t *testing.T) {
 	for _, required := range []string{
 		"run-name: ${{ inputs.request_id }}",
 		"request_id:",
+		"oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76",
+		"bun-version: 1.3.14",
 		`[[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`,
 		"contents: read",
 		"persist-credentials: false",
@@ -239,6 +241,11 @@ func TestProviderTagWorkflowExportsReadOnlySignedObject(t *testing.T) {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("provider tag signing workflow retains remote write authority %q", forbidden)
 		}
+	}
+	setupBun := strings.Index(text, "oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76")
+	executeCandidate := strings.Index(text, "name: Execute candidate code only in this read-only job")
+	if setupBun < 0 || executeCandidate < 0 || setupBun > executeCandidate {
+		t.Fatal("provider tag preflight must install the pinned Bun toolchain before executing candidate tests")
 	}
 }
 
