@@ -2,7 +2,7 @@ package currentformmodel
 
 import "strings"
 
-// hostname.go is the ONE canonicalization of a DNS hostname in the v1alpha3
+// hostname.go is the ONE canonicalization of a DNS hostname in the v1beta1
 // lane, shared by the host that compares and stores hostnames and by the
 // client that plans them.
 //

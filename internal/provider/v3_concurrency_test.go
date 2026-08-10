@@ -1,6 +1,6 @@
 package provider
 
-// v3_concurrency_test.go proves the v1alpha3 lane holds no global mutation
+// v3_concurrency_test.go proves the v1beta1 lane holds no global mutation
 // lock. The claim is structural — nothing in the lane serializes — so the only
 // honest proof is a host that refuses to answer the FIRST apply until a SECOND
 // one has arrived. If a global mutex is ever reintroduced the second apply can
@@ -169,7 +169,7 @@ func TestV3LaneRunsUnrelatedResourceOperationsConcurrently(t *testing.T) {
 	data := &providerData{defaultSpace: "prod"}
 	client := clientv3.NewWithOptions(host.server.URL, "test-token", host.server.Client(), clientv3.Options{})
 	if _, err := client.Discover(context.Background()); err != nil {
-		t.Fatalf("v1alpha3 discovery: %v", err)
+		t.Fatalf("v1beta1 discovery: %v", err)
 	}
 	data.clientV3 = client
 

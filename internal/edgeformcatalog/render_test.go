@@ -167,7 +167,7 @@ func TestRenderedDefinitionsOmitNameAndEnvelopeFields(t *testing.T) {
 //
 // The list matters more than the shape. `status.outputs` is REQUIRED on the
 // wire exactly for a Form whose Definition declares an outputSchema and
-// OMITTED for every other (spec/schemas/host-api-wire-v1alpha3.schema.json), so
+// OMITTED for every other (spec/schemas/host-api-wire-v1beta1.schema.json), so
 // a Form that gained or lost one silently would change what every conforming
 // host must return for it. Writing the set out means that change cannot happen
 // without an edit here.

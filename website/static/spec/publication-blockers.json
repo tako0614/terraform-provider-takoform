@@ -1,8 +1,8 @@
 {
   "format": "takoform.publication-blockers@v1",
-  "lane": "forms.takoform.com/v1alpha3",
-  "family": "edge.forms.takoform.com/v1alpha1",
-  "policy": "While any blocker below is open, this repository must not publish a Form Package, an Interface or Binding Definition, a provider release that exposes the family resource types, or a lifecycle transition for any family Form. Closing a blocker requires the evidence it names, not a passing local gate. The freeze is scoped to this lane's artifacts: it never gates the retained v1alpha1/v1alpha2 packages, and it never gates the append-only security revocation path, because an urgent revocation for an already-published package must not wait on this lane's readiness.",
+  "lane": "forms.takoform.com/v1beta1",
+  "family": "edge.forms.takoform.com/v1beta1",
+  "policy": "These records are later Stable/GA qualification and Form Package/public-service publication obligations. Open records block publishing the Beta Form Packages, Interface/Binding Definitions as independently published artifacts, and claims of Stable, GA, independent-host, real-backend, or third-party ecosystem readiness. They do not block the stable provider v2.1.0 release from embedding the exactly locked 15 Experimental Beta FormRefs and digests after its local provider gate passes. Closing an obligation still requires the evidence it names; no local gate fabricates independent-host, hosted-operation, real-backend, or third-party evidence. Retained packages and append-only security revocation remain outside this policy.",
   "blockers": [
     {
       "id": "V3-001",
@@ -18,15 +18,21 @@
     },
     {
       "id": "V3-002",
-      "title": "A relation pins the target's contract, not only its incarnation",
+      "title": "An independent host enforces a relation target's exact contract",
       "priority": "P0",
       "affectedForms": [
         "*"
       ],
       "status": "open",
       "issue": 103,
-      "rationale": "A reference pins the resolved target UID, so a re-created target is not adopted silently. It does not yet pin what contract that target satisfies, so a target whose Definition moves incompatibly still satisfies the reference.",
-      "evidence": []
+      "rationale": "The portable contract and reference host now require every relation to state exactly one target FormRef or Interface contract and revalidate that requirement before mutation and asynchronous commit (decision 0022). The host stores both the target UID and exact FormRef, and reports contract drift as ExternalChange. This closes the contract-authoring and reference-host implementation gap, but no host outside this repository has yet demonstrated the rule. V3-002 therefore remains open only for independent-host evidence. Its acceptance slice overlaps V3-004's independent Host API evidence, but V3-002 is retained as the relation-specific check that the host enforces the exact target contract.",
+      "evidence": [
+        "spec/decisions/0022-relations-pin-the-target-contract.md",
+        "internal/currentformmodel/target_contract_test.go",
+        "internal/portableconformancev3/relations.go",
+        "internal/portableconformancev3/runner_checks.go",
+        "conformance/portable-host-v3/contract.json"
+      ]
     },
     {
       "id": "V3-003",
@@ -50,7 +56,7 @@
     },
     {
       "id": "V3-004",
-      "title": "An independent host implements Host API v1alpha3",
+      "title": "An independent host implements Host API v1beta1",
       "priority": "P0",
       "affectedForms": [
         "*"
@@ -62,16 +68,20 @@
     },
     {
       "id": "V3-005",
-      "title": "A real backend materialises bundle, version and deployment",
+      "title": "A real backend materialises and serves the edge application revisions",
       "priority": "P0",
       "affectedForms": [
         "WorkerBundle",
+        "StaticAssetBundle",
         "WorkerVersion",
-        "WorkerDeployment"
+        "WorkerDeployment",
+        "SQLiteDatabase",
+        "SQLiteMigrationSet",
+        "SQLiteMigrationApplication"
       ],
       "status": "open",
       "issue": 106,
-      "rationale": "Immutable revisions and weighted traffic are these Forms' whole value. Until a real backend performs them, the state machine is asserted rather than demonstrated.",
+      "rationale": "Immutable code and asset revisions, weighted traffic, and transactional ordered SQLite migration history are these Forms' whole value. The reference host proves manifest closure, exact relations, asset fallback preconditions, and the append-only path-and-digest ledger state machine, but it serves no application traffic and executes no SQL. Until a real backend serves the referenced asset bytes with the declared worker ordering and commits each SQL file with its ledger record in one real SQLite transaction, those data-plane effects are asserted rather than demonstrated.",
       "evidence": []
     },
     {
@@ -168,7 +178,7 @@
       "rationale": "A resource's internal address must carry the tenant. Until the contract states that and the corpus drives it, a host may ship an address of space, kind and name — so two tenants naming one resource in one space share one record, one tenant reads, updates and deletes another's, a reference resolves across the boundary and pins a foreign uid, one prepareDigest is spendable by anyone holding it, and one Idempotency-Key replays another tenant's success. This is the single most damaging host defect the lane could permit, and the reference host itself carried the shape of it. The lane now states the rule normatively and measures it with ten black-box checks driven from two configured tenants, nine of them enumerated by surface rather than by intent so that every endpoint taking a resource name — observe and import included — is measured, and the tenth the permissive half none of the nine states: each tenant mutating its own plane, while the holder of a resource a stranger reached for can still update and delete it (spec/decisions/0028). What is NOT closed, and what this blocker is, is the same thing V3-004 is: no host outside this repository has been measured against it. It closes on a passed portable-host-v3 run, including the ten tenant checks, against a host this repository does not own.",
       "evidence": [
         "spec/decisions/0028-the-resource-plane-is-tenant-isolated.md",
-        "spec/host-api/v1alpha3.md",
+        "spec/host-api/v1beta1.md",
         "internal/portableconformancev3/runner_tenant_isolation_checks.go",
         "internal/portableconformancev3/tenant_isolation_test.go",
         "conformance/portable-host-v3/contract.json"
@@ -186,7 +196,7 @@
       "rationale": "A create's prepare binds the create markers, so a byte-identical re-create derives a byte-identical Idempotency-Key and fingerprint. Against a host that keeps its replay records forever, terraform destroy followed by terraform apply of an unchanged configuration reports success, creates nothing, and never converges: the next read 404s, the plan proposes the create again, and it replays again. No client can close it, because the discriminator is the deletion the host performed in between; and the determinism must stay, because it is the only answer to a create whose response was lost. The lane now states the host rule in decision 0011 and measures all three of its edges with replay-record-retires-with-its-incarnation. What is NOT closed is the same thing V3-004 and V3-012 are: no host outside this repository has been measured against it. It closes on a passed portable-host-v3 run, including that check, against a host this repository does not own.",
       "evidence": [
         "spec/decisions/0011-resource-identity-generation-and-revision.md",
-        "spec/host-api/v1alpha3.md",
+        "spec/host-api/v1beta1.md",
         "internal/portableconformancev3/runner_replay_lifetime_checks.go",
         "internal/portableconformancev3/reference_host.go",
         "conformance/portable-host-v3/contract.json"
@@ -204,7 +214,7 @@
       "rationale": "import carries a nativeId, and the lane now holds a host to it: one live resource per native identity within a tenant, an immutable recorded claim, released with its holder, spanning every space of the tenant and stopping there (decision 0011, amended). That proves a host BINDS an adoption to the identity it was given and will not manage one backend object twice, which is what fails a host whose /import is a plain create. It does not prove that the object named existed before the call, or that the host did not also mint a fresh one beside it. Neither is reachable from a portable surface: a native identifier is host detail and stays off every response, the published wire documents are closed, and a black-box runner cannot name an object it knows a host already holds without depending on that host's identifier format. It closes on a terraform import against a real backend of an object that backend provisioned out of band, shown afterwards to be the same object rather than a duplicate, with a second import of it refused.",
       "evidence": [
         "spec/decisions/0011-resource-identity-generation-and-revision.md",
-        "spec/host-api/v1alpha3.md",
+        "spec/host-api/v1beta1.md",
         "spec/portability-boundary.md",
         "internal/portableconformancev3/runner_checks.go",
         "internal/portableconformancev3/reference_host.go",

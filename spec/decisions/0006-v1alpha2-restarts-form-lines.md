@@ -53,13 +53,16 @@ The 34 v1alpha1 Forms are not mechanically cloned into v1alpha2. Each Kind must
 again establish a real workload, owner, host implementation, prior-art review,
 portable boundary, fixtures, migration behavior, and security analysis.
 
-The initial design set is the nine Form-backed Resources currently implemented
-and offered by Takosumi Cloud: EdgeWorker, RelationalDatabase, ObjectBucket,
-KeyValueStore, Queue, Schedule, ContainerService, StatefulEntity, and
-VectorIndex. Cloud implementation provides a real consumer and first-host
-starting point, not maturity, portability, or publication authority. Cloud's
-VerifiedDomain and AIGateway remain separate non-Form services. Absence from
-v1alpha2 remains the default for every other former Kind.
+The initial design set is the nine Form-backed Resources evaluated against a
+dated Takosumi-hosted preview during this reset: EdgeWorker,
+RelationalDatabase, ObjectBucket, KeyValueStore, Queue, Schedule,
+ContainerService, StatefulEntity, and VectorIndex. That evaluation is
+historical provenance only; it does not claim current implementation or offer,
+first-host status, or maturity. An independent host implementation or workload
+— including a Takosumi deployment — may contribute conformance/adoption
+evidence, while Takoform owns maturity and publication authority. The related
+`VerifiedDomain` and `AIGateway` capabilities remain separate non-Form
+services. Absence from v1alpha2 remains the default for every other former Kind.
 
 Provider SemVer remains independent. Provider v1 is the frozen v1alpha1
 compatibility client. Provider v2 is the v1alpha2 client and fails closed on

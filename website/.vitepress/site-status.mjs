@@ -50,17 +50,18 @@ export const SITE_STATUS_REPOSITORY_PATH =
 export const SITE_STATUS_PUBLISHED_PATH =
   "website/public/.well-known/takoform-site.json";
 
-// The Edge Platform Family rides an unpublished provider source candidate.
-// This is the single JS-side declaration of that line; check-public-surfaces
-// binds it to the generated Edge Family examples, which pin the same version,
-// so the constant cannot drift away from the bytes the generator produces.
+// The Beta Edge Platform Family rides the stable provider v2.1.0 release
+// target. Its descriptor remains candidate-only until the release owner
+// publishes it. This is the single JS-side declaration of that target;
+// check-public-surfaces binds it to the generated examples.
 export const EDGE_PREVIEW_PROVIDER_VERSION = "2.1.0";
-export const EDGE_PREVIEW_PROVIDER = `${EDGE_PREVIEW_PROVIDER_VERSION}-source`;
+export const EDGE_PREVIEW_PROVIDER = `${EDGE_PREVIEW_PROVIDER_VERSION}-candidate-only`;
 
 export const FAMILY_CANDIDATE_SET =
-  "forms/candidates/edge/v1alpha1/candidate-set.json";
+  "forms/candidates/edge/v1beta1/candidate-set.json";
 const BLOCKER_LEDGER = "spec/publication-blockers.json";
 const RELEASE_VERSION = "release/version.json";
+const PROVIDER_RELEASE_IDENTITIES = "release/provider-release-identities.json";
 
 export const SITE_STATUS_FIELDS = [
   "providerCurrent",
@@ -70,7 +71,12 @@ export const SITE_STATUS_FIELDS = [
   "openPublicationBlockers",
 ];
 
-const ROOT_MARKERS = [BLOCKER_LEDGER, FAMILY_CANDIDATE_SET, RELEASE_VERSION];
+const ROOT_MARKERS = [
+  BLOCKER_LEDGER,
+  FAMILY_CANDIDATE_SET,
+  RELEASE_VERSION,
+  PROVIDER_RELEASE_IDENTITIES,
+];
 
 /**
  * findRepositoryRoot walks up from a directory until it finds the tree that
@@ -107,9 +113,26 @@ function readJson(repositoryRoot, relativePath) {
  */
 export function deriveSiteStatusFacts(repositoryRoot) {
   const releaseVersion = readJson(repositoryRoot, RELEASE_VERSION);
-  const providerCurrent = releaseVersion.version;
+  const providerReleaseTarget = releaseVersion.version;
+  if (
+    providerReleaseTarget !== EDGE_PREVIEW_PROVIDER_VERSION ||
+    releaseVersion.publicationStatus !== "candidate-only"
+  ) {
+    throw new Error(
+      `${RELEASE_VERSION}: expected stable target ${EDGE_PREVIEW_PROVIDER_VERSION} ` +
+        "with publicationStatus candidate-only",
+    );
+  }
+
+  const releaseIdentities = readJson(repositoryRoot, PROVIDER_RELEASE_IDENTITIES);
+  const publishedEntries = Array.isArray(releaseIdentities.entries)
+    ? releaseIdentities.entries.filter((entry) => entry?.registryReadback)
+    : [];
+  const providerCurrent = publishedEntries.at(-1)?.version;
   if (typeof providerCurrent !== "string" || providerCurrent === "") {
-    throw new Error(`${RELEASE_VERSION}: version must be a non-empty string`);
+    throw new Error(
+      `${PROVIDER_RELEASE_IDENTITIES}: no retained Registry-readback release`,
+    );
   }
 
   const candidateSetBytes = readFileSync(

@@ -9,7 +9,7 @@ import (
 
 func TestEmbeddedV3RefsMatchGeneratedFamilyCandidateSet(t *testing.T) {
 	t.Parallel()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "candidates", "edge", "v1alpha1", "candidate-set.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "candidates", "edge", "v1beta1", "candidate-set.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestEmbeddedV3RefsMatchGeneratedFamilyCandidateSet(t *testing.T) {
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Family != "edge.forms.takoform.com/v1alpha1" {
+	if manifest.Family != "edge.forms.takoform.com/v1beta1" {
 		t.Fatalf("family = %q", manifest.Family)
 	}
 	registry := V3Current()
@@ -77,8 +77,80 @@ func TestV3SupportedFormRefsCoversEveryDefault(t *testing.T) {
 			t.Errorf("family candidate %s/%s is missing from the supported set", groupKind.APIVersion, groupKind.Kind)
 		}
 	}
-	if _, err := V3ForKind("edge.forms.takoform.com/v1alpha1", "NoSuchKind"); err == nil {
+	if _, err := V3ForKind("edge.forms.takoform.com/v1beta1", "NoSuchKind"); err == nil {
 		t.Fatal("unknown family kind unexpectedly resolved")
+	}
+}
+
+// TestProviderV210IdentityLedgerIsEmbedded separates provider compatibility
+// from Form Package publication. Provider v2.1.0 carries these exact 15 Beta
+// identities and digests even while the package artifacts remain unpublished.
+func TestProviderV210IdentityLedgerIsEmbedded(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "release", "provider-form-identities.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ledger struct {
+		Format   string `json:"format"`
+		Releases []struct {
+			ProviderVersion    string `json:"providerVersion"`
+			PortableAPIVersion string `json:"portableApiVersion"`
+			Family             string `json:"family"`
+			FormMaturity       string `json:"formMaturity"`
+			Forms              []struct {
+				ResourceType  string `json:"resourceType"`
+				FormRef       V3Ref  `json:"formRef"`
+				PackageDigest string `json:"packageDigest"`
+			} `json:"forms"`
+		} `json:"releases"`
+	}
+	if err := json.Unmarshal(raw, &ledger); err != nil {
+		t.Fatal(err)
+	}
+	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) != 1 {
+		t.Fatalf("provider identity ledger = %#v", ledger)
+	}
+	release := ledger.Releases[0]
+	if release.ProviderVersion != "2.1.0" || release.PortableAPIVersion != "forms.takoform.com/v1beta1" ||
+		release.Family != "edge.forms.takoform.com/v1beta1" || release.FormMaturity != "experimental" || len(release.Forms) != 15 {
+		t.Fatalf("provider v2.1 identity set = %#v", release)
+	}
+	registry := V3Current()
+	for _, entry := range release.Forms {
+		entry.FormRef.PackageDigest = entry.PackageDigest
+		got, ok := registry.Lookup(entry.FormRef.ExactKey())
+		if !ok || got != entry.FormRef {
+			t.Errorf("%s does not embed %s: got %#v ok=%t", entry.ResourceType, entry.FormRef.ExactKey(), got, ok)
+		}
+	}
+}
+
+// TestFutureStableDefaultDoesNotRebindBetaState pins the GA transition rule:
+// adding a 1.0 family identity and making it a create default never removes or
+// rewrites the Beta identity that existing state records.
+func TestFutureStableDefaultDoesNotRebindBetaState(t *testing.T) {
+	t.Parallel()
+	beta, err := V3ForKind("edge.forms.takoform.com/v1beta1", "ModuleWorker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stable := V3Ref{
+		APIVersion:        "edge.forms.takoform.com/v1",
+		Kind:              beta.Kind,
+		DefinitionVersion: "1.0.0",
+		SchemaDigest:      "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+		PackageDigest:     "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+	}
+	future, err := V3Current().Register(stable, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := future.DefaultCreate(stable.ExactKey().GroupKind()); err != nil || got != stable {
+		t.Fatalf("future stable create default = %#v (err %v)", got, err)
+	}
+	if got, ok := future.Lookup(beta.ExactKey()); !ok || got != beta {
+		t.Fatalf("future stable registration rebound Beta state: got %#v ok=%t", got, ok)
 	}
 }
 
@@ -90,7 +162,7 @@ func TestV3SupportedFormRefsCoversEveryDefault(t *testing.T) {
 // naming exactly one of them.
 func TestV3RegistryHoldsTwoDefinitionVersionsOfOneForm(t *testing.T) {
 	t.Parallel()
-	const group = "edge.forms.takoform.com/v1alpha1"
+	const group = "edge.forms.takoform.com/v1beta1"
 	groupKind := GroupKind{APIVersion: group, Kind: "ModuleWorker"}
 	base := V3Current()
 	first, err := base.DefaultCreate(groupKind)
@@ -156,7 +228,7 @@ func TestV3RegistryHoldsTwoDefinitionVersionsOfOneForm(t *testing.T) {
 func TestV3RegistryRefusesConflictingProvenance(t *testing.T) {
 	t.Parallel()
 	base := V3Current()
-	existing, err := V3ForKind("edge.forms.takoform.com/v1alpha1", "ModuleWorker")
+	existing, err := V3ForKind("edge.forms.takoform.com/v1beta1", "ModuleWorker")
 	if err != nil {
 		t.Fatal(err)
 	}

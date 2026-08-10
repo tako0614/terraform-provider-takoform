@@ -140,10 +140,19 @@ func closedStringMap(maxProperties int) map[string]any {
 // bound inside an operation schema and the declared `limits` entry — and a
 // literal repeated in both is a literal that eventually stops matching.
 const (
+	// kvMaxKeyBytes is the portion of Cloudflare KV's 512-byte key ceiling
+	// available to the user after the pooled runtime envelope reserves 45
+	// bytes. The candidate's maxLength and declared limit use this same
+	// UTF-8-byte budget.
+	kvMaxKeyBytes = 467
 	// kvMaxValueBytes bounds the DECODED length of one edge.kv value.
 	kvMaxValueBytes = 26214400
 	// queueMaxMessageBytes bounds the DECODED length of one queue message body.
-	queueMaxMessageBytes = 131072
+	queueMaxMessageBytes = 127000
+	// objectsMaxKeyBytes is the portion of the pooled object-key budget after
+	// its 45-byte runtime envelope is reserved from the 1024-byte substrate
+	// ceiling.
+	objectsMaxKeyBytes = 979
 	// objectsMaxObjectBytes is the largest object, reachable only through a
 	// multipart upload.
 	objectsMaxObjectBytes = 5368709120
@@ -153,6 +162,35 @@ const (
 	objectsMaxSinglePutBytes = 314572800
 	// objectsMaxMultipartParts bounds the parts of one multipart upload.
 	objectsMaxMultipartParts = 10000
+	// The edge.sql structural ceilings and declared limits use these same
+	// values, so the operation schema and portable contract cannot drift.
+	sqlMaxStatementBytes           = 100000
+	sqlMaxBoundParameters          = 100
+	sqlMaxStatementsPerTransaction = 100
+	sqlMaxRowsPerStatement         = 10000
+	// sqlMaxColumnsPerRow is the portable minimum shared by the SQL limit and
+	// the structural ceiling on each returned row. SQLite-backed Cloudflare
+	// substrates cap tables at 100 columns, so a higher candidate minimum
+	// would admit a contract a conforming host cannot serve.
+	sqlMaxColumnsPerRow = 100
+	// sqlMaxColumnNameBytes is measured on the UTF-8 encoding of one returned
+	// column name. The matching JSON Schema maxLength is a structural ceiling;
+	// the byte rule remains normative for multi-byte names.
+	sqlMaxColumnNameBytes = 128
+	// sqlMaxTextBytesPerValue bounds the UTF-8 encoding of one TEXT value.
+	sqlMaxTextBytesPerValue = 1000000
+	// sqlMaxBlobBytesPerValue bounds the decoded bytes of one canonical
+	// encoded-bytes BLOB value.
+	sqlMaxBlobBytesPerValue = 1000000
+	// sqlMaxRowBytes and sqlMaxResultBytesPerCall bound the UTF-8 bytes of the
+	// RFC 8785 canonical JSON representation of one row and one complete call
+	// result respectively.
+	sqlMaxRowBytes           = 2000000
+	sqlMaxResultBytesPerCall = 8388608
+	// sqlMaxNumberMagnitude is JavaScript's Number.MAX_SAFE_INTEGER. edge.sql
+	// has one binary64 number type; SQLite's INTEGER/REAL storage-class
+	// distinction is not projected through the portable value model.
+	sqlMaxNumberMagnitude = 9007199254740991
 )
 
 // base64Value builds one encoded-bytes fixture value from its base64 text.
@@ -160,14 +198,14 @@ func base64Value(data string) map[string]any {
 	return map[string]any{"encoding": "base64", "data": data}
 }
 
-// The five tagged SQLite values, as fixture literals.
-func sqlNull() map[string]any { return map[string]any{"type": "null"} }
-func sqlInteger(decimal string) map[string]any {
-	return map[string]any{"type": "integer", "value": decimal}
+// Edge SQL fixture literals use the exact portable wire values. BLOB is the
+// family's common encoded-bytes shape; it does not invent a SQL-only tag.
+func sqlNull() any                    { return nil }
+func sqlNumber(value float64) float64 { return value }
+func sqlText(value string) string     { return value }
+func sqlBlob(data string) map[string]any {
+	return base64Value(data)
 }
-func sqlReal(value float64) map[string]any { return map[string]any{"type": "real", "value": value} }
-func sqlText(value string) map[string]any  { return map[string]any{"type": "text", "value": value} }
-func sqlBlob(base64 string) map[string]any { return map[string]any{"type": "blob", "base64": base64} }
 
 // base64Length is the exact length of the standard base64 encoding, with
 // padding, of maxDecodedBytes bytes. It is what bounds the `data` string of an
@@ -201,52 +239,21 @@ func encodedBytes(maxDecodedBytes int) map[string]any {
 	}
 }
 
-// sqlDecimalInteger carries a 64-bit SQLite INTEGER as its canonical decimal
-// text. A JSON number cannot: IEEE-754 double has 53 bits of mantissa, so
-// 9223372036854775807 would arrive as 9223372036854775808 and a rowid past 2^53
-// would silently drift. The pattern admits a few values above the 64-bit range,
-// which the definition's own normative sentence closes — a structural minimum
-// with the semantic rule stated alongside it (decision 0014).
-func sqlDecimalInteger() map[string]any {
-	return map[string]any{
-		"type":      "string",
-		"maxLength": 20,
-		"pattern":   `^(?:0|-?[1-9][0-9]{0,18})$`,
-	}
-}
-
-// sqlValue is the tagged SQLite storage-class value: exactly one of NULL,
-// INTEGER, REAL, TEXT, and BLOB, each carrying its payload in the member that
-// can hold it losslessly.
-//
-// The untagged `boolean|null|number|string` union it replaces could carry
-// neither a 64-bit INTEGER nor a BLOB: the first lost precision above 2^53 and
-// the second had nowhere to go at all, so a column round-tripping through this
-// interface came back as a different value. SQLite has no boolean storage
-// class, so there is no boolean member either; 0 and 1 are INTEGERs.
+// sqlValue is the exact EdgeSqlValue wire union. A number is one finite
+// binary64 value inside JavaScript's safe-integer magnitude; the wire does not
+// expose SQLite's INTEGER/REAL storage-class distinction. A BLOB uses the
+// family's canonical encoded-bytes object. Boolean, bigint, and the withdrawn
+// SQL-only tagged objects are not members (decision 0034).
 func sqlValue() map[string]any {
-	tagged := func(tag string, payload map[string]any, member string) map[string]any {
-		properties := map[string]any{"type": map[string]any{"type": "string", "enum": []any{tag}}}
-		required := []string{"type"}
-		if member != "" {
-			properties[member] = payload
-			required = []string{member, "type"}
-		}
-		return map[string]any{
-			"type":                 "object",
-			"additionalProperties": false,
-			"required":             required,
-			"properties":           properties,
-		}
-	}
 	return map[string]any{
-		"type": "object",
 		"oneOf": []any{
-			tagged("null", nil, ""),
-			tagged("integer", sqlDecimalInteger(), "value"),
-			tagged("real", map[string]any{"type": "number"}, "value"),
-			tagged("text", map[string]any{"type": "string", "maxLength": 1000000}, "value"),
-			tagged("blob", map[string]any{"type": "string", "maxLength": base64Length(1000000)}, "base64"),
+			map[string]any{"type": "null"},
+			map[string]any{
+				"type": "number", "minimum": -float64(sqlMaxNumberMagnitude),
+				"maximum": float64(sqlMaxNumberMagnitude),
+			},
+			map[string]any{"type": "string", "maxLength": sqlMaxTextBytesPerValue},
+			encodedBytes(sqlMaxBlobBytesPerValue),
 		},
 	}
 }
@@ -254,7 +261,7 @@ func sqlValue() map[string]any {
 func sqlParams() map[string]any {
 	return map[string]any{
 		"type":     "array",
-		"maxItems": 100,
+		"maxItems": sqlMaxBoundParameters,
 		"items":    sqlValue(),
 	}
 }
@@ -266,20 +273,26 @@ func sqlParams() map[string]any {
 // transaction, which is the opposite of what it is for.
 func sqlStatementResult() map[string]any {
 	return closedObject([]string{"rows", "rowsWritten"}, map[string]any{
-		"rows":            sqlRows(),
-		"rowsWritten":     map[string]any{"type": "integer", "minimum": 0},
-		"lastInsertRowId": sqlDecimalInteger(),
+		"rows":        sqlRows(),
+		"rowsWritten": map[string]any{"type": "integer", "minimum": 0},
+	})
+}
+
+func sqlQueryResult() map[string]any {
+	return closedObject([]string{"rows", "rowsWritten"}, map[string]any{
+		"rows":        sqlRows(),
+		"rowsWritten": map[string]any{"type": "integer", "const": 0},
 	})
 }
 
 func sqlRows() map[string]any {
 	return map[string]any{
 		"type":     "array",
-		"maxItems": 10000,
+		"maxItems": sqlMaxRowsPerStatement,
 		"items": map[string]any{
 			"type":                 "object",
-			"maxProperties":        256,
-			"propertyNames":        map[string]any{"type": "string", "maxLength": 128},
+			"maxProperties":        sqlMaxColumnsPerRow,
+			"propertyNames":        map[string]any{"type": "string", "maxLength": sqlMaxColumnNameBytes},
 			"additionalProperties": sqlValue(),
 		},
 	}
@@ -291,7 +304,7 @@ func sqlStatement() map[string]any {
 		"additionalProperties": false,
 		"required":             []string{"sql"},
 		"properties": map[string]any{
-			"sql":    stringSchema(1, 100000),
+			"sql":    stringSchema(1, sqlMaxStatementBytes),
 			"params": sqlParams(),
 		},
 	}
@@ -414,7 +427,7 @@ func runtimeMediaTypesOf(property string) ([]string, error) {
 // encoded-bytes shape, and the fixtures assert only what one client can observe
 // without waiting for convergence.
 func edgeKVInterface() InterfaceDefinition {
-	key := stringSchema(1, 512)
+	key := stringSchema(1, kvMaxKeyBytes)
 	metadata := closedStringMap(64)
 	value := encodedBytes(kvMaxValueBytes)
 	return InterfaceDefinition{
@@ -428,7 +441,7 @@ func edgeKVInterface() InterfaceDefinition {
 			"structural ceiling of that encoding and is not the limit. A put whose decoded value exceeds " +
 			"maxValueBytes fails with value_too_large, and one whose data is not decodable base64 fails with " +
 			"invalid_value. A key is a UTF-8 string and maxKeyBytes bounds its UTF-8 ENCODED length, so a key " +
-			"of 512 astral characters is 2048 bytes and fails with invalid_key even though it is 512 code " +
+			"of 467 astral characters is 1868 bytes and fails with invalid_key even though it is 467 code " +
 			"points. Metadata is a text map, never bytes and never secret; maxMetadataBytes bounds the UTF-8 " +
 			"encoding of its canonical JSON and exceeding it fails with metadata_too_large. " +
 			"Consistency is eventual, and that is this contract's identity rather than an option a host " +
@@ -445,7 +458,7 @@ func edgeKVInterface() InterfaceDefinition {
 			"split is written down in the Host API specification.",
 		Semantics: InterfaceSemantics{Consistency: "eventual", Pagination: "cursor"},
 		Limits: map[string]int64{
-			"maxKeyBytes": 512, "maxValueBytes": kvMaxValueBytes,
+			"maxKeyBytes": kvMaxKeyBytes, "maxValueBytes": kvMaxValueBytes,
 			"maxMetadataBytes": 1024, "maxListPageKeys": 1000,
 		},
 		Operations: []InterfaceOperation{
@@ -512,7 +525,7 @@ func edgeKVInterface() InterfaceDefinition {
 					"eventually consistent like every other read: a key written moments ago may be missing from it, and a " +
 					"key deleted moments ago may still appear.",
 				InputSchema: operationObject(nil, map[string]any{
-					"prefix": stringSchema(0, 512),
+					"prefix": stringSchema(0, kvMaxKeyBytes),
 					"cursor": stringSchema(1, 4096),
 					"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
 				}),
@@ -577,7 +590,7 @@ func edgeKVInterface() InterfaceDefinition {
 // operations, with bodies STREAMING beside the operation document rather than
 // inside it.
 func edgeObjectsInterface() InterfaceDefinition {
-	key := stringSchema(1, 1024)
+	key := stringSchema(1, objectsMaxKeyBytes)
 	etag := stringSchema(1, 256)
 	contentType := stringSchema(1, 256)
 	size := map[string]any{"type": "integer", "minimum": 0, "maximum": objectsMaxObjectBytes}
@@ -619,7 +632,7 @@ func edgeObjectsInterface() InterfaceDefinition {
 			"during the trace; multipart assembly is a HOST OBLIGATION stated in the Host API specification.",
 		Semantics: InterfaceSemantics{Consistency: "read_after_write", Pagination: "cursor"},
 		Limits: map[string]int64{
-			"maxKeyBytes": 1024, "maxObjectBytes": objectsMaxObjectBytes,
+			"maxKeyBytes": objectsMaxKeyBytes, "maxObjectBytes": objectsMaxObjectBytes,
 			"maxSinglePutBytes": objectsMaxSinglePutBytes, "maxMultipartParts": objectsMaxMultipartParts,
 			"maxListPageObjects": 1000,
 		},
@@ -707,7 +720,7 @@ func edgeObjectsInterface() InterfaceDefinition {
 					"delimiter rolls every key whose remainder after the prefix contains it up into prefixes, and those keys " +
 					"are then absent from objects. The listing observes every put and delete that has already resolved.",
 				InputSchema: operationObject(nil, map[string]any{
-					"prefix":    stringSchema(0, 1024),
+					"prefix":    stringSchema(0, objectsMaxKeyBytes),
 					"delimiter": stringSchema(1, 16),
 					"cursor":    stringSchema(1, 4096),
 					"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
@@ -722,7 +735,7 @@ func edgeObjectsInterface() InterfaceDefinition {
 					},
 					"prefixes": map[string]any{
 						"type": "array", "maxItems": 1000, "uniqueItems": true,
-						"items": stringSchema(1, 1024),
+						"items": stringSchema(1, objectsMaxKeyBytes),
 					},
 					"truncated": map[string]any{"type": "boolean"},
 					"cursor":    stringSchema(1, 4096),
@@ -877,150 +890,127 @@ func edgeObjectsInterface() InterfaceDefinition {
 	}
 }
 
-// edgeSQLInterface is the embedded SQLite contract.
-//
-// Its value model used to be the untagged union boolean|null|number|string,
-// which could carry neither of the two things SQLite users depend on: a 64-bit
-// INTEGER (IEEE-754 double has 53 bits of mantissa, so a rowid past 2^53 came
-// back changed) and a BLOB (which had nowhere to go at all). Values are now
-// tagged by storage class, integers and rowids travel as canonical decimal
-// text, and every statement — inside a transaction or not — reports the same
-// result shape, so the atomic path is no longer strictly weaker than the
-// non-atomic one.
+// edgeSQLInterface is the embedded SQLite runtime contract corrected by
+// decision 0034. Its values stay in JavaScript's portable corridor rather than
+// exposing SQLite storage classes, and query earns idempotency from an actual
+// rollback-only transaction rather than from fallible SQL pre-classification.
 func edgeSQLInterface() InterfaceDefinition {
 	statementResult := sqlStatementResult()
-	sql := stringSchema(1, 100000)
+	queryResult := sqlQueryResult()
+	sql := stringSchema(1, sqlMaxStatementBytes)
 	return InterfaceDefinition{
 		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
 		Name: "edge.sql", Version: "1.0.0",
 		Title: "Embedded SQLite database",
 		Description: "SQL statements executed against one embedded SQLite database with serializable transactions. " +
-			"Values are TAGGED, never bare JSON scalars: every bound parameter and every returned column value is " +
-			"exactly one of {\"type\":\"null\"}, {\"type\":\"integer\",\"value\":\"<decimal>\"}, " +
-			"{\"type\":\"real\",\"value\":<number>}, {\"type\":\"text\",\"value\":\"<string>\"}, and " +
-			"{\"type\":\"blob\",\"base64\":\"<base64>\"} — SQLite's five storage classes and nothing else. An " +
-			"INTEGER travels as canonical decimal TEXT because IEEE-754 double carries 53 bits of mantissa, so " +
-			"9223372036854775807 would arrive as 9223372036854775808 if it were a JSON number; a host MUST reject " +
-			"with sql_error an integer outside the 64-bit two's-complement range " +
-			"-9223372036854775808..9223372036854775807, and one carrying a leading zero, a leading plus, or " +
-			"surrounding space. A BLOB travels as RFC 4648 section 4 base64 with padding, so arbitrary bytes " +
-			"survive; TEXT is UTF-8. There is no boolean member because SQLite has no boolean storage class: 0 and " +
-			"1 are INTEGERs. lastInsertRowId is the same canonical decimal text for the same reason. " +
-			"Every statement reports the same result whether it ran alone or inside a transaction: rows, the rows " +
-			"it returned in order and empty when it returned none; rowsWritten, the number of rows it inserted, " +
-			"updated, or deleted; and lastInsertRowId when it inserted at least one row. Parameters bind " +
-			"POSITIONALLY, so ?1 is params[0], and a statement referencing an index the array does not carry fails " +
-			"with sql_error. " +
-			"A transaction applies its ordered statements atomically under serializable isolation: it observes one " +
-			"consistent snapshot, and either every statement applied or none did. A failure anywhere rolls the " +
-			"whole transaction back, leaves the database exactly as it was, and reports sql_error without partial " +
-			"results — a result list describing statements whose effects were discarded would record a state that " +
-			"never existed. Concurrent writers may fail with busy, which is the only retryable outcome; a caller " +
-			"that retries re-runs the whole call. query is declared idempotent, which is only true if it cannot " +
-			"write, so a host MUST refuse a writing statement submitted through query with sql_error.",
+			"EdgeSqlValue is exactly null, a finite binary64 number whose absolute value is at most " +
+			"9007199254740991 (Number.MAX_SAFE_INTEGER), a UTF-8 string, or the common canonical encoded-bytes " +
+			"object {\"encoding\":\"base64\",\"data\":\"...\"}. The BLOB data is RFC 4648 section 4 base64, " +
+			"padded and unwrapped. Boolean, bigint, and SQL-only tagged objects are not values. SQLite INTEGER and " +
+			"REAL may store a number differently, but that storage-class distinction is not portable or observable " +
+			"through this value model. A host MUST NOT round, stringify, tag, or silently coerce a number: a " +
+			"non-finite or out-of-range input or output fails numeric_out_of_range. Malformed values and base64 fail " +
+			"sql_error. Parameters bind POSITIONALLY, so ?1 is params[0]. " +
+			"Every runtime entry accepts exactly one SQLite statement. After that statement, only whitespace and " +
+			"comments may remain; a second statement fails sql_error. BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT, and " +
+			"RELEASE are transaction-control SQL and fail sql_error on every runtime operation. A statement that " +
+			"would change sqlite_schema, the database attachment set, or the migration ledger also fails sql_error: " +
+			"durable schema migration exists only through the SQLiteMigrationApplication administrative path. " +
+			"Each statement result is exactly rows, in statement and row order, and rowsWritten, the number of rows " +
+			"inserted, updated, or deleted; lastInsertRowId is not portable and does not exist. " +
+			"SQL, column-name, and TEXT byte limits measure UTF-8; BLOB limits measure decoded bytes. maxRowBytes " +
+			"and maxResultBytesPerCall measure UTF-8 bytes of RFC 8785 canonical JSON for one row and the complete " +
+			"operation output. Every result is fully materialized and checked against the numeric, row, column, " +
+			"value, and result limits before a write commits. Concurrent writers may fail busy, the only retryable " +
+			"outcome; retrying re-runs the whole call.",
 		Semantics: InterfaceSemantics{Consistency: "serializable"},
 		Limits: map[string]int64{
-			"maxStatementBytes": 100000, "maxBoundParameters": 100,
-			"maxStatementsPerTransaction": 100, "maxRowsPerStatement": 10000,
-			"maxColumnsPerRow": 256,
+			"maxStatementBytes": int64(sqlMaxStatementBytes), "maxBoundParameters": int64(sqlMaxBoundParameters),
+			"maxStatementsPerTransaction": int64(sqlMaxStatementsPerTransaction),
+			"maxRowsPerStatement":         int64(sqlMaxRowsPerStatement), "maxColumnsPerRow": int64(sqlMaxColumnsPerRow),
+			"maxColumnNameBytes": int64(sqlMaxColumnNameBytes), "maxTextBytesPerValue": int64(sqlMaxTextBytesPerValue),
+			"maxBlobBytesPerValue": int64(sqlMaxBlobBytesPerValue), "maxRowBytes": int64(sqlMaxRowBytes),
+			"maxResultBytesPerCall": int64(sqlMaxResultBytesPerCall),
 		},
 		Operations: []InterfaceOperation{
 			{
 				Name: "execute",
-				Description: "Run one statement with positionally bound parameters and return its result. A statement that " +
-					"returns rows returns them here too; a statement that writes reports rowsWritten and, when it inserted at " +
-					"least one row, lastInsertRowId as canonical decimal text. execute is deliberately NOT idempotent: " +
-					"re-running an INSERT inserts again, so a caller that retries after a timeout must decide for itself " +
-					"whether the first attempt applied.",
+				Description: "Run exactly one runtime statement with positionally bound EdgeSqlValue parameters and return " +
+					"its fully materialized rows and rowsWritten. The statement may have effects, so execute is deliberately " +
+					"NOT idempotent: re-running an INSERT inserts again. Output and limits are validated before the statement's " +
+					"implicit transaction commits; numeric_out_of_range or an exceeded result limit applies nothing. A caller " +
+					"retrying after an unknown transport outcome must decide whether the first call applied.",
 				InputSchema:  operationObject([]string{"sql"}, map[string]any{"sql": sql, "params": sqlParams()}),
 				OutputSchema: withDialect(statementResult),
-				Errors:       []string{"sql_error", "busy", "backend_unavailable"},
+				Errors:       []string{"sql_error", "numeric_out_of_range", "busy", "backend_unavailable"},
 			},
 			{
 				Name: "query",
-				Description: "Run one READ statement with positionally bound parameters and return its rows. A host MUST " +
-					"refuse a statement that writes with sql_error: this operation is declared idempotent, and a writing " +
-					"statement behind that declaration would let a safe retry duplicate the write. rowsWritten is therefore " +
-					"always 0 here and lastInsertRowId never appears.",
+				Description: "Run exactly one runtime statement inside a rollback-only transaction, fully materialize and " +
+					"validate its result. The host always rolls back before returning and obtains zero persistent side effects " +
+					"without pre-classifying the statement as read-only; even a statement that transiently changes rows returns " +
+					"rowsWritten 0. A materialization, numeric, or limit failure also rolls back. This executed rollback, rather " +
+					"than SQL text classification, is why query is idempotent.",
 				InputSchema:  operationObject([]string{"sql"}, map[string]any{"sql": sql, "params": sqlParams()}),
-				OutputSchema: withDialect(statementResult),
-				Errors:       []string{"sql_error", "busy", "backend_unavailable"},
+				OutputSchema: withDialect(queryResult),
+				Errors:       []string{"sql_error", "numeric_out_of_range", "busy", "backend_unavailable"},
 				Idempotent:   true,
 			},
 			{
 				Name: "transaction",
-				Description: "Apply an ordered statement list atomically under serializable isolation and return one result " +
-					"per statement, in statement order. results carries exactly as many entries as statements, and each entry " +
-					"is the full statement result — including the rows a SELECT inside the transaction returned, which is why " +
-					"a read-modify-write no longer has to leave the transaction to see what it read.",
+				Description: "Run 1 to 100 ordered runtime statements under serializable isolation and return exactly one " +
+					"result per statement in order. All rows and results are materialized and validated before commit. Only " +
+					"then do all effects commit together; SQL failure, numeric_out_of_range, busy, materialization failure, or " +
+					"any value, row, column, or combined-result limit rolls the whole transaction back and returns no partial " +
+					"results. A successful SELECT inside the transaction therefore returns what that same snapshot observed.",
 				InputSchema: operationObject([]string{"statements"}, map[string]any{
-					"statements": map[string]any{"type": "array", "minItems": 1, "maxItems": 100, "items": sqlStatement()},
+					"statements": map[string]any{"type": "array", "minItems": 1, "maxItems": sqlMaxStatementsPerTransaction, "items": sqlStatement()},
 				}),
 				OutputSchema: operationObject([]string{"results"}, map[string]any{
-					"results": map[string]any{"type": "array", "maxItems": 100, "items": statementResult},
+					"results": map[string]any{"type": "array", "minItems": 1, "maxItems": sqlMaxStatementsPerTransaction, "items": statementResult},
 				}),
-				Errors: []string{"sql_error", "busy", "backend_unavailable"},
+				Errors: []string{"sql_error", "numeric_out_of_range", "busy", "backend_unavailable"},
 			},
 		},
 		Fixtures: []InterfaceFixture{
 			{
-				Name: "create-insert-select",
+				Name: "wire-values-round-trip",
 				Steps: []InterfaceFixtureStep{
 					{Operation: "execute", Input: map[string]any{
-						"sql": "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)",
-					}, Expected: map[string]any{"rows": []any{}, "rowsWritten": 0}},
-					{Operation: "execute", Input: map[string]any{
-						"sql":    "INSERT INTO notes (body) VALUES (?1)",
-						"params": []any{sqlText("first note")},
-					}, Expected: map[string]any{"rowsWritten": 1, "lastInsertRowId": "1"}},
-					{Operation: "query", Input: map[string]any{
-						"sql": "SELECT body FROM notes ORDER BY id",
+						"sql":    "SELECT ?1 AS n, ?2 AS t, ?3 AS b, ?4 AS z",
+						"params": []any{sqlNumber(1.5), sqlText("first note"), sqlBlob("AAECg/8="), sqlNull()},
 					}, Expected: map[string]any{
-						"rows":        []any{map[string]any{"body": sqlText("first note")}},
+						"rows": []any{map[string]any{
+							"n": sqlNumber(1.5), "t": sqlText("first note"), "b": sqlBlob("AAECg/8="), "z": sqlNull(),
+						}},
 						"rowsWritten": 0,
 					}},
 				},
 			},
 			{
-				// The whole reason integers are tagged decimal text. As a JSON
-				// number this value comes back as 9223372036854775808.
-				Name: "a-64-bit-integer-round-trips-losslessly",
+				Name: "safe-number-boundary-round-trips",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "execute", Input: map[string]any{"sql": "CREATE TABLE counters (v INTEGER NOT NULL)"}},
-					{Operation: "execute", Input: map[string]any{
-						"sql":    "INSERT INTO counters (v) VALUES (?1)",
-						"params": []any{sqlInteger("9223372036854775807")},
-					}, Expected: map[string]any{"rowsWritten": 1}},
-					{Operation: "query", Input: map[string]any{"sql": "SELECT v FROM counters"}, Expected: map[string]any{
-						"rows": []any{map[string]any{"v": sqlInteger("9223372036854775807")}},
+					{Operation: "query", Input: map[string]any{
+						"sql": "SELECT ?1 AS v", "params": []any{sqlNumber(float64(sqlMaxNumberMagnitude))},
+					}, Expected: map[string]any{
+						"rows": []any{map[string]any{"v": sqlNumber(float64(sqlMaxNumberMagnitude))}}, "rowsWritten": 0,
 					}},
 				},
 			},
 			{
-				// The other value the untagged union could not carry at all.
-				Name: "a-blob-round-trips-losslessly",
+				Name: "out-of-range-input-is-refused",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "execute", Input: map[string]any{"sql": "CREATE TABLE payloads (v BLOB NOT NULL)"}},
-					{Operation: "execute", Input: map[string]any{
-						"sql":    "INSERT INTO payloads (v) VALUES (?1)",
-						"params": []any{sqlBlob("AAECg/8=")},
-					}, Expected: map[string]any{"rowsWritten": 1}},
-					{Operation: "query", Input: map[string]any{"sql": "SELECT v FROM payloads"}, Expected: map[string]any{
-						"rows": []any{map[string]any{"v": sqlBlob("AAECg/8=")}},
-					}},
+					{Operation: "query", Input: map[string]any{
+						"sql": "SELECT ?1 AS v", "params": []any{float64(sqlMaxNumberMagnitude) + 1},
+					}, ExpectedError: "numeric_out_of_range"},
 				},
 			},
 			{
-				Name: "null-and-real-keep-their-storage-classes",
+				Name: "out-of-range-output-is-refused",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "execute", Input: map[string]any{"sql": "CREATE TABLE readings (a REAL, b TEXT)"}},
-					{Operation: "execute", Input: map[string]any{
-						"sql":    "INSERT INTO readings (a, b) VALUES (?1, ?2)",
-						"params": []any{sqlReal(1.5), sqlNull()},
-					}, Expected: map[string]any{"rowsWritten": 1}},
-					{Operation: "query", Input: map[string]any{"sql": "SELECT a, b FROM readings"}, Expected: map[string]any{
-						"rows": []any{map[string]any{"a": sqlReal(1.5), "b": sqlNull()}},
-					}},
+					{Operation: "query", Input: map[string]any{
+						"sql": "SELECT 9007199254740992 AS v",
+					}, ExpectedError: "numeric_out_of_range"},
 				},
 			},
 			{
@@ -1028,35 +1018,36 @@ func edgeSQLInterface() InterfaceDefinition {
 				Steps: []InterfaceFixtureStep{
 					{Operation: "transaction", Input: map[string]any{
 						"statements": []any{
-							map[string]any{"sql": "CREATE TABLE events (id INTEGER PRIMARY KEY, n INTEGER NOT NULL)"},
 							map[string]any{
-								"sql":    "INSERT INTO events (n) VALUES (?1)",
-								"params": []any{sqlInteger("7")},
+								"sql": "SELECT ?1 AS n", "params": []any{sqlNumber(7)},
 							},
-							map[string]any{"sql": "SELECT n FROM events ORDER BY id"},
+							map[string]any{"sql": "SELECT ?1 AS t", "params": []any{sqlText("done")}},
 						},
 					}, Expected: map[string]any{
 						"results": []any{
-							map[string]any{"rows": []any{}, "rowsWritten": 0},
-							map[string]any{"rows": []any{}, "rowsWritten": 1, "lastInsertRowId": "1"},
-							map[string]any{"rows": []any{map[string]any{"n": sqlInteger("7")}}, "rowsWritten": 0},
+							map[string]any{"rows": []any{map[string]any{"n": sqlNumber(7)}}, "rowsWritten": 0},
+							map[string]any{"rows": []any{map[string]any{"t": sqlText("done")}}, "rowsWritten": 0},
 						},
 					}},
 				},
 			},
 			{
-				// Atomicity is provable from one client: the table the first
-				// statement created must not exist after the transaction failed.
-				Name: "a-failed-transaction-applies-nothing",
+				Name: "multiple-statements-are-refused",
 				Steps: []InterfaceFixtureStep{
-					{Operation: "transaction", Input: map[string]any{
-						"statements": []any{
-							map[string]any{"sql": "CREATE TABLE rolled_back (id INTEGER PRIMARY KEY)"},
-							map[string]any{"sql": "INSERT INTO no_such_table (id) VALUES (1)"},
-						},
-					}, ExpectedError: "sql_error"},
-					{Operation: "query", Input: map[string]any{
-						"sql": "SELECT id FROM rolled_back",
+					{Operation: "execute", Input: map[string]any{"sql": "SELECT 1; SELECT 2"}, ExpectedError: "sql_error"},
+				},
+			},
+			{
+				Name: "transaction-control-is-refused",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "query", Input: map[string]any{"sql": "BEGIN"}, ExpectedError: "sql_error"},
+				},
+			},
+			{
+				Name: "schema-change-is-admin-only",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "execute", Input: map[string]any{
+						"sql": "CREATE TABLE forbidden_runtime_schema (id INTEGER PRIMARY KEY)",
 					}, ExpectedError: "sql_error"},
 				},
 			},
@@ -1527,7 +1518,7 @@ func workerRuntimeInterface() InterfaceDefinition {
 		Limits: map[string]int64{
 			"maxRequestBytes":        104857600,
 			"maxQueueBatchMessages":  100,
-			"maxQueueMessageBytes":   131072,
+			"maxQueueMessageBytes":   queueMaxMessageBytes,
 			"maxEnvironmentEntries":  256,
 			"maxWaitUntilTasks":      32,
 			"maxModulesPerBundleSet": 512,

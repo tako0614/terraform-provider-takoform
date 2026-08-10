@@ -17,7 +17,7 @@
             "additionalProperties": false,
             "properties": {
               "data": {
-                "maxLength": 174764,
+                "maxLength": 169336,
                 "type": "string"
               },
               "encoding": {
@@ -80,7 +80,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "data": {
-                      "maxLength": 174764,
+                      "maxLength": 169336,
                       "type": "string"
                     },
                     "encoding": {
@@ -295,7 +295,7 @@
   "limits": {
     "maxBatchMessages": 100,
     "maxDelaySeconds": 43200,
-    "maxMessageBytes": 131072
+    "maxMessageBytes": 127000
   },
   "fixtures": [
     {

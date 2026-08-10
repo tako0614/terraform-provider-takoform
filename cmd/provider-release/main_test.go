@@ -30,8 +30,11 @@ func TestReleaseDescriptorPinsPublicIdentityAndSigner(t *testing.T) {
 	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
 		t.Fatalf("CLI/FQN matrix: %v", err)
 	}
-	if desc.Version != "2.0.0" {
-		t.Fatalf("current provider candidate must be 2.0.0, got %q", desc.Version)
+	if desc.Version != "2.1.0" {
+		t.Fatalf("current provider candidate must be 2.1.0, got %q", desc.Version)
+	}
+	if desc.Versioning.PortableAPIVersion != "forms.takoform.com/v1beta1" {
+		t.Fatalf("current provider candidate must target Host API v1beta1, got %q", desc.Versioning.PortableAPIVersion)
 	}
 	if err := validateVersioningPolicy(desc.Versioning); err != nil {
 		t.Fatalf("versioning policy: %v", err)
@@ -56,6 +59,62 @@ func TestReleaseDescriptorRejectsWrongSigner(t *testing.T) {
 	}
 	if _, err := loadDescriptor(fixture); err == nil || !strings.Contains(err.Error(), "signing identity mismatch") {
 		t.Fatalf("expected wrong signer rejection, got %v", err)
+	}
+}
+
+func TestProviderIdentityLedgerPinsExactBetaFamily(t *testing.T) {
+	repo := testRepoRoot(t)
+	desc, err := loadDescriptor(repo)
+	if err != nil {
+		t.Fatalf("loadDescriptor: %v", err)
+	}
+	ledger, err := loadProviderIdentityLedger(repo, desc)
+	if err != nil {
+		t.Fatalf("loadProviderIdentityLedger: %v", err)
+	}
+	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) != 1 {
+		t.Fatalf("unexpected provider identity ledger envelope: %#v", ledger)
+	}
+	entry := ledger.Releases[0]
+	if entry.ProviderVersion != "2.1.0" || entry.PortableAPIVersion != providerHostAPIVersion ||
+		entry.Family != providerFamilyAPIVersion || entry.FormMaturity != "experimental" || len(entry.Forms) != 15 {
+		t.Fatalf("unexpected provider identity release: %#v", entry)
+	}
+}
+
+func TestProviderIdentityLedgerRejectsDigestDrift(t *testing.T) {
+	repo := testRepoRoot(t)
+	fixture := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(fixture, "release", "keys"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(fixture, "forms", "candidates", "edge", "v1beta1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copyFile(t, filepath.Join(repo, descriptorPath), filepath.Join(fixture, descriptorPath))
+	copyFile(t, filepath.Join(repo, providerIdentityLedgerPath), filepath.Join(fixture, providerIdentityLedgerPath))
+	copyFile(t, filepath.Join(repo, providerCandidateSetPath), filepath.Join(fixture, providerCandidateSetPath))
+	copyFile(t, filepath.Join(repo, "release", "keys", "provider-signing-key.asc"), filepath.Join(fixture, "release/keys/provider-signing-key.asc"))
+	var ledger map[string]any
+	raw, err := os.ReadFile(filepath.Join(fixture, providerIdentityLedgerPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &ledger); err != nil {
+		t.Fatal(err)
+	}
+	releases := ledger["releases"].([]any)
+	forms := releases[0].(map[string]any)["forms"].([]any)
+	forms[0].(map[string]any)["packageDigest"] = "sha256:" + strings.Repeat("f", 64)
+	mutated, err := json.Marshal(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fixture, providerIdentityLedgerPath), mutated, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadDescriptor(fixture); err == nil || !strings.Contains(err.Error(), "identity ledger differs") {
+		t.Fatalf("expected candidate-set digest drift rejection, got %v", err)
 	}
 }
 
@@ -877,7 +936,7 @@ func testDescriptor() descriptor {
 		PublicationStatus:  "candidate-only",
 		Versioning: versioningPolicy{
 			ProviderCompatibility:  "semver-major",
-			PortableAPIVersion:     "forms.takoform.com/v1alpha2",
+			PortableAPIVersion:     "forms.takoform.com/v1beta1",
 			FormDefinitionVersions: "independent-immutable-semver",
 			FormPackageVersions:    "content-addressed-current-retained-legacy-semver",
 		},

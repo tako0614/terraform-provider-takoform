@@ -6,7 +6,7 @@ package provider
 // The wire carries a LIST of conditions — each with a closed type, a status, a
 // closed portable reason, an optional host-specific reason and message, and the
 // time it last changed — together with the desired generation the status
-// reflects (spec/host-api/v1alpha3.md, spec/decisions/0011). Flattening all of
+// reflects (spec/host-api/v1beta1.md, spec/decisions/0011). Flattening all of
 // that to one boolean answered "is it ready" and threw away "why is it not",
 // which is exactly the question an operator has at the moment a plan surprises
 // them. Reading it then meant leaving Terraform for the host's own surfaces

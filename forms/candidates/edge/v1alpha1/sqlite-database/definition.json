@@ -3,12 +3,12 @@
   "kind": "SQLiteDatabase",
   "definitionVersion": "0.1.0",
   "title": "SQLite Database",
-  "description": "Embedded SQLite database with serializable transactions and TAGGED values, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Values carry their storage class, so a 64-bit INTEGER and a BLOB round-trip losslessly instead of being flattened into a JSON scalar (decision 0020).",
+  "description": "Embedded SQLite database with bounded EdgeSqlValue values, rollback-only queries, and serializable all-or-none transactions, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Numbers stay finite binary64 values inside Number.MAX_SAFE_INTEGER and do not expose the INTEGER/REAL storage-class distinction; BLOB uses the common canonical encoded-bytes object. Runtime SQL cannot migrate schema; SQLiteMigrationApplication owns that administrative path (decision 0034).",
   "role": "identity",
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
-    "description": "Embedded SQLite database with serializable transactions and TAGGED values, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Values carry their storage class, so a 64-bit INTEGER and a BLOB round-trip losslessly instead of being flattened into a JSON scalar (decision 0020).",
+    "description": "Embedded SQLite database with bounded EdgeSqlValue values, rollback-only queries, and serializable all-or-none transactions, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Numbers stay finite binary64 values inside Number.MAX_SAFE_INTEGER and do not expose the INTEGER/REAL storage-class distinction; BLOB uses the common canonical encoded-bytes object. Runtime SQL cannot migrate schema; SQLiteMigrationApplication owns that administrative path (decision 0034).",
     "properties": {},
     "title": "SQLite Database desired state",
     "type": "object"
@@ -25,7 +25,7 @@
       "apiVersion": "interfaces.takoform.com/v1alpha1",
       "name": "edge.sql",
       "version": "1.0.0",
-      "schemaDigest": "sha256:cd33793132cd91c20cdbe782db500e86fa7a8ad2e2281b95116337d697dcac1b"
+      "schemaDigest": "sha256:ff48410cf2d59fb93533525f76cb8e880a26339a0ce91c2e0faee2a7c3f5d053"
     }
   ],
   "conformanceFixtures": [

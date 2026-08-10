@@ -38,9 +38,11 @@ func desiredSchemaFor(t *testing.T, form model.Form) map[string]any {
 // silent flip from one to the other would either refuse a legitimate target or
 // admit one whose contract no longer answers.
 var wantRelations = map[string][]string{
-	"ModuleWorker": nil,
-	"WorkerBundle": nil,
+	"ModuleWorker":      nil,
+	"WorkerBundle":      nil,
+	"StaticAssetBundle": nil,
 	"WorkerVersion": {
+		"/assets/bundle -> StaticAssetBundle [-] optional exact-form",
 		"/bucketBindings/*/resource -> ObjectBucket [module-worker.object-bucket] optional iface:edge.objects@1.0.0",
 		"/bundle -> WorkerBundle [-] required exact-form",
 		"/kvBindings/*/resource -> EdgeKVNamespace [module-worker.edge-kv] optional iface:edge.kv@1.0.0",
@@ -62,9 +64,14 @@ var wantRelations = map[string][]string{
 	"WorkerCronTrigger": {
 		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
 	},
-	"EdgeKVNamespace":  nil,
-	"ObjectBucket":     nil,
-	"SQLiteDatabase":   nil,
+	"EdgeKVNamespace":    nil,
+	"ObjectBucket":       nil,
+	"SQLiteDatabase":     nil,
+	"SQLiteMigrationSet": nil,
+	"SQLiteMigrationApplication": {
+		"/database -> SQLiteDatabase [-] required exact-form",
+		"/migrationSet -> SQLiteMigrationSet [-] required exact-form",
+	},
 	"AtLeastOnceQueue": nil,
 	"QueueConsumer": {
 		"/deadLetterQueue -> AtLeastOnceQueue [-] optional iface:edge.queue@1.0.0",
@@ -151,8 +158,8 @@ func TestEveryDeclaredReferenceIsDerived(t *testing.T) {
 	if totalDeclared != totalDerived {
 		t.Fatalf("catalog declares %d reference fields but derives %d relations", totalDeclared, totalDerived)
 	}
-	if totalDerived != 15 {
-		t.Fatalf("family derives %d relations, want the 15 in the relation table", totalDerived)
+	if totalDerived != 18 {
+		t.Fatalf("family derives %d relations, want the 18 in the relation table", totalDerived)
 	}
 	// Five of the fourteen are typed bindings. Every other relation was
 	// completely unvalidated before this lane learned to derive them.

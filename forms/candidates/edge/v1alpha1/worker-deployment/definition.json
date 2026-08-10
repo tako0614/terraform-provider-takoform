@@ -51,7 +51,7 @@
                   "apiVersion": "edge.forms.takoform.com/v1alpha1",
                   "definitionVersion": "0.1.0",
                   "kind": "WorkerVersion",
-                  "schemaDigest": "sha256:5304e2c173b4fc55c72ca6926738025c45bc4c6a3b9ac175b8f592047d7011af"
+                  "schemaDigest": "sha256:24eecc6289b1a244756e4d17e6a84a1066b67e0f30656d29816fe4d5c421777a"
                 }
               ]
             }
@@ -97,7 +97,7 @@
             "apiVersion": "edge.forms.takoform.com/v1alpha1",
             "definitionVersion": "0.1.0",
             "kind": "ModuleWorker",
-            "schemaDigest": "sha256:cea859e4a2c295dea985e0b26bbc70309d296e210b805facf4b5592e5f635616"
+            "schemaDigest": "sha256:a6ea42b2e1968a8722d23fa121cd7fef0b0f1543085e72324e15e51433a3846c"
           }
         ]
       }

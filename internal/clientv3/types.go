@@ -11,7 +11,7 @@ import (
 )
 
 // FormRef pins one immutable typed Form Definition in a namespaced group
-// (spec/schemas/form-ref-v1alpha3.schema.json). Publication and admission
+// (spec/schemas/form-ref-v1beta1.schema.json). Publication and admission
 // are external to this value.
 type FormRef struct {
 	APIVersion        string `json:"apiVersion"`
@@ -28,7 +28,7 @@ type FormReference struct {
 	PackageDigest string  `json:"packageDigest,omitempty"`
 }
 
-// Metadata is the v1alpha3 resource metadata block. Name and Space are
+// Metadata is the v1beta1 resource metadata block. Name and Space are
 // client-owned; UID, Generation, and Revision are host-owned identity
 // (spec/decisions/0011) and required on every response.
 type Metadata struct {
@@ -58,7 +58,7 @@ type Status struct {
 	Outputs            map[string]any `json:"outputs,omitempty"`
 }
 
-// Resource is the v1alpha3 resource envelope. Spec is kept generic so the
+// Resource is the v1beta1 resource envelope. Spec is kept generic so the
 // same transport carries every Service Form; the provider's resource layer
 // owns the per-shape spec contents.
 type Resource struct {
@@ -125,20 +125,20 @@ var (
 	conditionStatuses = map[string]struct{}{"True": {}, "False": {}, "Unknown": {}}
 )
 
-// retainedGroups are the frozen lanes; they are not valid v1alpha3 groups.
+// retainedGroups are the frozen lanes; they are not valid v1beta1 groups.
 var retainedGroups = map[string]struct{}{
 	"forms.takoform.com/v1alpha1": {},
 	"forms.takoform.com/v1alpha2": {},
 }
 
-// ValidateFormRef enforces the v1alpha3 exact FormRef grammar, including the
+// ValidateFormRef enforces the v1beta1 exact FormRef grammar, including the
 // exclusion of the retained forms.takoform.com/v1alpha1|v1alpha2 groups.
 func ValidateFormRef(ref FormRef) error {
 	if len(ref.APIVersion) > 320 || !groupVersionPattern.MatchString(ref.APIVersion) {
 		return errors.New("takoform: FormRef apiVersion must be a namespaced group/version")
 	}
 	if _, retained := retainedGroups[ref.APIVersion]; retained {
-		return fmt.Errorf("takoform: FormRef group %s is a retained epoch, not a v1alpha3 group", ref.APIVersion)
+		return fmt.Errorf("takoform: FormRef group %s is a retained epoch, not a v1beta1 group", ref.APIVersion)
 	}
 	if !kindPattern.MatchString(ref.Kind) {
 		return errors.New("takoform: FormRef kind must match ^[A-Z][A-Za-z0-9]{0,63}$")
@@ -249,10 +249,10 @@ func sameFormRef(left, right FormRef) bool {
 }
 
 // validateRequestResource fails closed before any wire traffic when the
-// caller-supplied resource does not carry a coherent v1alpha3 identity.
+// caller-supplied resource does not carry a coherent v1beta1 identity.
 func validateRequestResource(resource *Resource) error {
 	if resource == nil || resource.Form == nil {
-		return errors.New("takoform: v1alpha3 resource requires an exact FormRef")
+		return errors.New("takoform: v1beta1 resource requires an exact FormRef")
 	}
 	if err := ValidateFormRef(resource.Form.FormRef); err != nil {
 		return err

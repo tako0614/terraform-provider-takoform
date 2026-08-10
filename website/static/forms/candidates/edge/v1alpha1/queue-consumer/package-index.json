@@ -5,7 +5,7 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "QueueConsumer",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:0be5f3315f2728d85a2744cd4c9d594c19b3784def7c8d7f5285740489a6b4ef"
+    "schemaDigest": "sha256:3fe1bea41f25f26ef43965cd8216a4aab1a800960003c23c99616c32d3b730a5"
   },
   "definitionPath": "definition.json",
   "files": [
@@ -13,7 +13,7 @@
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
       "size": 10772,
-      "digest": "sha256:79550cc7d0488b1e6d0c6203c931f5b249ae06a028fa5f6ebca170389d41bab2"
+      "digest": "sha256:abcf8699fd71a60b3422736d623b7f5760f1df2b1b64a5def6c5227722b25922"
     },
     {
       "path": "fixtures/desired.json",

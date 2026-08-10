@@ -5,7 +5,7 @@
 // It measures a different subject from internal/portableconformancev3. That
 // lane drives the Host API and therefore proves what a host SAYS about the
 // runtime it implements and what it REFUSES to store; it cannot observe a
-// JavaScript isolate at all, and spec/host-api/v1alpha3.md lists the seven
+// JavaScript isolate at all, and spec/host-api/v1beta1.md lists the seven
 // obligations it leaves unproven. This lane executes those obligations against
 // a runtime: it hands a module loader bytes, and it drives a deployed worker
 // built from the corpus bundle over HTTP.

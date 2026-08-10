@@ -119,7 +119,7 @@ func run(args []string, stdout io.Writer) error {
 }
 
 // manifestFormat reads only the corpus manifest identity so the command can
-// dispatch to the retained v1/v2 lane or the Host API v1alpha3 lane.
+// dispatch to the retained v1/v2 lane or the Host API v1beta1 lane.
 func manifestFormat(contractPath string) (string, error) {
 	raw, err := os.ReadFile(filepath.Join(contractPath, "manifest.json"))
 	if err != nil {

@@ -657,7 +657,7 @@ func TestDeclaredHandlerMustBeExportedByTheReferencedModule(t *testing.T) {
 // bytes the corpus pinned. Code it was never told about is accepted rather than
 // refused, because refusing would be a guess — a real host answers by loading
 // the module. The lane proves the refusal for pinned bundles and documents the
-// rest as a host obligation (spec/host-api/v1alpha3.md).
+// rest as a host obligation (spec/host-api/v1beta1.md).
 func TestUnknownModuleBytesAreNotGuessedAbout(t *testing.T) {
 	f := newAggregateFixture(t)
 	f.store(moduleWorkerKind, "worker", map[string]any{})

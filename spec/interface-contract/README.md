@@ -85,7 +85,7 @@ anything is stored. Everything the contract fixes about invocation is proven by
 its behavior fixtures against a real isolate: handler signatures, streaming
 bodies, `env`'s exact property set, `waitUntil`, exception outcomes, and the
 `globals` floor. The exact split for `worker.runtime@1.0.0` is written down in
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation),
+[`../host-api/v1beta1.md`](../host-api/v1beta1.md#what-the-lane-proves-and-what-stays-a-host-obligation),
 because a reader deciding whether a passing conformance report means "this host
 runs my code correctly" is entitled to know which half it covers.
 
@@ -167,6 +167,15 @@ counter-example — it declared bodies as JSON strings while the binding that
 projects it promised streaming, so the two halves of one contract disagreed.
 All of it is decided in decision 0020 and stated in each definition's own
 descriptions, because the published meta-schema has a member for none of it.
+
+`edge.sql` uses the same encoded-bytes object for BLOBs but does not expose
+SQLite storage-class tags. Its exact value is null, a finite binary64 number
+inside `Number.MAX_SAFE_INTEGER`, UTF-8 text, or canonical encoded bytes.
+`query` earns idempotency by executing inside a rollback-only transaction and
+always rolling it back, not by classifying SQL text as read-only; runtime SQL
+cannot own schema migration. That correction supersedes only decision 0020's
+SQL portions
+([decision 0034](../decisions/0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)).
 
 ## Interface distribution
 

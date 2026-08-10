@@ -1121,11 +1121,13 @@ The content-addressed upload API is
 [`../artifact-transport/`](../artifact-transport/README.md). The artifact
 endpoints share the lane's auth, idempotency, and error taxonomy.
 
-The desired state of a bundle-shaped revision resource is the **manifest
+The desired state of an artifact-backed revision resource is the **manifest
 digest and nothing else**: the committed artifact manifest describes the
 bytes, so the manifest and the desired spec are never two spellings of the
-same facts. A host MUST therefore resolve the referenced manifest before it
-mutates anything, on apply and on import alike, and fail closed when
+same facts. `WorkerBundle` requires manifest kind `WorkerBundle`,
+`StaticAssetBundle` requires `StaticAssetBundle`, and `SQLiteMigrationSet`
+requires `MigrationBundle`. A host MUST resolve the referenced manifest before
+it mutates anything, on apply and on import alike, and fail closed when
 
 - the digest names no committed manifest the caller's tenant holds —
   `artifact_missing` (404). Resolution is the same per-tenant question the
@@ -1136,8 +1138,8 @@ mutates anything, on apply and on import alike, and fail closed when
   requires — `artifact_invalid` (400);
 - the manifest violates any rule of
   [`../artifact-transport/`](../artifact-transport/README.md), including its
-  per-kind exclusivity, its closed media types, and the host's published
-  `limits` — `artifact_invalid` (400).
+  per-kind exclusivity, its media-type policy, entry-count or aggregate-byte
+  ceilings, and the host's published `limits` — `artifact_invalid` (400).
 
 A committed manifest and its blobs MUST remain readable while any resource
 references the manifest. Abandoning an unrelated upload session, or
@@ -1166,6 +1168,78 @@ and proved by the required conformance check `bundle-main-module-is-loadable`.
 The corresponding runtime obligation — an import resolving to an auxiliary
 module fails `unsupported_media_type` — is behavior no desired-state runner
 observes, and stays a host obligation with the rest of the ABI.
+
+### Static assets on a Worker Version
+
+The rules here are decided by
+[decision 0033](../decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md).
+A `WorkerVersion` with no `assets` member performs no asset lookup. When the
+member is present it is one closed object with three required members:
+
+```json
+{
+  "bundle": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
+    "kind": "StaticAssetBundle",
+    "name": "static-assets"
+  },
+  "runWorkerFirst": true,
+  "notFoundHandling": "single_page_application"
+}
+```
+
+The bundle relation requires the target's exact FormRef and is UID-pinned like
+every other relation. `notFoundHandling` is exactly `none` or
+`single_page_application`.
+
+- With `runWorkerFirst=false`, the host performs asset lookup first and invokes
+  `fetch` only when that stage produces no response.
+- With `runWorkerFirst=true`, it invokes `fetch` first and performs asset lookup
+  only when the worker returns 404. An asset response wins; if asset lookup
+  misses, the worker's 404 is preserved.
+- `none` leaves a missing exact path as a miss.
+- `single_page_application` answers a missing path with `index.html`. The host
+  MUST resolve the exact referenced manifest and refuse the Worker Version with
+  `invalid_argument` (400), before mutation, when it contains no `index.html`.
+
+Asset lookup maps the runtime URL `pathname` to a manifest path as one closed
+operation. Query strings and fragments are ignored; the escaped pathname is
+percent-decoded once as strict UTF-8, and exactly one leading `/` is removed.
+The host MUST reject encoded `/` or `\\`, repeated or empty interior segments,
+dot segments, backslashes, controls, Unicode noncharacters, malformed escapes,
+and invalid UTF-8. A valid path must still match the manifest's relative path
+grammar. Invalid paths fail closed and MUST NOT enter SPA fallback. A valid
+missing path is a miss under `none`, or resolves to `index.html` under
+`single_page_application`; the root pathname `/` is the canonical empty-path
+miss and follows that same fallback rule.
+
+The attachment never grants a runtime binding and never changes the asset
+bundle. A provider may author the manifest from local files, but desired state
+and provider state carry no file bytes.
+
+### SQLite migration history
+
+A `MigrationBundle` is an ordered non-empty `files` list and every entry MUST
+use `application/sql`; other media types are `artifact_invalid` (400).
+`SQLiteMigrationApplication` pins exact `SQLiteDatabase` and
+`SQLiteMigrationSet` relations. The host keeps a durable ordered ledger in the
+database, whose entry identity is `(path, digest)`.
+
+Before mutation, and again when an accepted operation commits, the host MUST
+serialize against other migration applications for the database and prove the
+ledger is an exact prefix of the referenced manifest. An applied entry that is
+absent, moved, or has another digest is `migration_required` (409) and changes
+nothing. Only the unapplied suffix may execute. Each file's SQL execution and
+its ledger insertion are one SQLite transaction: failure rolls back both for
+that file, keeps earlier committed entries, and makes a retry resume at the
+same suffix boundary. Ready means the durable ledger equals the exact ordered
+set.
+
+Deleting `SQLiteMigrationApplication` removes the attachment and its relation
+holders only. It MUST NOT execute down SQL, remove ledger entries, reinterpret
+the schema, or delete the database. The database and set are protected by
+ordinary `dependency_in_use` while the attachment lives; database deletion
+after it is gone is a separate database policy, not migration rollback.
 
 ### Upload sessions are owned
 
@@ -1224,8 +1298,12 @@ Responses validate against
 [`../schemas/host-support-profile-v1alpha1.schema.json`](../schemas/host-support-profile-v1alpha1.schema.json).
 A profile declares supported exact refs, closed capability subsets
 (`supportedEnums`), inclusive ranges (`supportedRanges`), supported binding
-contracts, and numeric limits. Price, SKU, region, quota, and commercial
-policy MUST NOT appear; those remain Service Offering data outside this API.
+contracts, and numeric limits. Artifact-backed Forms publish
+`maximumBundleBytes` together with `maximumBundleFiles`: the portable profile
+uses 4,096 modules for `WorkerBundle` and 16,384 files for
+`StaticAssetBundle`/`SQLiteMigrationSet`. Price, SKU, region, quota, and
+commercial policy MUST NOT appear; those remain Service Offering data outside
+this API.
 
 A host that supports the Edge Platform Family's `ModuleWorker` MUST advertise
 the ES Module Worker runtime ABI contract `worker.runtime@1.0.0` at the exact
@@ -1333,9 +1411,13 @@ declare is one the bytes keep, that backpressure and cancellation propagate,
 that a request abort and a response abort are different observable outcomes,
 that a callee exception arrives as a complete host-generated 500 rather than a
 hung call, and that a call which could not be dispatched fails rather than
-answering with a status. This lane drives desired state and never moves a byte
-of application data
-([decision 0020](../decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md)).
+answering with a status. `edge.sql` separately fixes its safe binary64 value
+corridor, canonical encoded BLOBs, rollback-only queries, one-statement runtime
+boundary, admin-only schema migrations, and materialize-before-commit
+transactions. This lane drives desired state and never moves a byte of
+application data
+([decision 0020](../decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md),
+[decision 0034](../decisions/0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)).
 
 Proven by required checks:
 
@@ -1365,6 +1447,18 @@ Proven by required checks:
 Obligations a conforming host MUST meet that this lane does NOT prove, because
 proving them means exercising the data plane rather than driving the Host API:
 
+- **Static-asset routing.** That request paths resolve to the exact bytes in the
+  referenced `StaticAssetBundle`, that `runWorkerFirst` orders the asset and
+  worker stages as declared, and that SPA fallback serves those `index.html`
+  bytes rather than a host-owned document. The reference host proves the exact
+  relation and refuses an SPA bundle without that path; it serves no HTTP
+  application traffic.
+- **SQLite migration execution.** That each SQL file and its `(path, digest)`
+  ledger insertion commit in one real SQLite transaction, that a failed file
+  leaves neither schema effects nor a ledger record, and that concurrent
+  applications serialize on the same database. The reference host proves the
+  ordered prefix/suffix state machine and never pretends its in-memory ledger
+  executed SQL.
 - **`edge.kv` convergence.** That a write eventually becomes visible at every
   location. One client cannot observe cross-location convergence at all, which
   is why the contract's deterministic fixtures assert only facts no write has to
@@ -1382,10 +1476,16 @@ proving them means exercising the data plane rather than driving the Host API:
   all. The contract's fixtures state the first three as traces a runtime
   conformance run executes; multipart cannot be a static trace, because its
   steps depend on part etags the host mints while the trace runs.
-- **`edge.sql` losslessness and atomicity.** That a 64-bit INTEGER and a BLOB
-  round-trip unchanged, that an out-of-range integer is refused, that a writing
-  statement submitted through `query` is refused, and that a failed transaction
-  applies nothing.
+- **`edge.sql` value and effect boundaries.** That safe finite binary64 numbers,
+  UTF-8 text, null, and canonical encoded BLOBs round-trip unchanged; unsafe
+  input and output fail `numeric_out_of_range` without rounding; a runtime call
+  refuses multiple statements, transaction-control SQL, and schema migration;
+  `query` materializes inside a transaction it always rolls back with
+  `rowsWritten: 0`, even when the statement transiently writes; and a
+  transaction materializes every bounded result before committing all effects
+  or none. The Interface fixtures state the deterministic wire/refusal half;
+  proving persistent effects requires a real SQLite data plane
+  ([decision 0034](../decisions/0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)).
 - **`edge.queue` delivery.** That a `messageId` is stable across redeliveries,
   that `attempts` counts them, that the first delivery does not count toward
   `maxRetries`, that an uncaught handler exception retries every message not

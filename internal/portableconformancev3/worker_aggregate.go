@@ -759,7 +759,7 @@ func (h *ReferenceHost) validateDeclaredHandlers(form *InstalledForm, spec map[s
 // whose bytes this host was never told about is therefore NOT refused — the
 // reference host answers only about code it knows, and never guesses. That
 // boundary is why the lane proves the refusal for a pinned bundle rather than
-// claiming to prove it for every possible one; see spec/host-api/v1alpha3.md.
+// claiming to prove it for every possible one; see spec/host-api/v1beta1.md.
 func (h *ReferenceHost) exportedHandlerViolation(
 	form *InstalledForm, scope resourceScope, spec map[string]any, relations []storedRelation,
 ) *hostError {

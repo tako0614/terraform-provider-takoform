@@ -1,6 +1,6 @@
 # Content-addressed artifact transport (artifacts.takoform.com/v1alpha1)
 
-The v1alpha3 lane replaces external credential-free artifact URLs with a
+The v1beta1 channel replaces external credential-free artifact URLs with a
 content-addressed upload API owned by the host
 ([decision 0012](../decisions/0012-artifacts-use-content-addressed-upload.md)).
 Desired state references only immutable manifest digests; raw code bytes,
@@ -9,7 +9,7 @@ upload endpoints, and transport details never enter client state.
 ## Endpoints
 
 Relative to the discovered `endpoints.api` base
-(`/apis/forms.takoform.com/v1alpha3`):
+(`/apis/forms.takoform.com/v1beta1`):
 
 ```
 POST   {api}/artifacts/uploads                      start an upload; body carries the manifest
@@ -30,11 +30,12 @@ DELETE {api}/artifacts/uploads/{uploadId}           abandon an incomplete upload
 3. The client uploads only the missing blobs. Each `PUT` body is the exact
    blob; the host verifies its size and digest on receipt.
 4. `POST .../commit` re-verifies the manifest and every blob against it
-   (size, digest, media type, path grammar, per-kind shape) and returns the
+   (size, digest, media type, path grammar, per-kind shape, and the published
+   count/aggregate ceilings) and returns the
    immutable `manifestDigest`: the RFC 8785 canonical digest of the manifest
    bytes.
-5. Desired state (for example a `WorkerBundle` revision) references the
-   manifest digest only.
+5. Desired state (`WorkerBundle`, `StaticAssetBundle`, or
+   `SQLiteMigrationSet`) references the manifest digest only.
 
 Uploads are resumable: repeating step 2 with the same manifest returns the
 still-missing blob set, and committing an already-committed manifest is
@@ -48,13 +49,23 @@ A host MUST reject, before commit:
 
 - duplicate module or file names;
 - absolute paths, `..` or `.` segments, backslashes, NUL, invalid UTF-8;
-- media types outside the manifest kind's closed set;
+- media types outside the manifest kind's policy: WorkerBundle modules use the
+  closed runtime set, StaticAssetBundle files use any normalized lowercase
+  type/subtype admitted by the published v1alpha1 grammar (with no parameters),
+  and MigrationBundle files are exactly `application/sql`;
 - size or digest mismatches between manifest and received bytes;
 - file-count or total-size overruns of the host's published limits;
 - a `WorkerBundle` whose `mainModule` is not listed in `modules`;
 - a `WorkerBundle` whose `mainModule` names an auxiliary module;
 - a source map whose target module is absent;
 - archive bombs — archives are transport only and never semantic identity.
+
+The v1beta1 Host Support Profile for each artifact-backed Form publishes
+`limits.maximumBundleFiles` and `limits.maximumBundleBytes`. A provider SHOULD
+reject a known overrun during planning; the host MUST enforce the exact profile
+ceilings again at upload start and commit. The portable reference profile is
+4,096 modules for `WorkerBundle`, 16,384 files for `StaticAssetBundle` and
+`MigrationBundle`, and 10 MiB aggregate bytes for either shape.
 
 Rejections use `artifact_invalid` (400); a commit referencing a blob that was
 never uploaded uses `artifact_missing` (404).
@@ -109,6 +120,13 @@ is normative:
 - a `StaticAssetBundle` or `MigrationBundle` manifest carries `files` and MUST
   NOT carry `mainModule` or `modules`.
 
+For `StaticAssetBundle`, `files` is an inventory and its array order has no
+routing meaning. For `MigrationBundle`, array order is semantic migration order
+and every entry MUST use `application/sql`; a different order is a different
+manifest and a different migration set. The host and authoring provider both
+enforce the SQL media type. These two kinds share transport, not meaning
+([decision 0033](../decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)).
+
 A manifest carrying both shapes has two meanings, which a content-addressed
 identity must never have; violations are `artifact_invalid` (400). The
 published manifest schema is the structural minimum for this document and
@@ -118,13 +136,16 @@ host and proved by a required conformance check rather than by the schema
 
 ## Referencing a manifest from desired state
 
-A bundle-shaped revision resource carries the manifest digest as its whole
-desired state; the manifest, not the resource, describes the bytes. Before any
-mutation — apply and import alike — a host MUST resolve the referenced
-manifest and fail closed when the digest names no committed manifest the
-caller's tenant holds (`artifact_missing`, 404), when the stored document does
-not canonicalize to the referenced digest, when its `kind` is not the kind the
-Form requires, or when it violates any rule above (`artifact_invalid`, 400).
+An artifact-backed revision carries the manifest digest as its whole desired
+state; the manifest, not the resource, describes the bytes. A `WorkerBundle`
+requires manifest kind `WorkerBundle`, `StaticAssetBundle` requires
+`StaticAssetBundle`, and `SQLiteMigrationSet` requires `MigrationBundle`.
+Before any mutation — apply and import alike — a host MUST resolve the
+referenced manifest and fail closed when the digest names no committed
+manifest the caller's tenant holds (`artifact_missing`, 404), when the stored
+document does not canonicalize to the referenced digest, when its kind is not
+the kind the Form requires, or when it violates any rule above
+(`artifact_invalid`, 400).
 
 Resolving a manifest on behalf of a request is subject to the same per-tenant
 holding rule as reading one

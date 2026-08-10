@@ -1,6 +1,6 @@
 package provider
 
-// v3_import_identity.go parses the import identity of the Host API v1alpha3
+// v3_import_identity.go parses the import identity of the Host API v1beta1
 // resource lane.
 //
 // Terraform hands a provider one opaque string, and this lane's identity is

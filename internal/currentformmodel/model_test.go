@@ -23,7 +23,7 @@ func testForm() Form {
 				Target:  testInterfaceContract(),
 				Default: []any{},
 				Example: []any{map[string]any{"name": "CACHE", "resource": map[string]any{
-					"apiVersion": "edge.forms.takoform.com/v1alpha1",
+					"apiVersion": "edge.forms.takoform.com/v1beta1",
 					"kind":       "EdgeKVNamespace",
 					"name":       "cache",
 				}}}},
@@ -35,8 +35,8 @@ func testForm() Form {
 
 func TestFamilyRendersNamespacedAPIVersion(t *testing.T) {
 	t.Parallel()
-	family := Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"}
-	if family.APIVersion() != "edge.forms.takoform.com/v1alpha1" {
+	family := Family{Group: "edge.forms.takoform.com", Version: "v1beta1"}
+	if family.APIVersion() != "edge.forms.takoform.com/v1beta1" {
 		t.Fatalf("apiVersion = %q", family.APIVersion())
 	}
 }
@@ -83,7 +83,7 @@ func TestLifecycleCapabilitiesFollowMutableFields(t *testing.T) {
 		}
 		for _, capability := range got {
 			if capability == "refresh" {
-				t.Errorf("%s declares refresh; the v1alpha3 lane has no refresh capability", testCase.name)
+				t.Errorf("%s declares refresh; the v1beta1 channel has no refresh capability", testCase.name)
 			}
 		}
 	}
@@ -104,7 +104,7 @@ func TestDesiredSchemaOmitsNameAndStaysClosed(t *testing.T) {
 	}
 	properties := schema["properties"].(map[string]any)
 	if _, present := properties["name"]; present {
-		t.Fatal("v1alpha3 desired schemas must not declare a name property; the envelope owns metadata.name")
+		t.Fatal("v1beta1 desired schemas must not declare a name property; the envelope owns metadata.name")
 	}
 	required, ok := schema["required"].([]string)
 	if !ok || len(required) != 1 || required[0] != "mainModule" {

@@ -378,7 +378,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "data": {
-                      "maxLength": 174764,
+                      "maxLength": 169336,
                       "type": "string"
                     },
                     "encoding": {
@@ -496,7 +496,7 @@
     "maxEnvironmentEntries": 256,
     "maxModulesPerBundleSet": 512,
     "maxQueueBatchMessages": 100,
-    "maxQueueMessageBytes": 131072,
+    "maxQueueMessageBytes": 127000,
     "maxRequestBytes": 104857600,
     "maxWaitUntilTasks": 32
   },

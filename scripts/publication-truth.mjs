@@ -72,8 +72,17 @@ export function derivePublicationTruth({ publicationSet, providerIdentities, pro
   );
   const assigned = providerIdentities.entries.filter((entry) => entry?.status === "assigned");
   requireValue(assigned.length > 0, "provider release identity ledger has no assigned release");
-  const publishedProvider = assigned.find((entry) => entry?.version === candidateProviderVersion);
-  requireValue(publishedProvider !== undefined, "current provider descriptor has no assigned immutable release");
+  const readbackProviderVersion = requireString(
+    providerReadback?.version,
+    "retained Registry-readback provider version",
+  );
+  const publishedProvider = assigned.find(
+    (entry) => entry?.version === readbackProviderVersion,
+  );
+  requireValue(
+    publishedProvider !== undefined,
+    "retained Registry readback has no assigned immutable release",
+  );
   const providerVersion = requireString(publishedProvider.version, "published provider version");
   requireValue(SEMVER.test(providerVersion), "published provider version must be exact SemVer");
   requireValue(publishedProvider.tag === `v${providerVersion}`, "published provider tag must match version");
@@ -287,6 +296,13 @@ export function loadPublicationTruth(repositoryRoot) {
     path.join(repositoryRoot, "release", "provider-release-identities.json"),
     "provider release identity ledger",
   );
+  const publishedAssignment = Array.isArray(providerIdentities.entries)
+    ? providerIdentities.entries.filter((entry) => entry?.registryReadback).at(-1)
+    : undefined;
+  requireValue(
+    typeof publishedAssignment?.version === "string",
+    "provider release identity ledger has no retained Registry readback",
+  );
   return derivePublicationTruth({
     publicationSet: readRegularJson(
       path.join(repositoryRoot, "admission", "v4", "form-package-publication-set.json"),
@@ -294,6 +310,9 @@ export function loadPublicationTruth(repositoryRoot) {
     ),
     releaseVersion,
     providerIdentities,
-    providerReadback: readProviderReadbackEvidence(providerIdentities, releaseVersion.version),
+    providerReadback: readProviderReadbackEvidence(
+      providerIdentities,
+      publishedAssignment.version,
+    ),
   });
 }

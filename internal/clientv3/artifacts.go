@@ -146,7 +146,7 @@ func (c *Client) UploadArtifact(ctx context.Context, manifest map[string]any, bl
 }
 
 // AbandonUpload releases a resumable upload session this client will not
-// finish (spec/host-api/operations-v1alpha3.json: "artifact-upload-abandon",
+// finish (spec/host-api/operations-v1beta1.json: "artifact-upload-abandon",
 // DELETE /artifacts/uploads/{uploadId}, 204). It frees the host's staged
 // blobs. An already-committed manifest is unaffected: a committed artifact is
 // content-addressed and outlives the upload session that carried its bytes.

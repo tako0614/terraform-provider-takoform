@@ -33,7 +33,7 @@ func TestV3DiagnosticRendersEveryRecordedFact(t *testing.T) {
 		Space:        "prod",
 		Name:         "version-6c37aa755eee",
 		Ref: currentformregistry.V3Ref{
-			APIVersion: "edge.forms.takoform.com/v1alpha1", Kind: "WorkerVersion",
+			APIVersion: "edge.forms.takoform.com/v1beta1", Kind: "WorkerVersion",
 			DefinitionVersion: "0.1.0", SchemaDigest: "sha256:abc",
 		},
 		Pointer:            "/kvBindings/0/resource",
@@ -57,7 +57,7 @@ func TestV3DiagnosticRendersEveryRecordedFact(t *testing.T) {
 	detail := rendered.Detail()
 	for _, want := range []string{
 		"Resource: takoform_worker_version (prod/version-6c37aa755eee)",
-		"Form: edge.forms.takoform.com/v1alpha1 WorkerVersion@0.1.0 schema=sha256:abc",
+		"Form: edge.forms.takoform.com/v1beta1 WorkerVersion@0.1.0 schema=sha256:abc",
 		"Pointer: /kvBindings/0/resource",
 		"Expected UID: uid-old",
 		"Current UID: uid-new",
@@ -145,7 +145,7 @@ func TestV3DiagnosticDestructuresTheHostAnswer(t *testing.T) {
 // fault and no next action, which is the shape this work exists to remove.
 func TestV3HostRepairsCoverTheClosedTaxonomy(t *testing.T) {
 	t.Parallel()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "spec", "host-api", "operations-v1alpha3.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "spec", "host-api", "operations-v1beta1.json"))
 	if err != nil {
 		t.Fatalf("read the published operations document: %v", err)
 	}
@@ -216,12 +216,12 @@ func TestInterfaceDataSourceReportsItsLane(t *testing.T) {
 	}
 }
 
-// TestV3LaneDiagnosticsCarryTheRecordedError proves the same for the v1alpha3
+// TestV3LaneDiagnosticsCarryTheRecordedError proves the same for the v1beta1
 // resources, so the two lanes stay symmetrical.
 func TestV3LaneDiagnosticsCarryTheRecordedError(t *testing.T) {
 	t.Parallel()
 	resource := v3TestFormResource(t, "WorkerBundle", &providerData{
-		v3Err: errors.New("discovering Takoform v1alpha3 endpoint: 404"),
+		v3Err: errors.New("discovering Takoform v1beta1 endpoint: 404"),
 	})
 	ctx := context.Background()
 	schemaResponse := v3SchemaOf(t, resource)
@@ -235,7 +235,7 @@ func TestV3LaneDiagnosticsCarryTheRecordedError(t *testing.T) {
 	detail := response.Diagnostics.Errors()[0].Detail()
 	for _, want := range []string{
 		"takoform_worker_bundle",
-		"discovering Takoform v1alpha3 endpoint: 404",
+		"discovering Takoform v1beta1 endpoint: 404",
 		"Code: " + v3CodeLaneUnavailable,
 	} {
 		if !strings.Contains(detail, want) {
@@ -250,13 +250,13 @@ func TestV3LaneDiagnosticsCarryTheRecordedError(t *testing.T) {
 func TestV3ParseRelationHostReasonLiftsThePointerAndUIDs(t *testing.T) {
 	t.Parallel()
 	pointer, expected, current := v3ParseRelationHostReason(
-		"relation /kvBindings/0/resource target edge.forms.takoform.com/v1alpha1 EdgeKVNamespace cache " +
+		"relation /kvBindings/0/resource target edge.forms.takoform.com/v1beta1 EdgeKVNamespace cache " +
 			"changed incarnation from uid uid-old (formRef a) to uid uid-new (formRef b); re-apply this resource")
 	if pointer != "/kvBindings/0/resource" || expected != "uid-old" || current != "uid-new" {
 		t.Fatalf("parsed %q %q %q", pointer, expected, current)
 	}
 	pointer, expected, current = v3ParseRelationHostReason(
-		"relation /worker target edge.forms.takoform.com/v1alpha1 ModuleWorker counter uid uid-3 no longer exists")
+		"relation /worker target edge.forms.takoform.com/v1beta1 ModuleWorker counter uid uid-3 no longer exists")
 	if pointer != "/worker" || expected != "uid-3" || current != "" {
 		t.Fatalf("parsed %q %q %q", pointer, expected, current)
 	}

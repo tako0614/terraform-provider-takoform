@@ -6,8 +6,8 @@ FormRef or public release identity exists yet.
 
 ## Need and boundary
 
-Takosumi Cloud invokes one connected Resource on a recurring schedule. The
-candidate Form describes expression, timezone, and the exact target
+The candidate Form describes one connected Resource invoked on a recurring
+schedule, with an expression, timezone, and the exact target
 connection. Scheduler implementation, enable/disable policy, delivery transport, retry policy,
 credentials, capacity, and price remain host-owned.
 

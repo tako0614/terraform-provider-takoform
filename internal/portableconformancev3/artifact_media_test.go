@@ -125,3 +125,76 @@ func TestSourceMapIsTheOnlyAuxiliaryMediaType(t *testing.T) {
 		)
 	}
 }
+
+func TestStaticAssetMediaTypeIsExtensibleButNormalized(t *testing.T) {
+	valid := decodeManifest(t, map[string]any{
+		"apiVersion": artifactAPIVersion,
+		"kind":       staticAssetBundleKind,
+		"files": []any{map[string]any{
+			"path": "data.bin", "mediaType": "application/vnd.example+json", "size": 0,
+			"digest": formpackage.DigestBytes(nil),
+		}},
+	})
+	if hostErr := validateArtifactManifest(valid); hostErr != nil {
+		t.Fatalf("valid extensible static media type refused: %+v", hostErr)
+	}
+	for _, mediaType := range []string{"Application/vnd.example+json", "application/vnd.example+json; charset=utf-8", "application/"} {
+		invalid := valid
+		invalid.Files = append([]artifactFile(nil), valid.Files...)
+		invalid.Files[0].MediaType = mediaType
+		if hostErr := validateArtifactManifest(invalid); hostErr == nil || hostErr.Code != "artifact_invalid" {
+			t.Errorf("media type %q = %+v, want artifact_invalid", mediaType, hostErr)
+		}
+	}
+}
+
+func TestArtifactManifestCountAndAggregateCeilings(t *testing.T) {
+	zeroDigest := formpackage.DigestBytes(nil)
+	modules := make([]artifactModule, maximumWorkerBundleModules)
+	for index := range modules {
+		name := "module-" + strconv.Itoa(index) + ".js"
+		if index == 0 {
+			name = "index.js"
+		}
+		modules[index] = artifactModule{Name: name, MediaType: "application/javascript+module", Size: "0", Digest: zeroDigest}
+	}
+	worker := artifactManifest{APIVersion: artifactAPIVersion, Kind: workerBundleKind, MainModule: "index.js", Modules: modules}
+	if hostErr := validateArtifactManifest(worker); hostErr != nil {
+		t.Fatalf("worker at exact module-count ceiling refused: %+v", hostErr)
+	}
+	worker.Modules = append(worker.Modules, artifactModule{Name: "overrun.js", MediaType: "application/javascript+module", Size: "0", Digest: zeroDigest})
+	if hostErr := validateArtifactManifest(worker); hostErr == nil || hostErr.Code != "artifact_invalid" {
+		t.Fatalf("worker module-count overrun = %+v, want artifact_invalid", hostErr)
+	}
+
+	files := make([]artifactFile, maximumBundleFiles)
+	for index := range files {
+		files[index] = artifactFile{
+			Path:      "asset-" + strconv.Itoa(index) + ".bin",
+			MediaType: "application/octet-stream",
+			Size:      "0",
+			Digest:    zeroDigest,
+		}
+	}
+	staticCount := artifactManifest{APIVersion: artifactAPIVersion, Kind: staticAssetBundleKind, Files: files}
+	if hostErr := validateArtifactManifest(staticCount); hostErr != nil {
+		t.Fatalf("static bundle at exact file-count ceiling refused: %+v", hostErr)
+	}
+	staticCount.Files = append(staticCount.Files, artifactFile{
+		Path: "file-count-overrun.bin", MediaType: "application/octet-stream", Size: "0", Digest: zeroDigest,
+	})
+	if hostErr := validateArtifactManifest(staticCount); hostErr == nil || hostErr.Code != "artifact_invalid" {
+		t.Fatalf("static file-count overrun = %+v, want artifact_invalid", hostErr)
+	}
+
+	static := artifactManifest{APIVersion: artifactAPIVersion, Kind: staticAssetBundleKind, Files: []artifactFile{{
+		Path: "large.bin", MediaType: "application/octet-stream", Size: json.Number(strconv.Itoa(maximumBundleBytes)), Digest: zeroDigest,
+	}}}
+	if hostErr := validateArtifactManifest(static); hostErr != nil {
+		t.Fatalf("static bundle at exact aggregate ceiling refused: %+v", hostErr)
+	}
+	static.Files[0].Size = json.Number(strconv.Itoa(maximumBundleBytes + 1))
+	if hostErr := validateArtifactManifest(static); hostErr == nil || hostErr.Code != "artifact_invalid" {
+		t.Fatalf("static aggregate overrun = %+v, want artifact_invalid", hostErr)
+	}
+}

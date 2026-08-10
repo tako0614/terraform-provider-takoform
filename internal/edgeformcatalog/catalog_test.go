@@ -11,6 +11,7 @@ import (
 var orderedKinds = []string{
 	"ModuleWorker",
 	"WorkerBundle",
+	"StaticAssetBundle",
 	"WorkerVersion",
 	"WorkerDeployment",
 	"WorkerCustomDomain",
@@ -19,6 +20,8 @@ var orderedKinds = []string{
 	"EdgeKVNamespace",
 	"ObjectBucket",
 	"SQLiteDatabase",
+	"SQLiteMigrationSet",
+	"SQLiteMigrationApplication",
 	"AtLeastOnceQueue",
 	"QueueConsumer",
 }
@@ -30,7 +33,7 @@ func TestCatalogValidates(t *testing.T) {
 	}
 }
 
-func TestCatalogIsExactTwelveFormFamily(t *testing.T) {
+func TestCatalogIsExactFifteenFormFamily(t *testing.T) {
 	t.Parallel()
 	if len(Forms) != len(orderedKinds) {
 		t.Fatalf("family has %d forms, want %d", len(Forms), len(orderedKinds))
@@ -40,7 +43,7 @@ func TestCatalogIsExactTwelveFormFamily(t *testing.T) {
 			t.Fatalf("form[%d] = %s@%s", index, form.Kind, form.DefinitionVersion)
 		}
 	}
-	if Family.APIVersion() != "edge.forms.takoform.com/v1alpha1" {
+	if Family.APIVersion() != "edge.forms.takoform.com/v1beta1" {
 		t.Fatalf("family apiVersion = %q", Family.APIVersion())
 	}
 }
@@ -52,25 +55,28 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 		// A bundle's portable desired state is exactly the immutable identity of
 		// its committed artifact manifest: the manifest, not the Form, describes
 		// the modules (spec/artifact-transport, decision 0014).
-		"WorkerBundle": {"manifestDigest"},
+		"WorkerBundle":      {"manifestDigest"},
+		"StaticAssetBundle": {"manifestDigest"},
 		// No compatibilityDate and no compatibilityFlags: the runtime is fixed by
 		// the exact worker.runtime contract the Module Worker identity provides,
 		// not by a token this project has no behavior registry to interpret
 		// (decision 0019).
 		"WorkerVersion": {
-			"bucketBindings", "bundle", "handlers", "kvBindings", "queueProducerBindings",
+			"assets", "bucketBindings", "bundle", "handlers", "kvBindings", "queueProducerBindings",
 			"requiredSensitiveVars", "serviceBindings", "sqliteBindings", "vars", "worker",
 		},
 		"WorkerDeployment":   {"versions", "worker"},
 		"WorkerCustomDomain": {"hostname", "worker"},
 		// Reachability is the whole request; the address is the answer, so the
 		// worker reference is the ONLY desired member (decision 0024).
-		"WorkerEndpoint":    {"worker"},
-		"WorkerCronTrigger": {"cron", "worker"},
-		"EdgeKVNamespace":   {},
-		"ObjectBucket":      {},
-		"SQLiteDatabase":    {},
-		"AtLeastOnceQueue":  {"deliveryDelaySeconds", "messageRetentionSeconds"},
+		"WorkerEndpoint":             {"worker"},
+		"WorkerCronTrigger":          {"cron", "worker"},
+		"EdgeKVNamespace":            {},
+		"ObjectBucket":               {},
+		"SQLiteDatabase":             {},
+		"SQLiteMigrationSet":         {"manifestDigest"},
+		"SQLiteMigrationApplication": {"database", "migrationSet"},
+		"AtLeastOnceQueue":           {"deliveryDelaySeconds", "messageRetentionSeconds"},
 		"QueueConsumer": {
 			"deadLetterQueue", "maxBatchSize", "maxBatchTimeoutSeconds", "maxConcurrency",
 			"maxRetries", "queue", "retryDelaySeconds", "worker",
@@ -91,18 +97,21 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 func TestRoleRules(t *testing.T) {
 	t.Parallel()
 	wantRoles := map[string]model.Role{
-		"ModuleWorker":       model.RoleIdentity,
-		"WorkerBundle":       model.RoleRevision,
-		"WorkerVersion":      model.RoleRevision,
-		"WorkerDeployment":   model.RoleDeployment,
-		"WorkerCustomDomain": model.RoleAttachment,
-		"WorkerEndpoint":     model.RoleAttachment,
-		"WorkerCronTrigger":  model.RoleAttachment,
-		"EdgeKVNamespace":    model.RoleIdentity,
-		"ObjectBucket":       model.RoleIdentity,
-		"SQLiteDatabase":     model.RoleIdentity,
-		"AtLeastOnceQueue":   model.RoleIdentity,
-		"QueueConsumer":      model.RoleAttachment,
+		"ModuleWorker":               model.RoleIdentity,
+		"WorkerBundle":               model.RoleRevision,
+		"StaticAssetBundle":          model.RoleRevision,
+		"WorkerVersion":              model.RoleRevision,
+		"WorkerDeployment":           model.RoleDeployment,
+		"WorkerCustomDomain":         model.RoleAttachment,
+		"WorkerEndpoint":             model.RoleAttachment,
+		"WorkerCronTrigger":          model.RoleAttachment,
+		"EdgeKVNamespace":            model.RoleIdentity,
+		"ObjectBucket":               model.RoleIdentity,
+		"SQLiteDatabase":             model.RoleIdentity,
+		"SQLiteMigrationSet":         model.RoleRevision,
+		"SQLiteMigrationApplication": model.RoleAttachment,
+		"AtLeastOnceQueue":           model.RoleIdentity,
+		"QueueConsumer":              model.RoleAttachment,
 	}
 	for _, form := range Forms {
 		if form.Role != wantRoles[form.Kind] {
@@ -128,24 +137,27 @@ func TestRoleRules(t *testing.T) {
 // TestLifecycleCapabilityTable pins the exact capability set of every family
 // member. update is a claim about what an in-place apply can move, so a Form
 // with nothing mutable must not advertise it, and no Form of any role
-// advertises refresh in the v1alpha3 lane.
+// advertises refresh in the v1beta1 lane.
 func TestLifecycleCapabilityTable(t *testing.T) {
 	t.Parallel()
 	base := []string{"create", "read", "delete", "import", "observe"}
 	withUpdate := []string{"create", "read", "update", "delete", "import", "observe"}
 	want := map[string][]string{
-		"ModuleWorker":       base,
-		"WorkerBundle":       base,
-		"WorkerVersion":      base,
-		"WorkerDeployment":   withUpdate,
-		"WorkerCustomDomain": base,
-		"WorkerEndpoint":     base,
-		"WorkerCronTrigger":  withUpdate,
-		"EdgeKVNamespace":    base,
-		"ObjectBucket":       base,
-		"SQLiteDatabase":     base,
-		"AtLeastOnceQueue":   withUpdate,
-		"QueueConsumer":      withUpdate,
+		"ModuleWorker":               base,
+		"WorkerBundle":               base,
+		"StaticAssetBundle":          base,
+		"WorkerVersion":              base,
+		"WorkerDeployment":           withUpdate,
+		"WorkerCustomDomain":         base,
+		"WorkerEndpoint":             base,
+		"WorkerCronTrigger":          withUpdate,
+		"EdgeKVNamespace":            base,
+		"ObjectBucket":               base,
+		"SQLiteDatabase":             base,
+		"SQLiteMigrationSet":         base,
+		"SQLiteMigrationApplication": base,
+		"AtLeastOnceQueue":           withUpdate,
+		"QueueConsumer":              withUpdate,
 	}
 	if len(want) != len(Forms) {
 		t.Fatalf("capability table covers %d forms, the family has %d", len(want), len(Forms))
@@ -156,7 +168,7 @@ func TestLifecycleCapabilityTable(t *testing.T) {
 			t.Errorf("%s capabilities = %v, want %v", form.Kind, got, want[form.Kind])
 		}
 		if slices.Contains(got, "refresh") {
-			t.Errorf("%s declares refresh; the v1alpha3 lane has no refresh capability", form.Kind)
+			t.Errorf("%s declares refresh; the v1beta1 lane has no refresh capability", form.Kind)
 		}
 		if form.Role == model.RoleRevision && slices.Contains(got, "update") {
 			t.Errorf("%s is a revision but declares update", form.Kind)
@@ -183,8 +195,81 @@ func TestEveryOptionalFieldCarriesPortableMeaning(t *testing.T) {
 			}
 		}
 	}
-	if !slices.Equal(exempt, []string{"QueueConsumer/deadLetterQueue"}) {
-		t.Errorf("absence-is-semantics fields = %v, want exactly the reviewed QueueConsumer/deadLetterQueue", exempt)
+	if !slices.Equal(exempt, []string{"WorkerVersion/assets", "QueueConsumer/deadLetterQueue"}) {
+		t.Errorf("absence-is-semantics fields = %v, want exactly the reviewed WorkerVersion/assets and QueueConsumer/deadLetterQueue", exempt)
+	}
+}
+
+func TestEdgeAppBetaDesiredStateIsClosedAndArtifactBacked(t *testing.T) {
+	t.Parallel()
+
+	assets, ok := ByKind("StaticAssetBundle")
+	if !ok {
+		t.Fatal("StaticAssetBundle is not declared")
+	}
+	migrations, ok := ByKind("SQLiteMigrationSet")
+	if !ok {
+		t.Fatal("SQLiteMigrationSet is not declared")
+	}
+	for _, form := range []model.Form{assets, migrations} {
+		if form.Role != model.RoleRevision {
+			t.Errorf("%s role = %s, want revision", form.Kind, form.Role)
+		}
+		if len(form.Fields) != 1 || form.Fields[0].Wire != "manifestDigest" ||
+			form.Fields[0].Pattern != model.PatternCanonicalSHA256 {
+			t.Errorf("%s desired fields = %#v, want only canonical manifestDigest", form.Kind, form.Fields)
+		}
+	}
+
+	version, ok := ByKind("WorkerVersion")
+	if !ok {
+		t.Fatal("WorkerVersion is not declared")
+	}
+	var assetField *model.Field
+	for index := range version.Fields {
+		if version.Fields[index].Wire == "assets" {
+			assetField = &version.Fields[index]
+			break
+		}
+	}
+	if assetField == nil {
+		t.Fatal("WorkerVersion has no assets field")
+	}
+	if assetField.Kind != model.KindObject || !assetField.AbsenceIsSemantic {
+		t.Fatalf("WorkerVersion assets = %#v, want optional semantic object", *assetField)
+	}
+	wantMembers := map[string]model.FieldKind{
+		"bundle":           model.KindResourceRef,
+		"runWorkerFirst":   model.KindBoolean,
+		"notFoundHandling": model.KindStringEnum,
+	}
+	for _, member := range assetField.Fields {
+		if !member.Required {
+			t.Errorf("assets.%s is optional; every present assets object must be complete", member.Wire)
+		}
+		if wantMembers[member.Wire] != member.Kind {
+			t.Errorf("assets.%s kind = %s, want %s", member.Wire, member.Kind, wantMembers[member.Wire])
+		}
+		delete(wantMembers, member.Wire)
+		if member.Wire == "notFoundHandling" && !slices.Equal(member.Enum, []string{"none", "single_page_application"}) {
+			t.Errorf("assets.notFoundHandling enum = %v", member.Enum)
+		}
+	}
+	if len(wantMembers) != 0 {
+		t.Errorf("WorkerVersion assets is missing members %v", wantMembers)
+	}
+
+	application, ok := ByKind("SQLiteMigrationApplication")
+	if !ok {
+		t.Fatal("SQLiteMigrationApplication is not declared")
+	}
+	if application.Role != model.RoleAttachment || application.DeclaresUpdate() {
+		t.Errorf("SQLiteMigrationApplication role/capability = %s/%v", application.Role, application.LifecycleCapabilities())
+	}
+	for _, field := range application.Fields {
+		if field.Kind != model.KindResourceRef || !field.Required || !field.Immutable || !field.Target.ExactForm {
+			t.Errorf("SQLiteMigrationApplication.%s is not an immutable exact resource relation: %#v", field.Wire, field)
+		}
 	}
 }
 

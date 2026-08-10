@@ -179,7 +179,7 @@ rule the host broke.
 
 ## Consequences
 
-- The Edge Platform Family has twelve members and fifteen relations. The
+- The Edge Platform Family now has fifteen members and eighteen relations. The
   conformance corpus grows to 89 required checks and pins one more probe, whose
   desired state is the worker reference alone — which is what makes an address
   in the response provably the host's rather than an echo of the request.

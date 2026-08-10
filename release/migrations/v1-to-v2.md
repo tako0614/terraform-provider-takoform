@@ -8,10 +8,14 @@ different Form epochs.
 | `1.x` | `forms.takoform.com/v1alpha1` | published Legacy | recovery and existing state |
 | `2.x` | `forms.takoform.com/v1alpha2` | published current | retained nine-Form v1alpha2 line |
 
-Provider v2.1 and later additionally carry the current Edge Platform Family
-lane over Host API `forms.takoform.com/v1alpha3` as an unpublished source
-candidate
-([decision 0013](../../spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md)).
+Provider v2.1 and later additionally carry the current Experimental Edge
+Platform Family over Beta Host API `forms.takoform.com/v1beta1`. Provider
+v2.1.0 is a stable release target whose descriptor remains `candidate-only`
+until the release owner publishes it
+([decision 0035](../../spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
+Existing Beta state remains bound to its exact Beta FormRef and codec when a
+future Stable `1.0.0` identity becomes the create default; refresh never
+performs that migration implicitly.
 
 This boundary is intentionally fail-closed. Provider v2 does not upgrade v1
 state in place because definition and package identities changed and the new

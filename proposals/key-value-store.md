@@ -6,8 +6,8 @@ FormRef or public release identity exists yet.
 
 ## Need and boundary
 
-Takosumi Cloud provides a namespaced key-value store. The candidate Form owns
-namespace lifecycle, narrow consistency/capability intent, and a
+The candidate Form describes a namespaced key-value store. It owns namespace
+lifecycle, narrow consistency/capability intent, and a
 `keyvalue.store@1` Interface. Backend engine, placement, capacity, credentials,
 replication, endpoint, and price remain host decisions.
 

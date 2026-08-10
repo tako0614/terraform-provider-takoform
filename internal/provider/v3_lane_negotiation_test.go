@@ -76,7 +76,7 @@ func TestOneHangingLaneLeavesTheOtherLaneUsable(t *testing.T) {
 		name        string
 		hangingPath string
 	}{
-		{"the v1alpha3 lane hangs", clientv3.DiscoveryPath},
+		{"the v1beta1 lane hangs", clientv3.DiscoveryPath},
 		{"the retained v1alpha2 lane hangs", client.DiscoveryPath},
 	}
 	for _, testCase := range tests {
@@ -93,11 +93,11 @@ func TestOneHangingLaneLeavesTheOtherLaneUsable(t *testing.T) {
 			)
 			elapsed := time.Since(started)
 
-			hungErr, hungLane := v3Err, "v1alpha3"
+			hungErr, hungLane := v3Err, "v1beta1"
 			liveClient, liveErr, liveLane := any(v2Client), v2Err, "v1alpha2"
 			if testCase.hangingPath == client.DiscoveryPath {
 				hungErr, hungLane = v2Err, "v1alpha2"
-				liveClient, liveErr, liveLane = any(v3Client), v3Err, "v1alpha3"
+				liveClient, liveErr, liveLane = any(v3Client), v3Err, "v1beta1"
 			}
 			if hungErr == nil {
 				t.Fatalf("the %s lane hung and still reported success", hungLane)
@@ -189,7 +189,7 @@ func TestBothLanesNegotiateConcurrently(t *testing.T) {
 		context.Background(), server.URL, "token", server.Client(), 20*time.Second,
 	)
 	if v2Err != nil || v3Err != nil {
-		t.Fatalf("lane negotiation failed: v1alpha2=%v v1alpha3=%v", v2Err, v3Err)
+		t.Fatalf("lane negotiation failed: v1alpha2=%v v1beta1=%v", v2Err, v3Err)
 	}
 	if v2Client == nil || v3Client == nil {
 		t.Fatal("both lanes reported success without returning a client")

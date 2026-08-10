@@ -3,17 +3,21 @@
 This page carries both inventories this repository renders, and it is generated
 from the same declarations the packages are built from. The first is the
 retained provider-v2 candidate set under `forms.takoform.com/v1alpha2`; the
-second is the Edge Platform Family source candidate set under
-`edge.forms.takoform.com/v1alpha1`. Neither is published, Experimental,
-Stable, centrally approved, or guaranteed commercially available.
+second is the Experimental Edge Platform Family Beta set under
+`edge.forms.takoform.com/v1beta1`. The Beta Form Packages remain
+unpublished. Experimental is Form maturity; it is not Stable, GA, central
+approval, or a commercial-availability claim.
 
 ## Retained v1alpha2 Form candidates
 
 This is the provider-v2 source candidate inventory for the nine Form-backed
-Resources currently operated by Takosumi Cloud. Every entry is a local
-Proposal-derived publication candidate under `forms.takoform.com/v1alpha2`,
-awaiting an explicit lifecycle transition before Experimental; none is published, Experimental, Stable,
-centrally approved, or guaranteed commercially available.
+Resources retained from the v1alpha2 reset. That dated reset was evaluated
+against a Takosumi-hosted preview, but it is provenance only: it does not claim
+that a hosted product provides or runs these Resources now, or that any host is
+the first host. Every entry is a local Proposal-derived publication candidate
+under `forms.takoform.com/v1alpha2`, awaiting an explicit lifecycle transition
+before Experimental; none is published, Experimental, Stable, centrally
+approved, or guaranteed commercially available.
 Each contract describes what a caller wants without
 naming a target, credential, placement, price, or implementation. A host may
 publish support and activate an exact FormRef under its own policy.
@@ -81,24 +85,26 @@ fields; the protocol lifecycle proves both.
 ### Status
 
 Every entry in this retained inventory is an unpublished `0.1.0` candidate.
-Takosumi Cloud implementation is workload and first-host evidence only; it
-does not turn a Proposal into a portable standard or authorize publication.
+Takoform owns maturity and publication authority. An independent host
+implementation or workload — possibly a Takosumi deployment — is one
+conformance/adoption evidence source only; it does not establish current
+availability, first-host status, or maturity.
 
 The earlier ten-package generation is also retired, not erased. Its immutable
 bytes and admission evidence stay verifiable through
 [`retired-package-set.json`](retired-package-set.json). Neither retained
 set may be rewritten, re-signed, promoted, or used to derive a current approved
-subset. Current lifecycle truth comes only from
-[`lifecycle.json`](lifecycle.json); Host Support and activation remain
-separate host-owned facts.
+subset. Current maturity truth comes from the applicable scoped lifecycle or
+family candidate record; Host Support and activation remain separate host-owned
+facts.
 
-## Edge Platform Family (edge.forms.takoform.com/v1alpha1)
+## Edge Platform Family (edge.forms.takoform.com/v1beta1)
 
 The first official Form Family fixes the shape of a proven edge developer
 platform without naming its vendor (spec/form-families.md). Its members are
-source candidates for the Host API v1alpha3 resource lane; the typed
-resources require provider v2.1.0 or later (source candidate; not yet
-published). Roles come from the closed v1alpha3 role enum and decide
+Experimental Forms for the Host API v1beta1 resource lane; their package
+artifacts remain unpublished. The typed resources require provider v2.1.0 or
+later. Roles come from the closed v1beta1 role enum and decide
 lifecycle mechanics: revisions are immutable, deployments move traffic,
 attachments activate inward events.
 
@@ -106,6 +112,7 @@ attachments activate inward events.
 | --- | --- | --- | --- | --- |
 | `ModuleWorker` | `takoform_module_worker` | `identity` | `0.1.0` | Long-lived logical identity of one ES Module Worker application. The Form fixes the ES Module Worker ABI by identity, and states it exactly: the runtime contract worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, the fetch, scheduled, and queue handler signatures, the binding environment, ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that exact digest; a runtime that behaves differently is a different contract version and a different Form version, never a compatibility date. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments. |
 | `WorkerBundle` | `takoform_worker_bundle` | `revision` | `0.1.0` | Immutable content-addressed module bundle of one worker build, named by the digest of the artifact manifest committed through the content-addressed upload API (decision 0012). The manifest, not this Form, describes the main module and every additional module with its closed media type, exact size, and sha256 digest, so the bundle keeps exactly one source of truth for its bytes. Different bytes commit a different manifest, which is a different bundle. |
+| `StaticAssetBundle` | `takoform_static_asset_bundle` | `revision` | `0.1.0` | Immutable content-addressed set of files served beside one Worker Version. The whole portable desired state is the digest of a committed artifacts.takoform.com/v1alpha1 StaticAssetBundle manifest; the manifest is the sole ordered inventory of path, media type, exact size, and sha256 digest for every file. Raw file bytes, upload locations, backend identities, and serving policy never enter this resource. Serving order and not-found behavior belong to the Worker Version attachment so the same bytes can participate in different immutable versions without giving the bundle two meanings. |
 | `WorkerVersion` | `takoform_worker_version` | `revision` | `0.1.0` | Immutable executable snapshot of one Module Worker: a bundle, the handlers its module exports, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is not a field of this Form: it is fixed by the worker.runtime@1.0.0 contract the Module Worker identity provides, so a version carries no compatibility date and no compatibility flag (decision 0019). |
 | `WorkerDeployment` | `takoform_worker_deployment` | `deployment` | `0.1.0` | Selects which Worker Versions of one Module Worker serve traffic and in what proportion. Weights are basis points and must sum to exactly 10000 across entries; the sum is host-validated semantics because a schema cannot add weights. Rollback is re-weighting, never mutating a revision. |
 | `WorkerCustomDomain` | `takoform_worker_custom_domain` | `attachment` | `0.1.0` | Attaches one DNS hostname to a Module Worker so its active deployment serves that hostname over HTTPS. Inward activation is an attachment, never a binding; deleting the attachment detaches the hostname and never deletes the worker. A hostname is a name in DNS rather than a label in this host's namespace, so it is CANONICALIZED before it is compared and before it is stored — trailing root dot removed, ASCII letters lowercased — and one canonical hostname is served by AT MOST ONE attachment per tenant, across every space. A second attachment claiming a hostname a live one already serves is refused before any mutation; releasing the holder makes the claim representable (decision 0026). |
@@ -113,14 +120,16 @@ attachments activate inward events.
 | `WorkerCronTrigger` | `takoform_worker_cron_trigger` | `attachment` | `0.1.0` | Attaches one cron schedule to a Module Worker, invoking its scheduled handler at each match. Schedules are interpreted in UTC only; there is no timezone field, so two hosts can never fire the same trigger at different instants and no schedule ever skips or repeats an hour for a daylight-saving transition. The grammar is five fields separated by single spaces — minute 0-59, hour 0-23, day-of-month 1-31, month 1-12, day-of-week 0-6 with 0 Sunday — and each field is a comma-separated list of `*`, a literal, a range `low-high`, `*/step`, or `low-high/step`. Names and a step on a bare literal are not accepted, and neither is any value outside its field's own range, an inverted range, or a step outside 1..span. When day-of-month and day-of-week are BOTH restricted the trigger fires on a day either of them selects; when only one is restricted only that one constrains the day. A missed run is not made up: a host that could not fire a match — because it was unavailable, or because the previous invocation was still running — skips it rather than firing late, so a schedule never produces a backlog. At-least-once delivery applies to each match: a handler may be invoked more than once for one matched minute, and it must be idempotent. An uncaught exception in the handler is a failed invocation reported to host diagnostics; it is not retried within the matched minute and it never becomes an HTTP response. |
 | `EdgeKVNamespace` | `takoform_edge_kv_namespace` | `identity` | `0.1.0` | Globally replicated key/value namespace of opaque BYTES with eventual consistency, exactly as fixed by the edge.kv Interface. Eventual consistency is the Form's semantics, not an option: a store with different convergence behavior is a different Form, and this one promises no read-your-writes, in any session, at any location. Values are byte strings carried in the family's encoded-bytes shape, so the declared byte limit and the structural string ceiling measure the same thing (decision 0020). |
 | `ObjectBucket` | `takoform_edge_object_bucket` | `identity` | `0.1.0` | Flat-namespace object store with strong read-after-write consistency, streaming bodies, ranged and conditional reads, and multipart upload, exactly as fixed by the edge.objects Interface. An object body is a byte stream, never a JSON string: the contract's 5 GiB ceiling is only meaningful because bodies never travel inside an operation document (decision 0020). Operating rules such as CORS, lifecycle, and lock are separate policy resources, never desired fields of the bucket identity. |
-| `SQLiteDatabase` | `takoform_sqlite_database` | `identity` | `0.1.0` | Embedded SQLite database with serializable transactions and TAGGED values, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Values carry their storage class, so a 64-bit INTEGER and a BLOB round-trip losslessly instead of being flattened into a JSON scalar (decision 0020). |
+| `SQLiteDatabase` | `takoform_sqlite_database` | `identity` | `0.1.0` | Embedded SQLite database with bounded EdgeSqlValue values, rollback-only queries, and serializable all-or-none transactions, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Numbers stay finite binary64 values inside Number.MAX_SAFE_INTEGER and do not expose the INTEGER/REAL storage-class distinction; BLOB uses the common canonical encoded-bytes object. Runtime SQL cannot migrate schema; SQLiteMigrationApplication owns that administrative path (decision 0034). |
+| `SQLiteMigrationSet` | `takoform_sqlite_migration_set` | `revision` | `0.1.0` | Immutable ordered SQLite migration history backed by one committed artifacts.takoform.com/v1alpha1 MigrationBundle manifest. The manifest files array is the migration order; every entry has a unique portable path, media type application/sql, exact size, and sha256 digest. SQL bytes travel only through the content-addressed artifact upload and never enter desired state. A new set may append entries, but an application refuses any set whose prefix rewrites, reorders, or removes an already applied path+digest pair. |
+| `SQLiteMigrationApplication` | `takoform_sqlite_migration_application` | `attachment` | `0.1.0` | Applies one exact SQLite Migration Set to one exact SQLite Database. Both relations are immutable and UID-pinned before mutation. The database's durable migration ledger records each applied manifest entry as its ordered path+digest pair. The requested set must extend that ledger exactly; a rewrite, reorder, or removal is refused before SQL executes, and only the unapplied suffix runs. Each file and its ledger append commit atomically, so an interrupted application retries the same suffix without replaying a recorded migration. Ready means the ledger equals the referenced set. Deleting this attachment only stops managing the application resource: it never runs down-migrations, rewrites the ledger, reverts schema, or deletes the database. |
 | `AtLeastOnceQueue` | `takoform_at_least_once_queue` | `identity` | `0.1.0` | Message queue with at-least-once delivery and no ordering guarantee, exactly as fixed by the edge.queue Interface. There is no ordering field: a FIFO queue is a different Form. Message bodies are opaque bytes, a message identity is stable across redeliveries, and a queue has AT MOST ONE consumer — two would split the stream between two retry policies and two dead-letter destinations, which leaves the queue's own behavior unstatable (decision 0020). |
 | `QueueConsumer` | `takoform_queue_consumer` | `attachment` | `0.1.0` | Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking its queue handler with message batches and redelivering messages that were not acknowledged. Consumption is inward activation and therefore an attachment, never a binding. One queue has at most one consumer, so a second attachment against the same queue is refused. A handler that returns normally without settling anything acknowledges the whole batch; one that throws retries every message it had not already acknowledged. maxRetries counts REDELIVERIES only — the first delivery does not count toward it — so a message is delivered at most 1 + maxRetries times, and a message that exhausts them moves to dead_letter_queue when one is declared and is dropped otherwise. The dead-letter copy is a new message there: new identity, new acceptance timestamp, and an attempt count starting again at 1 (decision 0020). Because that transfer resets the attempt count, dead_letter_queue MUST NOT lead back: a destination resolving to the queue this consumer drains, or closing a cycle of any length through the dead-letter graph, is refused before any mutation, because an exhausted message would circulate forever instead of coming to rest (decision 0026). |
 
-The provider exposes exactly these typed resources on the v1alpha3 lane, and no
+The provider exposes exactly these typed resources on the v1beta1 lane, and no
 generic carrier for a Form it was not built against: nothing in the lane lets a
 client verify a FormRef it did not compile in, so a carrier would offer reach
 with no verification behind it (spec/decisions/0021). Family membership grants
-no maturity: these members are tracked in the family candidate set, a lifecycle
-record begins only at an Experimental transition, and hosts state their
-supported subset in their Host Support Profiles.
+no Stable maturity: the generated family candidate set records all 15 as
+Experimental 0.1.0 Forms, and hosts state their supported subset in their Host
+Support Profiles. Beta is the API/family channel, not Form stability.

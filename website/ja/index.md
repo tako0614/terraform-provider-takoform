@@ -22,13 +22,12 @@ tier を説明しているかを明示し、両者を混ぜません。
 | Tier | 対象 | 入手方法 |
 | --- | --- | --- |
 | **公開済み (Current published)** | provider `v2.0.0` と、保持される 9 つの `forms.takoform.com/v1alpha2` リソース | `terraform init` が Registry からインストール |
-| **Edge preview** | provider `v2.1` の source candidate と、未公開の `edge.forms.takoform.com/v1alpha1` family | リポジトリの source から provider をビルド。Registry インストールなし |
+| **Beta release candidate** | stable provider target `v2.1.0` と、Experimental な `edge.forms.takoform.com/v1beta1` family 15種 | owner 公開までは source からビルド |
 
-Edge preview tier にはまだ公開ホストがなく、
-[publication blocker](/spec/publication-freeze.html) も open のままです。
-family の Form・Interface・Binding はどれも公開されておらず、`v2.1` の provider
-ラインにリリースはありません。作業が進んでいる場所ではありますが、いま
-インストールできるものではありません。
+`v2.1.0` descriptor は owner が公開するまで `candidate-only` です。15種の exact
+Beta FormRef/digest は provider compatibility identity として固定済みで、package
+artifact は未公開です。open obligation は package/public service と将来の
+Stable/GA qualification に残ります。
 [機械可読なステータス](/.well-known/takoform-site.json) が両 tier をデータとして
 述べています。
 
@@ -102,7 +101,7 @@ Form であり、交換可能なのはホストであって意味ではありま
 
 `forms.takoform.com/v1alpha2` の 9 種 `0.1.0` 候補は、公開済み provider
 `v2.0.0` の面としてそのまま保持されます
-([decision 0013](/spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.html))。
+([decision 0035](/spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.html))。
 
 | Resource | 宣言するもの |
 | --- | --- |
@@ -116,21 +115,20 @@ Form であり、交換可能なのはホストであって意味ではありま
 | [`takoform_stateful_entity`](/docs/resources/stateful_entity.html) | 参照可能な永続エンティティ |
 | [`takoform_vector_index`](/docs/resources/vector_index.html) | 次元を固定したベクターインデックス |
 
-## Edge preview: Edge Platform Family (v1alpha3 lane)
+## Beta: Experimental Edge Platform Family
 
-::: warning Edge preview — source のみ
-このセクションのすべては provider `v2.1.0`、すなわち未公開の source candidate
-に乗ります。Registry インストールも公開ホストもありません。ここに並ぶ Form・
-Interface・Binding はどれも公開や lifecycle 記録を持たず、blocker が open の
-間この lane は凍結されたままです。適用できる構成は
-[preview クイックスタート](/ja/docs/#edge-preview-v1alpha3) にあります。
+::: warning Beta provider release candidate
+このセクションは stable provider `v2.1.0` release target に乗ります。owner 公開
+までは descriptor が `candidate-only` です。15 Form は Experimental で、Beta は
+API/family channel であって Stable/GA claim ではありません。適用できる構成は
+[Beta クイックスタート](/ja/docs/#beta-edge-platform-family) にあります。
 断片だけでは apply できないため、このページには置きません。
 :::
 
-現在の設計レーンは namespaced な `edge.forms.takoform.com/v1alpha1`
+現在の設計 channel は namespaced な `edge.forms.takoform.com/v1beta1`
 family ([Form Families](/spec/form-families.html)) で、UID/generation/revision
 識別・long-running operation・content-addressed artifact upload を備えた
-`forms.takoform.com/v1alpha3` Host API 上で動きます。
+`forms.takoform.com/v1beta1` Host API 上で動きます。
 
 ※ 各リソースの詳細ページは英語のみです。
 
@@ -138,6 +136,7 @@ family ([Form Families](/spec/form-families.html)) で、UID/generation/revision
 | --- | --- | --- |
 | [`takoform_module_worker`](/docs/resources/module_worker.html) | identity | JavaScript module worker アプリの論理 identity |
 | [`takoform_worker_bundle`](/docs/resources/worker_bundle.html) | revision | アップロード済みの不変コードバンドル |
+| [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html) | revision | アップロード済みの不変 static file inventory |
 | [`takoform_worker_version`](/docs/resources/worker_version.html) | revision | bundle・handlers・vars・sensitive slots・typed bindings の不変 snapshot |
 | [`takoform_worker_deployment`](/docs/resources/worker_deployment.html) | deployment | どの version へどれだけ配信するか (basis points) |
 | [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html) | attachment | worker 自身を origin とする hostname |
@@ -146,6 +145,8 @@ family ([Form Families](/spec/form-families.html)) で、UID/generation/revision
 | [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html) | identity | eventually consistent な edge KV namespace |
 | [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html) | identity | 強整合な object bucket |
 | [`takoform_sqlite_database`](/docs/resources/sqlite_database.html) | identity | SQLite 意味論の serverless database |
+| [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html) | revision | 順序と checksum を固定した SQL migration set |
+| [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | 1つの database へ未適用 suffix だけを適用 |
 | [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html) | identity | acknowledgement と retry を持つ at-least-once 配信 |
 | [`takoform_queue_consumer`](/docs/resources/queue_consumer.html) | attachment | batch・retry・dead-letter policy を1つの worker へ向ける |
 
@@ -154,7 +155,7 @@ worker からの能力利用は typed binding (`kv_bindings`、`bucket_bindings`
 [Interface contracts](/spec/interface-contract/) と
 [Binding contracts](/spec/binding-contract/) に裏付けられます。外からの起動
 (route・domain・cron・consumption) は常に別の attachment リソースです。
-v1alpha3 lane はこの typed リソースだけで、provider が組み込んでいない Form を
+v1beta1 surface はこの typed リソースだけで、provider が組み込んでいない Form を
 運ぶ汎用リソースはありません。組み込んでいない FormRef を client が検証する
 手段がこの lane には無いためです
 ([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html))。

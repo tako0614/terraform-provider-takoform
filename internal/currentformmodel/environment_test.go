@@ -22,7 +22,7 @@ func collidingForm(varsExample map[string]any) Form {
 				Example: []any{map[string]any{
 					"name": "CACHE",
 					"resource": map[string]any{
-						"apiVersion": "edge.forms.takoform.com/v1alpha1",
+						"apiVersion": "edge.forms.takoform.com/v1beta1",
 						"kind":       "EdgeKVNamespace", "name": "edge-kv-namespace",
 					},
 				}}},

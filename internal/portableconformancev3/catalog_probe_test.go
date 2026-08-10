@@ -22,8 +22,9 @@ func probeFormRef(contract Contract, kind string) (FormRef, bool) {
 	input := contract.RunnerInput
 	for _, probe := range []ResourceProbe{
 		input.ModuleWorker, input.EdgeKvNamespace, input.AtLeastOnceQueue,
-		input.WorkerVersion, input.WorkerBundle.ResourceProbe, input.WorkerDeployment,
-		input.WorkerCustomDomain, input.WorkerCronTrigger, input.QueueConsumer,
+		input.WorkerVersion, input.WorkerBundle.ResourceProbe, input.StaticAssetBundle,
+		input.SQLiteDatabase, input.SQLiteMigrationSet, input.SQLiteMigrationApplication,
+		input.WorkerDeployment, input.WorkerCustomDomain, input.WorkerCronTrigger, input.QueueConsumer,
 	} {
 		if probe.Identity.FormRef.Kind == kind {
 			return probe.Identity.FormRef, true

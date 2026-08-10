@@ -25,6 +25,7 @@ function fixture(mutate) {
   try {
     for (const relativePath of [
       "release/version.json",
+      "release/provider-release-identities.json",
       "spec/publication-blockers.json",
       FAMILY_CANDIDATE_SET,
       SITE_STATUS_REPOSITORY_PATH,

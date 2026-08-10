@@ -1,7 +1,7 @@
 package standardforms
 
 // publish_surfaces_v3.go renders the human-facing surfaces of the Host API
-// v1alpha3 resource lane — one reference document and one example per Edge
+// v1beta1 resource lane — one reference document and one example per Edge
 // Platform Family resource — from the single catalog declaration in
 // internal/edgeformcatalog. Generation and verification share these exact
 // bytes, exactly like the retained v2 renderer above them.
@@ -87,6 +87,8 @@ func v3DocType(field model.Field) string {
 		return "Set of String"
 	case model.KindBindingList, model.KindObjectList:
 		return "List of Object"
+	case model.KindObject:
+		return "Object"
 	default:
 		return "String"
 	}
@@ -187,6 +189,12 @@ func v3FieldDocLine(form model.Form, field model.Field) string {
 		if field.MinItems > 0 && field.MaxItems > 0 {
 			doc += fmt.Sprintf(" The list must declare between %d and %d entries.", field.MinItems, field.MaxItems)
 		}
+	case model.KindObject:
+		members := make([]string, 0, len(field.Fields))
+		for _, member := range field.Fields {
+			members = append(members, "`"+member.HCL+"`")
+		}
+		doc += " The object declares " + strings.Join(members, ", ") + "; when the object is present, every member is required."
 	}
 	return fmt.Sprintf("- `%s` (%s, %s) — %s%s%s\n",
 		name, docType, v3DocRequirement(form, field), doc, v3DocConstraint(field), v3DocDefault(field))
@@ -251,8 +259,9 @@ description: |-
 
 `, form.ResourceType, form.Title+" ("+edgeformcatalog.Family.APIVersion()+", role "+string(form.Role)+").", form.ResourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This resource speaks the Host API v1alpha3 lane and requires provider v2.1.0 or\n" +
-		"later (source candidate; not yet published). The configured host selects and\n" +
+	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.0 or\n" +
+		"later. Provider v2.1.0 is the stable release target; its source descriptor stays\n" +
+		"candidate-only until the owner publishes it. The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
 		"price, or implementation. See the [complete example](../../examples/resources/" +
 		form.ResourceType + "/resource.tf).\n")
@@ -429,7 +438,7 @@ func v3ExampleHCL(form model.Form) string {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # provider v2.1.0 is an unpublished source candidate; build the provider from source.
+      # stable v2.1.0 release target; descriptor remains candidate-only until owner publication.
       version = "= 2.1.0"
     }
   }
@@ -470,6 +479,8 @@ provider "takoform" {
 				blocks = append(blocks, v3BindingBlockHCL(field))
 			case model.KindObjectList:
 				blocks = append(blocks, v3ObjectListHCL(field))
+			case model.KindObject:
+				blocks = append(blocks, v3ObjectHCL(field))
 			case model.KindJSONMap:
 				scalars = append(scalars, [2]string{field.HCL + "_json", v3JSONEncodeHCL(field.Example)})
 			case model.KindResourceRef:
@@ -563,6 +574,37 @@ func v3ObjectListHCL(field model.Field) string {
 	return builder.String()
 }
 
+func v3ObjectHCL(field model.Field) string {
+	entry, _ := field.Example.(map[string]any)
+	lines := make([][2]string, 0, len(field.Fields))
+	width := 0
+	for _, member := range field.Fields {
+		value, present := entry[member.Wire]
+		if !present {
+			continue
+		}
+		var rendered string
+		if member.Kind == model.KindResourceRef {
+			ref, _ := value.(map[string]any)
+			name, _ := ref["name"].(string)
+			rendered = fmt.Sprintf("%q", name)
+		} else {
+			rendered = quoteHCL(value)
+		}
+		lines = append(lines, [2]string{member.HCL, rendered})
+		if len(member.HCL) > width {
+			width = len(member.HCL)
+		}
+	}
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "  %s = {\n", field.HCL)
+	for _, line := range lines {
+		fmt.Fprintf(&builder, "    %-*s = %s\n", width, line[0], line[1])
+	}
+	builder.WriteString("  }\n")
+	return builder.String()
+}
+
 // v3JSONEncodeHCL renders a jsonencode(...) expression for one JSON-map
 // example with deterministic key order.
 func v3JSONEncodeHCL(example any) string {
@@ -589,9 +631,9 @@ func v3FormInventorySection() string {
 
 The first official Form Family fixes the shape of a proven edge developer
 platform without naming its vendor (spec/form-families.md). Its members are
-source candidates for the Host API v1alpha3 resource lane; the typed
-resources require provider v2.1.0 or later (source candidate; not yet
-published). Roles come from the closed v1alpha3 role enum and decide
+Experimental Forms for the Host API v1beta1 resource lane; their package
+artifacts remain unpublished. The typed resources require provider v2.1.0 or
+later. Roles come from the closed v1beta1 role enum and decide
 lifecycle mechanics: revisions are immutable, deployments move traffic,
 attachments activate inward events.
 
@@ -603,13 +645,13 @@ attachments activate inward events.
 			form.Kind, form.ResourceType, form.Role, form.DefinitionVersion, form.Description)
 	}
 	builder.WriteString(`
-The provider exposes exactly these typed resources on the v1alpha3 lane, and no
+The provider exposes exactly these typed resources on the v1beta1 lane, and no
 generic carrier for a Form it was not built against: nothing in the lane lets a
 client verify a FormRef it did not compile in, so a carrier would offer reach
 with no verification behind it (spec/decisions/0021). Family membership grants
-no maturity: these members are tracked in the family candidate set, a lifecycle
-record begins only at an Experimental transition, and hosts state their
-supported subset in their Host Support Profiles.
+no Stable maturity: the generated family candidate set records all 15 as
+Experimental 0.1.0 Forms, and hosts state their supported subset in their Host
+Support Profiles. Beta is the API/family channel, not Form stability.
 `)
 	return builder.String()
 }

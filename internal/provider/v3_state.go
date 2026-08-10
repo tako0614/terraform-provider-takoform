@@ -1,6 +1,6 @@
 package provider
 
-// v3_state.go carries the state model of the Host API v1alpha3 resource
+// v3_state.go carries the state model of the Host API v1beta1 resource
 // lane: reading plan/state values generically, and projecting host responses
 // back into Terraform state. State identity is space/apiVersion/kind/uid;
 // the packageDigest is audit evidence only and never identity
@@ -110,6 +110,10 @@ func (r *v3FormResource) writeV3StateFrom(
 	diags.Append(state.SetAttribute(ctx, path.Root("delete_timeout"), values.DeleteTimeout)...)
 	if r.form.Kind == workerBundleKind {
 		diags.Append(r.writeWorkerBundleState(ctx, state, values, res)...)
+		return diags
+	}
+	if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+		diags.Append(r.writeFileBundleState(ctx, state, values, res)...)
 		return diags
 	}
 	// The state ref's OWN codec decides which fields exist and how they decode:
@@ -435,6 +439,15 @@ func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGet
 		values.Fields["modules"] = modules
 		return values, diags
 	}
+	if _, fileArtifact := v3FileBundleManifestKind(r.form.Kind); fileArtifact {
+		var manifestDigest types.String
+		var files types.List
+		diags.Append(getter.GetAttribute(ctx, path.Root("manifest_digest"), &manifestDigest)...)
+		diags.Append(getter.GetAttribute(ctx, path.Root("files"), &files)...)
+		values.Fields["manifest_digest"] = manifestDigest
+		values.Fields["files"] = files
+		return values, diags
+	}
 	for _, field := range r.form.Fields {
 		name := v3AttributeName(field)
 		switch field.Kind {
@@ -452,6 +465,10 @@ func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGet
 			values.Fields[name] = value
 		case model.KindBindingList, model.KindObjectList, model.KindResourceRefList:
 			var value types.List
+			diags.Append(getter.GetAttribute(ctx, path.Root(name), &value)...)
+			values.Fields[name] = value
+		case model.KindObject:
+			var value types.Object
 			diags.Append(getter.GetAttribute(ctx, path.Root(name), &value)...)
 			values.Fields[name] = value
 		default:

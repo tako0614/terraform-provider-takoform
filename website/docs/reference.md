@@ -1,6 +1,6 @@
 ---
 page_title: "Takoform provider"
-description: "Published provider v2.0.0 retained resources, the Edge Platform Family source lane, and provider v1 Legacy recovery"
+description: "Published provider v2.0.0 retained resources, provider v2.1.0 Beta release target, and provider v1 Legacy recovery"
 ---
 
 # Takoform provider
@@ -10,21 +10,22 @@ frozen Legacy Epoch is `forms.takoform.com/v1alpha1`. The
 `forms.takoform.com/v1alpha2` epoch is retained as the provider-v2
 compatibility surface; its packages keep the retained
 `packages.forms.takoform.com/v1alpha3` envelope. Current design work is the
-Edge Platform Family (`edge.forms.takoform.com/v1alpha1`) on the
-`forms.takoform.com/v1alpha3` Host API lane, whose packages use
+Experimental Edge Platform Family (`edge.forms.takoform.com/v1beta1`) on the
+`forms.takoform.com/v1beta1` Host API channel, whose packages use
 `packages.forms.takoform.com/v1alpha4`.
 
 Provider v2 discovers its retained provider-v2 Host API wire at
-`/.well-known/takoform/v1alpha2`; the v1alpha3 lane discovers at its own
-path, `/.well-known/takoform/v1alpha3`. The unversioned well-known path is
+`/.well-known/takoform/v1alpha2`; the Beta channel discovers at its own
+path, `/.well-known/takoform/v1beta1`. The unversioned well-known path is
 retained only for provider-v1 Legacy compatibility.
 
 The 34 published Form Package identities from v1alpha1 are immutable **Legacy**
 evidence. There is no current central approval or admission. The nine `0.1.0`
 v1alpha2 candidates are retained provider-v2 preview candidates, exposed by
-the published provider `v2.0.0`, with real Takosumi Cloud implementations;
-Cloud hosting is evidence, not maturity authority. The Edge Platform Family
-ships as unpublished provider `v2.1.0` source.
+the published provider `v2.0.0`; using them requires a compatible host. This
+repository does not assert a hosted service's live availability. Stable
+provider `v2.1.0` is the release target for the Beta Edge family; its source
+descriptor remains `candidate-only` until the release owner publishes it.
 
 ## Choose the provider line
 
@@ -79,8 +80,8 @@ A source tag, documentation page, or local build alone is not Registry publicati
 
 ## Retained v2 resources
 
-Published provider v2.0.0 exposes exactly these nine retained candidates.
-Takosumi Cloud provides all nine resource implementations:
+Published provider v2.0.0 exposes exactly these nine retained candidates. A
+compatible host must independently advertise the exact FormRef it supports:
 
 - [EdgeWorker](resources/edge_worker.md)
 - [RelationalDatabase](resources/relational_database.md)
@@ -96,15 +97,17 @@ The read-only [Interface data source](data-sources/interface.md) resolves
 host-materialized declarations. An Interface declaration grants no
 authorization and carries no credential.
 
-## Edge Platform Family (v1alpha3 lane)
+## Edge Platform Family (v1beta1)
 
-The `edge.forms.takoform.com/v1alpha1` Form Family rides the Host API
-v1alpha3 lane, discovered at `/.well-known/takoform/v1alpha3`. Its typed
-resources are source candidates and require provider v2.1.0 or later (not
-yet published); the retained v2 resources above are unaffected:
+The `edge.forms.takoform.com/v1beta1` Form Family rides the Beta Host API,
+discovered at `/.well-known/takoform/v1beta1`. Its 15 typed resources are
+Experimental `0.1.0` Forms and require provider v2.1.0 or later. The provider
+release descriptor remains `candidate-only`; the retained v2 resources above
+are unaffected:
 
 - [ModuleWorker](resources/module_worker.md)
 - [WorkerBundle](resources/worker_bundle.md)
+- [StaticAssetBundle](resources/static_asset_bundle.md)
 - [WorkerVersion](resources/worker_version.md)
 - [WorkerDeployment](resources/worker_deployment.md)
 - [WorkerCustomDomain](resources/worker_custom_domain.md)
@@ -113,13 +116,15 @@ yet published); the retained v2 resources above are unaffected:
 - [EdgeKVNamespace](resources/edge_kv_namespace.md)
 - [ObjectBucket (edge)](resources/edge_object_bucket.md)
 - [SQLiteDatabase](resources/sqlite_database.md)
+- [SQLiteMigrationSet](resources/sqlite_migration_set.md)
+- [SQLiteMigrationApplication](resources/sqlite_migration_application.md)
 - [AtLeastOnceQueue](resources/at_least_once_queue.md)
 - [QueueConsumer](resources/queue_consumer.md)
 
 The Edge `ObjectBucket` registers as `takoform_edge_object_bucket` while the
 retained v2 lane still owns `takoform_object_bucket`.
 
-These are the whole v1alpha3 surface. The provider exposes no generic carrier
+These are the whole v1beta1 surface. The provider exposes no generic carrier
 for a Form it was not built against: a resource whose Form identity comes from
 the configuration cannot verify that identity, because the lane's Form
 Definition response carries neither the canonical definition bytes the
@@ -127,17 +132,13 @@ Definition response carries neither the canonical definition bytes the
 ([decision 0021](../spec/decisions/0021-third-party-forms-and-contract-distribution.md)).
 Supporting a third-party Form is a provider build, not a configuration value.
 
-Takosumi Cloud separately offers `VerifiedDomain` and `AIGateway` as Cloud
-services; those two are not Forms and do not appear in this provider
-inventory.
-
 ## Authority boundary
 
 - Takoform owns Form schemas, immutable identities, lifecycle vocabulary, and
   portable conformance tooling.
 - A host owns installation, executable support, activation, placement,
   credentials, and recovery policy.
-- Takosumi Cloud owns its managed implementations, capacity, billing, quota,
-  SLA, and service catalog.
+- Each host or commercial service owns its implementations, capacity, billing,
+  quota, SLA, and live catalog.
 - Provider release, Form publication, Form maturity, and host availability are
   independent facts.

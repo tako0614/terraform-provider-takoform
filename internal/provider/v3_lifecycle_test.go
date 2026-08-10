@@ -82,7 +82,7 @@ func TestV3ModuleWorkerCreateReadDeleteRoundTrip(t *testing.T) {
 	}
 	for name, want := range map[string]string{
 		"uid": "uid-1", "generation": "1", "revision": "1",
-		"form_api_version": "edge.forms.takoform.com/v1alpha1", "form_kind": "ModuleWorker",
+		"form_api_version": "edge.forms.takoform.com/v1beta1", "form_kind": "ModuleWorker",
 		"outputs_json": "{}",
 	} {
 		if got := v3StateString(t, ctx, createResponse.State, name).ValueString(); got != want {
@@ -839,7 +839,7 @@ func TestV3ReadRejectsUnknownStateFormRefBeforeHost(t *testing.T) {
 	}
 }
 
-// TestV3LaneCarriesNoUntypedFormRef proves the v1alpha3 lane exposes no
+// TestV3LaneCarriesNoUntypedFormRef proves the v1beta1 lane exposes no
 // resource that accepts an arbitrary FormRef. The withdrawn generic carrier
 // (spec/decisions/0021) is the shape this asserts against: a resource whose
 // Form identity is CONFIGURED rather than compiled in, which is exactly the

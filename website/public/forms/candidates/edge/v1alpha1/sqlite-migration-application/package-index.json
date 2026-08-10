@@ -1,0 +1,55 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha4",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
+    "kind": "SQLiteMigrationApplication",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:85efe28b9178abe56c9955ec42976e3ffb09b7103f2008b9c98801c74a236bbb"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 5424,
+      "digest": "sha256:ea7fc7533e1da34f20bcabfc4b7ece68f51ed21ba29d0a73e914684d56f6f223"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 286,
+      "digest": "sha256:713b4a724b51bf3948aca8ac2822e68540f3648abf6f66b94fc7f5e97bf90690"
+    },
+    {
+      "path": "fixtures/negative-database.json",
+      "mediaType": "application/json",
+      "size": 290,
+      "digest": "sha256:fd0752eee418311b2665d04d9159e82f5edc06893d573000e3d103ef5f7e9b23"
+    },
+    {
+      "path": "fixtures/negative-migration-set.json",
+      "mediaType": "application/json",
+      "size": 285,
+      "digest": "sha256:32df432747b5396b9c4401c3b1890177a68cad068888a4c91fe87dfc1d5d3386"
+    },
+    {
+      "path": "fixtures/negative-missing-database.json",
+      "mediaType": "application/json",
+      "size": 151,
+      "digest": "sha256:0cc5406c04490210206afd9c4bba336ac502fbeea3e4dd7fb6211dc88266942d"
+    },
+    {
+      "path": "fixtures/negative-missing-migration-set.json",
+      "mediaType": "application/json",
+      "size": 138,
+      "digest": "sha256:66044d0ac62f48bce6329452fe1b148f15687bb97f08af9c9310178169acadf6"
+    },
+    {
+      "path": "fixtures/negative-unexpected-property.json",
+      "mediaType": "application/json",
+      "size": 316,
+      "digest": "sha256:affc976302fdee54e39758b2dec4a7d1a56167ba997d1aa74684f19a5e812bff"
+    }
+  ]
+}

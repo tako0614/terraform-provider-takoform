@@ -12,7 +12,7 @@ type stubResolver struct{}
 
 func (stubResolver) TargetFormRefs(targetKind string) ([]TargetFormRef, error) {
 	return []TargetFormRef{{
-		APIVersion:        "edge.forms.takoform.com/v1alpha1",
+		APIVersion:        "edge.forms.takoform.com/v1beta1",
 		Kind:              targetKind,
 		DefinitionVersion: "0.1.0",
 		SchemaDigest:      "sha256:" + strings.Repeat("a", 64),

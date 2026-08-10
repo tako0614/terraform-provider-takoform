@@ -367,6 +367,8 @@ func TestV3FormsWithoutOutputsDeclareNoOutputAttributes(t *testing.T) {
 		want := len(v3CommonAttributes(form))
 		if form.Kind == workerBundleKind {
 			want += len(workerBundleAttributes())
+		} else if _, fileArtifact := v3FileBundleManifestKind(form.Kind); fileArtifact {
+			want += len(fileBundleAttributes(form.Kind))
 		} else {
 			want += len(form.Fields)
 		}

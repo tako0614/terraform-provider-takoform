@@ -1,5 +1,5 @@
-// Package currentformmodel is the rich authoring model for v1alpha3 Form
-// Definitions (the Form Family lane decided in spec/decisions/0008..0013).
+// Package currentformmodel is the rich authoring model for v1beta1 Form
+// Definitions (the current Beta Form Family contract fixed by decision 0035).
 //
 // A Form is described once here — its role, its typed fields, the exact
 // Interface and Binding contracts it references — and every derived surface
@@ -7,7 +7,7 @@
 // fixtures) is emitted from that single declaration.
 //
 // Unlike the retained v1alpha2 vocabulary (internal/formcatalog), this model
-// never emits a "name" desired property: the v1alpha3 resource envelope owns
+// never emits a "name" desired property: the v1beta1 resource envelope owns
 // metadata.name (decision 0011). It also carries no open capability tokens:
 // every string is closed by an anchored grammar or an enum (decision 0008).
 package currentformmodel
@@ -20,7 +20,7 @@ import (
 
 // Family is one Form Family API group and its group version. It renders the
 // namespaced apiVersion of every member FormRef, for example
-// "edge.forms.takoform.com/v1alpha1".
+// "edge.forms.takoform.com/v1beta1".
 type Family struct {
 	Group   string
 	Version string
@@ -29,7 +29,7 @@ type Family struct {
 // APIVersion renders the DNS-like namespaced group with its version.
 func (f Family) APIVersion() string { return f.Group + "/" + f.Version }
 
-// Role is the closed v1alpha3 resource role (decision 0009).
+// Role is the closed v1beta1 resource role (decision 0009).
 type Role string
 
 const (
@@ -214,7 +214,7 @@ type Form struct {
 }
 
 // ReservedResourceAttributes is the closed set of attribute names the
-// v1alpha3 resource surface owns on every Form: the portable envelope
+// v1beta1 resource surface owns on every Form: the portable envelope
 // (name, space, uid, generation, revision, conditions), the derived
 // conveniences a client renders from it, the exact recorded FormRef, the two
 // internal recovery records, and the operation timeouts.
@@ -280,9 +280,9 @@ func (f Form) DeclaresUpdate() bool { return len(f.MutableFields()) > 0 }
 
 // LifecycleCapabilities derives the closed capability set of this Form. The
 // base set is exactly create, read, delete, import, observe; update is added
-// only when the Form has at least one mutable desired field. The v1alpha3 lane
+// only when the Form has at least one mutable desired field. The v1beta1 channel
 // has no refresh capability at all: observe is the one read-only host-side
-// re-observation operation (spec/host-api/v1alpha3.md).
+// re-observation operation (spec/host-api/v1beta1.md).
 func (f Form) LifecycleCapabilities() []string {
 	capabilities := make([]string, 0, 6)
 	capabilities = append(capabilities, "create", "read")
@@ -327,11 +327,11 @@ func (f Form) Validate() error {
 		}
 		seen[field.Wire] = struct{}{}
 		if field.Wire == "name" || field.HCL == "name" {
-			return fmt.Errorf("form %s declares a top-level name field; the v1alpha3 envelope owns metadata.name (decision 0011)", f.Kind)
+			return fmt.Errorf("form %s declares a top-level name field; the v1beta1 envelope owns metadata.name (decision 0011)", f.Kind)
 		}
 		if reservedResourceAttribute(field.AttributeName()) {
 			return fmt.Errorf(
-				"form %s field %s takes the reserved resource attribute %q; the v1alpha3 envelope owns it",
+				"form %s field %s takes the reserved resource attribute %q; the v1beta1 envelope owns it",
 				f.Kind, field.Wire, field.AttributeName(),
 			)
 		}
@@ -409,7 +409,7 @@ func (f Form) validateOutputs(desiredNames map[string]struct{}) error {
 		}
 		if reservedResourceAttribute(output.AttributeName()) {
 			return fmt.Errorf(
-				"form %s output %s takes the reserved resource attribute %q; the v1alpha3 envelope owns it",
+				"form %s output %s takes the reserved resource attribute %q; the v1beta1 envelope owns it",
 				f.Kind, output.Wire, output.AttributeName(),
 			)
 		}

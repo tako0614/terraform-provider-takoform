@@ -25,7 +25,7 @@
       "apiVersion": "interfaces.takoform.com/v1alpha1",
       "name": "edge.objects",
       "version": "1.0.0",
-      "schemaDigest": "sha256:292668cf530eb7946f25d313740991b3efa0406f40d74ec12d788d2933d13f96"
+      "schemaDigest": "sha256:fad47fa63409a05fb0b5886d23300e7ecd32fd64b11aaef5a200247872d19e00"
     }
   ],
   "conformanceFixtures": [

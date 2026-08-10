@@ -6,8 +6,8 @@ FormRef or public release identity exists yet.
 
 ## Need and boundary
 
-Takosumi Cloud provides durable object storage. The candidate Form describes a
-bucket identity, version-retention semantics, lifecycle, and
+The candidate Form describes durable object storage: a bucket identity,
+version-retention semantics, lifecycle, and
 `object.storage@1` Interface. Region, storage class, replication, physical
 store, capacity, credentials, endpoint/protocol compatibility, policy, and
 pricing remain host-owned.

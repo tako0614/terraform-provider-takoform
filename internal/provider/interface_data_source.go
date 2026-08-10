@@ -43,7 +43,7 @@ type interfaceDataSourceModel struct {
 // interfaceDataSourceType is this data source's address as a practitioner
 // writes it. A diagnostic names it so the reader knows which of the two lanes
 // the message is about: this data source is a v1alpha2 consumer, and there is
-// no v1alpha3 interface read to fall back to.
+// no v1beta1 interface read to fall back to.
 const interfaceDataSourceType = "data.takoform_interface"
 
 func (d *interfaceDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -125,7 +125,7 @@ func (d *interfaceDataSource) Configure(_ context.Context, req datasource.Config
 func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	// The two nil cases are structurally different and must not share a
 	// diagnostic. A nil providerData is a provider bug; a nil v1alpha2 client
-	// after a successful Configure is a fact about the ENDPOINT — the v1alpha3
+	// after a successful Configure is a fact about the ENDPOINT — the v1beta1
 	// lane negotiated and this data source's lane did not — and the recorded
 	// per-lane error is the only thing that tells the reader which to change.
 	// The v2 form resources and the v3 resources both already report it this

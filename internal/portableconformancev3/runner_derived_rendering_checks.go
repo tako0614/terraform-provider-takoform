@@ -1,7 +1,7 @@
 package portableconformancev3
 
 // runner_derived_rendering_checks.go carries the black-box evidence for the
-// derived-rendering revision rule of spec/host-api/v1alpha3.md: when a host
+// derived-rendering revision rule of spec/host-api/v1beta1.md: when a host
 // renders any part of a representation from OTHER resources, mutating those
 // resources changes the document it serves, so it MUST advance that resource's
 // revision — and therefore its ETag — while leaving its generation alone.

@@ -5,7 +5,7 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "ObjectBucket",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:f5e064fab1432adbc8658a26962e74878fad34ec059b137002f358b4a9371f79"
+    "schemaDigest": "sha256:33a164e21c04a85a3b065c5b87978a0b6ba3d616b6caaa1f284e6a09233a5952"
   },
   "definitionPath": "definition.json",
   "files": [
@@ -13,7 +13,7 @@
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
       "size": 2104,
-      "digest": "sha256:663ed142d8d78a8e7314091bf763e82399c43c072a42770be7252377342979fd"
+      "digest": "sha256:25f0c764a437ece9b9df12dedfb0889615a7be862dd82545388513c6fc9d91ca"
     },
     {
       "path": "fixtures/desired.json",

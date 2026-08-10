@@ -1,8 +1,13 @@
 package portableconformancev3
 
 import (
+	"fmt"
+	"net/url"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
@@ -23,6 +28,273 @@ const queueRelationPointer = "/queue"
 // deadLetterRelationPointer is the optional edge from a consumer to the queue
 // that receives the messages the consumer exhausted.
 const deadLetterRelationPointer = "/deadLetterQueue"
+
+const (
+	assetBundleRelationPointer  = "/assets/bundle"
+	migrationDatabasePointer    = "/database"
+	migrationSetRelationPointer = "/migrationSet"
+)
+
+// CanonicalStaticAssetPath maps one runtime URL pathname to the closed
+// manifest-path grammar. The input is the URL's escaped Pathname, not its
+// query or fragment; accepting those as arguments too is harmless because the
+// path component is cut at the first raw delimiter. Percent-decoding happens
+// exactly once and is deliberately stricter than url.PathUnescape: encoded
+// separators would otherwise let one URL name a different manifest segment
+// depending on which hop decoded it first.
+func CanonicalStaticAssetPath(escapedPath string) (string, bool) {
+	return canonicalStaticAssetPath(escapedPath)
+}
+
+func canonicalStaticAssetPath(escapedPath string) (string, bool) {
+	if cut := strings.IndexAny(escapedPath, "?#"); cut >= 0 {
+		escapedPath = escapedPath[:cut]
+	}
+	if escapedPath == "" || !strings.HasPrefix(escapedPath, "/") {
+		return "", false
+	}
+	lower := strings.ToLower(escapedPath)
+	if strings.Contains(lower, "%2f") || strings.Contains(lower, "%5c") || strings.Contains(escapedPath, "\\") {
+		return "", false
+	}
+	decoded, err := url.PathUnescape(escapedPath)
+	if err != nil || !utf8.ValidString(decoded) {
+		return "", false
+	}
+	for _, character := range decoded {
+		if unicode.IsControl(character) || isUnicodeNoncharacter(character) || character == '\\' {
+			return "", false
+		}
+	}
+	// The first slash is the URL root. A second one, an interior empty
+	// segment, and a trailing slash all fail closed rather than being silently
+	// normalized to the same asset.
+	decoded = strings.TrimPrefix(decoded, "/")
+	if decoded == "" {
+		return "", true
+	}
+	segments := strings.Split(decoded, "/")
+	for _, segment := range segments {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", false
+		}
+	}
+	if !artifactPathPattern.MatchString(decoded) || len(decoded) > 240 {
+		return "", false
+	}
+	return decoded, true
+}
+
+func isUnicodeNoncharacter(character rune) bool {
+	return character >= 0xFDD0 && character <= 0xFDEF ||
+		(character&0xFFFF) >= 0xFFFE && character <= 0x10FFFF
+}
+
+// resolveStaticAssetPath applies the one closed request-path policy to a
+// committed StaticAssetBundle. Invalid paths return an error and never enter
+// SPA fallback; a valid miss may use index.html only when the attachment's
+// notFoundHandling explicitly asks for it.
+func resolveStaticAssetPath(
+	manifest artifactManifest, escapedPath, notFoundHandling string,
+) (artifactFile, bool, *hostError) {
+	canonical, valid := canonicalStaticAssetPath(escapedPath)
+	if !valid {
+		return artifactFile{}, false, stableError("invalid_argument", "static asset URL pathname is invalid")
+	}
+	for _, file := range manifest.Files {
+		if file.Path == canonical {
+			return file, true, nil
+		}
+	}
+	if notFoundHandling == "single_page_application" {
+		for _, file := range manifest.Files {
+			if file.Path == "index.html" {
+				return file, true, nil
+			}
+		}
+	}
+	return artifactFile{}, false, nil
+}
+
+// migrationLedgerEntry is the portable identity of one applied migration.
+// SQL bytes remain in the content-addressed artifact store; durable database
+// history records only the ordered path and digest needed to detect a rewrite,
+// reorder, or removal.
+type migrationLedgerEntry struct {
+	Path   string
+	Digest string
+}
+
+func (h *ReferenceHost) relationTargetResource(
+	scope resourceScope, relations []storedRelation, pointer string,
+) *storedResource {
+	for _, relation := range relations {
+		if relation.Pointer != pointer {
+			continue
+		}
+		target := h.resources[resourceKey(scope, relation.TargetAPIVersion, relation.TargetKind, relation.TargetName)]
+		if target != nil && target.UID == relation.TargetUID && target.Ref == relation.TargetRef {
+			return target
+		}
+	}
+	return nil
+}
+
+// validateWorkerVersionAssets proves the one asset rule a desired-state schema
+// cannot see: SPA fallback requires index.html to exist in the exact referenced
+// StaticAssetBundle manifest. The ordinary relation resolver already proves
+// the exact FormRef and pins the bundle incarnation.
+func (h *ReferenceHost) validateWorkerVersionAssets(
+	caller hostAuthContext,
+	form *InstalledForm,
+	scope resourceScope,
+	spec map[string]any,
+	relations []storedRelation,
+) *hostError {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != workerVersionKind {
+		return nil
+	}
+	assets, present := spec["assets"].(map[string]any)
+	if !present {
+		return nil
+	}
+	bundle := h.relationTargetResource(scope, relations, assetBundleRelationPointer)
+	if bundle == nil {
+		return stableError("resource_not_found", "WorkerVersion assets relation does not resolve to its pinned StaticAssetBundle")
+	}
+	manifest, hostErr := h.requireReferencedArtifactManifest(caller, bundle.Spec, staticAssetBundleKind)
+	if hostErr != nil {
+		return hostErr
+	}
+	if handling, _ := assets["notFoundHandling"].(string); handling == "single_page_application" {
+		for _, file := range manifest.Files {
+			if file.Path == "index.html" {
+				return nil
+			}
+		}
+		return stableError("invalid_argument", "single_page_application requires index.html in the referenced StaticAssetBundle")
+	}
+	return nil
+}
+
+// sqliteMigrationPlan resolves one application to the exact database and
+// MigrationBundle it pins, then proves the durable database ledger is an exact
+// prefix of that ordered manifest. Anything else is a rewrite, reorder, or
+// removal of applied history and is never repaired by replaying SQL.
+func (h *ReferenceHost) sqliteMigrationPlan(
+	caller hostAuthContext,
+	form *InstalledForm,
+	scope resourceScope,
+	relations []storedRelation,
+) (string, []migrationLedgerEntry, *hostError) {
+	if form.Ref.APIVersion != edgeFormsGroup || form.Ref.Kind != sqliteMigrationApplicationKind {
+		return "", nil, nil
+	}
+	database := h.relationTargetResource(scope, relations, migrationDatabasePointer)
+	set := h.relationTargetResource(scope, relations, migrationSetRelationPointer)
+	if database == nil || set == nil {
+		return "", nil, stableError("resource_not_found", "SQLiteMigrationApplication relations do not resolve to their pinned resources")
+	}
+	manifest, hostErr := h.requireReferencedArtifactManifest(caller, set.Spec, migrationBundleKind)
+	if hostErr != nil {
+		return "", nil, hostErr
+	}
+	desired := make([]migrationLedgerEntry, 0, len(manifest.Files))
+	for _, file := range manifest.Files {
+		desired = append(desired, migrationLedgerEntry{Path: file.Path, Digest: file.Digest})
+	}
+	applied := h.migrationLedgers[database.UID]
+	if len(applied) > len(desired) {
+		return "", nil, stableError("migration_required", "the migration set removes already-applied database history")
+	}
+	for index, prior := range applied {
+		if desired[index] != prior {
+			return "", nil, stableError("migration_required", "the migration set rewrites or reorders already-applied database history")
+		}
+	}
+	return database.UID, desired, nil
+}
+
+func (h *ReferenceHost) validateSQLiteMigrationApplication(
+	caller hostAuthContext,
+	form *InstalledForm,
+	scope resourceScope,
+	relations []storedRelation,
+) *hostError {
+	_, _, hostErr := h.sqliteMigrationPlan(caller, form, scope, relations)
+	return hostErr
+}
+
+// sqliteMigrationApplicationUnavailable is the derived readiness half of the
+// migration contract. Applying a later superset is allowed to leave an older
+// application resource live; its representation simply becomes not Ready
+// because the database ledger is no longer exactly the ordered set that
+// application declares. This is intentionally a comparison of full ordered
+// sets, not a one-live-application or name-based rule.
+func (h *ReferenceHost) sqliteMigrationApplicationUnavailable(
+	resource *storedResource,
+) (reason, hostReason string, unavailable bool) {
+	if resource.group() != edgeFormsGroup || resource.kind() != sqliteMigrationApplicationKind {
+		return "", "", false
+	}
+	database := h.relationTargetResource(resource.scope(), resource.Relations, migrationDatabasePointer)
+	set := h.relationTargetResource(resource.scope(), resource.Relations, migrationSetRelationPointer)
+	if database == nil || set == nil {
+		return "DependencyMissing", "migration application relation target is missing", true
+	}
+	digest, _ := set.Spec["manifestDigest"].(string)
+	raw := h.manifests[digest]
+	if !formpackage.ValidDigest(digest) || raw == nil || !h.holdsManifest(resource.Tenant, digest) {
+		return "DependencyMissing", "migration application manifest is not held by its tenant", true
+	}
+	var manifest artifactManifest
+	if err := formpackage.DecodeStrictIJSON(raw, &manifest); err != nil {
+		return "DependencyMissing", "migration application manifest is not decodable", true
+	}
+	if hostErr := validateArtifactManifest(manifest); hostErr != nil {
+		return "DependencyMissing", "migration application manifest is invalid", true
+	}
+	desired := make([]migrationLedgerEntry, 0, len(manifest.Files))
+	for _, file := range manifest.Files {
+		desired = append(desired, migrationLedgerEntry{Path: file.Path, Digest: file.Digest})
+	}
+	applied := h.migrationLedgers[database.UID]
+	if len(applied) == len(desired) {
+		matches := true
+		for index := range desired {
+			if desired[index] != applied[index] {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return "", "", false
+		}
+	}
+	return "Reconciling", fmt.Sprintf(
+		"SQLiteMigrationApplication %s declares %d ordered migrations while database uid %s ledger has %d; Ready requires exact ordered-set equality",
+		resource.Name, len(desired), database.UID, len(applied),
+	), true
+}
+
+// applySQLiteMigrationSuffix records only the unapplied suffix. A production
+// host executes each file and appends its ledger entry in one database
+// transaction; this deterministic reference host has no SQL engine, so its
+// portable control-plane evidence is the prefix/suffix state machine itself.
+func (h *ReferenceHost) applySQLiteMigrationSuffix(
+	caller hostAuthContext,
+	form *InstalledForm,
+	scope resourceScope,
+	relations []storedRelation,
+) *hostError {
+	databaseUID, desired, hostErr := h.sqliteMigrationPlan(caller, form, scope, relations)
+	if hostErr != nil || databaseUID == "" {
+		return hostErr
+	}
+	prior := h.migrationLedgers[databaseUID]
+	h.migrationLedgers[databaseUID] = append(append([]migrationLedgerEntry(nil), prior...), desired[len(prior):]...)
+	return nil
+}
 
 // canonicalizeEdgeSpec rewrites the family's canonical spellings into one
 // desired spec, at the host's single materialization entry point, before the

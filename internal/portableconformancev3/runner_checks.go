@@ -13,7 +13,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 )
 
-// run executes the complete ordered v1alpha3 matrix. Every named required
+// run executes the complete ordered v1beta1 matrix. Every named required
 // check is marked completed exactly where its evidence was actually
 // exercised over real HTTP.
 func (r *v3Runner) run() error {
@@ -72,6 +72,8 @@ func (r *v3Runner) run() error {
 		r.checkUploadSessionOwnership,
 		r.checkArtifactDigestIsNotACapability,
 		func() error { return r.checkManifestReferenceIsNotACapability(bundle) },
+		r.checkStaticAssetSPAJourney,
+		r.checkSQLiteMigrationLedgerReadiness,
 		func() error { return r.checkWorkerVersionFlow(version, kv) },
 		func() error { return r.checkBindingContractVerified(version) },
 		func() error { return r.checkRelationIncarnationChange(version, kv) },
@@ -454,16 +456,19 @@ func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
 //
 // What it does NOT measure, stated so it is not mistaken for coverage: the
 // published rule is about every exact FormRef a host serves, and this compares
-// the eleven documents the corpus pins. A host serving a desired schema of its
-// own for an installed Form no probe drives passes, and a client of that Form
-// has exactly the specDigest problem above. It is deliberate rather than
-// forgotten — a pin nothing materializes against is maintenance with no oracle
-// value (spec/decisions/0022) — and it is the reason the pin is required of
-// every probe rather than of a hand-written list, so the coverage grows with the
-// probes. The residual is that the lane's word covers the Forms it drives, which
-// is what a report of this corpus says; closing it for the whole catalog would
-// mean pinning every installed Definition's desired schema, and nothing in this
-// lane needs those bytes for anything else.
+// the fifteen documents the corpus pins: fourteen distinct probe Forms plus the
+// synthetic second ModuleWorker definition. A host serving a desired schema of
+// its own for an installed Form no probe drives passes, and a client of that
+// Form has exactly the specDigest problem above. The family's fifteenth Form,
+// ObjectBucket, is intentionally outside this runner inventory; its absence is
+// a declared coverage exception, not an omitted check. A pin nothing
+// materializes against is maintenance with no oracle value (spec/decisions/0022),
+// and it is the reason the pin is required of every probe rather than of a
+// hand-written list, so the measured coverage grows with the probes. The
+// residual is that the lane's word covers the Forms it drives, which is what a
+// report of this corpus says; closing it for the whole catalog would mean
+// pinning every installed Definition's desired schema, and nothing in this lane
+// needs those bytes for anything else.
 func (r *v3Runner) checkFormDefinitions() error {
 	input := r.contract.RunnerInput
 	type pinnedDefinition struct {
@@ -3547,6 +3552,35 @@ func (r *v3Runner) checkSupportProfiles() error {
 	}
 	if err := verifyWorkerVersionProfile(workerVersionProfile, r.contract.RunnerInput.SupportProbes.RuntimeContract); err != nil {
 		return err
+	}
+	artifactForms := []struct {
+		ref                FormRef
+		maximumBundleFiles int
+	}{
+		{ref: r.contract.RunnerInput.WorkerBundle.Identity.FormRef, maximumBundleFiles: maximumWorkerBundleModules},
+		{ref: r.contract.RunnerInput.StaticAssetBundle.Identity.FormRef, maximumBundleFiles: maximumBundleFiles},
+		{ref: r.contract.RunnerInput.SQLiteMigrationSet.Identity.FormRef, maximumBundleFiles: maximumBundleFiles},
+	}
+	for _, artifact := range artifactForms {
+		want := artifact.ref
+		var found map[string]any
+		for _, profile := range list.Profiles {
+			reference, _ := profile["formRef"].(map[string]any)
+			if reference != nil && reference["apiVersion"] == want.APIVersion &&
+				reference["kind"] == want.Kind && reference["definitionVersion"] == want.DefinitionVersion &&
+				reference["schemaDigest"] == want.SchemaDigest {
+				found = profile
+				break
+			}
+		}
+		if found == nil {
+			return fmt.Errorf("support profiles omit exact artifact Form %s", want.Kind)
+		}
+		limits, _ := found["limits"].(map[string]any)
+		if limits == nil || fmt.Sprintf("%v", limits["maximumBundleBytes"]) != fmt.Sprintf("%d", maximumBundleBytes) ||
+			fmt.Sprintf("%v", limits["maximumBundleFiles"]) != fmt.Sprintf("%d", artifact.maximumBundleFiles) {
+			return fmt.Errorf("%s support limits = %v, want maximumBundleBytes=%d maximumBundleFiles=%d", want.Kind, limits, maximumBundleBytes, artifact.maximumBundleFiles)
+		}
 	}
 	version := r.contract.RunnerInput.WorkerVersion.Identity.FormRef
 	oneURL := fmt.Sprintf(

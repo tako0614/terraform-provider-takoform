@@ -2,17 +2,18 @@
 page_title: "takoform_sqlite_database Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  SQLite Database (edge.forms.takoform.com/v1alpha1, role identity).
+  SQLite Database (edge.forms.takoform.com/v1beta1, role identity).
 ---
 
 # takoform_sqlite_database
 
-Embedded SQLite database with serializable transactions and TAGGED values, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Values carry their storage class, so a 64-bit INTEGER and a BLOB round-trip losslessly instead of being flattened into a JSON scalar (decision 0020).
+Embedded SQLite database with bounded EdgeSqlValue values, rollback-only queries, and serializable all-or-none transactions, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Numbers stay finite binary64 values inside Number.MAX_SAFE_INTEGER and do not expose the INTEGER/REAL storage-class distinction; BLOB uses the common canonical encoded-bytes object. Runtime SQL cannot migrate schema; SQLiteMigrationApplication owns that administrative path (decision 0034).
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This resource speaks the Host API v1alpha3 lane and requires provider v2.1.0 or
-later (source candidate; not yet published). The configured host selects and
+This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.0 or
+later. Provider v2.1.0 is the stable release target; its source descriptor stays
+candidate-only until the owner publishes it. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](../../examples/resources/takoform_sqlite_database/resource.tf).
 
@@ -86,7 +87,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_sqlite_database.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1alpha1","kind":"SQLiteDatabase","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"SQLiteDatabase","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

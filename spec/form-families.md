@@ -13,7 +13,7 @@ the semantic rule every member Form must satisfy is
 Each family owns a DNS-like API group with its own version:
 
 ```text
-edge.forms.takoform.com/v1alpha1
+edge.forms.takoform.com/v1beta1
 containers.forms.takoform.com/v1alpha1   (future)
 forms.example.com/v1alpha1               (third party)
 ```
@@ -52,7 +52,7 @@ A family that splits one running thing across these roles owes a statement of
 what holds them together. For the Edge Platform Family that statement is
 [decision 0016](decisions/0016-the-worker-aggregate-has-one-active-deployment.md),
 normatively stated in
-[`host-api/v1alpha3.md`](host-api/v1alpha3.md#the-worker-aggregate): an identity
+[`host-api/v1beta1.md`](host-api/v1beta1.md#the-worker-aggregate): an identity
 has at most ONE deployment resource; that deployment selects revisions of its
 own identity, each named once, with weights summing to exactly 10000; every
 attachment is admitted against the deployment rather than against any stored
@@ -66,24 +66,31 @@ its ETag, while leaving its generation alone.
 
 ## Edge Platform Family
 
-`edge.forms.takoform.com/v1alpha1` is the first official family. Its members
+`edge.forms.takoform.com/v1beta1` is the first official family. Its members
 fix the shape of a proven edge developer platform without naming its vendor.
 The authored first-milestone members are:
 
 ```text
 Compute      ModuleWorker, WorkerBundle, WorkerVersion, WorkerDeployment,
-             WorkerCustomDomain, WorkerEndpoint, WorkerCronTrigger
-Data         EdgeKVNamespace, ObjectBucket, SQLiteDatabase
+             StaticAssetBundle, WorkerCustomDomain, WorkerEndpoint,
+             WorkerCronTrigger
+Data         EdgeKVNamespace, ObjectBucket, SQLiteDatabase,
+             SQLiteMigrationSet, SQLiteMigrationApplication
 Messaging    AtLeastOnceQueue, QueueConsumer
 ```
 
 Later milestones add further members through their own proposals —
-`StaticAssetBundle`, `WorkerRoute`, `SQLiteMigrationSet`,
-`SQLiteMigrationApplication`, `DenseVectorIndex`, `VectorMetadataIndex`, and
+`WorkerRoute`, `DenseVectorIndex`, `VectorMetadataIndex`, and
 the bucket policy resources (`BucketCorsPolicy`, `BucketLifecyclePolicy`,
 `BucketLockPolicy`). Listing a planned member here reserves nothing: a Form
 exists only when its proposal, catalog declaration, and candidate package
 exist.
+
+Static files and SQLite migrations are artifact-backed rather than inline:
+`StaticAssetBundle` and `SQLiteMigrationSet` desired state is exactly one
+committed manifest digest, while `SQLiteMigrationApplication` attaches an
+ordered set to a database with append-only path+digest history
+([decision 0033](decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)).
 
 `ModuleWorker` fixes the ES Module Worker ABI by identity, and states what that
 ABI is: the exact Interface contract `worker.runtime@1.0.0` in its
@@ -111,15 +118,14 @@ incompleteness [`portability-boundary.md`](portability-boundary.md) forbids. The
 `handlers` vocabulary is the handler set the runtime contract defines, and a
 host refuses a handler that contract does not define before it mutates anything.
 
-Two authored first-milestone decisions are recorded here so neither is read as
+Three authored decisions are recorded here so none is read as
 an oversight:
 
-- `WorkerVersion` declares no `assets` field. Static assets served next to a
-  worker belong to the separate `StaticAssetBundle` member above;
-  `WorkerVersion` gains an `assets` reference to it when `StaticAssetBundle`
-  lands in the next milestone. Until then a version fixes code, runtime
-  behavior, configuration, and bindings only, and an asset-serving worker is
-  not yet fully expressible.
+- `WorkerVersion.assets` is one optional closed object referring to the
+  separate `StaticAssetBundle` member above. Absence means no asset lookup;
+  presence fixes request order and not-found handling without granting a
+  hidden runtime binding
+  ([decision 0033](decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)).
 - `WorkerVersion` names its sealed-value declaration `requiredSensitiveVars`
   rather than `secretRequirements`. The Form Package data-only policy rejects
   the token `secret` anywhere in a field name
@@ -159,9 +165,10 @@ container designs are separate family work with their own proposals.
 
 - It does not merge packages: one Form Package still contains exactly one
   Form Definition.
-- It does not grant maturity: family candidates are tracked in the family
-  candidate set, and a member Form gains its own lifecycle record at its
-  Experimental transition (no family member has made that transition yet).
+- It does not grant maturity: the current family candidate set explicitly
+  classifies its exact 15 `0.1.0` members as Experimental. The Beta family
+  channel does not make them Stable, and their package artifacts remain a
+  separate unpublished fact.
 - It does not constrain hosts: a host may support any subset of a family and
   states that subset in its Host Support Profile.
 - It does not admit vendor identity: adapter profiles map family Forms to

@@ -88,8 +88,9 @@ card padding is not part of this system.
   approval/admission subset exists; provider v1 retains the frozen Host wire
   `forms.takoform.com/v1alpha1`; provider v2 uses the current Host wire and
   exact FormRef group `forms.takoform.com/v1alpha2` through a separate
-  versioned discovery path; current Form Package indexes use
-  `packages.forms.takoform.com/v1alpha3`. Host implementation source and live
+  versioned discovery path; retained provider-v2 Form Package indexes use
+  `packages.forms.takoform.com/v1alpha3`, while current family packages use
+  `packages.forms.takoform.com/v1alpha4`. Host implementation source and live
   service availability are different evidence.
 
 ## What pages may differ on

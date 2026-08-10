@@ -6,8 +6,11 @@ desired state, optimistic concurrency, mutation replay, and stable errors.
 
 This document specifies the retained provider-v2 lane,
 `forms.takoform.com/v1alpha2`, which continues to govern the published
-provider v2.0.0. The current Host API lane is [`v1alpha3.md`](v1alpha3.md)
-([decision 0013](../decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md)).
+provider v2.0.0. The current Host API channel is
+[`v1beta1.md`](v1beta1.md)
+([decision 0035](../decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
+The v1alpha3 specification and schema identities are retained unchanged
+history.
 The retained lane's contract is frozen EXCEPT for the two recorded errata
 below; every other rule in this document stays normative for the retained
 lane, unchanged by that redesign. The published v1alpha2 wire schema and the

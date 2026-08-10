@@ -2,7 +2,7 @@
 page_title: "takoform_worker_custom_domain Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Worker Custom Domain (edge.forms.takoform.com/v1alpha1, role attachment).
+  Worker Custom Domain (edge.forms.takoform.com/v1beta1, role attachment).
 ---
 
 # takoform_worker_custom_domain
@@ -11,8 +11,9 @@ Attaches one DNS hostname to a Module Worker so its active deployment serves tha
 
 This is an `attachment` resource: it connects a parent to inward activation (routes, domains, schedules, queue consumption). Deleting the attachment never deletes the parent.
 
-This resource speaks the Host API v1alpha3 lane and requires provider v2.1.0 or
-later (source candidate; not yet published). The configured host selects and
+This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.0 or
+later. Provider v2.1.0 is the stable release target; its source descriptor stays
+candidate-only until the owner publishes it. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](../../examples/resources/takoform_worker_custom_domain/resource.tf).
 
@@ -84,7 +85,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_worker_custom_domain.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1alpha1","kind":"WorkerCustomDomain","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"WorkerCustomDomain","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

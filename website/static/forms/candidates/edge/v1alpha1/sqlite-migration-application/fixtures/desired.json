@@ -1,0 +1,12 @@
+{
+  "database": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
+    "kind": "SQLiteDatabase",
+    "name": "sqlite-database"
+  },
+  "migrationSet": {
+    "apiVersion": "edge.forms.takoform.com/v1alpha1",
+    "kind": "SQLiteMigrationSet",
+    "name": "sqlite-migration-set"
+  }
+}

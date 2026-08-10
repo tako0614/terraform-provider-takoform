@@ -6,10 +6,10 @@ job.
 | Tier | What it covers | How you get it |
 | --- | --- | --- |
 | **Current published** | provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | `terraform init` installs it from the Registry |
-| **Edge preview** | the provider `v2.1` source candidate and the unpublished `edge.forms.takoform.com/v1alpha1` family | build the provider from repository source; no Registry install |
+| **Beta release candidate** | stable provider target `v2.1.0`, Beta Host API, and 15 Experimental `edge.forms.takoform.com/v1beta1` Forms | build the provider from repository source until the owner publishes it |
 
 The quick start below is the current published tier. The
-[Edge preview](#edge-preview-the-v1alpha3-lane) is further down and is marked
+[Beta release candidate](#beta-edge-platform-family) is further down and is marked
 as such everywhere it appears.
 
 ## Quick start
@@ -88,9 +88,9 @@ terraform apply
 
 The host must advertise the exact v1alpha2 FormRefs at
 `/.well-known/takoform/v1alpha2` before the provider issues a mutation; a host
-that cannot serve the exact identity fails closed. Takosumi Cloud is the first
-host and implements all nine kinds — its account console provides your
-endpoint, Space, and token. Use the digest and URL of an artifact you can
+that cannot serve the exact identity fails closed. This repository does not
+assert any hosted service's live availability; obtain endpoint, Space, and
+token from the host you chose. Use the digest and URL of an artifact you can
 actually fetch; the values above are shape only.
 
 ## Lanes
@@ -102,7 +102,7 @@ lanes:
 | --- | --- | --- |
 | **v1.0.3** (published) | existing Legacy state, refresh, delete, recovery | from the Registry |
 | **v2.0.0** (published, current client) | the nine retained provider-v2 contracts | from the Registry |
-| **v2.1.0** (Edge preview; source candidate, not yet published) | [the Edge Platform Family](#edge-preview-the-v1alpha3-lane) on the v1alpha3 lane | build from source; no Registry install |
+| **v2.1.0** (stable release target; descriptor `candidate-only`) | [the Experimental Edge Platform Family](#beta-edge-platform-family) on v1beta1 | build from source until owner publication |
 
 ### Maintain published Legacy
 
@@ -132,19 +132,22 @@ Provider v2 refuses provider-v1 state.
 4. Move consumers, observe the result, then delete Legacy through v1 after
    rollback is no longer needed.
 
-## Edge preview: the v1alpha3 lane
+## Beta: Edge Platform Family
 
-::: warning Edge preview — source only
-The `edge.forms.takoform.com/v1alpha1` family rides provider `v2.1.0`, an
-unpublished source candidate. There is no Registry install and no public host:
-build the provider from the repository source. No family Form, Interface, or
-Binding is published and none holds a lifecycle record, because the lane stays
-frozen while its [publication blockers](/spec/publication-freeze.html) are
-open. The published `v2.0.0` quick start above remains the installable path.
+::: warning Beta provider release candidate
+The `edge.forms.takoform.com/v1beta1` family rides the stable provider `v2.1.0`
+release target. Its descriptor remains `candidate-only` until the release
+owner publishes it, so build from repository source for now. All 15 exact
+`0.1.0` Forms are Experimental and locked in the provider identity ledger;
+their package artifacts remain unpublished. Open
+[release-policy obligations](/spec/publication-freeze.html) remain later
+Stable/GA and package/public-service work, not a reason to relabel the provider
+version as a prerelease. The published `v2.0.0` quick start above remains the
+Registry-installable path.
 :::
 
-Family resources speak the `forms.takoform.com/v1alpha3` Host API, discovered
-at `/.well-known/takoform/v1alpha3`, with UID/generation/revision identity,
+Family resources speak the `forms.takoform.com/v1beta1` Host API, discovered
+at `/.well-known/takoform/v1beta1`, with UID/generation/revision identity,
 long-running operations, and content-addressed artifact upload.
 
 A worker becomes reachable through a chain, not a single resource: an identity,
@@ -203,7 +206,7 @@ resource "takoform_worker_endpoint" "api" {
 ```
 
 Each resource's own page carries a single-resource example with the `v2.1.0`
-source-candidate pin and the same source-only warning. Capability is added to a
+stable-target pin and the same candidate-only boundary. Capability is added to a
 version through typed bindings; inward activation — a custom domain, a cron
 trigger, a queue consumer — is always a separate attachment resource.
 
@@ -225,10 +228,12 @@ Retained provider-v2 resources (published `v2.0.0`):
 - [vector_index](/docs/resources/vector_index.html)
 - [interface data source](/docs/data-sources/interface.html)
 
-Edge Platform Family resources (`v2.1.0` source candidate; not yet published):
+Experimental Edge Platform Family resources (`v2.1.0` stable release target;
+descriptor `candidate-only`):
 
 - [module_worker](/docs/resources/module_worker.html)
 - [worker_bundle](/docs/resources/worker_bundle.html)
+- [static_asset_bundle](/docs/resources/static_asset_bundle.html)
 - [worker_version](/docs/resources/worker_version.html)
 - [worker_deployment](/docs/resources/worker_deployment.html)
 - [worker_custom_domain](/docs/resources/worker_custom_domain.html)
@@ -237,10 +242,12 @@ Edge Platform Family resources (`v2.1.0` source candidate; not yet published):
 - [edge_kv_namespace](/docs/resources/edge_kv_namespace.html)
 - [edge_object_bucket](/docs/resources/edge_object_bucket.html)
 - [sqlite_database](/docs/resources/sqlite_database.html)
+- [sqlite_migration_set](/docs/resources/sqlite_migration_set.html)
+- [sqlite_migration_application](/docs/resources/sqlite_migration_application.html)
 - [at_least_once_queue](/docs/resources/at_least_once_queue.html)
 - [queue_consumer](/docs/resources/queue_consumer.html)
 
-That is the entire v1alpha3 surface. There is no generic carrier for a Form the
+That is the entire v1beta1 surface. There is no generic carrier for a Form the
 provider was not built against: the lane offers no way for a client to verify a
 FormRef it did not compile in, so supporting a third-party Form is a provider
 build rather than a configuration value
@@ -261,7 +268,7 @@ build rather than a configuration value
 
 Takoform owns workload semantics, schemas, exact identities, packages, and
 conformance. Hosts own capability support, placement, routing, scaling,
-credentials, and recovery. Takosumi Cloud owns managed capacity, billing,
-quota, and SLA.
+credentials, recovery, and any managed service's live catalog, billing, quota,
+and SLA.
 
 <StatusNote />

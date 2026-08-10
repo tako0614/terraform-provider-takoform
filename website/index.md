@@ -14,7 +14,7 @@ hero:
       link: /spec/
 ---
 
-## What is published and what is preview
+## What is published and what is a release candidate
 
 This project ships in two tiers. Every page says which tier it is describing,
 and nothing here mixes them.
@@ -22,14 +22,15 @@ and nothing here mixes them.
 | Tier | What it covers | How you get it |
 | --- | --- | --- |
 | **Current published** | provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | `terraform init` installs it from the Registry |
-| **Edge preview** | the provider `v2.1` source candidate and the unpublished `edge.forms.takoform.com/v1alpha1` family | build the provider from repository source; no Registry install |
+| **Beta release candidate** | stable provider target `v2.1.0`, the Beta Host API, and 15 Experimental `edge.forms.takoform.com/v1beta1` Forms | build from source until owner publication |
 
-The Edge preview tier has no public host yet and its
-[publication blockers](/spec/publication-freeze.html) are still open, so no
-family Form, Interface, or Binding is published and the `v2.1` provider line
-has no release. It is where the work is; it is not something you can install
-today. The [machine-readable status](/.well-known/takoform-site.json) states
-both tiers as data.
+The v2.1.0 descriptor remains `candidate-only` until the release owner
+publishes it. Its exact 15 Beta FormRefs/digests are already immutable provider
+compatibility data; their package artifacts remain unpublished. Open
+[release-policy obligations](/spec/publication-freeze.html) stay in force for
+package/public-service publication and later Stable/GA qualification. The
+[machine-readable status](/.well-known/takoform-site.json) distinguishes the
+published provider from the release target.
 
 ## What it looks like
 
@@ -102,7 +103,7 @@ is exchangeable is the host, never the meaning
 
 The nine `forms.takoform.com/v1alpha2` `0.1.0` candidates are the surface of
 the published provider `v2.0.0`, retained for compatibility
-([decision 0013](/spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.html)):
+([decision 0035](/spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.html)):
 
 | Resource | What it declares |
 | --- | --- |
@@ -116,27 +117,28 @@ the published provider `v2.0.0`, retained for compatibility
 | [`takoform_stateful_entity`](/docs/resources/stateful_entity.html) | addressable persistent entities |
 | [`takoform_vector_index`](/docs/resources/vector_index.html) | a vector index with fixed dimensions |
 
-## Edge preview: the Edge Platform Family (v1alpha3 lane)
+## Beta: the Experimental Edge Platform Family
 
-::: warning Edge preview — source only
-Everything in this section rides provider `v2.1.0`, an unpublished source
-candidate. There is no Registry install and no public host. No Form,
-Interface, or Binding below has a publication or a lifecycle record, and the
-lane stays frozen while its blockers are open. The runnable configuration
-lives on the [preview quick start](/docs/#edge-preview-the-v1alpha3-lane), not
-on this page, because a fragment of it cannot be applied.
+::: warning Provider release candidate
+Everything in this section rides the stable provider `v2.1.0` release target.
+Its descriptor remains `candidate-only` until owner publication. The 15 exact
+Forms are Experimental; Beta is their API/family channel, not Stable maturity,
+and their package artifacts remain unpublished. Runnable configuration lives
+on the [Beta quick start](/docs/#beta-edge-platform-family), not on this page,
+because a fragment of it cannot be applied.
 :::
 
 Current design work happens in the namespaced
-`edge.forms.takoform.com/v1alpha1` family
+`edge.forms.takoform.com/v1beta1` family
 ([Form Families](/spec/form-families.html)), served over the
-`forms.takoform.com/v1alpha3` Host API with UID/generation/revision identity,
+`forms.takoform.com/v1beta1` Host API with UID/generation/revision identity,
 long-running operations, and content-addressed artifact upload.
 
 | Resource | Role | What it declares |
 | --- | --- | --- |
 | [`takoform_module_worker`](/docs/resources/module_worker.html) | identity | a JavaScript module-worker application identity |
 | [`takoform_worker_bundle`](/docs/resources/worker_bundle.html) | revision | an immutable uploaded code bundle (main module + modules) |
+| [`takoform_static_asset_bundle`](/docs/resources/static_asset_bundle.html) | revision | an immutable uploaded static-file inventory |
 | [`takoform_worker_version`](/docs/resources/worker_version.html) | revision | an immutable snapshot: bundle, handlers, vars, sensitive slots, typed bindings |
 | [`takoform_worker_deployment`](/docs/resources/worker_deployment.html) | deployment | which versions serve traffic, in basis points |
 | [`takoform_worker_custom_domain`](/docs/resources/worker_custom_domain.html) | attachment | a hostname whose origin is the worker |
@@ -145,6 +147,8 @@ long-running operations, and content-addressed artifact upload.
 | [`takoform_edge_kv_namespace`](/docs/resources/edge_kv_namespace.html) | identity | an eventually consistent edge KV namespace |
 | [`takoform_edge_object_bucket`](/docs/resources/edge_object_bucket.html) | identity | a strongly consistent object bucket |
 | [`takoform_sqlite_database`](/docs/resources/sqlite_database.html) | identity | a SQLite-semantics serverless database |
+| [`takoform_sqlite_migration_set`](/docs/resources/sqlite_migration_set.html) | revision | an immutable ordered SQL migration set |
+| [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | checksum-safe suffix application to one database |
 | [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html) | identity | at-least-once delivery with acknowledgement and retry |
 | [`takoform_queue_consumer`](/docs/resources/queue_consumer.html) | attachment | batch, retry, and dead-letter policy targeting one worker |
 

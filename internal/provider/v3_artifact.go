@@ -56,6 +56,17 @@ var workerBundleMediaTypes = model.BundleModuleMediaTypes()
 // ceiling.
 const workerBundleMaxModuleBytes = 268435456
 
+// These are the portable minimum ceilings the v1beta1 Host Support Profile
+// publishes for every artifact-backed Form.  A host may advertise a higher
+// byte ceiling, but the provider always checks the exact profile at plan time
+// before upload; the per-entry size remains bounded by the manifest schema.
+const (
+	// The public artifact-manifest schema intentionally keeps the WorkerBundle
+	// module list at 4096. File-backed bundles have their independent
+	// 16384-entry ceiling in v3_file_artifact.go.
+	workerBundleMaxModules = 4096
+)
+
 // workerBundleAttributes is the authoring surface of takoform_worker_bundle.
 // Every attribute requires replacement: a bundle is an immutable revision, and
 // different bytes are a different manifest and therefore a different bundle.
@@ -123,7 +134,7 @@ func workerBundleAttributes() map[string]schema.Attribute {
 					},
 				},
 			},
-			Validators:    []validator.List{v3ListSizeValidator{minItems: 1}},
+			Validators:    []validator.List{v3ListSizeValidator{minItems: 1, maxItems: workerBundleMaxModules}},
 			PlanModifiers: []planmodifier.List{listplanmodifier.RequiresReplace()},
 		},
 	}
@@ -251,6 +262,11 @@ func v3AuthoredBundleModules(list types.List, mainModule string) ([]v3BundleModu
 	if len(elements) == 0 {
 		diags.AddAttributeError(path.Root("modules"), "Empty bundle",
 			"Local authoring requires at least one module.")
+		return nil, diags
+	}
+	if len(elements) > workerBundleMaxModules {
+		diags.AddAttributeError(path.Root("modules"), "Too many bundle modules",
+			fmt.Sprintf("Local authoring declares %d modules; the portable ceiling is %d.", len(elements), workerBundleMaxModules))
 		return nil, diags
 	}
 	modules := make([]v3BundleModule, 0, len(elements))

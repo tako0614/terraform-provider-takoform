@@ -1,7 +1,7 @@
 package clientv3
 
 // correctness_gaps_test.go covers the small fail-closed and contract-coverage
-// gaps of the v1alpha3 client: operation-id substitution on cancel, exact
+// gaps of the v1beta1 client: operation-id substitution on cancel, exact
 // schemaDigest agreement on support profiles, host Retry-After hints that the
 // client used to silently shorten, and the upload-abandon endpoint.
 

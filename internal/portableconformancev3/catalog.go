@@ -366,7 +366,7 @@ func (catalog *Catalog) bindingContractByName(name, version string) (bindingCont
 	return contract, ok
 }
 
-// baseLifecycleCapabilities is the closed v1alpha3 capability set of a Form
+// baseLifecycleCapabilities is the closed v1beta1 capability set of a Form
 // with nothing mutable to change. It carries no refresh: the lane has no such
 // operation.
 func baseLifecycleCapabilities() []string {
@@ -380,6 +380,7 @@ func lifecycleCapabilitiesWithUpdate() []string {
 type candidateSet struct {
 	Format            string `json:"format"`
 	Family            string `json:"family"`
+	FormMaturity      string `json:"formMaturity"`
 	PackageAPIVersion string `json:"packageApiVersion"`
 	PublicationStatus string `json:"publicationStatus"`
 	AuthoringSource   string `json:"authoringSource"`
@@ -387,6 +388,7 @@ type candidateSet struct {
 	Forms             []struct {
 		Kind          string  `json:"kind"`
 		Role          string  `json:"role"`
+		ResourceType  string  `json:"resourceType"`
 		Path          string  `json:"path"`
 		FormRef       FormRef `json:"formRef"`
 		PackageDigest string  `json:"packageDigest"`
@@ -422,9 +424,12 @@ type bindingCandidateSet struct {
 func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 	catalog := newCatalog()
 	var set candidateSet
-	setPath := filepath.Join(repoRoot, "forms", "candidates", "edge", "v1alpha1", "candidate-set.json")
+	setPath := filepath.Join(repoRoot, "forms", "candidates", "edge", "v1beta1", "candidate-set.json")
 	if err := decodeStrictFile(setPath, &set); err != nil {
 		return nil, err
+	}
+	if set.FormMaturity != "experimental" {
+		return nil, fmt.Errorf("takoform: Beta family maturity is %q, want experimental", set.FormMaturity)
 	}
 	registry := currentformregistry.V3Current()
 	for _, candidate := range set.Forms {
@@ -676,6 +681,29 @@ func FallbackCatalog(contract Contract) (*Catalog, error) {
 			"required": []any{"manifestDigest"},
 			"properties": map[string]any{
 				"manifestDigest": map[string]any{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+			},
+		}},
+		{contract.RunnerInput.StaticAssetBundle, "revision", map[string]any{
+			"type": "object", "additionalProperties": false,
+			"required": []any{"manifestDigest"},
+			"properties": map[string]any{
+				"manifestDigest": map[string]any{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+			},
+		}},
+		{contract.RunnerInput.SQLiteDatabase, "identity", emptyObject},
+		{contract.RunnerInput.SQLiteMigrationSet, "revision", map[string]any{
+			"type": "object", "additionalProperties": false,
+			"required": []any{"manifestDigest"},
+			"properties": map[string]any{
+				"manifestDigest": map[string]any{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+			},
+		}},
+		{contract.RunnerInput.SQLiteMigrationApplication, "revision", map[string]any{
+			"type": "object", "additionalProperties": false,
+			"required": []any{"database", "migrationSet"},
+			"properties": map[string]any{
+				"database":     typedRef("SQLiteDatabase", exactFormTarget(contract.RunnerInput.SQLiteDatabase.Identity.FormRef)),
+				"migrationSet": typedRef("SQLiteMigrationSet", exactFormTarget(contract.RunnerInput.SQLiteMigrationSet.Identity.FormRef)),
 			},
 		}},
 		{contract.RunnerInput.WorkerVersion, "revision", map[string]any{

@@ -1203,7 +1203,7 @@ func validateResourceIdentity(kind string, resource *Resource) error {
 
 // requireCentralEpoch pins this retained provider-v2 client to the two frozen
 // central Form epochs. Namespaced family groups are valid FormRefs, but they
-// belong to the v1alpha3 client lane (decision 0013); this lane fails closed
+// belong to the v1beta1 client lane (decision 0035); this lane fails closed
 // on them exactly as it did before the family lane existed.
 func requireCentralEpoch(apiVersion string) error {
 	if apiVersion != formpackage.LegacyFormAPIVersion && apiVersion != formpackage.CurrentFormAPIVersion {

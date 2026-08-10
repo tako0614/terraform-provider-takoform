@@ -9,22 +9,26 @@ the [Edge Platform Family](edge/index.md), whose candidates are authored
 under the shape-preserving boundary of
 [decision 0008](../spec/decisions/0008-forms-preserve-service-shape.md).
 
-The retained v1alpha2 Proposal set is the nine Form-backed Resources
-implemented by Takosumi Cloud; it remains reproducible provider-v2 preview
-source. Cloud provides a real workload and first host; it does not provide
-Takoform maturity or publication authority. Each Proposal must still pass its
-own portability, prior-art, fixture, migration, security, provider, package,
-and public-readback evidence.
+The retained v1alpha2 Proposal set is the nine Form-backed Resources evaluated
+against a Takosumi-hosted preview during the v1alpha2 reset. That dated
+evaluation is provenance only: it does not establish that any hosted product
+provides or runs these Forms now, and a host never grants Takoform maturity or
+publication authority. Takoform owns every maturity decision. A Takosumi
+deployment may be one independent adopter, but Stable/1.0 promotion requires
+the independent conformance and real-consumer evidence recorded by Takoform.
+Each Proposal must still pass its own portability, prior-art, fixture,
+migration, security, provider, package, and public-readback evidence.
 
 Start another retained-line Proposal by copying `TEMPLATE.md`
 to a descriptive
 lowercase filename and adding one matching entry to
 [`../forms/lifecycle.json`](../forms/lifecycle.json) under `proposals`. Keep
-`currentForms` unchanged until an exact v1alpha2 `0.x` Form is carried by a
-v1alpha3 package and all Experimental evidence exists. Family Proposals
+the retained central-line `currentForms` registry unchanged until an exact
+central v1alpha2 `0.x` Form is carried by a v1alpha3 package and all
+Experimental evidence exists. Current Family Proposals
 instead live in per-family subdirectories such as [`edge/`](edge/) and are
 tracked by the family candidate set
-([`../forms/candidates/edge/v1alpha1/candidate-set.json`](../forms/candidates/edge/v1alpha1/candidate-set.json)),
+([`../forms/candidates/edge/v1beta1/candidate-set.json`](../forms/candidates/edge/v1beta1/candidate-set.json)),
 not [`../forms/lifecycle.json`](../forms/lifecycle.json), until an
 Experimental transition defines family lifecycle records.
 

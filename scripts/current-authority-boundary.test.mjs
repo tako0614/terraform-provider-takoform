@@ -12,8 +12,11 @@ const currentAuthoritySurfaces = [
   "README.md",
   "conformance/README.md",
   "forms/README.md",
+  "website/forms/index.md",
+  "website/public/forms/index.html",
   "release/form-packages.md",
   "spec/README.md",
+  "spec/decisions/0006-v1alpha2-restarts-form-lines.md",
   "spec/host-api/README.md",
   "cmd/provider-lifecycle-conformance/main.go",
   "internal/formcatalog/catalog.go",
@@ -49,6 +52,10 @@ test("current authority surfaces do not revive retired central admission", () =>
     "This inventory is `structural-candidate`",
     "signed admission evidence are external requirements",
     "lifecycle projection and legacy migration tooling are being implemented",
+    "Resources currently operated by" + " Takosumi Cloud",
+    "currently implemented and offered by" + " Takosumi Cloud",
+    "Takosumi Cloud implementation" + " is workload and first-host " + "evidence only",
+    "Cloud implementation provides a real consumer and first-host " + "starting point",
   ]) {
     expect(source).not.toContain(staleClaim);
   }

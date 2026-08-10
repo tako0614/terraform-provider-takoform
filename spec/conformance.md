@@ -46,7 +46,7 @@ reject a request whose exact Form identity it has not installed, and it MUST
 NOT return a Resource whose name, space, or Form identity differs from the one
 requested.
 
-A conforming **v1alpha3 host** ([`host-api/v1alpha3.md`](host-api/v1alpha3.md))
+A conforming **v1beta1 host** ([`host-api/v1beta1.md`](host-api/v1beta1.md))
 additionally MUST: issue immutable UIDs and change them across
 delete/recreate; increment `generation` only on desired-spec change and
 `revision` on any representation change, serving the quoted revision as the
@@ -102,7 +102,7 @@ appear in portable desired state.
 A **conforming provider** MUST send only declared desired state and MUST NOT
 place a credential, price, target, or backend selection in its state. On the
 retained v1alpha1 and v1alpha2 lanes it MUST carry the exact five-field
-installed Form identity on every mutation; on the v1alpha3 lane it carries
+installed Form identity on every mutation; on the v1beta1 lane it carries
 the exact four-field FormRef, with the package digest as optional audit
 evidence that never enters resource identity, queries, or fences
 ([decision 0011](decisions/0011-resource-identity-generation-and-revision.md)).

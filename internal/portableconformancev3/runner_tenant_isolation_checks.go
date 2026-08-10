@@ -14,7 +14,7 @@ package portableconformancev3
 // required rather than optional (RunEndpoint).
 //
 // The set of checks here is enumerated by SURFACE, not by intent: every
-// v1alpha3 endpoint that takes a resource name is listed in
+// v1beta1 endpoint that takes a resource name is listed in
 // nameAddressedResourceSurfaces (contract.go) beside the check that measures its
 // boundary, and three tests bind that list to the reference host's routes, to
 // the Lifecycle route block of the spec, and to requiredRunnerChecks. An
@@ -27,7 +27,7 @@ package portableconformancev3
 // construct a cross-tenant derived-rendering dependency at all, precisely because
 // relations resolve inside one tenant. Those two facts are held by host-side
 // tests in tenant_isolation_test.go, and the split is stated in
-// spec/host-api/v1alpha3.md.
+// spec/host-api/v1beta1.md.
 //
 // The refusal every ADDRESSING check expects is `resource_not_found` (404),
 // never `permission_denied` (403). A foreign tenant's resource must be

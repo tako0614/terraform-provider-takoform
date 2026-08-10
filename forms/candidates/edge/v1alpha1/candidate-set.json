@@ -14,9 +14,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "ModuleWorker",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:cea859e4a2c295dea985e0b26bbc70309d296e210b805facf4b5592e5f635616"
+        "schemaDigest": "sha256:a6ea42b2e1968a8722d23fa121cd7fef0b0f1543085e72324e15e51433a3846c"
       },
-      "packageDigest": "sha256:4041c1daf5b7ce74b8bcf507b837c9b13745e2b1bfdb1f662c33326283c3e008"
+      "packageDigest": "sha256:a9367e12d3d18528fdb82ab5e70e76d2ca0ab61891c1bd00876bef9188da7d94"
     },
     {
       "kind": "WorkerBundle",
@@ -31,6 +31,18 @@
       "packageDigest": "sha256:00f37d9f9c974eb71fded615de362d67953983b1888c14ad418d18b959c2c42c"
     },
     {
+      "kind": "StaticAssetBundle",
+      "role": "revision",
+      "path": "forms/candidates/edge/v1alpha1/static-asset-bundle",
+      "formRef": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
+        "kind": "StaticAssetBundle",
+        "definitionVersion": "0.1.0",
+        "schemaDigest": "sha256:364218ce5fadc0817eda8bfd334af95c77aa46d030a79be4c04ee4d4f203bd30"
+      },
+      "packageDigest": "sha256:9dac4c224ed1db4c567c14684bd3e7f4ee8d9ce23168aa905e160ac107b31374"
+    },
+    {
       "kind": "WorkerVersion",
       "role": "revision",
       "path": "forms/candidates/edge/v1alpha1/worker-version",
@@ -38,9 +50,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerVersion",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:5304e2c173b4fc55c72ca6926738025c45bc4c6a3b9ac175b8f592047d7011af"
+        "schemaDigest": "sha256:24eecc6289b1a244756e4d17e6a84a1066b67e0f30656d29816fe4d5c421777a"
       },
-      "packageDigest": "sha256:900740816a2c15b7cc88fd2e818cf995bd1984e101be6db3ce14f2e212278420"
+      "packageDigest": "sha256:f7e7465346abf6e4643bc41226c5f627f3c2b75d2235adc645ded8cad84285bb"
     },
     {
       "kind": "WorkerDeployment",
@@ -50,9 +62,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerDeployment",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:4472ad0d06fd81036cf8fb709febbbb94e15fd113f7dd5509de2eeda6e441d46"
+        "schemaDigest": "sha256:860d16e581fc38d8abb7a1789f611de9ae532418ff1e7fef8ef3a129736ad0f0"
       },
-      "packageDigest": "sha256:3c34512d949c68595bf811679447bea05914e762edf9ab597e81064082e5f757"
+      "packageDigest": "sha256:533c869fb27b5826576bd2744e558732dc64129cb9ce933f82bf8a7d91f79426"
     },
     {
       "kind": "WorkerCustomDomain",
@@ -62,9 +74,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerCustomDomain",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:f97338e6eea8c41f81516f653d9e8e8b6bd4a83f5c81d6216493c08fabdabee0"
+        "schemaDigest": "sha256:a3e1dfcdc3654c1e90ed1296ab90d906cccb6c743fc8279ec93ccdf4615b88d4"
       },
-      "packageDigest": "sha256:7bce62151373dd778fa288324f259b1958a66946cd570bbde1ebf259e3e40044"
+      "packageDigest": "sha256:1b680d79b7ed86607027e4bfa88c30e3248117fe0c88231882f8c25ac70bc08c"
     },
     {
       "kind": "WorkerEndpoint",
@@ -74,9 +86,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerEndpoint",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:ba7ae77f85faa46a7dbbe14651ccdb938e6f20e77216bbabd0ef450044c1c68f"
+        "schemaDigest": "sha256:dbbc38dcd68fd9613818eaf78b99c2b2d141fcef097f7815b395dbaf866f685a"
       },
-      "packageDigest": "sha256:70401c3510312d3e3f9eb485b10acf0b0d9e22f25495464882a703bbab04be8a"
+      "packageDigest": "sha256:bdda2195ef0c023e742258e329b0cdca7ab1cb7e0f3d70374c92a01c05581f09"
     },
     {
       "kind": "WorkerCronTrigger",
@@ -86,9 +98,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerCronTrigger",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:a22ae8ec7019faec684cf47f4cb32a25aa40ebbd0e8f9a7ac93c066e5044a2a4"
+        "schemaDigest": "sha256:64007356073aada83577b920afd2dedd571c996806f6239d6ac20de8c6eb2c83"
       },
-      "packageDigest": "sha256:5d6a8dd4e7458c5d66237ba931b9bebad02dbb149af88b709630d8fbca089816"
+      "packageDigest": "sha256:f25830d965b45cb98046444660bf27d78cba593a4ab3b66b30c3424dac6cf64e"
     },
     {
       "kind": "EdgeKVNamespace",
@@ -98,9 +110,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "EdgeKVNamespace",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:c24609616f36229634e82a987b98da5fc4043cbf400d8ff918e77c19c64b1d7e"
+        "schemaDigest": "sha256:6468872e66046f94d50a3ac182bedd7eb517d8f1cef709ccd57df225191bda08"
       },
-      "packageDigest": "sha256:790f567e482d49a6831f2f432270bf77b26b54a9eff1cc0e3095ccd9293291e3"
+      "packageDigest": "sha256:2be078fc3d0239745f029d03c52e0a2db203ae4c4fee5967b28058910491e7a5"
     },
     {
       "kind": "ObjectBucket",
@@ -110,9 +122,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "ObjectBucket",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:f5e064fab1432adbc8658a26962e74878fad34ec059b137002f358b4a9371f79"
+        "schemaDigest": "sha256:33a164e21c04a85a3b065c5b87978a0b6ba3d616b6caaa1f284e6a09233a5952"
       },
-      "packageDigest": "sha256:a7f1a61f6ac1710705b3fdccc9d075f6aa12ae0c37857e231797cb91f4f62ad3"
+      "packageDigest": "sha256:33cbbd22c8ad75e32f40989b6220beacb9b09a5ee9f9814812e4f6bbe2def6e9"
     },
     {
       "kind": "SQLiteDatabase",
@@ -122,9 +134,33 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "SQLiteDatabase",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:7a88cb0a831050be300b5a2e8dbab4561507affe9aad6c14c600bdf5a39887d2"
+        "schemaDigest": "sha256:e250197b8b5fc9305e47dc9b6ca521c1010bc0b5f61e36c977e2307c9972a85f"
       },
-      "packageDigest": "sha256:33ecdd1346080469d2d1f4c0a5836dd0d15877f116b355ddfeec621f13ac547a"
+      "packageDigest": "sha256:9ff6f4d0a82b56c8fad279a14c662f524416a582ea4e0b09a3f5d6db8220f92a"
+    },
+    {
+      "kind": "SQLiteMigrationSet",
+      "role": "revision",
+      "path": "forms/candidates/edge/v1alpha1/sqlite-migration-set",
+      "formRef": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
+        "kind": "SQLiteMigrationSet",
+        "definitionVersion": "0.1.0",
+        "schemaDigest": "sha256:5edd0c38db66e8b70234dee8ea405eec4354de881ae5edf844d40718732cf454"
+      },
+      "packageDigest": "sha256:8e5e08c04be4dd457b498dd9f1354d49af194b91bf2224aec36257ba332e25db"
+    },
+    {
+      "kind": "SQLiteMigrationApplication",
+      "role": "attachment",
+      "path": "forms/candidates/edge/v1alpha1/sqlite-migration-application",
+      "formRef": {
+        "apiVersion": "edge.forms.takoform.com/v1alpha1",
+        "kind": "SQLiteMigrationApplication",
+        "definitionVersion": "0.1.0",
+        "schemaDigest": "sha256:85efe28b9178abe56c9955ec42976e3ffb09b7103f2008b9c98801c74a236bbb"
+      },
+      "packageDigest": "sha256:c54a13e2a02ecbe787a7ca47a71f598f9e94e06cf989ad1fdd3f1ecd6e31d62f"
     },
     {
       "kind": "AtLeastOnceQueue",
@@ -134,9 +170,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "AtLeastOnceQueue",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:46e1a90ac043300304e3c9512242ac7e5c5f25df90e7dfebe4932f717ef4efbc"
+        "schemaDigest": "sha256:099970523cd9365600004a3346822603fcb0090968bb86d3ccc404818821c3e0"
       },
-      "packageDigest": "sha256:301130a2dacda683b7e4e8f94f88788439ee8ec12b1e69bcaa61c68af5830adf"
+      "packageDigest": "sha256:830310189bcb5bcd8d62f60c1b381117815632be5d0d8aa253a3613a8baa3613"
     },
     {
       "kind": "QueueConsumer",
@@ -146,9 +182,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "QueueConsumer",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:0be5f3315f2728d85a2744cd4c9d594c19b3784def7c8d7f5285740489a6b4ef"
+        "schemaDigest": "sha256:3fe1bea41f25f26ef43965cd8216a4aab1a800960003c23c99616c32d3b730a5"
       },
-      "packageDigest": "sha256:7c66ce59b55885294cfbe97d762a2f94bfd310f8f35740a2a99213eaed7b8e5c"
+      "packageDigest": "sha256:ee1e38d76db7b934c9f2cd2ace91aa14bcd9969549ea7ca0d2544ff71d868846"
     }
   ]
 }

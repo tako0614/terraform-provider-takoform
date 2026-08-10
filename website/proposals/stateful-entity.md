@@ -6,8 +6,8 @@ FormRef or public release identity exists yet.
 
 ## Need and boundary
 
-Takosumi Cloud runs a namespace of addressable durable entities from immutable
-application code. The candidate Form describes namespace identity,
+The candidate Form describes a namespace of addressable durable entities from
+immutable application code, including namespace identity,
 digest-bound code, a generic entrypoint, runtime and persistence capability
 requirements, non-secret configuration, connections, and an entity invocation
 Interface. Runtime implementation, storage engine, migrations, placement,

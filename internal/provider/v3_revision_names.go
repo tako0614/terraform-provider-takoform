@@ -120,13 +120,12 @@ func v3DerivedRevisionName(prefix, owner, digest string) (string, bool) {
 
 // v3ContentDigest is the content address one revision's name is derived from.
 //
-// A Worker Bundle's whole desired state is already a content address — the
-// manifest digest — so the name is derived straight from it: the same bytes
-// always produce the same bundle name, in any configuration, in any space. Every
-// other revision Form is named by the RFC 8785 canonical digest of its desired
-// spec, which is the same idea applied to a document rather than to a blob.
+// An artifact-backed revision's whole desired state is already a content
+// address — the manifest digest — so the name is derived straight from it: the
+// same manifest always produces the same revision name for one owner. Every
+// other revision Form is named by the canonical digest of its desired spec.
 func v3ContentDigest(kind string, spec map[string]any) (string, bool) {
-	if kind == workerBundleKind {
+	if v3ArtifactBackedRevision(kind) {
 		digest, ok := spec["manifestDigest"].(string)
 		return digest, ok && digest != ""
 	}
@@ -305,7 +304,7 @@ func (r *v3FormResource) v3PlannedSpec(
 		resp.Diagnostics.Append(diags...)
 		return nil, false
 	}
-	if r.form.Kind == workerBundleKind {
+	if v3ArtifactBackedRevision(r.form.Kind) {
 		digest, known := v3PlanKnownString(values.Fields["manifest_digest"])
 		if !known {
 			return nil, false

@@ -1,6 +1,6 @@
 package provider
 
-// v3_recovery_test.go covers the state-integrity properties of the v1alpha3
+// v3_recovery_test.go covers the state-integrity properties of the v1beta1
 // lane: a create the host ACCEPTED but that never completed must leave enough
 // identity behind to reconcile, dispatch must follow the FormRef recorded in
 // state rather than the current create default, and null must not pass as a
@@ -111,7 +111,7 @@ func TestV3CreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
 // group, an earlier definition version, different bytes. It is what a Form line
 // that has advanced leaves behind in existing state.
 var v3PriorModuleWorkerRef = currentformregistry.V3Ref{
-	APIVersion:        "edge.forms.takoform.com/v1alpha1",
+	APIVersion:        "edge.forms.takoform.com/v1beta1",
 	Kind:              "ModuleWorker",
 	DefinitionVersion: "0.0.9",
 	SchemaDigest:      "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",

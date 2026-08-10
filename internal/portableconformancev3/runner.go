@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	// HostRunnerReportFormat identifies the Host API v1alpha3 runner report.
+	// HostRunnerReportFormat identifies the Host API v1beta1 runner report.
 	HostRunnerReportFormat = "takoform.portable-host-runner-report@v3"
 	// ReferenceHostSelfTest classifies a local reference-host run: it proves
 	// the executable runner, never an external host.
@@ -101,7 +101,7 @@ func SelfTest(ctx context.Context, contract Contract) (HostRunnerReport, error) 
 	})
 }
 
-// RunEndpoint executes the complete black-box v1alpha3 matrix against a
+// RunEndpoint executes the complete black-box v1beta1 matrix against a
 // disposable endpoint. The endpoint must implement the runner-only probe
 // header (error, async, touch-status values) through a disposable adapter;
 // production endpoints must not implement it.

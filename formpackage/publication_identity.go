@@ -67,8 +67,8 @@ func PublicationLocatorFor(index PackageIndex, packageDigest string) (Publicatio
 
 // ParsePublicationTag recognizes the three immutable publication locator
 // profiles without interpreting any of them as Form maturity: the retained
-// v1alpha1 SemVer lane, the content-addressed central v1alpha3 lane, and the
-// content-addressed Form Family v1alpha4 lane.
+// v1alpha1 SemVer lane, the content-addressed provider-v2 v1alpha3 lane, and
+// the content-addressed Form Family v1alpha4 lane.
 //
 // The two content-addressed lanes share an artifact grammar, so the release ID
 // is what tells them apart: a family release ID decodes to "<group>/<Kind>"
@@ -135,11 +135,11 @@ func ReleaseIDForKind(kind string) string {
 
 // ReleaseIDForGroupKind is the v1alpha4 release identity: it encodes the
 // namespaced Form group (the FormRef apiVersion) together with the kind, so
-// "edge.forms.takoform.com/v1alpha1 ObjectBucket" and the frozen central
+// "edge.forms.takoform.com/v1beta1 ObjectBucket" and the frozen central
 // "ObjectBucket" own different release lines.
 //
 // The joined string contains MORE than one "/": a Form group is itself
-// "<dns-name>/<groupVersion>", so "edge.forms.takoform.com/v1alpha1" plus
+// "<dns-name>/<groupVersion>", so "edge.forms.takoform.com/v1beta1" plus
 // "ObjectBucket" joins to a value with two separators. The separator is
 // therefore not unique and never was. What makes the encoding unambiguous is
 // the Kind grammar (^[A-Z][A-Za-z0-9]{0,63}$, spec/schemas/form-ref-*.json),

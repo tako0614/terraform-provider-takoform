@@ -23,7 +23,7 @@ package portableconformancev3
 // them moves its generation — no desired spec changed.
 
 // derivedConditions renders the `status.conditions` of one resource: the ONLY
-// part of a v1alpha3 representation this host computes from resources other
+// part of a v1beta1 representation this host computes from resources other
 // than the one being rendered. Everything else renderResource emits comes from
 // the resource's own stored identity, spec, and status counters.
 //
@@ -41,6 +41,10 @@ func (h *ReferenceHost) derivedConditions(resource *storedResource) []map[string
 	// reason stays inside the closed portable vocabulary; the pointer and both
 	// uids travel in the free-form hostReason.
 	if reason, hostReason, drifted := h.relationDrift(resource); drifted {
+		ready["status"] = "False"
+		ready["reason"] = reason
+		ready["hostReason"] = hostReason
+	} else if reason, hostReason, unavailable := h.sqliteMigrationApplicationUnavailable(resource); unavailable {
 		ready["status"] = "False"
 		ready["reason"] = reason
 		ready["hostReason"] = hostReason

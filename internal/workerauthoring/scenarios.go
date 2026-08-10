@@ -661,7 +661,7 @@ func jsonTypeName(value any) string {
 	switch value.(type) {
 	case bool:
 		return "boolean"
-	// The v1alpha3 client decodes with UseNumber, so a JSON number arrives as
+	// The v1beta1 client decodes with UseNumber, so a JSON number arrives as
 	// json.Number rather than float64. Both are the same JSON type.
 	case json.Number, float64:
 		return "number"
@@ -1032,7 +1032,7 @@ func copyTree(source, destination string) error {
 	})
 }
 
-// client is a v1alpha3 client against this harness's disposable host.
+// client is a v1beta1 client against this harness's disposable host.
 func (h *harness) client(ctx context.Context) (*clientv3.Client, error) {
 	c := clientv3.NewWithOptions(h.Endpoint(), harnessToken, h.server.Client(), clientv3.Options{})
 	if _, err := c.Discover(ctx); err != nil {

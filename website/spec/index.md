@@ -10,13 +10,13 @@ is a protocol compatibility identity independent of any nested Form group.
 
 | Surface | Identity |
 | --- | --- |
-| Current Form Family | `edge.forms.takoform.com/v1alpha1` |
-| Current Host API wire | `forms.takoform.com/v1alpha3`, discovered at `/.well-known/takoform/v1alpha3` |
+| Current Form Family | `edge.forms.takoform.com/v1beta1` (15 Experimental `0.1.0` Forms) |
+| Current Host API wire | `forms.takoform.com/v1beta1`, discovered at `/.well-known/takoform/v1beta1` |
 | Current package envelope | `packages.forms.takoform.com/v1alpha4` |
 | Retained provider-v2 FormRef | `forms.takoform.com/v1alpha2`, wire discovered at `/.well-known/takoform/v1alpha2` |
 | Retained provider-v2 package envelope | `packages.forms.takoform.com/v1alpha3` |
 | Legacy FormRef | `forms.takoform.com/v1alpha1` (frozen) |
-| Provider | `v2.0.0` current published · `v1.0.3` Legacy · `v2.1.0` source candidate (not yet published) |
+| Provider | `v2.0.0` current published · `v1.0.3` Legacy · stable `v2.1.0` release target (`candidate-only` until owner publication) |
 
 The `forms.takoform.com/v1alpha2` epoch and its nine `0.1.0` candidates are
 retained provider-v2 preview source; they are not the basis for new
@@ -27,7 +27,7 @@ identity.
 
 - [Form Families](/spec/form-families.html) — namespaced Form groups and the
   Edge Platform Family
-- [Host API v1alpha3](/spec/host-api/v1alpha3.html) — uid/generation/revision
+- [Host API v1beta1](/spec/host-api/v1beta1.html) — uid/generation/revision
   identity, long-running operations, fencing
 - [Interface contracts](/spec/interface-contract/) — exact capability
   contracts a Form's service exposes
@@ -38,11 +38,11 @@ identity.
 
 ## Normative schemas
 
-Published at `forms.takoform.com/schemas/...`. Current lane:
+Published at `forms.takoform.com/schemas/...`. Current Beta identities:
 
-- [form-ref v1alpha3](/schemas/v1alpha3/form-ref.schema.json)
-- [form-definition v1alpha3](/schemas/v1alpha3/form-definition.schema.json)
-- [host-api-wire v1alpha3](/schemas/v1alpha3/host-api-wire.schema.json)
+- [form-ref v1beta1](/schemas/v1beta1/form-ref.schema.json)
+- [form-definition v1beta1](/schemas/v1beta1/form-definition.schema.json)
+- [host-api-wire v1beta1](/schemas/v1beta1/host-api-wire.schema.json)
 - [package-index v1alpha4](/schemas/v1alpha4/package-index.schema.json)
 
 Retained provider-v2 lane:
@@ -51,6 +51,9 @@ Retained provider-v2 lane:
 - [form-definition v1alpha2](/schemas/v1alpha2/form-definition.schema.json)
 - [package-index v1alpha3](/schemas/v1alpha3/package-index.schema.json)
 - [host-api-wire v1alpha2](/schemas/v1alpha2/host-api-wire.schema.json)
+
+The v1alpha3 schema identities remain immutable retained history and are never
+rewritten as Beta.
 
 ## Lifecycle
 

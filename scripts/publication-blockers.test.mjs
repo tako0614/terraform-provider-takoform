@@ -4,6 +4,7 @@ import path from "node:path";
 
 import {
   assertPublicationAllowed,
+  assertProviderReleaseCandidate,
   loadBlockerLedger,
   openBlockers,
   parseBlockerLedger,
@@ -29,19 +30,28 @@ function blocker(overrides = {}) {
 function ledger(blockers) {
   return {
     format: "takoform.publication-blockers@v1",
-    lane: "forms.takoform.com/v1alpha3",
-    family: "edge.forms.takoform.com/v1alpha1",
+    lane: "forms.takoform.com/v1beta1",
+    family: "edge.forms.takoform.com/v1beta1",
     policy: "frozen while any blocker is open",
     blockers,
   };
 }
 
 describe("the committed ledger", () => {
-  test("parses and still forbids publication", () => {
+  test("parses and still forbids Form Package/public-service publication", () => {
     const parsed = loadBlockerLedger(repositoryRoot);
     expect(parsed.blockers.length).toBeGreaterThan(0);
     expect(openBlockers(parsed).length).toBeGreaterThan(0);
-    expect(() => assertPublicationAllowed(parsed)).toThrow(/publication-frozen/);
+    expect(() => assertPublicationAllowed(parsed)).toThrow(/publication.*blocked/);
+  });
+
+  test("allows the exact provider v2.1 Beta candidate independently", () => {
+    const parsed = loadBlockerLedger(repositoryRoot);
+    expect(openBlockers(parsed).length).toBeGreaterThan(0);
+    expect(assertProviderReleaseCandidate(repositoryRoot)).toEqual({
+      formCount: 15,
+      version: "2.1.0",
+    });
   });
 
   test("names every open blocker in the refusal, so the message is actionable", () => {
@@ -194,7 +204,7 @@ describe("an issue number traces to an issue", () => {
   });
 });
 
-describe("the freeze stays scoped to this lane", () => {
+describe("the stricter package policy stays scoped", () => {
   // The shared owner gate also serves the retained packages and the append-only
   // revocation path. An urgent revocation must never wait on this lane.
   test("the release-owner gate does not assert publishability", () => {
@@ -204,7 +214,7 @@ describe("the freeze stays scoped to this lane", () => {
     expect(manifest.scripts["check:release-owner-gate"]).not.toContain("assert:publishable");
   });
 
-  test("the lane's own artifacts are what the check enforces", () => {
+  test("the unpublished package candidate is what the open-obligation check enforces", () => {
     const parsed = loadBlockerLedger(repositoryRoot);
     expect(() =>
       assertLaneStillUnpublished(repositoryRoot, parsed, openBlockers(parsed)),

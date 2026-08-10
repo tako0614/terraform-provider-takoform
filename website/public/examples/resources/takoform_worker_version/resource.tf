@@ -2,7 +2,7 @@ terraform {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # provider v2.1.0 is an unpublished source candidate; build the provider from source.
+      # stable v2.1.0 release target; descriptor remains candidate-only until owner publication.
       version = "= 2.1.0"
     }
   }
@@ -20,6 +20,12 @@ resource "takoform_worker_version" "example" {
   handlers                = ["fetch"]
   vars_json               = jsonencode({ "LOG_LEVEL" = "info" })
   required_sensitive_vars = ["API_SIGNING_TOKEN_NAME"]
+
+  assets = {
+    bundle             = "static-asset-bundle"
+    run_worker_first   = true
+    not_found_handling = "single_page_application"
+  }
 
   kv_bindings = [
     {

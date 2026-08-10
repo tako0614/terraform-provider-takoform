@@ -26,17 +26,23 @@ manifest and keeps `publicationReady=false`.
 Provider `v2.0.0` is the current published release. Provider `v1.0.3` is the
 published Legacy `v1` release. Their signed tags, immutable GitHub Releases,
 and canonical Terraform Registry listings exist.
-`release/version.json` retains `publicationStatus: candidate-only` because it
-is tag-time build metadata, not a live availability field.
 
-The Form Family lane on Host API `forms.takoform.com/v1alpha3` is carried by
-provider `v2.1.0`, which is an unpublished source candidate: no signed tag,
-GitHub Release, or Registry version exists for it, and it must be built from
-source. `release/version.json` therefore continues to describe the latest
-ASSIGNED release, `2.0.0`, until the owner's release flow assigns `2.1.0` with
-signed Registry-readback evidence through the phases below; a repository
-worktree never claims an unpublished version as released
-([decision 0013](../spec/decisions/0013-v1alpha3-lane-ships-in-provider-v2-1.md)).
+`release/version.json` now describes the stable provider release target
+`v2.1.0`, tag `v2.1.0`, carrying Host API
+`forms.takoform.com/v1beta1`. Its `publicationStatus` remains
+`candidate-only`: no source descriptor, local gate, or candidate build claims
+that the release owner has created the signed tag, GitHub Release, or Registry
+version. Those become publication facts only through the owner flow and
+readback evidence below.
+
+Provider v2.1.0 embeds exactly 15 Experimental `0.1.0` Forms in
+`edge.forms.takoform.com/v1beta1`. Their exact FormRefs and definition/package
+digests are locked independently in
+[`provider-form-identities.json`](provider-form-identities.json), even while
+the `packages.forms.takoform.com/v1alpha4` artifacts remain unpublished. Open
+package/public-service and later Stable/GA evidence obligations do not turn
+this stable provider version into a prerelease
+([decision 0035](../spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
 
 `release/provider-release-identities.json` retains the exact six-file signed
 Registry readback closure for current provider releases as canonical base64.
@@ -184,7 +190,10 @@ candidate set.
 
 Provider publication is an independent distribution action. The `v*` workflow runs
 `candidate-publication-check`, which requires `publicationStatus:
-candidate-only` and the unchanged structural inventory. Publishing that exact
+candidate-only` and the unchanged structural inventory. For v2.1.0 the owner
+gate additionally locks all 15 Terraform resource schemas, exact Beta
+FormRefs/digests, fake/reference-host v1beta1 conformance, provider state
+compatibility, and no-overwrite public identities. Publishing that exact
 binary, checksums, SBOM, provenance, and signatures does not change any Form's
 lifecycle state, install a Form Package, establish Host Support, or grant host
 activation authority. Provider SemVer has no admission-generation coupling.
