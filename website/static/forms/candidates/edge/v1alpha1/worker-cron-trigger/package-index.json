@@ -5,7 +5,7 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "WorkerCronTrigger",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:a22ae8ec7019faec684cf47f4cb32a25aa40ebbd0e8f9a7ac93c066e5044a2a4"
+    "schemaDigest": "sha256:64007356073aada83577b920afd2dedd571c996806f6239d6ac20de8c6eb2c83"
   },
   "definitionPath": "definition.json",
   "files": [
@@ -13,7 +13,7 @@
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
       "size": 6161,
-      "digest": "sha256:3c6a543b0c2283dc5e952c3768a8d8973f9b05abc337bd3138ccbbe94e32edb1"
+      "digest": "sha256:37954fa5b69c5fe91b856b648f43916f3c1fbb1babf7c8eb0fdcc249e8a7abc7"
     },
     {
       "path": "fixtures/desired.json",

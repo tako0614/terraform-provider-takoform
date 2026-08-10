@@ -143,7 +143,7 @@ const (
 	// kvMaxValueBytes bounds the DECODED length of one edge.kv value.
 	kvMaxValueBytes = 26214400
 	// queueMaxMessageBytes bounds the DECODED length of one queue message body.
-	queueMaxMessageBytes = 131072
+	queueMaxMessageBytes = 127000
 	// objectsMaxObjectBytes is the largest object, reachable only through a
 	// multipart upload.
 	objectsMaxObjectBytes = 5368709120
@@ -1532,7 +1532,7 @@ func workerRuntimeInterface() InterfaceDefinition {
 		Limits: map[string]int64{
 			"maxRequestBytes":        104857600,
 			"maxQueueBatchMessages":  100,
-			"maxQueueMessageBytes":   131072,
+			"maxQueueMessageBytes":   queueMaxMessageBytes,
 			"maxEnvironmentEntries":  256,
 			"maxWaitUntilTasks":      32,
 			"maxModulesPerBundleSet": 512,

@@ -21,7 +21,7 @@
     {
       "name": "module-worker.queue-producer",
       "version": "1.0.0",
-      "schemaDigest": "sha256:dc9a083b54ae48180398590859da855dc1a4bdc1bf8312ed41e24394b2cdf49b"
+      "schemaDigest": "sha256:0e5e3083ad0b1c27c79d84a305a8e2f4e1c47441b8849317be052bca7fc024df"
     },
     {
       "name": "module-worker.service",

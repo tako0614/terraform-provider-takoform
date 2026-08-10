@@ -121,6 +121,9 @@ func TestEdgeKVFixturesDoNotRequireConvergence(t *testing.T) {
 // declared byte limit rather than measuring string length against a byte count.
 func TestByteCarryingContractsShareOneEncodedShape(t *testing.T) {
 	t.Parallel()
+	if queueMaxMessageBytes != 127000 {
+		t.Fatalf("queueMaxMessageBytes = %d, want the Cloudflare portable minimum 127000", queueMaxMessageBytes)
+	}
 	for _, testCase := range []struct {
 		contract string
 		limit    string
@@ -147,6 +150,142 @@ func TestByteCarryingContractsShareOneEncodedShape(t *testing.T) {
 		if len(values) != 1 || values[0] != "base64" {
 			t.Fatalf("%s encoding enum is %v", testCase.contract, values)
 		}
+	}
+}
+
+func TestQueueMessageLimitCoversThePooledRuntimeEnvelope(t *testing.T) {
+	t.Parallel()
+	const want = int64(127000)
+
+	for _, testCase := range []struct {
+		contract string
+		limit    string
+	}{
+		{contract: "edge.queue", limit: "maxMessageBytes"},
+		{contract: WorkerRuntimeInterfaceName, limit: "maxQueueMessageBytes"},
+	} {
+		definition, err := interfaceDefinitionByName(testCase.contract)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := definition.Limits[testCase.limit]; got != want {
+			t.Fatalf("%s %s = %d, want %d", testCase.contract, testCase.limit, got, want)
+		}
+	}
+
+	queue, err := interfaceDefinitionByName("edge.queue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range queue.Operations {
+		var body map[string]any
+		properties, _ := operation.InputSchema["properties"].(map[string]any)
+		switch operation.Name {
+		case "send":
+			body, _ = properties["body"].(map[string]any)
+		case "sendBatch":
+			messages, _ := properties["messages"].(map[string]any)
+			items, _ := messages["items"].(map[string]any)
+			itemProperties, _ := items["properties"].(map[string]any)
+			body, _ = itemProperties["body"].(map[string]any)
+		default:
+			continue
+		}
+		if got := encodedBodyMaxLength(body); got != base64Length(int(want)) {
+			t.Fatalf("edge.queue %s body maxLength = %d, want %d", operation.Name, got, base64Length(int(want)))
+		}
+	}
+
+	for _, testCase := range []struct {
+		name  string
+		limit string
+	}{
+		{name: "edge.queue", limit: "maxMessageBytes"},
+		{name: WorkerRuntimeInterfaceName, limit: "maxQueueMessageBytes"},
+	} {
+		raw, err := os.ReadFile(filepath.Join(
+			"..", "..", "interfaces", "candidates", "v1alpha1", testCase.name, "definition.json",
+		))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var candidate struct {
+			Limits     map[string]int64 `json:"limits"`
+			Operations []struct {
+				Name        string         `json:"name"`
+				InputSchema map[string]any `json:"inputSchema"`
+			} `json:"operations"`
+		}
+		if err := json.Unmarshal(raw, &candidate); err != nil {
+			t.Fatal(err)
+		}
+		if got := candidate.Limits[testCase.limit]; got != want {
+			t.Fatalf("generated %s %s = %d, want %d", testCase.name, testCase.limit, got, want)
+		}
+		checked := 0
+		for _, operation := range candidate.Operations {
+			var body map[string]any
+			properties, _ := operation.InputSchema["properties"].(map[string]any)
+			switch {
+			case testCase.name == "edge.queue" && operation.Name == "send":
+				body, _ = properties["body"].(map[string]any)
+			case testCase.name == "edge.queue" && operation.Name == "sendBatch":
+				messages, _ := properties["messages"].(map[string]any)
+				items, _ := messages["items"].(map[string]any)
+				itemProperties, _ := items["properties"].(map[string]any)
+				body, _ = itemProperties["body"].(map[string]any)
+			case testCase.name == WorkerRuntimeInterfaceName && operation.Name == "queue":
+				messages, _ := properties["messages"].(map[string]any)
+				items, _ := messages["items"].(map[string]any)
+				itemProperties, _ := items["properties"].(map[string]any)
+				body, _ = itemProperties["body"].(map[string]any)
+			default:
+				continue
+			}
+			if got := encodedBodyMaxLength(body); got != base64Length(int(want)) {
+				t.Fatalf("generated %s %s body maxLength = %d, want %d", testCase.name, operation.Name, got, base64Length(int(want)))
+			}
+			checked++
+		}
+		wantChecked := 1
+		if testCase.name == "edge.queue" {
+			wantChecked = 2
+		}
+		if checked != wantChecked {
+			t.Fatalf("generated %s checked %d binary body schemas, want %d", testCase.name, checked, wantChecked)
+		}
+	}
+
+	runtime, err := interfaceDefinitionByName(WorkerRuntimeInterfaceName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range runtime.Operations {
+		if operation.Name != "queue" {
+			continue
+		}
+		properties, _ := operation.InputSchema["properties"].(map[string]any)
+		messages, _ := properties["messages"].(map[string]any)
+		items, _ := messages["items"].(map[string]any)
+		itemProperties, _ := items["properties"].(map[string]any)
+		if got := encodedBodyMaxLength(itemProperties["body"].(map[string]any)); got != base64Length(int(want)) {
+			t.Fatalf("worker.runtime queue body maxLength = %d, want %d", got, base64Length(int(want)))
+		}
+		return
+	}
+	t.Fatal("worker.runtime has no queue operation")
+}
+
+func encodedBodyMaxLength(schema map[string]any) int {
+	properties, _ := schema["properties"].(map[string]any)
+	data, _ := properties["data"].(map[string]any)
+	switch maxLength := data["maxLength"].(type) {
+	case int:
+		return maxLength
+	case float64:
+		return int(maxLength)
+	default:
+		return 0
 	}
 }
 
