@@ -153,6 +153,11 @@ const (
 	objectsMaxSinglePutBytes = 314572800
 	// objectsMaxMultipartParts bounds the parts of one multipart upload.
 	objectsMaxMultipartParts = 10000
+	// sqlMaxColumnsPerRow is the portable minimum shared by the SQL limit and
+	// the structural ceiling on each returned row. SQLite-backed Cloudflare
+	// substrates cap tables at 100 columns, so a higher candidate minimum
+	// would admit a contract a conforming host cannot serve.
+	sqlMaxColumnsPerRow = 100
 )
 
 // base64Value builds one encoded-bytes fixture value from its base64 text.
@@ -278,7 +283,7 @@ func sqlRows() map[string]any {
 		"maxItems": 10000,
 		"items": map[string]any{
 			"type":                 "object",
-			"maxProperties":        256,
+			"maxProperties":        sqlMaxColumnsPerRow,
 			"propertyNames":        map[string]any{"type": "string", "maxLength": 128},
 			"additionalProperties": sqlValue(),
 		},
@@ -922,7 +927,7 @@ func edgeSQLInterface() InterfaceDefinition {
 		Limits: map[string]int64{
 			"maxStatementBytes": 100000, "maxBoundParameters": 100,
 			"maxStatementsPerTransaction": 100, "maxRowsPerStatement": 10000,
-			"maxColumnsPerRow": 256,
+			"maxColumnsPerRow": sqlMaxColumnsPerRow,
 		},
 		Operations: []InterfaceOperation{
 			{

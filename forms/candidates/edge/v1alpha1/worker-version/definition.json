@@ -559,7 +559,7 @@
               "x-takoform-required-interface": {
                 "apiVersion": "interfaces.takoform.com/v1alpha1",
                 "name": "edge.sql",
-                "schemaDigest": "sha256:cd33793132cd91c20cdbe782db500e86fa7a8ad2e2281b95116337d697dcac1b",
+                "schemaDigest": "sha256:a1dcc648fb5f9f35e181cab455bbe373810876e322b1bd39ea470e4f11e05b27",
                 "version": "1.0.0"
               }
             }
@@ -667,7 +667,7 @@
       "apiVersion": "bindings.takoform.com/v1alpha1",
       "name": "module-worker.sqlite",
       "version": "1.0.0",
-      "schemaDigest": "sha256:acebb655c739466aac6db0d34afa15e26709857f4060aec8a256e4bfef682c71"
+      "schemaDigest": "sha256:38ca2453b139e5b1e66aca69de86b17026c626cf7d5a6dff9e853f0b560426a6"
     },
     {
       "apiVersion": "bindings.takoform.com/v1alpha1",

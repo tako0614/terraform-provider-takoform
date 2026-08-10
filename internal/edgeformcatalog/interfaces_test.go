@@ -1,6 +1,9 @@
 package edgeformcatalog
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -179,5 +182,62 @@ func TestSQLValuesCarryEveryStorageClass(t *testing.T) {
 	integer, _ := sqlDecimalInteger()["type"].(string)
 	if integer != "string" {
 		t.Fatalf("a 64-bit INTEGER travels as %q; a JSON number cannot carry 9223372036854775807", integer)
+	}
+}
+
+func TestSQLColumnLimitIsThePortableCandidateMinimum(t *testing.T) {
+	t.Parallel()
+	const want = int64(100)
+
+	definition, err := interfaceDefinitionByName("edge.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := definition.Limits["maxColumnsPerRow"]; got != want {
+		t.Fatalf("edge.sql maxColumnsPerRow = %d, want %d", got, want)
+	}
+	rows := sqlRows()
+	items, ok := rows["items"].(map[string]any)
+	if !ok {
+		t.Fatal("edge.sql rows schema has no item object")
+	}
+	if got, ok := items["maxProperties"].(int); !ok || int64(got) != want {
+		t.Fatalf("edge.sql row maxProperties = %v, want %d", items["maxProperties"], want)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(
+		"..", "..", "interfaces", "candidates", "v1alpha1", "edge.sql", "definition.json",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var candidate struct {
+		Limits     map[string]int64 `json:"limits"`
+		Operations []struct {
+			OutputSchema map[string]any `json:"outputSchema"`
+		} `json:"operations"`
+	}
+	if err := json.Unmarshal(raw, &candidate); err != nil {
+		t.Fatal(err)
+	}
+	if got := candidate.Limits["maxColumnsPerRow"]; got != want {
+		t.Fatalf("generated edge.sql maxColumnsPerRow = %d, want %d", got, want)
+	}
+	checked := 0
+	for _, operation := range candidate.Operations {
+		properties, _ := operation.OutputSchema["properties"].(map[string]any)
+		rowsSchema, ok := properties["rows"].(map[string]any)
+		if !ok {
+			continue
+		}
+		rowItems, _ := rowsSchema["items"].(map[string]any)
+		got, ok := rowItems["maxProperties"].(float64)
+		if !ok || int64(got) != want {
+			t.Fatalf("generated edge.sql operation row maxProperties = %v, want %d", rowItems["maxProperties"], want)
+		}
+		checked++
+	}
+	if checked != 2 {
+		t.Fatalf("generated edge.sql checked %d direct row result schemas, want 2", checked)
 	}
 }

@@ -239,7 +239,7 @@
                 ],
                 "type": "object"
               },
-              "maxProperties": 256,
+              "maxProperties": 100,
               "propertyNames": {
                 "maxLength": 128,
                 "type": "string"
@@ -499,7 +499,7 @@
                 ],
                 "type": "object"
               },
-              "maxProperties": 256,
+              "maxProperties": 100,
               "propertyNames": {
                 "maxLength": 128,
                 "type": "string"
@@ -778,7 +778,7 @@
                       ],
                       "type": "object"
                     },
-                    "maxProperties": 256,
+                    "maxProperties": 100,
                     "propertyNames": {
                       "maxLength": 128,
                       "type": "string"
@@ -820,7 +820,7 @@
   },
   "limits": {
     "maxBoundParameters": 100,
-    "maxColumnsPerRow": 256,
+    "maxColumnsPerRow": 100,
     "maxRowsPerStatement": 10000,
     "maxStatementBytes": 100000,
     "maxStatementsPerTransaction": 100

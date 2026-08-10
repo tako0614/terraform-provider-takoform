@@ -5,7 +5,7 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "SQLiteMigrationApplication",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:c6f357a9ecb2be54a6a5def1fcb9d8c75779c19b452cb715105117fed46d9a64"
+    "schemaDigest": "sha256:9153c327c497ca89665c592c966bb5c708df4e4b5c350f0590d2ad84dba282f1"
   },
   "definitionPath": "definition.json",
   "files": [
@@ -13,7 +13,7 @@
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
       "size": 5424,
-      "digest": "sha256:66a514dbededb9b42107d51dca1026e0e78f1cd284902b6998ce9f09c1eb11cd"
+      "digest": "sha256:198fa75d682c81b4b7b93a7ac6a44e110f982d324c81631d9b6051346890c147"
     },
     {
       "path": "fixtures/desired.json",

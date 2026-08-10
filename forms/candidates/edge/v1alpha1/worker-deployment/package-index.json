@@ -5,7 +5,7 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "WorkerDeployment",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:7ec66dbb40f9982efc4c7e24a1e312bbf17a73a7b1f1e243fb01f3ff0c91955c"
+    "schemaDigest": "sha256:fd7397b516dc91061367f3a1550ceb3f92ec1541ca6424873729849a0a8bbb6a"
   },
   "definitionPath": "definition.json",
   "files": [
@@ -13,7 +13,7 @@
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
       "size": 5213,
-      "digest": "sha256:3e8f71c72c241f7a6a23939e39b57a35659b90fbd7f65fab96f9dbdf3b930db9"
+      "digest": "sha256:8d6c2cf573b6b344c1c68c7dfaa2e795aa821497dd6e6b32f516616a5e0e87fe"
     },
     {
       "path": "fixtures/desired.json",
