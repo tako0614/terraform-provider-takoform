@@ -4,7 +4,7 @@
   "name": "edge.kv",
   "version": "1.0.0",
   "title": "Edge key/value namespace",
-  "description": "Globally replicated key/value storage of OPAQUE BYTES with eventual consistency. A value is a byte string, never text: it travels in the family's encoded-bytes shape {\"encoding\": \"base64\", \"data\": \"…\"}, where data is RFC 4648 section 4 base64 with padding and without line breaks. maxValueBytes bounds the DECODED length; the maxLength on data is the structural ceiling of that encoding and is not the limit. A put whose decoded value exceeds maxValueBytes fails with value_too_large, and one whose data is not decodable base64 fails with invalid_value. A key is a UTF-8 string and maxKeyBytes bounds its UTF-8 ENCODED length, so a key of 512 astral characters is 2048 bytes and fails with invalid_key even though it is 512 code points. Metadata is a text map, never bytes and never secret; maxMetadataBytes bounds the UTF-8 encoding of its canonical JSON and exceeding it fails with metadata_too_large. Consistency is eventual, and that is this contract's identity rather than an option a host chooses. A read is served by whichever replica is nearest, so a read that follows a write MAY return the previous value, or not_found, until replication converges — including a read the same client issues immediately after its own write, on the same connection, from the same location. This contract states NO read-your-writes guarantee, no session in which one would hold, and no bound on convergence time; a host states its own convergence target in its Host Support Profile. Deleting an absent key succeeds, and a delete converges the same way, so a get after a resolved delete may still return the deleted value. The behavior fixtures below are exactly what one client can prove about such a store: each runs against a fresh scope and asserts only facts that no write has to converge for. That a write eventually becomes visible everywhere is a HOST OBLIGATION rather than a proven property; the split is written down in the Host API specification.",
+  "description": "Globally replicated key/value storage of OPAQUE BYTES with eventual consistency. A value is a byte string, never text: it travels in the family's encoded-bytes shape {\"encoding\": \"base64\", \"data\": \"…\"}, where data is RFC 4648 section 4 base64 with padding and without line breaks. maxValueBytes bounds the DECODED length; the maxLength on data is the structural ceiling of that encoding and is not the limit. A put whose decoded value exceeds maxValueBytes fails with value_too_large, and one whose data is not decodable base64 fails with invalid_value. A key is a UTF-8 string and maxKeyBytes bounds its UTF-8 ENCODED length, so a key of 467 astral characters is 1868 bytes and fails with invalid_key even though it is 467 code points. Metadata is a text map, never bytes and never secret; maxMetadataBytes bounds the UTF-8 encoding of its canonical JSON and exceeding it fails with metadata_too_large. Consistency is eventual, and that is this contract's identity rather than an option a host chooses. A read is served by whichever replica is nearest, so a read that follows a write MAY return the previous value, or not_found, until replication converges — including a read the same client issues immediately after its own write, on the same connection, from the same location. This contract states NO read-your-writes guarantee, no session in which one would hold, and no bound on convergence time; a host states its own convergence target in its Host Support Profile. Deleting an absent key succeeds, and a delete converges the same way, so a get after a resolved delete may still return the deleted value. The behavior fixtures below are exactly what one client can prove about such a store: each runs against a fresh scope and asserts only facts that no write has to converge for. That a write eventually becomes visible everywhere is a HOST OBLIGATION rather than a proven property; the split is written down in the Host API specification.",
   "operations": [
     {
       "name": "get",
@@ -14,7 +14,7 @@
         "additionalProperties": false,
         "properties": {
           "key": {
-            "maxLength": 512,
+            "maxLength": 467,
             "minLength": 1,
             "type": "string"
           }
@@ -69,7 +69,7 @@
         "additionalProperties": false,
         "properties": {
           "key": {
-            "maxLength": 512,
+            "maxLength": 467,
             "minLength": 1,
             "type": "string"
           }
@@ -141,7 +141,7 @@
             "type": "integer"
           },
           "key": {
-            "maxLength": 512,
+            "maxLength": 467,
             "minLength": 1,
             "type": "string"
           },
@@ -206,7 +206,7 @@
         "additionalProperties": false,
         "properties": {
           "key": {
-            "maxLength": 512,
+            "maxLength": 467,
             "minLength": 1,
             "type": "string"
           }
@@ -246,7 +246,7 @@
             "type": "integer"
           },
           "prefix": {
-            "maxLength": 512,
+            "maxLength": 467,
             "type": "string"
           }
         },
@@ -266,7 +266,7 @@
               "additionalProperties": false,
               "properties": {
                 "name": {
-                  "maxLength": 512,
+                  "maxLength": 467,
                   "minLength": 1,
                   "type": "string"
                 }
@@ -301,7 +301,7 @@
     "pagination": "cursor"
   },
   "limits": {
-    "maxKeyBytes": 512,
+    "maxKeyBytes": 467,
     "maxListPageKeys": 1000,
     "maxMetadataBytes": 1024,
     "maxValueBytes": 26214400

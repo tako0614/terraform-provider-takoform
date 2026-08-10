@@ -276,6 +276,106 @@ func TestQueueMessageLimitCoversThePooledRuntimeEnvelope(t *testing.T) {
 	t.Fatal("worker.runtime has no queue operation")
 }
 
+func TestPooledKeyBudgetsReserveTheCloudflareEnvelope(t *testing.T) {
+	t.Parallel()
+	const pooledPrefixBytes = 45
+	if kvMaxKeyBytes != 512-pooledPrefixBytes {
+		t.Fatalf("kvMaxKeyBytes = %d, want %d", kvMaxKeyBytes, 512-pooledPrefixBytes)
+	}
+	if objectsMaxKeyBytes != 1024-pooledPrefixBytes {
+		t.Fatalf("objectsMaxKeyBytes = %d, want %d", objectsMaxKeyBytes, 1024-pooledPrefixBytes)
+	}
+
+	for _, testCase := range []struct {
+		contract string
+		limit    string
+		want     int
+	}{
+		{contract: "edge.kv", limit: "maxKeyBytes", want: kvMaxKeyBytes},
+		{contract: "edge.objects", limit: "maxKeyBytes", want: objectsMaxKeyBytes},
+	} {
+		definition, err := interfaceDefinitionByName(testCase.contract)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := definition.Limits[testCase.limit]; got != int64(testCase.want) {
+			t.Fatalf("%s %s = %d, want %d", testCase.contract, testCase.limit, got, testCase.want)
+		}
+		checked := 0
+		for _, operation := range definition.Operations {
+			checked += assertKeySchemaBudget(t, operation.InputSchema, testCase.contract, operation.Name, testCase.want)
+		}
+		if checked == 0 {
+			t.Fatalf("%s has no key schema to check", testCase.contract)
+		}
+
+		raw, err := os.ReadFile(filepath.Join(
+			"..", "..", "interfaces", "candidates", "v1alpha1", testCase.contract, "definition.json",
+		))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var candidate struct {
+			Limits     map[string]int64 `json:"limits"`
+			Operations []struct {
+				Name        string         `json:"name"`
+				InputSchema map[string]any `json:"inputSchema"`
+			} `json:"operations"`
+		}
+		if err := json.Unmarshal(raw, &candidate); err != nil {
+			t.Fatal(err)
+		}
+		if got := candidate.Limits[testCase.limit]; got != int64(testCase.want) {
+			t.Fatalf("generated %s %s = %d, want %d", testCase.contract, testCase.limit, got, testCase.want)
+		}
+		generatedChecked := 0
+		for _, operation := range candidate.Operations {
+			generatedChecked += assertKeySchemaBudget(t, operation.InputSchema, testCase.contract, operation.Name, testCase.want)
+		}
+		if generatedChecked != checked {
+			t.Fatalf("generated %s checked %d key schemas, want %d", testCase.contract, generatedChecked, checked)
+		}
+	}
+}
+
+func assertKeySchemaBudget(t *testing.T, schema map[string]any, contract, operation string, want int) int {
+	t.Helper()
+	properties, _ := schema["properties"].(map[string]any)
+	checked := 0
+	for _, propertyName := range []string{"key", "prefix"} {
+		if raw, ok := properties[propertyName].(map[string]any); ok {
+			maxLength, ok := raw["maxLength"]
+			if !ok {
+				t.Fatalf("%s %s %s schema has no maxLength", contract, operation, propertyName)
+			}
+			var got int
+			switch value := maxLength.(type) {
+			case int:
+				got = value
+			case float64:
+				got = int(value)
+			default:
+				t.Fatalf("%s %s %s schema maxLength has type %T", contract, operation, propertyName, maxLength)
+			}
+			if got != want {
+				t.Fatalf("%s %s %s maxLength = %d, want %d", contract, operation, propertyName, got, want)
+			}
+			checked++
+		}
+	}
+	for _, raw := range properties {
+		child, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		checked += assertKeySchemaBudget(t, child, contract, operation, want)
+	}
+	if items, ok := schema["items"].(map[string]any); ok {
+		checked += assertKeySchemaBudget(t, items, contract, operation, want)
+	}
+	return checked
+}
+
 func encodedBodyMaxLength(schema map[string]any) int {
 	properties, _ := schema["properties"].(map[string]any)
 	data, _ := properties["data"].(map[string]any)

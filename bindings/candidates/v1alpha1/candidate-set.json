@@ -6,12 +6,12 @@
     {
       "name": "module-worker.edge-kv",
       "version": "1.0.0",
-      "schemaDigest": "sha256:cd5d49047209769f5aaeb6a0ccfb0840b6050147f477920cae59c798a0935c85"
+      "schemaDigest": "sha256:4b2c03f70d01c8e48308e781187772e7789f2ca2bc23757de54cb80cefec8863"
     },
     {
       "name": "module-worker.object-bucket",
       "version": "1.0.0",
-      "schemaDigest": "sha256:e9d54e1d5d496700cc369b46a91f7255ddb3821cc704100e851a7787a8e85956"
+      "schemaDigest": "sha256:c4b7e6d9a4f8109ac261d7a743b7a0be96e296e1f27d43d6b4b8897c8f6796be"
     },
     {
       "name": "module-worker.sqlite",

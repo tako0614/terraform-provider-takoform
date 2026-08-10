@@ -140,10 +140,19 @@ func closedStringMap(maxProperties int) map[string]any {
 // bound inside an operation schema and the declared `limits` entry — and a
 // literal repeated in both is a literal that eventually stops matching.
 const (
+	// kvMaxKeyBytes is the portion of Cloudflare KV's 512-byte key ceiling
+	// available to the user after the pooled runtime envelope reserves 45
+	// bytes. The candidate's maxLength and declared limit use this same
+	// UTF-8-byte budget.
+	kvMaxKeyBytes = 467
 	// kvMaxValueBytes bounds the DECODED length of one edge.kv value.
 	kvMaxValueBytes = 26214400
 	// queueMaxMessageBytes bounds the DECODED length of one queue message body.
 	queueMaxMessageBytes = 127000
+	// objectsMaxKeyBytes is the portion of the pooled object-key budget after
+	// its 45-byte runtime envelope is reserved from the 1024-byte substrate
+	// ceiling.
+	objectsMaxKeyBytes = 979
 	// objectsMaxObjectBytes is the largest object, reachable only through a
 	// multipart upload.
 	objectsMaxObjectBytes = 5368709120
@@ -419,7 +428,7 @@ func runtimeMediaTypesOf(property string) ([]string, error) {
 // encoded-bytes shape, and the fixtures assert only what one client can observe
 // without waiting for convergence.
 func edgeKVInterface() InterfaceDefinition {
-	key := stringSchema(1, 512)
+	key := stringSchema(1, kvMaxKeyBytes)
 	metadata := closedStringMap(64)
 	value := encodedBytes(kvMaxValueBytes)
 	return InterfaceDefinition{
@@ -433,7 +442,7 @@ func edgeKVInterface() InterfaceDefinition {
 			"structural ceiling of that encoding and is not the limit. A put whose decoded value exceeds " +
 			"maxValueBytes fails with value_too_large, and one whose data is not decodable base64 fails with " +
 			"invalid_value. A key is a UTF-8 string and maxKeyBytes bounds its UTF-8 ENCODED length, so a key " +
-			"of 512 astral characters is 2048 bytes and fails with invalid_key even though it is 512 code " +
+			"of 467 astral characters is 1868 bytes and fails with invalid_key even though it is 467 code " +
 			"points. Metadata is a text map, never bytes and never secret; maxMetadataBytes bounds the UTF-8 " +
 			"encoding of its canonical JSON and exceeding it fails with metadata_too_large. " +
 			"Consistency is eventual, and that is this contract's identity rather than an option a host " +
@@ -450,7 +459,7 @@ func edgeKVInterface() InterfaceDefinition {
 			"split is written down in the Host API specification.",
 		Semantics: InterfaceSemantics{Consistency: "eventual", Pagination: "cursor"},
 		Limits: map[string]int64{
-			"maxKeyBytes": 512, "maxValueBytes": kvMaxValueBytes,
+			"maxKeyBytes": kvMaxKeyBytes, "maxValueBytes": kvMaxValueBytes,
 			"maxMetadataBytes": 1024, "maxListPageKeys": 1000,
 		},
 		Operations: []InterfaceOperation{
@@ -517,7 +526,7 @@ func edgeKVInterface() InterfaceDefinition {
 					"eventually consistent like every other read: a key written moments ago may be missing from it, and a " +
 					"key deleted moments ago may still appear.",
 				InputSchema: operationObject(nil, map[string]any{
-					"prefix": stringSchema(0, 512),
+					"prefix": stringSchema(0, kvMaxKeyBytes),
 					"cursor": stringSchema(1, 4096),
 					"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
 				}),
@@ -582,7 +591,7 @@ func edgeKVInterface() InterfaceDefinition {
 // operations, with bodies STREAMING beside the operation document rather than
 // inside it.
 func edgeObjectsInterface() InterfaceDefinition {
-	key := stringSchema(1, 1024)
+	key := stringSchema(1, objectsMaxKeyBytes)
 	etag := stringSchema(1, 256)
 	contentType := stringSchema(1, 256)
 	size := map[string]any{"type": "integer", "minimum": 0, "maximum": objectsMaxObjectBytes}
@@ -624,7 +633,7 @@ func edgeObjectsInterface() InterfaceDefinition {
 			"during the trace; multipart assembly is a HOST OBLIGATION stated in the Host API specification.",
 		Semantics: InterfaceSemantics{Consistency: "read_after_write", Pagination: "cursor"},
 		Limits: map[string]int64{
-			"maxKeyBytes": 1024, "maxObjectBytes": objectsMaxObjectBytes,
+			"maxKeyBytes": objectsMaxKeyBytes, "maxObjectBytes": objectsMaxObjectBytes,
 			"maxSinglePutBytes": objectsMaxSinglePutBytes, "maxMultipartParts": objectsMaxMultipartParts,
 			"maxListPageObjects": 1000,
 		},
@@ -712,7 +721,7 @@ func edgeObjectsInterface() InterfaceDefinition {
 					"delimiter rolls every key whose remainder after the prefix contains it up into prefixes, and those keys " +
 					"are then absent from objects. The listing observes every put and delete that has already resolved.",
 				InputSchema: operationObject(nil, map[string]any{
-					"prefix":    stringSchema(0, 1024),
+					"prefix":    stringSchema(0, objectsMaxKeyBytes),
 					"delimiter": stringSchema(1, 16),
 					"cursor":    stringSchema(1, 4096),
 					"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
@@ -727,7 +736,7 @@ func edgeObjectsInterface() InterfaceDefinition {
 					},
 					"prefixes": map[string]any{
 						"type": "array", "maxItems": 1000, "uniqueItems": true,
-						"items": stringSchema(1, 1024),
+						"items": stringSchema(1, objectsMaxKeyBytes),
 					},
 					"truncated": map[string]any{"type": "boolean"},
 					"cursor":    stringSchema(1, 4096),

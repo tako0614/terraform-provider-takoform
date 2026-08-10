@@ -5,7 +5,7 @@
     "apiVersion": "edge.forms.takoform.com/v1alpha1",
     "kind": "EdgeKVNamespace",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:c24609616f36229634e82a987b98da5fc4043cbf400d8ff918e77c19c64b1d7e"
+    "schemaDigest": "sha256:6468872e66046f94d50a3ac182bedd7eb517d8f1cef709ccd57df225191bda08"
   },
   "definitionPath": "definition.json",
   "files": [
@@ -13,7 +13,7 @@
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
       "size": 2126,
-      "digest": "sha256:9273b03532c741e497458492f8c1bbe3c30e120d721431dddc1bb012c3d78b91"
+      "digest": "sha256:e3b362466d03e24e38830fa56adcda78dd0a30299e8125cf10b603a978dd4ab2"
     },
     {
       "path": "fixtures/desired.json",

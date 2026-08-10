@@ -14,7 +14,7 @@
         "additionalProperties": false,
         "properties": {
           "key": {
-            "maxLength": 1024,
+            "maxLength": 979,
             "minLength": 1,
             "type": "string"
           }
@@ -79,7 +79,7 @@
             "type": "string"
           },
           "key": {
-            "maxLength": 1024,
+            "maxLength": 979,
             "minLength": 1,
             "type": "string"
           },
@@ -202,7 +202,7 @@
             "type": "string"
           },
           "key": {
-            "maxLength": 1024,
+            "maxLength": 979,
             "minLength": 1,
             "type": "string"
           }
@@ -251,7 +251,7 @@
         "additionalProperties": false,
         "properties": {
           "key": {
-            "maxLength": 1024,
+            "maxLength": 979,
             "minLength": 1,
             "type": "string"
           }
@@ -296,7 +296,7 @@
             "type": "integer"
           },
           "prefix": {
-            "maxLength": 1024,
+            "maxLength": 979,
             "type": "string"
           }
         },
@@ -321,7 +321,7 @@
                   "type": "string"
                 },
                 "key": {
-                  "maxLength": 1024,
+                  "maxLength": 979,
                   "minLength": 1,
                   "type": "string"
                 },
@@ -347,7 +347,7 @@
           },
           "prefixes": {
             "items": {
-              "maxLength": 1024,
+              "maxLength": 979,
               "minLength": 1,
               "type": "string"
             },
@@ -384,7 +384,7 @@
             "type": "string"
           },
           "key": {
-            "maxLength": 1024,
+            "maxLength": 979,
             "minLength": 1,
             "type": "string"
           }
@@ -430,7 +430,7 @@
             "type": "integer"
           },
           "key": {
-            "maxLength": 1024,
+            "maxLength": 979,
             "minLength": 1,
             "type": "string"
           },
@@ -492,7 +492,7 @@
         "additionalProperties": false,
         "properties": {
           "key": {
-            "maxLength": 1024,
+            "maxLength": 979,
             "minLength": 1,
             "type": "string"
           },
@@ -572,7 +572,7 @@
         "additionalProperties": false,
         "properties": {
           "key": {
-            "maxLength": 1024,
+            "maxLength": 979,
             "minLength": 1,
             "type": "string"
           },
@@ -606,7 +606,7 @@
     "pagination": "cursor"
   },
   "limits": {
-    "maxKeyBytes": 1024,
+    "maxKeyBytes": 979,
     "maxListPageObjects": 1000,
     "maxMultipartParts": 10000,
     "maxObjectBytes": 5368709120,
