@@ -80,6 +80,13 @@ describe("production deployment readback", () => {
   });
 });
 
+test("website snapshot copy includes the frozen identity module closure", () => {
+  const deploySource = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
+  expect(deploySource).toContain(
+    '"scripts/check-website-dist.mjs",\n    "scripts/frozen-public-identities.mjs",',
+  );
+});
+
 test("published asset discovery rejects symbolic links", () => {
   const directory = mkdtempSync(join(tmpdir(), "takoform-deploy-safety-"));
   temporaryDirectories.push(directory);

@@ -623,6 +623,7 @@ try {
     "package.json",
     "bun.lock",
     "scripts/check-website-dist.mjs",
+    "scripts/frozen-public-identities.mjs",
     "website",
   ];
   for (const prefix of copiedPrefixes) {
