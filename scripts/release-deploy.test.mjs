@@ -90,7 +90,7 @@ test("provider v2.1 release body names independent Beta identities and migration
     readFileSync(join(repositoryRoot, "release/version.json"), "utf8"),
   );
   const body = providerReleaseBody(descriptor);
-  expect(body).toContain("Provider v2.1.0");
+  expect(body).toContain("Provider v2.1.1");
   expect(body).toContain("forms.takoform.com/v1beta1");
   expect(body).toContain("edge.forms.takoform.com/v1beta1");
   expect(body).toContain("15 Experimental 0.1.0 FormRefs");
@@ -103,7 +103,7 @@ test("provider v2.1 release body names independent Beta identities and migration
 
 test("provider descriptor and identity ledger are exact Beta release inputs", () => {
   const descriptor = releaseDeployTestHooks.readProviderDescriptor(repositoryRoot);
-  expect(descriptor.version).toBe("2.1.0");
+  expect(descriptor.version).toBe("2.1.1");
   expect(descriptor.versioning.portableApiVersion).toBe(
     "forms.takoform.com/v1beta1",
   );

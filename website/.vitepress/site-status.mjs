@@ -50,11 +50,11 @@ export const SITE_STATUS_REPOSITORY_PATH =
 export const SITE_STATUS_PUBLISHED_PATH =
   "website/public/.well-known/takoform-site.json";
 
-// The Beta Edge Platform Family rides the stable provider v2.1.0 release
+// The Beta Edge Platform Family rides the stable provider v2.1.1 release
 // target. Its descriptor remains candidate-only until the release owner
 // publishes it. This is the single JS-side declaration of that target;
 // check-public-surfaces binds it to the generated examples.
-export const EDGE_PREVIEW_PROVIDER_VERSION = "2.1.0";
+export const EDGE_PREVIEW_PROVIDER_VERSION = "2.1.1";
 export const EDGE_PREVIEW_PROVIDER = `${EDGE_PREVIEW_PROVIDER_VERSION}-candidate-only`;
 
 export const FAMILY_CANDIDATE_SET =

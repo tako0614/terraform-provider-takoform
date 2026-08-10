@@ -6,7 +6,7 @@ The current portable contracts are the Host API
 channels. The 15 Form Definitions remain **Experimental**, each at
 `definitionVersion: 0.1.0`; Beta does not make a Form Stable.
 
-Provider versioning is independent. Provider `v2.1.0` is a stable SemVer
+Provider versioning is independent. Provider `v2.1.1` is a stable SemVer
 release candidate targeting the Beta Host API. Its descriptor remains
 `candidate-only` until the owning deploy actually publishes it. This is not a
 provider prerelease and it is not a claim that any hosted service, Takosumi

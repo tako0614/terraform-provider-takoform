@@ -11,8 +11,8 @@ Immutable ordered SQLite migration history backed by one committed artifacts.tak
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.0 or
-later. Provider v2.1.0 is the stable release target; its source descriptor stays
+This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or
+later. Provider v2.1.1 is the stable release target; its source descriptor stays
 candidate-only until the owner publishes it. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](../../examples/resources/takoform_sqlite_migration_set/resource.tf).

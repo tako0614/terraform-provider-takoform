@@ -2,6 +2,7 @@ package projectpolicy
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,6 +56,27 @@ type providerMigrationAudit struct {
 		ReplaceOnlyWhenOldAddressIsPresentInState bool   `json:"replaceOnlyWhenOldAddressIsPresentInState"`
 		ReplacementCommand                        string `json:"replacementCommand"`
 	} `json:"providerAddressBoundary"`
+}
+
+func TestCurrentV2MigrationGuideTracksReleaseDescriptor(t *testing.T) {
+	root := repositoryRoot(t)
+	var release releaseDescriptor
+	readStrictJSON(t, filepath.Join(root, "release", "version.json"), &release)
+
+	guideRaw, err := os.ReadFile(filepath.Join(root, "release", "migrations", "v1-to-v2.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentTarget := fmt.Sprintf(
+		"v%s is a stable release target whose descriptor remains `candidate-only`",
+		release.Version,
+	)
+	if !strings.Contains(string(guideRaw), currentTarget) {
+		t.Fatalf(
+			"v1-to-v2 migration guide does not track release/version.json target %s",
+			release.Version,
+		)
+	}
 }
 
 func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {

@@ -608,7 +608,7 @@ function checkTerraformProviderExample(filePath, providerVersion) {
   }
 }
 
-// The Edge Platform Family examples pin the stable v2.1.0 release target. The
+// The Edge Platform Family examples pin the stable v2.1.1 release target. The
 // descriptor remains candidate-only until the owner publishes it, so an
 // example must state that boundary without turning the SemVer into a
 // prerelease or claiming Registry availability.
@@ -630,7 +630,7 @@ function checkEdgeFamilyProviderExample(filePath) {
     );
   }
   if (
-    !source.includes("stable v2.1.0 release target") ||
+    !source.includes(`stable v${EDGE_PREVIEW_PROVIDER_VERSION} release target`) ||
     !source.includes("candidate-only until owner publication")
   ) {
     fail(
@@ -853,14 +853,14 @@ function checkRetainedPublicationTruthCopy(truth) {
     }
     if (descriptorFiles.has(filePath) && /\bcandidate-only\b/i.test(text)) {
       if (
-        !/\bv?2\.1\.0\b/i.test(text) ||
+        !new RegExp(`\\bv?${escapeRegExp(EDGE_PREVIEW_PROVIDER_VERSION)}\\b`, "i").test(text) ||
         !/(?:release target|stable provider)/i.test(text) ||
         !/(?:descriptor|release\/version\.json)/i.test(text) ||
         !/(?:owner[^.。]{0,80}publish|owner[^.。]{0,80}公開)/i.test(text)
       ) {
         fail(
           `${relative(filePath)}: candidate-only is not bound to the stable ` +
-            "v2.1.0 release target and owner-publication boundary",
+            `${EDGE_PREVIEW_PROVIDER_VERSION} release target and owner-publication boundary`,
         );
       }
     }
@@ -976,7 +976,7 @@ function checkContractLaneDocumentation(retainedSet) {
     ],
     [
       path.join(repositoryRoot, "release", "README.md"),
-      "until release assigns 2.1.0",
+      "until release assigns 2.1.1",
     ],
   ];
   for (const [file, stale] of staleClaims) {
@@ -1708,7 +1708,7 @@ if (publicationTruth !== null) {
 
 // The Host API v1beta1 channel: exactly the fifteen Edge Platform Family
 // resources, all rendered by internal/standardforms (doc name = resource type
-// minus the takoform_ prefix). They share the stable v2.1.0 release-target example
+// minus the takoform_ prefix). They share the stable v2.1.1 release-target example
 // pin. There is deliberately no generic takoform_resource carrier: the lane
 // exposes no resource that is not a Form (spec/decisions/0021), so this exact
 // set is also the assertion that the carrier has not come back.

@@ -5,7 +5,7 @@ Terraform / OpenTofu で Takoform を使うための手順と、3 つの利用�
 | Tier | 対象 | 入手方法 |
 | --- | --- | --- |
 | **公開済み (Current published)** | provider `v2.0.0` と、保持される 9 つの `forms.takoform.com/v1alpha2` リソース | `terraform init` が Registry からインストール |
-| **Beta release candidate** | stable provider target `v2.1.0` と、Experimental な `edge.forms.takoform.com/v1beta1` family 15種 | owner 公開までは source からビルド |
+| **Beta release candidate** | stable provider target `v2.1.1` と、Experimental な `edge.forms.takoform.com/v1beta1` family 15種 | owner 公開までは source からビルド |
 
 下のクイックスタートは公開済み tier です。
 [Beta release candidate](#beta-edge-platform-family) はこのページの後半にあり、candidate で
@@ -100,7 +100,7 @@ provider の address は `registry.terraform.io/tako0614/takoform` の 1 つだ�
 | --- | --- | --- |
 | **v1.0.3** (公開済み) | 既存の Legacy state の保守・delete・recovery | Registry から |
 | **v2.0.0** (公開済み・現在の client) | 保持される provider-v2 の 9 契約 | Registry から |
-| **v2.1.0** (stable release target、owner 公開まで `candidate-only`) | [Experimental Edge Platform Family](#beta-edge-platform-family) on v1beta1 | owner 公開までは source からビルド |
+| **v2.1.1** (stable release target、owner 公開まで `candidate-only`) | [Experimental Edge Platform Family](#beta-edge-platform-family) on v1beta1 | owner 公開までは source からビルド |
 
 ### 公開済み Legacy の保守
 
@@ -133,7 +133,7 @@ terraform {
 ## Beta: Edge Platform Family {#beta-edge-platform-family}
 
 ::: warning Beta provider release candidate
-`edge.forms.takoform.com/v1beta1` family は stable provider target `v2.1.0`
+`edge.forms.takoform.com/v1beta1` family は stable provider target `v2.1.1`
 に乗ります。owner が公開するまで descriptor は `candidate-only` なので、現在は
 source からビルドします。15種の exact `0.1.0` Form は Experimental で provider
 identity ledger に固定済みですが、package artifact は未公開です。open obligation
@@ -199,7 +199,7 @@ resource "takoform_worker_endpoint" "api" {
 }
 ```
 
-各リソースの個別ページには `v2.1.0` の source-candidate ピンを含む単体の例と、
+各リソースの個別ページには `v2.1.1` の source-candidate ピンを含む単体の例と、
 同じ source のみの警告があります。version への能力付与は typed binding で行い、
 外からの起動 — custom domain・cron trigger・queue consumer — は常に別の
 attachment リソースです。
@@ -224,7 +224,7 @@ attachment リソースです。
 - [vector_index](/docs/resources/vector_index.html)
 - [interface data source](/docs/data-sources/interface.html)
 
-Experimental Edge Platform Family リソース (`v2.1.0` stable target、descriptor は `candidate-only`):
+Experimental Edge Platform Family リソース (`v2.1.1` stable target、descriptor は `candidate-only`):
 
 - [module_worker](/docs/resources/module_worker.html)
 - [worker_bundle](/docs/resources/worker_bundle.html)

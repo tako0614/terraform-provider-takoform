@@ -8,7 +8,7 @@ characterization:
   nine independently authored v1alpha2 candidates, and covers typed schema
   behavior, validation, CRUD, import, state refresh, and the absence of
   plan-time remote mutation; the source tree additionally registers exactly the
-  v1beta1 Edge Platform Family resources for the stable v2.1.0 provider release
+  v1beta1 Edge Platform Family resources for the stable v2.1.1 provider release
   target — and no generic carrier, which is itself asserted
   ([decision 0035](../spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md),
   [decision 0021](../spec/decisions/0021-third-party-forms-and-contract-distribution.md));

@@ -28,14 +28,14 @@ published Legacy `v1` release. Their signed tags, immutable GitHub Releases,
 and canonical Terraform Registry listings exist.
 
 `release/version.json` now describes the stable provider release target
-`v2.1.0`, tag `v2.1.0`, carrying Host API
+`v2.1.1`, tag `v2.1.1`, carrying Host API
 `forms.takoform.com/v1beta1`. Its `publicationStatus` remains
 `candidate-only`: no source descriptor, local gate, or candidate build claims
 that the release owner has created the signed tag, GitHub Release, or Registry
 version. Those become publication facts only through the owner flow and
 readback evidence below.
 
-Provider v2.1.0 embeds exactly 15 Experimental `0.1.0` Forms in
+Provider v2.1.1 embeds exactly 15 Experimental `0.1.0` Forms in
 `edge.forms.takoform.com/v1beta1`. Their exact FormRefs and definition/package
 digests are locked independently in
 [`provider-form-identities.json`](provider-form-identities.json), even while
@@ -43,6 +43,26 @@ the `packages.forms.takoform.com/v1alpha4` artifacts remain unpublished. Open
 package/public-service and later Stable/GA evidence obligations do not turn
 this stable provider version into a prerelease
 ([decision 0035](../spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
+
+## Abandoned v2.1.0 candidate and v2.1.1 forward repair
+
+The signed annotated `v2.1.0` tag is a permanently abandoned, unpublished
+candidate. Its exact tag object is
+`5ec38b5485c774650065e8317f8024ad40270393`, and it peels to source commit
+`9add889446740d406a4c9ca93b74137c9b014fca`. Candidate workflow run
+`31379384964` failed before artifacts because Bun was missing. No GitHub Release
+or Terraform Registry version exists for `v2.1.0`; never move, delete,
+recreate, or reuse that tag.
+
+`v2.1.1` is the patch forward repair from the reviewed main commit. It carries
+the exact same 15 Beta FormRefs, schema/package digests, Host API
+`forms.takoform.com/v1beta1`, and family `edge.forms.takoform.com/v1beta1`;
+only provider release identity and tooling changed. The current
+`provider-form-identities.json` entry is re-keyed to `v2.1.1` without changing
+any nested Form identity or digest. Neither `v2.1.0` nor `v2.1.1` may be added
+to `release/provider-release-identities.json` before exact Registry readback;
+the descriptor remains `candidate-only` and this repository makes no
+publication claim before that readback.
 
 `release/provider-release-identities.json` retains the exact six-file signed
 Registry readback closure for current provider releases as canonical base64.
@@ -190,7 +210,7 @@ candidate set.
 
 Provider publication is an independent distribution action. The `v*` workflow runs
 `candidate-publication-check`, which requires `publicationStatus:
-candidate-only` and the unchanged structural inventory. For v2.1.0 the owner
+candidate-only` and the unchanged structural inventory. For v2.1.1 the owner
 gate additionally locks all 15 Terraform resource schemas, exact Beta
 FormRefs/digests, fake/reference-host v1beta1 conformance, provider state
 compatibility, and no-overwrite public identities. Publishing that exact

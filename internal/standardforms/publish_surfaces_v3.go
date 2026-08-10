@@ -259,8 +259,8 @@ description: |-
 
 `, form.ResourceType, form.Title+" ("+edgeformcatalog.Family.APIVersion()+", role "+string(form.Role)+").", form.ResourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.0 or\n" +
-		"later. Provider v2.1.0 is the stable release target; its source descriptor stays\n" +
+	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or\n" +
+		"later. Provider v2.1.1 is the stable release target; its source descriptor stays\n" +
 		"candidate-only until the owner publishes it. The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
 		"price, or implementation. See the [complete example](../../examples/resources/" +
@@ -438,8 +438,8 @@ func v3ExampleHCL(form model.Form) string {
   required_providers {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
-      # stable v2.1.0 release target; descriptor remains candidate-only until owner publication.
-      version = "= 2.1.0"
+      # stable v2.1.1 release target; descriptor remains candidate-only until owner publication.
+      version = "= 2.1.1"
     }
   }
 }
@@ -632,7 +632,7 @@ func v3FormInventorySection() string {
 The first official Form Family fixes the shape of a proven edge developer
 platform without naming its vendor (spec/form-families.md). Its members are
 Experimental Forms for the Host API v1beta1 resource lane; their package
-artifacts remain unpublished. The typed resources require provider v2.1.0 or
+artifacts remain unpublished. The typed resources require provider v2.1.1 or
 later. Roles come from the closed v1beta1 role enum and decide
 lifecycle mechanics: revisions are immutable, deployments move traffic,
 attachments activate inward events.

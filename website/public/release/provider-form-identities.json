@@ -2,7 +2,7 @@
   "format": "takoform.provider-form-identities@v1",
   "releases": [
     {
-      "providerVersion": "2.1.0",
+      "providerVersion": "2.1.1",
       "portableApiVersion": "forms.takoform.com/v1beta1",
       "family": "edge.forms.takoform.com/v1beta1",
       "formMaturity": "experimental",

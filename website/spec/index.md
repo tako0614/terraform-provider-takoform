@@ -16,7 +16,7 @@ is a protocol compatibility identity independent of any nested Form group.
 | Retained provider-v2 FormRef | `forms.takoform.com/v1alpha2`, wire discovered at `/.well-known/takoform/v1alpha2` |
 | Retained provider-v2 package envelope | `packages.forms.takoform.com/v1alpha3` |
 | Legacy FormRef | `forms.takoform.com/v1alpha1` (frozen) |
-| Provider | `v2.0.0` current published · `v1.0.3` Legacy · stable `v2.1.0` release target (`candidate-only` until owner publication) |
+| Provider | `v2.0.0` current published · `v1.0.3` Legacy · stable `v2.1.1` release target (`candidate-only` until owner publication) |
 
 The `forms.takoform.com/v1alpha2` epoch and its nine `0.1.0` candidates are
 retained provider-v2 preview source; they are not the basis for new

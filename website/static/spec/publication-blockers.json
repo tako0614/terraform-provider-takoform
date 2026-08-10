@@ -2,7 +2,7 @@
   "format": "takoform.publication-blockers@v1",
   "lane": "forms.takoform.com/v1beta1",
   "family": "edge.forms.takoform.com/v1beta1",
-  "policy": "These records are later Stable/GA qualification and Form Package/public-service publication obligations. Open records block publishing the Beta Form Packages, Interface/Binding Definitions as independently published artifacts, and claims of Stable, GA, independent-host, real-backend, or third-party ecosystem readiness. They do not block the stable provider v2.1.0 release from embedding the exactly locked 15 Experimental Beta FormRefs and digests after its local provider gate passes. Closing an obligation still requires the evidence it names; no local gate fabricates independent-host, hosted-operation, real-backend, or third-party evidence. Retained packages and append-only security revocation remain outside this policy.",
+  "policy": "These records are later Stable/GA qualification and Form Package/public-service publication obligations. Open records block publishing the Beta Form Packages, Interface/Binding Definitions as independently published artifacts, and claims of Stable, GA, independent-host, real-backend, or third-party ecosystem readiness. They do not block the stable provider v2.1.1 release from embedding the exactly locked 15 Experimental Beta FormRefs and digests after its local provider gate passes. Closing an obligation still requires the evidence it names; no local gate fabricates independent-host, hosted-operation, real-backend, or third-party evidence. Retained packages and append-only security revocation remain outside this policy.",
   "blockers": [
     {
       "id": "V3-001",

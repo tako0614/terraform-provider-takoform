@@ -5,7 +5,7 @@
 //
 // spec/publication-freeze.md names later Stable/GA qualification obligations.
 // They still block Form Package and public-service publication, but they do not
-// block provider v2.1.0 from carrying the locally proven Beta contracts.
+// block provider v2.1.1 from carrying the locally proven Beta contracts.
 //
 // The check therefore proves two separate facts: provider v2.1's exact Beta
 // identity set is coherent, while the Form Package candidate set remains
@@ -250,7 +250,7 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
 }
 
 // assertProviderReleaseCandidate proves the provider-first lane without using
-// package/GA obligations as a proxy. It locks v2.1.0 to the 15 Experimental
+// package/GA obligations as a proxy. It locks v2.1.1 to the 15 Experimental
 // Beta FormRefs and package digests recorded in the append-only provider
 // identity ledger. Candidate-only is a publication fact, not a prerelease
 // version: the owner deploy changes it only after the real release exists.
@@ -268,12 +268,12 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     readFileSync(path.join(repositoryRoot, "release/provider-form-identities.json"), "utf8"),
   );
   if (
-    descriptor.version !== "2.1.0" ||
-    descriptor.tag !== "v2.1.0" ||
+    descriptor.version !== "2.1.1" ||
+    descriptor.tag !== "v2.1.1" ||
     descriptor.publicationStatus !== "candidate-only" ||
     descriptor.versioning?.portableApiVersion !== "forms.takoform.com/v1beta1"
   ) {
-    fail("provider release descriptor is not candidate-only v2.1.0 on Host API v1beta1");
+    fail("provider release descriptor is not candidate-only v2.1.1 on Host API v1beta1");
   }
   if (
     candidate.family !== "edge.forms.takoform.com/v1beta1" ||

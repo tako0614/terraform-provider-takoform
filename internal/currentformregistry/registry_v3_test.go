@@ -82,10 +82,10 @@ func TestV3SupportedFormRefsCoversEveryDefault(t *testing.T) {
 	}
 }
 
-// TestProviderV210IdentityLedgerIsEmbedded separates provider compatibility
-// from Form Package publication. Provider v2.1.0 carries these exact 15 Beta
+// TestProviderV211IdentityLedgerIsEmbedded separates provider compatibility
+// from Form Package publication. Provider v2.1.1 carries these exact 15 Beta
 // identities and digests even while the package artifacts remain unpublished.
-func TestProviderV210IdentityLedgerIsEmbedded(t *testing.T) {
+func TestProviderV211IdentityLedgerIsEmbedded(t *testing.T) {
 	t.Parallel()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "release", "provider-form-identities.json"))
 	if err != nil {
@@ -112,7 +112,7 @@ func TestProviderV210IdentityLedgerIsEmbedded(t *testing.T) {
 		t.Fatalf("provider identity ledger = %#v", ledger)
 	}
 	release := ledger.Releases[0]
-	if release.ProviderVersion != "2.1.0" || release.PortableAPIVersion != "forms.takoform.com/v1beta1" ||
+	if release.ProviderVersion != "2.1.1" || release.PortableAPIVersion != "forms.takoform.com/v1beta1" ||
 		release.Family != "edge.forms.takoform.com/v1beta1" || release.FormMaturity != "experimental" || len(release.Forms) != 15 {
 		t.Fatalf("provider v2.1 identity set = %#v", release)
 	}

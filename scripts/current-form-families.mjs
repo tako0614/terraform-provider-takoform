@@ -47,17 +47,18 @@ const providerIdentityLedgerPath = path.join(
   "provider-form-identities.json",
 );
 const releaseDescriptorPath = path.join(repositoryRoot, "release", "version.json");
-// v2.1.0 is already published as the provider's immutable compatibility
-// commitment. The candidate ledger and the generated catalog may evolve only
-// by appending a new provider release; changing this entry in both places must
-// fail instead of being accepted as a self-consistent rebuild.
+// v2.1.1 is the forward-repaired provider candidate's immutable compatibility
+// commitment. The abandoned v2.1.0 candidate was never published and has no
+// provider identity-ledger entry. Changing this entry together with the
+// generated catalog must fail instead of being accepted as a self-consistent
+// rebuild.
 export const FROZEN_PROVIDER_RELEASES = new Map([
   [
-    "2.1.0",
+    "2.1.1",
     Object.freeze({
-      tag: "v2.1.0",
+      tag: "v2.1.1",
       ledgerDigest:
-        "sha256:a3252479c294bd05bd64339ff300c38548fe26fe7b734ee71f7e0502dfde686e",
+        "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d",
     }),
   ],
 ]);
@@ -472,12 +473,12 @@ function loadProviderIdentityLedger(manifest) {
     throw new Error("provider Form identity ledger has an invalid envelope");
   }
   if (
-    release?.version !== "2.1.0" ||
+    release?.version !== "2.1.1" ||
     release?.tag !== `v${release.version}` ||
     release?.publicationStatus !== "candidate-only" ||
     release?.versioning?.portableApiVersion !== "forms.takoform.com/v1beta1"
   ) {
-    throw new Error("provider release descriptor must name candidate-only v2.1.0 on Host API v1beta1");
+    throw new Error("provider release descriptor must name candidate-only v2.1.1 on Host API v1beta1");
   }
   assertFrozenProviderReleaseDescriptor(release);
 

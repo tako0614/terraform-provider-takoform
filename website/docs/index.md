@@ -6,7 +6,7 @@ job.
 | Tier | What it covers | How you get it |
 | --- | --- | --- |
 | **Current published** | provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | `terraform init` installs it from the Registry |
-| **Beta release candidate** | stable provider target `v2.1.0`, Beta Host API, and 15 Experimental `edge.forms.takoform.com/v1beta1` Forms | build the provider from repository source until the owner publishes it |
+| **Beta release candidate** | stable provider target `v2.1.1`, Beta Host API, and 15 Experimental `edge.forms.takoform.com/v1beta1` Forms | build the provider from repository source until the owner publishes it |
 
 The quick start below is the current published tier. The
 [Beta release candidate](#beta-edge-platform-family) is further down and is marked
@@ -102,7 +102,7 @@ lanes:
 | --- | --- | --- |
 | **v1.0.3** (published) | existing Legacy state, refresh, delete, recovery | from the Registry |
 | **v2.0.0** (published, current client) | the nine retained provider-v2 contracts | from the Registry |
-| **v2.1.0** (stable release target; descriptor `candidate-only`) | [the Experimental Edge Platform Family](#beta-edge-platform-family) on v1beta1 | build from source until owner publication |
+| **v2.1.1** (stable release target; descriptor `candidate-only`) | [the Experimental Edge Platform Family](#beta-edge-platform-family) on v1beta1 | build from source until owner publication |
 
 ### Maintain published Legacy
 
@@ -135,7 +135,7 @@ Provider v2 refuses provider-v1 state.
 ## Beta: Edge Platform Family
 
 ::: warning Beta provider release candidate
-The `edge.forms.takoform.com/v1beta1` family rides the stable provider `v2.1.0`
+The `edge.forms.takoform.com/v1beta1` family rides the stable provider `v2.1.1`
 release target. Its descriptor remains `candidate-only` until the release
 owner publishes it, so build from repository source for now. All 15 exact
 `0.1.0` Forms are Experimental and locked in the provider identity ledger;
@@ -205,7 +205,7 @@ resource "takoform_worker_endpoint" "api" {
 }
 ```
 
-Each resource's own page carries a single-resource example with the `v2.1.0`
+Each resource's own page carries a single-resource example with the `v2.1.1`
 stable-target pin and the same candidate-only boundary. Capability is added to a
 version through typed bindings; inward activation — a custom domain, a cron
 trigger, a queue consumer — is always a separate attachment resource.
@@ -228,7 +228,7 @@ Retained provider-v2 resources (published `v2.0.0`):
 - [vector_index](/docs/resources/vector_index.html)
 - [interface data source](/docs/data-sources/interface.html)
 
-Experimental Edge Platform Family resources (`v2.1.0` stable release target;
+Experimental Edge Platform Family resources (`v2.1.1` stable release target;
 descriptor `candidate-only`):
 
 - [module_worker](/docs/resources/module_worker.html)
