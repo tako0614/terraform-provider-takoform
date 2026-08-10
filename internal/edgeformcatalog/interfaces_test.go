@@ -389,38 +389,135 @@ func encodedBodyMaxLength(schema map[string]any) int {
 	}
 }
 
-// TestSQLValuesCarryEveryStorageClass proves the tagged value model covers
-// SQLite's five storage classes and nothing else, and that INTEGER travels as
-// text rather than as a JSON number that cannot hold it.
-func TestSQLValuesCarryEveryStorageClass(t *testing.T) {
+// TestSQLValuesUseThePortableWireUnion proves edge.sql has one JSON-shaped
+// value model rather than exposing SQLite's private INTEGER/REAL storage-class
+// distinction. Binary values reuse the family's canonical encoded-bytes shape;
+// boolean, bigint, and the withdrawn tagged objects have no representation.
+func TestSQLValuesUseThePortableWireUnion(t *testing.T) {
 	t.Parallel()
 	variants, _ := sqlValue()["oneOf"].([]any)
-	got := map[string]bool{}
+	if len(variants) != 4 {
+		t.Fatalf("edge.sql value union has %d variants, want null, number, string, encoded bytes", len(variants))
+	}
+	got := map[string]map[string]any{}
 	for _, variant := range variants {
 		schema, _ := variant.(map[string]any)
-		properties, _ := schema["properties"].(map[string]any)
-		tag, _ := properties["type"].(map[string]any)
-		values, _ := tag["enum"].([]any)
-		if len(values) != 1 {
-			t.Fatalf("a tagged value variant declares %d tags", len(values))
+		kind, _ := schema["type"].(string)
+		if kind == "" {
+			t.Fatalf("edge.sql value variant has no type: %#v", schema)
 		}
-		name, _ := values[0].(string)
-		got[name] = true
+		if _, duplicate := got[kind]; duplicate {
+			t.Fatalf("edge.sql value union declares %s twice", kind)
+		}
+		got[kind] = schema
 	}
-	for _, want := range []string{"null", "integer", "real", "text", "blob"} {
-		if !got[want] {
-			t.Fatalf("the tagged SQL value model is missing the %s storage class", want)
+	for _, want := range []string{"null", "number", "string", "object"} {
+		if _, present := got[want]; !present {
+			t.Fatalf("edge.sql value union is missing %s", want)
 		}
 	}
-	if len(got) != 5 {
-		t.Fatalf("the tagged SQL value model carries %d variants, want the five storage classes", len(got))
+	number := got["number"]
+	if number["minimum"] != -float64(9007199254740991) || number["maximum"] != float64(9007199254740991) {
+		t.Fatalf("edge.sql number range is %v..%v, want +/- Number.MAX_SAFE_INTEGER", number["minimum"], number["maximum"])
 	}
-	if got["boolean"] {
-		t.Fatal("SQLite has no boolean storage class")
+	text := got["string"]
+	if text["maxLength"] != 1000000 {
+		t.Fatalf("edge.sql text structural ceiling is %v, want 1000000", text["maxLength"])
 	}
-	integer, _ := sqlDecimalInteger()["type"].(string)
-	if integer != "string" {
-		t.Fatalf("a 64-bit INTEGER travels as %q; a JSON number cannot carry 9223372036854775807", integer)
+	blob := got["object"]
+	if max := encodedBodyMaxLength(blob); max != base64Length(1000000) {
+		t.Fatalf("edge.sql BLOB encoded ceiling is %d, want %d", max, base64Length(1000000))
+	}
+	properties, _ := blob["properties"].(map[string]any)
+	if _, tagged := properties["type"]; tagged {
+		t.Fatal("edge.sql BLOB still exposes the withdrawn tagged-value member")
+	}
+}
+
+// TestSQLContractIsBoundedAndRollbackSafe fixes the operation-level contract:
+// execute is the effectful one-statement path, query earns idempotency by
+// executing and materializing inside an always-rolled-back transaction, and a
+// transaction commits only after every result is materialized and validated.
+func TestSQLContractIsBoundedAndRollbackSafe(t *testing.T) {
+	t.Parallel()
+	definition, err := interfaceDefinitionByName("edge.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLimits := map[string]int64{
+		"maxStatementBytes": 100000, "maxBoundParameters": 100,
+		"maxStatementsPerTransaction": 100, "maxRowsPerStatement": 10000,
+		"maxColumnsPerRow": 100, "maxColumnNameBytes": 128,
+		"maxTextBytesPerValue": 1000000, "maxBlobBytesPerValue": 1000000,
+		"maxRowBytes": 2000000, "maxResultBytesPerCall": 8388608,
+	}
+	if len(definition.Limits) != len(wantLimits) {
+		t.Fatalf("edge.sql declares %d limits, want %d: %#v", len(definition.Limits), len(wantLimits), definition.Limits)
+	}
+	for name, want := range wantLimits {
+		if got := definition.Limits[name]; got != want {
+			t.Fatalf("edge.sql %s = %d, want %d", name, got, want)
+		}
+	}
+
+	operations := map[string]InterfaceOperation{}
+	for _, operation := range definition.Operations {
+		operations[operation.Name] = operation
+		foundNumericError := false
+		for _, code := range operation.Errors {
+			if code == "numeric_out_of_range" {
+				foundNumericError = true
+			}
+		}
+		if !foundNumericError {
+			t.Fatalf("edge.sql %s does not declare numeric_out_of_range", operation.Name)
+		}
+	}
+	if operations["execute"].Idempotent {
+		t.Fatal("edge.sql execute must remain effectful and non-idempotent")
+	}
+	if !operations["query"].Idempotent {
+		t.Fatal("edge.sql query must be idempotent")
+	}
+	for _, phrase := range []string{"rollback-only transaction", "always rolls back", "without pre-classifying"} {
+		if !strings.Contains(operations["query"].Description, phrase) {
+			t.Fatalf("edge.sql query description does not state %q", phrase)
+		}
+	}
+	queryProperties, _ := operations["query"].OutputSchema["properties"].(map[string]any)
+	queryRowsWritten, _ := queryProperties["rowsWritten"].(map[string]any)
+	if got := queryRowsWritten["const"]; got != 0 {
+		t.Fatalf("edge.sql query rowsWritten const = %v, want 0", got)
+	}
+	if !strings.Contains(operations["transaction"].Description, "materialized and validated before commit") {
+		t.Fatal("edge.sql transaction does not bind materialization and validation before commit")
+	}
+	transactionInput, _ := operations["transaction"].InputSchema["properties"].(map[string]any)
+	statements, _ := transactionInput["statements"].(map[string]any)
+	transactionOutput, _ := operations["transaction"].OutputSchema["properties"].(map[string]any)
+	results, _ := transactionOutput["results"].(map[string]any)
+	for name, schema := range map[string]map[string]any{"statements": statements, "results": results} {
+		if schema["minItems"] != 1 || schema["maxItems"] != sqlMaxStatementsPerTransaction {
+			t.Fatalf("edge.sql transaction %s bounds = %v..%v, want 1..%d", name, schema["minItems"], schema["maxItems"], sqlMaxStatementsPerTransaction)
+		}
+	}
+
+	result := sqlStatementResult()
+	properties, _ := result["properties"].(map[string]any)
+	if len(properties) != 2 || properties["rows"] == nil || properties["rowsWritten"] == nil {
+		t.Fatalf("edge.sql statement result properties are %#v, want exactly rows and rowsWritten", properties)
+	}
+	if _, legacy := properties["lastInsertRowId"]; legacy {
+		t.Fatal("edge.sql still exposes lastInsertRowId")
+	}
+	fixtureJSON, err := json.Marshal(definition.Fixtures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, legacy := range []string{"lastInsertRowId", `\"type\":\"integer\"`, `\"type\":\"real\"`, `\"type\":\"text\"`, `\"type\":\"blob\"`} {
+		if strings.Contains(string(fixtureJSON), legacy) {
+			t.Fatalf("edge.sql fixtures still contain withdrawn value shape %q", legacy)
+		}
 	}
 }
 

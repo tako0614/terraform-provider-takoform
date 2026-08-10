@@ -40,7 +40,7 @@
             "apiVersion": "edge.forms.takoform.com/v1alpha1",
             "definitionVersion": "0.1.0",
             "kind": "SQLiteDatabase",
-            "schemaDigest": "sha256:a667ec4a585223dc505a9497c91ecae49b6166a6dedeac07adae4b0d3cb3ca9f"
+            "schemaDigest": "sha256:e250197b8b5fc9305e47dc9b6ca521c1010bc0b5f61e36c977e2307c9972a85f"
           }
         ]
       },

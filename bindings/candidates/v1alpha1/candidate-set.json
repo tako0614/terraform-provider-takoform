@@ -16,7 +16,7 @@
     {
       "name": "module-worker.sqlite",
       "version": "1.0.0",
-      "schemaDigest": "sha256:38ca2453b139e5b1e66aca69de86b17026c626cf7d5a6dff9e853f0b560426a6"
+      "schemaDigest": "sha256:10cd1e5dbf339f18febf972374936c3058d5d17d6566edeb22631c1ef551b4d3"
     },
     {
       "name": "module-worker.queue-producer",

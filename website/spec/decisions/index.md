@@ -36,3 +36,4 @@ record does not replace them.
 - [0031 — Host capability is decided at plan time](0031-host-capability-is-decided-at-plan-time.md)
 - [0032 — A provider diagnostic states identity, fence, code, and repair](0032-a-diagnostic-states-identity-fence-code-and-repair.md)
 - [0033 — Edge app assets and SQLite migrations are content-addressed](0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)
+- [0034 — edge.sql uses safe wire values and rollback-only queries](0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)

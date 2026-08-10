@@ -16,7 +16,7 @@
     {
       "name": "edge.sql",
       "version": "1.0.0",
-      "schemaDigest": "sha256:a1dcc648fb5f9f35e181cab455bbe373810876e322b1bd39ea470e4f11e05b27"
+      "schemaDigest": "sha256:ff48410cf2d59fb93533525f76cb8e880a26339a0ce91c2e0faee2a7c3f5d053"
     },
     {
       "name": "edge.queue",

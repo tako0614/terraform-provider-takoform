@@ -219,8 +219,8 @@ var requiredRunnerChecks = []string{
 	"module-worker-runtime-contract-advertised",
 	"undeclared-runtime-handler-rejected",
 	"declared-handler-not-exported-rejected",
-	// The edge Interfaces state their data and delivery model
-	// (spec/decisions/0020).
+	// The edge Interfaces state their data and delivery model. edge.sql's
+	// value/effect boundary is superseded by spec/decisions/0034.
 	"edge-interface-contracts-advertised",
 	"cron-grammar-enforced",
 	"queue-single-consumer-enforced",

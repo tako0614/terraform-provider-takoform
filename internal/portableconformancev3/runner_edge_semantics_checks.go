@@ -11,7 +11,7 @@ import (
 
 // runner_edge_semantics_checks.go proves what a black-box Host API runner can
 // hold a host to about the family's data and delivery model
-// (spec/decisions/0020).
+// (spec/decisions/0020 and spec/decisions/0034).
 //
 // The lane drives DESIRED STATE. It cannot put a byte into a KV namespace, read
 // a row back out of a database, or wait for a queue message to be redelivered,
@@ -28,10 +28,10 @@ import (
 //  3. that one queue has at most one consumer, which is a cardinality rule over
 //     the store that no desired-state schema can express.
 //
-// Everything else the contracts state — convergence, streaming bodies, lossless
-// SQLite values, attempt counts, dead-letter transfer — is a host obligation,
-// listed as such in spec/host-api/v1alpha3.md rather than pretended to be
-// proven here.
+// Everything else the contracts state — convergence, streaming bodies, safe
+// SQLite value conversion and rollback-only effects, attempt counts, and
+// dead-letter transfer — is a host obligation, listed as such in
+// spec/host-api/v1alpha3.md rather than pretended to be proven here.
 
 // checkEdgeInterfaceContractsAdvertised proves the host implements each pinned
 // data-plane Interface at the EXACT contract the lane names.

@@ -1411,9 +1411,13 @@ declare is one the bytes keep, that backpressure and cancellation propagate,
 that a request abort and a response abort are different observable outcomes,
 that a callee exception arrives as a complete host-generated 500 rather than a
 hung call, and that a call which could not be dispatched fails rather than
-answering with a status. This lane drives desired state and never moves a byte
-of application data
-([decision 0020](../decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md)).
+answering with a status. `edge.sql` separately fixes its safe binary64 value
+corridor, canonical encoded BLOBs, rollback-only queries, one-statement runtime
+boundary, admin-only schema migrations, and materialize-before-commit
+transactions. This lane drives desired state and never moves a byte of
+application data
+([decision 0020](../decisions/0020-the-edge-interfaces-state-their-data-and-delivery-model.md),
+[decision 0034](../decisions/0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)).
 
 Proven by required checks:
 
@@ -1472,10 +1476,16 @@ proving them means exercising the data plane rather than driving the Host API:
   all. The contract's fixtures state the first three as traces a runtime
   conformance run executes; multipart cannot be a static trace, because its
   steps depend on part etags the host mints while the trace runs.
-- **`edge.sql` losslessness and atomicity.** That a 64-bit INTEGER and a BLOB
-  round-trip unchanged, that an out-of-range integer is refused, that a writing
-  statement submitted through `query` is refused, and that a failed transaction
-  applies nothing.
+- **`edge.sql` value and effect boundaries.** That safe finite binary64 numbers,
+  UTF-8 text, null, and canonical encoded BLOBs round-trip unchanged; unsafe
+  input and output fail `numeric_out_of_range` without rounding; a runtime call
+  refuses multiple statements, transaction-control SQL, and schema migration;
+  `query` materializes inside a transaction it always rolls back with
+  `rowsWritten: 0`, even when the statement transiently writes; and a
+  transaction materializes every bounded result before committing all effects
+  or none. The Interface fixtures state the deterministic wire/refusal half;
+  proving persistent effects requires a real SQLite data plane
+  ([decision 0034](../decisions/0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)).
 - **`edge.queue` delivery.** That a `messageId` is stable across redeliveries,
   that `attempts` counts them, that the first delivery does not count toward
   `maxRetries`, that an uncaught handler exception retries every message not

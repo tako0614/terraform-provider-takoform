@@ -168,6 +168,15 @@ projects it promised streaming, so the two halves of one contract disagreed.
 All of it is decided in decision 0020 and stated in each definition's own
 descriptions, because the published meta-schema has a member for none of it.
 
+`edge.sql` uses the same encoded-bytes object for BLOBs but does not expose
+SQLite storage-class tags. Its exact value is null, a finite binary64 number
+inside `Number.MAX_SAFE_INTEGER`, UTF-8 text, or canonical encoded bytes.
+`query` earns idempotency by executing inside a rollback-only transaction and
+always rolling it back, not by classifying SQL text as read-only; runtime SQL
+cannot own schema migration. That correction supersedes only decision 0020's
+SQL portions
+([decision 0034](../decisions/0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)).
+
 ## Interface distribution
 
 Interface candidates are distributed as digest-bound Interface

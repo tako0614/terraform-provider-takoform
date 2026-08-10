@@ -7,7 +7,7 @@ description: |-
 
 # takoform_sqlite_database
 
-Embedded SQLite database with serializable transactions and TAGGED values, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Values carry their storage class, so a 64-bit INTEGER and a BLOB round-trip losslessly instead of being flattened into a JSON scalar (decision 0020).
+Embedded SQLite database with bounded EdgeSqlValue values, rollback-only queries, and serializable all-or-none transactions, exactly as fixed by the edge.sql Interface. SQLite semantics are the identity: a database with different SQL, typing, or isolation behavior is a different Form, never an engine token. Numbers stay finite binary64 values inside Number.MAX_SAFE_INTEGER and do not expose the INTEGER/REAL storage-class distinction; BLOB uses the common canonical encoded-bytes object. Runtime SQL cannot migrate schema; SQLiteMigrationApplication owns that administrative path (decision 0034).
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 

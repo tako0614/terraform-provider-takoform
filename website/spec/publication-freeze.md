@@ -84,8 +84,11 @@ The first Forms proposed for Experimental publication are the Worker and edge
 KV vertical slice: `ModuleWorker`, `WorkerBundle`, `WorkerVersion`,
 `WorkerDeployment`, `WorkerCustomDomain`, and `EdgeKVNamespace`. The queue and
 schedule Forms follow. `ObjectBucket` and `SQLiteDatabase` come last, because
-their Interface contracts still need the most work and publishing them early
-would create the largest compatibility surface.
+they carry the largest data-plane compatibility surfaces. The unpublished
+`edge.sql` candidate was reset under
+[decision 0034](decisions/0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md),
+but that source correction is not real-backend evidence and does not close
+`V3-005`.
 
 Lifting the freeze is a separate reviewed decision. Passing local gates is not
 publication authority, and this document is not evidence that any blocker has

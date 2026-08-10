@@ -110,15 +110,19 @@ var bindingSpecs = []bindingSpec{
 		description: "Projects the complete edge.sql runtime API into a Worker Version under one " +
 			"JavaScript-identifier binding name, without exposing credentials or connection material. " +
 			"Runtime surface: env.NAME is an object with the methods execute(sql, params?), " +
-			"query(sql, params?), and transaction(statements), each returning a promise. params is an array of " +
-			"TAGGED edge.sql values bound positionally, so a 64-bit INTEGER (decimal text) and a BLOB (base64) " +
-			"survive the round trip that an untagged JSON scalar would have changed. Every one of the three " +
-			"resolves to the same statement-result shape — rows, rowsWritten, and lastInsertRowId — and " +
-			"transaction resolves to one such result per statement, in statement order, so a SELECT inside a " +
-			"transaction returns its rows without leaving the transaction. Statements apply atomically under " +
-			"serializable isolation, so a rejected transaction has applied nothing at all. Errors reject with " +
-			"an Error whose name is the edge.sql error code; busy is the retryable one, and a caller that means " +
-			"to retry must re-run the whole call.",
+			"query(sql, params?), and transaction(statements), each returning a promise. params and returned " +
+			"columns use EdgeSqlValue exactly: null, a finite Number whose absolute value is at most " +
+			"Number.MAX_SAFE_INTEGER, a string, or {encoding: \"base64\", data: \"...\"}. A BLOB stays in that " +
+			"canonical encoded-bytes object on this JavaScript surface; ArrayBuffer, typed arrays, boolean, bigint, " +
+			"and the withdrawn {type: ...} objects are not portable values. Results are exactly rows and " +
+			"rowsWritten; no last-insert metadata is projected. execute is effectful and non-idempotent. query " +
+			"materializes inside an always-rolled-back transaction, returns rowsWritten 0, and leaves no persistent " +
+			"side effects without guessing whether the SQL writes. transaction runs 1 to 100 statements under " +
+			"serializable all-or-none isolation and materializes every result before commit. Runtime calls reject a " +
+			"second statement, transaction-control SQL, and schema changes; SQLiteMigrationApplication is the only " +
+			"schema-migration path. Errors reject with an Error whose name is the edge.sql error code; unsafe or " +
+			"non-finite numbers reject as numeric_out_of_range, busy is the retryable outcome, and retrying re-runs " +
+			"the whole call.",
 		iface:      "edge.sql",
 		targetKind: "SQLiteDatabase",
 	},

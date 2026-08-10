@@ -4,11 +4,11 @@
   "name": "edge.sql",
   "version": "1.0.0",
   "title": "Embedded SQLite database",
-  "description": "SQL statements executed against one embedded SQLite database with serializable transactions. Values are TAGGED, never bare JSON scalars: every bound parameter and every returned column value is exactly one of {\"type\":\"null\"}, {\"type\":\"integer\",\"value\":\"<decimal>\"}, {\"type\":\"real\",\"value\":<number>}, {\"type\":\"text\",\"value\":\"<string>\"}, and {\"type\":\"blob\",\"base64\":\"<base64>\"} — SQLite's five storage classes and nothing else. An INTEGER travels as canonical decimal TEXT because IEEE-754 double carries 53 bits of mantissa, so 9223372036854775807 would arrive as 9223372036854775808 if it were a JSON number; a host MUST reject with sql_error an integer outside the 64-bit two's-complement range -9223372036854775808..9223372036854775807, and one carrying a leading zero, a leading plus, or surrounding space. A BLOB travels as RFC 4648 section 4 base64 with padding, so arbitrary bytes survive; TEXT is UTF-8. There is no boolean member because SQLite has no boolean storage class: 0 and 1 are INTEGERs. lastInsertRowId is the same canonical decimal text for the same reason. Every statement reports the same result whether it ran alone or inside a transaction: rows, the rows it returned in order and empty when it returned none; rowsWritten, the number of rows it inserted, updated, or deleted; and lastInsertRowId when it inserted at least one row. Parameters bind POSITIONALLY, so ?1 is params[0], and a statement referencing an index the array does not carry fails with sql_error. A transaction applies its ordered statements atomically under serializable isolation: it observes one consistent snapshot, and either every statement applied or none did. A failure anywhere rolls the whole transaction back, leaves the database exactly as it was, and reports sql_error without partial results — a result list describing statements whose effects were discarded would record a state that never existed. Concurrent writers may fail with busy, which is the only retryable outcome; a caller that retries re-runs the whole call. query is declared idempotent, which is only true if it cannot write, so a host MUST refuse a writing statement submitted through query with sql_error.",
+  "description": "SQL statements executed against one embedded SQLite database with serializable transactions. EdgeSqlValue is exactly null, a finite binary64 number whose absolute value is at most 9007199254740991 (Number.MAX_SAFE_INTEGER), a UTF-8 string, or the common canonical encoded-bytes object {\"encoding\":\"base64\",\"data\":\"...\"}. The BLOB data is RFC 4648 section 4 base64, padded and unwrapped. Boolean, bigint, and SQL-only tagged objects are not values. SQLite INTEGER and REAL may store a number differently, but that storage-class distinction is not portable or observable through this value model. A host MUST NOT round, stringify, tag, or silently coerce a number: a non-finite or out-of-range input or output fails numeric_out_of_range. Malformed values and base64 fail sql_error. Parameters bind POSITIONALLY, so ?1 is params[0]. Every runtime entry accepts exactly one SQLite statement. After that statement, only whitespace and comments may remain; a second statement fails sql_error. BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT, and RELEASE are transaction-control SQL and fail sql_error on every runtime operation. A statement that would change sqlite_schema, the database attachment set, or the migration ledger also fails sql_error: durable schema migration exists only through the SQLiteMigrationApplication administrative path. Each statement result is exactly rows, in statement and row order, and rowsWritten, the number of rows inserted, updated, or deleted; lastInsertRowId is not portable and does not exist. SQL, column-name, and TEXT byte limits measure UTF-8; BLOB limits measure decoded bytes. maxRowBytes and maxResultBytesPerCall measure UTF-8 bytes of RFC 8785 canonical JSON for one row and the complete operation output. Every result is fully materialized and checked against the numeric, row, column, value, and result limits before a write commits. Concurrent writers may fail busy, the only retryable outcome; retrying re-runs the whole call.",
   "operations": [
     {
       "name": "execute",
-      "description": "Run one statement with positionally bound parameters and return its result. A statement that returns rows returns them here too; a statement that writes reports rowsWritten and, when it inserted at least one row, lastInsertRowId as canonical decimal text. execute is deliberately NOT idempotent: re-running an INSERT inserts again, so a caller that retries after a timeout must decide for itself whether the first attempt applied.",
+      "description": "Run exactly one runtime statement with positionally bound EdgeSqlValue parameters and return its fully materialized rows and rowsWritten. The statement may have effects, so execute is deliberately NOT idempotent: re-running an INSERT inserts again. Output and limits are validated before the statement's implicit transaction commits; numeric_out_of_range or an exceeded result limit applies nothing. A caller retrying after an unknown transport outcome must decide whether the first call applied.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -17,102 +17,38 @@
             "items": {
               "oneOf": [
                 {
-                  "additionalProperties": false,
-                  "properties": {
-                    "type": {
-                      "enum": [
-                        "null"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "type"
-                  ],
-                  "type": "object"
+                  "type": "null"
+                },
+                {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "number"
+                },
+                {
+                  "maxLength": 1000000,
+                  "type": "string"
                 },
                 {
                   "additionalProperties": false,
                   "properties": {
-                    "type": {
-                      "enum": [
-                        "integer"
-                      ],
-                      "type": "string"
-                    },
-                    "value": {
-                      "maxLength": 20,
-                      "pattern": "^(?:0|-?[1-9][0-9]{0,18})$",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "value",
-                    "type"
-                  ],
-                  "type": "object"
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "type": {
-                      "enum": [
-                        "real"
-                      ],
-                      "type": "string"
-                    },
-                    "value": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "value",
-                    "type"
-                  ],
-                  "type": "object"
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "type": {
-                      "enum": [
-                        "text"
-                      ],
-                      "type": "string"
-                    },
-                    "value": {
-                      "maxLength": 1000000,
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "value",
-                    "type"
-                  ],
-                  "type": "object"
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "base64": {
+                    "data": {
                       "maxLength": 1333336,
                       "type": "string"
                     },
-                    "type": {
+                    "encoding": {
                       "enum": [
-                        "blob"
+                        "base64"
                       ],
                       "type": "string"
                     }
                   },
                   "required": [
-                    "base64",
-                    "type"
+                    "data",
+                    "encoding"
                   ],
                   "type": "object"
                 }
-              ],
-              "type": "object"
+              ]
             },
             "maxItems": 100,
             "type": "array"
@@ -132,112 +68,43 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "lastInsertRowId": {
-            "maxLength": 20,
-            "pattern": "^(?:0|-?[1-9][0-9]{0,18})$",
-            "type": "string"
-          },
           "rows": {
             "items": {
               "additionalProperties": {
                 "oneOf": [
                   {
-                    "additionalProperties": false,
-                    "properties": {
-                      "type": {
-                        "enum": [
-                          "null"
-                        ],
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "type"
-                    ],
-                    "type": "object"
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "number"
+                  },
+                  {
+                    "maxLength": 1000000,
+                    "type": "string"
                   },
                   {
                     "additionalProperties": false,
                     "properties": {
-                      "type": {
-                        "enum": [
-                          "integer"
-                        ],
-                        "type": "string"
-                      },
-                      "value": {
-                        "maxLength": 20,
-                        "pattern": "^(?:0|-?[1-9][0-9]{0,18})$",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "value",
-                      "type"
-                    ],
-                    "type": "object"
-                  },
-                  {
-                    "additionalProperties": false,
-                    "properties": {
-                      "type": {
-                        "enum": [
-                          "real"
-                        ],
-                        "type": "string"
-                      },
-                      "value": {
-                        "type": "number"
-                      }
-                    },
-                    "required": [
-                      "value",
-                      "type"
-                    ],
-                    "type": "object"
-                  },
-                  {
-                    "additionalProperties": false,
-                    "properties": {
-                      "type": {
-                        "enum": [
-                          "text"
-                        ],
-                        "type": "string"
-                      },
-                      "value": {
-                        "maxLength": 1000000,
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "value",
-                      "type"
-                    ],
-                    "type": "object"
-                  },
-                  {
-                    "additionalProperties": false,
-                    "properties": {
-                      "base64": {
+                      "data": {
                         "maxLength": 1333336,
                         "type": "string"
                       },
-                      "type": {
+                      "encoding": {
                         "enum": [
-                          "blob"
+                          "base64"
                         ],
                         "type": "string"
                       }
                     },
                     "required": [
-                      "base64",
-                      "type"
+                      "data",
+                      "encoding"
                     ],
                     "type": "object"
                   }
-                ],
-                "type": "object"
+                ]
               },
               "maxProperties": 100,
               "propertyNames": {
@@ -262,13 +129,14 @@
       },
       "errors": [
         "sql_error",
+        "numeric_out_of_range",
         "busy",
         "backend_unavailable"
       ]
     },
     {
       "name": "query",
-      "description": "Run one READ statement with positionally bound parameters and return its rows. A host MUST refuse a statement that writes with sql_error: this operation is declared idempotent, and a writing statement behind that declaration would let a safe retry duplicate the write. rowsWritten is therefore always 0 here and lastInsertRowId never appears.",
+      "description": "Run exactly one runtime statement inside a rollback-only transaction, fully materialize and validate its result. The host always rolls back before returning and obtains zero persistent side effects without pre-classifying the statement as read-only; even a statement that transiently changes rows returns rowsWritten 0. A materialization, numeric, or limit failure also rolls back. This executed rollback, rather than SQL text classification, is why query is idempotent.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -277,102 +145,38 @@
             "items": {
               "oneOf": [
                 {
-                  "additionalProperties": false,
-                  "properties": {
-                    "type": {
-                      "enum": [
-                        "null"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "type"
-                  ],
-                  "type": "object"
+                  "type": "null"
+                },
+                {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "number"
+                },
+                {
+                  "maxLength": 1000000,
+                  "type": "string"
                 },
                 {
                   "additionalProperties": false,
                   "properties": {
-                    "type": {
-                      "enum": [
-                        "integer"
-                      ],
-                      "type": "string"
-                    },
-                    "value": {
-                      "maxLength": 20,
-                      "pattern": "^(?:0|-?[1-9][0-9]{0,18})$",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "value",
-                    "type"
-                  ],
-                  "type": "object"
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "type": {
-                      "enum": [
-                        "real"
-                      ],
-                      "type": "string"
-                    },
-                    "value": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "value",
-                    "type"
-                  ],
-                  "type": "object"
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "type": {
-                      "enum": [
-                        "text"
-                      ],
-                      "type": "string"
-                    },
-                    "value": {
-                      "maxLength": 1000000,
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "value",
-                    "type"
-                  ],
-                  "type": "object"
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "base64": {
+                    "data": {
                       "maxLength": 1333336,
                       "type": "string"
                     },
-                    "type": {
+                    "encoding": {
                       "enum": [
-                        "blob"
+                        "base64"
                       ],
                       "type": "string"
                     }
                   },
                   "required": [
-                    "base64",
-                    "type"
+                    "data",
+                    "encoding"
                   ],
                   "type": "object"
                 }
-              ],
-              "type": "object"
+              ]
             },
             "maxItems": 100,
             "type": "array"
@@ -392,112 +196,43 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "lastInsertRowId": {
-            "maxLength": 20,
-            "pattern": "^(?:0|-?[1-9][0-9]{0,18})$",
-            "type": "string"
-          },
           "rows": {
             "items": {
               "additionalProperties": {
                 "oneOf": [
                   {
-                    "additionalProperties": false,
-                    "properties": {
-                      "type": {
-                        "enum": [
-                          "null"
-                        ],
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "type"
-                    ],
-                    "type": "object"
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "number"
+                  },
+                  {
+                    "maxLength": 1000000,
+                    "type": "string"
                   },
                   {
                     "additionalProperties": false,
                     "properties": {
-                      "type": {
-                        "enum": [
-                          "integer"
-                        ],
-                        "type": "string"
-                      },
-                      "value": {
-                        "maxLength": 20,
-                        "pattern": "^(?:0|-?[1-9][0-9]{0,18})$",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "value",
-                      "type"
-                    ],
-                    "type": "object"
-                  },
-                  {
-                    "additionalProperties": false,
-                    "properties": {
-                      "type": {
-                        "enum": [
-                          "real"
-                        ],
-                        "type": "string"
-                      },
-                      "value": {
-                        "type": "number"
-                      }
-                    },
-                    "required": [
-                      "value",
-                      "type"
-                    ],
-                    "type": "object"
-                  },
-                  {
-                    "additionalProperties": false,
-                    "properties": {
-                      "type": {
-                        "enum": [
-                          "text"
-                        ],
-                        "type": "string"
-                      },
-                      "value": {
-                        "maxLength": 1000000,
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "value",
-                      "type"
-                    ],
-                    "type": "object"
-                  },
-                  {
-                    "additionalProperties": false,
-                    "properties": {
-                      "base64": {
+                      "data": {
                         "maxLength": 1333336,
                         "type": "string"
                       },
-                      "type": {
+                      "encoding": {
                         "enum": [
-                          "blob"
+                          "base64"
                         ],
                         "type": "string"
                       }
                     },
                     "required": [
-                      "base64",
-                      "type"
+                      "data",
+                      "encoding"
                     ],
                     "type": "object"
                   }
-                ],
-                "type": "object"
+                ]
               },
               "maxProperties": 100,
               "propertyNames": {
@@ -510,7 +245,7 @@
             "type": "array"
           },
           "rowsWritten": {
-            "minimum": 0,
+            "const": 0,
             "type": "integer"
           }
         },
@@ -522,6 +257,7 @@
       },
       "errors": [
         "sql_error",
+        "numeric_out_of_range",
         "busy",
         "backend_unavailable"
       ],
@@ -529,7 +265,7 @@
     },
     {
       "name": "transaction",
-      "description": "Apply an ordered statement list atomically under serializable isolation and return one result per statement, in statement order. results carries exactly as many entries as statements, and each entry is the full statement result — including the rows a SELECT inside the transaction returned, which is why a read-modify-write no longer has to leave the transaction to see what it read.",
+      "description": "Run 1 to 100 ordered runtime statements under serializable isolation and return exactly one result per statement in order. All rows and results are materialized and validated before commit. Only then do all effects commit together; SQL failure, numeric_out_of_range, busy, materialization failure, or any value, row, column, or combined-result limit rolls the whole transaction back and returns no partial results. A successful SELECT inside the transaction therefore returns what that same snapshot observed.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -542,102 +278,38 @@
                   "items": {
                     "oneOf": [
                       {
-                        "additionalProperties": false,
-                        "properties": {
-                          "type": {
-                            "enum": [
-                              "null"
-                            ],
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "type"
-                        ],
-                        "type": "object"
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "number"
+                      },
+                      {
+                        "maxLength": 1000000,
+                        "type": "string"
                       },
                       {
                         "additionalProperties": false,
                         "properties": {
-                          "type": {
-                            "enum": [
-                              "integer"
-                            ],
-                            "type": "string"
-                          },
-                          "value": {
-                            "maxLength": 20,
-                            "pattern": "^(?:0|-?[1-9][0-9]{0,18})$",
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "value",
-                          "type"
-                        ],
-                        "type": "object"
-                      },
-                      {
-                        "additionalProperties": false,
-                        "properties": {
-                          "type": {
-                            "enum": [
-                              "real"
-                            ],
-                            "type": "string"
-                          },
-                          "value": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "value",
-                          "type"
-                        ],
-                        "type": "object"
-                      },
-                      {
-                        "additionalProperties": false,
-                        "properties": {
-                          "type": {
-                            "enum": [
-                              "text"
-                            ],
-                            "type": "string"
-                          },
-                          "value": {
-                            "maxLength": 1000000,
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "value",
-                          "type"
-                        ],
-                        "type": "object"
-                      },
-                      {
-                        "additionalProperties": false,
-                        "properties": {
-                          "base64": {
+                          "data": {
                             "maxLength": 1333336,
                             "type": "string"
                           },
-                          "type": {
+                          "encoding": {
                             "enum": [
-                              "blob"
+                              "base64"
                             ],
                             "type": "string"
                           }
                         },
                         "required": [
-                          "base64",
-                          "type"
+                          "data",
+                          "encoding"
                         ],
                         "type": "object"
                       }
-                    ],
-                    "type": "object"
+                    ]
                   },
                   "maxItems": 100,
                   "type": "array"
@@ -671,112 +343,43 @@
             "items": {
               "additionalProperties": false,
               "properties": {
-                "lastInsertRowId": {
-                  "maxLength": 20,
-                  "pattern": "^(?:0|-?[1-9][0-9]{0,18})$",
-                  "type": "string"
-                },
                 "rows": {
                   "items": {
                     "additionalProperties": {
                       "oneOf": [
                         {
-                          "additionalProperties": false,
-                          "properties": {
-                            "type": {
-                              "enum": [
-                                "null"
-                              ],
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "type"
-                          ],
-                          "type": "object"
+                          "type": "null"
+                        },
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "number"
+                        },
+                        {
+                          "maxLength": 1000000,
+                          "type": "string"
                         },
                         {
                           "additionalProperties": false,
                           "properties": {
-                            "type": {
-                              "enum": [
-                                "integer"
-                              ],
-                              "type": "string"
-                            },
-                            "value": {
-                              "maxLength": 20,
-                              "pattern": "^(?:0|-?[1-9][0-9]{0,18})$",
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "value",
-                            "type"
-                          ],
-                          "type": "object"
-                        },
-                        {
-                          "additionalProperties": false,
-                          "properties": {
-                            "type": {
-                              "enum": [
-                                "real"
-                              ],
-                              "type": "string"
-                            },
-                            "value": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "value",
-                            "type"
-                          ],
-                          "type": "object"
-                        },
-                        {
-                          "additionalProperties": false,
-                          "properties": {
-                            "type": {
-                              "enum": [
-                                "text"
-                              ],
-                              "type": "string"
-                            },
-                            "value": {
-                              "maxLength": 1000000,
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "value",
-                            "type"
-                          ],
-                          "type": "object"
-                        },
-                        {
-                          "additionalProperties": false,
-                          "properties": {
-                            "base64": {
+                            "data": {
                               "maxLength": 1333336,
                               "type": "string"
                             },
-                            "type": {
+                            "encoding": {
                               "enum": [
-                                "blob"
+                                "base64"
                               ],
                               "type": "string"
                             }
                           },
                           "required": [
-                            "base64",
-                            "type"
+                            "data",
+                            "encoding"
                           ],
                           "type": "object"
                         }
-                      ],
-                      "type": "object"
+                      ]
                     },
                     "maxProperties": 100,
                     "propertyNames": {
@@ -800,6 +403,7 @@
               "type": "object"
             },
             "maxItems": 100,
+            "minItems": 1,
             "type": "array"
           }
         },
@@ -810,6 +414,7 @@
       },
       "errors": [
         "sql_error",
+        "numeric_out_of_range",
         "busy",
         "backend_unavailable"
       ]
@@ -819,190 +424,98 @@
     "consistency": "serializable"
   },
   "limits": {
+    "maxBlobBytesPerValue": 1000000,
     "maxBoundParameters": 100,
+    "maxColumnNameBytes": 128,
     "maxColumnsPerRow": 100,
+    "maxResultBytesPerCall": 8388608,
+    "maxRowBytes": 2000000,
     "maxRowsPerStatement": 10000,
     "maxStatementBytes": 100000,
-    "maxStatementsPerTransaction": 100
+    "maxStatementsPerTransaction": 100,
+    "maxTextBytesPerValue": 1000000
   },
   "fixtures": [
     {
-      "name": "create-insert-select",
+      "name": "wire-values-round-trip",
       "steps": [
         {
           "operation": "execute",
           "input": {
-            "sql": "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)"
-          },
-          "expected": {
-            "rows": [],
-            "rowsWritten": 0
-          }
-        },
-        {
-          "operation": "execute",
-          "input": {
             "params": [
+              1.5,
+              "first note",
               {
-                "type": "text",
-                "value": "first note"
-              }
-            ],
-            "sql": "INSERT INTO notes (body) VALUES (?1)"
-          },
-          "expected": {
-            "lastInsertRowId": "1",
-            "rowsWritten": 1
-          }
-        },
-        {
-          "operation": "query",
-          "input": {
-            "sql": "SELECT body FROM notes ORDER BY id"
-          },
-          "expected": {
-            "rows": [
-              {
-                "body": {
-                  "type": "text",
-                  "value": "first note"
-                }
-              }
-            ],
-            "rowsWritten": 0
-          }
-        }
-      ]
-    },
-    {
-      "name": "a-64-bit-integer-round-trips-losslessly",
-      "steps": [
-        {
-          "operation": "execute",
-          "input": {
-            "sql": "CREATE TABLE counters (v INTEGER NOT NULL)"
-          }
-        },
-        {
-          "operation": "execute",
-          "input": {
-            "params": [
-              {
-                "type": "integer",
-                "value": "9223372036854775807"
-              }
-            ],
-            "sql": "INSERT INTO counters (v) VALUES (?1)"
-          },
-          "expected": {
-            "rowsWritten": 1
-          }
-        },
-        {
-          "operation": "query",
-          "input": {
-            "sql": "SELECT v FROM counters"
-          },
-          "expected": {
-            "rows": [
-              {
-                "v": {
-                  "type": "integer",
-                  "value": "9223372036854775807"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "a-blob-round-trips-losslessly",
-      "steps": [
-        {
-          "operation": "execute",
-          "input": {
-            "sql": "CREATE TABLE payloads (v BLOB NOT NULL)"
-          }
-        },
-        {
-          "operation": "execute",
-          "input": {
-            "params": [
-              {
-                "base64": "AAECg/8=",
-                "type": "blob"
-              }
-            ],
-            "sql": "INSERT INTO payloads (v) VALUES (?1)"
-          },
-          "expected": {
-            "rowsWritten": 1
-          }
-        },
-        {
-          "operation": "query",
-          "input": {
-            "sql": "SELECT v FROM payloads"
-          },
-          "expected": {
-            "rows": [
-              {
-                "v": {
-                  "base64": "AAECg/8=",
-                  "type": "blob"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "null-and-real-keep-their-storage-classes",
-      "steps": [
-        {
-          "operation": "execute",
-          "input": {
-            "sql": "CREATE TABLE readings (a REAL, b TEXT)"
-          }
-        },
-        {
-          "operation": "execute",
-          "input": {
-            "params": [
-              {
-                "type": "real",
-                "value": 1.5
+                "data": "AAECg/8=",
+                "encoding": "base64"
               },
-              {
-                "type": "null"
-              }
+              null
             ],
-            "sql": "INSERT INTO readings (a, b) VALUES (?1, ?2)"
-          },
-          "expected": {
-            "rowsWritten": 1
-          }
-        },
-        {
-          "operation": "query",
-          "input": {
-            "sql": "SELECT a, b FROM readings"
+            "sql": "SELECT ?1 AS n, ?2 AS t, ?3 AS b, ?4 AS z"
           },
           "expected": {
             "rows": [
               {
-                "a": {
-                  "type": "real",
-                  "value": 1.5
-                },
                 "b": {
-                  "type": "null"
-                }
+                  "data": "AAECg/8=",
+                  "encoding": "base64"
+                },
+                "n": 1.5,
+                "t": "first note",
+                "z": null
               }
-            ]
+            ],
+            "rowsWritten": 0
           }
+        }
+      ]
+    },
+    {
+      "name": "safe-number-boundary-round-trips",
+      "steps": [
+        {
+          "operation": "query",
+          "input": {
+            "params": [
+              9007199254740991
+            ],
+            "sql": "SELECT ?1 AS v"
+          },
+          "expected": {
+            "rows": [
+              {
+                "v": 9007199254740991
+              }
+            ],
+            "rowsWritten": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "out-of-range-input-is-refused",
+      "steps": [
+        {
+          "operation": "query",
+          "input": {
+            "params": [
+              9007199254740992
+            ],
+            "sql": "SELECT ?1 AS v"
+          },
+          "expectedError": "numeric_out_of_range"
+        }
+      ]
+    },
+    {
+      "name": "out-of-range-output-is-refused",
+      "steps": [
+        {
+          "operation": "query",
+          "input": {
+            "sql": "SELECT 9007199254740992 AS v"
+          },
+          "expectedError": "numeric_out_of_range"
         }
       ]
     },
@@ -1014,40 +527,33 @@
           "input": {
             "statements": [
               {
-                "sql": "CREATE TABLE events (id INTEGER PRIMARY KEY, n INTEGER NOT NULL)"
+                "params": [
+                  7
+                ],
+                "sql": "SELECT ?1 AS n"
               },
               {
                 "params": [
-                  {
-                    "type": "integer",
-                    "value": "7"
-                  }
+                  "done"
                 ],
-                "sql": "INSERT INTO events (n) VALUES (?1)"
-              },
-              {
-                "sql": "SELECT n FROM events ORDER BY id"
+                "sql": "SELECT ?1 AS t"
               }
             ]
           },
           "expected": {
             "results": [
               {
-                "rows": [],
+                "rows": [
+                  {
+                    "n": 7
+                  }
+                ],
                 "rowsWritten": 0
-              },
-              {
-                "lastInsertRowId": "1",
-                "rows": [],
-                "rowsWritten": 1
               },
               {
                 "rows": [
                   {
-                    "n": {
-                      "type": "integer",
-                      "value": "7"
-                    }
+                    "t": "done"
                   }
                 ],
                 "rowsWritten": 0
@@ -1058,26 +564,36 @@
       ]
     },
     {
-      "name": "a-failed-transaction-applies-nothing",
+      "name": "multiple-statements-are-refused",
       "steps": [
         {
-          "operation": "transaction",
+          "operation": "execute",
           "input": {
-            "statements": [
-              {
-                "sql": "CREATE TABLE rolled_back (id INTEGER PRIMARY KEY)"
-              },
-              {
-                "sql": "INSERT INTO no_such_table (id) VALUES (1)"
-              }
-            ]
+            "sql": "SELECT 1; SELECT 2"
           },
           "expectedError": "sql_error"
-        },
+        }
+      ]
+    },
+    {
+      "name": "transaction-control-is-refused",
+      "steps": [
         {
           "operation": "query",
           "input": {
-            "sql": "SELECT id FROM rolled_back"
+            "sql": "BEGIN"
+          },
+          "expectedError": "sql_error"
+        }
+      ]
+    },
+    {
+      "name": "schema-change-is-admin-only",
+      "steps": [
+        {
+          "operation": "execute",
+          "input": {
+            "sql": "CREATE TABLE forbidden_runtime_schema (id INTEGER PRIMARY KEY)"
           },
           "expectedError": "sql_error"
         }

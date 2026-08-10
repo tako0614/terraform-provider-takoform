@@ -50,9 +50,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerVersion",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:51979179aa6f8be5d4b655bea9674e98fd2c9a1492b58512425304d1f1454520"
+        "schemaDigest": "sha256:24eecc6289b1a244756e4d17e6a84a1066b67e0f30656d29816fe4d5c421777a"
       },
-      "packageDigest": "sha256:752d425274b535f04c904a36fcfbbfad0240f70987d99c3acc575f1c0d235021"
+      "packageDigest": "sha256:f7e7465346abf6e4643bc41226c5f627f3c2b75d2235adc645ded8cad84285bb"
     },
     {
       "kind": "WorkerDeployment",
@@ -62,9 +62,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "WorkerDeployment",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:acf8c550c65347db0b270afce72f7eefde66e46fbfe1a15221b7424f47333155"
+        "schemaDigest": "sha256:860d16e581fc38d8abb7a1789f611de9ae532418ff1e7fef8ef3a129736ad0f0"
       },
-      "packageDigest": "sha256:83b7921be3ba53ebe5416c57e2eebab6c7438636137050d0e72ced92b81a9cb6"
+      "packageDigest": "sha256:533c869fb27b5826576bd2744e558732dc64129cb9ce933f82bf8a7d91f79426"
     },
     {
       "kind": "WorkerCustomDomain",
@@ -134,9 +134,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "SQLiteDatabase",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:a667ec4a585223dc505a9497c91ecae49b6166a6dedeac07adae4b0d3cb3ca9f"
+        "schemaDigest": "sha256:e250197b8b5fc9305e47dc9b6ca521c1010bc0b5f61e36c977e2307c9972a85f"
       },
-      "packageDigest": "sha256:ed4ecf07a18b8f38d98586e011cfdea1fa5cb5c1218ba44384f588ab07ddd78a"
+      "packageDigest": "sha256:9ff6f4d0a82b56c8fad279a14c662f524416a582ea4e0b09a3f5d6db8220f92a"
     },
     {
       "kind": "SQLiteMigrationSet",
@@ -158,9 +158,9 @@
         "apiVersion": "edge.forms.takoform.com/v1alpha1",
         "kind": "SQLiteMigrationApplication",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:9153c327c497ca89665c592c966bb5c708df4e4b5c350f0590d2ad84dba282f1"
+        "schemaDigest": "sha256:85efe28b9178abe56c9955ec42976e3ffb09b7103f2008b9c98801c74a236bbb"
       },
-      "packageDigest": "sha256:975546a79daa861a8902a1c0aea621b24d3b035e6894223b246165545e993352"
+      "packageDigest": "sha256:c54a13e2a02ecbe787a7ca47a71f598f9e94e06cf989ad1fdd3f1ecd6e31d62f"
     },
     {
       "kind": "AtLeastOnceQueue",

@@ -24,6 +24,12 @@ set
 Deleting the attachment stops managing the relationship only. It never runs
 down SQL, erases ledger entries, changes schema, or deletes the database.
 
+This administrative path is deliberately separate from `edge.sql`. Runtime
+`execute`, `query`, and `transaction` reject durable schema changes,
+multi-statement input, and transaction-control SQL; only this attachment may
+advance schema through the exact committed migration history
+([decision 0034](../../spec/decisions/0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)).
+
 ## Why this is one Form
 
 The database, desired history, and act of applying that history have distinct
