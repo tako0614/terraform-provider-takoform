@@ -10,7 +10,7 @@ different Form epochs.
 
 Provider v2.1 and later additionally carry the current Experimental Edge
 Platform Family over Beta Host API `forms.takoform.com/v1beta1`. Provider
-v2.1.0 is a stable release target whose descriptor remains `candidate-only`
+v2.1.1 is a stable release target whose descriptor remains `candidate-only`
 until the release owner publishes it
 ([decision 0035](../../spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
 Existing Beta state remains bound to its exact Beta FormRef and codec when a

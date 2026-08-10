@@ -11,8 +11,8 @@ Embedded SQLite database with bounded EdgeSqlValue values, rollback-only queries
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.0 or
-later. Provider v2.1.0 is the stable release target; its source descriptor stays
+This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or
+later. Provider v2.1.1 is the stable release target; its source descriptor stays
 candidate-only until the owner publishes it. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](../../examples/resources/takoform_sqlite_database/resource.tf).

@@ -64,7 +64,7 @@ import (
 // resource.
 //
 // Version 1 is the first numbered layout of this channel. It ships in the
-// stable provider v2.1.0 release target; the descriptor remains candidate-only
+// stable provider v2.1.1 release target; the descriptor remains candidate-only
 // until owner publication, so no public user state exists at version 0.
 // Registering the upgrader anyway is what makes
 // the mechanism real rather than aspirational, and it is exercised by

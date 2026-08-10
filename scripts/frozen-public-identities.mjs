@@ -73,4 +73,5 @@ export const FROZEN_EXTRA_ASSETS = new Set([
   "assets/chunks/@localSearchIndexroot.DtBbonOt.js",
   "assets/spec_host-api_v1alpha3.md.B4iy7DrK.js",
   "assets/spec_host-api_v1alpha3.md.B4iy7DrK.lean.js",
+  "assets/style.BYwq6E7_.css",
 ]);

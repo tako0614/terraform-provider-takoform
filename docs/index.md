@@ -1,6 +1,6 @@
 ---
 page_title: "Takoform provider"
-description: "Published provider v2.0.0 retained resources, provider v2.1.0 Beta release target, and provider v1 Legacy recovery"
+description: "Published provider v2.0.0 retained resources, provider v2.1.1 Beta release target, and provider v1 Legacy recovery"
 ---
 
 # Takoform provider
@@ -24,7 +24,7 @@ evidence. There is no current central approval or admission. The nine `0.1.0`
 v1alpha2 candidates are retained provider-v2 preview candidates, exposed by
 the published provider `v2.0.0`; using them requires a compatible host. This
 repository does not assert a hosted service's live availability. Stable
-provider `v2.1.0` is the release target for the Beta Edge family; its source
+provider `v2.1.1` is the release target for the Beta Edge family; its source
 descriptor remains `candidate-only` until the release owner publishes it.
 
 ## Choose the provider line
@@ -101,7 +101,7 @@ authorization and carries no credential.
 
 The `edge.forms.takoform.com/v1beta1` Form Family rides the Beta Host API,
 discovered at `/.well-known/takoform/v1beta1`. Its 15 typed resources are
-Experimental `0.1.0` Forms and require provider v2.1.0 or later. The provider
+Experimental `0.1.0` Forms and require provider v2.1.1 or later. The provider
 release descriptor remains `candidate-only`; the retained v2 resources above
 are unaffected:
 

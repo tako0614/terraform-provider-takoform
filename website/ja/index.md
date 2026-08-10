@@ -22,9 +22,9 @@ tier を説明しているかを明示し、両者を混ぜません。
 | Tier | 対象 | 入手方法 |
 | --- | --- | --- |
 | **公開済み (Current published)** | provider `v2.0.0` と、保持される 9 つの `forms.takoform.com/v1alpha2` リソース | `terraform init` が Registry からインストール |
-| **Beta release candidate** | stable provider target `v2.1.0` と、Experimental な `edge.forms.takoform.com/v1beta1` family 15種 | owner 公開までは source からビルド |
+| **Beta release candidate** | stable provider target `v2.1.1` と、Experimental な `edge.forms.takoform.com/v1beta1` family 15種 | owner 公開までは source からビルド |
 
-`v2.1.0` descriptor は owner が公開するまで `candidate-only` です。15種の exact
+`v2.1.1` descriptor は owner が公開するまで `candidate-only` です。15種の exact
 Beta FormRef/digest は provider compatibility identity として固定済みで、package
 artifact は未公開です。open obligation は package/public service と将来の
 Stable/GA qualification に残ります。
@@ -118,7 +118,7 @@ Form であり、交換可能なのはホストであって意味ではありま
 ## Beta: Experimental Edge Platform Family
 
 ::: warning Beta provider release candidate
-このセクションは stable provider `v2.1.0` release target に乗ります。owner 公開
+このセクションは stable provider `v2.1.1` release target に乗ります。owner 公開
 までは descriptor が `candidate-only` です。15 Form は Experimental で、Beta は
 API/family channel であって Stable/GA claim ではありません。適用できる構成は
 [Beta クイックスタート](/ja/docs/#beta-edge-platform-family) にあります。

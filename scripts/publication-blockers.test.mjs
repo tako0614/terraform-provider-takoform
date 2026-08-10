@@ -50,7 +50,7 @@ describe("the committed ledger", () => {
     expect(openBlockers(parsed).length).toBeGreaterThan(0);
     expect(assertProviderReleaseCandidate(repositoryRoot)).toEqual({
       formCount: 15,
-      version: "2.1.0",
+      version: "2.1.1",
     });
   });
 

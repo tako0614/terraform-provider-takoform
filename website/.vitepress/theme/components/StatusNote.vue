@@ -17,7 +17,7 @@ const { lang } = useData();
       <code>forms.takoform.com/v1alpha2</code> epoch と
       <code>packages.forms.takoform.com/v1alpha3</code> envelope は provider-v2 の互換面として
       保持されます。provider <code>v2.0.0</code> は現在の公開済み client、provider
-      <code>v1.0.3</code> は公開済みの Legacy client です。stable provider <code>v2.1.0</code> は
+      <code>v1.0.3</code> は公開済みの Legacy client です。stable provider <code>v2.1.1</code> は
       Beta 契約を対象とする release target で、owner が公開するまで descriptor は
       <code>candidate-only</code> です。15 Form は Experimental で package は未公開です。
       <code>forms.takoform.com/v1alpha1</code> の公開済み Form Package identity
@@ -33,7 +33,7 @@ const { lang } = useData();
       <code>packages.forms.takoform.com/v1alpha3</code> envelope are retained as
       the provider-v2 compatibility surface. Provider <code>v2.0.0</code> is the
       current published client and provider <code>v1.0.3</code> is the published
-      Legacy client. Stable provider <code>v2.1.0</code> is the release target
+      Legacy client. Stable provider <code>v2.1.1</code> is the release target
       for the Beta contracts; its descriptor remains <code>candidate-only</code>
       until the owner publishes it. The 15 Forms are Experimental and their
       packages remain unpublished. The 34 published Form Package identities from

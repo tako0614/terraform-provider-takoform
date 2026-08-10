@@ -22,9 +22,9 @@ and nothing here mixes them.
 | Tier | What it covers | How you get it |
 | --- | --- | --- |
 | **Current published** | provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | `terraform init` installs it from the Registry |
-| **Beta release candidate** | stable provider target `v2.1.0`, the Beta Host API, and 15 Experimental `edge.forms.takoform.com/v1beta1` Forms | build from source until owner publication |
+| **Beta release candidate** | stable provider target `v2.1.1`, the Beta Host API, and 15 Experimental `edge.forms.takoform.com/v1beta1` Forms | build from source until owner publication |
 
-The v2.1.0 descriptor remains `candidate-only` until the release owner
+The v2.1.1 descriptor remains `candidate-only` until the release owner
 publishes it. Its exact 15 Beta FormRefs/digests are already immutable provider
 compatibility data; their package artifacts remain unpublished. Open
 [release-policy obligations](/spec/publication-freeze.html) stay in force for
@@ -120,7 +120,7 @@ the published provider `v2.0.0`, retained for compatibility
 ## Beta: the Experimental Edge Platform Family
 
 ::: warning Provider release candidate
-Everything in this section rides the stable provider `v2.1.0` release target.
+Everything in this section rides the stable provider `v2.1.1` release target.
 Its descriptor remains `candidate-only` until owner publication. The 15 exact
 Forms are Experimental; Beta is their API/family channel, not Stable maturity,
 and their package artifacts remain unpublished. Runnable configuration lives

@@ -30,8 +30,8 @@ func TestReleaseDescriptorPinsPublicIdentityAndSigner(t *testing.T) {
 	if err := validateCLIMatrix(desc.CLIMatrix); err != nil {
 		t.Fatalf("CLI/FQN matrix: %v", err)
 	}
-	if desc.Version != "2.1.0" {
-		t.Fatalf("current provider candidate must be 2.1.0, got %q", desc.Version)
+	if desc.Version != "2.1.1" {
+		t.Fatalf("current provider candidate must be 2.1.1, got %q", desc.Version)
 	}
 	if desc.Versioning.PortableAPIVersion != "forms.takoform.com/v1beta1" {
 		t.Fatalf("current provider candidate must target Host API v1beta1, got %q", desc.Versioning.PortableAPIVersion)
@@ -76,7 +76,7 @@ func TestProviderIdentityLedgerPinsExactBetaFamily(t *testing.T) {
 		t.Fatalf("unexpected provider identity ledger envelope: %#v", ledger)
 	}
 	entry := ledger.Releases[0]
-	if entry.ProviderVersion != "2.1.0" || entry.PortableAPIVersion != providerHostAPIVersion ||
+	if entry.ProviderVersion != "2.1.1" || entry.PortableAPIVersion != providerHostAPIVersion ||
 		entry.Family != providerFamilyAPIVersion || entry.FormMaturity != "experimental" || len(entry.Forms) != 15 {
 		t.Fatalf("unexpected provider identity release: %#v", entry)
 	}

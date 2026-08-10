@@ -19,7 +19,7 @@ security-maintained Legacy line for retained state and explicit migration.
 Historical release bytes remain available for verification and migration;
 support never means replacing them.
 
-`release/version.json` names the stable `v2.1.0` release target and keeps
+`release/version.json` names the stable `v2.1.1` release target and keeps
 `publicationStatus: candidate-only` until the release owner publishes it; it
 is not live availability state. The retained signed release, pinned tag
 identity, and canonical Registry listing independently establish that

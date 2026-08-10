@@ -220,7 +220,7 @@ provider-v2 Form Package indexes use `packages.forms.takoform.com/v1alpha3`;
 current Beta family packages use `packages.forms.takoform.com/v1alpha4`, and published
 v1alpha1/v1alpha2 package indexes remain immutable Legacy evidence.
 
-`release/version.json` names stable `v2.1.0` as the Beta release target and
+`release/version.json` names stable `v2.1.1` as the Beta release target and
 keeps `publicationStatus: candidate-only` until the release owner publishes
 it; the descriptor must not be presented as live publication state. Retained
 signed release and Registry evidence independently establish `v2.0.0` as the

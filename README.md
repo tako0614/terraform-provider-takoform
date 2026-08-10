@@ -20,7 +20,7 @@ are independent facts. Everything below names each fact explicitly.
 | Tier | What it is | How you get it |
 | --- | --- | --- |
 | **Current published** | Provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | installed from the Terraform Registry |
-| **Beta release candidate** | Stable provider target `v2.1.0`, carrying the Beta Host API `forms.takoform.com/v1beta1` and 15 exact Experimental Forms in `edge.forms.takoform.com/v1beta1`; descriptor status is `candidate-only` until the release owner publishes it | built from this repository's source only |
+| **Beta release candidate** | Stable provider target `v2.1.1`, carrying the Beta Host API `forms.takoform.com/v1beta1` and 15 exact Experimental Forms in `edge.forms.takoform.com/v1beta1`; descriptor status is `candidate-only` until the release owner publishes it | built from this repository's source only |
 
 The provider release candidate is source, not evidence of Registry publication.
 Its 15 embedded Beta FormRefs and definition/package digests are already locked
@@ -68,7 +68,7 @@ Host transport follows the same explicit split. Provider v1 uses the frozen
 v2 uses `/.well-known/takoform/v1alpha2` and
 `/apis/forms.takoform.com/v1alpha2`. The retained v1alpha3 identities remain
 available as immutable history. The current Beta lane carried by provider
-v2.1.0 uses `/.well-known/takoform/v1beta1` and
+v2.1.1 uses `/.well-known/takoform/v1beta1` and
 `/apis/forms.takoform.com/v1beta1` with
 UID/generation/revision identity, long-running operations, and
 content-addressed artifact upload; one discovery response never points two
@@ -95,7 +95,7 @@ establish publication.
   retained nine Form candidates, which are superseded for new design work.
   Its publication is proved by retained signed Registry-readback evidence,
   not inferred from the current source release descriptor.
-- Provider `v2.1.0` is the stable release target for the Beta Host API and the
+- Provider `v2.1.1` is the stable release target for the Beta Host API and the
   exact 15 Experimental Edge Platform Forms. Its descriptor remains
   `candidate-only` until the release owner actually publishes the provider
   ([decision 0035](spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).

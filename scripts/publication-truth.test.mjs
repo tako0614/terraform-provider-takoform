@@ -29,8 +29,8 @@ function fixture() {
     releaseVersion: {
       providerAddress: "registry.terraform.io/tako0614/takoform",
       publicationStatus: "candidate-only",
-      tag: "v2.1.0",
-      version: "2.1.0",
+      tag: "v2.1.1",
+      version: "2.1.1",
     },
     providerIdentities: {
       format: "takoform.provider-release-identities@v1",

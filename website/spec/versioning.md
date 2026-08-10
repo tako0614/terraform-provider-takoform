@@ -73,7 +73,7 @@ states. Changing the provider major MUST NOT reset, renumber, promote, or
 deprecate a Form. Changing a Form MUST NOT require a provider release when the
 provider can already carry that Form's data and exact identity correctly.
 
-Provider `v2.1.0` is therefore a stable provider version that targets the Beta
+Provider `v2.1.1` is therefore a stable provider version that targets the Beta
 Host API `forms.takoform.com/v1beta1` and 15 exact Experimental FormRefs in
 `edge.forms.takoform.com/v1beta1`. The release descriptor remains
 `candidate-only` until the release owner publishes it; that publication status

@@ -35,7 +35,7 @@ const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
 const SOURCE_REPOSITORY = `https://github.com/${GITHUB_REPOSITORY}.git`;
 const PROVIDER_ADDRESS = "registry.terraform.io/tako0614/takoform";
 const PROVIDER_SIGNER = "3510E75E05BBCC303B92D77934FC18AC897FB709";
-const PROVIDER_VERSION = "2.1.0";
+const PROVIDER_VERSION = "2.1.1";
 const PROVIDER_HOST_API = "forms.takoform.com/v1beta1";
 const PROVIDER_FORM_FAMILY = "edge.forms.takoform.com/v1beta1";
 const PROVIDER_IDENTITY_LEDGER = "release/provider-form-identities.json";
@@ -3652,11 +3652,11 @@ export function providerReleaseBody(descriptor) {
     descriptor?.versioning?.portableApiVersion !== PROVIDER_HOST_API
   ) {
     throw new Error(
-      "provider release body requires the exact v2.1.0 Beta Host API descriptor",
+      "provider release body requires the exact v2.1.1 Beta Host API descriptor",
     );
   }
   return (
-    "Signed deterministic Takoform provider v2.1.0 release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from provider v1: Provider v2.1.0 retains the published provider-v2 state compatibility lane and its historical Host API epoch forms.takoform.com/v1alpha2. Provider-v1 state remains a breaking boundary and is rejected instead of being rewritten; follow the explicit create/import/cutover migration guide: " +
+    "Signed deterministic Takoform provider v2.1.1 release. Provider publication does not publish, mature, activate, or make any Form commercially available.\n\nBreaking upgrade from provider v1: Provider v2.1.1 retains the published provider-v2 state compatibility lane and its historical Host API epoch forms.takoform.com/v1alpha2. Provider-v1 state remains a breaking boundary and is rejected instead of being rewritten; follow the explicit create/import/cutover migration guide: " +
     `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/release/migrations/v1-to-v2.md` +
     "\n\nThis provider release targets the Beta Host API `forms.takoform.com/v1beta1` and the Edge Platform Family `edge.forms.takoform.com/v1beta1`. Provider SemVer, Host API, Form Family, Form definition, and Form Package versions are independent axes. The exact 15 Experimental 0.1.0 FormRefs and package digests are locked in " +
     `https://github.com/${GITHUB_REPOSITORY}/blob/${descriptor.tag}/${PROVIDER_IDENTITY_LEDGER}` +
@@ -3789,7 +3789,7 @@ function providerPublish(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
   const releaseBody = providerReleaseBody(descriptor);
   if (
-    !releaseBody.includes("Provider v2.1.0") ||
+    !releaseBody.includes("Provider v2.1.1") ||
     !releaseBody.includes(PROVIDER_HOST_API) ||
     !releaseBody.includes(PROVIDER_FORM_FAMILY) ||
     !releaseBody.includes(PROVIDER_IDENTITY_LEDGER) ||
