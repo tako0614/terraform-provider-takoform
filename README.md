@@ -43,7 +43,7 @@ unversioned lane to downgrade into.
 
 `release/version.json` now describes the unissued `v1.0.4` maintenance
 candidate and intentionally retains `publicationStatus: candidate-only` as
-descriptor metadata, not live availability state. The append-only provider
+release-descriptor metadata, not live availability state. The append-only provider
 identity ledger, signed `v1.0.3` release, and canonical Registry readback
 establish the latest published provider; no `v1.0.4` identity is assigned.
 The protected admission tag and offline-authenticated retained closure
