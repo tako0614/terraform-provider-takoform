@@ -22,11 +22,11 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-Provider `v1.0.3` is the current release candidate. Provider `v1.0.2` remains
-the current published `v1` release until the signed GitHub Release and
-authenticated Terraform/OpenTofu Registry readback for `v1.0.3` complete.
-`release/version.json` says `publicationStatus: candidate-only` because it is
-candidate metadata, not a live availability field.
+Provider `v1.0.3` is the current published `v1` release. Its signed annotated
+tag resolves to commit `87b29ef58066755012a8d80bce0c8f715cf82cb9`; the
+append-only provider release ledger records the exact tag object and commit.
+`release/version.json` still says `publicationStatus: candidate-only` because
+it is immutable release-descriptor metadata, not a live availability field.
 
 ## Provider v1.0.3 RelationalDatabase schema inputs
 
