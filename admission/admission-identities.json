@@ -42,6 +42,13 @@
     {
       "version": "1.0.6",
       "tag": "forms/admissions/v1.0.6",
+      "status": "assigned-historical",
+      "tagObject": "b34b13a6e2fd3acbcbd73935e3e353f5d05b5c31",
+      "commit": "1e438d61ed77f1ccfd3e000250f7dcf0c578c1af"
+    },
+    {
+      "version": "1.0.7",
+      "tag": "forms/admissions/v1.0.7",
       "status": "assigned-current",
       "descriptorPath": "admission/v4/version.json"
     }

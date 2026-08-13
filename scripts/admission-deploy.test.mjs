@@ -42,8 +42,8 @@ afterEach(() => {
 
 const descriptor = {
   format: "takoform.standard-admission-checkpoint@v1",
-  version: "1.0.6",
-  tag: "forms/admissions/v1.0.6",
+  version: "1.0.7",
+  tag: "forms/admissions/v1.0.7",
   generation: "ga-core-v2",
   retainedRoot: "admission/v4",
 };
@@ -55,7 +55,9 @@ describe("admission deploy surface", () => {
       "authority",
       "published-identity",
     ]);
-    expect(ADMISSION_SURFACE.requiresScripts).toContain("check");
+    expect(ADMISSION_SURFACE.requiresScripts).toEqual([
+      "check:release-owner-gate",
+    ]);
     expect(ADMISSION_SURFACE.requiresTools).toEqual(["git", "bun", "go", "gh"]);
     expect(ADMISSION_SURFACE.requiresEnv).toEqual(["GH_TOKEN"]);
     expect(Object.keys(ADMISSION_SURFACE.obligations).sort()).toEqual(
@@ -106,8 +108,8 @@ describe("admission checkpoint identity", () => {
     );
     for (const mutate of [
       (value) => ({ ...value, unexpected: true }),
-      (value) => ({ ...value, version: "1.0.6-rc.1" }),
-      (value) => ({ ...value, tag: "forms/admissions/v1.0.7" }),
+      (value) => ({ ...value, version: "1.0.7-rc.1" }),
+      (value) => ({ ...value, tag: "forms/admissions/v1.0.6" }),
       (value) => ({ ...value, generation: "ga-core-v1" }),
       (value) => ({ ...value, retainedRoot: "admission/v3" }),
     ]) {
@@ -145,7 +147,7 @@ describe("admission checkpoint identity", () => {
       setDigest:
         "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     });
-    expect(message).toContain("Activate Standard Form admission v1.0.6");
+    expect(message).toContain("Activate Standard Form admission v1.0.7");
     expect(message).toContain("generation ga-core-v2");
     expect(message).toContain(
       "commit 0123456789abcdef0123456789abcdef01234567",
@@ -257,6 +259,14 @@ describe("admission deploy execution", () => {
     });
     expect(prepared.status).toBe("READY");
     expect(fake.state.local).toBeNull();
+    expect(
+      fake.state.calls.some(
+        ([command, args]) =>
+          command === "bun" &&
+          JSON.stringify(args) ===
+            JSON.stringify(["run", "check:release-owner-gate"]),
+      ),
+    ).toBe(true);
 
     const published = await runAdmissionSurface({
       surface: ADMISSION_SURFACE.surface,
@@ -936,7 +946,7 @@ function sourceFixture() {
     `${JSON.stringify({
       format: "takoform.standard-admission-set@v3",
       generation: "ga-core-v2",
-      admissionReleaseTag: "forms/admissions/v1.0.6",
+      admissionReleaseTag: "forms/admissions/v1.0.7",
     })}\n`,
   );
   return repo;
@@ -1059,6 +1069,13 @@ function fakeCommands({
       {
         tagObject: "b49a55016362d8787966f41b14570e3b67b8ddba",
         commit: "a426a379e2743b4345e868becf3618357c015447",
+      },
+    ],
+    [
+      "forms/admissions/v1.0.6",
+      {
+        tagObject: "b34b13a6e2fd3acbcbd73935e3e353f5d05b5c31",
+        commit: "1e438d61ed77f1ccfd3e000250f7dcf0c578c1af",
       },
     ],
   ]);

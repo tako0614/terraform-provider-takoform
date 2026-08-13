@@ -145,7 +145,7 @@ sources remain immutable history.
 All 34 exact package identities in
 [`forms/release-plan.json`](forms/release-plan.json) are published as signed,
 immutable Form Package releases. The protected
-`forms/admissions/v1.0.6` identity closes the retained
+`forms/admissions/v1.0.7` identity closes the retained
 [`admission/v4/`](admission/v4/) evidence and admits exactly these 10 as
 `portable-standard`: `EdgeWorker`, `ContainerService`, `StatefulEntity`,
 `Schedule`, `ObjectBucket`, `KeyValueStore`, `RelationalDatabase`, `Queue`,
@@ -211,7 +211,7 @@ Provider publication and Standard Form admission are separate authorities.
 Provider publication never changes admission status. The current admission is
 the source-retained, offline-authenticated v4 closure over package, runner,
 Registry, and admission-evidence subjects, identified by the protected
-`forms/admissions/v1.0.6` tag. There is no set-wide release artifact or
+`forms/admissions/v1.0.7` tag. There is no set-wide release artifact or
 controller promotion path.
 
 Provider releases use the fail-closed signed `v*` tag workflow documented in

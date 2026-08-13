@@ -42,7 +42,7 @@ revocation that does not retain package bytes for observe/delete as a
 supply-chain vulnerability.
 
 All 34 current Form Packages are published as immutable signed releases. The
-protected `forms/admissions/v1.0.6` closure admits exactly 10 of them as
+protected `forms/admissions/v1.0.7` closure admits exactly 10 of them as
 `portable-standard`; the remaining 24 are published but not admitted. Report
 any mutation or replacement of that admission identity, retained evidence, or
 package inventory. Retired package releases remain live and immutable, and

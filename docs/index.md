@@ -28,7 +28,7 @@ is `registry.terraform.io/tako0614/takoform`.
   stability are independent; provider `v1.0.3` does not graduate the API to
   `v1`.
 - **All 34 Service Form Packages below are published and immutable.** The
-  protected `forms/admissions/v1.0.6` closure admits exactly 10 as
+  protected `forms/admissions/v1.0.7` closure admits exactly 10 as
   `portable-standard`: `EdgeWorker`, `ContainerService`, `StatefulEntity`,
   `Schedule`, `ObjectBucket`, `KeyValueStore`, `RelationalDatabase`, `Queue`,
   `VectorIndex`, and `ModelEndpoint`. The remaining 24 are published but not
