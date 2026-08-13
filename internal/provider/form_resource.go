@@ -38,6 +38,8 @@ type formResource struct {
 	data *providerData
 }
 
+const relationalDatabaseV2ToV3Transition = "relational-database-v2-to-v3"
+
 var (
 	_ resource.Resource                 = (*formResource)(nil)
 	_ resource.ResourceWithImportState  = (*formResource)(nil)
@@ -67,6 +69,14 @@ func (r *formResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 	}
 	for _, field := range r.kind.Fields {
 		attrs[field.HCL] = fieldAttribute(field)
+	}
+	if r.kind.Kind == "RelationalDatabase" {
+		attrs["form_transition"] = schema.StringAttribute{
+			Optional: true,
+			Description: "Explicit one-time same-resource Form transition. The only accepted value is " +
+				"`relational-database-v2-to-v3`; it never changes fresh creates or resources already recorded as RelationalDatabase@3.0.0.",
+			Validators: []validator.String{StringOneOf(relationalDatabaseV2ToV3Transition)},
+		}
 	}
 	resp.Schema = schema.Schema{
 		Version:     1,
@@ -289,7 +299,12 @@ func artifactSourceAttributes() map[string]schema.Attribute {
 		"artifact_url": schema.StringAttribute{
 			Required:    true,
 			Description: "Absolute credential-free HTTPS URL from which any conforming host can fetch the prebuilt artifact; userinfo, query, and fragment are forbidden because this value persists in nonsensitive state.",
-			Validators:  []validator.String{StringMatches(formcatalog.PatternCredentialFreeHTTPSURL, "artifact_url must be an absolute credential-free https URL without userinfo, query, or fragment")},
+			// The Terraform schema is the decode union for current Edge4 and
+			// retained Edge3 state. The selected byte-exact codec applies its own
+			// desiredSchema before a host call, so this historical pattern does
+			// not weaken current creates or any other Form identity.
+			Validators: []validator.String{StringMatches(formcatalog.PatternRetainedCredentialFreeHTTPSURL,
+				"artifact_url must be an absolute credential-free https URL without userinfo, query, or fragment")},
 		},
 		"artifact_sha256": schema.StringAttribute{
 			Required:    true,
@@ -324,6 +339,7 @@ type formValues struct {
 	Name            types.String
 	Space           types.String
 	ResourceVersion types.String
+	FormTransition  types.String
 	FormIdentity    formStateIdentity
 	Fields          map[string]attr.Value
 	Connections     types.List
@@ -351,6 +367,9 @@ func (r *formResource) valuesFrom(ctx context.Context, getter interface {
 	diags.Append(getter.GetAttribute(ctx, path.Root("form_definition_version"), &values.FormIdentity.DefinitionVersion)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("form_schema_digest"), &values.FormIdentity.SchemaDigest)...)
 	diags.Append(getter.GetAttribute(ctx, path.Root("form_package_digest"), &values.FormIdentity.PackageDigest)...)
+	if r.kind.Kind == "RelationalDatabase" {
+		diags.Append(getter.GetAttribute(ctx, path.Root("form_transition"), &values.FormTransition)...)
+	}
 	if r.kind.Connections != formcatalog.ConnectionsAbsent {
 		diags.Append(getter.GetAttribute(ctx, path.Root("connections"), &values.Connections)...)
 	}
@@ -390,12 +409,21 @@ func (r *formResource) valuesFrom(ctx context.Context, getter interface {
 // declared fields travel, and an unknown plan value never becomes desired
 // state.
 func (r *formResource) toResource(ctx context.Context, values formValues) (*client.Resource, string, diag.Diagnostics) {
+	return r.toResourceWithCodec(ctx, values, formCodec{kind: r.kind})
+}
+
+func (r *formResource) toResourceWithCodec(
+	ctx context.Context,
+	values formValues,
+	codec formCodec,
+) (*client.Resource, string, diag.Diagnostics) {
 	var diags diag.Diagnostics
+	kind := codec.kind
 	spec := map[string]any{}
 	if values.Name.IsUnknown() {
 		diags.AddAttributeError(
 			path.Root("name"),
-			"Unknown "+r.kind.Kind+" field",
+			"Unknown "+kind.Kind+" field",
 			"name must be wholly known before the provider can preview or apply this Form.",
 		)
 	} else if !values.Name.IsNull() {
@@ -403,19 +431,21 @@ func (r *formResource) toResource(ctx context.Context, values formValues) (*clie
 			spec["name"] = name
 		}
 	}
-	if r.kind.Artifact {
-		source, sourceDiags := values.Artifact.toSpec(r.kind.ResourceType)
+	if kind.Artifact {
+		source, sourceDiags := values.Artifact.toSpec(kind.ResourceType)
 		diags.Append(sourceDiags...)
 		if source != nil {
 			spec["source"] = source
 		}
 	}
-	if r.kind.Connections != formcatalog.ConnectionsAbsent {
-		if connections := resourceConnectionsToSpec(ctx, r.kind, values.Connections, &diags); len(connections) > 0 {
+	if kind.Connections != formcatalog.ConnectionsAbsent {
+		if connections := resourceConnectionsToSpec(ctx, kind, values.Connections, &diags); len(connections) > 0 {
 			spec["connections"] = connections
 		}
 	}
-	for _, field := range r.kind.Fields {
+	codecFields := make(map[string]struct{}, len(kind.Fields))
+	for _, field := range kind.Fields {
+		codecFields[field.HCL] = struct{}{}
 		value, ok := values.Fields[field.HCL]
 		if !ok || value == nil || value.IsNull() {
 			continue
@@ -423,7 +453,7 @@ func (r *formResource) toResource(ctx context.Context, values formValues) (*clie
 		if value.IsUnknown() {
 			diags.AddAttributeError(
 				path.Root(field.HCL),
-				"Unknown "+r.kind.Kind+" field",
+				"Unknown "+kind.Kind+" field",
 				field.HCL+" must be wholly known before the provider can preview or apply this Form.",
 			)
 			continue
@@ -445,7 +475,7 @@ func (r *formResource) toResource(ctx context.Context, values formValues) (*clie
 				if member == nil || member.IsNull() || member.IsUnknown() {
 					diags.AddAttributeError(
 						path.Root(field.HCL).AtMapKey(key),
-						"Unknown or null "+r.kind.Kind+" map value",
+						"Unknown or null "+kind.Kind+" map value",
 						field.HCL+" must contain only wholly known, non-null values before the provider can preview or apply this Form.",
 					)
 					whollyKnown = false
@@ -465,7 +495,7 @@ func (r *formResource) toResource(ctx context.Context, values formValues) (*clie
 				if member == nil || member.IsNull() || member.IsUnknown() {
 					diags.AddAttributeError(
 						path.Root(field.HCL),
-						"Unknown or null "+r.kind.Kind+" set member",
+						"Unknown or null "+kind.Kind+" set member",
 						field.HCL+" must contain only wholly known, non-null values before the provider can preview or apply this Form.",
 					)
 					whollyKnown = false
@@ -490,24 +520,47 @@ func (r *formResource) toResource(ctx context.Context, values formValues) (*clie
 			}
 		}
 	}
-	if err := r.kind.ValidateDesired(spec); err != nil {
+	// The Terraform resource schema is the union required to represent both
+	// retained and current codecs. A field absent from the state-recorded codec
+	// must therefore be rejected explicitly; silently dropping it would make an
+	// old Form accept successor semantics.
+	for _, field := range r.kind.Fields {
+		if _, supported := codecFields[field.HCL]; supported {
+			continue
+		}
+		value := values.Fields[field.HCL]
+		if value == nil || value.IsNull() {
+			continue
+		}
+		diags.AddAttributeError(
+			path.Root(field.HCL),
+			"Field is not part of the state-recorded Form",
+			fmt.Sprintf(
+				"%s is not declared by exact %s@%s. Remove it or use an explicitly supported Form transition; the provider will not widen a recorded codec.",
+				field.HCL,
+				kind.Kind,
+				kind.DefinitionVersion,
+			),
+		)
+	}
+	if err := kind.ValidateDesired(spec); err != nil {
 		diags.AddError(
-			"Invalid "+r.kind.Kind+" desired state",
+			"Invalid "+kind.Kind+" desired state",
 			"The planned values do not satisfy the exact desiredSchema compiled into this provider, so no host request was made: "+err.Error(),
 		)
 	}
-	violations, err := r.kind.ConditionalViolations(spec)
+	violations, err := kind.ConditionalViolations(spec)
 	if err != nil {
 		diags.AddError("Invalid Form constraint", err.Error())
 	} else {
 		for _, violation := range violations {
 			attribute := camelToSnake(violation.WireField)
-			if field, ok := fieldByWire(r.kind, violation.WireField); ok {
+			if field, ok := fieldByWire(kind, violation.WireField); ok {
 				attribute = field.HCL
 			}
 			diags.AddAttributeError(
 				path.Root(attribute),
-				"Invalid "+r.kind.Kind+" field combination",
+				"Invalid "+kind.Kind+" field combination",
 				violation.Detail+".",
 			)
 		}
@@ -525,7 +578,7 @@ func (r *formResource) toResource(ctx context.Context, values formValues) (*clie
 	}
 	name, _ := spec["name"].(string)
 	body := &client.Resource{
-		APIVersion: client.APIVersion, Kind: r.kind.Kind,
+		APIVersion: client.APIVersion, Kind: kind.Kind,
 		Metadata: client.Metadata{Name: name, Space: space},
 		Spec:     spec,
 	}
@@ -548,8 +601,7 @@ func (r *formResource) assertConfigured(diags *diag.Diagnostics) bool {
 	return true
 }
 
-func (r *formResource) assertStateFormIdentity(values formValues, diags *diag.Diagnostics) bool {
-	want := r.data.forms[r.kind.Kind]
+func (r *formResource) stateFormCodec(values formValues, diags *diag.Diagnostics) (formCodec, bool) {
 	got, ok := values.FormIdentity.reference()
 	if !ok {
 		diags.AddError(
@@ -559,21 +611,31 @@ func (r *formResource) assertStateFormIdentity(values formValues, diags *diag.Di
 				"If that version is v0.2.1, follow release/migrations/v0.2.1-to-v1.0.1.md; do not refresh v0.1.x state through v0.2.1. "+
 				"Provider v1 intentionally has no automatic state upgrader because pre-v1 state cannot prove its exact FormRef.",
 		)
-		return false
+		return formCodec{}, false
 	}
-	if got != want {
+	if got.FormRef.Kind != r.kind.Kind {
 		diags.AddError(
-			"State Form identity does not match this provider",
+			"State Form identity does not match this resource",
 			fmt.Sprintf(
-				"State is bound to %s; this provider is bound to %s. "+
-					"Pin the provider that created the state and perform an explicit resource migration; "+
-					"the provider will not query a different exact FormRef and interpret a 404 as deletion.",
-				formatFormIdentity(got), formatFormIdentity(want),
+				"State is bound to %s, but this is the %s resource. The provider will not dispatch a lifecycle request across Form kinds.",
+				formatFormIdentity(got), r.kind.Kind,
 			),
 		)
-		return false
+		return formCodec{}, false
 	}
-	return true
+	codec, err := providerExactFormCodec(got)
+	if err != nil {
+		diags.AddError(
+			"State Form identity is unavailable in this provider",
+			fmt.Sprintf(
+				"State is bound to %s, but this provider has no byte-exact registry entry and codec for it: %v. "+
+					"No host request was made; pin a provider that explicitly retains this exact identity.",
+				formatFormIdentity(got), err,
+			),
+		)
+		return formCodec{}, false
+	}
+	return codec, true
 }
 
 func (identity formStateIdentity) reference() (client.InstalledFormReference, bool) {
@@ -620,7 +682,16 @@ func (r *formResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	r.put(ctx, values, &resp.State, &resp.Diagnostics)
+	_ = requestedFormTransition(values, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	codec, err := r.currentFormCodec()
+	if err != nil {
+		resp.Diagnostics.AddError("Current Form codec is unavailable", err.Error())
+		return
+	}
+	r.putWithCodec(ctx, values, codec, &resp.State, &resp.Diagnostics)
 }
 
 func (r *formResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -634,34 +705,60 @@ func (r *formResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 	stateValues, stateDiags := r.valuesFrom(ctx, req.State)
 	resp.Diagnostics.Append(stateDiags...)
-	if resp.Diagnostics.HasError() || !r.assertStateFormIdentity(stateValues, &resp.Diagnostics) {
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	codec, ok := r.stateFormCodec(stateValues, &resp.Diagnostics)
+	if !ok {
 		return
 	}
 	if values.ResourceVersion.IsNull() || values.ResourceVersion.IsUnknown() {
 		values.ResourceVersion = stateValues.ResourceVersion
 	}
-	r.put(ctx, values, &resp.State, &resp.Diagnostics)
+	marker := requestedFormTransition(values, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if marker != "" && codec.form != r.data.forms[r.kind.Kind] {
+		r.transitionDatabaseForm(ctx, values, codec, &resp.State, &resp.Diagnostics)
+		return
+	}
+	r.putWithCodec(ctx, values, codec, &resp.State, &resp.Diagnostics)
 }
 
 func (r *formResource) put(ctx context.Context, values formValues, state *tfsdk.State, diags *diag.Diagnostics) {
-	body, space, bodyDiags := r.toResource(ctx, values)
+	codec, err := r.currentFormCodec()
+	if err != nil {
+		diags.AddError("Current Form codec is unavailable", err.Error())
+		return
+	}
+	r.putWithCodec(ctx, values, codec, state, diags)
+}
+
+func (r *formResource) putWithCodec(
+	ctx context.Context,
+	values formValues,
+	codec formCodec,
+	state *tfsdk.State,
+	diags *diag.Diagnostics,
+) {
+	body, space, bodyDiags := r.toResourceWithCodec(ctx, values, codec)
 	diags.Append(bodyDiags...)
 	if diags.HasError() {
 		return
 	}
-	form := r.data.forms[r.kind.Kind]
-	body.Form = &form
+	body.Form = &codec.form
 	if !values.ResourceVersion.IsNull() && !values.ResourceVersion.IsUnknown() {
 		body.Metadata.ResourceVersion = values.ResourceVersion.ValueString()
 	}
 	r.data.serviceFormMutate.Lock()
 	defer r.data.serviceFormMutate.Unlock()
-	res, err := r.data.client.PutResource(ctx, r.kind.Kind, body.Metadata.Name, body)
+	res, err := r.data.client.PutResource(ctx, codec.kind.Kind, body.Metadata.Name, body)
 	if err != nil {
-		diags.AddError("Failed to apply "+r.kind.Kind, err.Error())
+		diags.AddError("Failed to apply "+codec.kind.Kind, err.Error())
 		return
 	}
-	diags.Append(r.setState(ctx, state, body.Metadata.Name, body.Spec, res, space, values, false)...)
+	diags.Append(r.setStateWithCodec(ctx, state, body.Metadata.Name, body.Spec, res, space, values, false, codec)...)
 }
 
 func (r *formResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -673,7 +770,8 @@ func (r *formResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !r.assertStateFormIdentity(values, &resp.Diagnostics) {
+	codec, ok := r.stateFormCodec(values, &resp.Diagnostics)
+	if !ok {
 		return
 	}
 	space, err := validatedEffectiveSpace(values.Space, r.data.defaultSpace)
@@ -685,8 +783,7 @@ func (r *formResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		)
 		return
 	}
-	form := r.data.forms[r.kind.Kind]
-	res, currentSpec, err := observeResourceForRead(ctx, r.data.client, r.kind.Kind, values.Name.ValueString(), space, form)
+	res, currentSpec, err := observeResourceForRead(ctx, r.data.client, codec.kind.Kind, values.Name.ValueString(), space, codec.form)
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -698,7 +795,7 @@ func (r *formResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	// A read is the only place host-observed desired state may replace what
 	// was configured: that is what makes import populate state and what makes
 	// an out-of-band change visible as a plan diff.
-	resp.Diagnostics.Append(r.setState(
+	resp.Diagnostics.Append(r.setStateWithCodec(
 		ctx,
 		&resp.State,
 		values.Name.ValueString(),
@@ -707,6 +804,7 @@ func (r *formResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		space,
 		values,
 		true,
+		codec,
 	)...)
 }
 
@@ -719,7 +817,8 @@ func (r *formResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !r.assertStateFormIdentity(values, &resp.Diagnostics) {
+	codec, ok := r.stateFormCodec(values, &resp.Diagnostics)
+	if !ok {
 		return
 	}
 	space, err := validatedEffectiveSpace(values.Space, r.data.defaultSpace)
@@ -733,9 +832,8 @@ func (r *formResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 	r.data.serviceFormMutate.Lock()
 	defer r.data.serviceFormMutate.Unlock()
-	form := r.data.forms[r.kind.Kind]
 	if err := r.data.client.DeleteResource(ctx, r.kind.Kind, values.Name.ValueString(), space,
-		client.MutationFence{ResourceVersion: values.ResourceVersion.ValueString(), Form: form}); err != nil {
+		client.MutationFence{ResourceVersion: values.ResourceVersion.ValueString(), Form: codec.form}); err != nil {
 		resp.Diagnostics.AddError("Failed to delete "+r.kind.Kind, err.Error())
 	}
 }
@@ -774,13 +872,31 @@ func (r *formResource) setState(
 	values formValues,
 	refresh bool,
 ) diag.Diagnostics {
+	codec, err := providerExactFormCodec(providerCandidateForms()[r.kind.Kind])
+	if err != nil {
+		return diag.Diagnostics{diag.NewErrorDiagnostic("Current Form codec is unavailable", err.Error())}
+	}
+	return r.setStateWithCodec(ctx, state, expectedName, expectedSpec, res, space, values, refresh, codec)
+}
+
+func (r *formResource) setStateWithCodec(
+	ctx context.Context,
+	state *tfsdk.State,
+	expectedName string,
+	expectedSpec map[string]any,
+	res *client.Resource,
+	space string,
+	values formValues,
+	refresh bool,
+	codec formCodec,
+) diag.Diagnostics {
 	var diags diag.Diagnostics
-	projection, err := validatePortableStateProjection(r.kind, expectedName, expectedSpec, res)
+	projection, err := validatePortableStateProjection(codec.kind, expectedName, expectedSpec, res)
 	if err != nil {
 		diags.AddError(
 			"Host returned invalid portable Resource",
 			"The Resource was not written to state because its desired/observed/output documents did not satisfy the exact "+
-				r.kind.Kind+" Form contract: "+err.Error(),
+				codec.kind.Kind+" Form contract: "+err.Error(),
 		)
 		return diags
 	}
@@ -788,13 +904,16 @@ func (r *formResource) setState(
 	diags.Append(state.SetAttribute(ctx, path.Root("space"), types.StringValue(space))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("id"), types.StringValue(projection.ID))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("resource_version"), optionalString(res.Metadata.ResourceVersion))...)
-	diags.Append(setFormIdentityState(ctx, state, r.data.forms[r.kind.Kind])...)
+	diags.Append(setFormIdentityState(ctx, state, codec.form)...)
 
 	outputs, outputDiags := types.MapValueFrom(ctx, types.StringType, projection.Outputs)
 	diags.Append(outputDiags...)
 	diags.Append(state.SetAttribute(ctx, path.Root("drift_status"), types.StringValue(projection.DriftStatus))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("portability"), types.StringValue(projection.Portability))...)
 	diags.Append(state.SetAttribute(ctx, path.Root("outputs"), outputs)...)
+	if r.kind.Kind == "RelationalDatabase" {
+		diags.Append(state.SetAttribute(ctx, path.Root("form_transition"), values.FormTransition)...)
+	}
 
 	if r.kind.Artifact {
 		source := artifactSourceValuesFromSpec(res.Spec["source"])

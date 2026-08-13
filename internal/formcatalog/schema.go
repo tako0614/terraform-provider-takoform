@@ -28,36 +28,59 @@ const (
 	// PatternCron intentionally defines a small interoperable subset rather
 	// than pretending every host agrees on extensions such as names, lists,
 	// ranges, or steps.
-	PatternCron                   = `^(?:[0-9]|[1-5][0-9]) (?:[0-9]|1[0-9]|2[0-3]) (?:\*|[1-9]|[12][0-9]|3[01]) (?:\*|[1-9]|1[0-2]) (?:\*|[0-6])$`
-	PatternHostname               = `^` + patternHostnameBody + `$`
-	PatternPath                   = `^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$`
-	PatternIPv4Address            = `^` + patternIPv4Body + `$`
-	PatternIPv6Address            = `^` + patternIPv6Body + `$`
-	PatternCIDR                   = `^(?:` + patternIPv4Body + `/(?:[0-9]|[12][0-9]|3[0-2])|` + patternIPv6Body + `/(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))$`
-	PatternDNSRelativeName        = `^(?:@|(?:\*\.)?[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)$`
-	PatternOCIDigest              = `^[^@\s]+@sha256:[A-Fa-f0-9]{64}$`
-	PatternSHA256                 = `^(sha256:)?[A-Fa-f0-9]{64}$`
-	PatternMailbox                = `^[^@\s]+@[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
-	PatternMailboxLocalPart       = `^[A-Za-z0-9][A-Za-z0-9.!#$%&'*+/=?^_{|}~-]{0,63}$`
-	PatternHTTPSURL               = `^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\s?#]*)?(?:\?[^\s#]*)?(?:#[^\s]*)?$`
-	PatternCredentialFreeHTTPSURL = `^https://` + patternHostnameBody + `(?::[0-9]{1,5})?(?:/[^` + patternURLWhitespaceBody + `?#]*)?$`
-	PatternMediaType              = `^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$`
-	PatternRecordData             = `^\S(.*\S)?$`
-	PatternRelativePath           = `^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$`
-	PatternDNSMX                  = `^` + patternUint16Body + ` ` + patternHostnameBody + `$`
-	PatternDNSSRV                 = `^` + patternUint16Body + ` ` + patternUint16Body + ` ` + patternUint16Body + ` ` + patternHostnameBody + `$`
-	PatternDNSCAA                 = `^` + patternUint8Body + ` [A-Za-z0-9]+ \S(?:.*\S)?$`
-	PatternName                   = `^[a-z][a-z0-9-]{0,62}$`
-	PatternResourceRef            = `^[A-Z][A-Za-z0-9]{0,63}/[a-z][a-z0-9-]{0,62}$`
+	PatternCron             = `^(?:[0-9]|[1-5][0-9]) (?:[0-9]|1[0-9]|2[0-3]) (?:\*|[1-9]|[12][0-9]|3[01]) (?:\*|[1-9]|1[0-2]) (?:\*|[0-6])$`
+	PatternHostname         = `^` + patternHostnameBody + `$`
+	PatternPath             = `^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$`
+	PatternIPv4Address      = `^` + patternIPv4Body + `$`
+	PatternIPv6Address      = `^` + patternIPv6Body + `$`
+	PatternCIDR             = `^(?:` + patternIPv4Body + `/(?:[0-9]|[12][0-9]|3[0-2])|` + patternIPv6Body + `/(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))$`
+	PatternDNSRelativeName  = `^(?:@|(?:\*\.)?[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*)$`
+	PatternOCIDigest        = `^[^@\s]+@sha256:[A-Fa-f0-9]{64}$`
+	PatternSHA256           = `^(sha256:)?[A-Fa-f0-9]{64}$`
+	PatternMailbox          = `^[^@\s]+@[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`
+	PatternMailboxLocalPart = `^[A-Za-z0-9][A-Za-z0-9.!#$%&'*+/=?^_{|}~-]{0,63}$`
+	PatternHTTPSURL         = `^https://[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+(?::[0-9]{1,5})?(?:/[^\s?#]*)?(?:\?[^\s#]*)?(?:#[^\s]*)?$`
+	// PatternRetainedCredentialFreeHTTPSURL is the broader historical pattern
+	// carried by EdgeWorker@3.0.0. The Terraform schema must be able to decode
+	// either recorded codec; the exact selected Form Definition performs the
+	// final validation before any host request.
+	PatternRetainedCredentialFreeHTTPSURL = `^https://` + patternHostnameBody + `(?::[0-9]{1,5})?(?:/[^\s?#]*)?$`
+	PatternCredentialFreeHTTPSURL         = `^https://` + patternHostnameBody + `(?::[0-9]{1,5})?(?:/[^` + patternURLWhitespaceBody + `?#]*)?$`
+	PatternMediaType                      = `^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$`
+	PatternRecordData                     = `^\S(.*\S)?$`
+	PatternRelativePath                   = `^[A-Za-z0-9_][A-Za-z0-9._-]*(?:/[A-Za-z0-9_][A-Za-z0-9._-]*)*$`
+	PatternDNSMX                          = `^` + patternUint16Body + ` ` + patternHostnameBody + `$`
+	PatternDNSSRV                         = `^` + patternUint16Body + ` ` + patternUint16Body + ` ` + patternUint16Body + ` ` + patternHostnameBody + `$`
+	PatternDNSCAA                         = `^` + patternUint8Body + ` [A-Za-z0-9]+ \S(?:.*\S)?$`
+	PatternName                           = `^[a-z][a-z0-9-]{0,62}$`
+	PatternResourceRef                    = `^[A-Z][A-Za-z0-9]{0,63}/[a-z][a-z0-9-]{0,62}$`
 )
 
 var credentialFreeHTTPSURLPattern = regexp.MustCompile(PatternCredentialFreeHTTPSURL)
+var retainedCredentialFreeHTTPSURLPattern = regexp.MustCompile(PatternRetainedCredentialFreeHTTPSURL)
 
 // ValidCredentialFreeHTTPSURL is the shared runtime validator for portable,
 // nonsensitive HTTPS coordinates. PatternCredentialFreeHTTPSURL is the same
 // definition embedded in every normative JSON Schema.
 func ValidCredentialFreeHTTPSURL(value string) bool {
 	if !credentialFreeHTTPSURLPattern.MatchString(value) {
+		return false
+	}
+	parsed, err := url.Parse(value)
+	return err == nil &&
+		parsed.Scheme == "https" &&
+		parsed.Host != "" &&
+		parsed.User == nil &&
+		parsed.RawQuery == "" &&
+		parsed.Fragment == ""
+}
+
+// ValidRetainedCredentialFreeHTTPSURL validates the decode union needed by a
+// provider that supports EdgeWorker@3.0.0 and EdgeWorker@4.0.0. Exact codec
+// validation still runs afterward, so a current Form never inherits the
+// historical pattern.
+func ValidRetainedCredentialFreeHTTPSURL(value string) bool {
+	if !retainedCredentialFreeHTTPSURLPattern.MatchString(value) {
 		return false
 	}
 	parsed, err := url.Parse(value)
@@ -165,6 +188,9 @@ func (g Grammar) Message(field string) string {
 // DesiredSchema derives the Draft 2020-12 desired schema of a Form from its
 // declared fields. It is the single source the Form Definition is built from.
 func (k Kind) DesiredSchema() map[string]any {
+	if k.exactDefinition != nil {
+		return cloneValue(k.exactDefinition.value.DesiredSchema).(map[string]any)
+	}
 	properties := map[string]any{
 		"name": map[string]any{
 			"type": "string", "minLength": 1, "maxLength": NameMaxLength, "pattern": PatternName,
@@ -545,6 +571,9 @@ func (k Kind) DesiredKeys() []string {
 // ImmutableFields lists the JSON Pointers a host must treat as replacement
 // triggers. Every Form fixes its name.
 func (k Kind) ImmutableFields() []string {
+	if k.exactDefinition != nil {
+		return append([]string(nil), k.exactDefinition.value.ImmutableFields...)
+	}
 	pointers := []string{"/name"}
 	for _, field := range k.Fields {
 		if field.Immutable {
@@ -561,6 +590,9 @@ func (k Kind) ImmutableFields() []string {
 // here only because a declared interface resolves it, never because a host
 // wanted to publish something about its own implementation.
 func (k Kind) OutputSchema() map[string]any {
+	if k.exactDefinition != nil {
+		return cloneValue(k.exactDefinition.value.OutputSchema).(map[string]any)
+	}
 	required := []string{"generation", "id", "kind", "name", "portability"}
 	properties := map[string]any{
 		"id":          map[string]any{"type": "string", "pattern": `^` + k.Kind + `/[a-z][a-z0-9-]{0,62}$`},
@@ -630,6 +662,9 @@ func (k Kind) interfaceResolvedFields() []Field {
 // shared, but its id is kind-bound; equality with the requested Resource name
 // is enforced by the provider/host lifecycle that has both documents.
 func (k Kind) ObservedSchema() map[string]any {
+	if k.exactDefinition != nil {
+		return cloneValue(k.exactDefinition.value.ObservedSchema).(map[string]any)
+	}
 	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
 		"additionalProperties": false,

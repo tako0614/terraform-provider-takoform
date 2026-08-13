@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
       name="description"
-      content="Takoform provider documentation: Registry-verified v1.0.2, 34 published Form Packages, 10 admitted portable-standard Forms, and the read-only Interface data source."
+      content="Takoform provider documentation: Registry-verified v1.0.3, unissued v1.0.4 maintenance candidate, 34 published Form Packages, 10 admitted portable-standard Forms, and the read-only Interface data source."
     >
     <title>Documentation / ドキュメント — Takoform</title>
     <link rel="stylesheet" href="/styles.css">
@@ -50,7 +50,7 @@
           <div class="status-col done">
             <h3>Published status / 公開状況</h3>
             <ul>
-              <li>Provider <code>v1.0.2</code> is published and Registry-verified.</li>
+              <li>Provider <code>v1.0.3</code> is published and Registry-verified.</li>
               <li>All 34 Form Packages are published and immutable.</li>
               <li>Exactly 10 are admitted <code>portable-standard</code>.</li>
               <li>The remaining 24 are published but not admitted.</li>
@@ -121,12 +121,12 @@
           <h2>Published configuration / 公開版の設定</h2>
           <p class="section-lede">
             <code>tofu init</code> and <code>terraform init</code> install this
-            exact <code>v1.0.2</code> release from the canonical Registry. Its
+            exact <code>v1.0.3</code> release from the canonical Registry. Its
             authenticated readback is retained with the release evidence.
             <br>
             <span lang="ja">
               <code>tofu init</code> と <code>terraform init</code> は、この
-              <code>v1.0.2</code> を canonical Registry から install します。
+              <code>v1.0.3</code> を canonical Registry から install します。
               認証済み readback も release evidence として保持されています。
             </span>
           </p>
@@ -298,7 +298,7 @@ resource "takoform_object_bucket" "assets" {
             <div class="status-col done">
               <h3>Published evidence / 公開済み証跡</h3>
               <ul>
-                <li>Provider <code>v1.0.2</code> is signed and Registry-verified with both CLIs.</li>
+                <li>Provider <code>v1.0.3</code> is signed and Registry-verified with both CLIs.</li>
                 <li>All 34 current Form Package identities are signed and immutable.</li>
                 <li><code>forms/admissions/v1.0.6</code> admits exactly 10 as <code>portable-standard</code>.</li>
                 <li>The closure binds the all-34 provider report and selected-ten Takosumi host report.</li>
@@ -317,7 +317,7 @@ resource "takoform_object_bucket" "assets" {
           <p class="fineprint">
             <code>release/version.json</code> retains
             <code>publicationStatus: candidate-only</code> as descriptor
-            metadata and records candidate <code>v1.0.3</code>, not live
+            metadata and records unissued candidate <code>v1.0.4</code>, not live
             availability state. The signed release and
             Registry readback establish provider publication; the protected
             admission tag and retained closure separately establish Standard

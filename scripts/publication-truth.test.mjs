@@ -134,6 +134,19 @@ function fixture() {
       version: "7.4.1",
     },
     providerReadback,
+    providerIdentities: {
+      format: "takoform.provider-release-identities@v1",
+      entries: [
+        {
+          version: "9.2.0",
+          tag: "v9.2.0",
+          status: "assigned",
+          tagObject: "c".repeat(40),
+          commit: "d".repeat(40),
+          signingFingerprint: "E".repeat(40),
+        },
+      ],
+    },
     publicationSet: {
       admissionStatus: "external-required",
       entries: [alpha, beta],
@@ -161,11 +174,11 @@ describe("publication truth", () => {
     });
   });
 
-  test("keeps retained admission readback independent from a later provider release", () => {
+  test("keeps published identity independent from a later candidate descriptor", () => {
     const material = fixture();
     material.releaseVersion.version = "9.2.1";
     material.releaseVersion.tag = "v9.2.1";
-    expect(derivePublicationTruth(material).providerVersion).toBe("9.2.1");
+    expect(derivePublicationTruth(material).providerVersion).toBe("9.2.0");
   });
 
   test("rejects an admission identity outside the published set", () => {
@@ -220,6 +233,10 @@ describe("publication truth", () => {
     writeFileSync(
       path.join(repository, "release", "version.json"),
       `${JSON.stringify(material.releaseVersion)}\n`,
+    );
+    writeFileSync(
+      path.join(repository, "release", "provider-release-identities.json"),
+      `${JSON.stringify(material.providerIdentities)}\n`,
     );
 
     expect(() => loadPublicationTruth(repository)).toThrow();

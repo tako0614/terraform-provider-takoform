@@ -403,6 +403,9 @@ an implementation. See the [complete example](../../examples/resources/%s/resour
 	case formcatalog.ConnectionsOptional:
 		builder.WriteString("- `connections` (List of Object, optional) — Declared references to other Resources, each with `name`, `resource`, `permissions`, and `projection`. A connection is a request the host validates; it grants nothing by itself.\n")
 	}
+	if kind.Kind == "RelationalDatabase" {
+		builder.WriteString("- `form_transition` (String, optional) — Closed explicit same-resource transition request. The only value is `relational-database-v2-to-v3`; it is inert for fresh DB3 creates and state already proved as DB3. See the [recorded-Form transition guide](../../release/migrations/v1.0.2-to-v1.0.4-recorded-form-transition.md).\n")
+	}
 	builder.WriteString("- `space` (String, optional, forces replacement) — Overrides the provider default.\n")
 
 	builder.WriteString(`

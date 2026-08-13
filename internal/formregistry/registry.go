@@ -35,8 +35,17 @@ var candidateRefsJSON []byte
 //go:embed successor-refs.json
 var successorRefsJSON []byte
 
+// retained-refs.json is deliberately hand-pinned to exact identities from
+// already-published provider releases. It is not generated from the current
+// package set: regeneration must never rewrite a historical state codec into
+// the current Form merely because its Kind still exists.
+//
+//go:embed retained-refs.json
+var retainedRefsJSON []byte
+
 var candidateRefs = mustDecodeCandidateRefs(candidateRefsJSON)
 var successorRefs = mustDecodeSuccessorRefs(successorRefsJSON)
+var retainedRefs = mustDecodeVersionedRefs("retained", retainedRefsJSON)
 
 func mustDecodeCandidateRefs(raw []byte) map[string]Ref {
 	var refs map[string]Ref
@@ -53,18 +62,22 @@ func mustDecodeCandidateRefs(raw []byte) map[string]Ref {
 }
 
 func mustDecodeSuccessorRefs(raw []byte) map[string]map[string]Ref {
+	return mustDecodeVersionedRefs("successor", raw)
+}
+
+func mustDecodeVersionedRefs(label string, raw []byte) map[string]map[string]Ref {
 	var refs map[string]map[string]Ref
 	if err := json.Unmarshal(raw, &refs); err != nil {
-		panic(fmt.Errorf("takoform: decode embedded successor FormRefs: %w", err))
+		panic(fmt.Errorf("takoform: decode embedded %s FormRefs: %w", label, err))
 	}
 	for kind, versions := range refs {
 		if kind == "" || len(versions) == 0 {
-			panic(fmt.Errorf("takoform: embedded successor FormRefs for %q are incomplete", kind))
+			panic(fmt.Errorf("takoform: embedded %s FormRefs for %q are incomplete", label, kind))
 		}
 		for version, ref := range versions {
 			if ref.APIVersion != APIVersion || ref.Kind != kind || ref.DefinitionVersion != version ||
 				ref.SchemaDigest == "" || ref.PackageDigest == "" {
-				panic(fmt.Errorf("takoform: embedded successor FormRef for %s@%s is incomplete", kind, version))
+				panic(fmt.Errorf("takoform: embedded %s FormRef for %s@%s is incomplete", label, kind, version))
 			}
 		}
 	}
@@ -87,12 +100,34 @@ func ForKindVersion(kind, definitionVersion string) (Ref, error) {
 	if current, ok := candidateRefs[kind]; ok && current.DefinitionVersion == definitionVersion {
 		return current, nil
 	}
+	if versions, ok := retainedRefs[kind]; ok {
+		if ref, ok := versions[definitionVersion]; ok {
+			return ref, nil
+		}
+	}
 	if versions, ok := successorRefs[kind]; ok {
 		if ref, ok := versions[definitionVersion]; ok {
 			return ref, nil
 		}
 	}
 	return Ref{}, fmt.Errorf("takoform: provider build has no candidate FormRef for %s@%s", kind, definitionVersion)
+}
+
+// ForExact returns a supported reference only when all five identity fields
+// are byte-for-byte equal to a compiled registry entry. In particular it does
+// not use SemVer ranges, select a nearest version, or trust a familiar Kind.
+func ForExact(want Ref) (Ref, error) {
+	ref, err := ForKindVersion(want.Kind, want.DefinitionVersion)
+	if err != nil || ref != want {
+		return Ref{}, fmt.Errorf(
+			"takoform: provider build has no exact FormRef for %s@%s schema=%s package=%s",
+			want.Kind,
+			want.DefinitionVersion,
+			want.SchemaDigest,
+			want.PackageDigest,
+		)
+	}
+	return ref, nil
 }
 
 // All returns a defensive copy of every embedded candidate identity.

@@ -8,17 +8,17 @@ Include the affected provider version, a minimal reproduction with all secrets r
 
 ## Supported versions
 
-The current `main` branch and published provider `v1.0.2` receive security
-fixes. `v1` is the supported provider line; the pre-v1 provider line is
+The maintained `maintenance/v1` branch and published provider `v1.0.3` receive
+security fixes for the provider-v1 line. The pre-v1 provider line is
 unsupported unless a security advisory explicitly says otherwise. Historical
 release bytes remain available for verification and migration; support never
 means replacing them.
 
 `release/version.json` retains `publicationStatus: candidate-only` as
-release-descriptor metadata from the candidate that minted `v1.0.2`. It is not
-live availability state; it currently records candidate `v1.0.3`. The signed
-release and authenticated canonical
-Registry readback establish that `v1.0.2` is published.
+release-descriptor metadata and currently records unissued candidate
+`v1.0.4`. It is not live availability state. The append-only identity ledger,
+signed release, and authenticated canonical Registry readback establish that
+`v1.0.3` is published; the ledger has no `v1.0.4` assignment.
 
 ## Provider release trust
 

@@ -1064,7 +1064,10 @@ compareExact(
   expectedResourceExampleFiles,
 );
 for (const example of resourceExampleFiles) {
-  checkTerraformProviderExample(example, releaseVersion.version);
+  checkTerraformProviderExample(
+    example,
+    publicationTruth?.providerVersion ?? releaseVersion.version,
+  );
 }
 
 const dataSourceDocs = path.join(repositoryRoot, "docs", "data-sources");
@@ -1093,7 +1096,10 @@ compareExact(
   ["takoform_interface/data-source.tf"],
 );
 for (const example of dataSourceExampleFiles) {
-  checkTerraformProviderExample(example, releaseVersion.version);
+  checkTerraformProviderExample(
+    example,
+    publicationTruth?.providerVersion ?? releaseVersion.version,
+  );
 }
 
 const docsIndexPath = path.join(repositoryRoot, "docs", "index.md");

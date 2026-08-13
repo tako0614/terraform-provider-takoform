@@ -6,7 +6,7 @@
 <title>Takoform — Vendor-neutral resources for Terraform &amp; OpenTofu</title>
 <meta name="description" content="Takoform provides a Registry-verified Terraform/OpenTofu provider and 34 immutable Service Form Packages. Exactly 10 are admitted portable-standard; the API remains v1alpha1.">
 <meta property="og:title" content="Takoform — Vendor-neutral resources for Terraform &amp; OpenTofu">
-<meta property="og:description" content="A host-neutral desired-state contract with provider v1.0.2, 34 published Form Packages, and 10 admitted portable-standard Forms.">
+<meta property="og:description" content="A host-neutral desired-state contract with provider v1.0.3, 34 published Form Packages, and 10 admitted portable-standard Forms.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Takoform">
 <meta property="og:url" content="https://takoform.com/">
@@ -77,7 +77,7 @@
 <section class="hero">
   <div class="container hero-grid">
     <div class="hero-copy">
-      <p class="eyebrow"><span class="dot"></span> provider v1.0.2 · Registry verified</p>
+      <p class="eyebrow"><span class="dot"></span> provider v1.0.3 · Registry verified</p>
       <h1>Take the vendor out of your Terraform code.</h1>
       <p class="lede">
         Takoform is an open-source specification and a Terraform/OpenTofu provider.
@@ -419,7 +419,7 @@
         <h3>Working today</h3>
         <ul>
           <li>The schemas and an offline package verifier</li>
-          <li>Published provider <code>v1.0.2</code>, installed and read back from the canonical Registry with Terraform and OpenTofu</li>
+          <li>Published provider <code>v1.0.3</code>, installed and read back from the canonical Registry with Terraform and OpenTofu</li>
           <li>34 statically typed Form resources with create, update, delete, import, and drift detection against an in-process test host</li>
           <li>One read-only <code>data "takoform_interface"</code> projection; Form definitions declare interfaces, while the host owns their records, bindings, authorization, and lifecycle</li>
           <li>Non-secret <code>configuration</code> on the application resources</li>
@@ -445,9 +445,9 @@
       and the current <code>ga-core-v2</code> closure does not inherit those
       proofs. In the source descriptor,
       <code>publicationStatus: candidate-only</code> is candidate metadata;
-      the descriptor currently records candidate <code>v1.0.3</code>, while
+      the descriptor currently records unissued candidate <code>v1.0.4</code>, while
       signed release and readback evidence establish the live status of
-      <code>v1.0.2</code>.
+      <code>v1.0.3</code>.
     </p>
   </div>
 </section>
@@ -520,7 +520,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
 <section class="hero">
   <div class="container hero-grid">
     <div class="hero-copy">
-      <p class="eyebrow"><span class="dot"></span> provider v1.0.2 · Registry 検証済み</p>
+      <p class="eyebrow"><span class="dot"></span> provider v1.0.3 · Registry 検証済み</p>
       <h1>Terraform のコードから、<br>ベンダー名をなくす。</h1>
       <p class="lede">Takoform は、サービスをベンダー中立に書くためのオープンな仕様と、その Terraform/OpenTofu プロバイダです。コードに書くのはバケット・キュー・データベースといった必要なものだけ。対応ホストは、その正確なポータブル契約に対してバックエンドを選び、運用できます。ただし、対応状況・置換・移行はホストと明示的な運用計画に依存します。</p>
       <div class="cta-row">
@@ -782,7 +782,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
         <h3>できていること</h3>
         <ul>
           <li>スキーマ一式と、オフラインで動くパッケージ検証ツール</li>
-          <li>canonical Registry から Terraform / OpenTofu の両方で install と readback を確認した provider <code>v1.0.2</code></li>
+          <li>canonical Registry から Terraform / OpenTofu の両方で install と readback を確認した provider <code>v1.0.3</code></li>
           <li>プロセス内のテスト用ホストに対して、作成・更新・削除・import・drift 検出まで対応した型付き Form 34 種類</li>
           <li>読み取り専用の <code>data "takoform_interface"</code> projection 1 種類。Form 定義が interface を宣言し、record・binding・認可・lifecycle はホストが所有します</li>
           <li>アプリケーション系リソースの、シークレットを含まない <code>configuration</code></li>
@@ -801,7 +801,7 @@ go run ./cmd/standard-form-conformance verify</code></pre>
         </ul>
       </div>
     </div>
-    <p class="fineprint">作り直す前に公開した過去の世代は、消さずに retire しています。リリースの immutable bytes・署名・admission の証跡はそのまま残り、いまもオフラインで検証できます。書き換えも署名し直しもしませんし、現在の <code>ga-core-v2</code> closure がその証跡を引き継ぐこともありません。source descriptor の <code>publicationStatus: candidate-only</code> は candidate metadata であり、descriptor は candidate <code>v1.0.3</code> を記録します。<code>v1.0.2</code> の live status は署名付き release と readback evidence が確定します。</p>
+    <p class="fineprint">作り直す前に公開した過去の世代は、消さずに retire しています。リリースの immutable bytes・署名・admission の証跡はそのまま残り、いまもオフラインで検証できます。書き換えも署名し直しもしませんし、現在の <code>ga-core-v2</code> closure がその証跡を引き継ぐこともありません。source descriptor の <code>publicationStatus: candidate-only</code> は candidate metadata であり、descriptor は未割当 candidate <code>v1.0.4</code> を記録します。<code>v1.0.3</code> の live status は署名付き release と readback evidence が確定します。</p>
   </div>
 </section>
 

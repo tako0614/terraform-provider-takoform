@@ -1,7 +1,7 @@
 ---
 page_title: "Provider: Takoform"
 description: |-
-  Reference for the Takoform v1.0.2 provider, its 34 portable Service Form resources, and read-only Interface data source.
+  Reference for the Takoform provider-v1 maintenance line, published v1.0.3, the v1.0.4 candidate, 34 portable Service Form resources, and the read-only Interface data source.
 ---
 
 # Takoform Provider
@@ -12,19 +12,20 @@ is `registry.terraform.io/tako0614/takoform`.
 
 ## Version and scope
 
-- **This documentation is version-bound to provider `v1.0.2`.** The canonical
-  distribution is `registry.terraform.io/tako0614/takoform`; consumers should
-  pin the exact version and let Terraform or OpenTofu verify its signed
-  checksums during installation.
+- **This documentation is version-bound to the provider-v1 maintenance line.**
+  The canonical distribution is
+  `registry.terraform.io/tako0614/takoform`; consumers should pin an exact
+  published version and let Terraform or OpenTofu verify its signed checksums
+  during installation. Unissued `v1.0.4` candidate behavior is identified below.
 - **Availability is verified, not declared by this immutable documentation.**
-  Provider `v1.0.2` has a signed release and retained authenticated direct
+  Provider `v1.0.3` has a signed release and retained authenticated direct
   installation readback from both Terraform and OpenTofu. Check the canonical
   [Registry version endpoint](https://registry.terraform.io/v1/providers/tako0614/takoform/versions)
-  for exact version `1.0.2`, then run `terraform init` or `tofu init` with the
+  for exact version `1.0.3`, then run `terraform init` or `tofu init` with the
   exact pin. A source tag, documentation page, or local build alone is not
   Registry publication or installation evidence.
 - **The API remains `forms.takoform.com/v1alpha1`.** Provider SemVer and API
-  stability are independent; provider `v1.0.2` does not graduate the API to
+  stability are independent; provider `v1.0.3` does not graduate the API to
   `v1`.
 - **All 34 Service Form Packages below are published and immutable.** The
   protected `forms/admissions/v1.0.6` closure admits exactly 10 as
@@ -40,10 +41,11 @@ is `registry.terraform.io/tako0614/takoform`.
 `release/version.json` retains `publicationStatus: candidate-only` as
 release-descriptor metadata, not live availability state. It does not override
 the signed provider release and canonical Registry readback that establish
-provider publication. The descriptor currently records candidate `v1.0.3`,
-while the latest published provider remains `v1.0.2`. The protected admission
-tag and offline-authenticated retained closure separately establish Standard
-Form admission.
+provider publication. The descriptor currently records unissued candidate
+`v1.0.4`, while the latest published provider remains `v1.0.3`. The
+append-only provider identity ledger has no `v1.0.4` assignment. The protected
+admission tag and offline-authenticated retained closure separately establish
+Standard Form admission.
 
 See [versioning](../spec/versioning.md), the
 [generated Form inventory](../forms/README.md), and
@@ -70,9 +72,8 @@ composition, if a host offers it, is outside portable Resource desired state.
 
 ## Configuration
 
-The following configuration pins the current candidate descriptor `v1.0.3` in
-the provider's `v1` compatibility line. The latest published provider remains
-`v1.0.2`.
+The following configuration pins published provider `v1.0.3` in the maintained
+`v1` compatibility line. The `v1.0.4` candidate is not an installability claim.
 
 ```hcl
 terraform {
@@ -123,6 +124,25 @@ The endpoint must advertise `features.service_forms = true`, API version
 `forms.takoform.com/v1alpha1`, its same-origin versioned endpoint, and exact
 availability for every build-pinned FormRef used by the
 configuration. There is no unversioned fallback.
+
+## Recorded Form identity maintenance candidate
+
+Provider `v1.0.4` retains the exact DB2 and Edge3 references and closed codecs
+written by provider `v1.0.2`. Read, ordinary Update, and Delete dispatch only
+through all five Form identity fields in state; an unknown or incomplete
+identity fails before a Resource host request. Neither a kind match nor SemVer
+selects a replacement codec.
+
+Only `takoform_relational_database` adds the optional closed declaration
+`form_transition = "relational-database-v2-to-v3"`. It requests exact
+DB2-to-DB3 same-resource transition from a host that advertises
+`resource_form_transition`. State remains DB2 until exact committed operation,
+request, Resource, desired-spec, revision, Form-pair, and native-identity proof
+is returned. An uncertain acknowledgement is reconciled by readback and is
+never permission to repeat the POST blindly. A fresh database create and state
+already proved as DB3 treat the marker as inert. Edge artifact-only updates
+remain on recorded Edge3. See the
+[`v1.0.2` recorded-Form transition guide](../release/migrations/v1.0.2-to-v1.0.4-recorded-form-transition.md).
 
 ## Compute and application
 

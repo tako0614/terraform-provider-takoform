@@ -20,7 +20,7 @@ func validOCIDigestReference(value string) bool {
 }
 
 func validCredentialFreeArtifactURL(value string) bool {
-	return formcatalog.ValidCredentialFreeHTTPSURL(value)
+	return formcatalog.ValidRetainedCredentialFreeHTTPSURL(value)
 }
 
 func validPortableName(value string) bool {

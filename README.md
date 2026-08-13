@@ -41,14 +41,18 @@ provider follows the same-origin versioned endpoint advertised by discovery.
 A host that advertises no versioned endpoint is rejected; there is no
 unversioned lane to downgrade into.
 
-`release/version.json` intentionally retains
-`publicationStatus: candidate-only` as release-descriptor metadata from the
-candidate that minted `v1.0.3`. The descriptor still records that immutable
-release snapshot until the next candidate changes it; that metadata is not
-live availability state. The signed release and canonical
-Registry readback establish provider publication.
+`release/version.json` now describes the unissued `v1.0.4` maintenance
+candidate and intentionally retains `publicationStatus: candidate-only` as
+descriptor metadata, not live availability state. The append-only provider
+identity ledger, signed `v1.0.3` release, and canonical Registry readback
+establish the latest published provider; no `v1.0.4` identity is assigned.
 The protected admission tag and offline-authenticated retained closure
 separately establish Standard Form admission.
+
+Provider-v1 maintenance is rooted at immutable `v1.0.3` on
+`maintenance/v1`. Current provider-v2 development is a separate line with
+different public types. Maintenance changes are not assumed to backmerge or to
+mix v1alpha1 resource types into the current line.
 
 ## Resources
 
@@ -82,6 +86,12 @@ a diagnostic-only v0.2.1 rejection handler, not an automatic state
 transformation. See the
 [`v0.2.1` to `v1.0.1` migration boundary](release/migrations/v0.2.1-to-v1.0.1.md)
 before changing an existing provider constraint or OpenTofu provider address.
+
+Provider `v1.0.4` retains the exact DB2 and Edge3 codecs written by provider
+`v1.0.2`. Ordinary lifecycle remains bound to the Form identity in state;
+only the explicit DB2-to-DB3 marker can request a host-proved same-resource
+transition. See the
+[`v1.0.2` recorded-Form transition guide](release/migrations/v1.0.2-to-v1.0.4-recorded-form-transition.md).
 
 A Form may declare the runtime interfaces its service exposes, with open
 author-defined `(name, version)` identities such as `http.request@1`,

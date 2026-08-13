@@ -1,0 +1,32 @@
+{
+  "name": "edge-worker",
+  "space": "prod",
+  "id": "EdgeWorker/edge-worker",
+  "resource_version": "7",
+  "form_api_version": "forms.takoform.com/v1alpha1",
+  "form_kind": "EdgeWorker",
+  "form_definition_version": "3.0.0",
+  "form_schema_digest": "sha256:c7fb07db10c937fd6ab119b192552ac239cbcad45dcc12bccd7993decffd2781",
+  "form_package_digest": "sha256:f03ede50c6b04459e669ed7aaef3e63397b127882a6b4b19dad45ea2da232381",
+  "drift_status": "current",
+  "portability": "portable",
+  "outputs": {
+    "generation": "7",
+    "id": "EdgeWorker/edge-worker",
+    "kind": "EdgeWorker",
+    "name": "edge-worker",
+    "portability": "portable"
+  },
+  "artifact_url": "https://artifacts.portable-conformance.invalid/edge-worker.tar",
+  "artifact_sha256": "0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37",
+  "artifact_media_type": "application/vnd.takoform.edge-worker+tar",
+  "connections": null,
+  "entrypoint": "worker.mjs",
+  "runtime": "javascript",
+  "runtime_version": "2026.1",
+  "request_timeout_seconds": 30,
+  "concurrency": 100,
+  "configuration": {
+    "LOG_LEVEL": "info"
+  }
+}
