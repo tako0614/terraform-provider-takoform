@@ -297,6 +297,9 @@ test("website deploy contract declares the published identity obligation", () =>
     "TAKOFORM_CLOUDFLARE_ACCOUNT_ID",
     "TAKOFORM_CLOUDFLARE_ZONE_ID",
   ]);
+  for (const variable of website.requiresEnv) {
+    expect(Object.values(website.obligations).join("\n")).toContain(variable);
+  }
   expect(website.requiresTools).toEqual([
     "git",
     "bun",
