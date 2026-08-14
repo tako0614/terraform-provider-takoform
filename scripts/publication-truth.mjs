@@ -216,6 +216,7 @@ function validateProviderReadback(providerReadback, releaseVersion) {
 export function derivePublicationTruth({
   admissionSet,
   checkpoint,
+  providerIdentities,
   providerReadback,
   publicationSet,
   releaseVersion,
@@ -360,6 +361,36 @@ export function derivePublicationTruth({
   }
 
   validateProviderReadback(providerReadback, releaseVersion);
+  requireValue(
+    providerIdentities?.format === "takoform.provider-release-identities@v1" &&
+      Array.isArray(providerIdentities.entries) &&
+      providerIdentities.entries.length > 0,
+    "provider release identity ledger must contain assigned immutable releases",
+  );
+  const assignedProviders = providerIdentities.entries.map((entry, index) => {
+    const label = `provider release identity ledger entries[${index}]`;
+    const version = requireString(entry?.version, `${label}.version`);
+    requireValue(SEMVER.test(version), `${label}.version must be exact SemVer`);
+    requireValue(entry?.tag === `v${version}`, `${label}.tag must match version`);
+    requireValue(entry?.status === "assigned", `${label}.status must be assigned`);
+    requireCommit(entry?.tagObject, `${label}.tagObject`);
+    requireCommit(entry?.commit, `${label}.commit`);
+    requireValue(
+      /^[0-9A-F]{40}$/u.test(entry?.signingFingerprint),
+      `${label}.signingFingerprint must be uppercase 40-hex`,
+    );
+    return { version, parts: version.split(".").map(Number) };
+  });
+  requireUnique(
+    assignedProviders.map(({ version }) => version),
+    "provider release identity ledger versions",
+  );
+  assignedProviders.sort((left, right) =>
+    right.parts[0] - left.parts[0] ||
+    right.parts[1] - left.parts[1] ||
+    right.parts[2] - left.parts[2],
+  );
+  const publishedProviderVersion = assignedProviders[0].version;
 
   return {
     admissionTag: checkpoint.tag,
@@ -367,7 +398,7 @@ export function derivePublicationTruth({
     admittedKinds: admitted.map(({ kind }) => kind),
     apiVersion,
     providerAddress: releaseVersion.providerAddress,
-    providerVersion: releaseVersion.version,
+    providerVersion: publishedProviderVersion,
     publishedCount: published.length,
     publishedKinds: published.map(({ kind }) => kind),
     remainingCount: published.length - admitted.length,
@@ -498,6 +529,13 @@ export function loadPublicationTruth(repositoryRoot) {
     ),
     "provider release descriptor",
   );
+  const providerIdentities = parseJson(
+    readRegularFile(
+      path.join(repositoryRoot, "release", "provider-release-identities.json"),
+      "provider release identity ledger",
+    ),
+    "provider release identity ledger",
+  );
 
   const readbackRef = admissionSet.providerRegistryReadback;
   const readbackRelative = requireString(
@@ -558,6 +596,7 @@ export function loadPublicationTruth(repositoryRoot) {
   return derivePublicationTruth({
     admissionSet,
     checkpoint,
+    providerIdentities,
     providerReadback,
     publicationSet,
     releaseVersion,

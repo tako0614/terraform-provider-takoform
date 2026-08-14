@@ -1,0 +1,27 @@
+{
+  "name": "relational-database",
+  "space": "prod",
+  "id": "RelationalDatabase/relational-database",
+  "resource_version": "7",
+  "form_api_version": "forms.takoform.com/v1alpha1",
+  "form_kind": "RelationalDatabase",
+  "form_definition_version": "2.0.0",
+  "form_schema_digest": "sha256:3898f8ee507bcebd9e03e80fbc1931b67b477299b1ebe2ff395facb7acf018de",
+  "form_package_digest": "sha256:dc131e4858ddedbb84d553fdf7808c55fc898a37f15d84839e414fe3ca57c910",
+  "drift_status": "current",
+  "portability": "portable",
+  "outputs": {
+    "engine": "postgres",
+    "generation": "7",
+    "id": "RelationalDatabase/relational-database",
+    "kind": "RelationalDatabase",
+    "name": "relational-database",
+    "portability": "portable"
+  },
+  "engine": "postgres",
+  "engine_version": "16",
+  "storage_gib": 20,
+  "size_class": "db.small",
+  "database_name": "app",
+  "high_availability": false
+}

@@ -147,14 +147,14 @@ operator and are never committed here.
 ## Content policy
 
 The site must claim nothing beyond signed, committed evidence in this
-repository. The current public truth is: provider `v1.0.2` is published and
+repository. The current public truth is: provider `v1.0.3` is published and
 Registry-verified; all 34 current Form Packages are published and immutable;
-`forms/admissions/v1.0.6` admits exactly 10 as `portable-standard`; and the
+`forms/admissions/v1.0.7` admits exactly 10 as `portable-standard`; and the
 remaining 24 are published but not admitted. The API nevertheless remains
 `forms.takoform.com/v1alpha1`.
 
 `release/version.json` keeps `publicationStatus: candidate-only` as descriptor
-metadata and currently records candidate `v1.0.3`; it must not be presented as
+metadata and currently records unissued candidate `v1.0.4`; it must not be presented as
 live availability state. Any later
 publication, admission, or revocation claim still requires the corresponding
 retained evidence. See

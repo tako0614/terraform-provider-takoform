@@ -153,6 +153,11 @@ type Kind struct {
 
 	Interfaces  []Interface
 	Constraints []ConditionalConstraint
+
+	// exactDefinition is populated only for a retained, already-published
+	// codec. Its schemas come from the byte-exact historical Form Definition,
+	// not from today's catalogue projection with successor fields removed.
+	exactDefinition *retainedFormDefinition
 }
 
 func i64(value int64) *int64 { return &value }

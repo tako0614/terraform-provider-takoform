@@ -68,9 +68,9 @@ const expectedFields = [
 ];
 
 const bindings = {
-  admission_version: "1.0.6",
+  admission_version: "1.0.7",
   host_candidate_path:
-    "admission/v4/candidates/host-report-1.0.6-fd32b41be05d-8c8580e85e0a",
+    "admission/v4/candidates/host-report-1.0.7-fd32b41be05d-8c8580e85e0a",
   host_candidate_tree: "a1e42ef2eb4f2c9dc88ce4880f39f7b127bb0afb",
   host_head_sha: "fd32b41be05decb0f417541ddcaaffac711a85db",
   host_id: "takosumi-oss-reference",
@@ -83,7 +83,7 @@ const bindings = {
   host_takoform_source_commit:
     "8c8580e85e0ac3bfddac24d32fe72f9f53164ac4",
   provider_candidate_path:
-    "admission/v4/candidates/provider-report-1.0.6-8c8580e85e0a",
+    "admission/v4/candidates/provider-report-1.0.7-8c8580e85e0a",
   provider_candidate_tree:
     "d98b378d94cd69b6ae2ee78a10f9adf1187d9a90",
   provider_head_sha: "8c8580e85e0ac3bfddac24d32fe72f9f53164ac4",
@@ -95,7 +95,7 @@ const bindings = {
   provider_source_commit:
     "8c8580e85e0ac3bfddac24d32fe72f9f53164ac4",
   registry_candidate_path:
-    "admission/v4/candidates/registry-readback-1.0.6-8c8580e85e0a",
+    "admission/v4/candidates/registry-readback-1.0.7-8c8580e85e0a",
   registry_candidate_tree:
     "57f51a83cceadc0de22205290b8eaa1e4215b2a4",
   registry_head_sha: "8c8580e85e0ac3bfddac24d32fe72f9f53164ac4",
@@ -170,7 +170,7 @@ describe("Standard admission evidence dispatch bindings", () => {
     ).toThrow("snapshot_commit is not canonical");
     expect(() =>
       parseEvidenceBindings(
-        rawObject({ ...bindings, admission_version: "v1.0.6" }),
+        rawObject({ ...bindings, admission_version: "v1.0.7" }),
       ),
     ).toThrow("admission_version is not canonical");
   });

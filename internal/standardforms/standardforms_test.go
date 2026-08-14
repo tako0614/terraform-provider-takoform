@@ -18,6 +18,12 @@ func TestCommittedCandidateSetVerifies(t *testing.T) {
 	}
 }
 
+func TestMaintenanceBaselineIncludesExactCurrentAdmissionClosure(t *testing.T) {
+	if err := VerifyCurrentAdmissionClosure(filepath.Join("..", "..")); err != nil {
+		t.Fatalf("maintenance baseline current admission closure: %v", err)
+	}
+}
+
 func TestReleaseSourceRequiresExactReviewedFixtureBytes(t *testing.T) {
 	t.Parallel()
 	fixtureRoot := filepath.Join("..", "..", "conformance", "form-package-v1", "positive", "standard", "object-bucket")

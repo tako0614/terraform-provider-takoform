@@ -1,0 +1,20 @@
+{
+  "EdgeWorker": {
+    "3.0.0": {
+      "apiVersion": "forms.takoform.com/v1alpha1",
+      "kind": "EdgeWorker",
+      "definitionVersion": "3.0.0",
+      "schemaDigest": "sha256:c7fb07db10c937fd6ab119b192552ac239cbcad45dcc12bccd7993decffd2781",
+      "packageDigest": "sha256:f03ede50c6b04459e669ed7aaef3e63397b127882a6b4b19dad45ea2da232381"
+    }
+  },
+  "RelationalDatabase": {
+    "2.0.0": {
+      "apiVersion": "forms.takoform.com/v1alpha1",
+      "kind": "RelationalDatabase",
+      "definitionVersion": "2.0.0",
+      "schemaDigest": "sha256:3898f8ee507bcebd9e03e80fbc1931b67b477299b1ebe2ff395facb7acf018de",
+      "packageDigest": "sha256:dc131e4858ddedbb84d553fdf7808c55fc898a37f15d84839e414fe3ca57c910"
+    }
+  }
+}

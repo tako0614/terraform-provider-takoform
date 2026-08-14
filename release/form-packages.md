@@ -321,7 +321,7 @@ set and its production package-publisher trust inputs offline. The retained
 check.
 
 All 34 current plan entries have signed immutable releases. The protected
-`forms/admissions/v1.0.6` tag identifies the retained standard-admission set
+`forms/admissions/v1.0.7` tag identifies the retained standard-admission set
 and admits exactly 10 as `portable-standard`. Publication alone grants no
 admission; the other 24 are published but not admitted. The retained Takosumi
 host report proves the selected 10 on that exact host, not universal support.

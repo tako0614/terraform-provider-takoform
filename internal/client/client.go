@@ -857,11 +857,50 @@ func (c *Client) doJSONWithHeaders(
 	retryStableAPIError bool,
 	successStatuses ...int,
 ) (http.Header, error) {
+	response, err := c.doJSONWithStatus(
+		ctx,
+		method,
+		fullURL,
+		headers,
+		body,
+		out,
+		retryStableAPIError,
+		successStatuses...,
+	)
+	return response.Headers, err
+}
+
+type jsonResponseMetadata struct {
+	Headers    http.Header
+	StatusCode int
+}
+
+// requestOutcomeUncertainError means a request might have reached its host,
+// but the client could not authenticate a complete response. Mutation callers
+// may use this type to choose read-only reconciliation; request construction
+// and stable API rejection errors deliberately do not implement it.
+type requestOutcomeUncertainError struct{ err error }
+
+func (e *requestOutcomeUncertainError) Error() string { return e.err.Error() }
+func (e *requestOutcomeUncertainError) Unwrap() error { return e.err }
+
+func uncertainRequestOutcome(err error) error {
+	return &requestOutcomeUncertainError{err: err}
+}
+
+func (c *Client) doJSONWithStatus(
+	ctx context.Context,
+	method, fullURL string,
+	headers map[string]string,
+	body, out any,
+	retryStableAPIError bool,
+	successStatuses ...int,
+) (jsonResponseMetadata, error) {
 	var raw []byte
 	if body != nil {
 		encoded, err := json.Marshal(body)
 		if err != nil {
-			return nil, fmt.Errorf("takoform: encoding request body: %w", err)
+			return jsonResponseMetadata{}, fmt.Errorf("takoform: encoding request body: %w", err)
 		}
 		raw = encoded
 	}
@@ -871,7 +910,8 @@ func (c *Client) doJSONWithHeaders(
 	}
 	for attempt := 0; attempt < attempts; attempt++ {
 		var reader io.Reader
-		if retryStableAPIError {
+		_, hasIdempotencyKey := headers["Idempotency-Key"]
+		if retryStableAPIError || hasIdempotencyKey {
 			// net/http treats Idempotency-Key as permission to replay a request
 			// after some transport failures. Lifecycle mutations deliberately
 			// use a one-shot body, including an empty one, so only this client's
@@ -882,9 +922,9 @@ func (c *Client) doJSONWithHeaders(
 		}
 		req, err := http.NewRequestWithContext(ctx, method, fullURL, reader)
 		if err != nil {
-			return nil, fmt.Errorf("takoform: building request: %w", err)
+			return jsonResponseMetadata{}, fmt.Errorf("takoform: building request: %w", err)
 		}
-		if retryStableAPIError && body != nil {
+		if (retryStableAPIError || hasIdempotencyKey) && body != nil {
 			req.ContentLength = int64(len(raw))
 		}
 		if body != nil {
@@ -901,59 +941,75 @@ func (c *Client) doJSONWithHeaders(
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("takoform: request to %s failed: %w", fullURL, err)
+			return jsonResponseMetadata{}, uncertainRequestOutcome(
+				fmt.Errorf("takoform: request to %s failed: %w", fullURL, err),
+			)
 		}
 		if resp.ContentLength > maxResponseBodyBytes {
 			_ = resp.Body.Close()
-			return nil, fmt.Errorf("takoform: response from %s exceeds %d bytes", fullURL, maxResponseBodyBytes)
+			return jsonResponseMetadata{}, uncertainRequestOutcome(
+				fmt.Errorf("takoform: response from %s exceeds %d bytes", fullURL, maxResponseBodyBytes),
+			)
 		}
 		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes+1))
 		_ = resp.Body.Close()
 		if readErr != nil {
-			return nil, fmt.Errorf("takoform: reading response body: %w", readErr)
+			return jsonResponseMetadata{}, uncertainRequestOutcome(
+				fmt.Errorf("takoform: reading response body: %w", readErr),
+			)
 		}
 		if len(data) > maxResponseBodyBytes {
-			return nil, fmt.Errorf("takoform: response from %s exceeds %d bytes", fullURL, maxResponseBodyBytes)
+			return jsonResponseMetadata{}, uncertainRequestOutcome(
+				fmt.Errorf("takoform: response from %s exceeds %d bytes", fullURL, maxResponseBodyBytes),
+			)
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			apiErr := parseAPIError(resp.StatusCode, data)
 			if retryStableAPIError && attempt+1 < attempts && isPortableRetryable(apiErr) {
 				if err := waitForRetry(ctx, attempt); err != nil {
-					return nil, err
+					return jsonResponseMetadata{}, err
 				}
 				continue
 			}
-			return nil, apiErr
+			return jsonResponseMetadata{}, apiErr
 		}
 		if !containsStatus(successStatuses, resp.StatusCode) {
-			return nil, fmt.Errorf(
-				"takoform: response from %s returned unexpected success status %d",
-				fullURL,
-				resp.StatusCode,
+			return jsonResponseMetadata{}, uncertainRequestOutcome(
+				fmt.Errorf(
+					"takoform: response from %s returned unexpected success status %d",
+					fullURL,
+					resp.StatusCode,
+				),
 			)
 		}
 		if resp.StatusCode == http.StatusNoContent && len(data) != 0 {
-			return nil, fmt.Errorf(
-				"takoform: response from %s returned a non-empty response body for HTTP 204",
-				fullURL,
+			return jsonResponseMetadata{}, uncertainRequestOutcome(
+				fmt.Errorf(
+					"takoform: response from %s returned a non-empty response body for HTTP 204",
+					fullURL,
+				),
 			)
 		}
 
 		if out != nil {
 			if len(bytes.TrimSpace(data)) == 0 {
-				return nil, fmt.Errorf(
-					"takoform: response from %s returned an empty JSON response body",
-					fullURL,
+				return jsonResponseMetadata{}, uncertainRequestOutcome(
+					fmt.Errorf(
+						"takoform: response from %s returned an empty JSON response body",
+						fullURL,
+					),
 				)
 			}
 			if err := decodeStrictJSON(data, out); err != nil {
-				return nil, fmt.Errorf("takoform: decoding response from %s: %w", fullURL, err)
+				return jsonResponseMetadata{}, uncertainRequestOutcome(
+					fmt.Errorf("takoform: decoding response from %s: %w", fullURL, err),
+				)
 			}
 		}
-		return resp.Header.Clone(), nil
+		return jsonResponseMetadata{Headers: resp.Header.Clone(), StatusCode: resp.StatusCode}, nil
 	}
-	return nil, errors.New("takoform: retry attempts exhausted")
+	return jsonResponseMetadata{}, errors.New("takoform: retry attempts exhausted")
 }
 
 func containsStatus(allowed []int, status int) bool {

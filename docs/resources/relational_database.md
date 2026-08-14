@@ -25,6 +25,7 @@ an implementation. See the [complete example](../../examples/resources/takoform_
 - `schema_url` (String, optional) — Optional immutable migration bundle the host applies in order.
 - `schema_sha256` (String, optional) — Digest binding schema_url to exact immutable bytes.
 - `schema_format` (String, optional) — Open capability token naming how the bundle is interpreted.
+- `form_transition` (String, optional) — Closed explicit same-resource transition request. The only value is `relational-database-v2-to-v3`; it is inert for fresh DB3 creates and state already proved as DB3. See the [recorded-Form transition guide](../../release/migrations/v1.0.2-to-v1.0.4-recorded-form-transition.md).
 - `space` (String, optional, forces replacement) — Overrides the provider default.
 
 ## Read-only attributes

@@ -22,11 +22,41 @@ The explicit `--allow-dirty-candidate` and `--allow-untagged-candidate` flags ar
 for local non-publishable evidence only. Any such exception is recorded in the
 manifest and keeps `publicationReady=false`.
 
-Provider `v1.0.3` is the current release candidate. Provider `v1.0.2` remains
-the current published `v1` release until the signed GitHub Release and
-authenticated Terraform/OpenTofu Registry readback for `v1.0.3` complete.
+Provider `v1.0.3` is the current published `v1` release. Its signed annotated
+tag resolves to commit `87b29ef58066755012a8d80bce0c8f715cf82cb9`; the
+append-only provider release ledger records the exact tag object and commit.
+Provider `v1.0.4` is the current unissued maintenance candidate;
 `release/version.json` says `publicationStatus: candidate-only` because it is
-candidate metadata, not a live availability field.
+release-descriptor metadata, not a live availability field. The append-only
+ledger has no `v1.0.4` assignment.
+
+The `maintenance/v1` branch is rooted exactly at immutable provider `v1.0.3`
+and exists only for the maintained v1alpha1 provider line. Current provider-v2
+development has independent types and contracts; this branch is not an
+automatic backmerge source and must not import v2 resource types. No
+maintenance-branch publication lane is enabled by this candidate. The
+main-bound release commands later in this document describe the already-used
+owner lane and do not authorize publishing `v1.0.4` from this branch.
+
+## Provider v1.0.4 recorded Form identity transition
+
+Provider `v1.0.4` retains exact closed codecs and registry references for
+`RelationalDatabase@2.0.0` and `EdgeWorker@3.0.0`, while fresh creates use the
+current DB3 and Edge4 identities. Read, ordinary Update, and Delete dispatch
+only through the exact complete Form identity persisted in state; unknown or
+unavailable identities fail before a Resource host request, with no SemVer
+inference.
+
+Only `takoform_relational_database` accepts
+`form_transition = "relational-database-v2-to-v3"`. The provider keeps state on
+DB2 until the host proves an atomic same-resource DB3 spec/identity commit.
+Every invocation performs operation readback before mutation; only the exact
+operation-not-found response or an exact same-request `prepared` response with
+`dispatchAttempted: false` permits one POST. Attempted, indeterminate,
+incomplete, or uncertain readback is reconciled without a blind repost. Edge
+artifact-only updates remain on its byte-exact historical Edge3 Definition.
+The operator guide is
+[`migrations/v1.0.2-to-v1.0.4-recorded-form-transition.md`](migrations/v1.0.2-to-v1.0.4-recorded-form-transition.md).
 
 ## Provider v1.0.3 RelationalDatabase schema inputs
 
@@ -133,7 +163,7 @@ Providers `v0.1.1`, `v0.1.2`, and the then-corrective `v0.1.3` describe
 historical pre-v1 layouts only. `v0.1.1` included SPDX evidence in
 `SHA256SUMS`; `v0.1.2` omitted the required Registry manifest; and `v0.1.3`
 corrected that historical checksum closure without replacing a published byte.
-None of those layouts defines the current provider `v1.0.2` release. The v1
+None of those layouts defines the maintained provider-v1 release. The v1
 release is governed by the 15-asset provenance closure above and MUST NOT
 overwrite or inherit the identity of any historical version.
 
@@ -268,7 +298,7 @@ The admission tag is intentionally unsigned and has no GitHub Release:
 authenticity comes from the separately Sigstore-signed retained evidence, while
 the protected ref provides its immutable source identity. Version `1.0.5` is
 permanently reserved and abandoned because v3 candidates already used it; the
-current assignment is `1.0.6` / `forms/admissions/v1.0.6`. Never reuse, replace,
+current assignment is `1.0.7` / `forms/admissions/v1.0.7`. Never reuse, replace,
 or move either identity.
 
 The tagged closure commit may later be an ancestor of `main`, but its complete

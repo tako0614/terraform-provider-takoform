@@ -36,10 +36,10 @@ This promise applies only to the provider binary and its Terraform/OpenTofu
 surface. It does not graduate the portable API group, admit a Form as
 `portable-standard`, or make any host implementation stable.
 
-Provider `v1.0.2` is published and verified by authenticated direct Registry
+Provider `v1.0.3` is published and verified by authenticated direct Registry
 installation with Terraform and OpenTofu. All 34 current Form Packages are
 published as immutable identities. The protected
-`forms/admissions/v1.0.6` closure admits exactly 10 as `portable-standard`; the
+`forms/admissions/v1.0.7` closure admits exactly 10 as `portable-standard`; the
 remaining 24 are published but not admitted. Package publication grants no
 admission by itself. Neither those publication facts nor the admission
 graduates
@@ -49,6 +49,20 @@ Provider `v1.0.2` is an additive provider-surface patch: the read-only
 `takoform_interface` data source gains an optional computed `resource_uri`
 whose value is supplied by the host. It changes no Form Definition, Form
 Package, Resource desired state, or persisted provider-v1 Resource schema.
+
+Provider `v1.0.3` is another additive provider-surface patch. It exposes the
+already-published optional RelationalDatabase schema-bundle inputs without
+changing any Form Definition or silently reinterpreting persisted state.
+
+Provider `v1.0.4` is the maintenance candidate rooted at immutable `v1.0.3`.
+It retains the exact DB2 and Edge3 codecs written by provider `v1.0.2` so
+ordinary Read, Update, and Delete remain bound to the complete Form identity
+in state. It does not infer identity from kind or SemVer and adds no state-only
+upgrader. The only identity change is the explicit, host-proved exact
+DB2-to-DB3 transition recorded in
+[`decisions/0004-recorded-form-identity-transition-is-explicit.md`](decisions/0004-recorded-form-identity-transition-is-explicit.md).
+Edge3 artifact updates remain Edge3. The maintained v1alpha1 line and current
+provider-v2 development do not share resource types by assumption.
 
 Provider, Form definition, Form Package, and admission versions MUST NOT be
 coordinated merely to share a number:

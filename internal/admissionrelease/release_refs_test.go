@@ -566,7 +566,7 @@ func TestPinnedProviderTagVerificationIgnoresAmbientGPGPrograms(t *testing.T) {
 func TestCurrentAdmissionTagMessageBindsExactRetainedSource(t *testing.T) {
 	t.Parallel()
 	message := currentAdmissionTagMessage(
-		"1.0.6",
+		"1.0.7",
 		"ga-core-v2",
 		"0123456789abcdef0123456789abcdef01234567",
 		"89abcdef0123456789abcdef0123456789abcdef",
@@ -575,7 +575,7 @@ func TestCurrentAdmissionTagMessageBindsExactRetainedSource(t *testing.T) {
 		"sha256:"+strings.Repeat("b", 64),
 	)
 	for _, required := range []string{
-		"Activate Standard Form admission v1.0.6\n",
+		"Activate Standard Form admission v1.0.7\n",
 		"generation ga-core-v2\n",
 		"commit 0123456789abcdef0123456789abcdef01234567\n",
 		"tree 89abcdef0123456789abcdef0123456789abcdef\n",

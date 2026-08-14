@@ -43,7 +43,19 @@ func validateRuntimeDocument(document, kind string, schemaValue, value map[strin
 	if value == nil {
 		return fmt.Errorf("%s document is missing", document)
 	}
-	key := document + ":" + kind
+	// A maintenance provider can carry more than one exact closed codec for a
+	// Kind. Include the schema's canonical digest in the cache key so a retained
+	// codec cannot poison the current codec (or vice versa) merely because both
+	// share the same Kind token.
+	schemaRaw, err := json.Marshal(schemaValue)
+	if err != nil {
+		return fmt.Errorf("encode %s schema for cache identity: %w", document, err)
+	}
+	schemaDigest, err := formpackage.DigestCanonicalJSON(schemaRaw)
+	if err != nil {
+		return fmt.Errorf("digest %s schema for cache identity: %w", document, err)
+	}
+	key := document + ":" + kind + ":" + schemaDigest
 	cached, ok := runtimeSchemaCache.Load(key)
 	if !ok {
 		compiled := compiledRuntimeSchema{}
