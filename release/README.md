@@ -371,7 +371,30 @@ object and still performs no candidate POST.
 Before candidate dispatch, the operator must allocate an owner-private
 directory outside the source tree, set it to mode `0700`, and durably record a
 new lowercase canonical UUIDv4. The request record target itself must not
-exist. Then invoke the separate create phase exactly once:
+exist.
+
+`prepare-candidate` is intentionally unusable until two independently
+reviewed, active GitHub **branch** rulesets have been installed and read back.
+This source change does not create or modify either repository setting:
+
+- `Restrict provider candidate reservation creation` includes exactly
+  `refs/heads/provider-candidate-reservation-v*` and
+  `refs/heads/provider-candidate-reservation-v*/**/*`, excludes nothing, has
+  only the `creation` rule, and gives `always` bypass only to the exact
+  `tako0614` User (`96359093`).
+- `Keep provider candidate reservations immutable` has the same exact two
+  includes and no excludes, has only `update` and `deletion`, and has no bypass
+  actor. The current operator must read back `current_user_can_bypass: never`.
+
+The entrypoint reads every branch-ruleset summary and detail and also asks
+GitHub to evaluate the rules for both the exact prospective branch and a
+descendant probe. The evaluated closure must be exactly `creation` from the
+first ruleset plus `update` and `deletion` from the second, all sourced from
+this repository. A missing, disabled, extra, bypassable, differently scoped,
+or ineffectively matched rule halts before a local record, reservation, or
+workflow POST.
+
+After those settings exist, invoke the separate create phase exactly once:
 
 ```console
 bun run deploy -- takoform-provider-release prepare-candidate \
@@ -385,16 +408,17 @@ bun run deploy -- takoform-provider-release prepare-candidate \
 
 The target parent must already be one physical, operator-owned `0700`
 directory; symlinked parents, source-tree paths, absent parents, weak modes,
-and moved paths are rejected. Immediately before its only candidate POST, the
-entrypoint repeats the owner gate, exact protected `maintenance/v1` check,
-pinned signed local/remote tag verification, Release/Registry absence, and
-exact UUID run-absence read. It then creates the target with `O_EXCL` and
+and moved paths are rejected. The entrypoint repeats the owner gate, exact
+protected `maintenance/v1` check, pinned signed local/remote tag verification,
+Release/Registry absence, exact UUID run-absence read, and both ruleset
+evaluations. It rejects either the exact global reservation or any descendant
+conflict before writing locally. It then creates the target with `O_EXCL` and
 `0600`, writes recursively key-sorted canonical JSON plus one LF, fsyncs the
-file and parent, and reads the exact bytes back. The record binds the UUID,
+file and parent, and reads the exact bytes back. The v2 record binds the UUID,
 release/current commit, tag and tag-object OID, repository, dispatch ref, exact
-tagged workflow identity, its own path digest, and
-`dispatchAttempted: true`. The path is never printed, and the record contains
-no GitHub token or raw API response.
+tagged workflow identity, its own path digest, deterministic reservation ref,
+reservation commit `F`, and `dispatchAttempted: true`. The path is never
+printed, and the record contains no GitHub token or raw API response.
 
 In the ordinary lane `E == F`. A reviewed recovery lane may use `E` strictly
 before `F`, but ancestry alone never authorizes dispatch: the entrypoint also
@@ -406,13 +430,37 @@ and documentation paths. The checkout must still be clean, attached to
 signed immutable tag must still peel to `E`. Candidate source/tooling metadata
 remains `E`, never `F`.
 
-Only after that durable write may `prepare-candidate` issue its one
-`release.yml` dispatch at the exact tag. It does not poll for or adopt a run;
-success returns `RECONCILIATION_REQUIRED`. A nonzero client result, process
-crash, connection loss, or absent visible run is never proof that GitHub did
-not accept the POST. Once the record exists, create mode always refuses it,
-including from a fresh clone. Do not delete, replace, copy, or edit the record
-to retry.
+After that durable write, the entrypoint uses GitHub's Create a reference REST
+operation exactly once for the flat deterministic branch
+`refs/heads/provider-candidate-reservation-v1.0.4`, pointing directly at `F`.
+The branch name is derived only from the release tag—never from the UUID or
+record path. The flat form plus the separately protected descendant pattern
+prevents a `<exact>/...` Git file/directory collision from escaping the same
+creation rule. Only this invocation's exact HTTP `201` response, exact response
+body, immediate exact `GET` showing a commit ref at `F`, unchanged evaluated
+rules, unchanged release authority, and a final exact ref readback authorize
+its one `release.yml` POST.
+
+A pre-existing exact reservation, descendant conflict, `422`, connection loss,
+non-`201` response, malformed response, or lost Create Ref acknowledgement is
+never adopted—even if authoritative readback later shows the exact ref at
+`F`. From the moment the remote reservation may have been created, every
+invocation is reconcile-only forever. A crash after exact reservation creation
+but before the workflow POST therefore strands this release request without a
+candidate; that permanent pre-POST halt is accepted safety behavior and is not
+repaired by deleting the branch, choosing another UUID, choosing another
+private path, or relying on Actions absence. A crash after only the private
+record similarly never permits that record to be retried. These fail-closed
+windows trade liveness for a repository-global proof that A and fresh-clone B
+cannot both POST.
+
+If the sole workflow POST returns, `prepare-candidate` does not poll for or
+adopt a run; success returns `RECONCILIATION_REQUIRED`. A nonzero client result,
+process crash, connection loss, or absent visible run is never proof that
+GitHub did not accept the POST. Once the record exists, create mode always
+refuses it, and once the reservation exists every record path and UUID is
+refused across fresh clones. Do not delete, replace, copy, or edit the record or
+reservation to retry.
 
 Reconcile only with the same exact inputs and record:
 
@@ -427,9 +475,11 @@ bun run deploy -- takoform-provider-release reconcile-candidate \
 ```
 
 `reconcile-candidate` is read-only: it never dispatches, pushes, creates a
-Release, or writes a result file. It stable-reads the same regular `0600` file
-without following links, requires its owner/mode/inode/path/canonical bytes and
-all bindings to remain exact, enumerates every `release.yml`
+Release, reservation, or result file. It requires the same exact active and
+evaluated rulesets, stable-reads the same regular `0600` file without following
+links, requires its owner/mode/inode/path/canonical bytes and all bindings to
+remain exact, and requires the deterministic immutable reservation to remain
+an exact commit ref at `F`. It then enumerates every `release.yml`
 `workflow_dispatch` page, and accepts only one run whose UUID, workflow,
 tag/head, commit, URL, and identity all match. More than one match or any
 matching-run drift fails closed. No match returns `UNRESOLVED_ABSENT`; that is

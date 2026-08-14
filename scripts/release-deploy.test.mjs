@@ -478,8 +478,14 @@ describe("release surface contract and strict parsing", () => {
     expect(provider.obligations["no-overwrite"]).toContain(
       "owner-private request record",
     );
+    expect(provider.obligations["no-overwrite"]).toContain(
+      "refs/heads/provider-candidate-reservation-<tag>",
+    );
+    expect(provider.obligations.provenance).toContain(
+      "evaluated creation/update/deletion rules",
+    );
     expect(provider.obligations["failure-handling"]).toContain(
-      "lost acknowledgement",
+      "lost create-ref acknowledgement",
     );
   });
 
@@ -1198,6 +1204,14 @@ describe("provider candidate durable dispatch request", () => {
     );
 
     expect(created).toEqual(expected);
+    expect(created).toMatchObject({
+      currentCommit: commit,
+      format: "takoform.provider-candidate-dispatch-request@v2",
+      releaseCommit: commit,
+      requestId,
+      reservationCommit: commit,
+      reservationRef: "refs/heads/provider-candidate-reservation-v1.0.4",
+    });
     expect(readFileSync(path, "utf8")).toBe(
       `${JSON.stringify(recursivelySorted(expected))}\n`,
     );
@@ -1245,6 +1259,22 @@ describe("provider candidate durable dispatch request", () => {
         expected,
       ),
     ).toThrow();
+
+    writeFileSync(
+      path,
+      `${JSON.stringify(recursivelySorted({
+        ...expected,
+        reservationRef:
+          "refs/heads/provider-candidate-reservation-v1.0.4-other",
+      }))}\n`,
+    );
+    expect(() =>
+      releaseDeployTestHooks.readProviderCandidateRequestRecord(
+        repositoryRoot,
+        path,
+        expected,
+      ),
+    ).toThrow("binding mismatch");
 
     writeFileSync(path, `${JSON.stringify(recursivelySorted(expected))}\n`);
     chmodSync(path, 0o644);
@@ -1566,6 +1596,91 @@ describe("provider candidate dispatch and read-only reconciliation", () => {
   const tag = "v1.0.4";
   const tagObject = "a".repeat(40);
   const signer = "3510E75E05BBCC303B92D77934FC18AC897FB709";
+  const reservationBranch = `provider-candidate-reservation-${tag}`;
+  const reservationRef = `refs/heads/${reservationBranch}`;
+  const reservationOwner = { id: 96359093, login: "tako0614", type: "User" };
+  const creationRulesetID = 7001;
+  const immutableRulesetID = 7002;
+  const reservationPatterns = [
+    "refs/heads/provider-candidate-reservation-v*",
+    "refs/heads/provider-candidate-reservation-v*/**/*",
+  ];
+
+  function exactReservationRulesets() {
+    return [
+      {
+        bypass_actors: [
+          {
+            actor_id: reservationOwner.id,
+            actor_type: "User",
+            bypass_mode: "always",
+          },
+        ],
+        conditions: {
+          ref_name: { exclude: [], include: reservationPatterns },
+        },
+        current_user_can_bypass: "always",
+        enforcement: "active",
+        id: creationRulesetID,
+        name: "Restrict provider candidate reservation creation",
+        rules: [{ type: "creation" }],
+        source: "tako0614/terraform-provider-takoform",
+        source_type: "Repository",
+        target: "branch",
+      },
+      {
+        bypass_actors: [],
+        conditions: {
+          ref_name: { exclude: [], include: reservationPatterns },
+        },
+        current_user_can_bypass: "never",
+        enforcement: "active",
+        id: immutableRulesetID,
+        name: "Keep provider candidate reservations immutable",
+        rules: [{ type: "deletion" }, { type: "update" }],
+        source: "tako0614/terraform-provider-takoform",
+        source_type: "Repository",
+        target: "branch",
+      },
+    ];
+  }
+
+  function exactEvaluatedReservationRules() {
+    return [
+      {
+        ruleset_id: creationRulesetID,
+        ruleset_source: "tako0614/terraform-provider-takoform",
+        ruleset_source_type: "Repository",
+        type: "creation",
+      },
+      {
+        ruleset_id: immutableRulesetID,
+        ruleset_source: "tako0614/terraform-provider-takoform",
+        ruleset_source_type: "Repository",
+        type: "deletion",
+      },
+      {
+        ruleset_id: immutableRulesetID,
+        ruleset_source: "tako0614/terraform-provider-takoform",
+        ruleset_source_type: "Repository",
+        type: "update",
+      },
+    ];
+  }
+
+  function reservationAPIRef(sha, ref = reservationRef) {
+    return {
+      object: {
+        sha,
+        type: "commit",
+        url: `https://api.github.com/repos/tako0614/terraform-provider-takoform/git/commits/${sha}`,
+      },
+      ref,
+      url:
+        "https://api.github.com/repos/tako0614/terraform-provider-takoform/git/refs/heads/" +
+        reservationBranch,
+    };
+  }
 
   function candidateExecution(
     requestRecord,
@@ -1580,11 +1695,29 @@ describe("provider candidate dispatch and read-only reconciliation", () => {
       remoteCommit = releaseCommit,
       releases = "[[]]",
       registryVersions = [],
+      reservationCreate = "success",
+      reservationState,
+      reservationRulesets = exactReservationRulesets(),
+      reservationRulesetsAfterCreate,
+      evaluatedExact = exactEvaluatedReservationRules(),
+      evaluatedDescendant = exactEvaluatedReservationRules(),
+      evaluatedAfterCreate,
+      reservationOperator = reservationOwner,
       runs = [],
     } = {},
   ) {
     const calls = [];
-    const state = { dispatch, runs: [...runs] };
+    const sharedReservation = reservationState ?? {
+      descendants: [],
+      exactCommit: existsSync(requestRecord) ? currentCommit : null,
+    };
+    const state = {
+      dispatch,
+      reservation: sharedReservation,
+      reservationCreate,
+      rulesetReads: 0,
+      runs: [...runs],
+    };
     const exactRun = (overrides = {}) => ({
       conclusion: null,
       display_title: requestId,
@@ -1608,6 +1741,13 @@ describe("provider candidate dispatch and read-only reconciliation", () => {
     );
     const fake = (executable, args) => {
       calls.push({ executable, args: [...args] });
+      const apiEndpoint =
+        executable === "gh" && args[0] === "api"
+          ? args.find(
+              (argument) =>
+                argument === "user" || argument.startsWith("repos/"),
+            )
+          : null;
       if (executable === "gh" && args[0] === "--version") {
         return "gh version 2.96.0 (2026-07-02)\n";
       }
@@ -1675,6 +1815,107 @@ describe("provider candidate dispatch and read-only reconciliation", () => {
           versions: registryVersions.map((version) => ({ version })),
         });
       }
+      if (apiEndpoint === "user") {
+        return JSON.stringify(reservationOperator);
+      }
+      if (apiEndpoint?.includes("/rulesets?")) {
+        state.rulesetReads += 1;
+        const active =
+          state.reservation.exactCommit && reservationRulesetsAfterCreate
+            ? reservationRulesetsAfterCreate
+            : reservationRulesets;
+        state.lastRulesets = active;
+        return JSON.stringify([
+          active.map((ruleset) => ({
+            enforcement: ruleset.enforcement,
+            id: ruleset.id,
+            name: ruleset.name,
+            source: ruleset.source,
+            source_type: ruleset.source_type,
+            target: ruleset.target,
+          })),
+        ]);
+      }
+      const rulesetDetail = apiEndpoint?.match(/\/rulesets\/([0-9]+)\?/u);
+      if (rulesetDetail) {
+        const ruleset = (state.lastRulesets ?? reservationRulesets).find(
+          (entry) => entry.id === Number(rulesetDetail[1]),
+        );
+        if (!ruleset) throw commandFailure("ruleset detail missing", 404);
+        return JSON.stringify(ruleset);
+      }
+      if (apiEndpoint?.includes("/rules/branches/")) {
+        const active =
+          state.reservation.exactCommit && evaluatedAfterCreate
+            ? evaluatedAfterCreate
+            : apiEndpoint.includes("%2F")
+              ? evaluatedDescendant
+              : evaluatedExact;
+        return JSON.stringify([active]);
+      }
+      if (apiEndpoint?.includes("/git/matching-refs/heads/")) {
+        const refs = [];
+        if (state.reservation.exactCommit) {
+          refs.push(reservationAPIRef(state.reservation.exactCommit));
+        }
+        for (const descendant of state.reservation.descendants) {
+          refs.push(
+            reservationAPIRef(
+              descendant.commit ?? currentCommit,
+              `${reservationRef}/${descendant.name}`,
+            ),
+          );
+        }
+        return JSON.stringify([refs]);
+      }
+      if (
+        apiEndpoint?.endsWith(`/git/ref/heads/${reservationBranch}`) &&
+        !args.includes("POST")
+      ) {
+        if (!state.reservation.exactCommit) {
+          throw commandFailure("reservation ref missing", 404);
+        }
+        return JSON.stringify(
+          reservationAPIRef(state.reservation.exactCommit),
+        );
+      }
+      if (
+        apiEndpoint?.endsWith("/git/refs") &&
+        args.includes("POST")
+      ) {
+        expect(existsSync(requestRecord)).toBe(true);
+        expect(args).toContain(`ref=${reservationRef}`);
+        expect(args).toContain(`sha=${currentCommit}`);
+        if (state.reservationCreate === "lost-ack") {
+          state.reservation.exactCommit = currentCommit;
+          throw commandFailure("connection closed after ref creation");
+        }
+        if (state.reservationCreate === "competing-exact") {
+          state.reservation.exactCommit = currentCommit;
+          throw commandFailure("reference already exists", 422);
+        }
+        if (state.reservationCreate === "failure") {
+          throw commandFailure("ref creation rejected", 422);
+        }
+        if (
+          state.reservation.exactCommit ||
+          state.reservation.descendants.length !== 0
+        ) {
+          throw commandFailure("reference already exists", 422);
+        }
+        state.reservation.exactCommit = currentCommit;
+        const status =
+          state.reservationCreate === "wrong-status" ? 200 : 201;
+        const responseCommit =
+          state.reservationCreate === "drifted-response"
+            ? laterCommit
+            : currentCommit;
+        return (
+          `HTTP/2.0 ${status} ${status === 201 ? "Created" : "OK"}\n` +
+          "Content-Type: application/json\n\n" +
+          JSON.stringify(reservationAPIRef(responseCommit))
+        );
+      }
       if (
         executable === "gh" &&
         args[0] === "api" &&
@@ -1692,6 +1933,7 @@ describe("provider candidate dispatch and read-only reconciliation", () => {
         args[1] === "run"
       ) {
         expect(existsSync(requestRecord)).toBe(true);
+        expect(state.reservation.exactCommit).toBe(currentCommit);
         expect(
           JSON.parse(readFileSync(requestRecord, "utf8")).dispatchAttempted,
         ).toBe(true);
@@ -1763,6 +2005,33 @@ describe("provider candidate dispatch and read-only reconciliation", () => {
     const durable = JSON.parse(readFileSync(requestRecord, "utf8"));
     expect(durable.releaseCommit).toBe(commit);
     expect(durable.currentCommit).toBe(commit);
+    expect(durable.reservationCommit).toBe(commit);
+    expect(durable.reservationRef).toBe(reservationRef);
+    const reservationCreateIndex = execution.calls.findIndex(
+      (call) =>
+        call.executable === "gh" &&
+        call.args.includes("POST") &&
+        call.args.includes(`ref=${reservationRef}`),
+    );
+    const dispatchIndex = execution.calls.findIndex(
+      (call) =>
+        call.executable === "gh" &&
+        call.args[0] === "workflow" &&
+        call.args[1] === "run",
+    );
+    expect(reservationCreateIndex).toBeGreaterThan(-1);
+    expect(dispatchIndex).toBeGreaterThan(reservationCreateIndex);
+    expect(
+      execution.calls.some(
+        (call) =>
+          call.executable === "gh" &&
+          call.args.some((argument) =>
+            argument.includes(
+              `/rules/branches/${reservationBranch}%2Fruleset-probe?`,
+            ),
+          ),
+      ),
+    ).toBe(true);
     expect(
       execution.calls.filter(
         (call) =>
@@ -1771,6 +2040,87 @@ describe("provider candidate dispatch and read-only reconciliation", () => {
           call.args[1] === "run",
       ),
     ).toHaveLength(1);
+  });
+
+  test("missing, bypassable, or unevaluated reservation rules fail before every writer", () => {
+    const missingDescendant = exactReservationRulesets();
+    missingDescendant[0].conditions.ref_name.include = [
+      reservationPatterns[0],
+    ];
+    const wrongActor = exactReservationRulesets();
+    wrongActor[0].bypass_actors[0].actor_id += 1;
+    const bypassableImmutable = exactReservationRulesets();
+    bypassableImmutable[1].bypass_actors = [
+      {
+        actor_id: reservationOwner.id,
+        actor_type: "User",
+        bypass_mode: "always",
+      },
+    ];
+    bypassableImmutable[1].current_user_can_bypass = "always";
+    const missingUpdate = exactReservationRulesets();
+    missingUpdate[1].rules = [{ type: "deletion" }];
+    const cases = [
+      { options: { reservationRulesets: [] }, message: "rulesets are absent" },
+      {
+        options: { reservationRulesets: missingDescendant },
+        message: "ambiguous or incomplete",
+      },
+      {
+        options: { reservationRulesets: wrongActor },
+        message: "exact operator User",
+      },
+      {
+        options: { reservationRulesets: bypassableImmutable },
+        message: "protection has a bypass",
+      },
+      {
+        options: { reservationRulesets: missingUpdate },
+        message: "distinct exact creation and immutable rulesets",
+      },
+      {
+        options: {
+          evaluatedExact: exactEvaluatedReservationRules().slice(0, 2),
+        },
+        message: "evaluated rules are incomplete",
+      },
+      {
+        options: {
+          evaluatedDescendant:
+            exactEvaluatedReservationRules().slice(1),
+        },
+        message: "evaluated rules are incomplete",
+      },
+      {
+        options: {
+          reservationOperator: {
+            id: reservationOwner.id + 1,
+            login: reservationOwner.login,
+            type: "User",
+          },
+        },
+        message: "exact repository owner",
+      },
+    ];
+    for (const [index, scenario] of cases.entries()) {
+      const requestRecord = ownerRecordPath(
+        `provider-candidate-reservation-rules-${index}`,
+      );
+      const execution = candidateExecution(requestRecord, scenario.options);
+      expect(() =>
+        runCandidate(execution, "prepare-candidate", requestRecord),
+      ).toThrow(scenario.message);
+      expect(existsSync(requestRecord)).toBe(false);
+      expect(
+        execution.calls.some(
+          (call) =>
+            call.executable === "gh" &&
+            ((call.args[0] === "workflow" && call.args[1] === "run") ||
+              (call.args.includes("POST") &&
+                call.args.includes(`ref=${reservationRef}`))),
+        ),
+      ).toBe(false);
+    }
   });
 
   test("reconcile adopts one exact run after a lost dispatch acknowledgement", () => {
@@ -1797,6 +2147,237 @@ describe("provider candidate dispatch and read-only reconciliation", () => {
           call.args[1] === "run",
       ),
     ).toHaveLength(1);
+  });
+
+  test("a global tag reservation blocks an alternate request after lost visibility", () => {
+    const sharedReservation = { descendants: [], exactCommit: null };
+    const firstRecord = ownerRecordPath("provider-candidate-global-first");
+    const first = candidateExecution(firstRecord, {
+      dispatch: "lost-ack",
+      reservationState: sharedReservation,
+    });
+    expect(() =>
+      runCandidate(first, "prepare-candidate", firstRecord),
+    ).toThrow("dispatch acknowledgement is unresolved");
+
+    const secondRecord = ownerRecordPath("provider-candidate-global-second");
+    const secondRequestId = "11111111-2222-4333-8444-555555555555";
+    const freshClone = candidateExecution(secondRecord, {
+      reservationState: sharedReservation,
+    });
+    expect(() =>
+      runCandidate(freshClone, "prepare-candidate", secondRecord, {
+        requestId: secondRequestId,
+      }),
+    ).toThrow("already reserved");
+    expect(existsSync(secondRecord)).toBe(false);
+    expect(
+      freshClone.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args[0] === "workflow" &&
+          call.args[1] === "run",
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("a lost reservation-create acknowledgement is permanently reconcile-only", () => {
+    const sharedReservation = { descendants: [], exactCommit: null };
+    const requestRecord = ownerRecordPath(
+      "provider-candidate-reservation-lost-ack",
+    );
+    const execution = candidateExecution(requestRecord, {
+      reservationCreate: "lost-ack",
+      reservationState: sharedReservation,
+    });
+    expect(() =>
+      runCandidate(execution, "prepare-candidate", requestRecord),
+    ).toThrow("reservation creation acknowledgement is unresolved");
+    expect(existsSync(requestRecord)).toBe(true);
+    expect(sharedReservation.exactCommit).toBe(commit);
+    expect(
+      execution.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args[0] === "workflow" &&
+          call.args[1] === "run",
+      ),
+    ).toHaveLength(0);
+    expect(
+      runCandidate(
+        execution,
+        "reconcile-candidate",
+        requestRecord,
+      ).result.status,
+    ).toBe("UNRESOLVED_ABSENT");
+    expect(
+      execution.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args.includes("POST") &&
+          call.args.includes(`ref=${reservationRef}`),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("a competing exact reservation creator is never adopted for dispatch", () => {
+    const sharedReservation = { descendants: [], exactCommit: null };
+    const firstRecord = ownerRecordPath(
+      "provider-candidate-reservation-competing",
+    );
+    const first = candidateExecution(firstRecord, {
+      reservationCreate: "competing-exact",
+      reservationState: sharedReservation,
+    });
+    expect(() =>
+      runCandidate(first, "prepare-candidate", firstRecord),
+    ).toThrow("reservation creation acknowledgement is unresolved");
+    expect(sharedReservation.exactCommit).toBe(commit);
+    expect(
+      first.calls.some(
+        (call) =>
+          call.executable === "gh" && call.args[0] === "workflow",
+      ),
+    ).toBe(false);
+
+    const secondRecord = ownerRecordPath(
+      "provider-candidate-reservation-competing-second",
+    );
+    const second = candidateExecution(secondRecord, {
+      reservationState: sharedReservation,
+    });
+    expect(() =>
+      runCandidate(second, "prepare-candidate", secondRecord, {
+        requestId: "11111111-2222-4333-8444-555555555555",
+      }),
+    ).toThrow("already reserved");
+    expect(existsSync(secondRecord)).toBe(false);
+    expect(
+      second.calls.some(
+        (call) =>
+          call.executable === "gh" &&
+          (call.args[0] === "workflow" || call.args.includes("POST")),
+      ),
+    ).toBe(false);
+  });
+
+  test("pre-existing exact or descendant reservation refs block before local record creation", () => {
+    const cases = [
+      {
+        message: "already reserved",
+        state: { descendants: [], exactCommit: commit },
+      },
+      {
+        message: "descendant ref conflict",
+        state: {
+          descendants: [{ commit, name: "blocker" }],
+          exactCommit: null,
+        },
+      },
+    ];
+    for (const [index, scenario] of cases.entries()) {
+      const requestRecord = ownerRecordPath(
+        `provider-candidate-reservation-preexisting-${index}`,
+      );
+      const execution = candidateExecution(requestRecord, {
+        reservationState: scenario.state,
+      });
+      expect(() =>
+        runCandidate(execution, "prepare-candidate", requestRecord),
+      ).toThrow(scenario.message);
+      expect(existsSync(requestRecord)).toBe(false);
+      expect(
+        execution.calls.some(
+          (call) =>
+            call.executable === "gh" &&
+            (call.args[0] === "workflow" || call.args.includes("POST")),
+        ),
+      ).toBe(false);
+    }
+  });
+
+  test("non-201 or drifted reservation creation responses can never dispatch", () => {
+    for (const mode of ["wrong-status", "drifted-response"]) {
+      const requestRecord = ownerRecordPath(
+        `provider-candidate-reservation-response-${mode}`,
+      );
+      const execution = candidateExecution(requestRecord, {
+        reservationCreate: mode,
+      });
+      expect(() =>
+        runCandidate(execution, "prepare-candidate", requestRecord),
+      ).toThrow("reservation creation acknowledgement is unresolved");
+      expect(existsSync(requestRecord)).toBe(true);
+      expect(
+        execution.calls.some(
+          (call) =>
+            call.executable === "gh" && call.args[0] === "workflow",
+        ),
+      ).toBe(false);
+    }
+  });
+
+  test("reservation ruleset drift after create strands the ref before dispatch", () => {
+    const driftedRulesets = exactReservationRulesets();
+    driftedRulesets[0].id = creationRulesetID + 100;
+    driftedRulesets[1].id = immutableRulesetID + 100;
+    const driftedEvaluated = exactEvaluatedReservationRules().map((rule) => ({
+      ...rule,
+      ruleset_id:
+        rule.ruleset_id === creationRulesetID
+          ? creationRulesetID + 100
+          : immutableRulesetID + 100,
+    }));
+    const requestRecord = ownerRecordPath(
+      "provider-candidate-reservation-rules-drift",
+    );
+    const execution = candidateExecution(requestRecord, {
+      evaluatedAfterCreate: driftedEvaluated,
+      reservationRulesetsAfterCreate: driftedRulesets,
+    });
+    expect(() =>
+      runCandidate(execution, "prepare-candidate", requestRecord),
+    ).toThrow("protection changed after creation");
+    expect(existsSync(requestRecord)).toBe(true);
+    expect(execution.state.reservation.exactCommit).toBe(commit);
+    expect(
+      execution.calls.some(
+        (call) =>
+          call.executable === "gh" && call.args[0] === "workflow",
+      ),
+    ).toBe(false);
+  });
+
+  test("reconciliation rejects a reservation ref that moved away from F", () => {
+    const requestRecord = ownerRecordPath(
+      "provider-candidate-reservation-ref-drift",
+    );
+    const record = releaseDeployTestHooks.providerCandidateRequestRecord({
+      currentCommit: commit,
+      releaseCommit: commit,
+      releaseTag: tag,
+      requestId,
+      requestRecord,
+      tagObjectOid: tagObject,
+    });
+    releaseDeployTestHooks.createProviderCandidateRequestRecord(
+      repositoryRoot,
+      requestRecord,
+      record,
+    );
+    const execution = candidateExecution(requestRecord, {
+      reservationState: { descendants: [], exactCommit: laterCommit },
+    });
+    expect(() =>
+      runCandidate(execution, "reconcile-candidate", requestRecord),
+    ).toThrow("ref readback drifted");
+    expect(
+      execution.calls.some(
+        (call) =>
+          call.executable === "gh" &&
+          (call.args[0] === "workflow" || call.args.includes("POST")),
+      ),
+    ).toBe(false);
   });
 
   test("a failed dispatch remains unresolved and can never be retried in create mode", () => {
@@ -1919,6 +2500,38 @@ describe("provider candidate dispatch and read-only reconciliation", () => {
           call.args[1] === "run",
       ),
     ).toHaveLength(0);
+  });
+
+  test("a crash before global reservation creation strands without creating or dispatching", () => {
+    const requestRecord = ownerRecordPath(
+      "provider-candidate-pre-reservation-crash",
+    );
+    const record = releaseDeployTestHooks.providerCandidateRequestRecord({
+      currentCommit: commit,
+      releaseCommit: commit,
+      releaseTag: tag,
+      requestId,
+      requestRecord,
+      tagObjectOid: tagObject,
+    });
+    releaseDeployTestHooks.createProviderCandidateRequestRecord(
+      repositoryRoot,
+      requestRecord,
+      record,
+    );
+    const execution = candidateExecution(requestRecord, {
+      reservationState: { descendants: [], exactCommit: null },
+    });
+    expect(() =>
+      runCandidate(execution, "reconcile-candidate", requestRecord),
+    ).toThrow("reservation ref readback is unreadable");
+    expect(
+      execution.calls.some(
+        (call) =>
+          call.executable === "gh" &&
+          (call.args[0] === "workflow" || call.args.includes("POST")),
+      ),
+    ).toBe(false);
   });
 
   test("reconcile rejects a drifted exact-request run and a different durable request", () => {
