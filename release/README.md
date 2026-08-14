@@ -637,8 +637,9 @@ closed; the verifier never republishes the provider.
 Repository configuration is part of the trust boundary, not a claim made by
 this tree. Before dispatch, maintainers must verify in the live repository
 settings that the dedicated `provider-registry-readback` GitHub Environment
-requires reviewer(s) and that the exact protected `maintenance/v1` custom
-branch policy is in effect. The readback signer needs no GPG key or
+requires exactly one reviewer, User `tako0614` (user ID `96359093`), with
+`prevent_self_review=false`, and that the exact protected `maintenance/v1`
+custom branch policy is in effect. The readback signer needs no GPG key or
 provider-release secrets (`GPG_PRIVATE_KEY` or `PASSPHRASE`): after Environment
 approval, its isolated job receives only `id-token: write` for Sigstore OIDC.
 `provider-release` remains separately owned by provider candidate
