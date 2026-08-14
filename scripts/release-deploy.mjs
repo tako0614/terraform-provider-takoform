@@ -156,7 +156,7 @@ export const RELEASE_SURFACES = Object.freeze([
       provenance:
         "requires local operator GH_TOKEN authority, a clean non-shallow maintenance/v1 checkout equal to a freshly fetched canonical origin/maintenance/v1, the complete owner check before every dispatch, tag push, or release mutation, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; the release-candidate dispatch additionally requires separately pinned release E and current maintenance F commits, E==F for the ordinary lane or the existing exact allowlisted nonempty E..F provider recovery fence, an operator-supplied lowercase UUID, a canonical create-only owner-private request record durably binding E, F, the exact signed tag object, workflow, and deterministic reservation ref, and exact live readback of two active branch rulesets plus their evaluated creation/update/deletion rules before the sole create-ref and workflow POST; GH_TOKEN is never printed or retained",
       "post-conditions":
-        "publishes the exact verified same-run bytes locally under exclusive single-writer authority because GitHub REST has no atomic asset-plus-metadata precondition, immediately rereads the empty and complete exact draft, restates the full exact identity on PATCH, requires GitHub's immutable release readback and a fresh download with identical digests, rechecks the pinned signed tag before VERIFIED, then separately installs the indexed provider with both supported Registry clients and checksum-closes the signed direct-install readback",
+        "publishes the exact verified same-run bytes locally under exclusive single-writer authority because GitHub REST has no atomic asset-plus-metadata precondition, immediately rereads the empty and complete exact draft, restates the full exact identity on PATCH, requires GitHub's immutable release readback and a fresh download with identical digests, performs one final pinned signed-tag readback before VERIFIED, then separately installs the indexed provider with both supported Registry clients and checksum-closes the signed direct-install readback",
       reversal:
         "provider versions, signed tags, and release assets are immutable and cannot be rolled back or overwritten; an exact signed tag-only partial state may only be completed by recover-tag-only, and an exact retained draft may only be resumed by recover-draft without changing the tag, candidate, or draft identity; any other bad publication is halted and repaired forward under a new version",
       "failure-handling":
@@ -164,7 +164,7 @@ export const RELEASE_SURFACES = Object.freeze([
       "independent-review":
         "the provider-release protected Environment reviews the signed tag and release candidates; the local publisher accepts only that exact successful run/attempt and re-verifies it independently before using local GitHub authority",
       "no-overwrite":
-        "requires the descriptor tag; a new tag uses zero-object-id compare-and-swap and a create-only lease push, while resumption accepts only the exact verified signed local and/or authoritative remote annotated object and refuses every drift or partial remote identity; GitHub Release and Registry identities must remain absent before candidate dispatch or publication; prepare-candidate requires an absent non-symlink target under one physical operator-owned 0700 directory, creates the 0600 owner-private request record with O_EXCL and fsync, then atomically creates only refs/heads/provider-candidate-reservation-<tag> at F through exact creation-only and no-bypass update/deletion rules; the flat exact ref and every descendant are globally create-once across record paths, UUIDs, and fresh clones, and only this process's exact HTTP 201 plus immediate exact readback may reach one workflow POST; publication accepts only an immutable release with the exact candidate inventory, and recovery never mutates or deletes a tag or reservation",
+        "requires the descriptor tag; a new tag uses zero-object-id compare-and-swap and a create-only lease push, while resumption accepts only the exact verified signed local and/or authoritative remote annotated object and refuses every drift or partial remote identity; GitHub Release and Registry identities must remain absent before candidate dispatch or publication; prepare-candidate requires an absent non-symlink target under one physical operator-owned 0700 directory, creates the 0600 owner-private request record with O_EXCL and fsync, then atomically creates only refs/heads/provider-candidate-reservation-<tag> at F through exact creation-only and no-bypass update/deletion rules; the flat exact ref and every descendant are globally create-once across record paths, UUIDs, and fresh clones, and only this process's exact HTTP 201 plus immediate exact readback may reach one workflow POST; publication requires an enabled immutable-release repository setting immediately before draft creation and again immediately before the public PATCH, accepts only an immutable release with the exact candidate inventory, and recovery never mutates or deletes a tag or reservation",
       halt:
         "prepare stops after dispatching the protected signed-tag workflow; tag verifies and reconciles the exact signed local/remote tag and stops as TAG_READY without dispatching release.yml; prepare-candidate durably records one exact request, requires the deterministic global reservation to be absent without descendants, accepts only its own exact 201 create-ref acknowledgement and F readback, and attempts at most one release.yml dispatch before returning RECONCILIATION_REQUIRED; every preexisting, lost-acknowledgement, or stranded reservation is reconcile-only forever; reconcile-candidate is strictly read-only, never creates a ref or dispatches, and returns only one exact UUID-bound run or UNRESOLVED_ABSENT; readback stops after its exact workflow dispatch, and no phase selects a latest or ambiguous run",
     },
@@ -3038,7 +3038,7 @@ function assertExactSignedProviderTag(
     localCommit !== expectedCommit
   ) {
     throw new Error(
-      `provider recovery requires exact local annotated tag object ${expectedObject} -> ${expectedCommit}; observed ${JSON.stringify({
+      `provider publication requires exact local annotated tag object ${expectedObject} -> ${expectedCommit}; observed ${JSON.stringify({
         object: local || null,
         type: localType || null,
         commit: localCommit || null,
@@ -3969,6 +3969,7 @@ function publishReleaseLocally(
     temporaryRoot,
     strictIdentity = false,
     targetCommitish = "main",
+    preDraftFence = () => {},
     prePublishFence = () => {},
   },
 ) {
@@ -3978,6 +3979,7 @@ function publishReleaseLocally(
   let published = false;
   let draftCreationAttempted = false;
   try {
+    preDraftFence();
     progress(context, `create local-authority draft for ${tag}`);
     draftCreationAttempted = true;
     const created = JSON.parse(
@@ -4348,7 +4350,7 @@ function assertReleaseImmutabilityEnabled(context) {
     value.enabled !== true
   ) {
     throw new Error(
-      "provider recovery requires repository immutable releases to be enabled",
+      "provider publication requires repository immutable releases to be enabled",
     );
   }
 }
@@ -4940,6 +4942,46 @@ function providerReconcileCandidate(context, options, descriptor) {
   });
 }
 
+function providerPublishMutationFence(
+  context,
+  { descriptor, expectedCommit, expectedObject, releaseId },
+) {
+  const currentMaintenance = providerOwnerGateAndFence(
+    context,
+    expectedCommit,
+  );
+  const tag = assertExactSignedProviderTag(context, {
+    tag: descriptor.tag,
+    expectedCommit,
+    expectedObject,
+  });
+  assertRegistryVersionAbsent(context, descriptor.version);
+  assertReleaseImmutabilityEnabled(context);
+  if (releaseId === undefined) {
+    assertReleaseAbsent(context, descriptor.tag);
+  } else {
+    assertUniqueReleaseIdentity(
+      context,
+      descriptor.tag,
+      releaseId,
+      true,
+    );
+  }
+  return { currentMaintenance, tag };
+}
+
+function finalizeProviderPublication(
+  context,
+  { tag, expectedCommit, expectedObject, result },
+) {
+  assertExactSignedProviderTag(context, {
+    tag,
+    expectedCommit,
+    expectedObject,
+  });
+  return emit(context, { ...result, status: "VERIFIED" });
+}
+
 function providerPublish(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
   const releaseBody = providerReleaseBody(descriptor);
@@ -4981,8 +5023,6 @@ function providerPublish(context, options, descriptor) {
       expectedCommit,
       tagObjectOid: localObject,
     });
-    providerOwnerGateAndFence(context, expectedCommit);
-    assertRegistryVersionAbsent(context, descriptor.version);
     const release = publishReleaseLocally(context, {
       tag: descriptor.tag,
       assets,
@@ -4990,26 +5030,39 @@ function providerPublish(context, options, descriptor) {
       body: releaseBody,
       temporaryRoot,
       targetCommitish: PROVIDER_RELEASE_BRANCH,
-      prePublishFence: () => {
-        providerOwnerGateAndFence(context, expectedCommit);
-        assertRegistryVersionAbsent(context, descriptor.version);
-      },
+      preDraftFence: () =>
+        providerPublishMutationFence(context, {
+          descriptor,
+          expectedCommit,
+          expectedObject: localObject,
+        }),
+      prePublishFence: (releaseId) =>
+        providerPublishMutationFence(context, {
+          descriptor,
+          expectedCommit,
+          expectedObject: localObject,
+          releaseId,
+        }),
     });
-    return emit(context, {
-      kind: "takos.deploy-result@v1",
-      surface: PROVIDER_SURFACE,
-      phase: "publish",
-      target: `github-release:${GITHUB_REPOSITORY}/${descriptor.tag}`,
-      commit: expectedCommit,
+    return finalizeProviderPublication(context, {
       tag: descriptor.tag,
-      candidateRun: { id: options["run-id"], attempt: options["run-attempt"], url: run.url },
-      releaseId: release.id,
-      releaseUrl: release.html_url,
-      assetDigests: Object.fromEntries(
-        [...assets].map(([name, asset]) => [name, asset.sha256]),
-      ),
-      productionReadback: "EXACT_IMMUTABLE_RELEASE",
-      status: "VERIFIED",
+      expectedCommit,
+      expectedObject: localObject,
+      result: {
+        kind: "takos.deploy-result@v1",
+        surface: PROVIDER_SURFACE,
+        phase: "publish",
+        target: `github-release:${GITHUB_REPOSITORY}/${descriptor.tag}`,
+        commit: expectedCommit,
+        tag: descriptor.tag,
+        candidateRun: { id: options["run-id"], attempt: options["run-attempt"], url: run.url },
+        releaseId: release.id,
+        releaseUrl: release.html_url,
+        assetDigests: Object.fromEntries(
+          [...assets].map(([name, asset]) => [name, asset.sha256]),
+        ),
+        productionReadback: "EXACT_IMMUTABLE_RELEASE",
+      },
     });
   });
 }
@@ -7412,12 +7465,14 @@ export const releaseDeployTestHooks = Object.freeze({
   dispatchWorkflow,
   establishFormPublishBatchOwnerGateProof,
   expectedFormTagObject,
+  finalizeProviderPublication,
   formPublishBatch,
   formPublicationMutationFence,
   formVerifyAll,
   githubUploadEnvironment,
   ownerGateAndFence,
   providerOwnerGateAndFence,
+  providerPublishMutationFence,
   observeTagFailureState,
   parseCandidateMetadata,
   parseCanonicalCandidateMetadata,

@@ -487,6 +487,12 @@ describe("release surface contract and strict parsing", () => {
     expect(provider.obligations["failure-handling"]).toContain(
       "lost create-ref acknowledgement",
     );
+    expect(provider.obligations["no-overwrite"]).toContain(
+      "immutable-release repository setting",
+    );
+    expect(provider.obligations["post-conditions"]).toContain(
+      "final pinned signed-tag readback",
+    );
   });
 
   test("accepts only exact phase options and canonical values", () => {
@@ -5804,6 +5810,232 @@ describe("local immutable GitHub Release publication", () => {
         providerReleaseCommit: sourceCommit,
       }),
     ).toThrow();
+  });
+
+  test("ordinary provider publish rechecks immutable releases before draft creation and public PATCH", () => {
+    const run = (disabledRead) => {
+      const root = temporaryDirectory(
+        `provider-publish-immutability-${disabledRead}`,
+      );
+      const candidate = join(root, "candidate");
+      mkdirSync(candidate);
+      const assetPath = join(candidate, "asset.txt");
+      writeFileSync(assetPath, "exact provider candidate\n");
+      const asset = {
+        name: "asset.txt",
+        path: assetPath,
+        sha256: sha256(readFileSync(assetPath)),
+      };
+      const assets = new Map([[asset.name, asset]]);
+      const calls = [];
+      let draftCreated = false;
+      let immutabilityReads = 0;
+      const draft = () => ({
+        id: 7,
+        tag_name: "v1.0.4",
+        draft: true,
+        prerelease: false,
+        assets: [
+          {
+            id: 9,
+            name: asset.name,
+            state: "uploaded",
+            digest: asset.sha256,
+            size: readFileSync(asset.path).length,
+          },
+        ],
+      });
+      const fake = (_executable, args) => {
+        calls.push([...args]);
+        if (isReleaseList(args)) {
+          return draftCreated
+            ? JSON.stringify([
+                [{ id: 7, tag_name: "v1.0.4", draft: true }],
+              ])
+            : "[[]]";
+        }
+        if (
+          args[0] === "api" &&
+          args[1] ===
+            "repos/tako0614/terraform-provider-takoform/immutable-releases"
+        ) {
+          immutabilityReads += 1;
+          return JSON.stringify({ enabled: immutabilityReads !== disabledRead });
+        }
+        if (
+          args.includes("POST") &&
+          args.some((argument) => argument.includes("/assets?name="))
+        ) {
+          return JSON.stringify(draft().assets[0]);
+        }
+        if (args.includes("POST")) {
+          draftCreated = true;
+          return JSON.stringify({
+            id: 7,
+            tag_name: "v1.0.4",
+            draft: true,
+            upload_url:
+              "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+          });
+        }
+        if (
+          args[0] === "api" &&
+          args[1] ===
+            "repos/tako0614/terraform-provider-takoform/releases/7"
+        ) {
+          return JSON.stringify(draft());
+        }
+        throw new Error(`unexpected command ${args.join(" ")}`);
+      };
+      const execution = context(fake);
+      const immutabilityFence = () =>
+        releaseDeployTestHooks.assertReleaseImmutabilityEnabled(execution);
+      expect(() =>
+        releaseDeployTestHooks.publishReleaseLocally(execution, {
+          tag: "v1.0.4",
+          assets,
+          body: "exact provider release",
+          temporaryRoot: root,
+          preDraftFence: immutabilityFence,
+          prePublishFence: immutabilityFence,
+        }),
+      ).toThrow("immutable releases");
+      return { calls, execution, immutabilityReads };
+    };
+
+    const beforeDraft = run(1);
+    expect(beforeDraft.immutabilityReads).toBe(1);
+    expect(
+      beforeDraft.calls.some(
+        (args) =>
+          args.includes("POST") ||
+          args.includes("PATCH") ||
+          args.includes("DELETE"),
+      ),
+    ).toBe(false);
+
+    const beforePublication = run(2);
+    expect(beforePublication.immutabilityReads).toBe(2);
+    expect(beforePublication.calls.some((args) => args.includes("PATCH"))).toBe(
+      false,
+    );
+    expect(beforePublication.calls.some((args) => args.includes("DELETE"))).toBe(
+      false,
+    );
+    expect(beforePublication.execution.io.errors).toContain(
+      "MATCHING_DRAFT_RETAINED",
+    );
+  });
+
+  test("ordinary provider publish fences both mutations and finalizes only after a signed-tag readback", () => {
+    const source = readFileSync(
+      join(repositoryRoot, "scripts/release-deploy.mjs"),
+      "utf8",
+    );
+    const fenceStart = source.indexOf(
+      "function providerPublishMutationFence(",
+    );
+    const fenceEnd = source.indexOf("\nfunction ", fenceStart + 1);
+    const fenceBody = source.slice(fenceStart, fenceEnd);
+    const ownerFence = fenceBody.indexOf("providerOwnerGateAndFence(");
+    const signedTagFence = fenceBody.indexOf(
+      "assertExactSignedProviderTag(context,",
+    );
+    const registryFence = fenceBody.indexOf("assertRegistryVersionAbsent(");
+    const immutableReleaseFence = fenceBody.indexOf(
+      "assertReleaseImmutabilityEnabled(context)",
+    );
+    const releaseIdentityFence = fenceBody.indexOf(
+      "if (releaseId === undefined)",
+    );
+    expect(fenceStart).toBeGreaterThanOrEqual(0);
+    expect(ownerFence).toBeGreaterThanOrEqual(0);
+    expect(signedTagFence).toBeGreaterThan(ownerFence);
+    expect(registryFence).toBeGreaterThan(signedTagFence);
+    expect(immutableReleaseFence).toBeGreaterThan(registryFence);
+    expect(releaseIdentityFence).toBeGreaterThan(immutableReleaseFence);
+
+    const start = source.indexOf("function providerPublish(");
+    const end = source.indexOf("\nfunction ", start + 1);
+    const body = source.slice(start, end);
+    const publication = body.indexOf(
+      "const release = publishReleaseLocally(",
+    );
+    const preDraft = body.indexOf("preDraftFence:", publication);
+    const firstFence = body.indexOf(
+      "providerPublishMutationFence(context,",
+      preDraft,
+    );
+    const prePatch = body.indexOf("prePublishFence:", publication);
+    const secondFence = body.indexOf(
+      "providerPublishMutationFence(context,",
+      prePatch,
+    );
+    const finalTagReadback = body.indexOf(
+      "finalizeProviderPublication(context,",
+      publication,
+    );
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(publication).toBeGreaterThanOrEqual(0);
+    expect(preDraft).toBeGreaterThan(publication);
+    expect(firstFence).toBeGreaterThan(preDraft);
+    expect(prePatch).toBeGreaterThan(firstFence);
+    expect(secondFence).toBeGreaterThan(prePatch);
+    expect(finalTagReadback).toBeGreaterThan(secondFence);
+  });
+
+  test("post-publication signed-tag drift or read failure cannot emit VERIFIED or retry mutation", () => {
+    const expectedObject = "a".repeat(40);
+    const scenarios = [
+      {
+        expected: "exact local annotated tag object",
+        local: "b".repeat(40),
+      },
+      {
+        expected: "git for-each-ref",
+        local: commandFailure("final signed tag read failed"),
+      },
+    ];
+    for (const scenario of scenarios) {
+      const calls = [];
+      const fake = (_executable, args) => {
+        calls.push([...args]);
+        if (args[0] === "for-each-ref") {
+          if (scenario.local instanceof Error) throw scenario.local;
+          return `${scenario.local}\n`;
+        }
+        if (args[0] === "cat-file" && args[1] === "-t") return "tag\n";
+        if (args[0] === "rev-parse") return `${commit}\n`;
+        throw new Error(`unexpected command ${args.join(" ")}`);
+      };
+      const execution = context(fake);
+      expect(() =>
+        releaseDeployTestHooks.finalizeProviderPublication(execution, {
+          tag: "v1.0.4",
+          expectedCommit: commit,
+          expectedObject,
+          result: {
+            kind: "takos.deploy-result@v1",
+            surface: "takoform-provider-release",
+            phase: "publish",
+          },
+        }),
+      ).toThrow(scenario.expected);
+      expect(execution.io.output).not.toContain("VERIFIED");
+      if (scenario.local instanceof Error) {
+        expect(execution.io.errors).toContain("final signed tag read failed");
+      }
+      expect(
+        calls.some(
+          (args) =>
+            args.includes("POST") ||
+            args.includes("PATCH") ||
+            args.includes("DELETE") ||
+            args.includes("push") ||
+            args.includes("update-ref"),
+        ),
+      ).toBe(false);
+    }
   });
 
   test("provider recovery rechecks the exact signed tag after immutable publication and before VERIFIED", () => {
