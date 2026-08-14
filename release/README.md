@@ -352,19 +352,98 @@ bun run deploy -- takoform-provider-release tag \
 
 The verifier closes both inventories, reconstructs the exact public tag object
 with `git mktag`, checks its expected object id and peeled target, imports only
-the pinned public key in a temporary keyring, verifies the signer fingerprint,
-and refuses to replace an existing local tag ref. The final push uses the
-maintainer's existing admin authentication to cross the restricted tag-creation
-ruleset; the Actions job itself cannot bypass that rule. The entrypoint then
-dispatches the prepare-only `release.yml` at that exact immutable signed tag
-ref, with the same tag and peeled source commit. It never dispatches this
-candidate workflow from a mutable branch; its workflow identity is exactly
-`.github/workflows/release.yml@refs/tags/<tag>`.
+the pinned public key in a temporary keyring, and verifies the signer
+fingerprint. It then reconciles only four safe states: both refs absent, the
+exact reconstructed local object only, the exact authoritative remote object
+only, or that same exact object both locally and remotely. Local creation is a
+zero-object compare-and-swap and the remote write is a create-only lease push.
+An exact remote readback also closes a lost push acknowledgement. A different
+object, different peeled commit, lightweight/partial remote identity, Release,
+or Registry version fails closed. The maintainer's existing admin
+authentication crosses the restricted tag-creation ruleset; the Actions job
+itself cannot bypass that rule.
+
+`tag` ends with `TAG_READY`. It never dispatches `release.yml`. This boundary
+means a crash after the exact tag push but before any candidate request is not
+an ambiguous dispatch: rerunning `tag` only re-verifies the exact local/remote
+object and still performs no candidate POST.
+
+Before candidate dispatch, the operator must allocate an owner-private
+directory outside the source tree, set it to mode `0700`, and durably record a
+new lowercase canonical UUIDv4. The request record target itself must not
+exist. Then invoke the separate create phase exactly once:
+
+```console
+bun run deploy -- takoform-provider-release prepare-candidate \
+  --tag v1.0.4 \
+  --expected-release-commit <signed-tag-peeled-release-commit-E> \
+  --expected-current-commit <current-protected-maintenance-v1-commit-F> \
+  --expected-tag-object <exact-annotated-signed-tag-object> \
+  --request-id <pre-recorded-lowercase-uuid-v4> \
+  --request-record </absolute/operator-private/provider-v1.0.4-request.json>
+```
+
+The target parent must already be one physical, operator-owned `0700`
+directory; symlinked parents, source-tree paths, absent parents, weak modes,
+and moved paths are rejected. Immediately before its only candidate POST, the
+entrypoint repeats the owner gate, exact protected `maintenance/v1` check,
+pinned signed local/remote tag verification, Release/Registry absence, and
+exact UUID run-absence read. It then creates the target with `O_EXCL` and
+`0600`, writes recursively key-sorted canonical JSON plus one LF, fsyncs the
+file and parent, and reads the exact bytes back. The record binds the UUID,
+release/current commit, tag and tag-object OID, repository, dispatch ref, exact
+tagged workflow identity, its own path digest, and
+`dispatchAttempted: true`. The path is never printed, and the record contains
+no GitHub token or raw API response.
+
+In the ordinary lane `E == F`. A reviewed recovery lane may use `E` strictly
+before `F`, but ancestry alone never authorizes dispatch: the entrypoint also
+requires the existing narrow provider recovery fence over the exact `E..F`
+diff. That diff must be nonempty, include `scripts/release-deploy.mjs`, and
+contain only the allowlisted reviewed release orchestration, tests, fixture,
+and documentation paths. The checkout must still be clean, attached to
+`maintenance/v1`, and exactly equal to freshly fetched canonical `F`; the
+signed immutable tag must still peel to `E`. Candidate source/tooling metadata
+remains `E`, never `F`.
+
+Only after that durable write may `prepare-candidate` issue its one
+`release.yml` dispatch at the exact tag. It does not poll for or adopt a run;
+success returns `RECONCILIATION_REQUIRED`. A nonzero client result, process
+crash, connection loss, or absent visible run is never proof that GitHub did
+not accept the POST. Once the record exists, create mode always refuses it,
+including from a fresh clone. Do not delete, replace, copy, or edit the record
+to retry.
+
+Reconcile only with the same exact inputs and record:
+
+```console
+bun run deploy -- takoform-provider-release reconcile-candidate \
+  --tag v1.0.4 \
+  --expected-release-commit <same-signed-tag-peeled-release-commit-E> \
+  --expected-current-commit <same-current-protected-maintenance-v1-commit-F> \
+  --expected-tag-object <exact-annotated-signed-tag-object> \
+  --request-id <same-pre-recorded-lowercase-uuid-v4> \
+  --request-record </same/absolute/operator-private/provider-v1.0.4-request.json>
+```
+
+`reconcile-candidate` is read-only: it never dispatches, pushes, creates a
+Release, or writes a result file. It stable-reads the same regular `0600` file
+without following links, requires its owner/mode/inode/path/canonical bytes and
+all bindings to remain exact, enumerates every `release.yml`
+`workflow_dispatch` page, and accepts only one run whose UUID, workflow,
+tag/head, commit, URL, and identity all match. More than one match or any
+matching-run drift fails closed. No match returns `UNRESOLVED_ABSENT`; that is
+an unresolved terminal observation, not authorization for another POST.
+Exactly one match returns its run id, attempt, and URL as `AWAITING_REVIEW`.
+Cancel that exact run before Environment approval if any input or evidence is
+wrong; never select a latest run.
+
+The immutable dispatch ref is the signed tag and its workflow identity is
+exactly `.github/workflows/release.yml@refs/tags/<tag>`.
 The tagged workflow fetches the fixed `maintenance/v1` ref and requires its
 peeled tag commit to be an ancestor of the current canonical branch. Its
 `sourceCommit` and `toolingCommit` metadata must both equal that peeled commit;
 current branch tooling is never relabeled as release-source evidence.
-It prints that exact run URL and stops again.
 Its read-only build job verifies the signed tag with the public key, runs the
 same non-publishing GoReleaser command twice, requires the five final archive
 names and bytes to match after a source-mtime perturbation, extracts the exact
@@ -402,9 +481,14 @@ pretty JSON with exactly one trailing LF, matching the `jq -S` workflow output.
 Compact JSON, a missing or extra LF, different indentation, unsorted keys, and
 duplicate keys are rejected before any publication mutation.
 
-If the exact signed annotated tag already exists locally and remotely but no
-GitHub Release or Registry version exists, normal `publish` remains
-intentionally unusable. Complete only that exact partial identity with:
+An exact signed annotated tag without a candidate run is no longer a
+publication-recovery condition: use `prepare-candidate` and
+`reconcile-candidate`. In the ordinary `E == F` lane, do not create an
+artificial nonempty `E..F` recovery commit merely to dispatch `E`; the empty
+diff naturally bypasses the recovery-only fence. `recover-tag-only` is
+reserved for completing publication after one exact candidate run already
+exists and the reviewed protected-maintenance recovery boundary genuinely
+uses a distinct `F`. Complete only that exact partial identity with:
 
 ```console
 bun run deploy -- takoform-provider-release recover-tag-only \

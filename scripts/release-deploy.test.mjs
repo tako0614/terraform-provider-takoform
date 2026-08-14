@@ -6,6 +6,8 @@ import {
   constants as fsConstants,
   copyFileSync,
   existsSync,
+  fstatSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -27,6 +29,7 @@ import {
 
 const repositoryRoot = resolve(import.meta.dir, "..");
 const commit = "0123456789abcdef0123456789abcdef01234567";
+const laterCommit = "89abcdef0123456789abcdef0123456789abcdef";
 const requestId = "01234567-89ab-4cde-8fab-0123456789ab";
 const providerReleaseBranch = "maintenance/v1";
 const providerReleaseRef = `refs/heads/${providerReleaseBranch}`;
@@ -467,6 +470,17 @@ describe("release surface contract and strict parsing", () => {
         ].sort(),
       );
     }
+    const provider = RELEASE_SURFACES.find(
+      (surface) => surface.surface === "takoform-provider-release",
+    );
+    expect(provider.obligations.halt).toContain("prepare-candidate");
+    expect(provider.obligations.halt).toContain("reconcile-candidate");
+    expect(provider.obligations["no-overwrite"]).toContain(
+      "owner-private request record",
+    );
+    expect(provider.obligations["failure-handling"]).toContain(
+      "lost acknowledgement",
+    );
   });
 
   test("accepts only exact phase options and canonical values", () => {
@@ -610,6 +624,80 @@ describe("release surface contract and strict parsing", () => {
         "1",
       ])["release-id"],
     ).toBe("362120999");
+    const requestRecord = join(
+      temporaryDirectory("provider-candidate-request"),
+      "request.json",
+    );
+    for (const phase of ["prepare-candidate", "reconcile-candidate"]) {
+      expect(
+        parseReleaseSurfaceArgs("takoform-provider-release", [
+          phase,
+          "--tag",
+          "v1.0.4",
+          "--expected-release-commit",
+          commit,
+          "--expected-current-commit",
+          "89abcdef0123456789abcdef0123456789abcdef",
+          "--expected-tag-object",
+          "a".repeat(40),
+          "--request-id",
+          requestId,
+          "--request-record",
+          requestRecord,
+        ]),
+      ).toEqual({
+        phase,
+        tag: "v1.0.4",
+        "expected-release-commit": commit,
+        "expected-current-commit":
+          "89abcdef0123456789abcdef0123456789abcdef",
+        "expected-tag-object": "a".repeat(40),
+        "request-id": requestId,
+        "request-record": requestRecord,
+      });
+    }
+    for (const invalidRequestId of [
+      "",
+      "01234567-89AB-4CDE-8FAB-0123456789AB",
+      "01234567-89ab-1cde-8fab-0123456789ab",
+      "01234567-89ab-4cde-7fab-0123456789ab",
+      "not-a-uuid",
+    ]) {
+      expect(() =>
+        parseReleaseSurfaceArgs("takoform-provider-release", [
+          "prepare-candidate",
+          "--tag",
+          "v1.0.4",
+          "--expected-release-commit",
+          commit,
+          "--expected-current-commit",
+          commit,
+          "--expected-tag-object",
+          "a".repeat(40),
+          "--request-id",
+          invalidRequestId,
+          "--request-record",
+          requestRecord,
+        ]),
+      ).toThrow();
+    }
+    expect(() =>
+      parseReleaseSurfaceArgs("takoform-provider-release", [
+        "prepare-candidate",
+        "--tag",
+        "v1.0.4",
+        "--expected-release-commit",
+        commit,
+        "--expected-current-commit",
+        commit,
+        "--expected-tag-object",
+        "a".repeat(40),
+        "--request-id",
+        requestId,
+        "--request-record",
+        "request.json",
+      ]),
+    ).toThrow("--request-record must be an absolute path");
     for (const invalid of ["HEAD", "A".repeat(40), "a".repeat(39), "a".repeat(41)]) {
       expect(() =>
         parseReleaseSurfaceArgs("takoform-form-package-release", [
@@ -1081,6 +1169,882 @@ describe("workflow dispatch authority and correlation", () => {
         ),
       ).toThrow("not the exact successful reviewed candidate");
     }
+  });
+});
+
+describe("provider candidate durable dispatch request", () => {
+  function expectedRequestRecord(path, overrides = {}) {
+    return releaseDeployTestHooks.providerCandidateRequestRecord({
+      currentCommit: commit,
+      releaseCommit: commit,
+      releaseTag: "v1.0.4",
+      requestId,
+      requestRecord: path,
+      tagObjectOid: "a".repeat(40),
+      ...overrides,
+    });
+  }
+
+  test("persists canonical owner-private create-only bytes before dispatch", () => {
+    const ownerRoot = temporaryDirectory("provider-owner-record");
+    chmodSync(ownerRoot, 0o700);
+    const path = join(ownerRoot, "candidate-request.json");
+    const expected = expectedRequestRecord(path);
+
+    const created = releaseDeployTestHooks.createProviderCandidateRequestRecord(
+      repositoryRoot,
+      path,
+      expected,
+    );
+
+    expect(created).toEqual(expected);
+    expect(readFileSync(path, "utf8")).toBe(
+      `${JSON.stringify(recursivelySorted(expected))}\n`,
+    );
+    expect((lstatSync(path).mode & 0o777).toString(8)).toBe("600");
+    expect(
+      releaseDeployTestHooks.readProviderCandidateRequestRecord(
+        repositoryRoot,
+        path,
+        expected,
+      ),
+    ).toEqual(expected);
+    expect(() =>
+      releaseDeployTestHooks.createProviderCandidateRequestRecord(
+        repositoryRoot,
+        path,
+        expected,
+      ),
+    ).toThrow("already exists");
+  });
+
+  test("rejects missing, divergent, linked, weak-mode, wrong-owner, and moved records", () => {
+    const ownerRoot = temporaryDirectory("provider-owner-record-invalid");
+    chmodSync(ownerRoot, 0o700);
+    const missing = join(ownerRoot, "missing.json");
+    expect(() =>
+      releaseDeployTestHooks.readProviderCandidateRequestRecord(
+        repositoryRoot,
+        missing,
+        expectedRequestRecord(missing),
+      ),
+    ).toThrow();
+
+    const path = join(ownerRoot, "candidate-request.json");
+    const expected = expectedRequestRecord(path);
+    releaseDeployTestHooks.createProviderCandidateRequestRecord(
+      repositoryRoot,
+      path,
+      expected,
+    );
+    writeFileSync(path, `${JSON.stringify({ ...expected, requestId: "fedcba98-7654-4321-8fed-cba987654321" })}\n`);
+    expect(() =>
+      releaseDeployTestHooks.readProviderCandidateRequestRecord(
+        repositoryRoot,
+        path,
+        expected,
+      ),
+    ).toThrow();
+
+    writeFileSync(path, `${JSON.stringify(recursivelySorted(expected))}\n`);
+    chmodSync(path, 0o644);
+    expect(() =>
+      releaseDeployTestHooks.readProviderCandidateRequestRecord(
+        repositoryRoot,
+        path,
+        expected,
+      ),
+    ).toThrow("0600");
+    chmodSync(path, 0o600);
+    expect(() =>
+      releaseDeployTestHooks.readProviderCandidateRequestRecord(
+        repositoryRoot,
+        path,
+        expected,
+        { getuid: () => process.getuid() + 1 },
+      ),
+    ).toThrow("owner");
+    const wrongFileOwner = (descriptor) => {
+      const stat = fstatSync(descriptor);
+      return new Proxy(stat, {
+        get(target, property) {
+          if (property === "uid") return target.uid + 1;
+          const value = Reflect.get(target, property, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+    };
+    expect(() =>
+      releaseDeployTestHooks.readProviderCandidateRequestRecord(
+        repositoryRoot,
+        path,
+        expected,
+        { fstat: wrongFileOwner },
+      ),
+    ).toThrow("record owner");
+
+    const movedRoot = temporaryDirectory("provider-owner-record-moved");
+    chmodSync(movedRoot, 0o700);
+    const moved = join(movedRoot, "candidate-request.json");
+    copyFileSync(path, moved);
+    chmodSync(moved, 0o600);
+    expect(() =>
+      releaseDeployTestHooks.readProviderCandidateRequestRecord(
+        repositoryRoot,
+        moved,
+        expectedRequestRecord(moved),
+      ),
+    ).toThrow("binding mismatch");
+
+    const linked = join(ownerRoot, "linked.json");
+    symlinkSync(path, linked);
+    expect(() =>
+      releaseDeployTestHooks.readProviderCandidateRequestRecord(
+        repositoryRoot,
+        linked,
+        expectedRequestRecord(linked),
+      ),
+    ).toThrow();
+  });
+
+  test("rejects non-private, linked, missing, and source-tree parents", () => {
+    const weakRoot = temporaryDirectory("provider-owner-parent-weak");
+    chmodSync(weakRoot, 0o755);
+    const weakPath = join(weakRoot, "candidate-request.json");
+    expect(() =>
+      releaseDeployTestHooks.createProviderCandidateRequestRecord(
+        repositoryRoot,
+        weakPath,
+        expectedRequestRecord(weakPath),
+      ),
+    ).toThrow("0700");
+
+    const physicalRoot = temporaryDirectory("provider-owner-parent-physical");
+    chmodSync(physicalRoot, 0o700);
+    const linkRoot = `${physicalRoot}-link`;
+    symlinkSync(physicalRoot, linkRoot);
+    temporaryDirectories.push(linkRoot);
+    const linkedPath = join(linkRoot, "candidate-request.json");
+    expect(() =>
+      releaseDeployTestHooks.createProviderCandidateRequestRecord(
+        repositoryRoot,
+        linkedPath,
+        expectedRequestRecord(linkedPath),
+      ),
+    ).toThrow("physical");
+
+    const missingPath = join(
+      temporaryDirectory("provider-owner-parent-missing"),
+      "absent",
+      "candidate-request.json",
+    );
+    expect(() =>
+      releaseDeployTestHooks.createProviderCandidateRequestRecord(
+        repositoryRoot,
+        missingPath,
+        expectedRequestRecord(missingPath),
+      ),
+    ).toThrow();
+
+    const sourcePath = join(repositoryRoot, ".candidate-request.json");
+    expect(() =>
+      releaseDeployTestHooks.createProviderCandidateRequestRecord(
+        repositoryRoot,
+        sourcePath,
+        expectedRequestRecord(sourcePath),
+      ),
+    ).toThrow("outside the source tree");
+  });
+});
+
+describe("provider signed-tag materialization state machine", () => {
+  const tag = "v1.0.4";
+  const tagObject = "a".repeat(40);
+  const runId = "30507374579";
+  const runAttempt = "1";
+
+  function tagExecution({
+    local = "",
+    remote = {},
+    losePushAck = false,
+  } = {}) {
+    const calls = [];
+    const state = {
+      local,
+      remote: { ...remote },
+    };
+    const run = {
+      attempt: 1,
+      conclusion: "success",
+      databaseId: Number(runId),
+      displayTitle: requestId,
+      event: "workflow_dispatch",
+      headBranch: providerReleaseBranch,
+      headSha: commit,
+      status: "completed",
+      url:
+        `https://github.com/tako0614/terraform-provider-takoform/actions/runs/${runId}/attempts/${runAttempt}`,
+      workflowName: "Author provider release tag",
+    };
+    const fake = (executable, args) => {
+      calls.push({ executable, args: [...args] });
+      if (executable === "gh" && args[0] === "--version") {
+        return "gh version 2.96.0 (2026-07-02)\n";
+      }
+      if (executable === "cosign" && args[0] === "version") {
+        return "GitVersion:    v3.0.6\n";
+      }
+      if (
+        executable === "bun" &&
+        args.join(" ") === "run check:release-owner-gate"
+      ) {
+        return "";
+      }
+      if (executable === "git") {
+        if (args[0] === "status") return "";
+        if (args.join(" ") === "rev-parse --is-shallow-repository") {
+          return "false\n";
+        }
+        if (args.join(" ") === "remote get-url origin") {
+          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+        }
+        if (args[0] === "symbolic-ref") return `${providerReleaseBranch}\n`;
+        if (args[0] === "fetch") return "";
+        if (
+          args.join(" ") === "rev-parse HEAD" ||
+          args.join(" ") === `rev-parse ${providerReleaseRemoteRef}`
+        ) {
+          return `${commit}\n`;
+        }
+        if (args[0] === "cat-file") return "";
+        if (args[0] === "for-each-ref") return `${state.local}\n`;
+        if (args[0] === "ls-remote") {
+          return [
+            state.remote.object
+              ? `${state.remote.object}\trefs/tags/${tag}`
+              : "",
+            state.remote.commit
+              ? `${state.remote.commit}\trefs/tags/${tag}^{}`
+              : "",
+          ].filter(Boolean).join("\n");
+        }
+        if (args[0] === "update-ref") {
+          state.local = tagObject;
+          return "";
+        }
+        if (args[0] === "push") {
+          state.remote = { object: tagObject, commit };
+          if (losePushAck) {
+            throw commandFailure("connection closed after server accepted push");
+          }
+          return "";
+        }
+      }
+      if (executable === "gh" && isReleaseList(args)) return "[[]]";
+      if (executable === "curl" && args.at(-1).endsWith("/versions")) {
+        return '{"versions":[]}';
+      }
+      if (executable === "gh" && args[0] === "run" && args[1] === "view") {
+        return JSON.stringify(run);
+      }
+      if (
+        executable === "gh" &&
+        args[0] === "run" &&
+        args[1] === "download"
+      ) {
+        return "";
+      }
+      if (
+        executable === "go" &&
+        args.includes("verify-tag-artifact")
+      ) {
+        return JSON.stringify({
+          kind: "takoform.provider-signed-tag-verification@v1",
+          requestId,
+          releaseTag: tag,
+          sourceCommit: commit,
+          workflowRun: run.url,
+          preflightSha256: `sha256:${"b".repeat(64)}`,
+          tagObjectOid: tagObject,
+          tagObjectSha256: `sha256:${"c".repeat(64)}`,
+          signerFingerprint:
+            "3510E75E05BBCC303B92D77934FC18AC897FB709",
+          localRefMaterialized: false,
+          verified: true,
+        });
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+    return { calls, fake, state };
+  }
+
+  function runTag(execution) {
+    return runReleaseSurface({
+      surface: "takoform-provider-release",
+      args: [
+        "tag",
+        "--tag",
+        tag,
+        "--expected-commit",
+        commit,
+        "--run-id",
+        runId,
+        "--run-attempt",
+        runAttempt,
+      ],
+      repo: repositoryRoot,
+      execFile: execution.fake,
+      stdout: memoryIO().stdout,
+      stderr: memoryIO().stderr,
+    });
+  }
+
+  test("adopts an authoritative exact remote tag after a prior crash without dispatch", () => {
+    const execution = tagExecution({
+      remote: { object: tagObject, commit },
+    });
+    const result = runTag(execution);
+    expect(result.status).toBe("TAG_READY");
+    expect(result.tagObject).toBe(tagObject);
+    expect(execution.state.local).toBe(tagObject);
+    expect(
+      execution.calls.filter(
+        (call) => call.executable === "git" && call.args[0] === "push",
+      ),
+    ).toHaveLength(0);
+    expect(
+      execution.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args[0] === "workflow" &&
+          call.args[1] === "run",
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("reconciles a lost push acknowledgement from authoritative exact remote state", () => {
+    const execution = tagExecution({ losePushAck: true });
+    const result = runTag(execution);
+    expect(result.status).toBe("TAG_READY");
+    expect(result.tagReconciliation).toContain("REMOTE_PUSH_ACK_LOST");
+    expect(execution.state.remote).toEqual({ object: tagObject, commit });
+    expect(
+      execution.calls.filter(
+        (call) => call.executable === "git" && call.args[0] === "push",
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("resumes an exact local-only signed tag without rematerializing it", () => {
+    const execution = tagExecution({ local: tagObject });
+    const result = runTag(execution);
+    expect(result.status).toBe("TAG_READY");
+    expect(execution.state.remote).toEqual({ object: tagObject, commit });
+    expect(
+      execution.calls.filter(
+        (call) => call.executable === "git" && call.args[0] === "update-ref",
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("fails closed on a drifted remote tag object before any writer", () => {
+    const execution = tagExecution({
+      remote: { object: "d".repeat(40), commit },
+    });
+    expect(() => runTag(execution)).toThrow("signed tag state drift");
+    expect(
+      execution.calls.filter(
+        (call) =>
+          call.executable === "git" &&
+          ["update-ref", "push"].includes(call.args[0]),
+      ),
+    ).toHaveLength(0);
+  });
+});
+
+describe("provider candidate dispatch and read-only reconciliation", () => {
+  const tag = "v1.0.4";
+  const tagObject = "a".repeat(40);
+  const signer = "3510E75E05BBCC303B92D77934FC18AC897FB709";
+
+  function candidateExecution(
+    requestRecord,
+    {
+      branch = providerReleaseBranch,
+      currentCommit = commit,
+      dispatch = "success",
+      localObject = tagObject,
+      recoveryPaths = [],
+      releaseCommit = commit,
+      remoteObject = tagObject,
+      remoteCommit = releaseCommit,
+      releases = "[[]]",
+      registryVersions = [],
+      runs = [],
+    } = {},
+  ) {
+    const calls = [];
+    const state = { dispatch, runs: [...runs] };
+    const exactRun = (overrides = {}) => ({
+      conclusion: null,
+      display_title: requestId,
+      event: "workflow_dispatch",
+      head_branch: tag,
+      head_sha: releaseCommit,
+      html_url:
+        "https://github.com/tako0614/terraform-provider-takoform/actions/runs/4242",
+      id: 4242,
+      name: requestId,
+      path: ".github/workflows/release.yml",
+      run_attempt: 1,
+      status: "queued",
+      ...overrides,
+    });
+    const signedTag = Buffer.from(
+      `object ${releaseCommit}\ntype commit\ntag ${tag}\n` +
+        "tagger Takoform Provider Release <release@takoform.invalid> 1 +0000\n\n" +
+        "exact provider release\n" +
+        "-----BEGIN PGP SIGNATURE-----\nopaque\n-----END PGP SIGNATURE-----\n",
+    );
+    const fake = (executable, args) => {
+      calls.push({ executable, args: [...args] });
+      if (executable === "gh" && args[0] === "--version") {
+        return "gh version 2.96.0 (2026-07-02)\n";
+      }
+      if (executable === "cosign" && args[0] === "version") {
+        return "GitVersion:    v3.0.6\n";
+      }
+      if (
+        executable === "bun" &&
+        args.join(" ") === "run check:release-owner-gate"
+      ) {
+        return "";
+      }
+      if (executable === "git") {
+        if (args[0] === "status") return "";
+        if (args.join(" ") === "rev-parse --is-shallow-repository") {
+          return "false\n";
+        }
+        if (args.join(" ") === "remote get-url origin") {
+          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+        }
+        if (args[0] === "symbolic-ref") return `${branch}\n`;
+        if (args[0] === "fetch") return "";
+        if (
+          args.join(" ") === "rev-parse HEAD" ||
+          args.join(" ") === `rev-parse ${providerReleaseRemoteRef}`
+        ) {
+          return `${currentCommit}\n`;
+        }
+        if (args.join(" ") === `rev-parse refs/tags/${tag}^{commit}`) {
+          return `${releaseCommit}\n`;
+        }
+        if (args[0] === "merge-base") return "";
+        if (args[0] === "-c" && args.includes("diff")) {
+          return recoveryPaths.length === 0
+            ? ""
+            : `${recoveryPaths.join("\0")}\0`;
+        }
+        if (args[0] === "for-each-ref") return `${localObject}\n`;
+        if (args[0] === "ls-remote") {
+          return [
+            remoteObject ? `${remoteObject}\trefs/tags/${tag}` : "",
+            remoteCommit ? `${remoteCommit}\trefs/tags/${tag}^{}` : "",
+          ].filter(Boolean).join("\n");
+        }
+        if (args.join(" ") === `cat-file -t refs/tags/${tag}`) {
+          return "tag\n";
+        }
+        if (args.join(" ") === `cat-file tag ${tagObject}`) {
+          return signedTag;
+        }
+        if (args[0] === "cat-file") return "";
+      }
+      if (executable.endsWith("/gpg")) {
+        if (args.includes("show-only")) {
+          return `fpr:::::::::${signer}:\n`;
+        }
+        if (args.includes("--verify")) {
+          return `[GNUPG:] VALIDSIG ${signer} 2026-07-30 0 4 0 1 10 00 ${signer}\n`;
+        }
+        return "";
+      }
+      if (executable === "gh" && isReleaseList(args)) return releases;
+      if (executable === "curl" && args.at(-1).endsWith("/versions")) {
+        return JSON.stringify({
+          versions: registryVersions.map((version) => ({ version })),
+        });
+      }
+      if (
+        executable === "gh" &&
+        args[0] === "api" &&
+        args.some((argument) =>
+          argument.includes("actions/workflows/release.yml/runs?"),
+        )
+      ) {
+        return JSON.stringify([
+          { total_count: state.runs.length, workflow_runs: state.runs },
+        ]);
+      }
+      if (
+        executable === "gh" &&
+        args[0] === "workflow" &&
+        args[1] === "run"
+      ) {
+        expect(existsSync(requestRecord)).toBe(true);
+        expect(
+          JSON.parse(readFileSync(requestRecord, "utf8")).dispatchAttempted,
+        ).toBe(true);
+        if (state.dispatch === "success" || state.dispatch === "lost-ack") {
+          state.runs.push(exactRun());
+        }
+        if (state.dispatch === "lost-ack") {
+          throw commandFailure("connection closed before response");
+        }
+        if (state.dispatch === "failure") {
+          throw commandFailure("dispatch request rejected");
+        }
+        return "raw candidate dispatch response must not leak";
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+    return { calls, exactRun, fake, state };
+  }
+
+  function candidateArgs(phase, requestRecord, overrides = {}) {
+    return [
+      phase,
+      "--tag",
+      tag,
+      "--expected-release-commit",
+      overrides.releaseCommit ?? commit,
+      "--expected-current-commit",
+      overrides.currentCommit ?? commit,
+      "--expected-tag-object",
+      overrides.tagObject ?? tagObject,
+      "--request-id",
+      overrides.requestId ?? requestId,
+      "--request-record",
+      requestRecord,
+    ];
+  }
+
+  function runCandidate(execution, phase, requestRecord, overrides = {}) {
+    const io = memoryIO();
+    const result = runReleaseSurface({
+      surface: "takoform-provider-release",
+      args: candidateArgs(phase, requestRecord, overrides),
+      repo: repositoryRoot,
+      execFile: execution.fake,
+      stdout: io.stdout,
+      stderr: io.stderr,
+    });
+    return { io, result };
+  }
+
+  function ownerRecordPath(prefix) {
+    const root = temporaryDirectory(prefix);
+    chmodSync(root, 0o700);
+    return join(root, "candidate-request.json");
+  }
+
+  test("durably records the sole candidate dispatch attempt and then halts", () => {
+    const requestRecord = ownerRecordPath("provider-candidate-dispatch");
+    const execution = candidateExecution(requestRecord);
+    const { io, result } = runCandidate(
+      execution,
+      "prepare-candidate",
+      requestRecord,
+    );
+    expect(result.status).toBe("RECONCILIATION_REQUIRED");
+    expect(result.dispatchStatus).toBe("ATTEMPTED_ONCE");
+    expect(io.output).not.toContain(requestRecord);
+    expect(io.output).not.toContain("raw candidate dispatch response");
+    const durable = JSON.parse(readFileSync(requestRecord, "utf8"));
+    expect(durable.releaseCommit).toBe(commit);
+    expect(durable.currentCommit).toBe(commit);
+    expect(
+      execution.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args[0] === "workflow" &&
+          call.args[1] === "run",
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("reconcile adopts one exact run after a lost dispatch acknowledgement", () => {
+    const requestRecord = ownerRecordPath("provider-candidate-lost-ack");
+    const execution = candidateExecution(requestRecord, {
+      dispatch: "lost-ack",
+    });
+    expect(() =>
+      runCandidate(execution, "prepare-candidate", requestRecord),
+    ).toThrow("dispatch acknowledgement is unresolved");
+    const { result } = runCandidate(
+      execution,
+      "reconcile-candidate",
+      requestRecord,
+    );
+    expect(result.status).toBe("AWAITING_REVIEW");
+    expect(result.workflowRun.runId).toBe("4242");
+    expect(result.workflowRun.requestId).toBe(requestId);
+    expect(
+      execution.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args[0] === "workflow" &&
+          call.args[1] === "run",
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("a failed dispatch remains unresolved and can never be retried in create mode", () => {
+    const requestRecord = ownerRecordPath("provider-candidate-failed");
+    const execution = candidateExecution(requestRecord, {
+      dispatch: "failure",
+    });
+    expect(() =>
+      runCandidate(execution, "prepare-candidate", requestRecord),
+    ).toThrow("dispatch acknowledgement is unresolved");
+    expect(
+      runCandidate(execution, "reconcile-candidate", requestRecord).result
+        .status,
+    ).toBe("UNRESOLVED_ABSENT");
+    expect(() =>
+      runCandidate(execution, "prepare-candidate", requestRecord),
+    ).toThrow("already exists");
+    expect(
+      execution.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args[0] === "workflow" &&
+          call.args[1] === "run",
+      ),
+    ).toHaveLength(1);
+    const freshClone = candidateExecution(requestRecord);
+    expect(() =>
+      runCandidate(freshClone, "prepare-candidate", requestRecord),
+    ).toThrow("already exists");
+    expect(
+      freshClone.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args[0] === "workflow" &&
+          call.args[1] === "run",
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("create mode refuses to adopt a pre-existing request run", () => {
+    const requestRecord = ownerRecordPath("provider-candidate-preexisting");
+    const seed = candidateExecution(requestRecord);
+    const execution = candidateExecution(requestRecord, {
+      runs: [seed.exactRun()],
+    });
+    expect(() =>
+      runCandidate(execution, "prepare-candidate", requestRecord),
+    ).toThrow("already has a workflow run");
+    expect(existsSync(requestRecord)).toBe(false);
+    expect(
+      execution.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args[0] === "workflow" &&
+          call.args[1] === "run",
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("reconciliation is strictly read-only and fails on ambiguous exact runs", () => {
+    const requestRecord = ownerRecordPath("provider-candidate-ambiguous");
+    const seed = candidateExecution(requestRecord);
+    const record = releaseDeployTestHooks.providerCandidateRequestRecord({
+      currentCommit: commit,
+      releaseCommit: commit,
+      releaseTag: tag,
+      requestId,
+      requestRecord,
+      tagObjectOid: tagObject,
+    });
+    releaseDeployTestHooks.createProviderCandidateRequestRecord(
+      repositoryRoot,
+      requestRecord,
+      record,
+    );
+    const execution = candidateExecution(requestRecord, {
+      runs: [seed.exactRun(), seed.exactRun({ id: 4243, html_url:
+        "https://github.com/tako0614/terraform-provider-takoform/actions/runs/4243" })],
+    });
+    expect(() =>
+      runCandidate(execution, "reconcile-candidate", requestRecord),
+    ).toThrow("ambiguous");
+    expect(
+      execution.calls.some(
+        (call) =>
+          (call.executable === "gh" && call.args[0] === "workflow") ||
+          (call.executable === "git" &&
+            ["push", "update-ref"].includes(call.args[0])),
+      ),
+    ).toBe(false);
+  });
+
+  test("a crash after the durable attempt record is reconcile-only and stays absent", () => {
+    const requestRecord = ownerRecordPath("provider-candidate-pre-post-crash");
+    const record = releaseDeployTestHooks.providerCandidateRequestRecord({
+      currentCommit: commit,
+      releaseCommit: commit,
+      releaseTag: tag,
+      requestId,
+      requestRecord,
+      tagObjectOid: tagObject,
+    });
+    releaseDeployTestHooks.createProviderCandidateRequestRecord(
+      repositoryRoot,
+      requestRecord,
+      record,
+    );
+    const execution = candidateExecution(requestRecord);
+    const { result } = runCandidate(
+      execution,
+      "reconcile-candidate",
+      requestRecord,
+    );
+    expect(result.status).toBe("UNRESOLVED_ABSENT");
+    expect(
+      execution.calls.filter(
+        (call) =>
+          call.executable === "gh" &&
+          call.args[0] === "workflow" &&
+          call.args[1] === "run",
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("reconcile rejects a drifted exact-request run and a different durable request", () => {
+    const requestRecord = ownerRecordPath("provider-candidate-wrong-run");
+    const record = releaseDeployTestHooks.providerCandidateRequestRecord({
+      currentCommit: commit,
+      releaseCommit: commit,
+      releaseTag: tag,
+      requestId,
+      requestRecord,
+      tagObjectOid: tagObject,
+    });
+    releaseDeployTestHooks.createProviderCandidateRequestRecord(
+      repositoryRoot,
+      requestRecord,
+      record,
+    );
+    const seed = candidateExecution(requestRecord);
+    const wrongRun = candidateExecution(requestRecord, {
+      runs: [seed.exactRun({ head_branch: "main" })],
+    });
+    expect(() =>
+      runCandidate(wrongRun, "reconcile-candidate", requestRecord),
+    ).toThrow("drifted workflow run");
+
+    const differentRecord = ownerRecordPath("provider-candidate-wrong-request");
+    const differentRequestId = "11111111-2222-4333-8444-555555555555";
+    const different = releaseDeployTestHooks.providerCandidateRequestRecord({
+      currentCommit: commit,
+      releaseCommit: commit,
+      releaseTag: tag,
+      requestId: differentRequestId,
+      requestRecord: differentRecord,
+      tagObjectOid: tagObject,
+    });
+    releaseDeployTestHooks.createProviderCandidateRequestRecord(
+      repositoryRoot,
+      differentRecord,
+      different,
+    );
+    const wrongRequest = candidateExecution(differentRecord);
+    expect(() =>
+      runCandidate(wrongRequest, "reconcile-candidate", differentRecord),
+    ).toThrow("binding mismatch");
+  });
+
+  test("wrong branch, tag object, Release, and Registry state fail before record or dispatch", () => {
+    const cases = [
+      { branch: "main" },
+      { localObject: "d".repeat(40) },
+      { remoteObject: "d".repeat(40) },
+      {
+        releases: JSON.stringify([
+          [{ id: 99, tag_name: tag, draft: false }],
+        ]),
+      },
+      { registryVersions: ["1.0.4"] },
+    ];
+    for (const [index, scenario] of cases.entries()) {
+      const requestRecord = ownerRecordPath(
+        `provider-candidate-fail-closed-${index}`,
+      );
+      const execution = candidateExecution(requestRecord, scenario);
+      expect(() =>
+        runCandidate(execution, "prepare-candidate", requestRecord),
+      ).toThrow();
+      expect(existsSync(requestRecord)).toBe(false);
+      expect(
+        execution.calls.some(
+          (call) =>
+            (call.executable === "gh" && call.args[0] === "workflow") ||
+            (call.executable === "git" &&
+              ["push", "update-ref"].includes(call.args[0])),
+        ),
+      ).toBe(false);
+    }
+  });
+
+  test("permits E before F only through the exact reviewed recovery diff fence", () => {
+    const allowedPaths = [
+      "release/README.md",
+      "scripts/release-deploy.mjs",
+      "scripts/release-deploy.test.mjs",
+    ];
+    const requestRecord = ownerRecordPath("provider-candidate-reviewed-ef");
+    const execution = candidateExecution(requestRecord, {
+      currentCommit: laterCommit,
+      recoveryPaths: allowedPaths,
+      releaseCommit: commit,
+    });
+    const { result } = runCandidate(
+      execution,
+      "prepare-candidate",
+      requestRecord,
+      { releaseCommit: commit, currentCommit: laterCommit },
+    );
+    expect(result.status).toBe("RECONCILIATION_REQUIRED");
+    expect(JSON.parse(readFileSync(requestRecord, "utf8"))).toMatchObject({
+      currentCommit: laterCommit,
+      releaseCommit: commit,
+    });
+
+    const rejectedRecord = ownerRecordPath(
+      "provider-candidate-unreviewed-ef",
+    );
+    const rejected = candidateExecution(rejectedRecord, {
+      currentCommit: laterCommit,
+      recoveryPaths: [
+        "scripts/release-deploy.mjs",
+        ".github/workflows/release.yml",
+      ],
+      releaseCommit: commit,
+    });
+    expect(() =>
+      runCandidate(rejected, "prepare-candidate", rejectedRecord, {
+        releaseCommit: commit,
+        currentCommit: laterCommit,
+      }),
+    ).toThrow("exact reviewed recovery implementation");
+    expect(existsSync(rejectedRecord)).toBe(false);
+    expect(
+      rejected.calls.some(
+        (call) =>
+          call.executable === "gh" && call.args[0] === "workflow",
+      ),
+    ).toBe(false);
   });
 });
 
