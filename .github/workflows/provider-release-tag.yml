@@ -9,7 +9,7 @@ on:
         required: true
         type: string
       expected_commit:
-        description: Exact approved 40-character protected-main commit
+        description: Exact approved 40-character protected maintenance/v1 commit
         required: true
         type: string
       request_id:
@@ -27,6 +27,8 @@ concurrency:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   EXPECTED_GPG_FINGERPRINT: "3510E75E05BBCC303B92D77934FC18AC897FB709"
+  PROVIDER_RELEASE_BRANCH: maintenance/v1
+  PROVIDER_RELEASE_REF: refs/heads/maintenance/v1
 
 jobs:
   candidate-preflight:
@@ -42,7 +44,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify the requested protected-main source
+      - name: Verify the requested protected maintenance/v1 source
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.tag }}
@@ -54,12 +56,13 @@ jobs:
             echo "request_id must be one exact lowercase canonical UUIDv4" >&2
             exit 1
           fi
-          if [[ "$GITHUB_REF" != "refs/heads/main" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
-            echo "Provider preflight must execute the current protected main commit" >&2
+          git fetch --no-tags origin "+$PROVIDER_RELEASE_REF:refs/remotes/origin/$PROVIDER_RELEASE_BRANCH"
+          if [[ "$GITHUB_REF" != "$PROVIDER_RELEASE_REF" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/maintenance/v1)" != "$GITHUB_SHA" ]]; then
+            echo "Provider preflight must execute the current protected maintenance/v1 commit" >&2
             exit 1
           fi
           if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ || "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
-            echo "expected_commit must equal the current protected-main commit" >&2
+            echo "expected_commit must equal the current protected maintenance/v1 commit" >&2
             exit 1
           fi
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ || "$(jq -r .tag release/version.json)" != "$RELEASE_TAG" || "v$(jq -r .version release/version.json)" != "$RELEASE_TAG" ]]; then
@@ -74,6 +77,13 @@ jobs:
           cache-dependency-path: |
             go.sum
             cmd/provider-release/go.sum
+
+      # The provider continuity suite invokes the generated-family checker
+      # through Bun. Keep the protected release preflight on the same pinned
+      # toolchain as the repository quality workflow.
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
+        with:
+          bun-version: 1.3.14
 
       - uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # pinned: v2
         with:
@@ -155,7 +165,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Check out the exact protected-main candidate without write credentials
+      - name: Check out the exact protected maintenance/v1 candidate without write credentials
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.sha }}
@@ -181,12 +191,13 @@ jobs:
             echo "request_id must be one exact lowercase canonical UUIDv4" >&2
             exit 1
           fi
-          if [[ "$GITHUB_REF" != "refs/heads/main" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/main)" != "$GITHUB_SHA" ]]; then
-            echo "Provider tag authoring must execute the current protected main commit" >&2
+          git fetch --no-tags origin "+$PROVIDER_RELEASE_REF:refs/remotes/origin/$PROVIDER_RELEASE_BRANCH"
+          if [[ "$GITHUB_REF" != "$PROVIDER_RELEASE_REF" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$(git rev-parse refs/remotes/origin/maintenance/v1)" != "$GITHUB_SHA" ]]; then
+            echo "Provider tag authoring must execute the current protected maintenance/v1 commit" >&2
             exit 1
           fi
           if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ || "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
-            echo "expected_commit must equal the current protected-main commit" >&2
+            echo "expected_commit must equal the current protected maintenance/v1 commit" >&2
             exit 1
           fi
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ || "$(jq -r .tag release/version.json)" != "$RELEASE_TAG" || "v$(jq -r .version release/version.json)" != "$RELEASE_TAG" ]]; then
@@ -317,8 +328,8 @@ jobs:
             echo "Imported signing key fingerprint does not match the pinned provider signer" >&2
             exit 1
           fi
-          git fetch --no-tags origin main
-          test "$(git rev-parse refs/remotes/origin/main)" = "$EXPECTED_COMMIT"
+          git fetch --no-tags origin "+$PROVIDER_RELEASE_REF:refs/remotes/origin/$PROVIDER_RELEASE_BRANCH"
+          test "$(git rev-parse refs/remotes/origin/maintenance/v1)" = "$EXPECTED_COMMIT"
           remote_tag_refs="$RUNNER_TEMP/provider-tag-remote-refs-final.txt"
           if ! git ls-remote --tags origin \
             "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" > "$remote_tag_refs"; then
@@ -332,7 +343,7 @@ jobs:
           preflight="$RUNNER_TEMP/provider-preflight"
           preflight_sha256="sha256:$(sha256sum "$preflight/SHA256SUMS" | cut -d' ' -f1)"
           workflow_path=".github/workflows/provider-release-tag.yml"
-          workflow_ref="$GITHUB_REPOSITORY/$workflow_path@refs/heads/main"
+          workflow_ref="$GITHUB_REPOSITORY/$workflow_path@$PROVIDER_RELEASE_REF"
           test "$GITHUB_WORKFLOW_REF" = "$workflow_ref"
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]

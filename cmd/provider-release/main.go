@@ -29,7 +29,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-const descriptorPath = "release/version.json"
+const (
+	descriptorPath        = "release/version.json"
+	providerReleaseBranch = "maintenance/v1"
+	providerReleaseRef    = "refs/heads/" + providerReleaseBranch
+)
 
 var (
 	semverPattern    = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
@@ -373,7 +377,7 @@ func main() {
 		expectedRunID := fs.String("expected-run-id", "", "exact approved GitHub Actions run id")
 		expectedRunAttempt := fs.String("expected-run-attempt", "", "exact approved GitHub Actions run attempt")
 		expectedRequestID := fs.String("expected-request-id", "", "exact lowercase UUIDv4 dispatch correlation token")
-		expectedCommit := fs.String("expected-commit", "", "exact protected-main source commit")
+		expectedCommit := fs.String("expected-commit", "", "exact protected maintenance/v1 source commit")
 		materializeRef := fs.Bool("materialize-ref", false, "atomically create the local descriptor tag ref after verification")
 		check(fs.Parse(os.Args[2:]))
 		evidence, err := verifySignedTagArtifact(repo, desc, *artifactPath, *preflightPath, *expectedRunID, *expectedRunAttempt, *expectedRequestID, *expectedCommit, *materializeRef)
@@ -764,6 +768,25 @@ func verifyPinnedDetachedSignature(publicKeyPath, expectedFingerprint, signature
 	return validFingerprints[0], nil
 }
 
+func verifySignedTagArtifactMetadataBinding(
+	metadata signedTagArtifactMetadata,
+	desc descriptor,
+	expectedRunID, expectedRunAttempt, expectedRequestID, expectedCommit string,
+) error {
+	expectedWorkflowPath := ".github/workflows/provider-release-tag.yml"
+	expectedWorkflowRef := "tako0614/terraform-provider-takoform/" + expectedWorkflowPath + "@" + providerReleaseRef
+	if metadata.Format != "takoform.provider-signed-tag-artifact@v1" ||
+		metadata.Repository != "tako0614/terraform-provider-takoform" ||
+		metadata.WorkflowPath != expectedWorkflowPath || metadata.WorkflowRef != expectedWorkflowRef ||
+		metadata.RunID != expectedRunID || metadata.RunAttempt != expectedRunAttempt ||
+		metadata.RequestID != expectedRequestID ||
+		metadata.SourceRef != providerReleaseRef || metadata.SourceCommit != expectedCommit ||
+		metadata.ReleaseTag != desc.Tag || metadata.SignerFingerprint != desc.SigningFingerprint {
+		return errors.New("signed tag metadata does not match the exact maintenance/v1 release, source, workflow run, or signer")
+	}
+	return nil
+}
+
 func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflightPath, expectedRunID, expectedRunAttempt, expectedRequestID, expectedCommit string, materializeRef bool) (signedTagArtifactEvidence, error) {
 	if strings.TrimSpace(artifactPath) == "" || strings.TrimSpace(preflightPath) == "" {
 		return signedTagArtifactEvidence{}, errors.New("--artifact and --preflight-artifact are required")
@@ -804,17 +827,9 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 	if err := readStrictJSONFile(filepath.Join(artifactPath, "metadata.json"), &metadata); err != nil {
 		return signedTagArtifactEvidence{}, fmt.Errorf("read signed tag metadata: %w", err)
 	}
-	expectedWorkflowPath := ".github/workflows/provider-release-tag.yml"
-	expectedWorkflowRef := "tako0614/terraform-provider-takoform/" + expectedWorkflowPath + "@refs/heads/main"
 	expectedWorkflowRun := "https://github.com/tako0614/terraform-provider-takoform/actions/runs/" + expectedRunID + "/attempts/" + expectedRunAttempt
-	if metadata.Format != "takoform.provider-signed-tag-artifact@v1" ||
-		metadata.Repository != "tako0614/terraform-provider-takoform" ||
-		metadata.WorkflowPath != expectedWorkflowPath || metadata.WorkflowRef != expectedWorkflowRef ||
-		metadata.RunID != expectedRunID || metadata.RunAttempt != expectedRunAttempt ||
-		metadata.RequestID != expectedRequestID ||
-		metadata.SourceRef != "refs/heads/main" || metadata.SourceCommit != expectedCommit ||
-		metadata.ReleaseTag != desc.Tag || metadata.SignerFingerprint != desc.SigningFingerprint {
-		return signedTagArtifactEvidence{}, errors.New("signed tag metadata does not match the exact release, source, workflow run, or signer")
+	if err := verifySignedTagArtifactMetadataBinding(metadata, desc, expectedRunID, expectedRunAttempt, expectedRequestID, expectedCommit); err != nil {
+		return signedTagArtifactEvidence{}, err
 	}
 	objectFormat, err := command(repo, nil, "git", "rev-parse", "--show-object-format")
 	if err != nil {
@@ -868,7 +883,7 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 	}
 	peeled, err := command(repo, nil, "git", "rev-parse", tagObjectOID+"^{}")
 	if err != nil || strings.TrimSpace(peeled) != expectedCommit {
-		return signedTagArtifactEvidence{}, errors.New("reconstructed tag object does not peel to the exact protected-main commit")
+		return signedTagArtifactEvidence{}, errors.New("reconstructed tag object does not peel to the exact protected maintenance/v1 commit")
 	}
 	gnupgHome, err := os.MkdirTemp("", "takoform-provider-tag-verify-")
 	if err != nil {
@@ -1458,7 +1473,7 @@ func createProvenance(desc descriptor, evidence sourceEvidence, artifacts []arti
 				"resolvedDependencies": []map[string]any{{"uri": "git+https://" + desc.SourceRepository, "digest": map[string]string{"gitCommit": evidence.Commit}}},
 			},
 			RunDetails: map[string]any{
-				"builder": map[string]string{"id": "https://github.com/tako0614/terraform-provider-takoform/tree/main/cmd/provider-release"},
+				"builder": map[string]string{"id": "https://github.com/tako0614/terraform-provider-takoform/tree/maintenance/v1/cmd/provider-release"},
 			},
 		},
 	}

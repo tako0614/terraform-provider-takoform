@@ -28,6 +28,9 @@ import {
 const repositoryRoot = resolve(import.meta.dir, "..");
 const commit = "0123456789abcdef0123456789abcdef01234567";
 const requestId = "01234567-89ab-4cde-8fab-0123456789ab";
+const providerReleaseBranch = "maintenance/v1";
+const providerReleaseRef = `refs/heads/${providerReleaseBranch}`;
+const providerReleaseRemoteRef = `refs/remotes/origin/${providerReleaseBranch}`;
 const temporaryDirectories = [];
 let previousGH;
 let previousGitHub;
@@ -343,6 +346,99 @@ function writePublicationSetFixture(staging, plan) {
       })),
     }),
   );
+}
+
+function writeRegistryReadbackCandidate(
+  root,
+  {
+    sourceCommit = commit,
+    providerCommit = "b".repeat(40),
+    certificateIdentity =
+      "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/provider-registry-readback.yml@refs/heads/maintenance/v1",
+    installedDigests = ["sha256:" + "c".repeat(64), "sha256:" + "c".repeat(64)],
+  } = {},
+) {
+  const descriptor = JSON.parse(
+    readFileSync(join(repositoryRoot, "release", "version.json"), "utf8"),
+  );
+  const matrix = Buffer.from('{"fixture":"registry-matrix"}');
+  const readback = Buffer.from(
+    JSON.stringify({
+      installs: [
+        { product: "OpenTofu", providerBinarySha256: installedDigests[0] },
+        { product: "Terraform", providerBinarySha256: installedDigests[1] },
+      ],
+    }),
+  );
+  const bundle = Buffer.from("sigstore fixture\n");
+  writeFileSync(join(root, "provider-lifecycle-matrix.json"), matrix);
+  writeFileSync(join(root, "provider-readback.json"), readback);
+  writeFileSync(join(root, "provider-readback.sigstore.json"), bundle);
+  const manifest = recursivelySorted({
+    format: "takoform.provider-registry-readback-candidate@v1",
+    status: "candidate-only",
+    proofType: "registry-readback",
+    generation: "portable-v1",
+    source: {
+      repository:
+        "https://github.com/tako0614/terraform-provider-takoform.git",
+      commit: sourceCommit,
+    },
+    provider: {
+      address: "registry.terraform.io/tako0614/takoform",
+      version: descriptor.version,
+      tag: descriptor.tag,
+      commit: providerCommit,
+    },
+    matrix: {
+      path: "provider-lifecycle-matrix.json",
+      digest: sha256(matrix),
+    },
+    readback: {
+      path: "provider-readback.json",
+      digest: sha256(readback),
+      bundlePath: "provider-readback.sigstore.json",
+    },
+  });
+  const manifestRaw = Buffer.from(JSON.stringify(manifest));
+  writeFileSync(
+    join(root, "provider-registry-readback-manifest.json"),
+    manifestRaw,
+  );
+  const signed = recursivelySorted({
+    format: "takoform.provider-registry-readback-signed-candidate@v1",
+    status: "candidate-only",
+    proofType: "registry-readback",
+    generation: "portable-v1",
+    certificateIdentity,
+    workflow: ".github/workflows/provider-registry-readback.yml",
+    requestId,
+    workflowRunId: "123",
+    workflowRunAttempt: 1,
+    source: manifest.source,
+    manifest: {
+      path: "provider-registry-readback-manifest.json",
+      digest: sha256(manifestRaw),
+    },
+    readback: {
+      path: "provider-readback.json",
+      digest: sha256(readback),
+      bundlePath: "provider-readback.sigstore.json",
+      bundleDigest: sha256(bundle),
+    },
+  });
+  writeFileSync(
+    join(root, "signed-provider-registry-readback-candidate.json"),
+    JSON.stringify(signed),
+  );
+  writeChecksumFixture(root, [
+    "provider-lifecycle-matrix.json",
+    "provider-readback.json",
+    "provider-readback.sigstore.json",
+    "provider-registry-readback-manifest.json",
+    "signed-provider-registry-readback-candidate.json",
+  ]);
+  return { descriptor, providerCommit, readback: readback.toString("utf8") };
 }
 
 describe("release surface contract and strict parsing", () => {
@@ -718,6 +814,114 @@ describe("release surface contract and strict parsing", () => {
 });
 
 describe("workflow dispatch authority and correlation", () => {
+  test("provider prepare dispatches and correlates only maintenance/v1", () => {
+    const calls = [];
+    let dispatched = false;
+    const run = {
+      attempt: 1,
+      createdAt: "2026-07-29T00:00:01.000Z",
+      databaseId: 123,
+      displayTitle: requestId,
+      event: "workflow_dispatch",
+      headBranch: providerReleaseBranch,
+      headSha: commit,
+      status: "queued",
+      url:
+        "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123",
+      workflowName: "Author provider release tag",
+    };
+    const fake = (executable, args) => {
+      calls.push({ executable, args: [...args] });
+      if (executable === "gh" && args[0] === "--version") {
+        return "gh version 2.96.0 (2026-07-02)\n";
+      }
+      if (executable === "cosign" && args[0] === "version") {
+        return "GitVersion:    v3.0.6\n";
+      }
+      if (
+        executable === "bun" &&
+        args.join(" ") === "run check:release-owner-gate"
+      ) {
+        return "";
+      }
+      if (executable === "git") {
+        if (args[0] === "status") return "";
+        if (args.join(" ") === "rev-parse --is-shallow-repository") {
+          return "false\n";
+        }
+        if (args.join(" ") === "remote get-url origin") {
+          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+        }
+        if (args[0] === "symbolic-ref") return `${providerReleaseBranch}\n`;
+        if (args[0] === "fetch") return "";
+        if (
+          args.join(" ") === "rev-parse HEAD" ||
+          args.join(" ") === `rev-parse ${providerReleaseRemoteRef}`
+        ) {
+          return `${commit}\n`;
+        }
+        if (args[0] === "cat-file") return "";
+        if (args[0] === "for-each-ref" || args[0] === "ls-remote") {
+          return "";
+        }
+      }
+      if (executable === "curl" && args.at(-1).endsWith("/versions")) {
+        return '{"versions":[]}';
+      }
+      if (executable === "gh" && isReleaseList(args)) return "[[]]";
+      if (executable === "gh" && args[0] === "run" && args[1] === "list") {
+        return JSON.stringify(dispatched ? [run] : []);
+      }
+      if (
+        executable === "gh" &&
+        args[0] === "workflow" &&
+        args[1] === "run"
+      ) {
+        dispatched = true;
+        return `${run.url}\n`;
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+
+    const result = runReleaseSurface({
+      surface: "takoform-provider-release",
+      args: [
+        "prepare",
+        "--tag",
+        "v1.0.4",
+        "--expected-commit",
+        commit,
+      ],
+      repo: repositoryRoot,
+      execFile: fake,
+      stdout: memoryIO().stdout,
+      stderr: memoryIO().stderr,
+      uuidFactory: () => requestId,
+      now: () => Date.parse("2026-07-29T00:00:01.000Z"),
+      wait: () => {},
+    });
+
+    expect(result.workflowRun.runId).toBe("123");
+    const dispatch = calls.find(
+      (call) =>
+        call.executable === "gh" &&
+        call.args[0] === "workflow" &&
+        call.args[1] === "run",
+    );
+    expect(dispatch.args).toContain(providerReleaseBranch);
+    const correlatedLists = calls.filter(
+      (call) =>
+        call.executable === "gh" &&
+        call.args[0] === "run" &&
+        call.args[1] === "list",
+    );
+    expect(correlatedLists).toHaveLength(2);
+    for (const listed of correlatedLists) {
+      expect(listed.args).toContain("--branch");
+      expect(listed.args).toContain(providerReleaseBranch);
+    }
+  });
+
   test("scopes upload authority to the absolute uploads host without argv exposure", () => {
     process.env.GH_ENTERPRISE_TOKEN = "ambient-enterprise-token";
     process.env.GITHUB_ENTERPRISE_TOKEN = "ambient-enterprise-token";
@@ -890,6 +1094,127 @@ describe("owner gate final fence and pinned release tools", () => {
     }
     return null;
   }
+
+  for (const scenario of [
+    {
+      name: "main substitution",
+      branch: "main",
+      remote: commit,
+      dirty: "",
+      error: "attached to maintenance/v1",
+    },
+    {
+      name: "detached HEAD",
+      branch: null,
+      remote: commit,
+      dirty: "",
+      error: "attached to maintenance/v1",
+    },
+    {
+      name: "stale maintenance checkout",
+      branch: providerReleaseBranch,
+      remote: "89abcdef0123456789abcdef0123456789abcdef",
+      dirty: "",
+      error: "fresh origin/maintenance/v1",
+    },
+    {
+      name: "dirty maintenance checkout",
+      branch: providerReleaseBranch,
+      remote: commit,
+      dirty: " M scripts/release-deploy.mjs\n",
+      error: "worktree is dirty",
+    },
+  ]) {
+    test(`provider refuses ${scenario.name} before any writer`, () => {
+      const calls = [];
+      const fake = (executable, args) => {
+        calls.push({ executable, args: [...args] });
+        const version = toolOutput(executable, args);
+        if (version !== null) return version;
+        if (executable === "bun") return "";
+        if (executable === "git") {
+          if (args[0] === "status") return scenario.dirty;
+          if (args.join(" ") === "rev-parse --is-shallow-repository") {
+            return "false\n";
+          }
+          if (args.join(" ") === "remote get-url origin") {
+            return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+          }
+          if (args[0] === "symbolic-ref") {
+            if (scenario.branch === null) {
+              throw commandFailure("fatal: ref HEAD is not a symbolic ref\n");
+            }
+            return `${scenario.branch}\n`;
+          }
+          if (args[0] === "fetch") return "";
+          if (args.join(" ") === "rev-parse HEAD") return `${commit}\n`;
+          if (args.join(" ") === `rev-parse ${providerReleaseRemoteRef}`) {
+            return `${scenario.remote}\n`;
+          }
+          if (args.join(" ") === "rev-parse refs/remotes/origin/main") {
+            return `${commit}\n`;
+          }
+        }
+        throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+      };
+      expect(() =>
+        releaseDeployTestHooks.providerOwnerGateAndFence(
+          context(fake),
+          commit,
+        ),
+      ).toThrow(scenario.error);
+      expect(
+        calls.some(
+          ({ executable, args }) =>
+            (executable === "git" &&
+              (args[0] === "push" || args[0] === "update-ref")) ||
+            (executable === "gh" &&
+              ((args[0] === "workflow" && args[1] === "run") ||
+                (args[0] === "api" &&
+                  ["POST", "PATCH", "DELETE"].some((method) =>
+                    args.includes(method),
+                  )))),
+        ),
+      ).toBe(false);
+    });
+  }
+
+  test("Form Package owner fence remains fixed to main", () => {
+    const calls = [];
+    const fake = (executable, args) => {
+      calls.push({ executable, args: [...args] });
+      const version = toolOutput(executable, args);
+      if (version !== null) return version;
+      if (executable === "bun") return "";
+      if (executable === "git") {
+        if (args[0] === "status") return "";
+        if (args.join(" ") === "rev-parse --is-shallow-repository") {
+          return "false\n";
+        }
+        if (args.join(" ") === "remote get-url origin") {
+          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+        }
+        if (args[0] === "symbolic-ref") return "main\n";
+        if (args[0] === "fetch") return "";
+        if (
+          args.join(" ") === "rev-parse HEAD" ||
+          args.join(" ") === "rev-parse refs/remotes/origin/main"
+        ) {
+          return `${commit}\n`;
+        }
+        if (args[0] === "cat-file") return "";
+      }
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+    expect(releaseDeployTestHooks.ownerGateAndFence(context(fake), commit)).toBe(
+      commit,
+    );
+    const fetch = calls.find(
+      ({ executable, args }) => executable === "git" && args[0] === "fetch",
+    );
+    expect(fetch.args).toContain("+refs/heads/main:refs/remotes/origin/main");
+    expect(fetch.args.join(" ")).not.toContain(providerReleaseBranch);
+  });
 
   test("blocks mutation when origin/main advances after the owner check", () => {
     const calls = [];
@@ -2499,6 +2824,84 @@ describe("provider 15-asset provenance closure", () => {
   });
 });
 
+describe("provider Registry readback maintenance identity", () => {
+  function verifier(root, readback, providerCommit) {
+    const fake = (executable, args) => {
+      if (executable === "gh" && args[0] === "--version") {
+        return "gh version 2.96.0 (2026-07-02)\n";
+      }
+      if (executable === "cosign" && args[0] === "version") {
+        return "GitVersion:    v3.0.6\n";
+      }
+      if (executable === "git") {
+        if (args[0] === "rev-list") return `${providerCommit}\n`;
+        if (args[0] === "cat-file" || args[0] === "merge-base") return "";
+      }
+      if (executable === "go") return readback;
+      if (executable === "cosign" && args[0] === "verify-blob") return "";
+      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+    };
+    const descriptor = JSON.parse(
+      readFileSync(join(repositoryRoot, "release", "version.json"), "utf8"),
+    );
+    return releaseDeployTestHooks.verifyRegistryCandidate(
+      context(fake),
+      root,
+      {
+        descriptor,
+        expectedCommit: commit,
+        runId: "123",
+        runAttempt: "1",
+        requestId,
+      },
+    );
+  }
+
+  test("accepts only the maintenance workflow identity", () => {
+    const root = temporaryDirectory("registry-maintenance-identity");
+    const fixture = writeRegistryReadbackCandidate(root);
+    expect(
+      verifier(root, fixture.readback, fixture.providerCommit)
+        .installedProviderDigest,
+    ).toBe("sha256:" + "c".repeat(64));
+  });
+
+  test("rejects main identity substitution and source drift", () => {
+    {
+      const root = temporaryDirectory("registry-main-substitution");
+      const fixture = writeRegistryReadbackCandidate(root, {
+        certificateIdentity:
+          "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/provider-registry-readback.yml@refs/heads/main",
+      });
+      expect(() =>
+        verifier(root, fixture.readback, fixture.providerCommit),
+      ).toThrow("metadata binding mismatch");
+    }
+    {
+      const root = temporaryDirectory("registry-source-drift");
+      const fixture = writeRegistryReadbackCandidate(root, {
+        sourceCommit: "d".repeat(40),
+      });
+      expect(() =>
+        verifier(root, fixture.readback, fixture.providerCommit),
+      ).toThrow("metadata binding mismatch");
+    }
+  });
+
+  test("rejects Terraform and OpenTofu binary digest mismatch", () => {
+    const root = temporaryDirectory("registry-binary-digest-drift");
+    const fixture = writeRegistryReadbackCandidate(root, {
+      installedDigests: [
+        "sha256:" + "c".repeat(64),
+        "sha256:" + "d".repeat(64),
+      ],
+    });
+    expect(() => verifier(root, fixture.readback, fixture.providerCommit)).toThrow(
+      "one provider binary digest",
+    );
+  });
+});
+
 describe("local immutable GitHub Release publication", () => {
   function assetFixture() {
     const root = temporaryDirectory("release-publish");
@@ -2656,7 +3059,7 @@ describe("local immutable GitHub Release publication", () => {
     }
   });
 
-  test("strict publication sends full exact PATCH identity and halts on a drifted response", () => {
+  test("strict publication sends the selected full exact PATCH identity and halts on a drifted response", () => {
     const fixture = assetFixture();
     const tag = "v1.0.1";
     const body = "exact provider release";
@@ -2666,7 +3069,7 @@ describe("local immutable GitHub Release publication", () => {
     const exactDraft = () => ({
       id: 7,
       tag_name: tag,
-      target_commitish: "main",
+      target_commitish: providerReleaseBranch,
       name: tag,
       body,
       draft: true,
@@ -2736,11 +3139,12 @@ describe("local immutable GitHub Release publication", () => {
         body,
         temporaryRoot: fixture.root,
         strictIdentity: true,
+        targetCommitish: providerReleaseBranch,
       }),
     ).toThrow("PATCH response differs");
     const patch = calls.find((args) => args.includes("PATCH"));
     expect(patch).toContain(`tag_name=${tag}`);
-    expect(patch).toContain("target_commitish=main");
+    expect(patch).toContain(`target_commitish=${providerReleaseBranch}`);
     expect(patch).toContain(`name=${tag}`);
     expect(patch).toContain(`body=${body}`);
     expect(patch).toContain("prerelease=false");

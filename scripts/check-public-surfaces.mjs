@@ -857,11 +857,14 @@ function checkProviderReleaseCommitBindings() {
   const releaseGuide = read(path.join(repositoryRoot, "release", "README.md"));
   for (const required of [
     "--expected-release-commit <signed-tag-peeled-release-commit-E>",
-    "--expected-recovery-commit <current-reviewed-protected-main-commit-F>",
+    "--expected-recovery-commit <current-reviewed-protected-maintenance-v1-commit-F>",
     "After an exact recovery, `--expected-commit` is instead the current",
     "release provenance and provider commit remain the tag's peeled commit `E`.",
     "require `E` to be an ancestor of `F`",
-    "--expected-commit <current-reviewed-protected-main-source-commit>",
+    "--expected-commit <current-reviewed-protected-maintenance-v1-source-commit>",
+    "provider-registry-readback.yml@refs/heads/maintenance/v1",
+    "already-issued `provider-registry-readback.yml@refs/heads/main` identity",
+    "Form Package release and revocation tooling remains fixed to",
   ]) {
     if (!releaseGuide.includes(required)) {
       fail(

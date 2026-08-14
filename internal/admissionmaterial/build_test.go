@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -434,6 +435,7 @@ func TestRegistryReadbackWorkflowUsesBothCLIsAndAnIsolatedSigner(t *testing.T) {
 		t.Fatal(err)
 	}
 	workflow := string(raw)
+	const maintenanceRegistryIdentity = "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/provider-registry-readback.yml@refs/heads/maintenance/v1"
 	for _, required := range []string{
 		"permissions: {}",
 		"tofu_version: 1.12.3",
@@ -448,7 +450,10 @@ func TestRegistryReadbackWorkflowUsesBothCLIsAndAnIsolatedSigner(t *testing.T) {
 		"artifact-ids: ${{ needs.generate.outputs.artifact_id }}",
 		"digest-mismatch: error",
 		"provider-readback.sigstore.json",
-		registryIdentity,
+		"PROVIDER_RELEASE_BRANCH: maintenance/v1",
+		"PROVIDER_RELEASE_REF: refs/heads/maintenance/v1",
+		"refs/remotes/origin/maintenance/v1",
+		maintenanceRegistryIdentity,
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Errorf("Registry workflow omits %q", required)
@@ -465,6 +470,12 @@ func TestRegistryReadbackWorkflowUsesBothCLIsAndAnIsolatedSigner(t *testing.T) {
 		strings.Contains(workflow, "gh release") ||
 		strings.Contains(workflow, "git push") {
 		t.Fatal("Registry evidence workflow gained publication authority")
+	}
+	if regexp.MustCompile(`refs/(?:heads|remotes/origin)/main(?:[^A-Za-z0-9/]|$)`).MatchString(workflow) {
+		t.Fatal("current provider Registry readback workflow must not accept main as provider-v1 release authority")
+	}
+	if registryIdentity != "https://github.com/tako0614/terraform-provider-takoform/.github/workflows/provider-registry-readback.yml@refs/heads/main" {
+		t.Fatal("retained admission evidence identity must remain the historical main workflow identity")
 	}
 }
 

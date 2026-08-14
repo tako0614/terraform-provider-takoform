@@ -34,6 +34,10 @@ import process from "node:process";
 const GITHUB_REPOSITORY = "tako0614/terraform-provider-takoform";
 const SOURCE_REPOSITORY = `https://github.com/${GITHUB_REPOSITORY}.git`;
 const PROVIDER_ADDRESS = "registry.terraform.io/tako0614/takoform";
+const PROVIDER_RELEASE_BRANCH = "maintenance/v1";
+const PROVIDER_RELEASE_REF = `refs/heads/${PROVIDER_RELEASE_BRANCH}`;
+const PROVIDER_RELEASE_REMOTE_REF =
+  `refs/remotes/origin/${PROVIDER_RELEASE_BRANCH}`;
 const PROVIDER_SIGNER = "3510E75E05BBCC303B92D77934FC18AC897FB709";
 const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const TRUSTED_ROOT = "admission/v4/trust/trusted-root.json";
@@ -128,7 +132,7 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "requires local operator GH_TOKEN authority, a clean non-shallow main checkout equal to a freshly fetched canonical origin/main, the complete owner check before every dispatch, tag push, or release mutation, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; GH_TOKEN is never printed or retained",
+        "requires local operator GH_TOKEN authority, a clean non-shallow maintenance/v1 checkout equal to a freshly fetched canonical origin/maintenance/v1, the complete owner check before every dispatch, tag push, or release mutation, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; GH_TOKEN is never printed or retained",
       "post-conditions":
         "publishes the exact verified same-run bytes locally under exclusive single-writer authority because GitHub REST has no atomic asset-plus-metadata precondition, immediately rereads the empty and complete exact draft, restates the full exact identity on PATCH, requires GitHub's immutable release readback and a fresh download with identical digests, rechecks the pinned signed tag before VERIFIED, then separately installs the indexed provider with both supported Registry clients and checksum-closes the signed direct-install readback",
       reversal:
@@ -686,6 +690,16 @@ function ownerGateAndFence(context, expectedCommit, options) {
   return assertCurrentProtectedMain(context, expectedCommit, options);
 }
 
+function providerOwnerGateAndFence(context, expectedCommit, options) {
+  verifyLocalReleaseToolchain(context);
+  runOwnerCheck(context);
+  return assertCurrentProviderReleaseBranch(
+    context,
+    expectedCommit,
+    options,
+  );
+}
+
 function establishFormPublishBatchOwnerGateProof(context) {
   if (context.formPublishBatchOwnerGateProof) {
     throw new Error("Form Package batch owner gate proof is already active");
@@ -763,7 +777,17 @@ function verifyLocalReleaseToolchain(context) {
   context.releaseToolchainVerified = true;
 }
 
-function assertCurrentProtectedMain(context, expectedCommit, { exact = true } = {}) {
+function assertCurrentCanonicalBranch(
+  context,
+  expectedCommit,
+  {
+    branch,
+    branchRef,
+    remoteRef,
+    label,
+    exact = true,
+  },
+) {
   const dirty = git(context, "status", "--porcelain=v1", "--untracked-files=all");
   if (dirty !== "") {
     throw new Error(
@@ -779,28 +803,34 @@ function assertCurrentProtectedMain(context, expectedCommit, { exact = true } = 
       `release blocked: origin is not the canonical ${SOURCE_REPOSITORY}: ${origin}`,
     );
   }
-  if (git(context, "symbolic-ref", "--quiet", "--short", "HEAD") !== "main") {
-    throw new Error("release blocked: checkout must be attached to main");
+  let attachedBranch;
+  try {
+    attachedBranch = git(context, "symbolic-ref", "--quiet", "--short", "HEAD");
+  } catch {
+    throw new Error(`release blocked: checkout must be attached to ${branch}`);
   }
-  progress(context, "fetch canonical protected origin/main");
+  if (attachedBranch !== branch) {
+    throw new Error(`release blocked: checkout must be attached to ${branch}`);
+  }
+  progress(context, `fetch canonical protected origin/${branch}`);
   command(context, "git", [
     "fetch",
     "--no-tags",
     "--prune",
     "origin",
-    "+refs/heads/main:refs/remotes/origin/main",
+    `+${branchRef}:${remoteRef}`,
   ]);
   const head = git(context, "rev-parse", "HEAD");
-  const remoteMain = git(context, "rev-parse", "refs/remotes/origin/main");
-  if (head !== remoteMain) {
+  const remoteHead = git(context, "rev-parse", remoteRef);
+  if (head !== remoteHead) {
     throw new Error(
-      `release blocked: HEAD ${head} is not fresh origin/main ${remoteMain}`,
+      `release blocked: HEAD ${head} is not fresh origin/${branch} ${remoteHead}`,
     );
   }
   if (expectedCommit) {
     if (exact && expectedCommit !== head) {
       throw new Error(
-        `release blocked: expected commit ${expectedCommit} is not current protected main ${head}`,
+        `release blocked: expected commit ${expectedCommit} is not current ${label} ${head}`,
       );
     }
     command(context, "git", ["cat-file", "-e", `${expectedCommit}^{commit}`]);
@@ -814,6 +844,34 @@ function assertCurrentProtectedMain(context, expectedCommit, { exact = true } = 
     }
   }
   return head;
+}
+
+function assertCurrentProtectedMain(
+  context,
+  expectedCommit,
+  { exact = true } = {},
+) {
+  return assertCurrentCanonicalBranch(context, expectedCommit, {
+    branch: "main",
+    branchRef: "refs/heads/main",
+    remoteRef: "refs/remotes/origin/main",
+    label: "protected main",
+    exact,
+  });
+}
+
+function assertCurrentProviderReleaseBranch(
+  context,
+  expectedCommit,
+  { exact = true } = {},
+) {
+  return assertCurrentCanonicalBranch(context, expectedCommit, {
+    branch: PROVIDER_RELEASE_BRANCH,
+    branchRef: PROVIDER_RELEASE_REF,
+    remoteRef: PROVIDER_RELEASE_REMOTE_REF,
+    label: "protected maintenance/v1",
+    exact,
+  });
 }
 
 function assertCommitAncestor(context, ancestor, descendant, label) {
@@ -1200,7 +1258,9 @@ function dispatchWorkflow(
       GITHUB_REPOSITORY,
       "--workflow",
       workflow,
-      ...(ref === "main" ? ["--branch", ref] : []),
+      ...(ref === "main" || ref === PROVIDER_RELEASE_BRANCH
+        ? ["--branch", ref]
+        : []),
       "--event",
       "workflow_dispatch",
       "--commit",
@@ -2221,6 +2281,7 @@ function readExactRetainedDraft(
     prerelease = false,
     body,
     assets,
+    targetCommitish = "main",
     requireComplete = false,
   },
 ) {
@@ -2240,7 +2301,7 @@ function readExactRetainedDraft(
   if (
     draft.id !== releaseId ||
     draft.tag_name !== tag ||
-    draft.target_commitish !== "main" ||
+    draft.target_commitish !== targetCommitish ||
     draft.name !== tag ||
     draft.body !== body ||
     draft.draft !== true ||
@@ -2291,7 +2352,14 @@ function readExactRetainedDraft(
 
 function validateExactReleasePatchResponse(
   response,
-  { releaseId, tag, prerelease, body, assets },
+  {
+    releaseId,
+    tag,
+    prerelease,
+    body,
+    assets,
+    targetCommitish = "main",
+  },
 ) {
   const expectedAssetsURL =
     `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/` +
@@ -2302,7 +2370,7 @@ function validateExactReleasePatchResponse(
   if (
     response.id !== releaseId ||
     response.tag_name !== tag ||
-    response.target_commitish !== "main" ||
+    response.target_commitish !== targetCommitish ||
     response.name !== tag ||
     response.body !== body ||
     response.draft !== false ||
@@ -2389,6 +2457,7 @@ function resumeDraftReleaseLocally(
     prerelease = false,
     temporaryRoot,
     surface = FORM_SURFACE,
+    targetCommitish = "main",
     prePublishFence = () => {},
   },
 ) {
@@ -2405,6 +2474,7 @@ function resumeDraftReleaseLocally(
       prerelease,
       body,
       assets,
+      targetCommitish,
     });
     progress(
       context,
@@ -2442,6 +2512,7 @@ function resumeDraftReleaseLocally(
       prerelease,
       body,
       assets,
+      targetCommitish,
       requireComplete: true,
     });
     prePublishFence(releaseId);
@@ -2451,6 +2522,7 @@ function resumeDraftReleaseLocally(
       prerelease,
       body,
       assets,
+      targetCommitish,
       requireComplete: true,
     });
     progress(context, `publish exact retained draft ${releaseId}`);
@@ -2465,7 +2537,7 @@ function resumeDraftReleaseLocally(
           "-f",
           `tag_name=${tag}`,
           "-f",
-          "target_commitish=main",
+          `target_commitish=${targetCommitish}`,
           "-f",
           `name=${tag}`,
           "-f",
@@ -2501,6 +2573,7 @@ function resumeDraftReleaseLocally(
       prerelease,
       body,
       assets,
+      targetCommitish,
     });
     let release;
     let published = false;
@@ -2526,7 +2599,7 @@ function resumeDraftReleaseLocally(
       expectedReleaseId: releaseId,
       expectedName: tag,
       expectedBody: body,
-      expectedTargetCommitish: "main",
+      expectedTargetCommitish: targetCommitish,
       expectedAssetsURL,
       expectedUploadURL,
     });
@@ -2548,10 +2621,12 @@ function publishReleaseLocally(
     prerelease = false,
     temporaryRoot,
     strictIdentity = false,
+    targetCommitish = "main",
     prePublishFence = () => {},
   },
 ) {
   assertReleaseAbsent(context, tag);
+  const exactIdentity = strictIdentity || targetCommitish !== "main";
   let releaseId = null;
   let published = false;
   let draftCreationAttempted = false;
@@ -2566,7 +2641,9 @@ function publishReleaseLocally(
         `repos/${GITHUB_REPOSITORY}/releases`,
         "-f",
         `tag_name=${tag}`,
-        ...(strictIdentity ? ["-f", "target_commitish=main"] : []),
+        ...(exactIdentity
+          ? ["-f", `target_commitish=${targetCommitish}`]
+          : []),
         "-f",
         `name=${tag}`,
         "-F",
@@ -2593,13 +2670,14 @@ function publishReleaseLocally(
     const orderedAssets = [...assets.values()].sort((left, right) =>
       compareNames(left.name, right.name),
     );
-    if (strictIdentity) {
+    if (exactIdentity) {
       const initial = readExactRetainedDraft(context, {
         releaseId,
         tag,
         prerelease,
         body,
         assets,
+        targetCommitish,
       });
       if (
         initial.draft.assets.length !== 0 ||
@@ -2637,13 +2715,14 @@ function publishReleaseLocally(
         );
       }
     }
-    if (strictIdentity) {
+    if (exactIdentity) {
       readExactRetainedDraft(context, {
         releaseId,
         tag,
         prerelease,
         body,
         assets,
+        targetCommitish,
         requireComplete: true,
       });
     } else {
@@ -2661,13 +2740,14 @@ function publishReleaseLocally(
       });
     }
     prePublishFence(releaseId);
-    if (strictIdentity) {
+    if (exactIdentity) {
       readExactRetainedDraft(context, {
         releaseId,
         tag,
         prerelease,
         body,
         assets,
+        targetCommitish,
         requireComplete: true,
       });
     } else {
@@ -2680,12 +2760,12 @@ function publishReleaseLocally(
         "--method",
         "PATCH",
         `repos/${GITHUB_REPOSITORY}/releases/${releaseId}`,
-        ...(strictIdentity
+        ...(exactIdentity
           ? [
               "-f",
               `tag_name=${tag}`,
               "-f",
-              "target_commitish=main",
+              `target_commitish=${targetCommitish}`,
               "-f",
               `name=${tag}`,
               "-f",
@@ -2700,13 +2780,14 @@ function publishReleaseLocally(
         "make_latest=false",
       ]),
     );
-    if (strictIdentity) {
+    if (exactIdentity) {
       validateExactReleasePatchResponse(patchResponse, {
         releaseId,
         tag,
         prerelease,
         body,
         assets,
+        targetCommitish,
       });
     }
     let release;
@@ -2731,12 +2812,12 @@ function publishReleaseLocally(
     }
     validateReleaseReadback(release, tag, assets, {
       prerelease,
-      ...(strictIdentity
+      ...(exactIdentity
         ? {
             expectedReleaseId: releaseId,
             expectedName: tag,
             expectedBody: body,
-            expectedTargetCommitish: "main",
+            expectedTargetCommitish: targetCommitish,
             expectedAssetsURL:
               `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${releaseId}/assets`,
             expectedUploadURL:
@@ -3191,15 +3272,27 @@ function providerReleaseBody(descriptor) {
 }
 
 function providerPrepare(context, options, descriptor) {
-  const commit = assertCurrentProtectedMain(context, options["expected-commit"]);
+  const commit = assertCurrentProviderReleaseBranch(
+    context,
+    options["expected-commit"],
+  );
   assertTagAbsent(context, descriptor.tag);
   assertReleaseAbsent(context, descriptor.tag);
   assertRegistryVersionAbsent(context, descriptor.version);
-  ownerGateAndFence(context, commit);
-  const dispatched = dispatchWorkflow(context, "provider-release-tag.yml", {
-    tag: descriptor.tag,
-    expected_commit: commit,
-  });
+  providerOwnerGateAndFence(context, commit);
+  const dispatched = dispatchWorkflow(
+    context,
+    "provider-release-tag.yml",
+    {
+      tag: descriptor.tag,
+      expected_commit: commit,
+    },
+    {
+      headSha: commit,
+      ref: PROVIDER_RELEASE_BRANCH,
+      headBranch: PROVIDER_RELEASE_BRANCH,
+    },
+  );
   return emit(context, {
     kind: "takos.deploy-result@v1",
     surface: PROVIDER_SURFACE,
@@ -3215,9 +3308,9 @@ function providerPrepare(context, options, descriptor) {
 
 function providerTag(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
-  assertCurrentProtectedMain(context, expectedCommit);
+  assertCurrentProviderReleaseBranch(context, expectedCommit);
   assertTagAbsent(context, descriptor.tag);
-  ownerGateAndFence(context, expectedCommit);
+  providerOwnerGateAndFence(context, expectedCommit);
   const run = requireSuccessfulRun(
     context,
     options["run-id"],
@@ -3225,6 +3318,7 @@ function providerTag(context, options, descriptor) {
     {
       workflowName: "Author provider release tag",
       headSha: expectedCommit,
+      headBranch: PROVIDER_RELEASE_BRANCH,
     },
   );
   return withTemporaryDirectory("takoform-provider-tag", (temporaryRoot) => {
@@ -3242,7 +3336,7 @@ function providerTag(context, options, descriptor) {
     );
     let localObject = "";
     try {
-      assertCurrentProtectedMain(context, expectedCommit);
+      assertCurrentProviderReleaseBranch(context, expectedCommit);
       progress(context, "verify and materialize exact signed provider tag");
       command(
         context,
@@ -3271,11 +3365,11 @@ function providerTag(context, options, descriptor) {
       );
       localObject = localTagOID(context, descriptor.tag);
       if (!localObject) throw new Error("provider tag verifier created no local ref");
-      ownerGateAndFence(context, expectedCommit);
+      providerOwnerGateAndFence(context, expectedCommit);
       assertReleaseAbsent(context, descriptor.tag);
       assertRegistryVersionAbsent(context, descriptor.version);
       pushExactTag(context, descriptor.tag, expectedCommit, localObject);
-      ownerGateAndFence(context, expectedCommit);
+      providerOwnerGateAndFence(context, expectedCommit);
       const dispatched = dispatchWorkflow(
         context,
         "release.yml",
@@ -3320,13 +3414,13 @@ function providerPublish(context, options, descriptor) {
   ) {
     throw new Error("provider release body omits the exact v1 migration guide");
   }
-  assertCurrentProtectedMain(context, expectedCommit);
+  assertCurrentProviderReleaseBranch(context, expectedCommit);
   const localObject = localTagOID(context, descriptor.tag);
   if (!localObject) throw new Error(`local signed provider tag ${descriptor.tag} is missing`);
   assertExactRemoteTag(context, descriptor.tag, expectedCommit, localObject);
   assertReleaseAbsent(context, descriptor.tag);
   assertRegistryVersionAbsent(context, descriptor.version);
-  ownerGateAndFence(context, expectedCommit);
+  providerOwnerGateAndFence(context, expectedCommit);
   const run = requireSuccessfulRun(
     context,
     options["run-id"],
@@ -3352,7 +3446,7 @@ function providerPublish(context, options, descriptor) {
       expectedCommit,
       tagObjectOid: localObject,
     });
-    ownerGateAndFence(context, expectedCommit);
+    providerOwnerGateAndFence(context, expectedCommit);
     assertRegistryVersionAbsent(context, descriptor.version);
     const release = publishReleaseLocally(context, {
       tag: descriptor.tag,
@@ -3360,8 +3454,9 @@ function providerPublish(context, options, descriptor) {
       prerelease: descriptor.version.includes("-"),
       body: releaseBody,
       temporaryRoot,
+      targetCommitish: PROVIDER_RELEASE_BRANCH,
       prePublishFence: () => {
-        ownerGateAndFence(context, expectedCommit);
+        providerOwnerGateAndFence(context, expectedCommit);
         assertRegistryVersionAbsent(context, descriptor.version);
       },
     });
@@ -3395,10 +3490,13 @@ function providerRecoveryMutationFence(
     label,
   },
 ) {
-  const currentMain = ownerGateAndFence(context, recoveryCommit);
+  const currentMaintenance = providerOwnerGateAndFence(
+    context,
+    recoveryCommit,
+  );
   assertProviderRecoveryFence(context, {
     releaseCommit,
-    recoveryCommit: currentMain,
+    recoveryCommit: currentMaintenance,
     label,
   });
   const tag = assertExactSignedProviderTag(context, {
@@ -3418,17 +3516,20 @@ function providerRecoveryMutationFence(
       true,
     );
   }
-  return { currentMain, tag };
+  return { currentMaintenance, tag };
 }
 
 function providerRecoverTagOnly(context, options, descriptor) {
   const releaseCommit = options["expected-release-commit"];
   const expectedObject = options["expected-tag-object"];
   const recoveryCommit = options["expected-recovery-commit"];
-  const initialMain = assertCurrentProtectedMain(context, recoveryCommit);
+  const initialMaintenance = assertCurrentProviderReleaseBranch(
+    context,
+    recoveryCommit,
+  );
   assertProviderRecoveryFence(context, {
     releaseCommit,
-    recoveryCommit: initialMain,
+    recoveryCommit: initialMaintenance,
     label: "provider tag-only reviewed recovery fence",
   });
   const run = requireSuccessfulRun(
@@ -3473,6 +3574,7 @@ function providerRecoverTagOnly(context, options, descriptor) {
           body: providerReleaseBody(descriptor),
           temporaryRoot,
           strictIdentity: true,
+          targetCommitish: PROVIDER_RELEASE_BRANCH,
           prePublishFence: (releaseId) =>
             providerRecoveryMutationFence(context, {
               descriptor,
@@ -3530,10 +3632,13 @@ function providerRecoverDraft(context, options, descriptor) {
   const expectedObject = options["expected-tag-object"];
   const recoveryCommit = options["expected-recovery-commit"];
   const releaseId = Number(options["release-id"]);
-  const initialMain = assertCurrentProtectedMain(context, recoveryCommit);
+  const initialMaintenance = assertCurrentProviderReleaseBranch(
+    context,
+    recoveryCommit,
+  );
   assertProviderRecoveryFence(context, {
     releaseCommit,
-    recoveryCommit: initialMain,
+    recoveryCommit: initialMaintenance,
     label: "provider retained-draft reviewed recovery fence",
   });
   const run = requireSuccessfulRun(
@@ -3580,6 +3685,7 @@ function providerRecoverDraft(context, options, descriptor) {
           body: providerReleaseBody(descriptor),
           temporaryRoot,
           surface: PROVIDER_SURFACE,
+          targetCommitish: PROVIDER_RELEASE_BRANCH,
           prePublishFence: (retainedReleaseId) =>
             providerRecoveryMutationFence(context, {
               descriptor,
@@ -3675,7 +3781,7 @@ function readProviderPublicRelease(
     expectedReleaseId: release.id,
     expectedName: descriptor.tag,
     expectedBody: providerReleaseBody(descriptor),
-    expectedTargetCommitish: "main",
+    expectedTargetCommitish: PROVIDER_RELEASE_BRANCH,
     expectedAssetsURL:
       `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${release.id}/assets`,
     expectedUploadURL:
@@ -3744,7 +3850,7 @@ function assertProviderReadbackCommitBinding(
 
 function providerReadback(context, options, descriptor) {
   const currentCommit = options["expected-commit"];
-  assertCurrentProtectedMain(context, currentCommit);
+  assertCurrentProviderReleaseBranch(context, currentCommit);
   const localObject = localTagOID(context, descriptor.tag);
   if (!localObject) throw new Error(`local provider tag ${descriptor.tag} is missing`);
   const releaseCommit = git(
@@ -3777,12 +3883,16 @@ function providerReadback(context, options, descriptor) {
         `Terraform Registry has not indexed ${descriptor.version}: HTTP ${status}`,
       );
     }
-    ownerGateAndFence(context, currentCommit);
+    providerOwnerGateAndFence(context, currentCommit);
     const dispatched = dispatchWorkflow(
       context,
       "provider-registry-readback.yml",
       {},
-      { headSha: currentCommit },
+      {
+        headSha: currentCommit,
+        ref: PROVIDER_RELEASE_BRANCH,
+        headBranch: PROVIDER_RELEASE_BRANCH,
+      },
     );
     return emit(context, {
       kind: "takos.deploy-result@v1",
@@ -3802,7 +3912,7 @@ function providerReadback(context, options, descriptor) {
 
 function providerVerify(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
-  assertCurrentProtectedMain(context, expectedCommit);
+  assertCurrentProviderReleaseBranch(context, expectedCommit);
   const run = requireSuccessfulRun(
     context,
     options["run-id"],
@@ -3810,6 +3920,7 @@ function providerVerify(context, options, descriptor) {
     {
       workflowName: "Build signed provider Registry readback",
       headSha: expectedCommit,
+      headBranch: PROVIDER_RELEASE_BRANCH,
     },
   );
   return withTemporaryDirectory("takoform-registry-proof", (temporaryRoot) => {
@@ -3937,7 +4048,7 @@ function verifyRegistryCandidate(
   });
   const certificateIdentity =
     `https://github.com/${GITHUB_REPOSITORY}/.github/workflows/` +
-    "provider-registry-readback.yml@refs/heads/main";
+    `provider-registry-readback.yml@${PROVIDER_RELEASE_REF}`;
   if (
     manifest.format !== "takoform.provider-registry-readback-candidate@v1" ||
     manifest.status !== "candidate-only" ||
@@ -5770,6 +5881,7 @@ export const releaseDeployTestHooks = Object.freeze({
   formVerifyAll,
   githubUploadEnvironment,
   ownerGateAndFence,
+  providerOwnerGateAndFence,
   observeTagFailureState,
   parseCandidateMetadata,
   parseCanonicalCandidateMetadata,
