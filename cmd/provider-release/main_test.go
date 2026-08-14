@@ -156,6 +156,11 @@ func TestProviderTagWorkflowExportsReadOnlySignedObject(t *testing.T) {
 	for _, required := range []string{
 		"run-name: ${{ inputs.request_id }}",
 		"request_id:",
+		"PROVIDER_RELEASE_BRANCH: maintenance/v1",
+		"PROVIDER_RELEASE_REF: refs/heads/maintenance/v1",
+		"refs/remotes/origin/maintenance/v1",
+		"oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76",
+		"bun-version: 1.3.14",
 		`[[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`,
 		"contents: read",
 		"persist-credentials: false",
@@ -180,6 +185,52 @@ func TestProviderTagWorkflowExportsReadOnlySignedObject(t *testing.T) {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("provider tag signing workflow retains remote write authority %q", forbidden)
 		}
+	}
+	if regexp.MustCompile(`refs/(?:heads|remotes/origin)/main(?:[^A-Za-z0-9/]|$)`).MatchString(text) {
+		t.Fatal("provider tag workflow must not accept the main branch as provider-v1 release authority")
+	}
+	setupBun := strings.Index(text, "oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76")
+	executeCandidate := strings.Index(text, "name: Execute candidate code only in this read-only job")
+	if setupBun < 0 || executeCandidate < 0 || setupBun > executeCandidate {
+		t.Fatal("provider tag preflight must install the pinned Bun toolchain before executing candidate tests")
+	}
+}
+
+func TestSignedTagMetadataRejectsMainBranchSubstitution(t *testing.T) {
+	desc := testDescriptor()
+	requestID := "123e4567-e89b-42d3-a456-426614174000"
+	commit := strings.Repeat("a", 40)
+	metadata := signedTagArtifactMetadata{
+		Format:            "takoform.provider-signed-tag-artifact@v1",
+		Repository:        "tako0614/terraform-provider-takoform",
+		WorkflowPath:      ".github/workflows/provider-release-tag.yml",
+		WorkflowRef:       "tako0614/terraform-provider-takoform/.github/workflows/provider-release-tag.yml@refs/heads/maintenance/v1",
+		RunID:             "123",
+		RunAttempt:        "1",
+		RequestID:         requestID,
+		SourceRef:         "refs/heads/maintenance/v1",
+		SourceCommit:      commit,
+		ReleaseTag:        desc.Tag,
+		SignerFingerprint: desc.SigningFingerprint,
+	}
+	if err := verifySignedTagArtifactMetadataBinding(metadata, desc, "123", "1", requestID, commit); err != nil {
+		t.Fatalf("exact maintenance metadata: %v", err)
+	}
+	for name, mutate := range map[string]func(*signedTagArtifactMetadata){
+		"workflow main": func(value *signedTagArtifactMetadata) {
+			value.WorkflowRef = "tako0614/terraform-provider-takoform/.github/workflows/provider-release-tag.yml@refs/heads/main"
+		},
+		"source main": func(value *signedTagArtifactMetadata) {
+			value.SourceRef = "refs/heads/main"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			substituted := metadata
+			mutate(&substituted)
+			if err := verifySignedTagArtifactMetadataBinding(substituted, desc, "123", "1", requestID, commit); err == nil {
+				t.Fatal("main-branch signed tag metadata substitution was accepted")
+			}
+		})
 	}
 }
 
@@ -585,6 +636,11 @@ func TestProviderReleaseWorkflowPreparesChecksumClosedCandidateWithoutProduction
 		`expected_workflow_ref="$GITHUB_REPOSITORY/.github/workflows/release.yml@refs/tags/$RELEASE_TAG"`,
 		`test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"`,
 		`test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/release.yml@refs/tags/$RELEASE_TAG"`,
+		"PROVIDER_RELEASE_BRANCH: maintenance/v1",
+		"PROVIDER_RELEASE_REF: refs/heads/maintenance/v1",
+		"refs/remotes/origin/maintenance/v1",
+		"oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76",
+		"bun-version: 1.3.14",
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("provider preparation workflow lacks %q", required)
@@ -608,8 +664,17 @@ func TestProviderReleaseWorkflowPreparesChecksumClosedCandidateWithoutProduction
 	if strings.Count(text, `test "$tag_commit" = "$GITHUB_SHA"`) != 2 {
 		t.Fatal("both provider jobs must bind the peeled signed-tag source and tooling commit to the exact workflow commit")
 	}
-	if strings.Contains(text, "refs/heads/main") || strings.Contains(text, "protected-main-release-tooling") {
+	if regexp.MustCompile(`refs/(?:heads|remotes/origin)/main(?:[^A-Za-z0-9/]|$)`).MatchString(text) || strings.Contains(text, "protected-main-release-tooling") {
 		t.Fatal("provider release candidate workflow must not retain mutable-main execution or provenance identity")
+	}
+	if strings.Count(text, `git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/maintenance/v1`) != 2 ||
+		strings.Count(text, `git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/maintenance/v1`) != 1 {
+		t.Fatal("every immutable provider release job must bind the tag commit to current maintenance/v1 ancestry")
+	}
+	setupBun := strings.Index(text, "oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76")
+	providerTests := strings.Index(text, "go -C release-source/cmd/provider-release test ./...")
+	if setupBun < 0 || providerTests < 0 || setupBun > providerTests {
+		t.Fatal("provider release build must install the pinned Bun toolchain before executing candidate tests")
 	}
 }
 

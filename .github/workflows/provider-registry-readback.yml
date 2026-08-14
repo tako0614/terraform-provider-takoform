@@ -19,7 +19,9 @@ permissions: {}
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   EXPECTED_COSIGN_VERSION: "v3.0.6"
-  READBACK_IDENTITY: https://github.com/tako0614/terraform-provider-takoform/.github/workflows/provider-registry-readback.yml@refs/heads/main
+  PROVIDER_RELEASE_BRANCH: maintenance/v1
+  PROVIDER_RELEASE_REF: refs/heads/maintenance/v1
+  READBACK_IDENTITY: https://github.com/tako0614/terraform-provider-takoform/.github/workflows/provider-registry-readback.yml@refs/heads/maintenance/v1
 
 jobs:
   generate:
@@ -40,7 +42,7 @@ jobs:
           fetch-tags: true
           persist-credentials: false
 
-      - name: Bind this exact run attempt to protected main and the published tag
+      - name: Bind this exact run attempt to protected maintenance/v1 and the published tag
         id: source
         shell: bash
         env:
@@ -52,9 +54,10 @@ jobs:
             exit 1
           fi
           [[ "${GITHUB_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
-          test "${GITHUB_REF}" = "refs/heads/main"
+          test "${GITHUB_REF}" = "${PROVIDER_RELEASE_REF}"
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          test "$(git rev-parse refs/remotes/origin/main)" = "${GITHUB_SHA}"
+          git fetch --no-tags origin "+${PROVIDER_RELEASE_REF}:refs/remotes/origin/${PROVIDER_RELEASE_BRANCH}"
+          test "$(git rev-parse refs/remotes/origin/maintenance/v1)" = "${GITHUB_SHA}"
           version="$(node -p 'require("./release/version.json").version')"
           tag="v${version}"
           git rev-parse --verify "${tag}^{commit}" >/dev/null

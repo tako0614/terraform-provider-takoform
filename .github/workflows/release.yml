@@ -29,6 +29,8 @@ env:
   SYFT_VERSION: "1.48.0"
   SYFT_LINUX_AMD64_SHA256: "6cef9a7f37220d9067eaf9cfaaa2fce986e9f320a8d42cbc36658c99af78ea04"
   EXPECTED_GPG_FINGERPRINT: "3510E75E05BBCC303B92D77934FC18AC897FB709"
+  PROVIDER_RELEASE_BRANCH: maintenance/v1
+  PROVIDER_RELEASE_REF: refs/heads/maintenance/v1
 
 jobs:
   build:
@@ -74,7 +76,8 @@ jobs:
           tag_commit="$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")"
           test "$tag_commit" = "$EXPECTED_COMMIT"
           test "$tag_commit" = "$GITHUB_SHA"
-          git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main
+          git fetch --no-tags origin "+$PROVIDER_RELEASE_REF:refs/remotes/origin/$PROVIDER_RELEASE_BRANCH"
+          git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/maintenance/v1
           tag_object_oid="$(git rev-parse "refs/tags/$RELEASE_TAG")"
           test "$(git cat-file -t "$tag_object_oid")" = "tag"
           remote_tag_object_oid="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | awk 'NF == 2 { print $1 }')"
@@ -100,6 +103,13 @@ jobs:
           cache-dependency-path: |
             release-source/go.sum
             release-source/cmd/provider-release/go.sum
+
+      # The tagged release build invokes the generated-family checker through
+      # Bun. Keep the immutable release candidate on the same pinned toolchain
+      # as the repository quality workflow and protected release preflight.
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
+        with:
+          bun-version: 1.3.14
 
       - uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # pinned: v2
         with:
@@ -345,7 +355,8 @@ jobs:
           tag_commit="$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")"
           test "$tag_commit" = "$EXPECTED_COMMIT"
           test "$tag_commit" = "$GITHUB_SHA"
-          git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main
+          git fetch --no-tags origin "+$PROVIDER_RELEASE_REF:refs/remotes/origin/$PROVIDER_RELEASE_BRANCH"
+          git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/maintenance/v1
           fingerprints="$(gpg --batch --with-colons --import-options show-only --import release/keys/provider-signing-key.asc | awk -F: '$1 == "fpr" { print $10 }')"
           test "$fingerprints" = "$EXPECTED_GPG_FINGERPRINT"
           gpg --batch --import release/keys/provider-signing-key.asc
@@ -746,7 +757,8 @@ jobs:
           test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/release.yml@refs/tags/$RELEASE_TAG"
           test "$EXPECTED_COMMIT" = "$GITHUB_SHA"
           test "$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")" = "$GITHUB_SHA"
-          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+          git fetch --no-tags origin "+$PROVIDER_RELEASE_REF:refs/remotes/origin/$PROVIDER_RELEASE_BRANCH"
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/maintenance/v1
           tag_object_oid="$(git rev-parse "refs/tags/$RELEASE_TAG")"
           test "$(git cat-file -t "$tag_object_oid")" = "tag"
           remote_tag_object_oid="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | awk 'NF == 2 { print $1 }')"

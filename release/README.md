@@ -33,10 +33,11 @@ ledger has no `v1.0.4` assignment.
 The `maintenance/v1` branch is rooted exactly at immutable provider `v1.0.3`
 and exists only for the maintained v1alpha1 provider line. Current provider-v2
 development has independent types and contracts; this branch is not an
-automatic backmerge source and must not import v2 resource types. No
-maintenance-branch publication lane is enabled by this candidate. The
-main-bound release commands later in this document describe the already-used
-owner lane and do not authorize publishing `v1.0.4` from this branch.
+automatic backmerge source and must not import v2 resource types. Provider v1
+release tooling exists only on this branch and fixes every mutable workflow,
+operator, and readback ref to `maintenance/v1`; it is not a release authority
+for provider v2. Form Package release and revocation tooling remains fixed to
+`main`.
 
 ## Provider v1.0.4 recorded Form identity transition
 
@@ -317,12 +318,12 @@ evidence.
 The provider build tool never signs, uploads, creates a GitHub Release, or
 publishes to a Registry/mirror. The only operator entrypoint is the repository
 deploy command. First dispatch the protected signed-tag lane with the exact
-descriptor tag and current protected-main commit:
+descriptor tag and current protected `maintenance/v1` commit:
 
 ```console
 bun run deploy -- takoform-provider-release prepare \
-  --tag v1.0.3 \
-  --expected-commit <40-character-protected-main-commit>
+  --tag v1.0.4 \
+  --expected-commit <40-character-protected-maintenance-v1-commit>
 ```
 
 The entrypoint records the workflow run and stops. Its read-only preflight job
@@ -333,15 +334,17 @@ artifact boundary. The protected signing job starts from a fresh exact checkout,
 performs only static JSON/hash/Git/Registry-absence checks, imports the
 `provider-release` Environment key, and exports a checksum-closed public
 signed-tag object without repository write credentials. The signed message
-binds the protected-main commit, complete preflight checksum inventory, and
-exact Actions run/attempt. No local human signing key is required.
+binds the protected `maintenance/v1` commit, complete preflight checksum
+inventory, exact `maintenance/v1` workflow/source refs, and exact Actions
+run/attempt. A signed artifact that substitutes `main` is rejected. No local
+human signing key is required.
 
 After the Environment-approved run succeeds, an admin maintainer consumes that
 exact signed-tag run through the same owner entrypoint:
 
 ```console
 bun run deploy -- takoform-provider-release tag \
-  --tag v1.0.3 \
+  --tag v1.0.4 \
   --expected-commit <same-40-character-commit> \
   --run-id <signed-tag-workflow-run-id> \
   --run-attempt <signed-tag-workflow-attempt>
@@ -355,8 +358,12 @@ maintainer's existing admin authentication to cross the restricted tag-creation
 ruleset; the Actions job itself cannot bypass that rule. The entrypoint then
 dispatches the prepare-only `release.yml` at that exact immutable signed tag
 ref, with the same tag and peeled source commit. It never dispatches this
-candidate workflow from mutable `main`; its workflow identity is exactly
+candidate workflow from a mutable branch; its workflow identity is exactly
 `.github/workflows/release.yml@refs/tags/<tag>`.
+The tagged workflow fetches the fixed `maintenance/v1` ref and requires its
+peeled tag commit to be an ancestor of the current canonical branch. Its
+`sourceCommit` and `toolingCommit` metadata must both equal that peeled commit;
+current branch tooling is never relabeled as release-source evidence.
 It prints that exact run URL and stops again.
 Its read-only build job verifies the signed tag with the public key, runs the
 same non-publishing GoReleaser command twice, requires the five final archive
@@ -378,7 +385,7 @@ After that second run succeeds, publish only its exact run/attempt:
 
 ```console
 bun run deploy -- takoform-provider-release publish \
-  --tag v1.0.3 \
+  --tag v1.0.4 \
   --expected-commit <same-40-character-commit> \
   --run-id <provider-release-candidate-run-id> \
   --run-attempt <provider-release-candidate-run-attempt>
@@ -401,21 +408,22 @@ intentionally unusable. Complete only that exact partial identity with:
 
 ```console
 bun run deploy -- takoform-provider-release recover-tag-only \
-  --tag v1.0.3 \
+  --tag v1.0.4 \
   --expected-release-commit <signed-tag-peeled-release-commit-E> \
   --expected-tag-object <exact-annotated-signed-tag-object> \
-  --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
+  --expected-recovery-commit <current-reviewed-protected-maintenance-v1-commit-F> \
   --run-id <original-provider-candidate-run-id> \
   --run-attempt <original-provider-candidate-run-attempt>
 ```
 
 This phase requires `E` to be an ancestor of `F`, and the exact `E..F` diff may
 contain only the reviewed recovery implementation, its tests, and this release
-documentation. It requires current protected `main` to equal `F`; the exact
-local and remote annotated tag object must still peel to `E` and verify with
-the pinned provider key; the GitHub Release and Registry version must still be
-absent; and the successful candidate run must have exact head `E`, branch
-`v1.0.3`, run, attempt, checksums, 15 assets, GPG signatures, and provenance.
+documentation. It requires current protected `maintenance/v1` to equal `F`;
+the exact local and remote annotated tag object must still peel to `E` and
+verify with the pinned provider key; the GitHub Release and Registry version
+must still be absent; and the successful candidate run must have exact head
+`E`, branch `v1.0.4`, run, attempt, checksums, 15 assets, GPG signatures, and
+provenance.
 The owner gate and the same recovery fence run immediately before draft
 creation and again immediately before publication. Recovery never moves,
 deletes, or recreates the tag.
@@ -425,10 +433,10 @@ identity:
 
 ```console
 bun run deploy -- takoform-provider-release recover-draft \
-  --tag v1.0.3 \
+  --tag v1.0.4 \
   --expected-release-commit <signed-tag-peeled-release-commit-E> \
   --expected-tag-object <exact-annotated-signed-tag-object> \
-  --expected-recovery-commit <current-reviewed-protected-main-commit-F> \
+  --expected-recovery-commit <current-reviewed-protected-maintenance-v1-commit-F> \
   --release-id <exact-retained-github-release-id> \
   --run-id <original-provider-candidate-run-id> \
   --run-attempt <original-provider-candidate-run-attempt>
@@ -438,8 +446,9 @@ bun run deploy -- takoform-provider-release recover-draft \
 gate, and `E..F` recovery fence. It accepts only the exact draft id, tag, name,
 body, target commitish, upload/assets endpoints, and already-uploaded subset;
 it uploads only missing assets, rereads the complete draft, repeats the fence,
-and publishes that same draft. Any competing, public, unknown, duplicate, or
-drifted identity fails closed without deletion or blind retry.
+and publishes that same draft. The retained release target must remain exactly
+`maintenance/v1`. Any competing, public, unknown, duplicate, or drifted
+identity fails closed without deletion or blind retry.
 
 Both recovery phases require exclusive single-writer operator authority from
 draft creation or resumption through immutable publication. GitHub's REST API
@@ -453,9 +462,9 @@ before reporting `VERIFIED`.
 After the immutable GitHub Release exists and the public Registry has indexed
 it, dispatch the signed direct-install readback and then verify that exact run:
 
-For the ordinary lane, protected `main` may still equal the signed tag's peeled
-commit. After an exact recovery, `--expected-commit` is instead the current
-reviewed protected-main source/tooling commit `F`. The immutable provider
+For the ordinary lane, protected `maintenance/v1` may still equal the signed
+tag's peeled commit. After an exact recovery, `--expected-commit` is instead the current
+reviewed protected-maintenance-v1 source/tooling commit `F`. The immutable provider
 release provenance and provider commit remain the tag's peeled commit `E`.
 The readback workflow and local verifier require `E` to be an ancestor of `F`
 and preserve those two bindings separately; they never relabel the released
@@ -463,12 +472,12 @@ provider bytes as having been built from `F`.
 
 ```console
 bun run deploy -- takoform-provider-release readback \
-  --tag v1.0.3 \
-  --expected-commit <current-reviewed-protected-main-source-commit>
+  --tag v1.0.4 \
+  --expected-commit <current-reviewed-protected-maintenance-v1-source-commit>
 
 bun run deploy -- takoform-provider-release verify \
-  --tag v1.0.3 \
-  --expected-commit <same-current-reviewed-protected-main-source-commit> \
+  --tag v1.0.4 \
+  --expected-commit <same-current-reviewed-protected-maintenance-v1-source-commit> \
   --run-id <registry-readback-workflow-run-id> \
   --run-attempt <registry-readback-workflow-attempt>
 ```
@@ -476,14 +485,20 @@ bun run deploy -- takoform-provider-release verify \
 The readback workflow installs the exact public version directly through both
 OpenTofu and Terraform, requires one provider binary digest, signs the Registry
 readback, and emits the exact six-file candidate used by admission. The verify
-phase requires that workflow attempt to have completed successfully and closes
-the downloaded artifact inventory and checksums; it never republishes the
-provider.
+phase accepts only the exact certificate identity
+`.github/workflows/provider-registry-readback.yml@refs/heads/maintenance/v1`,
+requires that workflow attempt to have completed successfully, and closes the
+downloaded artifact inventory, checksums, and equal Terraform/OpenTofu provider
+binary digest. A `main` identity, source drift, or CLI digest mismatch fails
+closed; the verifier never republishes the provider.
 
 Repository configuration is part of the trust boundary, not a claim made by
 this tree. The workflow references the `provider-release` GitHub Environment,
 but publication remains blocked until maintainers verify required reviewers on
-that Environment plus protected `main` and restricted `v*` tag creation rules.
+that Environment plus protected `maintenance/v1` and restricted `v*` tag
+creation rules. Historical retained admission material continues to verify its
+already-issued `provider-registry-readback.yml@refs/heads/main` identity; this
+maintenance release lane does not rewrite that immutable evidence.
 
 The release verifier is an isolated Go module under `cmd/provider-release`.
 Its schema/attestation dependencies are not provider runtime dependencies and

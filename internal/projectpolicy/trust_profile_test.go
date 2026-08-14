@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -362,6 +363,86 @@ func TestReleaseWorkflowsPinTheReviewedCLIMatrix(t *testing.T) {
 				)
 			}
 		}
+	}
+}
+
+func TestProviderReleaseWorkflowsPinReviewedBunToolchain(t *testing.T) {
+	root := repositoryRoot(t)
+	const (
+		bunAction  = "- uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2"
+		bunVersion = "bun-version: 1.3.14"
+	)
+	for _, path := range []string{
+		".github/workflows/provider-release-tag.yml",
+		".github/workflows/release.yml",
+	} {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			workflow := readText(t, filepath.Join(root, filepath.FromSlash(path)))
+			if strings.Count(workflow, "oven-sh/setup-bun@") != 1 {
+				t.Fatalf("workflow must contain exactly one setup-bun action")
+			}
+			if !strings.Contains(workflow, bunAction) {
+				t.Fatalf("workflow must use the immutable setup-bun action pin %q", bunAction)
+			}
+			if strings.Count(workflow, bunVersion) != 1 {
+				t.Fatalf("workflow must contain exactly one Bun version pin %q", bunVersion)
+			}
+
+			bun := strings.Index(workflow, bunAction)
+			goSetup := strings.Index(workflow, "actions/setup-go@")
+			tofuSetup := strings.Index(workflow, "opentofu/setup-opentofu@")
+			if goSetup < 0 || tofuSetup < 0 || bun <= goSetup || bun >= tofuSetup {
+				t.Fatalf("setup-bun must run after setup-go and before setup-opentofu")
+			}
+			markers := []string{"go test ./..."}
+			if filepath.Base(path) == "release.yml" {
+				markers = []string{
+					"go -C release-source/cmd/provider-release test ./...",
+					"goreleaser/goreleaser-action@",
+				}
+			}
+			for _, marker := range markers {
+				candidate := strings.Index(workflow, marker)
+				if candidate < 0 {
+					t.Fatalf("workflow lacks candidate execution marker %q", marker)
+				}
+				if bun >= candidate {
+					t.Fatalf("setup-bun must precede candidate execution marker %q", marker)
+				}
+			}
+		})
+	}
+}
+
+func TestProviderV1ReleaseLaneIsMaintenanceOnlyWhileFormLaneRemainsMain(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, path := range []string{
+		".github/workflows/provider-release-tag.yml",
+		".github/workflows/release.yml",
+		".github/workflows/provider-registry-readback.yml",
+	} {
+		workflow := readText(t, filepath.Join(root, filepath.FromSlash(path)))
+		if !strings.Contains(workflow, "PROVIDER_RELEASE_BRANCH: maintenance/v1") ||
+			!strings.Contains(workflow, "PROVIDER_RELEASE_REF: refs/heads/maintenance/v1") {
+			t.Errorf("%s does not bind the fixed provider-v1 maintenance branch/ref", path)
+		}
+		if regexp.MustCompile(`refs/(?:heads|remotes/origin)/main(?:[^A-Za-z0-9/]|$)`).MatchString(workflow) {
+			t.Errorf("%s retains main as provider-v1 release authority", path)
+		}
+	}
+	for _, path := range []string{
+		".github/workflows/form-package-release.yml",
+		".github/workflows/form-package-revocation.yml",
+	} {
+		workflow := readText(t, filepath.Join(root, filepath.FromSlash(path)))
+		if !strings.Contains(workflow, "refs/heads/main") || strings.Contains(workflow, "maintenance/v1") {
+			t.Errorf("%s must remain on the independent main Form Package lane", path)
+		}
+	}
+	retainedRegistryPolicy := readText(t, filepath.Join(root, "admission", "v4", "trust", "registry-readback-policy.json"))
+	if !strings.Contains(retainedRegistryPolicy, "provider-registry-readback.yml@refs/heads/main") ||
+		strings.Contains(retainedRegistryPolicy, "maintenance/v1") {
+		t.Fatal("retained admission Registry identity must remain on its historical main authority")
 	}
 }
 
