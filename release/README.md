@@ -523,8 +523,15 @@ bun run deploy -- takoform-provider-release publish \
 The owner deploy entrypoint verifies the outer checksum closure and detached
 GPG signature, then uses only the operator machine's GitHub authority to create
 a draft, upload the exact fifteen assets, compare their public API digests,
-publish that same draft, and require an immutable exact-ID/tag readback. A
-dispatch, tag push, or candidate artifact is not publication success.
+publish that same draft, and require an immutable exact-ID/tag readback. The
+mutation fence reads the active repository immutable-release setting and
+requires `enabled: true` immediately before the draft POST and again
+immediately before the public PATCH. Both reads also repeat the owner gate,
+Registry absence, exact Release identity, and pinned signed local/remote tag
+object, peeled commit, and signature verification. After the immutable Release
+readback and fresh exact-asset download, one final pinned signed-tag readback
+must pass before the entrypoint reports `VERIFIED`. A dispatch, tag push, or
+candidate artifact is not publication success.
 
 The provider candidate metadata is exact recursively key-sorted, two-space
 pretty JSON with exactly one trailing LF, matching the `jq -S` workflow output.
@@ -558,9 +565,10 @@ verify with the pinned provider key; the GitHub Release and Registry version
 must still be absent; and the successful candidate run must have exact head
 `E`, branch `v1.0.4`, run, attempt, checksums, 15 assets, GPG signatures, and
 provenance.
-The owner gate and the same recovery fence run immediately before draft
-creation and again immediately before publication. Recovery never moves,
-deletes, or recreates the tag.
+The owner gate, active `enabled: true` immutable-release repository setting,
+and the same recovery fence run immediately before draft creation and again
+immediately before publication. Recovery never moves, deletes, or recreates
+the tag.
 
 If that phase stops after retaining one exact draft, resume only the named
 identity:
