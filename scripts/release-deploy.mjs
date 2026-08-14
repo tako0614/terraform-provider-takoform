@@ -7,6 +7,7 @@ import {
   constants as fsConstants,
   existsSync,
   fstatSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -16,6 +17,7 @@ import {
   readSync,
   readdirSync,
   rmSync,
+  writeSync,
   writeFileSync,
 } from "node:fs";
 import {
@@ -48,6 +50,26 @@ const COMMIT = /^[0-9a-f]{40}$/u;
 const GIT_OBJECT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/u;
 const FORM_BATCH_MAX_BYTES = 1024 * 1024;
+const PROVIDER_REQUEST_RECORD_MAX_BYTES = 4096;
+const PROVIDER_REQUEST_RECORD_FORMAT =
+  "takoform.provider-candidate-dispatch-request@v2";
+const PROVIDER_CANDIDATE_WORKFLOW = ".github/workflows/release.yml";
+const GITHUB_API_VERSION = "2022-11-28";
+const PROVIDER_CANDIDATE_RESERVATION_PREFIX =
+  "provider-candidate-reservation-";
+const PROVIDER_CANDIDATE_RESERVATION_PATTERNS = Object.freeze([
+  "refs/heads/provider-candidate-reservation-v*",
+  "refs/heads/provider-candidate-reservation-v*/**/*",
+]);
+const PROVIDER_CANDIDATE_RESERVATION_CREATION_RULESET =
+  "Restrict provider candidate reservation creation";
+const PROVIDER_CANDIDATE_RESERVATION_IMMUTABLE_RULESET =
+  "Keep provider candidate reservations immutable";
+const PROVIDER_CANDIDATE_RESERVATION_OWNER = Object.freeze({
+  id: 96359093,
+  login: "tako0614",
+});
+const PROVIDER_CANDIDATE_RULESET_MAX = 100;
 const REQUEST_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PROVIDER_TAG = /^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u;
@@ -132,19 +154,19 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "requires local operator GH_TOKEN authority, a clean non-shallow maintenance/v1 checkout equal to a freshly fetched canonical origin/maintenance/v1, the complete owner check before every dispatch, tag push, or release mutation, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; GH_TOKEN is never printed or retained",
+        "requires local operator GH_TOKEN authority, a clean non-shallow maintenance/v1 checkout equal to a freshly fetched canonical origin/maintenance/v1, the complete owner check before every dispatch, tag push, or release mutation, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; the release-candidate dispatch additionally requires separately pinned release E and current maintenance F commits, E==F for the ordinary lane or the existing exact allowlisted nonempty E..F provider recovery fence, an operator-supplied lowercase UUID, a canonical create-only owner-private request record durably binding E, F, the exact signed tag object, workflow, and deterministic reservation ref, and exact live readback of two active branch rulesets plus their evaluated creation/update/deletion rules before the sole create-ref and workflow POST; GH_TOKEN is never printed or retained",
       "post-conditions":
         "publishes the exact verified same-run bytes locally under exclusive single-writer authority because GitHub REST has no atomic asset-plus-metadata precondition, immediately rereads the empty and complete exact draft, restates the full exact identity on PATCH, requires GitHub's immutable release readback and a fresh download with identical digests, rechecks the pinned signed tag before VERIFIED, then separately installs the indexed provider with both supported Registry clients and checksum-closes the signed direct-install readback",
       reversal:
         "provider versions, signed tags, and release assets are immutable and cannot be rolled back or overwritten; an exact signed tag-only partial state may only be completed by recover-tag-only, and an exact retained draft may only be resumed by recover-draft without changing the tag, candidate, or draft identity; any other bad publication is halted and repaired forward under a new version",
       "failure-handling":
-        "prints raw command diagnostics and distinguishes failure before tag creation, after local tag materialization, after remote tag push, after draft creation, and after immutable publication; it retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, refuses blind retry after an indeterminate mutation, and exposes only explicit exact-tag and exact-draft recovery bound to the original release commit, tag object, run attempt, and current reviewed recovery commit",
+        "distinguishes failure before tag creation, after local tag materialization, after remote tag push, after durable candidate intent, after global reservation creation, after candidate dispatch, after draft creation, and after immutable publication; an exact authoritative remote tag reconciles a lost acknowledgement without another push, but a preexisting provider-candidate-reservation-<tag> ref or any non-201/lost create-ref acknowledgement is permanently reconcile-only even when it points to exact F, and a durable dispatch attempt with a lost acknowledgement can never authorize another POST; it retains and reports every created draft for authoritative inspection, never automatically removes a release, tag, or reservation, refuses blind retry after an indeterminate mutation, and exposes only explicit exact-tag and exact-draft publication recovery bound to the original release commit, tag object, run attempt, and current reviewed recovery commit",
       "independent-review":
         "the provider-release protected Environment reviews the signed tag and release candidates; the local publisher accepts only that exact successful run/attempt and re-verifies it independently before using local GitHub authority",
       "no-overwrite":
-        "requires the descriptor tag, refuses any pre-existing local/remote tag, Registry version, or GitHub Release before creation, uses zero-object-id compare-and-swap for local refs, pushes an exact ref, and accepts only an immutable release with the exact candidate inventory; recovery never mutates or deletes a tag and accepts only the exact pinned signed local/remote annotated object",
+        "requires the descriptor tag; a new tag uses zero-object-id compare-and-swap and a create-only lease push, while resumption accepts only the exact verified signed local and/or authoritative remote annotated object and refuses every drift or partial remote identity; GitHub Release and Registry identities must remain absent before candidate dispatch or publication; prepare-candidate requires an absent non-symlink target under one physical operator-owned 0700 directory, creates the 0600 owner-private request record with O_EXCL and fsync, then atomically creates only refs/heads/provider-candidate-reservation-<tag> at F through exact creation-only and no-bypass update/deletion rules; the flat exact ref and every descendant are globally create-once across record paths, UUIDs, and fresh clones, and only this process's exact HTTP 201 plus immediate exact readback may reach one workflow POST; publication accepts only an immutable release with the exact candidate inventory, and recovery never mutates or deletes a tag or reservation",
       halt:
-        "prepare, tag, and readback stop after one exact workflow dispatch and return its URL as AWAITING_REVIEW; cancel that exact run before approval on any input or evidence mismatch, and never continue by selecting a latest run",
+        "prepare stops after dispatching the protected signed-tag workflow; tag verifies and reconciles the exact signed local/remote tag and stops as TAG_READY without dispatching release.yml; prepare-candidate durably records one exact request, requires the deterministic global reservation to be absent without descendants, accepts only its own exact 201 create-ref acknowledgement and F readback, and attempts at most one release.yml dispatch before returning RECONCILIATION_REQUIRED; every preexisting, lost-acknowledgement, or stranded reservation is reconcile-only forever; reconcile-candidate is strictly read-only, never creates a ref or dispatches, and returns only one exact UUID-bound run or UNRESOLVED_ABSENT; readback stops after its exact workflow dispatch, and no phase selects a latest or ambiguous run",
     },
   },
   {
@@ -186,6 +208,22 @@ const PHASES = {
   [PROVIDER_SURFACE]: {
     prepare: ["tag", "expected-commit"],
     tag: ["tag", "expected-commit", "run-id", "run-attempt"],
+    "prepare-candidate": [
+      "tag",
+      "expected-release-commit",
+      "expected-current-commit",
+      "expected-tag-object",
+      "request-id",
+      "request-record",
+    ],
+    "reconcile-candidate": [
+      "tag",
+      "expected-release-commit",
+      "expected-current-commit",
+      "expected-tag-object",
+      "request-id",
+      "request-record",
+    ],
     publish: ["tag", "expected-commit", "run-id", "run-attempt"],
     "recover-tag-only": [
       "tag",
@@ -284,6 +322,7 @@ export function parseReleaseSurfaceArgs(surface, args) {
   }
   for (const name of [
     "expected-commit",
+    "expected-current-commit",
     "expected-release-commit",
     "expected-recovery-commit",
   ]) {
@@ -317,6 +356,15 @@ export function parseReleaseSurfaceArgs(surface, args) {
   }
   if (values.input && !isAbsolute(values.input)) {
     throw new Error("--input must be an absolute path");
+  }
+  if (values["request-id"] && !REQUEST_ID.test(values["request-id"])) {
+    throw new Error("--request-id must be a canonical lowercase UUIDv4");
+  }
+  if (
+    values["request-record"] &&
+    !isAbsolute(values["request-record"])
+  ) {
+    throw new Error("--request-record must be an absolute path");
   }
   return { phase, ...values };
 }
@@ -383,6 +431,10 @@ function runProvider(context, options) {
       return providerPrepare(context, options, descriptor);
     case "tag":
       return providerTag(context, options, descriptor);
+    case "prepare-candidate":
+      return providerPrepareCandidate(context, options, descriptor);
+    case "reconcile-candidate":
+      return providerReconcileCandidate(context, options, descriptor);
     case "publish":
       return providerPublish(context, options, descriptor);
     case "recover-tag-only":
@@ -1351,6 +1403,1086 @@ function dispatchWorkflow(
   return { runId, requestId, url: run.url };
 }
 
+function providerCandidateReservation(releaseTag) {
+  if (!PROVIDER_TAG.test(releaseTag ?? "")) {
+    throw new Error("provider candidate reservation requires an exact release tag");
+  }
+  const branch = `${PROVIDER_CANDIDATE_RESERVATION_PREFIX}${releaseTag}`;
+  return {
+    branch,
+    descendantProbe: `${branch}/ruleset-probe`,
+    ref: `refs/heads/${branch}`,
+  };
+}
+
+function providerGithubAPIArguments(endpoint, options = []) {
+  return [
+    "api",
+    ...options,
+    endpoint,
+    "--header",
+    "Accept: application/vnd.github+json",
+    "--header",
+    `X-GitHub-Api-Version: ${GITHUB_API_VERSION}`,
+  ];
+}
+
+function readProviderGithubJSON(context, endpoint, label, options = []) {
+  const response = attemptCommand(
+    context,
+    "gh",
+    providerGithubAPIArguments(endpoint, options),
+  );
+  if (!response.ok) throw new Error(`${label} is unreadable`);
+  try {
+    return JSON.parse(response.output);
+  } catch {
+    throw new Error(`${label} is not valid JSON`);
+  }
+}
+
+function readProviderGithubArrayPages(context, endpoint, label) {
+  const pages = readProviderGithubJSON(
+    context,
+    endpoint,
+    label,
+    ["--paginate", "--slurp"],
+  );
+  if (
+    !Array.isArray(pages) ||
+    pages.length === 0 ||
+    pages.some((page) => !Array.isArray(page))
+  ) {
+    throw new Error(`${label} pagination is invalid`);
+  }
+  return pages.flat();
+}
+
+function exactStringSet(values, expected) {
+  return (
+    Array.isArray(values) &&
+    values.length === expected.length &&
+    JSON.stringify([...values].sort()) === JSON.stringify([...expected].sort())
+  );
+}
+
+function normalizedProviderCandidateRuleset(rule, rulesetID) {
+  if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+    throw new Error(`provider reservation ruleset ${rulesetID} has an invalid rule`);
+  }
+  if (rule.type === "update" && rule.parameters !== undefined) {
+    requireExactKeys(
+      rule.parameters,
+      ["update_allows_fetch_and_merge"],
+      `provider reservation ruleset ${rulesetID} update parameters`,
+    );
+    if (rule.parameters.update_allows_fetch_and_merge !== false) {
+      throw new Error(
+        `provider reservation ruleset ${rulesetID} permits fetch-and-merge updates`,
+      );
+    }
+    requireExactKeys(
+      rule,
+      ["parameters", "type"],
+      `provider reservation ruleset ${rulesetID} update rule`,
+    );
+  } else {
+    requireExactKeys(
+      rule,
+      ["type"],
+      `provider reservation ruleset ${rulesetID} rule`,
+    );
+  }
+  if (typeof rule.type !== "string") {
+    throw new Error(`provider reservation ruleset ${rulesetID} has an invalid rule`);
+  }
+  return rule.type;
+}
+
+function parseProviderCandidateReservationProtection({
+  currentUser,
+  details,
+  evaluatedDescendant,
+  evaluatedExact,
+  reservation,
+}) {
+  if (
+    !currentUser ||
+    typeof currentUser !== "object" ||
+    Array.isArray(currentUser) ||
+    currentUser.id !== PROVIDER_CANDIDATE_RESERVATION_OWNER.id ||
+    currentUser.login !== PROVIDER_CANDIDATE_RESERVATION_OWNER.login ||
+    currentUser.type !== "User"
+  ) {
+    throw new Error(
+      "provider candidate reservation authority is not the exact repository owner",
+    );
+  }
+  if (!Array.isArray(details) || details.length === 0) {
+    throw new Error("provider candidate reservation rulesets are absent");
+  }
+  const matching = [];
+  const seenIDs = new Set();
+  for (const candidate of details) {
+    if (
+      !candidate ||
+      typeof candidate !== "object" ||
+      Array.isArray(candidate) ||
+      !Number.isSafeInteger(candidate.id) ||
+      candidate.id <= 0 ||
+      seenIDs.has(candidate.id)
+    ) {
+      throw new Error("provider candidate reservation ruleset inventory is invalid");
+    }
+    seenIDs.add(candidate.id);
+    const refName = candidate.conditions?.ref_name;
+    if (
+      candidate.target !== "branch" ||
+      candidate.source_type !== "Repository" ||
+      candidate.source !== GITHUB_REPOSITORY ||
+      candidate.enforcement !== "active" ||
+      !refName ||
+      typeof refName !== "object" ||
+      Array.isArray(refName) ||
+      !exactStringSet(
+        refName.include,
+        PROVIDER_CANDIDATE_RESERVATION_PATTERNS,
+      ) ||
+      !exactStringSet(refName.exclude, [])
+    ) {
+      continue;
+    }
+    requireExactKeys(candidate.conditions, ["ref_name"], "provider reservation ruleset conditions");
+    requireExactKeys(refName, ["exclude", "include"], "provider reservation ref conditions");
+    if (!Array.isArray(candidate.rules) || !Array.isArray(candidate.bypass_actors)) {
+      throw new Error(
+        `provider candidate reservation ruleset ${candidate.id} is incomplete`,
+      );
+    }
+    const ruleTypes = candidate.rules.map((rule) =>
+      normalizedProviderCandidateRuleset(rule, candidate.id));
+    if (new Set(ruleTypes).size !== ruleTypes.length) {
+      throw new Error(
+        `provider candidate reservation ruleset ${candidate.id} repeats a rule`,
+      );
+    }
+    const bypassActors = candidate.bypass_actors.map((actor, index) => {
+      if (!actor || typeof actor !== "object" || Array.isArray(actor)) {
+        throw new Error(
+          `provider candidate reservation ruleset ${candidate.id} has an invalid bypass actor`,
+        );
+      }
+      requireExactKeys(
+        actor,
+        ["actor_id", "actor_type", "bypass_mode"],
+        `provider reservation ruleset ${candidate.id} bypass actor ${index}`,
+      );
+      return {
+        actorId: actor.actor_id,
+        actorType: actor.actor_type,
+        bypassMode: actor.bypass_mode,
+      };
+    });
+    matching.push({
+      bypassActors,
+      currentUserCanBypass: candidate.current_user_can_bypass,
+      id: candidate.id,
+      name: candidate.name,
+      ruleTypes: ruleTypes.sort(),
+    });
+  }
+  if (matching.length !== 2) {
+    throw new Error(
+      `provider candidate reservation rulesets are ambiguous or incomplete: exact=${matching.length}`,
+    );
+  }
+  const creation = matching.find(
+    (ruleset) =>
+      ruleset.name === PROVIDER_CANDIDATE_RESERVATION_CREATION_RULESET &&
+      JSON.stringify(ruleset.ruleTypes) === JSON.stringify(["creation"]),
+  );
+  const immutable = matching.find(
+    (ruleset) =>
+      ruleset.name === PROVIDER_CANDIDATE_RESERVATION_IMMUTABLE_RULESET &&
+      JSON.stringify(ruleset.ruleTypes) ===
+        JSON.stringify(["deletion", "update"]),
+  );
+  if (!creation || !immutable || creation.id === immutable.id) {
+    throw new Error(
+      "provider candidate reservation requires distinct exact creation and immutable rulesets",
+    );
+  }
+  if (
+    creation.currentUserCanBypass !== "always" ||
+    creation.bypassActors.length !== 1 ||
+    creation.bypassActors[0]?.actorId !==
+      PROVIDER_CANDIDATE_RESERVATION_OWNER.id ||
+    creation.bypassActors[0]?.actorType !== "User" ||
+    creation.bypassActors[0]?.bypassMode !== "always"
+  ) {
+    throw new Error(
+      "provider candidate reservation creation is not restricted to the exact operator User",
+    );
+  }
+  if (
+    immutable.currentUserCanBypass !== "never" ||
+    immutable.bypassActors.length !== 0
+  ) {
+    throw new Error(
+      "provider candidate reservation update or deletion protection has a bypass",
+    );
+  }
+
+  const expectedEvaluated = [
+    ["creation", creation.id],
+    ["deletion", immutable.id],
+    ["update", immutable.id],
+  ];
+  for (const [label, evaluated] of [
+    [reservation.branch, evaluatedExact],
+    [reservation.descendantProbe, evaluatedDescendant],
+  ]) {
+    if (!Array.isArray(evaluated) || evaluated.length !== 3) {
+      throw new Error(
+        `provider candidate reservation evaluated rules are incomplete for ${label}`,
+      );
+    }
+    const observed = evaluated.map((rule) => {
+      if (
+        !rule ||
+        typeof rule !== "object" ||
+        Array.isArray(rule) ||
+        typeof rule.type !== "string" ||
+        !Number.isSafeInteger(rule.ruleset_id) ||
+        rule.ruleset_id <= 0 ||
+        rule.ruleset_source_type !== "Repository" ||
+        rule.ruleset_source !== GITHUB_REPOSITORY
+      ) {
+        throw new Error(
+          `provider candidate reservation evaluated rule is invalid for ${label}`,
+        );
+      }
+      return [rule.type, rule.ruleset_id];
+    }).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    const expected = [...expectedEvaluated].sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    if (JSON.stringify(observed) !== JSON.stringify(expected)) {
+      throw new Error(
+        `provider candidate reservation evaluated rules drifted for ${label}`,
+      );
+    }
+  }
+
+  const projection = recursivelySorted({
+    creation,
+    immutable,
+    patterns: PROVIDER_CANDIDATE_RESERVATION_PATTERNS,
+    reservationRef: reservation.ref,
+  });
+  return {
+    creationRulesetID: creation.id,
+    fingerprint: sha256(Buffer.from(JSON.stringify(projection), "utf8")),
+    immutableRulesetID: immutable.id,
+    reservation,
+  };
+}
+
+function readProviderCandidateReservationProtection(context, releaseTag) {
+  const reservation = providerCandidateReservation(releaseTag);
+  const currentUser = readProviderGithubJSON(
+    context,
+    "user",
+    "provider candidate reservation operator identity",
+  );
+  const summaries = readProviderGithubArrayPages(
+    context,
+    `repos/${GITHUB_REPOSITORY}/rulesets?includes_parents=true&targets=branch&per_page=${PROVIDER_CANDIDATE_RULESET_MAX}`,
+    "provider candidate reservation ruleset inventory",
+  );
+  if (summaries.length === 0) {
+    throw new Error("provider candidate reservation rulesets are absent");
+  }
+  const summaryIDs = new Set();
+  const details = summaries.map((summary) => {
+    if (
+      !summary ||
+      typeof summary !== "object" ||
+      Array.isArray(summary) ||
+      !Number.isSafeInteger(summary.id) ||
+      summary.id <= 0 ||
+      summaryIDs.has(summary.id) ||
+      summary.target !== "branch"
+    ) {
+      throw new Error("provider candidate reservation ruleset inventory is invalid");
+    }
+    summaryIDs.add(summary.id);
+    const detail = readProviderGithubJSON(
+      context,
+      `repos/${GITHUB_REPOSITORY}/rulesets/${summary.id}?includes_parents=true`,
+      `provider candidate reservation ruleset ${summary.id}`,
+    );
+    if (detail?.id !== summary.id) {
+      throw new Error(
+        `provider candidate reservation ruleset ${summary.id} detail mismatched its summary`,
+      );
+    }
+    return detail;
+  });
+  const evaluatedExact = readProviderGithubArrayPages(
+    context,
+    `repos/${GITHUB_REPOSITORY}/rules/branches/${encodeURIComponent(reservation.branch)}?per_page=${PROVIDER_CANDIDATE_RULESET_MAX}`,
+    "provider candidate reservation exact evaluated rules",
+  );
+  const evaluatedDescendant = readProviderGithubArrayPages(
+    context,
+    `repos/${GITHUB_REPOSITORY}/rules/branches/${encodeURIComponent(reservation.descendantProbe)}?per_page=${PROVIDER_CANDIDATE_RULESET_MAX}`,
+    "provider candidate reservation descendant evaluated rules",
+  );
+  return parseProviderCandidateReservationProtection({
+    currentUser,
+    details,
+    evaluatedDescendant,
+    evaluatedExact,
+    reservation,
+  });
+}
+
+function providerCandidateReservationInventory(context, reservation) {
+  const refs = readProviderGithubArrayPages(
+    context,
+    `repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${reservation.branch}?per_page=100`,
+    "provider candidate reservation ref inventory",
+  );
+  const seen = new Set();
+  const relevant = [];
+  for (const entry of refs) {
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      Array.isArray(entry) ||
+      typeof entry.ref !== "string" ||
+      seen.has(entry.ref) ||
+      !entry.object ||
+      typeof entry.object !== "object" ||
+      Array.isArray(entry.object) ||
+      !GIT_OBJECT.test(entry.object.sha ?? "") ||
+      typeof entry.object.type !== "string"
+    ) {
+      throw new Error("provider candidate reservation ref inventory is invalid");
+    }
+    seen.add(entry.ref);
+    if (
+      entry.ref === reservation.ref ||
+      entry.ref.startsWith(`${reservation.ref}/`)
+    ) {
+      relevant.push({
+        ref: entry.ref,
+        sha: entry.object.sha,
+        type: entry.object.type,
+      });
+    }
+  }
+  return relevant;
+}
+
+function assertProviderCandidateReservationAbsent(context, reservation) {
+  const relevant = providerCandidateReservationInventory(context, reservation);
+  if (relevant.some((entry) => entry.ref === reservation.ref)) {
+    throw new Error(
+      "provider candidate release tag is already reserved; use reconcile-candidate with the original request record",
+    );
+  }
+  if (relevant.length !== 0) {
+    throw new Error(
+      "provider candidate reservation has a descendant ref conflict; no dispatch is permitted",
+    );
+  }
+}
+
+function validateProviderCandidateReservationRef(raw, reservation, expectedCommit) {
+  if (
+    !raw ||
+    typeof raw !== "object" ||
+    Array.isArray(raw) ||
+    raw.ref !== reservation.ref ||
+    !raw.object ||
+    typeof raw.object !== "object" ||
+    Array.isArray(raw.object) ||
+    raw.object.type !== "commit" ||
+    raw.object.sha !== expectedCommit
+  ) {
+    throw new Error("provider candidate reservation ref readback drifted");
+  }
+  return { ref: reservation.ref, commit: expectedCommit };
+}
+
+function readExactProviderCandidateReservation(context, reservation, expectedCommit) {
+  const raw = readProviderGithubJSON(
+    context,
+    `repos/${GITHUB_REPOSITORY}/git/ref/heads/${reservation.branch}`,
+    "provider candidate reservation ref readback",
+  );
+  return validateProviderCandidateReservationRef(
+    raw,
+    reservation,
+    expectedCommit,
+  );
+}
+
+function parseProviderCandidateReservationCreateResponse(
+  raw,
+  reservation,
+  expectedCommit,
+) {
+  if (typeof raw !== "string") {
+    throw new Error("provider candidate reservation creation response is invalid");
+  }
+  const normalized = raw.replaceAll("\r\n", "\n");
+  const separator = normalized.indexOf("\n\n");
+  if (separator <= 0) {
+    throw new Error("provider candidate reservation creation response is invalid");
+  }
+  const headers = normalized.slice(0, separator).split("\n");
+  if (
+    headers.filter((line) => /^HTTP\//u.test(line)).length !== 1 ||
+    !/^HTTP\/(?:1\.1|2(?:\.0)?) 201(?: |$)/u.test(headers[0])
+  ) {
+    throw new Error("provider candidate reservation creation was not HTTP 201");
+  }
+  let body;
+  try {
+    body = JSON.parse(normalized.slice(separator + 2));
+  } catch {
+    throw new Error("provider candidate reservation creation response is invalid");
+  }
+  return validateProviderCandidateReservationRef(
+    body,
+    reservation,
+    expectedCommit,
+  );
+}
+
+function createProviderCandidateReservation(context, reservation, expectedCommit) {
+  progress(context, `create global candidate reservation ${reservation.ref}`);
+  const response = attemptCommand(
+    context,
+    "gh",
+    providerGithubAPIArguments(
+      `repos/${GITHUB_REPOSITORY}/git/refs`,
+      [
+        "--method",
+        "POST",
+        "--include",
+        "-f",
+        `ref=${reservation.ref}`,
+        "-f",
+        `sha=${expectedCommit}`,
+      ],
+    ),
+  );
+  if (!response.ok) {
+    throw new Error(
+      "provider candidate reservation creation acknowledgement is unresolved; preserve the request record and use reconcile-candidate only",
+    );
+  }
+  try {
+    return parseProviderCandidateReservationCreateResponse(
+      response.output,
+      reservation,
+      expectedCommit,
+    );
+  } catch {
+    throw new Error(
+      "provider candidate reservation creation acknowledgement is unresolved; preserve the request record and use reconcile-candidate only",
+    );
+  }
+}
+
+function providerCandidateRequestRecord({
+  currentCommit,
+  releaseCommit,
+  releaseTag,
+  requestId,
+  requestRecord,
+  tagObjectOid,
+}) {
+  if (
+    !COMMIT.test(currentCommit ?? "") ||
+    !COMMIT.test(releaseCommit ?? "") ||
+    !PROVIDER_TAG.test(releaseTag ?? "") ||
+    !REQUEST_ID.test(requestId ?? "") ||
+    !GIT_OBJECT.test(tagObjectOid ?? "") ||
+    !isAbsolute(requestRecord ?? "") ||
+    resolve(requestRecord) !== requestRecord
+  ) {
+    throw new Error("provider candidate request record bindings are invalid");
+  }
+  return {
+    currentCommit,
+    dispatchAttempted: true,
+    dispatchRef: `refs/tags/${releaseTag}`,
+    format: PROVIDER_REQUEST_RECORD_FORMAT,
+    releaseCommit,
+    releaseTag,
+    repository: GITHUB_REPOSITORY,
+    requestId,
+    requestRecordPathSha256: sha256(Buffer.from(requestRecord, "utf8")),
+    reservationCommit: currentCommit,
+    reservationRef: providerCandidateReservation(releaseTag).ref,
+    tagObjectOid,
+    workflowPath: PROVIDER_CANDIDATE_WORKFLOW,
+    workflowRef:
+      `${GITHUB_REPOSITORY}/${PROVIDER_CANDIDATE_WORKFLOW}@refs/tags/${releaseTag}`,
+  };
+}
+
+function canonicalProviderCandidateRequestRecord(record, requestRecord) {
+  requireExactKeys(
+    record,
+    [
+      "currentCommit",
+      "dispatchAttempted",
+      "dispatchRef",
+      "format",
+      "releaseCommit",
+      "releaseTag",
+      "repository",
+      "requestId",
+      "requestRecordPathSha256",
+      "reservationCommit",
+      "reservationRef",
+      "tagObjectOid",
+      "workflowPath",
+      "workflowRef",
+    ],
+    "provider candidate request record",
+  );
+  const expected = providerCandidateRequestRecord({
+    currentCommit: record.currentCommit,
+    releaseCommit: record.releaseCommit,
+    releaseTag: record.releaseTag,
+    requestId: record.requestId,
+    requestRecord,
+    tagObjectOid: record.tagObjectOid,
+  });
+  const canonical = Buffer.from(
+    `${JSON.stringify(recursivelySorted(expected))}\n`,
+    "utf8",
+  );
+  if (
+    canonical.length > PROVIDER_REQUEST_RECORD_MAX_BYTES ||
+    !canonical.equals(
+      Buffer.from(`${JSON.stringify(recursivelySorted(record))}\n`, "utf8"),
+    )
+  ) {
+    throw new Error("provider candidate request record binding mismatch");
+  }
+  return { canonical, expected };
+}
+
+function requestRecordOwnerUid(getuid = process.getuid) {
+  if (typeof getuid !== "function") {
+    throw new Error("provider candidate request records require POSIX ownership");
+  }
+  const uid = getuid();
+  if (!Number.isSafeInteger(uid) || uid < 0) {
+    throw new Error("provider candidate request record owner is invalid");
+  }
+  return uid;
+}
+
+function isPathInside(root, candidate) {
+  const pathFromRoot = relative(root, candidate);
+  return (
+    pathFromRoot === "" ||
+    (pathFromRoot !== ".." &&
+      !pathFromRoot.startsWith(`..${sep}`) &&
+      !isAbsolute(pathFromRoot))
+  );
+}
+
+function inspectProviderRequestRecordParent(
+  repo,
+  requestRecord,
+  { getuid = process.getuid } = {},
+) {
+  if (
+    !isAbsolute(requestRecord ?? "") ||
+    resolve(requestRecord) !== requestRecord
+  ) {
+    throw new Error("provider request record path must be canonical and absolute");
+  }
+  const physicalRepo = realpathSync(repo);
+  if (isPathInside(physicalRepo, requestRecord)) {
+    throw new Error("provider request record must be outside the source tree");
+  }
+  const parent = dirname(requestRecord);
+  let parentStat;
+  let physicalParent;
+  try {
+    parentStat = lstatSync(parent);
+    physicalParent = realpathSync(parent);
+  } catch {
+    throw new Error("provider request record parent must already exist");
+  }
+  if (
+    !parentStat.isDirectory() ||
+    parentStat.isSymbolicLink() ||
+    physicalParent !== parent
+  ) {
+    throw new Error(
+      "provider request record parent must be one physical directory",
+    );
+  }
+  const uid = requestRecordOwnerUid(getuid);
+  if (parentStat.uid !== uid) {
+    throw new Error("provider request record parent owner must be the operator");
+  }
+  if ((parentStat.mode & 0o7777) !== 0o700) {
+    throw new Error("provider request record parent mode must be exactly 0700");
+  }
+  return { parent, parentStat, uid };
+}
+
+function assertOwnerPrivateRequestRecordFile(
+  stat,
+  uid,
+  { emptyOK = false } = {},
+) {
+  if (!stat.isFile()) {
+    throw new Error("provider candidate request record must be a regular file");
+  }
+  if (stat.uid !== uid) {
+    throw new Error(
+      "provider candidate request record owner must be the operator",
+    );
+  }
+  if ((stat.mode & 0o7777) !== 0o600) {
+    throw new Error(
+      "provider candidate request record mode must be exactly 0600",
+    );
+  }
+  if (
+    !Number.isSafeInteger(stat.size) ||
+    (!emptyOK && stat.size <= 0) ||
+    stat.size > PROVIDER_REQUEST_RECORD_MAX_BYTES
+  ) {
+    throw new Error("provider candidate request record has an invalid size");
+  }
+}
+
+function writeAll(descriptor, raw, write = writeSync) {
+  let offset = 0;
+  while (offset < raw.length) {
+    const written = write(
+      descriptor,
+      raw,
+      offset,
+      raw.length - offset,
+      null,
+    );
+    if (
+      !Number.isSafeInteger(written) ||
+      written <= 0 ||
+      written > raw.length - offset
+    ) {
+      throw new Error("provider candidate request record write was incomplete");
+    }
+    offset += written;
+  }
+}
+
+function createProviderCandidateRequestRecord(
+  repo,
+  requestRecord,
+  record,
+  {
+    getuid = process.getuid,
+    open = openSync,
+    fstat = fstatSync,
+    fsync = fsyncSync,
+    close = closeSync,
+    write = writeSync,
+  } = {},
+) {
+  const { canonical, expected } =
+    canonicalProviderCandidateRequestRecord(record, requestRecord);
+  const { parent, parentStat, uid } = inspectProviderRequestRecordParent(
+    repo,
+    requestRecord,
+    { getuid },
+  );
+  try {
+    lstatSync(requestRecord);
+    throw new Error(
+      "provider candidate request record already exists; use reconcile-candidate",
+    );
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      if (error?.message?.startsWith("provider candidate request record")) {
+        throw error;
+      }
+      throw new Error("provider candidate request record state is unreadable");
+    }
+  }
+  let descriptor;
+  try {
+    descriptor = open(
+      requestRecord,
+      fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        fsConstants.O_NOFOLLOW,
+      0o600,
+    );
+  } catch {
+    throw new Error(
+      "provider candidate request record cannot be created exclusively",
+    );
+  }
+  try {
+    const initialStat = fstat(descriptor);
+    assertOwnerPrivateRequestRecordFile(initialStat, uid, { emptyOK: true });
+    if (initialStat.size !== 0) {
+      throw new Error("provider candidate request record was not created empty");
+    }
+    writeAll(descriptor, canonical, write);
+    fsync(descriptor);
+    const writtenStat = fstat(descriptor);
+    assertOwnerPrivateRequestRecordFile(writtenStat, uid);
+    if (writtenStat.size !== canonical.length) {
+      throw new Error("provider candidate request record write was incomplete");
+    }
+  } finally {
+    close(descriptor);
+  }
+  let parentDescriptor;
+  try {
+    parentDescriptor = open(
+      parent,
+      fsConstants.O_RDONLY |
+        fsConstants.O_DIRECTORY |
+        fsConstants.O_NOFOLLOW,
+    );
+    const openedParent = fstat(parentDescriptor);
+    if (
+      !openedParent.isDirectory() ||
+      openedParent.dev !== parentStat.dev ||
+      openedParent.ino !== parentStat.ino
+    ) {
+      throw new Error("provider request record parent changed during creation");
+    }
+    fsync(parentDescriptor);
+  } catch (error) {
+    if (error?.message?.startsWith("provider request record")) throw error;
+    throw new Error(
+      "provider request record parent could not be durably synchronized",
+    );
+  } finally {
+    if (parentDescriptor !== undefined) close(parentDescriptor);
+  }
+  return readProviderCandidateRequestRecord(repo, requestRecord, expected, {
+    getuid,
+  });
+}
+
+function readProviderCandidateRequestRecord(
+  repo,
+  requestRecord,
+  expected,
+  {
+    getuid = process.getuid,
+    open = openSync,
+    fstat = fstatSync,
+    read = readSync,
+    close = closeSync,
+  } = {},
+) {
+  const { canonical } = canonicalProviderCandidateRequestRecord(
+    expected,
+    requestRecord,
+  );
+  const { parentStat, uid } = inspectProviderRequestRecordParent(
+    repo,
+    requestRecord,
+    { getuid },
+  );
+  let descriptor;
+  try {
+    descriptor = open(
+      requestRecord,
+      fsConstants.O_RDONLY |
+        fsConstants.O_NOFOLLOW |
+        fsConstants.O_NONBLOCK,
+    );
+  } catch {
+    throw new Error(
+      "provider candidate request record cannot be opened without following links",
+    );
+  }
+  let raw;
+  let initialStat;
+  try {
+    initialStat = fstat(descriptor);
+    assertOwnerPrivateRequestRecordFile(initialStat, uid);
+    const buffer = Buffer.alloc(PROVIDER_REQUEST_RECORD_MAX_BYTES + 1);
+    let offset = 0;
+    while (offset < buffer.length) {
+      const bytesRead = read(
+        descriptor,
+        buffer,
+        offset,
+        buffer.length - offset,
+        null,
+      );
+      if (
+        !Number.isSafeInteger(bytesRead) ||
+        bytesRead < 0 ||
+        bytesRead > buffer.length - offset
+      ) {
+        throw new Error("provider candidate request record read was invalid");
+      }
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    if (offset > PROVIDER_REQUEST_RECORD_MAX_BYTES) {
+      throw new Error("provider candidate request record is too large");
+    }
+    const finalStat = fstat(descriptor);
+    assertOwnerPrivateRequestRecordFile(finalStat, uid);
+    if (
+      offset !== initialStat.size ||
+      finalStat.size !== initialStat.size ||
+      finalStat.dev !== initialStat.dev ||
+      finalStat.ino !== initialStat.ino ||
+      finalStat.mtimeMs !== initialStat.mtimeMs ||
+      finalStat.ctimeMs !== initialStat.ctimeMs
+    ) {
+      throw new Error("provider candidate request record changed while read");
+    }
+    let pathStat;
+    let physicalPath;
+    try {
+      pathStat = lstatSync(requestRecord);
+      physicalPath = realpathSync(requestRecord);
+    } catch {
+      throw new Error(
+        "provider candidate request record path changed while read",
+      );
+    }
+    if (
+      pathStat.isSymbolicLink() ||
+      pathStat.dev !== initialStat.dev ||
+      pathStat.ino !== initialStat.ino ||
+      physicalPath !== requestRecord
+    ) {
+      throw new Error("provider candidate request record path changed while read");
+    }
+    raw = buffer.subarray(0, offset);
+  } finally {
+    close(descriptor);
+  }
+  let finalParent;
+  try {
+    finalParent = lstatSync(dirname(requestRecord));
+  } catch {
+    throw new Error("provider request record parent changed while read");
+  }
+  if (
+    finalParent.dev !== parentStat.dev ||
+    finalParent.ino !== parentStat.ino
+  ) {
+    throw new Error("provider request record parent changed while read");
+  }
+  if (!raw.equals(canonical)) {
+    throw new Error("provider candidate request record binding mismatch");
+  }
+  return expected;
+}
+
+function assertProviderCandidateRequestRecordAbsent(repo, requestRecord) {
+  inspectProviderRequestRecordParent(repo, requestRecord);
+  try {
+    lstatSync(requestRecord);
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw new Error("provider candidate request record state is unreadable");
+  }
+  throw new Error(
+    "provider candidate request record already exists; use reconcile-candidate",
+  );
+}
+
+function providerCandidateRunListArguments() {
+  return [
+    "api",
+    "--paginate",
+    "--slurp",
+    `repos/${GITHUB_REPOSITORY}/actions/workflows/release.yml/runs?event=workflow_dispatch&per_page=100`,
+  ];
+}
+
+function validateProviderCandidateRun(run, expected) {
+  const runId = String(run?.id ?? "");
+  const runAttempt = String(run?.run_attempt ?? "");
+  const expectedURL =
+    `https://github.com/${GITHUB_REPOSITORY}/actions/runs/${runId}`;
+  const validStatuses = new Set([
+    "completed",
+    "in_progress",
+    "pending",
+    "queued",
+    "requested",
+    "waiting",
+  ]);
+  if (
+    !POSITIVE_INTEGER.test(runId) ||
+    !POSITIVE_INTEGER.test(runAttempt) ||
+    !Number.isSafeInteger(Number(runId)) ||
+    !Number.isSafeInteger(Number(runAttempt)) ||
+    run.display_title !== expected.requestId ||
+    run.event !== "workflow_dispatch" ||
+    run.head_branch !== expected.tag ||
+    run.head_sha !== expected.expectedCommit ||
+    run.name !== expected.requestId ||
+    run.path !== PROVIDER_CANDIDATE_WORKFLOW ||
+    run.html_url !== expectedURL ||
+    !validStatuses.has(run.status) ||
+    (run.conclusion !== null && typeof run.conclusion !== "string")
+  ) {
+    throw new Error(
+      `provider candidate request ${expected.requestId} matched a drifted workflow run`,
+    );
+  }
+  return {
+    runId,
+    runAttempt,
+    requestId: expected.requestId,
+    url: run.html_url,
+    status: run.status,
+    conclusion: run.conclusion,
+  };
+}
+
+function findProviderCandidateRun(context, expected) {
+  let pages;
+  try {
+    const response = attemptCommand(
+      context,
+      "gh",
+      providerCandidateRunListArguments(),
+    );
+    if (!response.ok) throw new Error("request failed");
+    pages = JSON.parse(response.output);
+  } catch {
+    throw new Error("provider candidate workflow-run inventory is unreadable");
+  }
+  if (
+    !Array.isArray(pages) ||
+    pages.some(
+      (page) =>
+        !page ||
+        typeof page !== "object" ||
+        Array.isArray(page) ||
+        !Number.isSafeInteger(page.total_count) ||
+        page.total_count < 0 ||
+        !Array.isArray(page.workflow_runs),
+    )
+  ) {
+    throw new Error("provider candidate workflow-run pagination is invalid");
+  }
+  const runs = pages.flatMap((page) => page.workflow_runs);
+  const totals = new Set(pages.map((page) => page.total_count));
+  if (totals.size !== 1 || runs.length !== pages[0].total_count) {
+    throw new Error(
+      "provider candidate workflow-run pagination did not close exactly",
+    );
+  }
+  const ids = new Set();
+  for (const run of runs) {
+    if (
+      !run ||
+      typeof run !== "object" ||
+      Array.isArray(run) ||
+      !Number.isSafeInteger(run.id) ||
+      run.id <= 0 ||
+      ids.has(run.id) ||
+      typeof run.display_title !== "string"
+    ) {
+      throw new Error("provider candidate workflow-run inventory is invalid");
+    }
+    ids.add(run.id);
+  }
+  const matched = runs.filter(
+    (run) => run.display_title === expected.requestId,
+  );
+  if (matched.length > 1) {
+    throw new Error(
+      `provider candidate request ${expected.requestId} is ambiguous across ${matched.length} workflow runs`,
+    );
+  }
+  if (matched.length === 0) return null;
+  return validateProviderCandidateRun(matched[0], expected);
+}
+
+function providerCandidateRequestFromOptions(options, currentCommit) {
+  return providerCandidateRequestRecord({
+    currentCommit,
+    releaseCommit: options["expected-release-commit"],
+    releaseTag: options.tag,
+    requestId: options["request-id"],
+    requestRecord: options["request-record"],
+    tagObjectOid: options["expected-tag-object"],
+  });
+}
+
+function assertProviderCandidateAuthority(
+  context,
+  options,
+  descriptor,
+  { ownerGate = false } = {},
+) {
+  const releaseCommit = options["expected-release-commit"];
+  const expectedCurrentCommit = options["expected-current-commit"];
+  const currentCommit = ownerGate
+    ? providerOwnerGateAndFence(context, expectedCurrentCommit)
+    : assertCurrentProviderReleaseBranch(context, expectedCurrentCommit);
+  if (releaseCommit !== currentCommit) {
+    assertProviderRecoveryFence(context, {
+      releaseCommit,
+      recoveryCommit: currentCommit,
+      label: "provider candidate-dispatch reviewed recovery fence",
+    });
+  }
+  assertExactSignedProviderTag(context, {
+    tag: descriptor.tag,
+    expectedCommit: releaseCommit,
+    expectedObject: options["expected-tag-object"],
+  });
+  assertReleaseAbsent(context, descriptor.tag);
+  assertRegistryVersionAbsent(context, descriptor.version);
+  return currentCommit;
+}
+
+function attemptProviderCandidateDispatch(context, options) {
+  progress(context, "dispatch release.yml once from the exact signed tag");
+  return attemptCommand(context, "gh", [
+    "workflow",
+    "run",
+    "release.yml",
+    "--repo",
+    GITHUB_REPOSITORY,
+    "--ref",
+    options.tag,
+    "-f",
+    `tag=${options.tag}`,
+    "-f",
+    `expected_commit=${options["expected-release-commit"]}`,
+    "-f",
+    `request_id=${options["request-id"]}`,
+  ]);
+}
+
 function requireSuccessfulRun(
   context,
   runId,
@@ -2042,6 +3174,221 @@ function pushExactTag(context, tag, expectedCommit, expectedObject) {
     `refs/tags/${tag}:refs/tags/${tag}`,
   ], { env: gitPushEnvironment() });
   return assertExactRemoteTag(context, tag, expectedCommit, expectedObject);
+}
+
+function validateProviderSignedTagArtifactEvidence(
+  raw,
+  { tag, expectedCommit, runId, runAttempt, requestId },
+) {
+  let evidence;
+  try {
+    evidence = JSON.parse(raw);
+  } catch {
+    throw new Error("provider signed-tag verifier returned invalid JSON");
+  }
+  requireExactKeys(
+    evidence,
+    [
+      "kind",
+      "requestId",
+      "releaseTag",
+      "sourceCommit",
+      "workflowRun",
+      "preflightSha256",
+      "tagObjectOid",
+      "tagObjectSha256",
+      "signerFingerprint",
+      "localRefMaterialized",
+      "verified",
+    ],
+    "provider signed-tag verification evidence",
+  );
+  const workflowRun =
+    `https://github.com/${GITHUB_REPOSITORY}/actions/runs/${runId}` +
+    `/attempts/${runAttempt}`;
+  if (
+    evidence.kind !== "takoform.provider-signed-tag-verification@v1" ||
+    evidence.requestId !== requestId ||
+    evidence.releaseTag !== tag ||
+    evidence.sourceCommit !== expectedCommit ||
+    evidence.workflowRun !== workflowRun ||
+    !SHA256.test(evidence.preflightSha256 ?? "") ||
+    !GIT_OBJECT.test(evidence.tagObjectOid ?? "") ||
+    !SHA256.test(evidence.tagObjectSha256 ?? "") ||
+    evidence.signerFingerprint !== PROVIDER_SIGNER ||
+    evidence.localRefMaterialized !== false ||
+    evidence.verified !== true
+  ) {
+    throw new Error("provider signed-tag verification evidence binding mismatch");
+  }
+  return evidence;
+}
+
+function exactProviderSignedTagState(
+  context,
+  { tag, expectedCommit, expectedObject },
+) {
+  const local = localTagOID(context, tag);
+  const remote = remoteTagState(context, tag);
+  const remoteAbsent = !remote.object && !remote.commit;
+  const remoteExact =
+    remote.object === expectedObject && remote.commit === expectedCommit;
+  if (
+    (local && local !== expectedObject) ||
+    (!remoteAbsent && !remoteExact)
+  ) {
+    throw new Error(
+      `provider signed tag state drift: local=${local || "absent"} remote=${JSON.stringify(remote)}`,
+    );
+  }
+  return {
+    local: local || null,
+    remote,
+    remoteAbsent,
+    remoteExact,
+  };
+}
+
+function providerTagMutationFence(
+  context,
+  descriptor,
+  expectedCommit,
+  expectedObject,
+) {
+  providerOwnerGateAndFence(context, expectedCommit);
+  assertReleaseAbsent(context, descriptor.tag);
+  assertRegistryVersionAbsent(context, descriptor.version);
+  return exactProviderSignedTagState(context, {
+    tag: descriptor.tag,
+    expectedCommit,
+    expectedObject,
+  });
+}
+
+function materializeExactProviderTagRef(
+  context,
+  tag,
+  expectedObject,
+) {
+  progress(context, `materialize create-only local tag ${tag}`);
+  command(context, "git", [
+    "update-ref",
+    `refs/tags/${tag}`,
+    expectedObject,
+    "0".repeat(expectedObject.length),
+  ]);
+  const local = localTagOID(context, tag);
+  if (local !== expectedObject) {
+    throw new Error("provider local signed tag readback differs after creation");
+  }
+}
+
+function pushProviderTagWithAcknowledgementRecovery(
+  context,
+  tag,
+  expectedCommit,
+  expectedObject,
+) {
+  progress(context, `push create-only tag ${tag}`);
+  const result = attemptCommand(
+    context,
+    "git",
+    [
+      "push",
+      "--no-verify",
+      `--force-with-lease=refs/tags/${tag}:`,
+      SOURCE_REPOSITORY,
+      `refs/tags/${tag}:refs/tags/${tag}`,
+    ],
+    { env: gitPushEnvironment() },
+  );
+  let remote;
+  try {
+    remote = assertExactRemoteTag(
+      context,
+      tag,
+      expectedCommit,
+      expectedObject,
+    );
+  } catch (error) {
+    if (!result.ok) {
+      if (result.output) context.stdout.write(result.output);
+      if (result.stderr) context.stderr.write(result.stderr);
+    }
+    throw error;
+  }
+  return {
+    remote,
+    acknowledgement: result.ok ? "ACKNOWLEDGED" : "LOST_ACK_RECONCILED",
+  };
+}
+
+function reconcileExactProviderSignedTag(
+  context,
+  descriptor,
+  expectedCommit,
+  expectedObject,
+) {
+  const actions = [];
+  let state = exactProviderSignedTagState(context, {
+    tag: descriptor.tag,
+    expectedCommit,
+    expectedObject,
+  });
+  if (!state.local) {
+    state = providerTagMutationFence(
+      context,
+      descriptor,
+      expectedCommit,
+      expectedObject,
+    );
+    if (state.local) {
+      throw new Error(
+        "provider local signed tag changed before create-only materialization",
+      );
+    }
+    materializeExactProviderTagRef(context, descriptor.tag, expectedObject);
+    actions.push("LOCAL_REF_MATERIALIZED");
+    state = exactProviderSignedTagState(context, {
+      tag: descriptor.tag,
+      expectedCommit,
+      expectedObject,
+    });
+  }
+  if (state.remoteAbsent) {
+    state = providerTagMutationFence(
+      context,
+      descriptor,
+      expectedCommit,
+      expectedObject,
+    );
+    if (state.local !== expectedObject || !state.remoteAbsent) {
+      throw new Error(
+        "provider signed tag state changed before create-only push",
+      );
+    }
+    const pushed = pushProviderTagWithAcknowledgementRecovery(
+      context,
+      descriptor.tag,
+      expectedCommit,
+      expectedObject,
+    );
+    actions.push(
+      pushed.acknowledgement === "ACKNOWLEDGED"
+        ? "REMOTE_PUSHED"
+        : "REMOTE_PUSH_ACK_LOST_RECONCILED",
+    );
+  }
+  const finalState = exactProviderSignedTagState(context, {
+    tag: descriptor.tag,
+    expectedCommit,
+    expectedObject,
+  });
+  if (finalState.local !== expectedObject || !finalState.remoteExact) {
+    throw new Error("provider signed tag reconciliation did not close exactly");
+  }
+  if (actions.length === 0) actions.push("EXACT_TAG_ALREADY_RECONCILED");
+  return { actions, state: finalState };
 }
 
 function apiTagPath(tag) {
@@ -3309,7 +4656,8 @@ function providerPrepare(context, options, descriptor) {
 function providerTag(context, options, descriptor) {
   const expectedCommit = options["expected-commit"];
   assertCurrentProviderReleaseBranch(context, expectedCommit);
-  assertTagAbsent(context, descriptor.tag);
+  assertReleaseAbsent(context, descriptor.tag);
+  assertRegistryVersionAbsent(context, descriptor.version);
   providerOwnerGateAndFence(context, expectedCommit);
   const run = requireSuccessfulRun(
     context,
@@ -3334,74 +4682,261 @@ function providerTag(context, options, descriptor) {
       `provider-signed-tag-${run.displayTitle}-${options["run-id"]}-${options["run-attempt"]}`,
       join(temporaryRoot, "signed-tag"),
     );
-    let localObject = "";
+    let tagObject = "";
     try {
       assertCurrentProviderReleaseBranch(context, expectedCommit);
-      progress(context, "verify and materialize exact signed provider tag");
-      command(
-        context,
-        "go",
-        [
-          "-C",
-          "./cmd/provider-release",
-          "run",
-          ".",
-          "verify-tag-artifact",
-          "--artifact",
-          signedTag,
-          "--preflight-artifact",
-          preflight,
-          "--expected-run-id",
-          options["run-id"],
-          "--expected-run-attempt",
-          options["run-attempt"],
-          "--expected-request-id",
-          run.displayTitle,
-          "--expected-commit",
-          expectedCommit,
-          "--materialize-ref",
-        ],
-        { echo: true },
-      );
-      localObject = localTagOID(context, descriptor.tag);
-      if (!localObject) throw new Error("provider tag verifier created no local ref");
-      providerOwnerGateAndFence(context, expectedCommit);
-      assertReleaseAbsent(context, descriptor.tag);
-      assertRegistryVersionAbsent(context, descriptor.version);
-      pushExactTag(context, descriptor.tag, expectedCommit, localObject);
-      providerOwnerGateAndFence(context, expectedCommit);
-      const dispatched = dispatchWorkflow(
-        context,
-        "release.yml",
+      progress(context, "verify exact signed provider tag artifact");
+      const verification = validateProviderSignedTagArtifactEvidence(
+        command(
+          context,
+          "go",
+          [
+            "-C",
+            "./cmd/provider-release",
+            "run",
+            ".",
+            "verify-tag-artifact",
+            "--artifact",
+            signedTag,
+            "--preflight-artifact",
+            preflight,
+            "--expected-run-id",
+            options["run-id"],
+            "--expected-run-attempt",
+            options["run-attempt"],
+            "--expected-request-id",
+            run.displayTitle,
+            "--expected-commit",
+            expectedCommit,
+          ],
+          { label: "verify provider signed-tag artifacts" },
+        ),
         {
           tag: descriptor.tag,
-          expected_commit: expectedCommit,
-        },
-        {
-          headSha: expectedCommit,
-          ref: descriptor.tag,
-          headBranch: descriptor.tag,
+          expectedCommit,
+          runId: options["run-id"],
+          runAttempt: options["run-attempt"],
+          requestId: run.displayTitle,
         },
       );
+      tagObject = verification.tagObjectOid;
+      const reconciled = reconcileExactProviderSignedTag(
+        context,
+        descriptor,
+        expectedCommit,
+        tagObject,
+      );
+      assertCurrentProviderReleaseBranch(context, expectedCommit);
+      assertReleaseAbsent(context, descriptor.tag);
+      assertRegistryVersionAbsent(context, descriptor.version);
       return emit(context, {
         kind: "takos.deploy-result@v1",
         surface: PROVIDER_SURFACE,
         phase: "tag",
         commit: expectedCommit,
         tag: descriptor.tag,
-        tagObject: localObject,
+        tagObject,
         reviewedRun: { id: options["run-id"], attempt: options["run-attempt"], url: run.url },
-        dispatchStatus: "DISPATCHED",
-        status: "AWAITING_REVIEW",
-        releaseCandidateRun: dispatched,
+        tagReconciliation: reconciled.actions.join("+"),
+        dispatchStatus: "NOT_DISPATCHED",
+        nextPhase: "prepare-candidate",
+        status: "TAG_READY",
       });
     } catch (error) {
-      reportTagFailure(context, descriptor.tag, localObject, {
+      reportTagFailure(context, descriptor.tag, tagObject, {
         surface: PROVIDER_SURFACE,
         phase: "tag",
       });
       throw error;
     }
+  });
+}
+
+function providerPrepareCandidate(context, options, descriptor) {
+  assertProviderCandidateRequestRecordAbsent(
+    context.repo,
+    options["request-record"],
+  );
+  const initialProtection = readProviderCandidateReservationProtection(
+    context,
+    descriptor.tag,
+  );
+  assertProviderCandidateReservationAbsent(
+    context,
+    initialProtection.reservation,
+  );
+  const currentCommit = assertProviderCandidateAuthority(
+    context,
+    options,
+    descriptor,
+  );
+  let request = providerCandidateRequestFromOptions(options, currentCommit);
+  const expectedRun = {
+    requestId: request.requestId,
+    tag: descriptor.tag,
+    expectedCommit: request.releaseCommit,
+  };
+  if (findProviderCandidateRun(context, expectedRun)) {
+    throw new Error(
+      `provider candidate request ${request.requestId} already has a workflow run; create mode cannot adopt it`,
+    );
+  }
+
+  const fencedCommit = assertProviderCandidateAuthority(
+    context,
+    options,
+    descriptor,
+    { ownerGate: true },
+  );
+  request = providerCandidateRequestFromOptions(options, fencedCommit);
+  if (findProviderCandidateRun(context, expectedRun)) {
+    throw new Error(
+      `provider candidate request ${request.requestId} already has a workflow run; create mode cannot adopt it`,
+    );
+  }
+  const preCreateProtection = readProviderCandidateReservationProtection(
+    context,
+    descriptor.tag,
+  );
+  if (preCreateProtection.fingerprint !== initialProtection.fingerprint) {
+    throw new Error(
+      "provider candidate reservation protection changed before creation",
+    );
+  }
+  assertProviderCandidateReservationAbsent(
+    context,
+    preCreateProtection.reservation,
+  );
+  createProviderCandidateRequestRecord(
+    context.repo,
+    options["request-record"],
+    request,
+  );
+  createProviderCandidateReservation(
+    context,
+    preCreateProtection.reservation,
+    request.currentCommit,
+  );
+  readExactProviderCandidateReservation(
+    context,
+    preCreateProtection.reservation,
+    request.currentCommit,
+  );
+  assertProviderCandidateAuthority(context, options, descriptor);
+  if (findProviderCandidateRun(context, expectedRun)) {
+    throw new Error(
+      `provider candidate request ${request.requestId} appeared before dispatch; preserve the reservation and reconcile only`,
+    );
+  }
+  const postCreateProtection = readProviderCandidateReservationProtection(
+    context,
+    descriptor.tag,
+  );
+  if (postCreateProtection.fingerprint !== preCreateProtection.fingerprint) {
+    throw new Error(
+      "provider candidate reservation protection changed after creation; preserve the request record and reconcile only",
+    );
+  }
+  readExactProviderCandidateReservation(
+    context,
+    postCreateProtection.reservation,
+    request.currentCommit,
+  );
+  const attempted = attemptProviderCandidateDispatch(context, options);
+  if (!attempted.ok) {
+    throw new Error(
+      "provider candidate dispatch acknowledgement is unresolved; preserve the request record and use reconcile-candidate only",
+    );
+  }
+  return emit(context, {
+    kind: "takos.deploy-result@v1",
+    surface: PROVIDER_SURFACE,
+    phase: "prepare-candidate",
+    target: PROVIDER_ADDRESS,
+    commit: request.currentCommit,
+    releaseCommit: request.releaseCommit,
+    tag: request.releaseTag,
+    tagObject: request.tagObjectOid,
+    requestId: request.requestId,
+    requestRecordSha256: sha256(
+      Buffer.from(
+        `${JSON.stringify(recursivelySorted(request))}\n`,
+        "utf8",
+      ),
+    ),
+    reservationCommit: request.reservationCommit,
+    reservationRef: request.reservationRef,
+    reservationRulesetFingerprint: postCreateProtection.fingerprint,
+    dispatchStatus: "ATTEMPTED_ONCE",
+    nextPhase: "reconcile-candidate",
+    status: "RECONCILIATION_REQUIRED",
+  });
+}
+
+function providerReconcileCandidate(context, options, descriptor) {
+  verifyLocalReleaseToolchain(context);
+  const protection = readProviderCandidateReservationProtection(
+    context,
+    descriptor.tag,
+  );
+  const currentCommit = assertProviderCandidateAuthority(
+    context,
+    options,
+    descriptor,
+  );
+  const expected = providerCandidateRequestFromOptions(
+    options,
+    currentCommit,
+  );
+  const request = readProviderCandidateRequestRecord(
+    context.repo,
+    options["request-record"],
+    expected,
+  );
+  readExactProviderCandidateReservation(
+    context,
+    protection.reservation,
+    request.currentCommit,
+  );
+  const run = findProviderCandidateRun(context, {
+    requestId: request.requestId,
+    tag: request.releaseTag,
+    expectedCommit: request.releaseCommit,
+  });
+  if (!run) {
+    return emit(context, {
+      kind: "takos.deploy-result@v1",
+      surface: PROVIDER_SURFACE,
+      phase: "reconcile-candidate",
+      target: PROVIDER_ADDRESS,
+      commit: request.currentCommit,
+      releaseCommit: request.releaseCommit,
+      tag: request.releaseTag,
+      tagObject: request.tagObjectOid,
+      requestId: request.requestId,
+      reservationCommit: request.reservationCommit,
+      reservationRef: request.reservationRef,
+      reservationRulesetFingerprint: protection.fingerprint,
+      dispatchStatus: "NOT_DISPATCHED",
+      status: "UNRESOLVED_ABSENT",
+    });
+  }
+  return emit(context, {
+    kind: "takos.deploy-result@v1",
+    surface: PROVIDER_SURFACE,
+    phase: "reconcile-candidate",
+    target: PROVIDER_ADDRESS,
+    commit: request.currentCommit,
+    releaseCommit: request.releaseCommit,
+    tag: request.releaseTag,
+    tagObject: request.tagObjectOid,
+    requestId: request.requestId,
+    reservationCommit: request.reservationCommit,
+    reservationRef: request.reservationRef,
+    reservationRulesetFingerprint: protection.fingerprint,
+    dispatchStatus: "NOT_DISPATCHED",
+    status: "AWAITING_REVIEW",
+    workflowRun: run,
   });
 }
 
@@ -5873,6 +7408,7 @@ export const releaseDeployTestHooks = Object.freeze({
   assertRegistryVersionAbsent,
   assertTagOnlyRecoveryState,
   command,
+  createProviderCandidateRequestRecord,
   dispatchWorkflow,
   establishFormPublishBatchOwnerGateProof,
   expectedFormTagObject,
@@ -5888,11 +7424,13 @@ export const releaseDeployTestHooks = Object.freeze({
   parsePrettyCandidateMetadata,
   publishReleaseLocally,
   providerAssetNames,
+  providerCandidateRequestRecord,
   pushExactTag,
   reportTagFailure,
   resumeDraftReleaseLocally,
   reconstructCandidateTagObject,
   readFormPublishBatch,
+  readProviderCandidateRequestRecord,
   requireSuccessfulRun,
   validateReleaseReadback,
   validateDraftBeforePublication,
