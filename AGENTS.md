@@ -14,7 +14,7 @@
 
 - Owns: Portable Service Form specification and exact identities / Typed Terraform and OpenTofu provider / Data-only Form Packages, trust rules, and conformance corpus
 - Does not own: Any host implementation, hosted Form instance, backend lifecycle, target, or credential / Backend managers or executable package code / Cloud pricing, billing, quota, capacity, or SLA
-- Hazards: Normative changes require maintainer authorization, ADR, and contract-lock re-pin. / Do not claim publication or admission without signed live evidence. / Remain independent of Takosumi and closed Cloud code.
+- Hazards: Normative changes require maintainer authorization, ADR, and contract-lock re-pin. / Do not claim publication or admission without signed live evidence. / Remain independent of Takosumi, Takoserver, and Takosumi Hosted code.
 
 ## Required workflow
 
