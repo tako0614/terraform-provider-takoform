@@ -1426,6 +1426,64 @@ function checkHandWrittenInventories(retainedForms, familyRoster) {
   }
 }
 
+// A corpus directory named for its place in a sequence has to be renamed by
+// hand every time a lane moves, and when v1alpha3 became v1beta1 it was not:
+// portable-host-v3 kept its name and changed its contract, so one published
+// address began answering about a different lane. A name that states the lane
+// cannot rot that way, so a NEW corpus must carry one.
+//
+// The three generation-named corpora below are published addresses. Their
+// names are retained history and are supposed to stay, which is exactly why
+// they are listed one by one rather than matched by a pattern: adding a fourth
+// is an edit somebody has to justify.
+const RETAINED_GENERATION_NAMED_CORPORA = new Map([
+  ["portable-host-v1", "forms.takoform.com/v1alpha1"],
+  ["portable-host-v2", "forms.takoform.com/v1alpha2"],
+  ["portable-host-v3", "forms.takoform.com/v1alpha3"],
+]);
+
+function checkCorpusNamesStateTheirLane() {
+  const conformanceRoot = path.join(repositoryRoot, "conformance");
+  for (const entry of readdirSync(conformanceRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith("portable-host-")) {
+      continue;
+    }
+    const contractPath = path.join(
+      conformanceRoot,
+      entry.name,
+      "contract.json",
+    );
+    if (!existsSync(contractPath)) {
+      continue;
+    }
+    const apiVersion = readJson(contractPath)?.apiVersion;
+    if (typeof apiVersion !== "string") {
+      fail(`${contractPath}: corpus states no apiVersion`);
+      continue;
+    }
+    const retainedLane = RETAINED_GENERATION_NAMED_CORPORA.get(entry.name);
+    if (retainedLane !== undefined) {
+      if (retainedLane !== apiVersion) {
+        fail(
+          `conformance/${entry.name}: retained corpus measures ${apiVersion}, ` +
+            `but this address is retained history for ${retainedLane}; serve a ` +
+            `new lane from a new directory named for it`,
+        );
+      }
+      continue;
+    }
+    const expected = `portable-host-${apiVersion.split("/").pop()}`;
+    if (entry.name !== expected) {
+      fail(
+        `conformance/${entry.name}: corpus measures ${apiVersion} and should be ` +
+          `named conformance/${expected}; a corpus named for its place in a ` +
+          `sequence has to be renamed by hand when a lane moves, and that is the ` +
+          `step that gets missed`,
+      );
+    }
+  }
+}
+
 // A count written in prose beside a count a machine already knows rots the
 // moment the corpus moves, and nothing notices. Every such number in the
 // conformance guide is bound here to the array in the corpus that defines it.
@@ -1972,6 +2030,7 @@ checkProviderReleaseCommitBindings();
 checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
 checkHandWrittenInventories(forms, edgeFamilyRoster);
+checkCorpusNamesStateTheirLane();
 checkConformanceCorpusCounts();
 for (const failure of verifySiteStatusDocument(repositoryRoot, publicationTruth)) {
   fail(failure);

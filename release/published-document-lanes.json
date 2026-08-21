@@ -1,0 +1,681 @@
+{
+  "kind": "takoform.published-document-lanes@v1",
+  "documents": [
+    {
+      "path": "conformance/form-package-v1/negative/interface-document-required-but-omitted.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/negative/interface-document-schema-mismatch.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/negative/interface-duplicate-input.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/negative/interface-invalid-pointer.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/negative/interface-literal-with-pointer.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/negative/interface-literal-without-value.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/negative/interface-output-with-value.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/negative/interface-unnamespaced-source.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/example-store/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/example-store/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/interface-declaration/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/interface-declaration/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/analytics-dataset/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/analytics-dataset/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/backup-policy/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/backup-policy/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/cache-cluster/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/cache-cluster/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/compute-instance/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/compute-instance/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/container-registry/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/container-registry/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/container-service/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/container-service/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/dns-record/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/dns-record/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/dns-zone/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/dns-zone/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/edge-worker/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/edge-worker/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/email-sender/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/email-sender/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/feature-flag/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/feature-flag/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/http-route/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/http-route/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/identity-client/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/identity-client/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/indexed-store/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/indexed-store/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/key-value-store/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/key-value-store/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/load-balancer/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/load-balancer/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/log-sink/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/log-sink/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/metric-sink/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/metric-sink/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/model-endpoint/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/model-endpoint/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/object-bucket/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/object-bucket/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/object-lifecycle-rule/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/object-lifecycle-rule/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/private-network/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/private-network/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/queue/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/queue/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/rate-limit-policy/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/rate-limit-policy/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/relational-database/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/relational-database/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/schedule/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/schedule/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/search-index/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/search-index/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/stateful-entity/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/stateful-entity/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/static-site/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/static-site/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/stream-topic/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/stream-topic/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/tls-certificate/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/tls-certificate/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/vector-index/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/vector-index/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/webhook-endpoint/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/webhook-endpoint/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/workflow/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/form-package-v1/positive/standard/workflow/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/portable-host-v1/contract.json",
+      "apiVersion": "forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/portable-host-v1beta1/contract.json",
+      "apiVersion": "forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "conformance/portable-host-v1beta1/fixtures/synthetic-module-worker-second-definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "conformance/portable-host-v2/contract.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "conformance/portable-host-v2/edge-worker/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "conformance/portable-host-v3/contract.json",
+      "apiVersion": "forms.takoform.com/v1alpha3"
+    },
+    {
+      "path": "conformance/portable-host-v3/fixtures/synthetic-module-worker-second-definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/revocation-checkpoint-v1/positive/checkpoint-1.json",
+      "apiVersion": "trust.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/revocation-checkpoint-v1/positive/checkpoint-2.json",
+      "apiVersion": "trust.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/revocation-checkpoint-v1/positive/statement-1.json",
+      "apiVersion": "trust.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "conformance/revocation-checkpoint-v1/positive/statement-2.json",
+      "apiVersion": "trust.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/at-least-once-queue/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/at-least-once-queue/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/edge-kv-namespace/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/edge-kv-namespace/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/module-worker/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/module-worker/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/object-bucket/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/object-bucket/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/queue-consumer/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/queue-consumer/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/sqlite-database/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/sqlite-database/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/sqlite-migration-application/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/sqlite-migration-application/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/sqlite-migration-set/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/sqlite-migration-set/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/static-asset-bundle/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/static-asset-bundle/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-bundle/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-bundle/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-cron-trigger/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-cron-trigger/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-custom-domain/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-custom-domain/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-deployment/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-deployment/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-endpoint/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-endpoint/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-version/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1"
+    },
+    {
+      "path": "forms/candidates/edge/v1alpha1/worker-version/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/at-least-once-queue/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/at-least-once-queue/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/edge-kv-namespace/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/edge-kv-namespace/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/module-worker/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/module-worker/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/object-bucket/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/object-bucket/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/queue-consumer/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/queue-consumer/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/sqlite-database/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/sqlite-database/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/sqlite-migration-application/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/sqlite-migration-application/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/sqlite-migration-set/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/sqlite-migration-set/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/static-asset-bundle/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/static-asset-bundle/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-bundle/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-bundle/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-cron-trigger/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-cron-trigger/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-custom-domain/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-custom-domain/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-deployment/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-deployment/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-endpoint/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-endpoint/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-version/definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1beta1"
+    },
+    {
+      "path": "forms/candidates/edge/v1beta1/worker-version/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha4"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/container-service/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/container-service/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha3"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/edge-worker/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/edge-worker/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha3"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/key-value-store/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/key-value-store/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha3"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/object-bucket/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/object-bucket/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha3"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/queue/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/queue/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha3"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/relational-database/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/relational-database/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha3"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/schedule/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/schedule/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha3"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/stateful-entity/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/stateful-entity/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha3"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/vector-index/definition.json",
+      "apiVersion": "forms.takoform.com/v1alpha2"
+    },
+    {
+      "path": "forms/candidates/v1alpha2/vector-index/package-index.json",
+      "apiVersion": "packages.forms.takoform.com/v1alpha3"
+    }
+  ]
+}
