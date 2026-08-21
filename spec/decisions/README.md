@@ -38,3 +38,4 @@ record does not replace them.
 - [0033 — Edge app assets and SQLite migrations are content-addressed](0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md)
 - [0034 — edge.sql uses safe wire values and rollback-only queries](0034-edge-sql-uses-safe-wire-values-and-rollback-only-queries.md)
 - [0035 — Stable provider v2.1 ships the immutable Beta 1 contracts](0035-beta-contracts-ship-in-stable-provider-v2-1.md)
+- [0036 — An artifact's name states the lane it describes, not its place in a sequence](0036-artifact-names-state-the-lane-they-describe.md)
