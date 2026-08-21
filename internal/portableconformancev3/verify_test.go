@@ -15,7 +15,7 @@ import (
 
 func corpusRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", "..", "conformance", "portable-host-v3"))
+	root, err := filepath.Abs(filepath.Join("..", "..", "conformance", "portable-host-v1beta1"))
 	if err != nil {
 		t.Fatalf("resolve corpus root: %v", err)
 	}
