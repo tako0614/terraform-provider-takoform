@@ -33,7 +33,7 @@ type incarnationProbe struct {
 
 func newIncarnationProbe(t *testing.T) incarnationProbe {
 	t.Helper()
-	contract, err := portableconformancev3.Verify("../../conformance/portable-host-v3")
+	contract, err := portableconformancev3.Verify("../../conformance/portable-host-v1beta1")
 	if err != nil {
 		t.Fatalf("verify portable host v3 contract: %v", err)
 	}

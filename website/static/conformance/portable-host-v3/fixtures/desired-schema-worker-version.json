@@ -182,64 +182,6 @@
   "additionalProperties": false,
   "description": "Immutable executable snapshot of one Module Worker: a bundle, the handlers its module exports, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is not a field of this Form: it is fixed by the worker.runtime@1.0.0 contract the Module Worker identity provides, so a version carries no compatibility date and no compatibility flag (decision 0019).",
   "properties": {
-    "assets": {
-      "additionalProperties": false,
-      "description": "Optional static-asset attachment for this immutable version. Without it the host performs no asset lookup. When present, every member is required and the request order is closed: with runWorkerFirst=false the host tries the asset lookup before invoking fetch; with true it invokes fetch first and tries the asset lookup only when that invocation returns 404. An asset result wins; if both stages miss, the worker's 404 is preserved. The attachment never grants a hidden runtime binding and never mutates the referenced bundle.",
-      "properties": {
-        "bundle": {
-          "additionalProperties": false,
-          "description": "Static Asset Bundle whose exact manifest inventory this version serves.",
-          "properties": {
-            "apiVersion": {
-              "const": "edge.forms.takoform.com/v1beta1",
-              "type": "string"
-            },
-            "kind": {
-              "const": "StaticAssetBundle",
-              "type": "string"
-            },
-            "name": {
-              "maxLength": 63,
-              "minLength": 1,
-              "pattern": "^[a-z][a-z0-9-]{0,62}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "apiVersion",
-            "kind",
-            "name"
-          ],
-          "type": "object",
-          "x-takoform-target-formrefs": [
-            {
-              "apiVersion": "edge.forms.takoform.com/v1beta1",
-              "definitionVersion": "0.1.0",
-              "kind": "StaticAssetBundle",
-              "schemaDigest": "sha256:9cdfa58d6701e571d41c42281e2de770c989d3c0dd3fb642533c43fa897eb348"
-            }
-          ]
-        },
-        "notFoundHandling": {
-          "description": "Closed asset-miss behavior. none leaves a missing exact path as a miss. single_page_application serves the bundle's index.html for a missing path; a bundle without index.html is refused before this Worker Version is stored.",
-          "enum": [
-            "none",
-            "single_page_application"
-          ],
-          "type": "string"
-        },
-        "runWorkerFirst": {
-          "description": "Whether every request invokes the worker fetch handler before the asset lookup. False performs the lookup first and invokes fetch only when it misses; true performs the lookup only after fetch returns 404.",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "bundle",
-        "notFoundHandling",
-        "runWorkerFirst"
-      ],
-      "type": "object"
-    },
     "bucketBindings": {
       "default": [],
       "description": "Typed module-worker.object-bucket bindings projecting the edge.objects API. Omitting it declares no such binding.",
@@ -255,7 +197,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta1",
+                "const": "edge.forms.takoform.com/v1alpha1",
                 "type": "string"
               },
               "kind": {
@@ -278,7 +220,7 @@
             "x-takoform-required-interface": {
               "apiVersion": "interfaces.takoform.com/v1alpha1",
               "name": "edge.objects",
-              "schemaDigest": "sha256:fad47fa63409a05fb0b5886d23300e7ecd32fd64b11aaef5a200247872d19e00",
+              "schemaDigest": "sha256:292668cf530eb7946f25d313740991b3efa0406f40d74ec12d788d2933d13f96",
               "version": "1.0.0"
             }
           }
@@ -299,7 +241,7 @@
       "description": "Worker Bundle carrying the exact module bytes this version executes.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1beta1",
+          "const": "edge.forms.takoform.com/v1alpha1",
           "type": "string"
         },
         "kind": {
@@ -321,10 +263,10 @@
       "type": "object",
       "x-takoform-target-formrefs": [
         {
-          "apiVersion": "edge.forms.takoform.com/v1beta1",
+          "apiVersion": "edge.forms.takoform.com/v1alpha1",
           "definitionVersion": "0.1.0",
           "kind": "WorkerBundle",
-          "schemaDigest": "sha256:8891abff562e0725c96aaaf2014bd2ded6cd0e8697ffa2fe227342363a6537b1"
+          "schemaDigest": "sha256:d7fd1bfc966a90b9f15ebfc6530c2465ee19b14fed3fef91c72502e799539f74"
         }
       ]
     },
@@ -357,7 +299,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta1",
+                "const": "edge.forms.takoform.com/v1alpha1",
                 "type": "string"
               },
               "kind": {
@@ -380,7 +322,7 @@
             "x-takoform-required-interface": {
               "apiVersion": "interfaces.takoform.com/v1alpha1",
               "name": "edge.kv",
-              "schemaDigest": "sha256:231cfe2a7d8a6a9234f2ca84d4c4fc5b52857e5b632ab613ab2f9eca0116e082",
+              "schemaDigest": "sha256:58c8e9af97dabcd205422eca0b47fba51734503bc80a66867056dae28efe1cf8",
               "version": "1.0.0"
             }
           }
@@ -411,7 +353,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta1",
+                "const": "edge.forms.takoform.com/v1alpha1",
                 "type": "string"
               },
               "kind": {
@@ -434,7 +376,7 @@
             "x-takoform-required-interface": {
               "apiVersion": "interfaces.takoform.com/v1alpha1",
               "name": "edge.queue",
-              "schemaDigest": "sha256:d8ed5c673cb544f5b2bd61aa66ac1c1a716276cf072232b3a0d06471403c2ff7",
+              "schemaDigest": "sha256:e88be3a9bfb0eb202422483cfca8bf45ab74d60f96f8c4f3fe289f0f607510cf",
               "version": "1.0.0"
             }
           }
@@ -475,7 +417,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta1",
+                "const": "edge.forms.takoform.com/v1alpha1",
                 "type": "string"
               },
               "kind": {
@@ -529,7 +471,7 @@
             "additionalProperties": false,
             "properties": {
               "apiVersion": {
-                "const": "edge.forms.takoform.com/v1beta1",
+                "const": "edge.forms.takoform.com/v1alpha1",
                 "type": "string"
               },
               "kind": {
@@ -552,7 +494,7 @@
             "x-takoform-required-interface": {
               "apiVersion": "interfaces.takoform.com/v1alpha1",
               "name": "edge.sql",
-              "schemaDigest": "sha256:ff48410cf2d59fb93533525f76cb8e880a26339a0ce91c2e0faee2a7c3f5d053",
+              "schemaDigest": "sha256:cd33793132cd91c20cdbe782db500e86fa7a8ad2e2281b95116337d697dcac1b",
               "version": "1.0.0"
             }
           }
@@ -587,7 +529,7 @@
       "description": "Module Worker identity this version belongs to.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1beta1",
+          "const": "edge.forms.takoform.com/v1alpha1",
           "type": "string"
         },
         "kind": {
@@ -610,7 +552,7 @@
       "x-takoform-required-interface": {
         "apiVersion": "interfaces.takoform.com/v1alpha1",
         "name": "worker.runtime",
-        "schemaDigest": "sha256:c5d71337fb615f403f00c21a92dc6bcc9fc3cbcffad600e537a55f124441e820",
+        "schemaDigest": "sha256:48d5fe4ca3109d1235354fef99748f5d01b7e0c398f97a9354496a220dc7a579",
         "version": "1.0.0"
       }
     }

@@ -1,6 +1,6 @@
 // Package portableconformancev3 is the Host API v1beta1 conformance lane:
 // a deterministic reference host speaking the complete v1beta1 wire, a
-// black-box runner, and the loader for the conformance/portable-host-v3
+// black-box runner, and the loader for the conformance/portable-host-v1beta1
 // corpus. Passing this lane is local implementation evidence only; it is
 // never publication, admission, support, or maturity evidence.
 package portableconformancev3
@@ -29,8 +29,8 @@ import (
 // importing it, so the conformance lane stays black-box with respect to the
 // client implementation.
 const (
-	ContractFormat = "takoform.portable-host-conformance@v3"
-	ManifestFormat = "takoform.portable-host-conformance-manifest@v3"
+	ContractFormat = "takoform.portable-host-conformance@v1beta1"
+	ManifestFormat = "takoform.portable-host-conformance-manifest@v1beta1"
 	APIVersion     = "forms.takoform.com/v1beta1"
 	DiscoveryPath  = "/.well-known/takoform/v1beta1"
 	APIPath        = "/apis/forms.takoform.com/v1beta1"
@@ -783,7 +783,7 @@ type ErrorEnvelopeContract struct {
 	HTTPStatusByCode       map[string]int `json:"httpStatusByCode"`
 }
 
-// Contract is the verified conformance/portable-host-v3 contract.
+// Contract is the verified conformance/portable-host-v1beta1 contract.
 type Contract struct {
 	Format               string                `json:"format"`
 	APIVersion           string                `json:"apiVersion"`
@@ -813,7 +813,7 @@ var (
 	spacePattern        = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 )
 
-// Verify loads and fail-closed-verifies a portable-host-v3 corpus: manifest
+// Verify loads and fail-closed-verifies a portable-host-v1beta1 corpus: manifest
 // identity, contract byte digest, strict I-JSON decoding, fixture bytes, and
 // the pinned identity/taxonomy/check surfaces.
 func Verify(root string) (Contract, error) {

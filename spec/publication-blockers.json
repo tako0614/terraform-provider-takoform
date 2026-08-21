@@ -31,7 +31,7 @@
         "internal/currentformmodel/target_contract_test.go",
         "internal/portableconformancev3/relations.go",
         "internal/portableconformancev3/runner_checks.go",
-        "conformance/portable-host-v3/contract.json"
+        "conformance/portable-host-v1beta1/contract.json"
       ]
     },
     {
@@ -175,13 +175,13 @@
       ],
       "status": "open",
       "issue": 121,
-      "rationale": "A resource's internal address must carry the tenant. Until the contract states that and the corpus drives it, a host may ship an address of space, kind and name — so two tenants naming one resource in one space share one record, one tenant reads, updates and deletes another's, a reference resolves across the boundary and pins a foreign uid, one prepareDigest is spendable by anyone holding it, and one Idempotency-Key replays another tenant's success. This is the single most damaging host defect the lane could permit, and the reference host itself carried the shape of it. The lane now states the rule normatively and measures it with ten black-box checks driven from two configured tenants, nine of them enumerated by surface rather than by intent so that every endpoint taking a resource name — observe and import included — is measured, and the tenth the permissive half none of the nine states: each tenant mutating its own plane, while the holder of a resource a stranger reached for can still update and delete it (spec/decisions/0028). What is NOT closed, and what this blocker is, is the same thing V3-004 is: no host outside this repository has been measured against it. It closes on a passed portable-host-v3 run, including the ten tenant checks, against a host this repository does not own.",
+      "rationale": "A resource's internal address must carry the tenant. Until the contract states that and the corpus drives it, a host may ship an address of space, kind and name — so two tenants naming one resource in one space share one record, one tenant reads, updates and deletes another's, a reference resolves across the boundary and pins a foreign uid, one prepareDigest is spendable by anyone holding it, and one Idempotency-Key replays another tenant's success. This is the single most damaging host defect the lane could permit, and the reference host itself carried the shape of it. The lane now states the rule normatively and measures it with ten black-box checks driven from two configured tenants, nine of them enumerated by surface rather than by intent so that every endpoint taking a resource name — observe and import included — is measured, and the tenth the permissive half none of the nine states: each tenant mutating its own plane, while the holder of a resource a stranger reached for can still update and delete it (spec/decisions/0028). What is NOT closed, and what this blocker is, is the same thing V3-004 is: no host outside this repository has been measured against it. It closes on a passed portable-host-v1beta1 run, including the ten tenant checks, against a host this repository does not own.",
       "evidence": [
         "spec/decisions/0028-the-resource-plane-is-tenant-isolated.md",
         "spec/host-api/v1beta1.md",
         "internal/portableconformancev3/runner_tenant_isolation_checks.go",
         "internal/portableconformancev3/tenant_isolation_test.go",
-        "conformance/portable-host-v3/contract.json"
+        "conformance/portable-host-v1beta1/contract.json"
       ]
     },
     {
@@ -193,13 +193,13 @@
       ],
       "status": "open",
       "issue": 127,
-      "rationale": "A create's prepare binds the create markers, so a byte-identical re-create derives a byte-identical Idempotency-Key and fingerprint. Against a host that keeps its replay records forever, terraform destroy followed by terraform apply of an unchanged configuration reports success, creates nothing, and never converges: the next read 404s, the plan proposes the create again, and it replays again. No client can close it, because the discriminator is the deletion the host performed in between; and the determinism must stay, because it is the only answer to a create whose response was lost. The lane now states the host rule in decision 0011 and measures all three of its edges with replay-record-retires-with-its-incarnation. What is NOT closed is the same thing V3-004 and V3-012 are: no host outside this repository has been measured against it. It closes on a passed portable-host-v3 run, including that check, against a host this repository does not own.",
+      "rationale": "A create's prepare binds the create markers, so a byte-identical re-create derives a byte-identical Idempotency-Key and fingerprint. Against a host that keeps its replay records forever, terraform destroy followed by terraform apply of an unchanged configuration reports success, creates nothing, and never converges: the next read 404s, the plan proposes the create again, and it replays again. No client can close it, because the discriminator is the deletion the host performed in between; and the determinism must stay, because it is the only answer to a create whose response was lost. The lane now states the host rule in decision 0011 and measures all three of its edges with replay-record-retires-with-its-incarnation. What is NOT closed is the same thing V3-004 and V3-012 are: no host outside this repository has been measured against it. It closes on a passed portable-host-v1beta1 run, including that check, against a host this repository does not own.",
       "evidence": [
         "spec/decisions/0011-resource-identity-generation-and-revision.md",
         "spec/host-api/v1beta1.md",
         "internal/portableconformancev3/runner_replay_lifetime_checks.go",
         "internal/portableconformancev3/reference_host.go",
-        "conformance/portable-host-v3/contract.json"
+        "conformance/portable-host-v1beta1/contract.json"
       ]
     },
     {
@@ -219,7 +219,7 @@
         "internal/portableconformancev3/runner_checks.go",
         "internal/portableconformancev3/reference_host.go",
         "internal/portableconformancev3/divergent_host_test.go",
-        "conformance/portable-host-v3/contract.json"
+        "conformance/portable-host-v1beta1/contract.json"
       ]
     }
   ]

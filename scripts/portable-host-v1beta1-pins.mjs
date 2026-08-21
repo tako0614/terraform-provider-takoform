@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// Re-pins only the source-derived closure of conformance/portable-host-v3:
+// Re-pins only the source-derived closure of conformance/portable-host-v1beta1:
 // exact Form identities/packages, desired-schema fixture bytes, Interface
 // digests, and the contract manifest. The behavioral runner input and required
 // checks remain hand-authored corpus source and are never regenerated here.
@@ -12,14 +12,14 @@ import { fileURLToPath } from "node:url";
 
 const mode = process.argv[2];
 if (process.argv.length !== 3 || !["--write", "--check"].includes(mode)) {
-  throw new Error("usage: bun scripts/portable-host-v3-pins.mjs --write|--check");
+  throw new Error("usage: bun scripts/portable-host-v1beta1-pins.mjs --write|--check");
 }
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const corpusRoot = path.join(repositoryRoot, "conformance", "portable-host-v3");
+const corpusRoot = path.join(repositoryRoot, "conformance", "portable-host-v1beta1");
 const contractPath = path.join(corpusRoot, "contract.json");
 const manifestPath = path.join(corpusRoot, "manifest.json");
 
@@ -35,7 +35,7 @@ if (
   interfaces.format !== "takoform.interface-candidates@v1" ||
   interfaces.publicationStatus !== "unpublished"
 ) {
-  throw new Error("portable-host-v3 pins require the unpublished family candidate lane");
+  throw new Error("portable-host-v1beta1 pins require the unpublished family candidate lane");
 }
 
 const formsByFamily = new Map(
@@ -79,7 +79,7 @@ for (const probe of Object.values(contract.runnerInput)) {
       : undefined);
   if (candidate === undefined) {
     throw new Error(
-      `portable-host-v3 references unknown current Form family ${ref.apiVersion}/${ref.kind}`,
+      `portable-host-v1beta1 references unknown current Form family ${ref.apiVersion}/${ref.kind}`,
     );
   }
 
@@ -110,7 +110,7 @@ for (const probe of Object.values(contract.runnerInput)) {
 }
 if (pinnedForms === 0) {
   throw new Error(
-    "portable-host-v3 does not reference any current Form candidates",
+    "portable-host-v1beta1 does not reference any current Form candidates",
   );
 }
 
@@ -127,7 +127,7 @@ support.runtimeContract.schemaDigest = runtime.schemaDigest;
 
 const contractOutput = `${JSON.stringify(contract, null, 2)}\n`;
 const manifest = {
-  format: "takoform.portable-host-conformance-manifest@v3",
+  format: "takoform.portable-host-conformance-manifest@v1beta1",
   contract: "contract.json",
   sha256: digest(contractOutput).slice("sha256:".length),
 };
@@ -141,7 +141,7 @@ const outputs = [
 if (mode === "--write") {
   for (const output of outputs) writeFileSync(output.path, output.expected);
   process.stdout.write(
-    `re-pinned portable-host-v3 from ${pinnedForms} Forms and ${support.dataInterfaces.length + 1} Interfaces\n`,
+    `re-pinned portable-host-v1beta1 from ${pinnedForms} Forms and ${support.dataInterfaces.length + 1} Interfaces\n`,
   );
 } else {
   const stale = outputs
@@ -149,12 +149,12 @@ if (mode === "--write") {
     .map((output) => path.relative(repositoryRoot, output.path));
   if (stale.length > 0) {
     throw new Error(
-      `portable-host-v3 source-derived pins are stale: ${stale.join(", ")}; ` +
-        "run bun run sync:portable-host-v3",
+      `portable-host-v1beta1 source-derived pins are stale: ${stale.join(", ")}; ` +
+        "run bun run sync:portable-host-v1beta1",
     );
   }
   process.stdout.write(
-    `portable-host-v3 source-derived pins match ${pinnedForms} Forms and ${support.dataInterfaces.length + 1} Interfaces\n`,
+    `portable-host-v1beta1 source-derived pins match ${pinnedForms} Forms and ${support.dataInterfaces.length + 1} Interfaces\n`,
   );
 }
 
@@ -169,7 +169,7 @@ function formFamily(ref) {
 function requiredInterface(name, version) {
   const candidate = interfacesByIdentity.get(`${name}@${version}`);
   if (candidate === undefined) {
-    throw new Error(`portable-host-v3 references unknown Interface ${name}@${version}`);
+    throw new Error(`portable-host-v1beta1 references unknown Interface ${name}@${version}`);
   }
   return candidate;
 }

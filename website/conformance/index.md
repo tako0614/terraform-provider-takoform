@@ -183,13 +183,21 @@ probe, concurrency/idempotency rules, stable errors, and required cross-repo
 black-box checks. The retained-lane provider client consumes this contract in
 adversarial HTTP tests.
 
+`portable-host-v3/` is the retained `forms.takoform.com/v1alpha3` corpus: 114
+retained v1alpha3 checks, published at the address that has always named them. It is
+retained bytes rather than a runnable corpus — the v1alpha3 runner became the
+v1beta1 runner instead of being copied — so `bun run check` guarantees that it
+does not change rather than that it executes. Its own
+`portable-host-v3/RETAINED.md` states why it keeps a generation-numbered name
+while the current corpus does not.
+
 Every count this page states about a corpus — the size of a check matrix, of an
 error taxonomy, of a retryable set — is bound by `bun run check:public-surfaces`
 to the array in that corpus's `contract.json` that defines it. A number written
 here beside a number a machine already knows is a defect waiting to recur, so
 the gate names both values and fails when they part company.
 
-`portable-host-v3/` is the Host API v1beta1 corpus consumed by the provider
+`portable-host-v1beta1/` is the Host API v1beta1 corpus consumed by the provider
 v2.1 client lane. It pins the v1beta1 discovery/API paths, the closed
 26-code error taxonomy with its exact HTTP status map and 4-code retryable
 set, the uid/generation/revision identity rules, the closed portable
@@ -219,7 +227,7 @@ of the ModuleWorker line, so the lane can install two contracts of one group and
 kind at once; without it, "a host answers for the exact ref recorded in state"
 and "a host answers for the kind" are the same behavior and no check can tell
 them apart (same decision).
-`self-test --contract conformance/portable-host-v3`
+`self-test --contract conformance/portable-host-v1beta1`
 starts a deterministic reference host over the real candidate definitions and
 drives the complete 116-check matrix over real HTTP: exact discovery and
 availability, a credential that is REQUIRED — an absent `Authorization` header
@@ -518,7 +526,7 @@ lists what it cannot prove, because proving it means executing the module
 rather than driving the API. This corpus executes it
 ([decision 0023](../spec/decisions/0023-the-runtime-abi-is-measured-separately-from-the-control-plane.md)).
 
-The corpus is digest-pinned the same way `portable-host-v3/` is: `manifest.json`
+The corpus is digest-pinned the same way `portable-host-v1beta1/` is: `manifest.json`
 carries the sha256 of `contract.json`, and `contract.json` additionally pins the
 sha256 of every module byte it ships. It states, as data, the exact
 `worker.runtime` InterfaceRef it measures, the closed handler vocabulary, the

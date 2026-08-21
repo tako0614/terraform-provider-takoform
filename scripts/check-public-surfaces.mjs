@@ -1436,19 +1436,19 @@ function checkConformanceCorpusCounts() {
     {
       label: "the Host API v1beta1 check matrix size",
       pattern: /(\d+)-check matrix/g,
-      corpus: "conformance/portable-host-v3/contract.json",
+      corpus: "conformance/portable-host-v1beta1/contract.json",
       field: ["requiredRunnerChecks"],
     },
     {
       label: "the v1beta1 error taxonomy size",
       pattern: /(\d+)-code error taxonomy/g,
-      corpus: "conformance/portable-host-v3/contract.json",
+      corpus: "conformance/portable-host-v1beta1/contract.json",
       field: ["errorEnvelope", "codes"],
     },
     {
       label: "the v1beta1 automatically-retryable set size",
       pattern: /(\d+)-code retryable set/g,
-      corpus: "conformance/portable-host-v3/contract.json",
+      corpus: "conformance/portable-host-v1beta1/contract.json",
       field: ["errorEnvelope", "automaticallyRetryable"],
     },
     {
@@ -1456,6 +1456,12 @@ function checkConformanceCorpusCounts() {
       pattern: /(\d+) required checks/g,
       corpus: "conformance/runtime-abi-v1/contract.json",
       field: ["requiredChecks"],
+    },
+    {
+      label: "the retained v1alpha3 check matrix size",
+      pattern: /(\d+) retained v1alpha3 checks/g,
+      corpus: "conformance/portable-host-v3/contract.json",
+      field: ["requiredRunnerChecks"],
     },
   ];
 
@@ -1489,7 +1495,7 @@ function checkConformanceCorpusCounts() {
   const hostContractPath = path.join(
     repositoryRoot,
     "conformance",
-    "portable-host-v3",
+    "portable-host-v1beta1",
     "contract.json",
   );
   const hostContract = readJson(hostContractPath);
@@ -1506,7 +1512,7 @@ function checkConformanceCorpusCounts() {
   const uniqueDrivenKinds = new Set(drivenKinds);
   if (drivenKinds.length !== 14 || uniqueDrivenKinds.size !== 14) {
     fail(
-      `${hostContractPath}: portable-host-v3 must drive exactly 14 distinct ` +
+      `${hostContractPath}: portable-host-v1beta1 must drive exactly 14 distinct ` +
         `Form probes, found ${drivenKinds.length} (${[...uniqueDrivenKinds].join(", ")})`,
     );
   }
@@ -1526,7 +1532,7 @@ function checkConformanceCorpusCounts() {
     unprobedKinds[0] !== "ObjectBucket"
   ) {
     fail(
-      `${FAMILY_CANDIDATE_SET}: portable-host-v3 coverage must leave exactly ` +
+      `${FAMILY_CANDIDATE_SET}: portable-host-v1beta1 coverage must leave exactly ` +
         `ObjectBucket unprobed (family=${familyKinds.length}, ` +
         `unprobed=${unprobedKinds.join(", ") || "none"})`,
     );
@@ -1537,13 +1543,13 @@ function checkConformanceCorpusCounts() {
   ];
   if (schemaCoverageClaims.length === 0) {
     fail(
-      "conformance/README.md: portable-host-v3 Form schema coverage count is not stated",
+      "conformance/README.md: portable-host-v1beta1 Form schema coverage count is not stated",
     );
   } else {
     for (const match of schemaCoverageClaims) {
       if (Number(match[1]) !== drivenKinds.length) {
         fail(
-          `conformance/README.md: portable-host-v3 schema coverage is written as ${match[1]}, ` +
+          `conformance/README.md: portable-host-v1beta1 schema coverage is written as ${match[1]}, ` +
             `but the runner drives ${drivenKinds.length} Forms`,
         );
       }
@@ -1555,7 +1561,7 @@ function checkConformanceCorpusCounts() {
     )
   ) {
     fail(
-      "conformance/README.md: portable-host-v3 must state the intentional ObjectBucket coverage exception",
+      "conformance/README.md: portable-host-v1beta1 must state the intentional ObjectBucket coverage exception",
     );
   }
 }
