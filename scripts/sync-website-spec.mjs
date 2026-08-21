@@ -240,6 +240,7 @@ const staticDirectories = [
     (file) =>
       (file === "public-schema-identities.json" ||
         file === "provider-form-identities.json" ||
+        file === "published-document-lanes.json" ||
         file.startsWith("migrations/")) &&
       !file.endsWith(".md"),
   ],

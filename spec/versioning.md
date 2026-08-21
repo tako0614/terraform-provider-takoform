@@ -16,6 +16,66 @@ defined in [`project-lifecycle.md`](project-lifecycle.md).
 | Interface / Binding contract | Exact ref plus schema digest       | Immutable operation-surface and typed-capability contracts referenced by Forms             |
 | Provider     | Provider SemVer                                 | Terraform/OpenTofu protocol, typed surface, persisted state, and host-client compatibility |
 
+### A name is absolute or it rots
+
+The axes above are independent by design, so their numbers disagree, and a
+reader who expects them to agree cannot tell which axis a `v1beta1` or a `v3`
+belongs to. What separates a version word that stays true from one that goes
+quietly false is not the axis, though. It is whether the name is **absolute**
+or **relative**.
+
+An **absolute** name states which thing it names: `forms.takoform.com/v1beta1`
+means that lane and no other, on the day it was written and afterwards. A
+**relative** name states a position — `current`, or the Nth of a sequence — and
+is true only until the thing it points at moves. Nothing announces the move, so
+a relative name has to be rewritten by hand, and the rewrite is what gets
+missed.
+
+It has been missed. When the current lane became `forms.takoform.com/v1beta1`
+the absolute names were minted correctly — [`host-api/v1beta1.md`](host-api/v1beta1.md)
+beside the retained [`host-api/v1alpha3.md`](host-api/v1alpha3.md) — while
+`conformance/portable-host-v3`, named for its place in a sequence, was rewritten
+in place instead. One published address then answered about a different contract
+than it had answered about the day before, which the retention rule of
+[decision 0035](decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)
+forbids. The corpus now lives at `conformance/portable-host-v1beta1`, named for
+its lane; `conformance/portable-host-v3` holds the v1alpha3 bytes again; and two
+checks in `bun run check` refuse both the symptom and the cause.
+
+So: **a new artifact whose name carries a version word names the lane it
+describes, never its place in a sequence.** Already-published relative names are
+retained history and stay as they are — the rule binds what is minted next.
+
+### `current` is not one word
+
+Two things in this repository are called current, and they are two generations
+apart:
+
+- the **current Host API lane and Form family**, `forms.takoform.com/v1beta1`
+  and `edge.forms.takoform.com/v1beta1`, carried by published provider `v2.1.1`;
+- the **retained central Form epoch**, `forms.takoform.com/v1alpha2`, which is
+  what `formpackage.CurrentFormAPIVersion`, `forms/lifecycle.json`'s
+  `currentEpoch`, and `internal/currentform*` mean. `forms/lifecycle.schema.json`
+  pins that value as a `const` and `internal/standardforms` enforces it, so it
+  is deliberate rather than stale — but the word does not say so.
+
+When a document or an identifier says current, it is naming one of these two,
+and which one is decided by what pins it, not by which is newer.
+
+### What freezes each value
+
+An axis says what a number means; it does not say whether the number may move.
+That is decided by what has already published it.
+
+| Value | Frozen by |
+| --- | --- |
+| Lane `forms.takoform.com/v1beta1`, family `edge.forms.takoform.com/v1beta1`, the 15 exact FormRefs and their digests | Registry-published provider `v2.1.1`, recorded append-only in [`../release/provider-form-identities.json`](../release/provider-form-identities.json) |
+| Every `spec/schemas/` filename and `$id` | [`../release/public-schema-identities.json`](../release/public-schema-identities.json), enforced append-only across the whole committed history of that ledger |
+| `packages.forms.takoform.com/v1alpha4` | it is inside published schema bytes |
+| The lane each published document declares | [`../release/published-document-lanes.json`](../release/published-document-lanes.json) |
+| `forms.takoform.com/v1alpha1`, `/v1alpha2`, `/v1alpha3`, `edge.forms.takoform.com/v1alpha1`, and every published package byte | retained history |
+| Internal package, directory, and script names | nothing; they are free to be made absolute |
+
 Since [decision 0009](decisions/0009-form-families-and-namespaced-api-versions.md)
 the FormRef group is a namespaced DNS-like identifier. Official families use
 subdomains of `forms.takoform.com` (the first is
