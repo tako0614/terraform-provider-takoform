@@ -395,7 +395,7 @@ description: |-
 
 The configured host selects and operates the concrete backend. This resource
 carries desired state only: it never names a target, a credential, a price, or
-an implementation. See the [complete example](../../examples/resources/%s/resource.tf).
+an implementation. See the [complete example](https://takoform.com/examples/resources/%s/resource.tf).
 
 ## Arguments
 

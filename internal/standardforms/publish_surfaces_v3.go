@@ -263,7 +263,7 @@ description: |-
 		"later. Provider v2.1.1 is Registry-published; release/version.json retains\n" +
 		"candidate-only descriptor metadata after owner publication. The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
-		"price, or implementation. See the [complete example](../../examples/resources/" +
+		"price, or implementation. See the [complete example](https://takoform.com/examples/resources/" +
 		form.ResourceType + "/resource.tf).\n")
 	builder.WriteString("\n## Arguments\n\n")
 	builder.WriteString(v3NameArgumentDoc(form))
