@@ -15,7 +15,7 @@ This Experimental Form speaks the Host API v1beta1 lane and requires provider v2
 later. Provider v2.1.1 is Registry-published; release/version.json retains
 candidate-only descriptor metadata after owner publication. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
-price, or implementation. See the [complete example](../../examples/resources/takoform_worker_endpoint/resource.tf).
+price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_worker_endpoint/resource.tf).
 
 ## Arguments
 
