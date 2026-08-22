@@ -1439,7 +1439,6 @@ function checkHandWrittenInventories(retainedForms, familyRoster) {
 const RETAINED_GENERATION_NAMED_CORPORA = new Map([
   ["portable-host-v1", "forms.takoform.com/v1alpha1"],
   ["portable-host-v2", "forms.takoform.com/v1alpha2"],
-  ["portable-host-v3", "forms.takoform.com/v1alpha3"],
 ]);
 
 function checkCorpusNamesStateTheirLane() {
@@ -1514,12 +1513,6 @@ function checkConformanceCorpusCounts() {
       pattern: /(\d+) required checks/g,
       corpus: "conformance/runtime-abi-v1/contract.json",
       field: ["requiredChecks"],
-    },
-    {
-      label: "the retained v1alpha3 check matrix size",
-      pattern: /(\d+) retained v1alpha3 checks/g,
-      corpus: "conformance/portable-host-v3/contract.json",
-      field: ["requiredRunnerChecks"],
     },
   ];
 

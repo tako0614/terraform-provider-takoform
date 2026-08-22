@@ -76,16 +76,34 @@ each is enforced rather than described:
 
 ## Enforcement
 
-`release/published-document-lanes.json` and `release/public-schema-identities.json`
-each gain a `retired` list, and their checks gain the three refusals above.
-`scripts/deploy.mjs` passes the retired set into
-`enforceAppendOnlyPublicSchemaIdentities` at both call sites, so the full-history
-append-only walk admits a recorded withdrawal and nothing else.
+Both ledgers accept a `retired` list and refuse the three things above. The
+lists are not symmetric in use and the difference is worth stating: withdrawals
+have so far been recorded only in `release/published-document-lanes.json`;
+`release/public-schema-identities.json` carries the capability and, so far,
+no entries.
 
-Both were driven backwards before being trusted: an unrecorded removal fails, a
-`--write` that would forget an address fails and names it, a recorded withdrawal
-passes, a withdrawn address that is published again fails, a withdrawal under
-different bytes fails, and an identity listed as both served and retired fails.
+For a served document, `scripts/published-document-lanes.mjs --check` walks the
+ledger's own committed history and requires every address it ever recorded to be
+served under the lane it declared or withdrawn under that same lane. Vanishing
+is neither, which is what makes a hand edit to both the tree and the ledger
+fail rather than pass silently. Where Git is unavailable the check says so
+rather than reporting a walk it did not perform.
+
+For a schema identity, `scripts/deploy.mjs` passes the retired set into
+`enforceAppendOnlyPublicSchemaIdentities` at both call sites, so the
+full-history append-only walk admits a recorded withdrawal and nothing else —
+and, separately, fetches each withdrawn URL. Unreachable passes and so does an
+address still answering the bytes it published; only a `200` carrying something
+NEW fails. A withdrawn address is allowed to go quiet and allowed to keep its
+word, never to say something else under a name a reader kept.
+
+Every refusal was driven backwards before being trusted: an unrecorded removal,
+a hand erasure of both tree and ledger, a `--write` that would forget an
+address, a withdrawn address published again, a withdrawal under different
+bytes, an identity listed as both served and retired, and a deployed ledger
+holding an identity the candidate withdrew — which, before this decision was
+carried into the publication guard, made the first retirement impossible to
+deploy at all.
 
 [Decision 0036](0036-artifact-names-state-the-lane-they-describe.md) is
 unaffected. It governs what a name says, not how long the thing it names is
@@ -93,9 +111,11 @@ served, and the corpus-naming gate it added still applies to whatever remains.
 
 ## Consequences
 
-Retiring the pre-Stable generations becomes possible, which is the point: the
-project can carry one live generation instead of four, and "which one is
-current" stops being a question a reader has to answer by inference.
+Retiring the pre-Stable generations becomes possible, which is the point. It is
+a capability and not yet a result: `forms.takoform.com/v1alpha1`, `/v1alpha2`
+and `/v1alpha3` all remain, and a reader still has more than one generation to
+hold. What has been withdrawn under this decision is the
+`edge.forms.takoform.com/v1alpha1` family and the host corpus that measured it.
 
 What this decision does not do is decide which generations go. It makes
 withdrawal expressible and auditable; each withdrawal is still its own reviewed

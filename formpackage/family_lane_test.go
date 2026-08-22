@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const testFamilyGroup = "edge.forms.takoform.com/v1alpha1"
+const testFamilyGroup = "edge.forms.takoform.com/v1beta1"
 
 func familyPortableMapKeys() map[string]any {
 	return map[string]any{

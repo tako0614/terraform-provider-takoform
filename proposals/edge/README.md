@@ -20,7 +20,7 @@ envelope owns identity and status
 ([decision 0011](../../spec/decisions/0011-resource-identity-generation-and-revision.md)).
 
 The catalog source of truth is `internal/edgeformcatalog`; the generated
-candidates live in `forms/candidates/edge/v1alpha1`, the exact Interface and
+candidates live in `forms/candidates/edge/v1beta1`, the exact Interface and
 Binding candidates in `interfaces/candidates/v1alpha1` and
 `bindings/candidates/v1alpha1`.
 
