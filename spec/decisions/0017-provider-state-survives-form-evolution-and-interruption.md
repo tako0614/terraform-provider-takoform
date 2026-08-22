@@ -56,7 +56,7 @@ a decision record.
 
 Provider state is bound to one EXACT Form identity and one host incarnation, and
 a refresh never silently changes either. The rules below are normative; the
-operative text lives in [`../host-api/v1alpha3.md`](../host-api/v1alpha3.md),
+operative text lives in `../host-api/v1alpha3.md`,
 [`../versioning.md`](../versioning.md), and the generated provider resource
 documents.
 

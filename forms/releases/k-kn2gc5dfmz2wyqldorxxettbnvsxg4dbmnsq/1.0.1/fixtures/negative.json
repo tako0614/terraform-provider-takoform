@@ -1,6 +1,0 @@
-{
-  "className": "not a class",
-  "migrationTag": "v1",
-  "name": "rooms",
-  "storageProfile": "durable_sqlite"
-}

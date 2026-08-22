@@ -108,66 +108,75 @@ type SequenceEvidence struct {
 }
 
 // Run drives every authoring scenario against one CLI and returns the
-// evidence.
+// evidence. It builds the provider from source; RunWithProvider drives the
+// same scenarios with an exact already-built binary.
 func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
+	return RunWithProvider(ctx, repoRoot, cliPath, "")
+}
+
+// RunWithProvider is Run against an explicit provider binary. An empty path
+// builds from source, which is the ordinary pre-publication gate; a release
+// workflow passes the exact final artifact so the evidence is about the bytes
+// being published rather than a fresh build of the same commit.
+func RunWithProvider(ctx context.Context, repoRoot, cliPath, providerBinary string) (Report, error) {
 	report := Report{Format: ReportFormat}
 
-	deadlock, identity, err := runSameNameDeadlock(ctx, repoRoot, cliPath)
+	deadlock, identity, err := runSameNameDeadlock(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
 	report.CLI = identity
 	report.SameNameDeadlock = deadlock
 
-	refusal, err := runPinnedNamePlanRefusal(ctx, repoRoot, cliPath)
+	refusal, err := runPinnedNamePlanRefusal(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
 	report.PlanRefusal = refusal
 
-	rollForward, err := runRollForward(ctx, repoRoot, cliPath)
+	rollForward, err := runRollForward(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
 	report.RollForward = rollForward
 
-	moduleDeploy, err := runModuleDeploy(ctx, repoRoot, cliPath)
+	moduleDeploy, err := runModuleDeploy(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
 	report.ModuleDeploy = moduleDeploy
 
-	moduleDestroy, err := runModuleDestroy(ctx, repoRoot, cliPath)
+	moduleDestroy, err := runModuleDestroy(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
 	report.ModuleDestroy = moduleDestroy
 
-	twoOwners, err := runTwoOwners(ctx, repoRoot, cliPath)
+	twoOwners, err := runTwoOwners(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
 	report.TwoOwners = twoOwners
 
-	vars, err := runHeterogeneousVars(ctx, repoRoot, cliPath)
+	vars, err := runHeterogeneousVars(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
 	report.HeterogeneousVars = vars
 
-	shortest, err := runShortestName(ctx, repoRoot, cliPath)
+	shortest, err := runShortestName(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
 	report.ShortestModuleName = shortest
 
-	support, err := runHostSupportAtPlan(ctx, repoRoot, cliPath)
+	support, err := runHostSupportAtPlan(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
 	report.HostSupport = support
 
-	configurations, err := runConfigurationValidation(ctx, repoRoot, cliPath)
+	configurations, err := runConfigurationValidation(ctx, repoRoot, cliPath, providerBinary)
 	if err != nil {
 		return Report{}, err
 	}
@@ -184,8 +193,8 @@ func Run(ctx context.Context, repoRoot, cliPath string) (Report, error) {
 // host, and it has to keep being measured against one. Both branches are
 // exercised on a live aggregate — a bundle a version executes, a version a
 // deployment weights — because that is the only state in which they arise.
-func runSameNameDeadlock(ctx context.Context, repoRoot, cliPath string) (DeadlockEvidence, CLIIdentity, error) {
-	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+func runSameNameDeadlock(ctx context.Context, repoRoot, cliPath, providerBinary string) (DeadlockEvidence, CLIIdentity, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
 	if err != nil {
 		return DeadlockEvidence{}, CLIIdentity{}, err
 	}
@@ -247,8 +256,8 @@ func runSameNameDeadlock(ctx context.Context, repoRoot, cliPath string) (Deadloc
 
 // runPinnedNamePlanRefusal proves the provider refuses the same-name
 // replacement at PLAN, before any apply order is chosen.
-func runPinnedNamePlanRefusal(ctx context.Context, repoRoot, cliPath string) (RefusalEvidence, error) {
-	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+func runPinnedNamePlanRefusal(ctx context.Context, repoRoot, cliPath, providerBinary string) (RefusalEvidence, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
 	if err != nil {
 		return RefusalEvidence{}, err
 	}
@@ -295,8 +304,8 @@ func runPinnedNamePlanRefusal(ctx context.Context, repoRoot, cliPath string) (Re
 
 // runRollForward proves the whole sequence a code change must drive, against
 // the raw resources with derived names.
-func runRollForward(ctx context.Context, repoRoot, cliPath string) (SequenceEvidence, error) {
-	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+func runRollForward(ctx context.Context, repoRoot, cliPath, providerBinary string) (SequenceEvidence, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
 	if err != nil {
 		return SequenceEvidence{}, err
 	}
@@ -316,8 +325,8 @@ func runRollForward(ctx context.Context, repoRoot, cliPath string) (SequenceEvid
 // runModuleDeploy drives the official module end to end, including the
 // host-assigned endpoint, and proves the same sequence plus the one guarantee
 // the endpoint adds: the address survives a code change.
-func runModuleDeploy(ctx context.Context, repoRoot, cliPath string) (SequenceEvidence, error) {
-	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+func runModuleDeploy(ctx context.Context, repoRoot, cliPath, providerBinary string) (SequenceEvidence, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
 	if err != nil {
 		return SequenceEvidence{}, err
 	}
@@ -384,8 +393,8 @@ func runModuleDeploy(ctx context.Context, repoRoot, cliPath string) (SequenceEvi
 // apart was a live aggregate rather than a half-built one. And the host's store
 // must be EMPTY afterwards — not "the names this configuration declared are
 // gone", which cannot see an orphan.
-func runModuleDestroy(ctx context.Context, repoRoot, cliPath string) (TeardownEvidence, error) {
-	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+func runModuleDestroy(ctx context.Context, repoRoot, cliPath, providerBinary string) (TeardownEvidence, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
 	if err != nil {
 		return TeardownEvidence{}, err
 	}
@@ -474,8 +483,8 @@ func storedAddresses(snapshot []portableconformancev3.ResourceAddress) []string 
 // The delete is the half that matters. Under a shared name it is refused,
 // because the peer's version still holds the bundle, or it succeeds and takes
 // the peer's revision with it.
-func runTwoOwners(ctx context.Context, repoRoot, cliPath string) (OwnershipEvidence, error) {
-	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+func runTwoOwners(ctx context.Context, repoRoot, cliPath, providerBinary string) (OwnershipEvidence, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
 	if err != nil {
 		return OwnershipEvidence{}, err
 	}
@@ -598,8 +607,8 @@ func assertDistinct(kind string, names []string) error {
 // boolean and `3` as a JSON number. A module input typed as a collection with
 // one inferred element type cannot carry that: the values unify — usually to
 // strings — before anything encodes them.
-func runHeterogeneousVars(ctx context.Context, repoRoot, cliPath string) (VarsEvidence, error) {
-	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+func runHeterogeneousVars(ctx context.Context, repoRoot, cliPath, providerBinary string) (VarsEvidence, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
 	if err != nil {
 		return VarsEvidence{}, err
 	}
@@ -683,8 +692,8 @@ func jsonTypeName(value any) string {
 // `^[a-z][a-z0-9-]{0,62}$` admits a single letter. A module that demands a
 // second terminal character rejects a name `takoform_module_worker` accepts,
 // and sends the author back to the raw resources for no reason at all.
-func runShortestName(ctx context.Context, repoRoot, cliPath string) (string, error) {
-	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+func runShortestName(ctx context.Context, repoRoot, cliPath, providerBinary string) (string, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
 	if err != nil {
 		return "", err
 	}
@@ -890,8 +899,9 @@ func (h *harness) startReadinessSamplerFor(ctx context.Context, name string) (fu
 // one an author used to discover only at apply. The KV-only worker must plan
 // clean; adding a bucket binding must be refused at plan, naming the code, with
 // nothing mutated.
-func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath string) (RefusalEvidence, error) {
+func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath, providerBinary string) (RefusalEvidence, error) {
 	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{
+		providerBinary:   providerBinary,
 		unsupportedKinds: []string{"ObjectBucket", "SQLiteDatabase", "AtLeastOnceQueue"},
 	})
 	if err != nil {
@@ -938,8 +948,8 @@ func runHostSupportAtPlan(ctx context.Context, repoRoot, cliPath string) (Refusa
 // runConfigurationValidation runs the CLI's own configuration check over the
 // official module and every example, in a scratch copy so the repository tree
 // stays clean.
-func runConfigurationValidation(ctx context.Context, repoRoot, cliPath string) ([]string, error) {
-	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{})
+func runConfigurationValidation(ctx context.Context, repoRoot, cliPath, providerBinary string) ([]string, error) {
+	h, err := startHarness(ctx, repoRoot, cliPath, harnessOptions{providerBinary: providerBinary})
 	if err != nil {
 		return nil, err
 	}

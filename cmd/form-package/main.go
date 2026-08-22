@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
@@ -84,19 +83,6 @@ func run(arguments []string) error {
 			return err
 		}
 		return writeJSON(checkpoint)
-	case "conformance":
-		if len(arguments) > 2 {
-			return usageError()
-		}
-		root := filepath.FromSlash("conformance/form-package-v1")
-		if len(arguments) == 2 {
-			root = arguments[1]
-		}
-		report, err := formpackage.VerifyConformance(root)
-		if err != nil {
-			return err
-		}
-		return writeJSON(report)
 	default:
 		return usageError()
 	}
@@ -110,5 +96,5 @@ func writeJSON(value any) error {
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: form-package verify DIR | canonicalize FILE | digest FILE | validate-revocation FILE | validate-revocation-checkpoint FILE | conformance [CORPUS_DIR]")
+	return fmt.Errorf("usage: form-package verify DIR | canonicalize FILE | digest FILE | validate-revocation FILE | validate-revocation-checkpoint FILE")
 }

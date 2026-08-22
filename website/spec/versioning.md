@@ -10,7 +10,7 @@ defined in [`project-lifecycle.md`](project-lifecycle.md).
 | Concern      | Identifier                                      | Meaning                                                                                    |
 | ------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | Host API     | API group such as current `forms.takoform.com/v1beta1` | Protocol envelope, discovery, and lifecycle compatibility                              |
-| Form group   | DNS-like API group inside an exact `FormRef`    | Namespace boundary between Form Families and retained epochs; versioned per family          |
+| Form group   | DNS-like API group inside an exact `FormRef`    | Namespace boundary between Form Families and withdrawn epochs; versioned per family         |
 | Form         | SemVer inside an exact `FormRef`                | Compatibility of one portable desired-state contract within its group                      |
 | Form Package | Exact package identity plus content digest      | Immutable distribution of one exact Form and its fixtures                                  |
 | Interface / Binding contract | Exact ref plus schema digest       | Immutable operation-surface and typed-capability contracts referenced by Forms             |
@@ -33,7 +33,7 @@ missed.
 
 It has been missed. When the current lane became `forms.takoform.com/v1beta1`
 the absolute names were minted correctly — [`host-api/v1beta1.md`](host-api/v1beta1.md)
-beside the retained [`host-api/v1alpha3.md`](host-api/v1alpha3.md) — while
+beside the then-retained `host-api/v1alpha3.md` — while
 `conformance/portable-host-v3`, named for its place in a sequence, was rewritten
 in place instead. One published address then answered about a different contract
 than it had answered about the day before, which the retention rule of
@@ -42,27 +42,25 @@ forbids. The corpus now lives at `conformance/portable-host-v1beta1`, named for
 its lane, and two checks in `bun run check` refuse both the symptom and the
 cause. The v1alpha3 corpus was restored to its own address first and then
 withdrawn with the family it measured
-([decision 0037](decisions/0037-immutability-begins-at-stable.md)).
+([decision 0037](decisions/0037-immutability-begins-at-stable.md)), and both
+pre-Beta epochs later followed it out
+([decision 0042](decisions/0042-the-pre-beta-epochs-are-withdrawn.md)).
 
 So: **a new artifact whose name carries a version word names the lane it
 describes, never its place in a sequence.** Already-published relative names are
 retained history and stay as they are — the rule binds what is minted next.
 
-### `current` is not one word
+### `current` is one word again
 
-Two things in this repository are called current, and they are two generations
-apart:
-
-- the **current Host API lane and Form family**, `forms.takoform.com/v1beta1`
-  and `edge.forms.takoform.com/v1beta1`, carried by published provider `v2.1.1`;
-- the **retained central Form epoch**, `forms.takoform.com/v1alpha2`, which is
-  what `formpackage.CurrentFormAPIVersion`, `forms/lifecycle.json`'s
-  `currentEpoch`, and `internal/currentform*` mean. `forms/lifecycle.schema.json`
-  pins that value as a `const` and `internal/standardforms` enforces it, so it
-  is deliberate rather than stale — but the word does not say so.
-
-When a document or an identifier says current, it is naming one of these two,
-and which one is decided by what pins it, not by which is newer.
+Two things in this repository used to be called current, two generations
+apart: the current Beta lane, and the retained central Form epoch
+(`forms.takoform.com/v1alpha2`) that `formpackage.CurrentFormAPIVersion` and
+the `internal/currentform*` packages meant. The withdrawal of the pre-Beta
+epochs ([decision 0042](decisions/0042-the-pre-beta-epochs-are-withdrawn.md))
+removed the second referent: current now names the
+`forms.takoform.com/v1beta1` lane, the `edge.forms.takoform.com/v1beta1`
+family, and nothing else. A future generation move re-creates the ambiguity
+only if a new name reuses the word instead of stating its lane.
 
 ### What freezes each value
 
@@ -75,27 +73,24 @@ That is decided by what has already published it.
 | Every `spec/schemas/` filename and `$id` | [`../release/public-schema-identities.json`](../release/public-schema-identities.json), enforced append-only across the whole committed history of that ledger |
 | `packages.forms.takoform.com/v1alpha4` | it is inside published schema bytes |
 | The lane each published document declares | [`../release/published-document-lanes.json`](../release/published-document-lanes.json) |
-| `forms.takoform.com/v1alpha1`, `/v1alpha2`, `/v1alpha3`, and every published package byte | retained history |
-| `edge.forms.takoform.com/v1alpha1` and the `forms.takoform.com/v1alpha3` host corpus | **withdrawn** under [decision 0037](decisions/0037-immutability-begins-at-stable.md); recorded in [`../release/published-document-lanes.json`](../release/published-document-lanes.json) |
+| `forms.takoform.com/v1alpha1`, `/v1alpha2`, `/v1alpha3`, `edge.forms.takoform.com/v1alpha1`, their schemas, corpora, and served documents | **withdrawn** under [decisions 0037](decisions/0037-immutability-begins-at-stable.md)/[0042](decisions/0042-the-pre-beta-epochs-are-withdrawn.md); recorded as retired in [`../release/published-document-lanes.json`](../release/published-document-lanes.json) and [`../release/public-schema-identities.json`](../release/public-schema-identities.json), bytes in git history and release tags |
 | Internal package, directory, and script names | nothing; they are free to be made absolute |
 
 Since [decision 0009](decisions/0009-form-families-and-namespaced-api-versions.md)
 the FormRef group is a namespaced DNS-like identifier. Official families use
 subdomains of `forms.takoform.com` (the first is
 `edge.forms.takoform.com/v1beta1`); third-party groups are valid FormRefs
-under their own domains. `forms.takoform.com/v1alpha1` (Legacy) and
-`forms.takoform.com/v1alpha2` (retained provider-v2 preview) are frozen
-groups; new families never reuse them. Each family group versions
-independently.
+under their own domains. The withdrawn `forms.takoform.com/v1alpha1` and
+`forms.takoform.com/v1alpha2` groups are retired identities; new families
+never reuse them. Each family group versions independently.
 
 Host Support, Form Activation, and Service Offering records refer to exact
 identities but are not version streams. Updating one of those facts MUST NOT
 change a Form or provider version.
 
 Current family packages use the `packages.forms.takoform.com/v1alpha4`
-envelope, which carries namespaced FormRef groups; the
-`packages.forms.takoform.com/v1alpha3` envelope remains the retained
-provider-v2 candidate profile.
+envelope, which carries namespaced FormRef groups; the three earlier envelope
+identities are retired with their epochs.
 
 **The envelope is a manifest format, not a version axis**
 ([decision 0040](decisions/0040-the-package-envelope-is-a-format-not-an-axis.md)).
@@ -116,11 +111,11 @@ in [`../release/provider-form-identities.json`](../release/provider-form-identit
 The identity stays content-addressed and provider-free, because a third-party
 publisher — which the Stable criteria require — publishes under its own cadence. Content-addressed packages have no independent
 SemVer. Their exact package digest produces the publication artifact ID
-`sha256-<hex>` and therefore the source path and tag. Existing v1alpha1
-`packageVersion` values and the published content-addressed v1alpha2 package
-profile remain immutable Legacy identities; tooling MUST preserve and verify
-their paths, tags, signatures, and bytes without interpreting a package profile
-as Form maturity. The content-addressed locator decision is recorded in
+`sha256-<hex>` and therefore the source path and tag. The withdrawn epochs'
+`packageVersion` values and package profiles are retired identities; their
+bytes stay in git history and `forms/*` release tags, where the `formpackage`
+verifier still verifies paths, tags, signatures, and bytes without
+interpreting a package profile as Form maturity. The content-addressed locator decision is recorded in
 [`decisions/0005`](decisions/0005-current-form-packages-use-content-addressed-locators.md),
 the v1alpha3 envelope required by the Form epoch reset is recorded in
 [`decisions/0006`](decisions/0006-v1alpha2-restarts-form-lines.md), and the
@@ -314,10 +309,12 @@ whose public version is already `1.x` or later MUST NOT be renumbered to `0.x`
 or presented as Stable merely because its number is greater than zero.
 
 The Forms and admission documents published before decision
-[`0004`](decisions/0004-takoform-is-an-experimental-specification.md) are a
-Legacy line. Their original version numbers and document fields remain intact;
-current lifecycle projections describe them as Legacy without changing the
-published definitions.
+[`0004`](decisions/0004-takoform-is-an-experimental-specification.md) were a
+Legacy line, since withdrawn with its epoch
+([decision 0042](decisions/0042-the-pre-beta-epochs-are-withdrawn.md)). Their
+original version numbers and document fields remain intact in git history and
+release tags; nothing reinterprets or renumbers them, and their identities are
+never reused.
 
 ## Form and package identity
 
@@ -343,12 +340,11 @@ UID/generation/revision identity, long-running Operations, content-addressed
 artifact upload, and Host Support Profiles
 ([decision 0035](decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
 
-The `forms.takoform.com/v1alpha2` wire remains the retained provider-v2 lane
-at `/.well-known/takoform/v1alpha2`, and the frozen
-`forms.takoform.com/v1alpha1` Host API and Form epoch remain a closed
-provider-v1 compatibility lane at `/.well-known/takoform`. The v1alpha3
-schema, operation, documentation, and public-mirror identities are retained
-unchanged history. Each lane has its own discovery path and API base; a Host
+The three pre-Beta wires — `forms.takoform.com/v1alpha1` at the unversioned
+`/.well-known/takoform`, `/v1alpha2` at `/.well-known/takoform/v1alpha2`, and
+the `/v1alpha3` identities the Beta lane carried forward — are withdrawn
+retired identities ([decision 0042](decisions/0042-the-pre-beta-epochs-are-withdrawn.md)).
+Each lane has its own discovery path and API base; a Host
 wire version never implies Form maturity. Breaking protocol changes require a
 new Host API group identity, starting with `v1beta2` for a breaking Beta fix.
 
@@ -387,7 +383,7 @@ future graduation decision requires, at minimum:
 
 1. two independently operated hosts exercising the same lifecycle semantics;
 2. a documented compatibility window with no breaking operation change;
-3. end-to-end materialization of each retained optional interface surface;
+3. end-to-end materialization of each optional surface the lane declares;
 4. cross-publisher package installation and lifecycle evidence;
 5. a real deprecation/removal exercise and production consumption of the
    revocation chain.

@@ -249,7 +249,7 @@ func TestIncarnationKeyComposition(t *testing.T) {
 	otherKind := ref
 	otherKind.Kind = "EdgeKVNamespace"
 	otherGroup := ref
-	otherGroup.APIVersion = "data.forms.takoform.com/v1alpha1"
+	otherGroup.APIVersion = "data.forms.takoform.com/v9"
 	for component, form := range map[string]FormRef{"kind": otherKind, "group": otherGroup} {
 		if incarnationKey("delete", form, "queue", "prod", "uid-1", "1", "") == base {
 			t.Errorf("a different Form %s must derive a different Idempotency-Key", component)

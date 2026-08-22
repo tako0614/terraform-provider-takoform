@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "SQLDatabase/main",
-  "kind": "SQLDatabase",
-  "name": "main",
-  "portability": "portable"
-}

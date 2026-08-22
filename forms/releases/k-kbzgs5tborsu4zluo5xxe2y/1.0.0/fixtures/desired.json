@@ -1,5 +1,0 @@
-{
-  "addressSpace": "10.32.0.0/16",
-  "name": "private-network",
-  "publicEgress": false
-}

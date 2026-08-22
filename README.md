@@ -33,115 +33,64 @@ by `bun run sync:current-generation`, and 12 publication obligations in
 
 <!-- current-generation:end -->
 
-## What is published and what remains independent
+## One epoch, three published provider lines
 
-Provider publication, contract channel, Form maturity, and package publication
-are independent facts. Everything below names each fact explicitly.
+The specification carries **one epoch**: the Beta Host API lane
+`forms.takoform.com/v1beta1`, the Edge Platform Family
+`edge.forms.takoform.com/v1beta1`
+([spec/form-families.md](spec/form-families.md)), and the
+`packages.forms.takoform.com/v1alpha4` package envelope. The family is exactly
+15 Forms: `ModuleWorker`, `WorkerBundle`, `StaticAssetBundle`, `WorkerVersion`,
+`WorkerDeployment`, `WorkerCustomDomain`, `WorkerEndpoint`, `WorkerCronTrigger`,
+`EdgeKVNamespace`, `ObjectBucket`, `SQLiteDatabase`, `SQLiteMigrationSet`,
+`SQLiteMigrationApplication`, `AtLeastOnceQueue`, and `QueueConsumer`, with
+exact Interface and typed Binding contracts under
+`interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha1`. All 15
+definitions are `0.1.0` and Experimental; their package artifacts remain
+unpublished. Experimental is Form maturity, not package-publication or Host-GA
+status ([decision 0035](spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
 
-| Tier | What it is | How you get it |
-| --- | --- | --- |
-| **Current published provider** | Provider `v2.1.1`, carrying the Beta Host API `forms.takoform.com/v1beta1` and 15 exact Experimental Forms in `edge.forms.takoform.com/v1beta1` | installed from the Terraform Registry |
-| **Published compatibility predecessor** | Provider `v2.0.0` and the retained nine `forms.takoform.com/v1alpha2` resources | installed from the Terraform Registry with an exact compatibility pin |
-| **Published Legacy** | Provider `v1.0.3` and the frozen `forms.takoform.com/v1alpha1` state line | installed from the Terraform Registry for recovery and migration |
+The two pre-Beta epochs — Legacy `forms.takoform.com/v1alpha1` with its 34
+published package identities, and the provider-v2 `forms.takoform.com/v1alpha2`
+epoch with its nine retained candidates — were **withdrawn** while Takoform is
+pre-Stable ([decision
+0042](spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.md)). Their
+identities are recorded as retired in
+[`release/published-document-lanes.json`](release/published-document-lanes.json)
+and [`release/public-schema-identities.json`](release/public-schema-identities.json)
+so no address can quietly come back meaning something else, and their bytes
+stay in this repository's git history and release tags, where the
+[`formpackage`](formpackage/) verifier still verifies them.
 
-Registry readback proves the immutable `v2.1.1` provider publication. The
-stable `v2.1.1` release target's `release/version.json` descriptor intentionally
-remains `candidate-only` metadata after owner publication; that value is not
-live availability state and does not make the published SemVer a prerelease.
-Its 15 embedded Beta FormRefs and definition/package digests are locked as
-provider compatibility identities in
-[`release/provider-form-identities.json`](release/provider-form-identities.json).
-The open obligations in
+Provider SemVer is independent from both. One provider address exists,
+`registry.terraform.io/tako0614/takoform`, used identically by Terraform and
+OpenTofu, and three published releases on it are immutable Registry history:
+
+- Provider `v2.1.1` is the current published, Registry-verified provider. It
+  carries the Beta Host API lane and the exact 15 Experimental Edge Platform
+  Forms, plus the nine since-withdrawn v1alpha2 resources it was published
+  with. Its 15 embedded Beta FormRefs and definition/package digests are locked
+  in [`release/provider-form-identities.json`](release/provider-form-identities.json).
+- Provider `v2.0.0` is the published compatibility predecessor for the
+  withdrawn v1alpha2 epoch. Existing state can keep it exactly pinned.
+- Provider `v1.0.3` is published Legacy for the withdrawn v1alpha1 epoch, for
+  recovery and migration only.
+
+The provider **built from this repository** exposes only the 15 Family
+resources. Because the nine v1alpha2 resources are gone from it, the next
+published release MUST be a major, `3.0.0`; what existing users of the nine do
+is written down in [release/migrations/v2-to-v3.md](release/migrations/v2-to-v3.md).
+The stable `v2.1.1` release target's `release/version.json` descriptor
+intentionally remains `candidate-only` metadata after owner publication; that
+value is not live availability state and the owner's release flow assigns the
+next version when a release is actually cut. Registry readback proves the
+immutable `v2.1.1` publication. The open obligations in
 [`spec/publication-blockers.json`](spec/publication-blockers.json) still block
-Form Package or public-service publication and remain later Stable/GA
-qualification obligations; provider publication does not grant Form maturity,
-Host Support, activation, or Cloud availability. The scoped policy is
-[`spec/publication-freeze.md`](spec/publication-freeze.md).
+Form Package or public-service publication; provider publication does not grant
+Form maturity, Host Support, activation, or Cloud availability. The scoped
+policy is [`spec/publication-freeze.md`](spec/publication-freeze.md).
 
-The specification has three explicit lanes:
-
-- `forms.takoform.com/v1alpha1` is the frozen **Legacy Epoch**. Its 34 published
-  Form Package identities are immutable Legacy evidence. There is no current
-  central approval or admission derived from that history.
-- `forms.takoform.com/v1alpha2` is the retained **provider-v2 epoch**. Its nine
-  Proposal-derived, unpublished `0.1.0` candidates (`EdgeWorker`,
-  `RelationalDatabase`, `ObjectBucket`, `KeyValueStore`, `Queue`, `Schedule`,
-  `ContainerService`, `StatefulEntity`, `VectorIndex`) remain reproducible
-  provider-v2 preview source. They are superseded for new design work.
-- Current design work happens in namespaced **Form Families**
-  ([spec/form-families.md](spec/form-families.md)). The first family is the
-  Edge Platform Family, `edge.forms.takoform.com/v1beta1`: `ModuleWorker`,
-  `WorkerBundle`, `StaticAssetBundle`, `WorkerVersion`, `WorkerDeployment`,
-  `WorkerCustomDomain`, `WorkerEndpoint`, `WorkerCronTrigger`,
-  `EdgeKVNamespace`, `ObjectBucket`, `SQLiteDatabase`, `SQLiteMigrationSet`,
-  `SQLiteMigrationApplication`, `AtLeastOnceQueue`, and `QueueConsumer`, with exact
-  Interface and typed Binding contracts under
-  `interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha1`.
-  All 15 definitions are `0.1.0` and Experimental. Their package artifacts
-  remain unpublished; Experimental is Form maturity, not package-publication or
-  Host-GA status
-  ([decision 0035](spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
-
-Retained v1alpha2 package envelopes use `packages.forms.takoform.com/v1alpha3`
-because a published v1alpha2 package schema already refers to Legacy FormRefs;
-family packages use `packages.forms.takoform.com/v1alpha4`. Published
-v1alpha1/v1alpha2/v1alpha3 package bytes and all v1alpha3 Host API identities
-remain unchanged.
-
-Host transport follows the same explicit split. Provider v1 uses the frozen
-`/.well-known/takoform` and `/apis/forms.takoform.com/v1alpha1` lane. Provider
-v2 uses `/.well-known/takoform/v1alpha2` and
-`/apis/forms.takoform.com/v1alpha2`. The retained v1alpha3 identities remain
-available as immutable history. The current Beta lane carried by provider
-v2.1.1 uses `/.well-known/takoform/v1beta1` and
-`/apis/forms.takoform.com/v1beta1` with
-UID/generation/revision identity, long-running operations, and
-content-addressed artifact upload; one discovery response never points two
-client generations at an ambiguous API base.
-
-## Provider lines
-
-There is one provider address:
-`registry.terraform.io/tako0614/takoform`. Provider SemVer is independent from
-Form definition versions and the Form API epoch.
-
-Terraform and OpenTofu use one provider source and state identity. The
-published v2 line and Legacy v1 are both
-published at the canonical Terraform Registry address; installation is
-verified through CLI rather than inferred
-from repository files. `release/version.json` is release-descriptor metadata,
-while the signed release, immutable tag identity, and Registry listing
-establish publication.
-
-- Provider `v1.0.3` is published and Registry-verified. It is the Legacy
-  `v1alpha1` client. Existing Legacy state must pin provider v1.
-- Provider `v2.0.0` is the published, Registry-verified compatibility
-  predecessor for the retained `v1alpha2` client. It exposes exactly the
-  retained nine Form candidates, which are superseded for new design work.
-- Provider `v2.1.1` is the current published, Registry-verified provider for
-  the Beta Host API and the exact 15 Experimental Edge Platform Forms. Its
-  descriptor remains `candidate-only` metadata by design; publication does not
-  promote the Host API or Forms, publish their packages, or establish a hosted
-  service ([decision 0035](spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
-  A future `1.0.0` Form line is a new exact identity: refresh never silently
-  rewrites Beta state or its codec to that identity.
-- Provider v2 fails closed on provider-v1 state. Migration is an explicit
-  create/import operation, not an automatic state rewrite.
-
-Published Legacy usage:
-
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 1.0.3"
-    }
-  }
-}
-```
-
-Current published-provider configuration:
+## Using the published provider
 
 ```hcl
 terraform {
@@ -161,6 +110,13 @@ provider "takoform" {
 
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
+
+Host transport is the Beta lane only: discovery at
+`/.well-known/takoform/v1beta1` and the API base
+`/apis/forms.takoform.com/v1beta1`, with UID/generation/revision identity,
+long-running operations, and content-addressed artifact upload
+([`spec/host-api/v1beta1.md`](spec/host-api/v1beta1.md)). One discovery
+response never points two client generations at an ambiguous API base.
 
 ### Run it against a host on your machine
 
@@ -199,37 +155,12 @@ develop against; measuring a real one is what
 [`spec/publication-blockers.json`](spec/publication-blockers.json) is still open
 about.
 
-The published `v2.0.0` compatibility predecessor remains available for the
-retained v1alpha2 lane:
+## What a host owns
 
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
-    }
-  }
-}
-```
-
-## Retained v1alpha2 Forms and host responsibility
-
-The retained provider-v2 inventory is generated from the exact nine-candidate
-manifest:
-
-- [Form inventory](forms/README.md)
-- [Provider reference](docs/index.md)
-- [Candidate packages](forms/candidates/v1alpha2/)
-- [Lifecycle authority](forms/lifecycle.json)
-- [Epoch decision](spec/decisions/0006-v1alpha2-restarts-form-lines.md)
-
-Provider v2.0.0 retains the nine typed resource schemas as a compatibility
-predecessor. Using them requires a
-compatible host that independently advertises exact support and availability;
-this repository does not own or assert any hosted service's live catalog. Host
-evidence, when recorded, does not grant Takoform maturity, publication, or
-approval authority.
+Using the provider requires a compatible host that independently advertises
+exact support and availability; this repository does not own or assert any
+hosted service's live catalog. Host evidence, when recorded, does not grant
+Takoform maturity, publication, or approval authority.
 
 The provider contains no target-pool, backend, credential, price, quota,
 billing, or activation resources. A host owns exact Form support, activation,
@@ -237,23 +168,17 @@ placement, credentials, and commercial policy. Provider state retains only the
 exact FormRef/package identity, portable desired fields, generation fences,
 and schema-validated public output.
 
-## Legacy recovery
+The generated inventories:
 
-The previous 34 provider resources, signed Form Package releases, historical
-admission sets, and public provider releases are retained byte-for-byte. They
-are compatibility and recovery material, not the current catalog. New Legacy
-create should be disabled by default by hosts; read, observe, refresh, delete,
-recovery, and explicit migration remain supported lanes.
-
-See [provider v1 to v2 migration](release/migrations/v1-to-v2.md) and the
-[retained publication evidence](admission/v4/README.md).
+- [Form inventory](forms/README.md)
+- [Provider reference](docs/index.md)
+- [Candidate set](forms/candidates/edge/v1beta1/candidate-set.json)
 
 ## Development
 
 ```console
-bun run check:current-form-candidates
 go test ./...
-go run ./cmd/provider-lifecycle-conformance matrix --opentofu tofu --terraform terraform
+go run ./cmd/worker-authoring-conformance matrix --opentofu tofu --terraform terraform
 go run ./cmd/standard-form-conformance verify
 bun run check
 ```

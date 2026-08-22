@@ -2,13 +2,10 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -18,60 +15,12 @@ import (
 
 	frameworkdatasource "github.com/hashicorp/terraform-plugin-framework/datasource"
 	frameworkprovider "github.com/hashicorp/terraform-plugin-framework/provider"
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/client"
-	"github.com/tako0614/terraform-provider-takoform/internal/currentformcatalog"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
-
-func discoveryHandler(t *testing.T, serviceForms bool) http.HandlerFunc {
-	t.Helper()
-	return versionedDiscoveryHandler(t, client.APIVersion, serviceForms)
-}
-
-// versionedDiscoveryHandler serves the only discovery document a conforming
-// host may serve: a versioned same-origin API base plus the required feature
-// set. There is no unversioned capability document to fall back to.
-func versionedDiscoveryHandler(t *testing.T, discoveryVersion string, serviceForms bool) http.HandlerFunc {
-	t.Helper()
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/.well-known/takoform/v1beta1" {
-			// Configure probes both Host API lanes; a v2-only host answers the
-			// v1beta1 probe with a plain 404 and the provider records the
-			// per-lane error instead of failing.
-			http.NotFound(w, r)
-			return
-		}
-		if r.URL.Path != "/.well-known/takoform/v1alpha2" {
-			t.Errorf("unexpected path %q", r.URL.Path)
-			http.NotFound(w, r)
-			return
-		}
-		origin := "http://" + r.Host
-		body := map[string]any{
-			"api_versions": []string{discoveryVersion},
-			"features": map[string]bool{
-				"service_forms":          serviceForms,
-				"exact_form_ref":         true,
-				"optimistic_concurrency": true,
-				"idempotent_lifecycle":   true,
-			},
-			"endpoints": map[string]string{
-				"api":   origin + "/apis/forms.takoform.com/v1alpha2",
-				"forms": origin + "/apis/forms.takoform.com/v1alpha2/forms",
-			},
-		}
-		raw, _ := json.Marshal(body)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(raw)
-	}
-}
 
 func TestProviderResourcesIncludeCurrentServiceForms(t *testing.T) {
 	got := providerResourceTypeNames(t)
@@ -132,71 +81,12 @@ func TestProviderExposesNoHostAuthorityResources(t *testing.T) {
 			}
 		}
 	}
-	if !reflect.DeepEqual(dataSourceNames, []string{"takoform_interface"}) {
-		t.Fatalf("data sources = %v, want only the read-only declaration surface", dataSourceNames)
-	}
-}
-
-func TestInterfaceDataSourceIsReadOnlyAndVersionExact(t *testing.T) {
-	var schemaResponse frameworkdatasource.SchemaResponse
-	NewInterfaceDataSource().Schema(context.Background(), frameworkdatasource.SchemaRequest{}, &schemaResponse)
-	for name, attribute := range schemaResponse.Schema.Attributes {
-		switch name {
-		case "name", "space":
-			if !attribute.IsRequired() && !attribute.IsOptional() {
-				t.Errorf("%s must be a selector", name)
-			}
-		case "version", "resource_kind", "resource_name":
-			if !attribute.IsOptional() || !attribute.IsComputed() {
-				t.Errorf("%s must be an optional exact selector and a computed identity result", name)
-			}
-		default:
-			if !attribute.IsComputed() || attribute.IsRequired() || attribute.IsOptional() {
-				t.Errorf("%s must be computed-only", name)
-			}
-		}
-	}
-	for _, forbidden := range []string{
-		"binding", "permission", "grant", "token", "credential", "secret",
-		"policy", "target", "price", "billing", "quota",
-	} {
-		if _, ok := schemaResponse.Schema.Attributes[forbidden]; ok {
-			t.Errorf("declaration read exposes forbidden attribute %s", forbidden)
-		}
-	}
-}
-
-func TestInterfaceDataSourceRejectsUnknownIdentityAndScopeBeforeRead(t *testing.T) {
-	base := interfaceDataSourceModel{
-		Name: types.StringValue("mcp.server"), Space: types.StringNull(), Version: types.StringNull(),
-		ResourceKind: types.StringNull(), ResourceName: types.StringNull(),
-	}
-	tests := []struct {
-		name   string
-		mutate func(*interfaceDataSourceModel)
-	}{
-		{name: "name", mutate: func(value *interfaceDataSourceModel) { value.Name = types.StringUnknown() }},
-		{name: "space", mutate: func(value *interfaceDataSourceModel) { value.Space = types.StringUnknown() }},
-		{name: "version", mutate: func(value *interfaceDataSourceModel) { value.Version = types.StringUnknown() }},
-		{name: "resource_kind", mutate: func(value *interfaceDataSourceModel) { value.ResourceKind = types.StringUnknown() }},
-		{name: "resource_name", mutate: func(value *interfaceDataSourceModel) { value.ResourceName = types.StringUnknown() }},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			value := base
-			test.mutate(&value)
-			if got := unknownInterfaceReadField(value); got != test.name {
-				t.Fatalf("unknown field = %q, want %q", got, test.name)
-			}
-		})
+	if len(dataSourceNames) != 0 {
+		t.Fatalf("data sources = %v, want none; the takoform_interface data source was withdrawn with the v1alpha2 lane", dataSourceNames)
 	}
 }
 
 func TestProviderStateExcludesBackendCredentialAndPriceAuthority(t *testing.T) {
-	v2Types := map[string]struct{}{}
-	for _, kind := range currentformcatalog.Kinds {
-		v2Types[kind.ResourceType] = struct{}{}
-	}
 	for _, factory := range (&takoformProvider{}).Resources(context.Background()) {
 		candidate := factory()
 		var metadata frameworkresource.MetadataResponse
@@ -208,125 +98,14 @@ func TestProviderStateExcludesBackendCredentialAndPriceAuthority(t *testing.T) {
 				t.Errorf("%s exposes forbidden provider-state attribute %s", metadata.TypeName, forbidden)
 			}
 		}
-		if _, isV2 := v2Types[metadata.TypeName]; !isV2 {
-			// The Host API v1beta1 lane splits the single resource_version
-			// into the generation/revision fence pair and starts fresh state
-			// (no v2 schema-version guard applies).
-			for _, fence := range []string{"uid", "generation", "revision"} {
-				if _, ok := schemaResponse.Schema.Attributes[fence]; !ok {
-					t.Errorf("%s omits the v1beta1 %s identity attribute", metadata.TypeName, fence)
-				}
-			}
-			continue
-		}
-		if _, ok := schemaResponse.Schema.Attributes["resource_version"]; !ok {
-			t.Errorf("%s omits the optimistic-concurrency fence", metadata.TypeName)
-		}
-		if schemaResponse.Schema.Version != 1 {
-			t.Errorf("%s schema version = %d, want fail-closed provider-v1 state version 1", metadata.TypeName, schemaResponse.Schema.Version)
-		}
-		stateGuard, ok := candidate.(frameworkresource.ResourceWithUpgradeState)
-		if !ok {
-			t.Errorf("%s omits the diagnostic-only version-zero state guard", metadata.TypeName)
-		} else if upgraders := stateGuard.UpgradeState(context.Background()); len(upgraders) != 1 {
-			t.Errorf("%s version-zero state guard count = %d, want 1", metadata.TypeName, len(upgraders))
-		} else if _, ok := upgraders[0]; !ok {
-			t.Errorf("%s omits the version-zero state guard", metadata.TypeName)
-		}
-		for _, name := range []string{
-			"form_api_version",
-			"form_kind",
-			"form_definition_version",
-			"form_schema_digest",
-			"form_package_digest",
-		} {
-			attribute, ok := schemaResponse.Schema.Attributes[name]
-			if !ok {
-				t.Errorf("%s omits exact state identity attribute %s", metadata.TypeName, name)
-				continue
-			}
-			if !attribute.IsComputed() || attribute.IsOptional() || attribute.IsRequired() {
-				t.Errorf("%s attribute %s must be computed-only", metadata.TypeName, name)
+		// The Host API v1beta1 lane splits the single resource_version into
+		// the generation/revision fence pair; every resource carries the full
+		// identity triple.
+		for _, fence := range []string{"uid", "generation", "revision"} {
+			if _, ok := schemaResponse.Schema.Attributes[fence]; !ok {
+				t.Errorf("%s omits the v1beta1 %s identity attribute", metadata.TypeName, fence)
 			}
 		}
-	}
-}
-
-func TestProtocolRejectsVersionZeroFormStateWithoutRunningAnUpgrader(t *testing.T) {
-	server := providerserver.NewProtocol6(New("1.0.0")())()
-	response, err := server.UpgradeResourceState(context.Background(), &tfprotov6.UpgradeResourceStateRequest{
-		TypeName: "takoform_object_bucket",
-		Version:  0,
-		RawState: &tfprotov6.RawState{JSON: []byte(`{
-			"name":"legacy",
-			"space":"prod",
-			"storage_class":"standard"
-		}`)},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if response.UpgradedState != nil {
-		t.Fatal("provider fabricated upgraded v0.2.1 state")
-	}
-	for _, diagnostic := range response.Diagnostics {
-		if diagnostic.Summary == "Provider v2 requires explicit Form migration" &&
-			strings.Contains(diagnostic.Detail, "State was not modified and no Resource lifecycle request was made") &&
-			strings.Contains(diagnostic.Detail, "Pin the exact historical provider") &&
-			strings.Contains(diagnostic.Detail, "create/import") {
-			return
-		}
-	}
-	t.Fatalf("protocol did not reject schema-version-0 state: %#v", response.Diagnostics)
-}
-
-func TestConfigureClientUsesOnlyTheAdvertisedVersionedEndpoint(t *testing.T) {
-	var server *httptest.Server
-	unversionedRequests := 0
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/.well-known/takoform/v1alpha2":
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"api_versions": []string{client.APIVersion},
-				"features":     map[string]bool{"service_forms": true, "exact_form_ref": true, "optimistic_concurrency": true, "idempotent_lifecycle": true},
-				"endpoints": map[string]string{
-					"api":   server.URL + "/apis/forms.takoform.com/v1alpha2",
-					"forms": server.URL + "/apis/forms.takoform.com/v1alpha2/forms",
-				},
-			})
-		default:
-			if strings.HasPrefix(r.URL.Path, "/v1/") {
-				unversionedRequests++
-			}
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	if _, err := configureClient(context.Background(), server.URL, "token", server.Client()); err != nil {
-		t.Fatal(err)
-	}
-	if unversionedRequests != 0 {
-		t.Fatalf("provider configuration touched %d unversioned endpoints", unversionedRequests)
-	}
-}
-
-// TestConfigureClientRejectsHostsWithoutAVersionedEndpoint proves the provider
-// fails closed instead of downgrading to an unversioned Resource API.
-func TestConfigureClientRejectsHostsWithoutAVersionedEndpoint(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/takoform/v1alpha2" {
-			http.NotFound(w, r)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"api_versions": []string{"forms.takoform.com/v1alpha1"},
-			"features":     map[string]bool{"service_forms": true},
-			"endpoints":    map[string]string{},
-		})
-	}))
-	defer server.Close()
-	if _, err := configureClient(context.Background(), server.URL, "token", server.Client()); err == nil {
-		t.Fatal("expected a fail-closed configuration error")
 	}
 }
 
@@ -356,13 +135,13 @@ func TestProviderConfigureRejectsUnknownAuthorityConfigurationBeforeEnvironmentF
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Configure negotiates both lanes CONCURRENTLY (spec/decisions/0018),
-			// so the two discovery requests arrive on different goroutines.
+			// Configuration authority is decided before any lane negotiates, so
+			// the endpoint only has to exist; a 404 leaves the lane error
+			// recorded rather than fatal.
 			var requests atomic.Int64
-			handler := discoveryHandler(t, true)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests.Add(1)
-				handler(w, r)
+				http.NotFound(w, r)
 			}))
 			defer server.Close()
 
@@ -447,7 +226,7 @@ func TestResourceAPIHTTPClientDoesNotForwardBearerThroughRedirect(t *testing.T) 
 	}))
 	defer redirector.Close()
 
-	_, err := configureClient(context.Background(), redirector.URL, "must-not-forward", newResourceAPIHTTPClient())
+	_, err := configureClientV3(context.Background(), redirector.URL, "must-not-forward", newResourceAPIHTTPClient())
 	if err == nil {
 		t.Fatal("redirected discovery unexpectedly configured the provider")
 	}
@@ -514,13 +293,7 @@ func TestPublishedHCLUsesFullyQualifiedProviderAddress(t *testing.T) {
 }
 
 func currentProviderResourceTypeNames() []string {
-	names := make([]string, 0, len(currentformcatalog.Kinds)+len(edgeformcatalog.Forms))
-	for _, kind := range currentformcatalog.Kinds {
-		names = append(names, kind.ResourceType)
-	}
-	names = append(names, v3ProviderResourceTypeNames()...)
-	sort.Strings(names)
-	return names
+	return v3ProviderResourceTypeNames()
 }
 
 // v3ProviderResourceTypeNames is the Host API v1beta1 lane: exactly the typed
@@ -550,61 +323,6 @@ func providerResourceTypeNames(t *testing.T) []string {
 	}
 	sort.Strings(got)
 	return got
-}
-
-func TestConfigureClient_AcceptsServiceForms(t *testing.T) {
-	srv := httptest.NewServer(discoveryHandler(t, true))
-	defer srv.Close()
-
-	c, err := configureClient(context.Background(), srv.URL, "tok", srv.Client())
-	if err != nil {
-		t.Fatalf("configureClient: %v", err)
-	}
-	if c == nil {
-		t.Fatalf("expected a client")
-	}
-}
-
-func TestConfigureClient_RejectsWhenServiceFormsFalse(t *testing.T) {
-	srv := httptest.NewServer(discoveryHandler(t, false))
-	defer srv.Close()
-
-	_, err := configureClient(context.Background(), srv.URL, "", srv.Client())
-	if err == nil {
-		t.Fatalf("expected configuration to fail when service_forms is false")
-	}
-	if !strings.Contains(err.Error(), "features.service_forms") {
-		t.Fatalf("expected a clear Service Form API diagnostic, got: %v", err)
-	}
-}
-
-func TestConfigureClient_RejectsUnsupportedDiscoveryVersion(t *testing.T) {
-	srv := httptest.NewServer(versionedDiscoveryHandler(t, "forms.takoform.com/v0", true))
-	defer srv.Close()
-
-	_, err := configureClient(context.Background(), srv.URL, "", srv.Client())
-	if err == nil {
-		t.Fatalf("expected configuration to fail on unsupported discovery api version")
-	}
-	if !strings.Contains(err.Error(), "must advertise only API version") {
-		t.Fatalf("expected api version diagnostic, got: %v", err)
-	}
-}
-
-func TestConfigureClient_DiscoveryError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = io.WriteString(w, `{"error":{"code":"boom","message":"down"}}`)
-	}))
-	defer srv.Close()
-
-	_, err := configureClient(context.Background(), srv.URL, "", srv.Client())
-	if err == nil {
-		t.Fatalf("expected discovery error")
-	}
-	if !strings.Contains(err.Error(), "discovering Takoform endpoint") {
-		t.Fatalf("expected discovery-wrapped error, got: %v", err)
-	}
 }
 
 func TestFirstNonEmpty(t *testing.T) {

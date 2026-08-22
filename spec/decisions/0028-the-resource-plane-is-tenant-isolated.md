@@ -177,7 +177,7 @@ representation, or conflicted with and overwrote foreign state. So the
 enumeration axis is the surface: every route of the lane that takes a resource
 name is listed against the check measuring its boundary, and that list is bound
 by tests to the published route block of
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md), to the reference host's
+`../host-api/v1alpha3.md`, to the reference host's
 router, and to the required-check list. A name-addressed endpoint cannot be
 added to this lane without a tenant check, which is a stronger guarantee than
 remembering to think of one.
@@ -202,7 +202,7 @@ remembering to think of one.
   it to the published route block, one to the enumeration, and one binds the
   enumeration to the required-check list.
 - Two obligations stay unproven by the lane and are stated as such in
-  [`../host-api/v1alpha3.md`](../host-api/v1alpha3.md): that the tenant is in the
+  `../host-api/v1alpha3.md`: that the tenant is in the
   address rather than in a late filter, and that an unscoped derived-rendering
   pass would cross the tenant. Neither is reachable black box — the second
   because relation resolution refuses to build the case. Both are held by

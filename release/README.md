@@ -6,8 +6,13 @@ does not inherit a Takosumi package or release version.
 The provider-specific trust lane is pinned by the release trust profile
 (internal decision identifier D-08) in
 [`../spec/trust/`](../spec/trust/). Form Packages use a separate keyless trust
-lane and never reuse this provider GPG key. Its release and revocation delivery
-boundary is documented in [`form-packages.md`](form-packages.md).
+lane and never reuse this provider GPG key; its pinned Sigstore trust root
+lives at [`trust/trusted-root.json`](trust/trusted-root.json). Since
+[decision 0041](../spec/decisions/0041-form-packages-publish-with-the-provider-release.md)
+Form Packages have no independent release cadence — they publish with the
+provider release that embeds them, when the publication blockers clear — and
+only the revocation delivery lane remains a standing workflow
+(`.github/workflows/form-package-revocation.yml`).
 
 The repository can build deterministic, unsigned candidate evidence:
 
@@ -71,8 +76,8 @@ Registry readback closure for current provider releases as canonical base64.
 The closure binds the provider release commit, readback tooling commit,
 Terraform and OpenTofu direct installs, one provider binary digest, the
 workflow certificate identity, transparency-log proof, and original checksum
-manifest. `scripts/publication-truth.mjs` reconstructs and validates those
-exact bytes before public documentation can call the current provider
+manifest. The site derivation (`website/.vitepress/site-status.mjs`) reads the
+retained readback entries when deriving what public documentation may call
 Registry-published. This distribution evidence grants no Form maturity, Host
 Support, activation, placement, or commercial authority.
 
@@ -137,26 +142,19 @@ and per-resource cutover procedure is
 the machine-readable
 [`migration audit`](migrations/v0.2.1-to-v1.0.1.json).
 
-This is the first stable provider compatibility line, not a claim that any Form
-epoch graduated. The `forms.takoform.com/v1alpha1` Form epoch is now frozen
-Legacy; the retained provider-v2 epoch uses `forms.takoform.com/v1alpha2`
-inside `packages.forms.takoform.com/v1alpha3` after an individual lifecycle
-transition, and is superseded for new design work by the namespaced Form
-Families lane. The retained nine are still unpublished candidates. The outer
-Host API wire independently
-uses `forms.takoform.com/v1alpha2` behind `/.well-known/takoform/v1alpha2` for
-provider v2. The frozen provider-v1 lane retains
-`forms.takoform.com/v1alpha1` behind `/.well-known/takoform`; one discovery
-document never advertises both epochs. Provider and Form Definition versions
-remain independent; current Form Package artifacts are content-addressed while
-retained Legacy package locators preserve their published identities.
-Admission generations are a separate historical evidence stream. Published
-`EdgeWorker@1.0.0` and
-`EdgeWorker@1.0.1` identities cannot be reset, so the provider-neutral
-definition uses the independent `EdgeWorker@3.0.0` identity. The intermediate
-`2.0.0` release source remains unmodified; tightening its artifact URL grammar
-required a new Form major. The exact contract is in
-[`../spec/versioning.md`](../spec/versioning.md).
+This is the first stable provider compatibility line, not a claim that any
+Form epoch graduated. The `forms.takoform.com/v1alpha1` and
+`forms.takoform.com/v1alpha2` Form epochs those early releases carried were
+later withdrawn while Takoform is pre-Stable
+([decision 0042](../spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.md));
+published provider releases that speak them remain immutable Registry history,
+and their identities are recorded as retired in
+[`published-document-lanes.json`](published-document-lanes.json). Provider and
+Form Definition versions remain independent; current Form Package artifacts
+are content-addressed. Published `EdgeWorker@1.0.0` and `EdgeWorker@1.0.1`
+identities cannot be reset, which is why the withdrawn provider-neutral
+definition used the independent `EdgeWorker@3.0.0` identity. The exact
+contract is in [`../spec/versioning.md`](../spec/versioning.md).
 
 Every candidate contains:
 
@@ -220,74 +218,32 @@ binary, checksums, SBOM, provenance, and signatures does not change any Form's
 lifecycle state, install a Form Package, establish Host Support, or grant host
 activation authority. Provider SemVer has no admission-generation coupling.
 
-The normal `matrix` command intentionally uses a locally built provider binary
-through `dev_overrides`; it is a pre-publication regression gate and is not
-Registry evidence. After the first authorized publication, capture the
-post-publication readback with:
-
-```console
-go run ./cmd/provider-lifecycle-conformance render-registry-matrix \
-  --opentofu tofu --terraform terraform \
-  > /tmp/provider-lifecycle-matrix.json
-go run ./cmd/provider-registry-readback \
-  --matrix /tmp/provider-lifecycle-matrix.json \
-  --provider-release-commit "$(git rev-list -n 1 "$(jq -r .tag release/version.json)")" \
-  --output /tmp/provider-readback.json
-```
-
-During Terraform Registry propagation, a maintainer can diagnose one exact CLI
-execution without weakening the dual-CLI matrix gate:
-
-```console
-go run ./cmd/provider-lifecycle-conformance render-registry-report \
-  --cli /absolute/path/to/terraform
-go run ./cmd/provider-lifecycle-conformance render-registry-report \
-  --cli /absolute/path/to/tofu
-```
-
-Each command still performs the complete provider lifecycle through
-`direct {}` and validates the resulting report, but the single-CLI report is
-non-publishable diagnostic evidence. Only `render-registry-matrix` proves that
-both reviewed CLIs install the canonical FQN and expose identical bytes,
-schema, and lifecycle.
-
-The matrix mode pins the exact descriptor version in generated configuration,
-runs `init` with only `direct {}`, locates and hashes the downloaded provider
-binary, and repeats the complete lifecycle. Its report carries
-`installationSource: direct-registry-install`; the historical readback validator rejects
-otherwise-valid matrices carrying `local-dev-override`. The matrix is still
-not self-authenticating: it becomes usable only when an externally signed,
-canonical `takoform.provider-registry-readback@v1` document binds its digest,
-installed binary/schema digests, CLI/FQN identities, provider tag, and source
-commit.
+The normal `matrix` command of `cmd/worker-authoring-conformance`
+intentionally uses a locally built provider binary through `dev_overrides`; it
+is a pre-publication regression gate and is not Registry evidence. The signed
+direct-install Registry readback lane that captured post-publication evidence
+for `v2.1.1` was retired with the withdrawn epochs' tooling
+([decision 0042](../spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.md));
+its six-file signed closure for `v2.1.1` is retained in
+`release/provider-release-identities.json` and remains the publication
+evidence for that release. The next release (`3.0.0`, per
+[`migrations/v2-to-v3.md`](migrations/v2-to-v3.md)) must bring its own
+readback lane matched to the 15-resource surface before its publication can be
+called Registry-verified; a matrix or local report is never
+self-authenticating.
 
 ## Historical admission evidence
 
 Takoform no longer has a central candidate set, admission assembly workflow,
-admission publisher, or set-wide promotion lane. The provider Registry
-readback and the all-34 provider reports remain useful compatibility evidence,
-but they do not vote on Form maturity and are not inputs to a current central
-approval process.
-
-Published admission identities are a closed historical namespace. Versions
-`1.0.1`, `1.0.2`, `1.0.3`, `1.0.4`, `1.0.6`, and `1.0.7` are pinned by exact annotated
-tag object, commit, retained tree, and set digest in
-[`../admission/admission-identities.json`](../admission/admission-identities.json).
-Version `1.0.5` is permanently `reserved-abandoned`. No new admission checkpoint
-is assigned.
-
-The history-only gates are:
-
-```console
-go run ./cmd/standard-form-conformance legacy-published-package-check
-go run ./cmd/standard-form-conformance legacy-admission-evidence-check
-```
-
-They prove the immutable Legacy publication inventory and historical Git
-identity ledger. They do not rerun old `portable-standard` assertions as
-current conformance, support, availability, or activation claims. Provider
-versions remain independent of Form versions and of these retired historical
-identities.
+admission publisher, or set-wide promotion lane, and the retained admission
+evidence trees were withdrawn with the Legacy epoch
+([decision 0042](../spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.md)).
+The admission identity ledger, the 34-package release inventory, and the
+history-only verification subcommands that walked them are readable in this
+repository's git history; the [`formpackage`](../formpackage/) verifier keeps
+every epoch's schemas so bytes retained in history and `forms/*` release tags
+stay verifiable. Nothing derives current approval, maturity, or conformance
+from that history.
 
 The provider build tool never signs, uploads, creates a GitHub Release, or
 publishes to a Registry/mirror. The only operator entrypoint is the repository
@@ -426,34 +382,10 @@ exact Release readback and download, and one final pinned signed-tag check
 before reporting `VERIFIED`.
 
 After the immutable GitHub Release exists and the public Registry has indexed
-it, dispatch the signed direct-install readback and then verify that exact run:
-
-For the ordinary lane, protected `main` may still equal the signed tag's peeled
-commit. After an exact recovery, `--expected-commit` is instead the current
-reviewed protected-main source/tooling commit `F`. The immutable provider
-release provenance and provider commit remain the tag's peeled commit `E`.
-The readback workflow and local verifier require `E` to be an ancestor of `F`
-and preserve those two bindings separately; they never relabel the released
-provider bytes as having been built from `F`.
-
-```console
-bun run deploy -- takoform-provider-release readback \
-  --tag <descriptor-tag-from-release/version.json> \
-  --expected-commit <current-reviewed-protected-main-source-commit>
-
-bun run deploy -- takoform-provider-release verify \
-  --tag <descriptor-tag-from-release/version.json> \
-  --expected-commit <same-current-reviewed-protected-main-source-commit> \
-  --run-id <registry-readback-workflow-run-id> \
-  --run-attempt <registry-readback-workflow-attempt>
-```
-
-The readback workflow installs the exact public version directly through both
-OpenTofu and Terraform, requires one provider binary digest, signs the Registry
-readback, and emits the exact six-file candidate used by admission. The verify
-phase requires that workflow attempt to have completed successfully and closes
-the downloaded artifact inventory and checksums; it never republishes the
-provider.
+it, capturing signed direct-install readback evidence is a release obligation
+that the retired lane no longer fulfils; see the readback note above. The
+`v2.1.1` closure retained in `release/provider-release-identities.json` is the
+only readback evidence that exists.
 
 Repository configuration is part of the trust boundary, not a claim made by
 this tree. The workflow references the `provider-release` GitHub Environment,

@@ -44,16 +44,6 @@ const projections = [
     canonical: path.join(repositoryRoot, "docs", "resources", name),
     site: path.join(repositoryRoot, "website", "docs", "resources", name),
   })),
-  {
-    canonical: path.join(repositoryRoot, "docs", "data-sources", "interface.md"),
-    site: path.join(
-      repositoryRoot,
-      "website",
-      "docs",
-      "data-sources",
-      "interface.md",
-    ),
-  },
   ...resourceDocs.map((name) => ({
     canonical: path.join(
       repositoryRoot,
@@ -75,27 +65,9 @@ const projections = [
       "resource.tf",
     ),
   })),
-  {
-    canonical: path.join(
-      repositoryRoot,
-      "examples",
-      "data-sources",
-      "takoform_interface",
-      "data-source.tf",
-    ),
-    site: path.join(
-      repositoryRoot,
-      "website",
-      "static",
-      "examples",
-      "data-sources",
-      "takoform_interface",
-      "data-source.tf",
-    ),
-  },
 ];
 
-// The projection is a MIRROR, not an append: these four site trees hold
+// The projection is a MIRROR, not an append: these site trees hold
 // projected files and nothing else. Copying alone cannot express that, so a
 // canonical file that goes away — a resource document whose resource was
 // withdrawn, for example — would otherwise leave an orphan the site keeps

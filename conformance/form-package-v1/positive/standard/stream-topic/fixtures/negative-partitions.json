@@ -1,5 +1,0 @@
-{
-  "name": "stream-topic",
-  "partitions": 0,
-  "retentionHours": 24
-}

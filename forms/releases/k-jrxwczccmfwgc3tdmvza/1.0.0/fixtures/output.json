@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "LoadBalancer/load-balancer",
-  "kind": "LoadBalancer",
-  "name": "load-balancer",
-  "portability": "portable"
-}

@@ -1,7 +1,0 @@
-{
-  "authMethod": "not-a-declared-choice",
-  "name": "identity-client",
-  "redirectUris": [
-    "https://app.portable-conformance.invalid/callback"
-  ]
-}

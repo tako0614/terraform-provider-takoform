@@ -35,7 +35,6 @@ import {
   prepareSiteStatus,
   renderSiteStatusDocument,
 } from "../website/.vitepress/site-status.mjs";
-import { loadPublicationTruth } from "./publication-truth.mjs";
 
 export { SITE_STATUS_PUBLISHED_PATH, SITE_STATUS_REPOSITORY_PATH };
 
@@ -60,7 +59,7 @@ function readDocument(repositoryRoot, relativePath, failures) {
   }
 }
 
-function verifyOneCopy(document, relativePath, facts, truth, failures) {
+function verifyOneCopy(document, relativePath, facts, failures) {
   const actualFields = Object.keys(document);
   if (JSON.stringify(actualFields) !== JSON.stringify(SITE_STATUS_FIELDS)) {
     failures.push(
@@ -118,33 +117,16 @@ function verifyOneCopy(document, relativePath, facts, truth, failures) {
     );
   }
 
-  if (truth !== null) {
-    for (const field of ["providerPublished", "providerCurrent"]) {
-      if (document[field] !== truth.providerVersion) {
-        const label =
-          field === "providerCurrent"
-            ? `${field} (deprecated alias of providerPublished)`
-            : field;
-        failures.push(
-          `${relativePath}: ${label} = ${JSON.stringify(document[field])}, ` +
-            `but the retained Registry readback evidence names v${truth.providerVersion}`,
-        );
-      }
-    }
-  }
 }
 
 /**
  * verifySiteStatusDocument re-derives every published/preview fact and compares
  * it with both committed copies: the VitePress source under website/static and
  * the build output under website/public that the deploy uploads.
- *
- * `truth` is the evidence-derived publication truth when the caller already has
- * it; passing it confirms providerPublished (and its deprecated providerCurrent
- * alias) against the independently retained signed Registry readback. The
- * release descriptor may name a newer candidate-only provider release target.
+ * providerPublished (and its deprecated providerCurrent alias) derive from the
+ * append-only Registry-readback entries in release/provider-form-identities.json.
  */
-export function verifySiteStatusDocument(repositoryRoot, truth = null) {
+export function verifySiteStatusDocument(repositoryRoot) {
   const failures = [];
   const documents = SITE_STATUS_COPIES.map((relativePath) => ({
     document: readDocument(repositoryRoot, relativePath, failures),
@@ -165,7 +147,7 @@ export function verifySiteStatusDocument(repositoryRoot, truth = null) {
   }
 
   for (const { document, relativePath } of documents) {
-    verifyOneCopy(document, relativePath, facts, truth, failures);
+    verifyOneCopy(document, relativePath, facts, failures);
   }
 
   // The two copies must also be byte-identical: VitePress copies static/
@@ -204,10 +186,7 @@ function main() {
     return;
   }
 
-  const failures = verifySiteStatusDocument(
-    repositoryRoot,
-    loadPublicationTruth(repositoryRoot),
-  );
+  const failures = verifySiteStatusDocument(repositoryRoot);
   if (failures.length > 0) {
     for (const failure of failures) {
       process.stderr.write(`- ${failure}\n`);

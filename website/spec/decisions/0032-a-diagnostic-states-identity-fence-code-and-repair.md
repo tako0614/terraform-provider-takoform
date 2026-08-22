@@ -54,7 +54,7 @@ match the closed taxonomy is labelled protocol-invalid and offers no guessed
 remedy.
 
 The repair is per stable code and is complete: a test reads
-[`../host-api/operations-v1alpha3.json`](../host-api/operations-v1alpha3.json)
+`../host-api/operations-v1alpha3.json`
 and fails if any published code has no repair, or if the provider states a
 repair for a code that is not published. A diagnostic that names a fault and no
 next action is the shape this decision exists to remove.

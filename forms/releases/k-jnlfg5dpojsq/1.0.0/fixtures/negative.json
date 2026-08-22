@@ -1,4 +1,0 @@
-{
-  "consistency": "linearizable",
-  "name": "cache"
-}

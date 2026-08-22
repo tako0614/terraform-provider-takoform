@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "EmailSender/email-sender",
-  "kind": "EmailSender",
-  "name": "email-sender",
-  "portability": "portable"
-}

@@ -1,5 +1,0 @@
-{
-  "name": "analytics-dataset",
-  "partitionField": "eventDate",
-  "retentionDays": 0
-}

@@ -1,9 +1,0 @@
-{
-  "connections": {},
-  "healthCheckPath": "/healthz",
-  "idleTimeoutSeconds": 60,
-  "internal": false,
-  "listenPort": 443,
-  "name": "load-balancer",
-  "protocol": "https"
-}

@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "VectorIndex/vector-index",
-  "kind": "VectorIndex",
-  "name": "vector-index",
-  "portability": "portable"
-}

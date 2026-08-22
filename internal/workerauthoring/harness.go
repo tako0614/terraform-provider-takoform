@@ -16,6 +16,7 @@ package workerauthoring
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,6 +60,10 @@ type harness struct {
 
 // harnessOptions selects which Forms the disposable host answers support for.
 type harnessOptions struct {
+	// providerBinary, when non-empty, is an exact already-built provider the
+	// harness copies verbatim instead of building from source, so a release
+	// gate can measure the bytes it is about to publish.
+	providerBinary string
 	// unsupportedKinds are Form kinds the host still installs but declares no
 	// support profile for, so a plan-time capability check has something real
 	// to refuse.
@@ -104,7 +109,12 @@ func startHarness(ctx context.Context, repoRoot, cliPath string, options harness
 		return nil, err
 	}
 	binary := filepath.Join(binDir, "terraform-provider-takoform")
-	if output, err := buildProvider(ctx, repoRoot, version, binary); err != nil {
+	if options.providerBinary != "" {
+		if err := copyExecutable(options.providerBinary, binary); err != nil {
+			h.Close()
+			return nil, fmt.Errorf("copy explicit provider binary: %w", err)
+		}
+	} else if output, err := buildProvider(ctx, repoRoot, version, binary); err != nil {
 		h.Close()
 		return nil, fmt.Errorf("build provider binary: %w\n%s", err, output)
 	}
@@ -244,4 +254,23 @@ func runCommand(ctx context.Context, dir string, env []string, name string, args
 	}
 	output, err := command.CombinedOutput()
 	return string(output), err
+}
+
+// copyExecutable copies an exact provider binary into the harness bin
+// directory without reinterpreting a single byte.
+func copyExecutable(source, destination string) error {
+	bytes, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(destination, bytes, 0o755)
+}
+
+// fileSHA256 returns the canonical lowercase sha256: digest of one file.
+func fileSHA256(path string) (string, error) {
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(bytes)), nil
 }

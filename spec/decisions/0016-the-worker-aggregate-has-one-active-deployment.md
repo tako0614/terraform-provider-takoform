@@ -47,7 +47,7 @@ host semantics, so this repository's `AGENTS.md` requires a decision record.
 The **Worker aggregate** is one `ModuleWorker` incarnation together with the
 Worker Versions pinned to it, the one Worker Deployment that governs its
 traffic, and everything activated against it. The rules below are normative;
-the operative text lives in [`../host-api/v1alpha3.md`](../host-api/v1alpha3.md)
+the operative text lives in `../host-api/v1alpha3.md`
 and [`../form-families.md`](../form-families.md).
 
 1. **One active deployment per worker.** Creating or importing a

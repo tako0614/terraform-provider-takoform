@@ -8,8 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	"github.com/tako0614/terraform-provider-takoform/internal/formcatalog"
 )
 
 func TestMapKeysMatchAcceptsUnknownComputedValues(t *testing.T) {
@@ -26,7 +24,7 @@ func TestMapKeysMatchAcceptsUnknownComputedValues(t *testing.T) {
 	var response validator.MapResponse
 
 	MapKeysMatch(
-		formcatalog.PortableMapKeyPattern,
+		portableMapKeyPattern,
 		"configuration keys must use the portable map-key grammar",
 	).ValidateMap(context.Background(), request, &response)
 
@@ -48,7 +46,7 @@ func TestMapKeysMatchStillRejectsInvalidKeyWithUnknownValue(t *testing.T) {
 	var response validator.MapResponse
 
 	MapKeysMatch(
-		formcatalog.PortableMapKeyPattern,
+		portableMapKeyPattern,
 		"configuration keys must use the portable map-key grammar",
 	).ValidateMap(context.Background(), request, &response)
 

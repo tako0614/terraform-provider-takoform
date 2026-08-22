@@ -1,6 +1,0 @@
-{
-  "defaultTtlSeconds": 300,
-  "evictionPolicy": "not-a-declared-choice",
-  "name": "cache-cluster",
-  "sizeClass": "cache.small"
-}

@@ -1,7 +1,0 @@
-{
-  "accessProtocols": [
-    "s3_api"
-  ],
-  "storageClass": "standard",
-  "versioning": true
-}

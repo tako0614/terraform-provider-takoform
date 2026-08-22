@@ -14,17 +14,20 @@ preview や成熟度を意味しません。
 | Form definition       | **definition 0.1.0**                       | 現在の 15 個の Experimental Form が使う exact definition version です。                                                                                                        |
 | Form Package envelope | **`packages.forms.takoform.com/v1alpha4`** | provider や Host API とは独立した package/distribution schema identifier。package artifact は unpublished です。                                                               |
 
-Provider の配布状態は独立した軸です。**Provider 2.1.1** は現在の Registry
-readback client、**Provider 2.0.0** は retained compatibility surface の公開済み
-predecessor、**Provider 1.0.3** は既存 v1 state 用の公開済み Legacy client です。
+Provider の配布状態は独立した軸です。**Provider 2.1.1** が現在の Registry
+公開済み client です。**Provider 2.0.0** と **Provider 1.0.3** は撤回された
+pre-Beta epoch のための不変の Registry 履歴として残ります
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
+このリポジトリから次に公開される release は major の **3.0.0** です
+([v2 から v3 への移行境界](/release/migrations/v2-to-v3.html))。
 
 ## Published compatibility mapping
 
 | Client / distribution       | Host API          | Form と definition                                                    | 状態 / 用途                                                           |
 | --------------------------- | ----------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1、definition 0.1.0 の Experimental Form 15 個 | Registry 公開済みの current client。descriptor は設計上 `candidate-only` metadata。 |
-| Provider 2.0.0 distribution | Host API v1alpha2 | retained provider-v2 Form の既存 definition identity                  | Registry 公開済みの compatibility client。                            |
-| Provider 1.0.3 Legacy       | Host API v1alpha1 | 不変の v1 Form Package identity                                       | Registry 公開済みの migration / recovery client。                     |
+| Provider 2.0.0 distribution | Host API v1alpha2（撤回済み epoch） | 撤回された 9 個の v1alpha2 Form | 不変の Registry 履歴。exact pin のみ、後継なし。 |
+| Provider 1.0.3 Legacy       | Host API v1alpha1（撤回済み epoch） | 撤回された v1 Form Package identity | 不変の Registry 履歴。recovery / migration のみ。 |
 
 Host API v1beta1 は wire protocol、Edge Form Family v1beta1 はその上で動く
 Form の group です。definition 0.1.0 は Form の identity であり、Provider
@@ -67,54 +70,16 @@ terraform {
 repository descriptor は owner publication 後も設計上 `candidate-only`
 metadata として残ります。この metadata は Registry client の公開状態を変更しません。
 
-## Published compatibility / Migration / History
+## 撤回された epoch
 
-<details>
-<summary>保持される Provider 2.0.0 と Legacy Provider 1.0.3</summary>
-
-### Provider 2.0.0 / Host API v1alpha2 {#provider-2-0-0}
-
-既存の resource URL はそのまま利用できます。次の 9 リソースは現在の Edge Form
-Family ではなく、互換性のための履歴として保持されます。
-
-- [`takoform_edge_worker`](/docs/resources/edge_worker.html)
-- [`takoform_relational_database`](/docs/resources/relational_database.html)
-- [`takoform_object_bucket`](/docs/resources/object_bucket.html)
-- [`takoform_key_value_store`](/docs/resources/key_value_store.html)
-- [`takoform_queue`](/docs/resources/queue.html)
-- [`takoform_schedule`](/docs/resources/schedule.html)
-- [`takoform_container_service`](/docs/resources/container_service.html)
-- [`takoform_stateful_entity`](/docs/resources/stateful_entity.html)
-- [`takoform_vector_index`](/docs/resources/vector_index.html)
-- [Interface data source](/docs/data-sources/interface.html)
-
-Provider 2.0.0 は `/.well-known/takoform/v1alpha2` で exact な retained FormRef
-を discovery します。retained package index は
-`packages.forms.takoform.com/v1alpha3` であり、どちらの identity も現在の
-v1beta1 stack へ暗黙に置き換えません。
-
-### Provider 1.0.3 / Host API v1alpha1 {#provider-1-0-3}
-
-Provider 1.0.3 は不変の Legacy client です。既存 v1 state、refresh/delete/recovery、
-および v1 wire が必要な移行手順では pin してください。discovery 境界は
-`/.well-known/takoform/v1alpha1` で、公開済み v1 Form Package identity は履歴の
-証跡として残ります。
-
-### 移行
-
-移行は自動 state rewrite ではなく明示的に行います。
-
-1. Provider 1.0.3 を pin して Legacy resource を refresh する。
-2. secret ではない desired configuration と必要な public output を記録する。
-3. Provider 2.0.0 で exact な Host API v1alpha2 FormRef の下に create するか、
-   host conformance の証明がある場合だけ import する。
-4. consumer を切り替えて observe し、rollback が不要になってから Legacy を
-   delete する。
-
-[Provider 1 から 2 への migration guide](/release/migrations/v1-to-v2.html) も参照して
-ください。公開済み identity は不変です。互換性とは旧 URL と意味を保持することであり、
-v1beta1 に名前を変えることではありません。
-
-</details>
+pre-Beta の epoch とその文書は撤回されました
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
+撤回された resource ページはこのサイトに存在しません。identity は公開台帳に
+retired として記録され、バイト列は git 履歴と release tag に残ります。撤回
+された resource の既存利用者は exact pin（`= 2.0.0` / `= 2.1.1`、v1 state は
+`= 1.0.3`）を維持するか、
+[v2 から v3 への移行境界](/release/migrations/v2-to-v3.html) に従ってください。
+自動 migration はなく、9 resource のいずれかを state に残したまま撤回を越えて
+upgrade すると、lifecycle request の前に fail closed します。
 
 <StatusNote />

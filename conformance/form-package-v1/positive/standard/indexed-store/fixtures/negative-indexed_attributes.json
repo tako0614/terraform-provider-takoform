@@ -1,8 +1,0 @@
-{
-  "indexedAttributes": [
-    "not a token"
-  ],
-  "name": "indexed-store",
-  "partitionKey": "tenantId",
-  "sortKey": "createdAt"
-}

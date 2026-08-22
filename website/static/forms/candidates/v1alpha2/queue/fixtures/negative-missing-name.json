@@ -1,4 +1,0 @@
-{
-  "messageRetentionSeconds": 345600,
-  "ordering": "best_effort"
-}

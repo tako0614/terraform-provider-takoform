@@ -1,5 +1,0 @@
-{
-  "name": "analytics-dataset",
-  "partitionField": "not a token",
-  "retentionDays": 365
-}

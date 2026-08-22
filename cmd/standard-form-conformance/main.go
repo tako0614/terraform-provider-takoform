@@ -1,3 +1,9 @@
+// standard-form-conformance verifies and regenerates the catalog-derived
+// public surfaces of the Edge Platform Family: one reference document and one
+// example per Form, plus the Form inventory. The central-epoch subcommands
+// that used to live beside these — release plans, candidate publication,
+// legacy package and admission checks — were withdrawn with the pre-Beta
+// generations they verified (decision 0042).
 package main
 
 import (
@@ -8,44 +14,23 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 || (os.Args[1] != "verify" && os.Args[1] != "generate-current-surfaces" && os.Args[1] != "materializability-check" && os.Args[1] != "release-plan" && os.Args[1] != "current-release-plan" && os.Args[1] != "candidate-publication-check" && os.Args[1] != "published-package-check" && os.Args[1] != "retained-ga-core-v1-published-package-check" && os.Args[1] != "legacy-published-package-check" && os.Args[1] != "legacy-admission-evidence-check") {
-		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance verify|generate-current-surfaces|release-plan|current-release-plan|materializability-check|candidate-publication-check|published-package-check|retained-ga-core-v1-published-package-check|legacy-published-package-check|legacy-admission-evidence-check")
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: standard-form-conformance verify|generate-current-surfaces")
 		os.Exit(2)
 	}
 	var err error
-	if os.Args[1] == "verify" {
+	switch os.Args[1] {
+	case "verify":
 		err = standardforms.Verify(".")
-	} else if os.Args[1] == "generate-current-surfaces" {
+	case "generate-current-surfaces":
 		err = standardforms.GenerateCurrentPublishedSurfaces(".")
-	} else if os.Args[1] == "release-plan" {
-		var rendered string
-		rendered, err = standardforms.RenderReleasePlan(".")
-		if err == nil {
-			fmt.Print(rendered)
-		}
-	} else if os.Args[1] == "current-release-plan" {
-		var rendered string
-		rendered, err = standardforms.RenderCurrentReleasePlan(".")
-		if err == nil {
-			fmt.Print(rendered)
-			return
-		}
-	} else if os.Args[1] == "materializability-check" {
-		err = standardforms.VerifyMaterializableCandidate(".")
-	} else if os.Args[1] == "candidate-publication-check" {
-		err = standardforms.VerifyCandidatePublication(".")
-	} else if os.Args[1] == "published-package-check" {
-		err = standardforms.VerifyPublishedPackageSet(".")
-	} else if os.Args[1] == "retained-ga-core-v1-published-package-check" {
-		err = standardforms.VerifyRetainedGaCoreV1PublishedPackageSet(".")
-	} else if os.Args[1] == "legacy-published-package-check" {
-		err = standardforms.VerifyLegacyPublishedPackageSet(".")
-	} else {
-		err = standardforms.VerifyLegacyAdmissionEvidence(".")
+	default:
+		fmt.Fprintf(os.Stderr, "unknown subcommand %q; use verify or generate-current-surfaces\n", os.Args[1])
+		os.Exit(2)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "standard-form-conformance:", err)
+		fmt.Fprintln(os.Stderr, "standard-form-structure:", err)
 		os.Exit(1)
 	}
-	fmt.Println("standard-form-structure:", os.Args[1], "passed")
+	fmt.Printf("standard-form-structure: %s passed\n", os.Args[1])
 }

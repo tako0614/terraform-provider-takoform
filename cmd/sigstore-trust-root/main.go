@@ -10,7 +10,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-const outputPath = "admission/v1/trust/trusted-root.json"
+const outputPath = "release/trust/trusted-root.json"
 
 func main() {
 	if len(os.Args) != 2 || os.Args[1] != "refresh" {

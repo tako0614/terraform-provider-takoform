@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
@@ -125,20 +126,18 @@ var (
 	conditionStatuses = map[string]struct{}{"True": {}, "False": {}, "Unknown": {}}
 )
 
-// retainedGroups are the frozen lanes; they are not valid v1beta1 groups.
-var retainedGroups = map[string]struct{}{
-	"forms.takoform.com/v1alpha1": {},
-	"forms.takoform.com/v1alpha2": {},
-}
-
-// ValidateFormRef enforces the v1beta1 exact FormRef grammar, including the
-// exclusion of the retained forms.takoform.com/v1alpha1|v1alpha2 groups.
+// ValidateFormRef enforces the v1beta1 exact FormRef grammar. The apex
+// forms.takoform.com group is refused at any version: it belongs to the Host
+// API and the withdrawn pre-family epochs, while a Form group is a namespaced
+// family (decision 0009) — a subdomain of forms.takoform.com or a third
+// party's own domain. Refusing the apex wholesale means no withdrawn epoch
+// has to be named here for the next one to be refused.
 func ValidateFormRef(ref FormRef) error {
 	if len(ref.APIVersion) > 320 || !groupVersionPattern.MatchString(ref.APIVersion) {
 		return errors.New("takoform: FormRef apiVersion must be a namespaced group/version")
 	}
-	if _, retained := retainedGroups[ref.APIVersion]; retained {
-		return fmt.Errorf("takoform: FormRef group %s is a retained epoch, not a v1beta1 group", ref.APIVersion)
+	if strings.HasPrefix(ref.APIVersion, "forms.takoform.com/") {
+		return fmt.Errorf("takoform: FormRef group %s is the apex Host API group, not a Form family", ref.APIVersion)
 	}
 	if !kindPattern.MatchString(ref.Kind) {
 		return errors.New("takoform: FormRef kind must match ^[A-Z][A-Za-z0-9]{0,63}$")
@@ -166,10 +165,10 @@ func ValidateResourceName(value string) error {
 // Schema's maxLength semantics for the normative host wire contract.
 const spaceIDMaxLength = 255
 
-// validateSpaceID enforces the portable Space identity contract without
+// ValidateSpaceID enforces the portable Space identity contract without
 // normalizing it: opaque, case-sensitive UTF-8; embedded whitespace is data;
 // boundary whitespace (including U+FEFF), controls, and slash are forbidden.
-func validateSpaceID(value string) error {
+func ValidateSpaceID(value string) error {
 	if !utf8.ValidString(value) {
 		return errors.New("SpaceID must be valid UTF-8")
 	}
@@ -266,7 +265,7 @@ func validateRequestResource(resource *Resource) error {
 	if err := ValidateResourceName(resource.Metadata.Name); err != nil {
 		return fmt.Errorf("takoform: resource metadata.name is invalid: %w", err)
 	}
-	if err := validateSpaceID(resource.Metadata.Space); err != nil {
+	if err := ValidateSpaceID(resource.Metadata.Space); err != nil {
 		return fmt.Errorf("takoform: resource metadata.space has invalid SpaceID: %w", err)
 	}
 	return nil

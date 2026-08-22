@@ -186,7 +186,7 @@ either.
 **A runtime revision is a new exact Interface version, and — if it changes what
 a Form desires — a new Form version. It is never a date and never a flag.** This
 is stated normatively in [`../form-families.md`](../form-families.md), in
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md), and in
+`../host-api/v1alpha3.md`, and in
 [`../interface-contract/`](../interface-contract/index.md).
 
 ### Bindings state the surface the caller calls
@@ -244,7 +244,7 @@ so the refusal above can be driven at all. Loading the corpus fails if either
 stops being what the lane needs it to be.
 
 The lane is a Host API runner, so it proves what a host advertises and what it
-refuses, never what an isolate does. [`../host-api/v1alpha3.md`](../host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation)
+refuses, never what an isolate does. `../host-api/v1alpha3.md`
 states the split explicitly: handler signatures, streaming bodies, the exact
 `env` property set, `waitUntil`, exception outcomes, the `globals` floor, and
 `handler_not_exported` for arbitrary bytes remain obligations proven by the

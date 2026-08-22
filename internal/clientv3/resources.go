@@ -46,7 +46,7 @@ func (c *Client) EnsureFormAvailable(ctx context.Context, space string, ref Form
 	if err := ValidateFormRef(ref); err != nil {
 		return err
 	}
-	if err := validateSpaceID(space); err != nil {
+	if err := ValidateSpaceID(space); err != nil {
 		return fmt.Errorf("takoform: exact FormRef availability has invalid SpaceID: %w", err)
 	}
 	fullURL := c.apiBase + "/forms?" + exactFormQuery(space, ref).Encode()
@@ -92,7 +92,7 @@ func (c *Client) GetFormDefinition(ctx context.Context, space string, ref FormRe
 	if err := ValidateFormRef(ref); err != nil {
 		return FormDefinitionResponse{}, err
 	}
-	if err := validateSpaceID(space); err != nil {
+	if err := ValidateSpaceID(space); err != nil {
 		return FormDefinitionResponse{}, fmt.Errorf("takoform: exact Form Definition has invalid SpaceID: %w", err)
 	}
 	fullURL := fmt.Sprintf(
@@ -412,7 +412,7 @@ func (c *Client) GetResource(ctx context.Context, space string, ref FormRef, nam
 	if err := ValidateFormRef(ref); err != nil {
 		return nil, err
 	}
-	if err := validateSpaceID(space); err != nil {
+	if err := ValidateSpaceID(space); err != nil {
 		return nil, fmt.Errorf("takoform: resource read has invalid SpaceID: %w", err)
 	}
 	if err := ValidateResourceName(name); err != nil {
@@ -458,7 +458,7 @@ func (c *Client) fencedStatusAction(ctx context.Context, action, space string, r
 	if err := ValidateFormRef(ref); err != nil {
 		return nil, err
 	}
-	if err := validateSpaceID(space); err != nil {
+	if err := ValidateSpaceID(space); err != nil {
 		return nil, fmt.Errorf("takoform: resource %s has invalid SpaceID: %w", action, err)
 	}
 	if err := ValidateResourceName(name); err != nil {
@@ -535,7 +535,7 @@ func (c *Client) DeleteResource(ctx context.Context, space string, ref FormRef, 
 	if err := ValidateFormRef(ref); err != nil {
 		return err
 	}
-	if err := validateSpaceID(space); err != nil {
+	if err := ValidateSpaceID(space); err != nil {
 		return fmt.Errorf("takoform: resource delete has invalid SpaceID: %w", err)
 	}
 	if err := ValidateResourceName(name); err != nil {

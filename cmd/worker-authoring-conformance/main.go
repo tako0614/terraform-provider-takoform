@@ -13,12 +13,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/providerlifecycle"
 	"github.com/tako0614/terraform-provider-takoform/internal/workerauthoring"
 )
 
 const usage = "usage: go run ./cmd/worker-authoring-conformance [matrix|render-matrix] " +
-	"[--opentofu PATH] [--terraform PATH]"
+	"[--opentofu PATH] [--terraform PATH] [--provider-binary PATH]"
 
 func main() {
 	command := "matrix"
@@ -29,6 +28,7 @@ func main() {
 	}
 	openTofuPath := "tofu"
 	terraformPath := "terraform"
+	providerBinary := ""
 	for len(args) > 0 {
 		if len(args) < 2 {
 			fail(fmt.Errorf("%s", usage))
@@ -38,18 +38,20 @@ func main() {
 			openTofuPath = args[1]
 		case "--terraform":
 			terraformPath = args[1]
+		case "--provider-binary":
+			providerBinary = args[1]
 		default:
 			fail(fmt.Errorf("%s", usage))
 		}
 		args = args[2:]
 	}
-	root, err := providerlifecycle.RepoRoot(".")
+	root, err := workerauthoring.RepoRoot(".")
 	if err != nil {
 		fail(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	matrix, err := workerauthoring.RunMatrix(ctx, root, openTofuPath, terraformPath)
+	matrix, err := workerauthoring.RunMatrixWithProvider(ctx, root, openTofuPath, terraformPath, providerBinary)
 	if err != nil {
 		fail(err)
 	}

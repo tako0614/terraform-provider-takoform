@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "HttpRoute/http-route",
-  "kind": "HttpRoute",
-  "name": "http-route",
-  "portability": "portable"
-}

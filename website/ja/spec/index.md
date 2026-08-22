@@ -12,14 +12,12 @@ Host API group はどの Form group からも独立した protocol 互換性 ide
 | 現在の Form Family | `edge.forms.takoform.com/v1beta1` (Beta family; Experimental `0.1.0` 15種) |
 | 現在の Host API wire | `forms.takoform.com/v1beta1` (discovery は `/.well-known/takoform/v1beta1`) |
 | 現在の package envelope | `packages.forms.takoform.com/v1alpha4` |
-| 保持される provider-v2 FormRef | `forms.takoform.com/v1alpha2` (wire discovery は `/.well-known/takoform/v1alpha2`) |
-| 保持される provider-v2 package envelope | `packages.forms.takoform.com/v1alpha3` |
-| Legacy FormRef | `forms.takoform.com/v1alpha1` (凍結) |
-| Provider distribution | `v2.1.1` Registry 公開済みの current stable distribution（descriptor は owner 公開後も `candidate-only` metadata） · `v2.0.0` 公開済み compatibility predecessor · `v1.0.3` Legacy |
+| Provider distribution | `v2.1.1` Registry 公開済みの current stable distribution（descriptor は owner 公開後も `candidate-only` metadata）。`v2.0.0` と `v1.0.3` は撤回された epoch の不変の Registry 履歴 |
 
-`forms.takoform.com/v1alpha2` epoch と 9 種の `0.1.0` 候補は provider-v2 の
-互換面として保持されるもので、新しい仕様作業の基盤ではありません。provider の
-SemVer はどの API identity からも独立しています。
+pre-Beta の epoch（`forms.takoform.com/v1alpha1` と `/v1alpha2`）は撤回されました
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
+identity は公開台帳に retired として記録され、バイト列はリポジトリ履歴に残ります。
+provider の SemVer はどの API identity からも独立しています。
 
 ## 現在レーンの契約 (英語のみ)
 
@@ -43,14 +41,9 @@ SemVer はどの API identity からも独立しています。
 - [host-api-wire v1beta1](/schemas/v1beta1/host-api-wire.schema.json)
 - [package-index v1alpha4](/schemas/v1alpha4/package-index.schema.json)
 
-保持される provider-v2 レーン:
-
-- [form-ref v1alpha2](/schemas/v1alpha2/form-ref.schema.json)
-- [form-definition v1alpha2](/schemas/v1alpha2/form-definition.schema.json)
-- [package-index v1alpha3](/schemas/v1alpha3/package-index.schema.json)
-- [host-api-wire v1alpha2](/schemas/v1alpha2/host-api-wire.schema.json)
-
-v1alpha3 schema identity は immutable な履歴として保持し、Beta bytes で上書きしません。
+撤回された epoch の schema identity は
+[`release/public-schema-identities.json`](/release/public-schema-identities.json)
+に retired として記録され、再利用されません。
 
 ## ライフサイクル
 

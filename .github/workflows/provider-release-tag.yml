@@ -98,9 +98,10 @@ jobs:
           set -euo pipefail
           go mod verify
           go test ./...
-          go run ./cmd/provider-lifecycle-conformance render-matrix \
-            --opentofu tofu --terraform terraform > "$RUNNER_TEMP/provider-lifecycle-matrix.json"
-          go run ./cmd/standard-form-conformance candidate-publication-check
+          go run ./cmd/worker-authoring-conformance render-matrix \
+            --opentofu tofu --terraform terraform > "$RUNNER_TEMP/worker-authoring-matrix.json"
+          jq -e '.publicationStatus == "candidate-only"' release/version.json > /dev/null
+          go run ./cmd/standard-form-conformance verify
           go -C cmd/provider-release mod verify
           go -C cmd/provider-release test ./...
           go -C cmd/provider-release run . verify-source --allow-untagged-candidate

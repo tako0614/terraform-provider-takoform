@@ -116,7 +116,7 @@ remains asserts only facts that no write has to converge for: a put is accepted,
 a never-written key is `not_found`, deleting an absent key succeeds, and the
 listing of an empty scope is complete. Convergence becomes a host obligation,
 listed as one in
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation).
+`../host-api/v1alpha3.md`.
 
 ### `edge.objects` becomes a real object API with streaming bodies
 

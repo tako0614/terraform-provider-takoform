@@ -77,7 +77,6 @@ jobs:
         run: |
           bun run build:current-form-families
           bun run sync:portable-host-v1beta1
-          bun run build:current-form-candidates
           go run ./cmd/standard-form-conformance generate-current-surfaces
           bun run sync:public-schemas
           bun run sync:website-docs

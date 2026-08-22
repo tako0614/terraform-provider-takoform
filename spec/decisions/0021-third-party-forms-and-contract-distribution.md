@@ -25,7 +25,7 @@ and the reason is not effort. `schemaDigest` binds the RFC 8785 canonical
 **Form Definition** bytes ([`../versioning.md`](../versioning.md)), and a Form
 Definition's required members include `title`, `role`, and
 `lifecycleCapabilities`
-([`../schemas/form-definition-v1alpha3.schema.json`](../schemas/form-definition-v1alpha3.schema.json)).
+(`../schemas/form-definition-v1alpha3.schema.json`).
 The only surface a host exposes for a Definition is the `form-definition`
 operation, whose response is
 `host-api-wire-v1alpha3.schema.json#/$defs/formDefinitionResponse`: an

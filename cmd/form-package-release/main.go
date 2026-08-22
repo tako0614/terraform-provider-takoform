@@ -39,7 +39,7 @@ const (
 	packageWorkflow  = ".github/workflows/form-package-release.yml"
 	revokeWorkflow   = ".github/workflows/form-package-revocation.yml"
 	bundleMediaType  = "application/vnd.dev.sigstore.bundle.v0.3+json"
-	trustedRootPath  = "admission/v4/trust/trusted-root.json"
+	trustedRootPath  = "release/trust/trusted-root.json"
 
 	revocationVerificationFormat = "takoform.form-package-revocation-directory-verification@v1"
 	maxRevocationAssetBytes      = 64 << 20

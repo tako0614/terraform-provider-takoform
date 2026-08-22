@@ -35,10 +35,11 @@ Provider の distribution availability は下の compatibility section と
 [機械可読なステータス](/.well-known/takoform-site.json)で別に示します。
 [現在の quick start](/ja/docs/) には適用できる構成があります。
 
-Provider 2.1.1 is Registry-published; its descriptor remains `candidate-only`
-metadata after owner publication. The 34 published Form Package identities
-belong to immutable Legacy history. No current central Takoform-wide approval
-or admission is implied by that historical publication set.
+Provider 2.1.1 は Registry 公開済みで、descriptor は owner 公開後も設計として
+`candidate-only` metadata のままです。pre-Beta の 2 epoch は撤回されました
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
+その identity は retired として台帳に記録され、バイト列はリポジトリ履歴に
+残ります。過去の公開集合から現在の承認や admission は一切導かれません。
 
 ```hcl
 terraform {
@@ -103,103 +104,17 @@ Takoform は複数クラウドの最小公倍数へ薄めた汎用リソース�
 Form であり、交換可能なのはホストであって意味ではありません
 ([decision 0008](/spec/decisions/0008-forms-preserve-service-shape.html))。
 
-## Published compatibility / Migration / History
+## 撤回された epoch と公開済み履歴
 
-<details>
-<summary>Published compatibility: Provider 2.0.0、保持される v1alpha2、Legacy Provider 1.0.3</summary>
-
-### Provider 2.0.0 / Host API v1alpha2
-
-Provider 2.0.0 は retained `forms.takoform.com/v1alpha2` surface の Registry
-公開済み compatibility client です。次の 9 resource を保持します
-([decision 0035](/spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.html))。
-
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
-    }
-  }
-}
-
-provider "takoform" {
-  endpoint = "https://host.example.com"
-  space    = "prod"
-}
-
-resource "takoform_key_value_store" "cache" {
-  name                = "cache"
-  consistency         = "eventual"
-  default_ttl_seconds = 3600
-}
-
-resource "takoform_queue" "jobs" {
-  name                      = "jobs"
-  message_retention_seconds = 345600
-  ordering                  = "best_effort"
-}
-
-resource "takoform_edge_worker" "api" {
-  name                = "api"
-  artifact_media_type = "application/vnd.takoform.edge-worker+tar"
-  artifact_sha256     = "sha256:0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37"
-  artifact_url        = "https://artifacts.example.com/api.tar"
-  entrypoint          = "worker.mjs"
-  runtime             = "javascript"
-  runtime_version     = "2026.1"
-  configuration       = { "LOG_LEVEL" = "info" }
-
-  connections = [
-    {
-      name        = "data"
-      resource    = "KeyValueStore/cache"
-      permissions = ["read", "write"]
-      projection  = "keyvalue.binding.v1"
-    },
-  ]
-}
-```
-
-Provider 2.0.0 は `/.well-known/takoform/v1alpha2` で exact な retained FormRef
-を discovery し、package index は `packages.forms.takoform.com/v1alpha3` です
-([decision 0035](/spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.html))。
-
-| Resource                                                                   | 宣言するもの                                                  |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| [`takoform_edge_worker`](/docs/resources/edge_worker.html)                 | ダイジェストを固定した artifact から動く request/event アプリ |
-| [`takoform_relational_database`](/docs/resources/relational_database.html) | open engine token で識別する relational database              |
-| [`takoform_object_bucket`](/docs/resources/object_bucket.html)             | オブジェクトストレージ                                        |
-| [`takoform_key_value_store`](/docs/resources/key_value_store.html)         | key/value ストア                                              |
-| [`takoform_queue`](/docs/resources/queue.html)                             | at-least-once でメッセージを配信するキュー                    |
-| [`takoform_schedule`](/docs/resources/schedule.html)                       | 接続したリソースを1つ呼び出す cron                            |
-| [`takoform_container_service`](/docs/resources/container_service.html)     | OCI イメージのダイジェストから動くサービス                    |
-| [`takoform_stateful_entity`](/docs/resources/stateful_entity.html)         | 参照可能な永続エンティティ                                    |
-| [`takoform_vector_index`](/docs/resources/vector_index.html)               | 次元を固定したベクターインデックス                            |
-
-### Provider 1.0.3 / Host API v1alpha1
-
-Provider 1.0.3 は既存 v1 state のための公開済み Legacy client です。refresh、
-delete、recovery、v1 wire が残る移行手順では pin してください。discovery 境界は
-`forms.takoform.com/v1alpha1` の `/.well-known/takoform/v1alpha1` で、v1 Form
-Package identity は不変の履歴です。
-
-### 移行
-
-移行は明示的な create/import で行います。自動 state rewrite はありません。
-
-1. Provider 1.0.3 を pin して Legacy resource を refresh する。
-2. secret ではない desired configuration と必要な public output を記録する。
-3. Provider 2.0.0 で exact な v1alpha2 FormRef の下に create するか、host
-   conformance の証明がある場合だけ import する。
-4. consumer を切り替えて observe し、rollback が不要になってから Legacy を
-   delete する。
-
-[Provider 1 から 2 への migration guide](/release/migrations/v1-to-v2.html) も参照して
-ください。
-
-</details>
+現在のスタックの前に 2 つの pre-Beta epoch があり、撤回されました
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
+それらを載せて公開された provider release は不変の Registry 履歴として残ります。
+**Provider 2.0.0**（`forms.takoform.com/v1alpha2` compatibility client）と
+**Provider 1.0.3**（`forms.takoform.com/v1alpha1` Legacy client）は既存 state の
+維持・recovery・移行のために exact pin で今もインストールできますが、その
+resource に後継はなく、このサイトはもう文書化しません。このリポジトリから
+次に公開される release は major の `3.0.0` です。撤回された resource の利用者は
+[v2 から v3 への移行境界](/release/migrations/v2-to-v3.html) に従ってください。
 
 ## どう動くか
 

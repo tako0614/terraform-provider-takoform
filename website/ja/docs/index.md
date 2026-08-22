@@ -22,9 +22,9 @@ metadata として残ります。
 
 Takoform is an Experimental specification project. Provider 2.1.1 is the
 Registry-published stable client distribution; its descriptor remains
-`candidate-only` metadata after owner publication. The 34 published Form
-Package identities belong to immutable Legacy history. No current central
-Takoform-wide approval or admission is implied by that historical publication set.
+`candidate-only` metadata after owner publication. pre-Beta の epoch は撤回されました
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
+過去の公開集合から現在の承認や admission は一切導かれません。
 
 ## Current design target — Edge Form Family v1beta1 (15 Experimental Forms) {#beta-edge-platform-family}
 
@@ -127,98 +127,15 @@ provider が compile していない Form を運ぶ generic carrier はありま
 surface が client に検証できる exact FormRef だけを提供するためです
 ([decision 0021](/spec/decisions/0021-third-party-forms-and-contract-distribution.html))。
 
-## Published compatibility / Migration / History {#lanes}
+## 撤回された epoch {#lanes}
 
-<details>
-<summary>Published compatibility: Provider 2.0.0、保持される v1alpha2、Legacy Provider 1.0.3</summary>
-
-### Provider 2.0.0 / Host API v1alpha2 の quick start
-
-Provider 2.0.0 は retained Host API boundary
-`forms.takoform.com/v1alpha2` 上の Registry 公開済み compatibility client です。
-保持される provider-v2 の 9 resource を提供します。provider と 9 種類をまとめて検証するには
-repository の conformance matrix を使います。
-
-```sh
-bun run check:current-form-candidates
-go run ./cmd/provider-lifecycle-conformance matrix \
-  --opentofu tofu --terraform terraform
-```
-
-matrix は実ホストに触れず exact v1alpha2 contract の preview/apply/observe/refresh/delete
-を検証します。実ホストでは、先に `/.well-known/takoform/v1alpha2` で exact FormRef を
-公開していることを確認してください。
-
-#### 公開済み Provider 2.0.0 の pin
-
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
-    }
-  }
-}
-```
-
-実ホストを動かすには、host から API `endpoint`、対象 `space`、bearer `token` を取得
-します。provider 設定か `TAKOFORM_ENDPOINT`、`TAKOFORM_SPACE`、`TAKOFORM_TOKEN` に
-渡してください。mutation 前に host が exact v1alpha2 identity を提供できなければ
-fail closed します。この repository は hosted service の live availability を主張
-しません。
-
-### Provider 2.0.0 の retained resource
-
-次の 9 resource URL は compatibility surface として保持されます。
-
-- [edge_worker](/docs/resources/edge_worker.html)
-- [relational_database](/docs/resources/relational_database.html)
-- [object_bucket](/docs/resources/object_bucket.html)
-- [key_value_store](/docs/resources/key_value_store.html)
-- [queue](/docs/resources/queue.html)
-- [schedule](/docs/resources/schedule.html)
-- [container_service](/docs/resources/container_service.html)
-- [stateful_entity](/docs/resources/stateful_entity.html)
-- [vector_index](/docs/resources/vector_index.html)
-- [interface data source](/docs/data-sources/interface.html)
-
-retained package envelope は `packages.forms.takoform.com/v1alpha3` です。
-
-### Provider 1.0.3 / Host API v1alpha1
-
-既存 v1 state には公開済み Legacy Provider 1.0.3 を pin してください。この provider は
-state を v2 semantics に自動変換しません。v1 Host API boundary は
-`forms.takoform.com/v1alpha1`、discovery は `/.well-known/takoform/v1alpha1`、公開済み
-v1 Form Package identity は不変の履歴です。
-
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      # 公開済み Legacy Provider 1.0.3（既存 v1 state 用）。
-      version = "= 1.0.3"
-    }
-  }
-}
-```
-
-### Provider 1.0.3 からの migration
-
-移行は自動 state rewrite ではなく明示的な create/import です。
-
-1. Provider 1.0.3 を pin して Legacy resource を refresh する。
-2. secret ではない desired configuration と必要な public output を記録する。
-3. Provider 2.0.0 で exact v1alpha2 FormRef の下に create するか、host conformance
-   の証明がある場合だけ import する。
-4. consumer を切り替えて observe し、rollback が不要になってから Provider 1.0.3
-   で Legacy を delete する。
-
-[Provider 1 から 2 への migration guide](/release/migrations/v1-to-v2.html) も参照して
-ください。
-
-</details>
+pre-Beta の 2 epoch（`forms.takoform.com/v1alpha1` Legacy と
+`forms.takoform.com/v1alpha2`）は撤回されました
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html))。
+それらを運んだ **Provider 2.0.0** と **Provider 1.0.3** は不変の Registry
+履歴として exact pin で残りますが、resource に後継はなく、このサイトはもう
+文書化しません。既存 state の扱いは
+[v2 から v3 への移行境界](/release/migrations/v2-to-v3.html) を参照してください。
 
 ## その他の project surface
 

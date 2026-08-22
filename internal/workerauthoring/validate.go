@@ -11,19 +11,37 @@ import (
 
 // MatrixReport is the evidence both supported CLIs produced.
 type MatrixReport struct {
-	Format           string   `json:"format"`
-	PublicationReady bool     `json:"publicationReady"`
-	Reports          []Report `json:"reports"`
+	Format           string `json:"format"`
+	PublicationReady bool   `json:"publicationReady"`
+	// ProviderBinarySHA256 is set only when the matrix was driven with an
+	// explicit already-built provider binary; it is the digest of the exact
+	// bytes both CLIs exercised.
+	ProviderBinarySHA256 string   `json:"providerBinarySha256,omitempty"`
+	Reports              []Report `json:"reports"`
 }
 
 // MatrixFormat identifies the two-CLI evidence shape.
 const MatrixFormat = "takoform.worker-authoring-conformance-matrix@v1"
 
-// RunMatrix drives every scenario under both supported CLIs.
+// RunMatrix drives every scenario under both supported CLIs with a provider
+// built from source.
 func RunMatrix(ctx context.Context, repoRoot, openTofuPath, terraformPath string) (MatrixReport, error) {
+	return RunMatrixWithProvider(ctx, repoRoot, openTofuPath, terraformPath, "")
+}
+
+// RunMatrixWithProvider drives every scenario under both supported CLIs with
+// an explicit already-built provider binary; an empty path builds from source.
+func RunMatrixWithProvider(ctx context.Context, repoRoot, openTofuPath, terraformPath, providerBinary string) (MatrixReport, error) {
 	matrix := MatrixReport{Format: MatrixFormat}
+	if providerBinary != "" {
+		digest, err := fileSHA256(providerBinary)
+		if err != nil {
+			return MatrixReport{}, err
+		}
+		matrix.ProviderBinarySHA256 = digest
+	}
 	for _, cli := range []string{openTofuPath, terraformPath} {
-		report, err := Run(ctx, repoRoot, cli)
+		report, err := RunWithProvider(ctx, repoRoot, cli, providerBinary)
 		if err != nil {
 			return MatrixReport{}, err
 		}
