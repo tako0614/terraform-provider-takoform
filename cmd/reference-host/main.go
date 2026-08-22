@@ -79,6 +79,19 @@ func run(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// The banner's "keep it on loopback" is a safety boundary, not advice: this
+	// handler implements the runner-only probe headers and its credentials are
+	// constants in this repository. Enforce the boundary mechanically rather
+	// than stating it — an --addr of 0.0.0.0 or a public interface is refused,
+	// whatever the flag said.
+	if tcp, ok := listener.Addr().(*net.TCPAddr); !ok || !tcp.IP.IsLoopback() {
+		_ = listener.Close()
+		return fmt.Errorf(
+			"refusing to listen on %s: this host serves conformance probe headers and "+
+				"repository-known credentials, so it binds loopback addresses only",
+			listener.Addr(),
+		)
+	}
 	origin := "http://" + listener.Addr().String()
 
 	fmt.Fprintf(stdout, "Takoform reference host listening on %s\n", origin)
