@@ -157,6 +157,11 @@ An Experimental Form MUST NOT become Stable until:
   release line;
 - known limitations do not contradict the claimed portable semantics.
 
+The evidence above is gathered on the Beta 2 rehearsal generation, whose
+identities are treated as immutable from publication and complete before
+minted; Stable identities then carry the Beta 2 contracts unchanged
+([decision 0046](decisions/0046-stable-arrives-through-a-stable-grade-beta-2.md)).
+
 Stable commits Takoform to the stable SemVer rules in
 [`versioning.md`](versioning.md). It does not guarantee that every host supports
 the Form or that a commercial platform offers it.
