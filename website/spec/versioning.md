@@ -393,6 +393,17 @@ future graduation decision requires, at minimum:
 5. a real deprecation/removal exercise and production consumption of the
    revocation chain.
 
+The graduation evidence is gathered on the **Beta 2 rehearsal generation**
+([decision 0046](decisions/0046-stable-arrives-through-a-stable-grade-beta-2.md)):
+the compatibility window, both host subjects, the optional-surface
+materialization, the cross-publisher installation, and the exercises above are
+all measured against Beta 2 identities. Those identities elect out of the
+pre-Stable withdrawal permission of
+[decision 0037](decisions/0037-immutability-begins-at-stable.md): a published
+Beta 2 identity is treated as immutable from publication, a defect gets a
+successor identity, and a Beta 2 identity is not published before its
+conformance coverage exists. v1 then carries the Beta 2 contracts unchanged.
+
 Takoform's lifecycle authority owns promotion; a provider release or host
 milestone is not a maturity decision. Only Host API and Form contracts that
 have satisfied the applicable qualification above MAY mint stable identities
