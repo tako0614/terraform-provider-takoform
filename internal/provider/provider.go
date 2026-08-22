@@ -51,6 +51,12 @@ const (
 	// whole provider — and therefore the OTHER lane's resources — for twelve
 	// minutes before anything could run (spec/decisions/0018).
 	discoveryTimeout = 15 * time.Second
+
+	// Host resource mutations acknowledge work before the provider polls the
+	// resulting operation. Bound the time spent waiting for response headers so
+	// a stalled host cannot hold an OpenTofu apply for the full
+	// resource-operation timeout.
+	resourceAPIResponseHeaderTimeout = 30 * time.Second
 )
 
 // Ensure takoformProvider satisfies the provider.Provider interface.
@@ -225,8 +231,12 @@ func (p *takoformProvider) Configure(ctx context.Context, req provider.Configure
 }
 
 func newResourceAPIHTTPClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = resourceAPIResponseHeaderTimeout
+
 	return &http.Client{
-		Timeout: defaultResourceAPITimeout,
+		Transport: transport,
+		Timeout:   defaultResourceAPITimeout,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			// Discovery and Resource API endpoints are exact protocol identities.
 			// Do not forward a provider bearer token through an HTTP redirect.
