@@ -253,7 +253,7 @@ func TestProviderTagPreflightRejectsRerunAndRequestSubstitution(t *testing.T) {
 	requestID := "123e4567-e89b-42d3-a456-426614174000"
 	commit := strings.Repeat("a", 40)
 	preflight := providerTagPreflight{
-		Format:       "takoform.provider-tag-preflight@v1",
+		Format:       "takoform.provider-tag-preflight@v2",
 		RequestID:    requestID,
 		RunID:        "123",
 		RunAttempt:   "2",
