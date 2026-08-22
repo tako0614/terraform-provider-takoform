@@ -20,6 +20,12 @@ import (
 )
 
 const (
+	// ReferencePrimaryToken is exported so cmd/reference-host can print the
+	// credential a reader needs. It is a constant compiled into this
+	// repository and authenticates nobody in particular, which is one of the
+	// reasons this host belongs on loopback.
+	ReferencePrimaryToken = referencePrimaryToken
+
 	referencePrimaryToken         = "reference-primary-token"
 	referenceAlternateToken       = "reference-alternate-token"
 	referenceAlternateTenantToken = "reference-alternate-tenant-token"
