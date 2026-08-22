@@ -1,0 +1,31 @@
+{
+  "kind": "takoform.form-contract-continuity@v1",
+  "moves": [
+    {
+      "from": "edge.forms.takoform.com/v1alpha1",
+      "to": "edge.forms.takoform.com/v1beta1",
+      "fromCommit": "869c9529ac25a3949347c2f167b4b83169d84e3a",
+      "fromTree": "forms/candidates/edge/v1alpha1",
+      "toTree": "forms/candidates/edge/v1beta1",
+      "contractChanged": [
+        "SQLiteMigrationApplication",
+        "WorkerDeployment",
+        "WorkerVersion"
+      ],
+      "reIdentifiedOnly": [
+        "AtLeastOnceQueue",
+        "EdgeKVNamespace",
+        "ModuleWorker",
+        "ObjectBucket",
+        "QueueConsumer",
+        "SQLiteDatabase",
+        "SQLiteMigrationSet",
+        "StaticAssetBundle",
+        "WorkerBundle",
+        "WorkerCronTrigger",
+        "WorkerCustomDomain",
+        "WorkerEndpoint"
+      ]
+    }
+  ]
+}

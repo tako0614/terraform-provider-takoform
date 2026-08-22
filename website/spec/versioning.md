@@ -249,6 +249,15 @@ in that client, governed by its own versioning — for the Terraform/OpenTofu
 provider, by "Provider versions are independent" above, which already forbids
 silently reinterpreting persisted state as a different FormRef within a major.
 
+A group rename asks the same question of every member at once, and answers it
+for none of them: the group string is inside the digested bytes, so renaming a
+family re-identifies all of its Forms whether or not their contracts moved.
+When `edge.forms.takoform.com/v1alpha1` became `/v1beta1`, three contracts
+changed and twelve did not, and all fifteen got new `schemaDigest` values.
+Which was which is recorded, derived rather than authored, in
+[`../release/form-contract-continuity.json`](../release/form-contract-continuity.json)
+— the answer a client holding a recorded FormRef actually needs.
+
 ### What a Form version change costs a Terraform resource type
 
 A codec absorbs a definition change invisibly. A Terraform resource SCHEMA
