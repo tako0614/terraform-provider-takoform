@@ -29,14 +29,18 @@ relabeling of a contract already run the way Stable will run.**
 What Beta 2 contains:
 
 1. **The Edge family moves to `edge.forms.takoform.com/v1beta2`** carrying
-   17 Forms: the 15 at additive `0.2.0` definitions embedding the
-   decision-0045 external-service declaration where it is meaningful, plus
-   `DurableWorkflow` and `ActorNamespace` at `0.1.0`
+   17 Forms: the 15 re-identified under the new group — each definition
+   version bumped only where its contract actually changed, which the
+   continuity ledger derives rather than anyone asserting (decision 0038);
+   the decision-0045 external-service declaration lands where it is
+   meaningful, starting with `WorkerVersion` — plus `DurableWorkflow` and
+   `ActorNamespace` at `0.1.0`
    ([decision 0043](0043-forms-target-popular-vendor-locked-primitives.md)),
-   with their ABI and binding contracts. The definition grammar gains the
-   external-service member as a new `form-definition-v1beta2` schema
-   identity; the frozen v1beta1 schemas and served v1beta1 documents are
-   retained unchanged — Beta 2 adds identities, it withdraws nothing.
+   with their ABI and binding contracts. No new schema identity is needed:
+   the v1beta1 FormRef and definition schemas admit any namespaced group by
+   design, and the v1alpha4 envelope already carries generations without
+   moving. The served v1beta1 documents are retained unchanged — Beta 2 adds
+   identities, it withdraws nothing.
 2. **The seven new families are born** under their own groups at their own
    `v1beta1`, into the same discipline from birth. Their numbers do not align
    with the Edge family's, which is the standing rule, not an accident.
