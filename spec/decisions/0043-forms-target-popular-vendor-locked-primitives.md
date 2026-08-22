@@ -160,10 +160,15 @@ What is deliberately **excluded**: every integrate-side row above. The
 earlier `postgres`-family idea dies here — PostgreSQL is a standard, so it is
 an integration target.
 
-The same principle is adopted ecosystem-wide: takoserver builds on de-facto
-standards where they exist and defines contracts only where the category is
-vendor-locked. That obligation lives with takoserver; this record states the
-shared principle.
+The same principle is adopted ecosystem-wide, and for takoserver it runs in
+both directions: where a de-facto standard exists, takoserver **serves that
+standard API itself** (an S3-compatible endpoint, an OpenAI-compatible
+Responses API endpoint, onward down the same roadmap) rather than inventing a
+surface; where none exists, takoserver implements the Takoform contracts as a
+host. One server offers the standard half as standards and the vendor-locked
+half as Takoform, and a workload connects to either through the same
+decision-0045 sealed slots. That obligation lives with takoserver; this
+record states the shared principle.
 
 ## Enforcement
 
