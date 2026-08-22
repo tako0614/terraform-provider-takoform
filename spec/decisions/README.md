@@ -47,3 +47,4 @@ record does not replace them.
 - [0042 — The pre-Beta epochs are withdrawn](0042-the-pre-beta-epochs-are-withdrawn.md)
 - [0043 — A Form Family targets a popular primitive whose APIs are vendor-locked](0043-forms-target-popular-vendor-locked-primitives.md)
 - [0044 — Graduation evidence is implementation independence, honestly attributed](0044-graduation-evidence-is-implementation-independence.md)
+- [0045 — An external standard service is a sealed slot with a protocol tag](0045-external-standard-services-are-sealed-slots.md)

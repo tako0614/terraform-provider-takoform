@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/standards/v1alpha1/standard-service-ref.schema.json",
+  "title": "Takoform StandardServiceRef v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "protocol"],
+  "properties": {
+    "apiVersion": {
+      "const": "standards.takoform.com/v1alpha1"
+    },
+    "protocol": {
+      "enum": ["s3-compatible", "postgresql", "redis", "smtp"]
+    }
+  }
+}
