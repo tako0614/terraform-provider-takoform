@@ -12,6 +12,27 @@ and leaves only the vendor's identity, account, placement, and commerce
 outside the contract. Hosts are exchangeable; resource semantics are not
 ([decision 0008](spec/decisions/0008-forms-preserve-service-shape.md)).
 
+## Which identity is current
+
+<!-- current-generation:begin -->
+
+| Axis | Current identity | |
+| --- | --- | --- |
+| Host API lane | `forms.takoform.com/v1beta1` | the wire a provider speaks |
+| Form Family | `edge.forms.takoform.com/v1beta1` | 15 Forms, each `0.1.0` and experimental |
+| Form Package envelope | `packages.forms.takoform.com/v1alpha4` | package artifacts are unpublished |
+| Provider | `2.1.1` | installed from the Terraform Registry |
+
+These four numbers do not line up, and they are not supposed to: the axes
+change for different reasons. They also do not sort the same way — the lane
+went `v1alpha3` → `v1beta1`, where the digit falls, while the envelope went
+`v1alpha3` → `v1alpha4`, where it rises. **Do not infer which identity is
+current from a version word.** This table is generated from the repository
+by `bun run sync:current-generation`, and 12 publication obligations in
+[`spec/publication-blockers.json`](spec/publication-blockers.json) are open.
+
+<!-- current-generation:end -->
+
 ## What is published and what remains independent
 
 Provider publication, contract channel, Form maturity, and package publication
