@@ -1,6 +1,0 @@
-{
-  "maxConcurrency": 0,
-  "model": "portable-conformance/v1/embedding-small",
-  "name": "model-endpoint",
-  "task": "embedding"
-}

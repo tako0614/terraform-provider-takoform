@@ -46,7 +46,7 @@ A Form's outputs are a declared, closed, typed contract, and the provider
 surfaces them as typed computed attributes. `outputs_json` is retained,
 unnarrowed, as the escape hatch for what the contract does not describe. The
 rules below are normative; the operative text lives in
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md).
+`../host-api/v1alpha3.md`.
 
 1. **Outputs are declared, and the declaration is closed.** A Form Definition's
    `outputSchema` is a Draft 2020-12 object with `additionalProperties: false`

@@ -1,6 +1,0 @@
-{
-  "authMethod": "none",
-  "redirectUris": [
-    "https://app.portable-conformance.invalid/callback"
-  ]
-}

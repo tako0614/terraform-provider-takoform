@@ -3,31 +3,18 @@ import { execFileSync } from "node:child_process";
 import {
   accessSync,
   chmodSync,
-  closeSync,
   constants as fsConstants,
   existsSync,
-  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readFileSync,
   realpathSync,
-  readSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import {
-  basename,
-  delimiter,
-  dirname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-  sep,
-} from "node:path";
+import { delimiter, isAbsolute, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
 
@@ -59,27 +46,21 @@ const PROVIDER_FORM_KINDS = Object.freeze({
   takoform_queue_consumer: "QueueConsumer",
 });
 const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
-const TRUSTED_ROOT = "admission/v4/trust/trusted-root.json";
+const TRUSTED_ROOT = "release/trust/trusted-root.json";
 const PINNED_GH_VERSION = "2.96.0";
 const PINNED_COSIGN_VERSION = "v3.0.6";
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const COMMIT = /^[0-9a-f]{40}$/u;
 const GIT_OBJECT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/u;
-const FORM_BATCH_MAX_BYTES = 1024 * 1024;
 const REQUEST_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PROVIDER_TAG = /^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u;
-const LEGACY_FORM_TAG = /^forms\/(k-[a-z2-7]{2,103})\/v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/u;
-const CURRENT_FORM_TAG = /^forms\/(k-[a-z2-7]{2,103})\/(sha256-[0-9a-f]{64})$/u;
 const REVOCATION_TAG = /^forms\/revocations\/v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/u;
 const FORM_RELEASE_AUTHORITY_PATHS = Object.freeze([
-  ".github/workflows/form-package-release.yml",
   ".github/workflows/form-package-revocation.yml",
   TRUSTED_ROOT,
   "cmd/form-package-release",
-  "cmd/published-package-set",
-  "cmd/release-output-commit",
   "formpackage",
   "go.mod",
   "go.sum",
@@ -97,24 +78,6 @@ const FORM_RELEASE_AUTHORITY_PATHS = Object.freeze([
   "scripts/release-deploy.mjs",
   "standardform",
 ]);
-const FORM_CURRENT_RELEASE_AUTHORITY_PATHS = Object.freeze([
-  "forms/lifecycle.json",
-  "forms/lifecycle.schema.json",
-  "proposals",
-]);
-const FORM_TAG_ONLY_RECOVERY_STABLE_PATHS = Object.freeze([
-  ".github/workflows/form-package-release.yml",
-  TRUSTED_ROOT,
-  "cmd/form-package-release",
-  "formpackage",
-  "go.mod",
-  "go.sum",
-  "internal/client",
-  "internal/formcatalog",
-  "internal/formregistry",
-  "internal/hostpolicy",
-  "standardform",
-]);
 const PROVIDER_RECOVERY_ALLOWED_PATHS = Object.freeze([
   "release/README.md",
   "scripts/check-public-surfaces.mjs",
@@ -122,18 +85,11 @@ const PROVIDER_RECOVERY_ALLOWED_PATHS = Object.freeze([
   "scripts/release-deploy.test.mjs",
   "scripts/testdata/provider-release-candidate-30507374579-1-metadata.json",
 ]);
-const FORM_TAG_ONLY_RELEASE_BODY =
-  "Data-only Takoform Form Package release completed forward from an exact tag-only partial state. Verify the canonical package index, Sigstore bundle, and publisher identity before installation.";
-
 const PROVIDER_SURFACE = "takoform-provider-release";
 const FORM_SURFACE = "takoform-form-package-release";
 const WORKFLOW_NAMES = {
   "provider-release-tag.yml": "Author provider release tag",
   "release.yml": "Prepare provider release candidate",
-  "provider-registry-readback.yml":
-    "Build signed provider Registry readback",
-  "form-package-release.yml":
-    "Prepare signed Form Package release candidate",
   "form-package-revocation.yml":
     "Prepare signed Form Package revocation checkpoint",
 };
@@ -148,7 +104,6 @@ export const RELEASE_SURFACES = Object.freeze([
       "release/keys/provider-signing-key.asc",
       ".github/workflows/provider-release-tag.yml",
       ".github/workflows/release.yml",
-      ".github/workflows/provider-registry-readback.yml",
       "cmd/provider-release",
     ],
     requiresScripts: ["check"],
@@ -159,7 +114,7 @@ export const RELEASE_SURFACES = Object.freeze([
       provenance:
         "requires local operator GH_TOKEN authority, a clean non-shallow main checkout equal to a freshly fetched canonical origin/main, the complete owner check before every dispatch, tag push, or release mutation, an explicitly named successful workflow run/attempt, checksum closure over its same-run candidate, the pinned provider GPG signer, and a record of the source commit plus every published asset digest; GH_TOKEN is never printed or retained",
       "post-conditions":
-        "publishes the exact verified same-run bytes locally under exclusive single-writer authority because GitHub REST has no atomic asset-plus-metadata precondition, immediately rereads the empty and complete exact draft, restates the full exact identity on PATCH, requires GitHub's immutable release readback and a fresh download with identical digests, rechecks the pinned signed tag before VERIFIED, then separately installs the indexed provider with both supported Registry clients and checksum-closes the signed direct-install readback",
+        "publishes the exact verified same-run bytes locally under exclusive single-writer authority because GitHub REST has no atomic asset-plus-metadata precondition, immediately rereads the empty and complete exact draft, restates the full exact identity on PATCH, requires GitHub's immutable release readback and a fresh download with identical digests, and rechecks the pinned signed tag before VERIFIED",
       reversal:
         "provider versions, signed tags, and release assets are immutable and cannot be rolled back or overwritten; an exact signed tag-only partial state may only be completed by recover-tag-only, and an exact retained draft may only be resumed by recover-draft without changing the tag, candidate, or draft identity; any other bad publication is halted and repaired forward under a new version",
       "failure-handling":
@@ -169,23 +124,17 @@ export const RELEASE_SURFACES = Object.freeze([
       "no-overwrite":
         "requires the descriptor tag, refuses any pre-existing local/remote tag, Registry version, or GitHub Release before creation, uses zero-object-id compare-and-swap for local refs, pushes an exact ref, and accepts only an immutable release with the exact candidate inventory; recovery never mutates or deletes a tag and accepts only the exact pinned signed local/remote annotated object",
       halt:
-        "prepare, tag, and readback stop after one exact workflow dispatch and return its URL as AWAITING_REVIEW; cancel that exact run before approval on any input or evidence mismatch, and never continue by selecting a latest run",
+        "prepare and tag stop after one exact workflow dispatch and return its URL as AWAITING_REVIEW; cancel that exact run before approval on any input or evidence mismatch, and never continue by selecting a latest run",
     },
   },
   {
     surface: FORM_SURFACE,
     target:
-      "github-release:tako0614/terraform-provider-takoform/forms/*",
+      "github-release:tako0614/terraform-provider-takoform/forms/revocations/*",
     covers: [
-      "forms/lifecycle.json",
-      "forms/lifecycle.schema.json",
-      "forms/releases",
-      "forms/release-plan.json",
       "forms/revocations",
-      ".github/workflows/form-package-release.yml",
       ".github/workflows/form-package-revocation.yml",
       "cmd/form-package-release",
-      "cmd/published-package-set",
     ],
     requiresScripts: ["check"],
     requiresTools: ["git", "bun", "gh", "go", "cosign"],
@@ -193,19 +142,19 @@ export const RELEASE_SURFACES = Object.freeze([
     triggers: ["authority", "published-identity", "asynchronous"],
     obligations: {
       provenance:
-        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN, accepts new Form publication only from the current lifecycle-derived Experimental or Stable release authority and accepts Legacy identities only for exact source-commit recovery or verification; ordinary phases accept one Form tag and explicit publish-batch accepts a non-empty unique ordered set, requires a clean non-shallow current protected main, runs the complete owner check before dispatch or mutation, or exactly once for an explicit serial publish-batch whose process-scoped proof is bound to the same clean protected-main commit and tree and revalidated immediately before each tag push, Release draft creation, and final draft publication, checksum-closes every explicit successful same-run candidate, verifies its source/tooling commits and Sigstore identity, and records every exact tag object and asset digest",
+        "uses local operator GH_TOKEN authority without printing or retaining GH_TOKEN; every phase accepts one exact forms/revocations/v<semver> tag plus its exact source commit, requires the committed revocation source and checkpoint files, a clean non-shallow current protected main that descends from that source commit, and the pinned gh/cosign toolchain, runs the complete owner check before dispatch and again before every mutation, consumes only one explicitly named successful revocation-workflow run/attempt, checksum-closes that same-run candidate, verifies its deterministic tag object, source/tooling commit ancestry, and Sigstore identity against the trusted root retained at the tooling commit, and records the exact tag object and every published asset digest",
       "post-conditions":
-        "after local tag/release publication requires exact remote tag resolution, immutable release id/tag, exact API asset digests, and a fresh seven-file package or six-file revocation download; verify-all delegates all 34 semantic readbacks to the repository's Go verifier and writes one create-only external publication set",
+        "after the create-only tag push and Release publication, publish-revocation requires exact remote tag resolution, one immutable release with the exact id/tag identity, exact API asset digests, and a fresh six-file revocation download identical to the verified candidate; verify-revocation closes the published identity by re-downloading the live release, re-verifying its manifest, checksum closure, deep Go semantic report, and Sigstore bundle, and binding the published source commit to the expected commit and its tooling commit to an ancestor of current protected main",
       reversal:
-        "Form Package and revocation identities are append-only and cannot be replaced; an exact tag-only partial state may only be completed forward by recover-tag-only without changing the tag, and its exact retained draft may only be resumed by recover-draft without replacing any identity, while a bad identity requires a corrected package version or later cumulative revocation checkpoint",
+        "revocation checkpoints are append-only cumulative identities: a published checkpoint tag or release is never overwritten, deleted, or rolled back, and no automated recovery phase exists; a wrong or incomplete checkpoint is superseded only by a later cumulative checkpoint under a new version, and an interrupted publication leaves the reported exact tag/release state for operator inspection instead of being resumed blindly",
       "failure-handling":
-        "prints raw diagnostics, retains and reports every created draft for authoritative inspection, never automatically removes a release or tag, reports local and remote ref state after a tag-side partial failure, serial publish-batch preserves input order, stops on the first failure, and reports completedTags plus failedTag, refuses blind retry whenever mutation state is indeterminate, exposes an explicit tag-only recovery that requires the exact candidate object/commit and a completely absent Release, and exposes a separate exact-draft recovery that accepts only a named matching draft and uploads only its missing same-candidate assets",
+        "prints raw command diagnostics, reports the exact local and remote ref state after a tag-side failure and the retained draft or ambiguous release identities after a release-side failure, never automatically removes a release or tag, and refuses blind retry whenever mutation state is indeterminate",
       "independent-review":
-        "the form-package-release protected Environment reviews and signs the exact candidate; local publication consumes only that named successful run/attempt and independently verifies its checksum and Sigstore closure",
+        "the form-package-release protected Environment reviews the revocation workflow run that builds and keyless-signs the exact cumulative checkpoint candidate; local publication consumes only that named successful run/attempt and independently re-verifies its checksum, deterministic tag object, and Sigstore closure before any mutation",
       "no-overwrite":
-        "the lifecycle-derived current authority, tag, source, FormRef, and package digest must match exactly; the retained Legacy plan can authorize only recovery or verification, local tag creation is compare-and-swap, remote refs must be absent before creation and exact afterwards, existing releases are refused, and final readback requires immutable exact assets",
+        "the exact tag must be absent locally and remotely and no GitHub Release identity may exist for it before creation; local tag creation is zero-object-id compare-and-swap over the exact reconstructed candidate object, the remote push is a create-only lease of that exact ref, and final readback accepts only one immutable release with the exact candidate inventory, so every checkpoint identity only appends",
       halt:
-        "prepare and prepare-revocation stop at the exact returned workflow URL as AWAITING_REVIEW; cancel that exact run before approval if anything changes, and publish never infers or selects a latest candidate",
+        "prepare-revocation stops after one exact workflow dispatch and returns its URL as AWAITING_REVIEW; cancel that exact run before approval if any input changes, and publish-revocation never infers or selects a latest run — it consumes only the explicitly named run/attempt",
     },
   },
 ]);
@@ -232,33 +181,8 @@ const PHASES = {
       "run-id",
       "run-attempt",
     ],
-    readback: ["tag", "expected-commit"],
-    verify: ["tag", "expected-commit", "run-id", "run-attempt"],
   },
   [FORM_SURFACE]: {
-    plan: [],
-    prepare: ["tag", "expected-commit"],
-    publish: ["tag", "expected-commit", "run-id", "run-attempt"],
-    "publish-batch": ["input"],
-    "recover-tag-only": [
-      "tag",
-      "expected-commit",
-      "expected-tag-object",
-      "expected-recovery-commit",
-      "run-id",
-      "run-attempt",
-    ],
-    "recover-draft": [
-      "tag",
-      "expected-commit",
-      "expected-tag-object",
-      "expected-recovery-commit",
-      "release-id",
-      "run-id",
-      "run-attempt",
-    ],
-    verify: ["tag", "expected-commit"],
-    "verify-all": ["output-root"],
     "prepare-revocation": ["tag", "expected-commit"],
     "publish-revocation": [
       "tag",
@@ -340,12 +264,6 @@ export function parseReleaseSurfaceArgs(surface, args) {
       throw new Error(`--${name} must be a safe positive decimal integer`);
     }
   }
-  if (values["output-root"] && !isAbsolute(values["output-root"])) {
-    throw new Error("--output-root must be an absolute path");
-  }
-  if (values.input && !isAbsolute(values.input)) {
-    throw new Error("--input must be an absolute path");
-  }
   return { phase, ...values };
 }
 
@@ -417,10 +335,6 @@ function runProvider(context, options) {
       return providerRecoverTagOnly(context, options, descriptor);
     case "recover-draft":
       return providerRecoverDraft(context, options, descriptor);
-    case "readback":
-      return providerReadback(context, options, descriptor);
-    case "verify":
-      return providerVerify(context, options, descriptor);
     default:
       throw usageError(PROVIDER_SURFACE);
   }
@@ -428,40 +342,6 @@ function runProvider(context, options) {
 
 function runForm(context, options) {
   switch (options.phase) {
-    case "plan":
-      return formPlan(context, readCurrentReleasePlan(context.repo));
-    case "prepare":
-      return formPrepare(context, options, readCurrentReleasePlan(context.repo));
-    case "publish":
-      return formPublish(context, options, readCurrentReleasePlan(context.repo));
-    case "publish-batch":
-      return formPublishBatch(
-        context,
-        options,
-        readCurrentReleasePlan(context.repo),
-      );
-    case "recover-tag-only":
-      return formRecoverTagOnly(
-        context,
-        options,
-        formReleaseAuthorityAtSourceCommit(
-          context,
-          options["expected-commit"],
-        ),
-      );
-    case "recover-draft":
-      return formRecoverDraft(
-        context,
-        options,
-        formReleaseAuthorityAtSourceCommit(
-          context,
-          options["expected-commit"],
-        ),
-      );
-    case "verify":
-      return formVerify(context, options);
-    case "verify-all":
-      return formVerifyAll(context, options, readReleasePlan(context.repo));
     case "prepare-revocation":
       return revocationPrepare(context, options);
     case "publish-revocation":
@@ -712,75 +592,8 @@ function runOwnerCheck(context) {
 
 function ownerGateAndFence(context, expectedCommit, options) {
   verifyLocalReleaseToolchain(context);
-  if (context.formPublishBatchOwnerGateProof) {
-    return assertReusableOwnerGateProof(
-      context,
-      context.formPublishBatchOwnerGateProof,
-      expectedCommit,
-      options,
-    );
-  }
   runOwnerCheck(context);
   return assertCurrentProtectedMain(context, expectedCommit, options);
-}
-
-function establishFormPublishBatchOwnerGateProof(context) {
-  if (context.formPublishBatchOwnerGateProof) {
-    throw new Error("Form Package batch owner gate proof is already active");
-  }
-  verifyLocalReleaseToolchain(context);
-  const initialMain = assertCurrentProtectedMain(context);
-  runOwnerCheck(context);
-  const checkedMain = assertCurrentProtectedMain(context, initialMain);
-  const tree = git(context, "rev-parse", "HEAD^{tree}");
-  const proof = Object.freeze({
-    repo: context.repo,
-    commit: checkedMain,
-    tree,
-  });
-  context.formPublishBatchOwnerGateProof = proof;
-  return proof;
-}
-
-function assertReusableOwnerGateProof(
-  context,
-  proof,
-  expectedCommit,
-  options,
-) {
-  if (
-    !proof ||
-    proof.repo !== context.repo ||
-    !COMMIT.test(proof.commit ?? "") ||
-    !GIT_OBJECT.test(proof.tree ?? "")
-  ) {
-    throw new Error("Form Package batch owner gate proof is invalid");
-  }
-  const currentMain = assertCurrentProtectedMain(context, proof.commit);
-  const currentTree = git(context, "rev-parse", "HEAD^{tree}");
-  if (currentTree !== proof.tree) {
-    throw new Error(
-      `release blocked: protected-main tree changed after the batch owner gate; expected ${proof.tree}, observed ${currentTree}`,
-    );
-  }
-  if (expectedCommit) {
-    const exact = options?.exact ?? true;
-    if (exact && expectedCommit !== currentMain) {
-      throw new Error(
-        `release blocked: expected commit ${expectedCommit} is not current protected main ${currentMain}`,
-      );
-    }
-    command(context, "git", ["cat-file", "-e", `${expectedCommit}^{commit}`]);
-    if (!exact) {
-      command(context, "git", [
-        "merge-base",
-        "--is-ancestor",
-        expectedCommit,
-        currentMain,
-      ]);
-    }
-  }
-  return currentMain;
 }
 
 function verifyLocalReleaseToolchain(context) {
@@ -886,14 +699,7 @@ function assertRecoveryCommitAncestor(
 
 function assertFormReleaseAuthorityFence(
   context,
-  {
-    sourceCommit,
-    toolingCommit,
-    currentMain,
-    sourcePath,
-    revocation = false,
-    label,
-  },
+  { sourceCommit, toolingCommit, currentMain, label },
 ) {
   assertCommitAncestor(
     context,
@@ -909,9 +715,7 @@ function assertFormReleaseAuthorityFence(
   );
   const authorityPaths = [
     ...FORM_RELEASE_AUTHORITY_PATHS,
-    revocation ? "forms/revocations" : "forms/release-plan.json",
-    ...(!revocation ? FORM_CURRENT_RELEASE_AUTHORITY_PATHS : []),
-    ...(!revocation && sourcePath ? [sourcePath] : []),
+    "forms/revocations",
   ].sort();
   command(
     context,
@@ -926,49 +730,6 @@ function assertFormReleaseAuthorityFence(
     ],
     {
       label: `${label}: release authority paths changed after reviewed tooling commit`,
-    },
-  );
-}
-
-function assertFormTagOnlyRecoveryFence(
-  context,
-  {
-    sourceCommit,
-    toolingCommit,
-    recoveryCommit,
-    sourcePath,
-    label,
-  },
-) {
-  assertCommitAncestor(
-    context,
-    sourceCommit,
-    toolingCommit,
-    `${label} source/tooling ancestry`,
-  );
-  assertCommitAncestor(
-    context,
-    toolingCommit,
-    recoveryCommit,
-    `${label} tooling/recovery ancestry`,
-  );
-  command(
-    context,
-    "git",
-    [
-      "diff",
-      "--quiet",
-      toolingCommit,
-      recoveryCommit,
-      "--",
-      "forms/release-plan.json",
-      sourcePath,
-      ...FORM_TAG_ONLY_RECOVERY_STABLE_PATHS,
-    ],
-    {
-      label:
-        `${label}: candidate generation, identity, signing, or trust inputs ` +
-        "changed after the reviewed candidate",
     },
   );
 }
@@ -1343,293 +1104,6 @@ function requireProviderTag(tag, descriptor) {
       `--tag must exactly match release/version.json (${descriptor.tag})`,
     );
   }
-}
-
-function readReleasePlan(repo) {
-  const plan = readJSON(join(repo, "forms/release-plan.json"), "release plan");
-  return validateReleasePlan(plan);
-}
-
-function readReleasePlanAtCommit(context, commit) {
-  const raw = command(context, "git", [
-    "show",
-    `${commit}:forms/release-plan.json`,
-  ]);
-  let plan;
-  try {
-    plan = JSON.parse(raw);
-  } catch (error) {
-    throw new Error(`release plan at tooling commit is invalid JSON`, {
-      cause: error,
-    });
-  }
-  return validateReleasePlan(plan);
-}
-
-function readCurrentReleasePlan(repo) {
-  const lifecycle = readJSON(
-    join(repo, "forms/lifecycle.json"),
-    "current Form lifecycle authority",
-  );
-  return currentReleasePlanFromLifecycle(lifecycle, (relativePath) =>
-    readJSON(join(repo, ...relativePath.split("/")), relativePath),
-  );
-}
-
-function readCurrentReleasePlanAtCommit(context, commit) {
-  if (!COMMIT.test(commit ?? "")) {
-    throw new Error("current Form release authority commit is invalid");
-  }
-  const readAtCommit = (relativePath, label = relativePath) => {
-    const raw = command(context, "git", ["show", `${commit}:${relativePath}`]);
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      throw new Error(`${label} at source commit is invalid JSON: ${error.message}`);
-    }
-  };
-  return currentReleasePlanFromLifecycle(
-    readAtCommit("forms/lifecycle.json", "current Form lifecycle authority"),
-    readAtCommit,
-  );
-}
-
-function pathExistsAtCommit(context, commit, relativePath) {
-  if (!COMMIT.test(commit ?? "")) {
-    throw new Error("Form release authority commit is invalid");
-  }
-  return attemptCommand(context, "git", [
-    "cat-file",
-    "-e",
-    `${commit}:${relativePath}`,
-  ]).ok;
-}
-
-function currentReleasePlanAtCommitIfPresent(context, commit) {
-  if (!pathExistsAtCommit(context, commit, "forms/lifecycle.json")) {
-    return {
-      format: "takoform.current-form-release-plan@v2",
-      repository: GITHUB_REPOSITORY,
-      releases: [],
-    };
-  }
-  return readCurrentReleasePlanAtCommit(context, commit);
-}
-
-function currentReleasePlanFromLifecycle(lifecycle, readPackageJSON) {
-  requireExactKeys(
-    lifecycle,
-    [
-      "format",
-      "projectStatus",
-      "currentEpoch",
-      "states",
-      "legacy",
-      "currentForms",
-      "proposals",
-    ],
-    "current Form lifecycle authority",
-  );
-  if (
-    lifecycle.format !== "takoform.form-lifecycle@v2" ||
-    lifecycle.projectStatus !== "experimental" ||
-    lifecycle.currentEpoch !== "forms.takoform.com/v1alpha2" ||
-    JSON.stringify(lifecycle.states) !==
-      JSON.stringify(["proposal", "experimental", "stable", "legacy"]) ||
-    !Array.isArray(lifecycle.currentForms)
-  ) {
-    throw new Error("current Form lifecycle authority identity is invalid");
-  }
-  const releases = [];
-  const tags = new Set();
-  for (const [index, record] of lifecycle.currentForms.entries()) {
-    if (record?.state === "legacy") continue;
-    const label = `current Form lifecycle currentForms[${index}]`;
-    requireExactKeys(
-      record,
-      [
-        "proposalId",
-        "state",
-        "owner",
-        "formRef",
-        "packageDigest",
-        "packagePath",
-        "history",
-        "evidence",
-      ],
-      label,
-    );
-    if (record.state !== "experimental" && record.state !== "stable") {
-      throw new Error(`${label} has a non-publishable state`);
-    }
-    requireExactKeys(
-      record.formRef,
-      ["apiVersion", "kind", "definitionVersion", "schemaDigest"],
-      `${label} FormRef`,
-    );
-    if (
-      record.formRef.apiVersion !== "forms.takoform.com/v1alpha2" ||
-      !/^[A-Z][A-Za-z0-9]{0,63}$/u.test(record.formRef.kind ?? "") ||
-      !/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u.test(
-        record.formRef.definitionVersion ?? "",
-      ) ||
-      !SHA256.test(record.formRef.schemaDigest ?? "") ||
-      !SHA256.test(record.packageDigest ?? "") ||
-      typeof record.packagePath !== "string"
-    ) {
-      throw new Error(`${label} exact identity is invalid`);
-    }
-    const releaseId = releaseIdForKind(record.formRef.kind);
-    const packageIndexPath = `${record.packagePath}/package-index.json`;
-    const packageIndex = readPackageJSON(packageIndexPath);
-    requireExactKeys(
-      packageIndex,
-      ["apiVersion", "kind", "formRef", "definitionPath", "files"],
-      `${label} package index`,
-    );
-    const artifactId = record.packageDigest.replace(":", "-");
-    const tag = `forms/${releaseId}/${artifactId}`;
-    const expectedSourcePath = `forms/releases/${releaseId}/${artifactId}`;
-    if (
-      packageIndex.apiVersion !== "packages.forms.takoform.com/v1alpha3" ||
-      packageIndex.kind !== "FormPackage" ||
-      packageIndex.definitionPath !== "definition.json" ||
-      !CURRENT_FORM_TAG.test(tag) ||
-      record.packagePath !== expectedSourcePath ||
-      JSON.stringify(packageIndex.formRef) !== JSON.stringify(record.formRef)
-    ) {
-      throw new Error(`${label} package release identity is invalid`);
-    }
-    if (tags.has(tag)) {
-      throw new Error(`${label} duplicates release tag ${tag}`);
-    }
-    tags.add(tag);
-    releases.push({
-      proposalId: record.proposalId,
-      state: record.state,
-      kind: record.formRef.kind,
-      releaseId,
-      artifactId,
-      tag,
-      sourcePath: record.packagePath,
-      formRef: record.formRef,
-      packageDigest: record.packageDigest,
-    });
-  }
-  releases.sort((left, right) => left.tag.localeCompare(right.tag));
-  return {
-    format: "takoform.current-form-release-plan@v2",
-    repository: GITHUB_REPOSITORY,
-    releases,
-  };
-}
-
-function releaseIdForKind(kind) {
-  const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
-  let accumulator = 0;
-  let bits = 0;
-  let encoded = "";
-  for (const byte of Buffer.from(kind, "utf8")) {
-    accumulator = (accumulator << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      bits -= 5;
-      encoded += alphabet[(accumulator >> bits) & 31];
-    }
-    accumulator = bits === 0 ? 0 : accumulator & ((1 << bits) - 1);
-  }
-  if (bits > 0) encoded += alphabet[(accumulator << (5 - bits)) & 31];
-  return `k-${encoded}`;
-}
-
-function formReleaseAuthorityAtSourceCommit(context, commit) {
-  return combineFormReleasePlans(
-    currentReleasePlanAtCommitIfPresent(context, commit),
-    readReleasePlanAtCommit(context, commit),
-  );
-}
-
-function combineFormReleasePlans(current, historical) {
-  const releases = [...current.releases, ...historical.releases];
-  const tags = new Set();
-  for (const release of releases) {
-    if (tags.has(release.tag)) {
-      throw new Error(`current and Legacy release authorities overlap at ${release.tag}`);
-    }
-    tags.add(release.tag);
-  }
-  return {
-    format: "takoform.combined-form-release-authority@v1",
-    generation: "current-and-legacy-recovery",
-    repository: GITHUB_REPOSITORY,
-    releases,
-  };
-}
-
-function validateReleasePlan(plan) {
-  if (
-    plan?.format !== "takoform.release-plan@v1" ||
-    plan.generation !== "portable-v1" ||
-    plan.repository !== GITHUB_REPOSITORY ||
-    !Array.isArray(plan.releases) ||
-    plan.releases.length !== 34
-  ) {
-    throw new Error("forms/release-plan.json is not the exact 34-entry plan");
-  }
-  const tags = new Set();
-  for (const entry of plan.releases) {
-    const match = LEGACY_FORM_TAG.exec(entry?.tag ?? "");
-    if (
-      !match ||
-      entry.releaseId !== match[1] ||
-      entry.version !== match[2] ||
-      entry.sourcePath !==
-        `forms/releases/${entry.releaseId}/${entry.version}` ||
-      !SHA256.test(entry.packageDigest) ||
-      typeof entry.kind !== "string" ||
-      typeof entry.formRef !== "object" ||
-      tags.has(entry.tag)
-    ) {
-      throw new Error(`release plan entry is invalid: ${entry?.tag ?? "unknown"}`);
-    }
-    tags.add(entry.tag);
-  }
-  return plan;
-}
-
-function formReleaseIdentity(tag) {
-  const current = CURRENT_FORM_TAG.exec(tag ?? "");
-  if (current) {
-    return {
-      tag,
-      releaseId: current[1],
-      artifactId: current[2],
-      packageApiVersion: "packages.forms.takoform.com/v1alpha3",
-    };
-  }
-  const legacy = LEGACY_FORM_TAG.exec(tag ?? "");
-  if (legacy) {
-    return {
-      tag,
-      releaseId: legacy[1],
-      artifactId: legacy[2],
-      version: legacy[2],
-      packageApiVersion: "packages.forms.takoform.com/v1alpha1",
-    };
-  }
-  throw new Error(
-    "--tag must use a current sha256 locator or a retained Legacy v<semver> locator",
-  );
-}
-
-function plannedRelease(plan, tag) {
-  const entry = plan.releases.find((candidate) => candidate.tag === tag);
-  if (!entry) {
-    throw new Error(
-      `Form Package tag is not authorized by the selected release authority: ${tag}`,
-    );
-  }
-  return entry;
 }
 
 function dispatchWorkflow(
@@ -2191,41 +1665,6 @@ function materializeTagObject(context, tag, expectedCommit, root, metadata) {
     zero,
   ]);
   return reconstructed;
-}
-
-function assertTagOnlyRecoveryState(
-  context,
-  { tag, expectedCommit, expectedObject },
-) {
-  const local = localTagOID(context, tag);
-  if (local !== expectedObject) {
-    throw new Error(
-      `tag-only recovery requires exact local annotated tag object ${expectedObject}; observed ${local || "absent"}`,
-    );
-  }
-  const localType = git(context, "cat-file", "-t", `refs/tags/${tag}`);
-  const localCommit = git(
-    context,
-    "rev-parse",
-    `refs/tags/${tag}^{commit}`,
-  );
-  if (localType !== "tag" || localCommit !== expectedCommit) {
-    throw new Error(
-      `tag-only recovery local tag is not the exact annotated object/commit: ${JSON.stringify({
-        object: local,
-        type: localType,
-        commit: localCommit,
-      })}`,
-    );
-  }
-  const remote = assertExactRemoteTag(
-    context,
-    tag,
-    expectedCommit,
-    expectedObject,
-  );
-  assertReleaseAbsent(context, tag);
-  return { local: { object: local, type: localType, commit: localCommit }, remote };
 }
 
 function splitSignedProviderTagObject(raw, tag, expectedCommit) {
@@ -3309,23 +2748,6 @@ function verifyNamedChecksums(root, checksumName, expectedTargets) {
   }
 }
 
-function registryStatus(context, version) {
-  const status = command(context, "curl", [
-    "--silent",
-    "--show-error",
-    "--location",
-    "--output",
-    "/dev/null",
-    "--write-out",
-    "%{http_code}",
-    `https://registry.terraform.io/v1/providers/tako0614/takoform/${version}/download/linux/amd64`,
-  ]).trim();
-  if (!/^[0-9]{3}$/u.test(status)) {
-    throw new Error(`Terraform Registry returned invalid HTTP status ${status}`);
-  }
-  return status;
-}
-
 function registryVersions(context) {
   const raw = command(context, "curl", [
     "--fail-with-body",
@@ -3452,39 +2874,6 @@ function verifyProviderReleaseProvenance(context, root, descriptor, expected) {
     throw new Error("provider release provenance verification report drifted");
   }
   return report;
-}
-
-function providerProvenanceExpectations(root, descriptor) {
-  const names = providerAssetNames(descriptor);
-  const statement = readJSON(
-    join(root, names.provenance),
-    "provider release provenance",
-  );
-  const build = statement.predicate?.buildDefinition;
-  const external = build?.externalParameters;
-  const internal = build?.internalParameters;
-  const expected = {
-    sourceCommit: internal?.sourceCommit,
-    toolingCommit: internal?.toolingCommit,
-    requestId: external?.requestId,
-    runId: String(internal?.run?.id ?? ""),
-    runAttempt: String(internal?.run?.attempt ?? ""),
-    tagObjectOid: internal?.tagObject?.oid,
-    tagObjectSha256: internal?.tagObject?.sha256,
-  };
-  if (
-    external?.tag !== descriptor.tag ||
-    !COMMIT.test(expected.sourceCommit ?? "") ||
-    !COMMIT.test(expected.toolingCommit ?? "") ||
-    !REQUEST_ID.test(expected.requestId ?? "") ||
-    !POSITIVE_INTEGER.test(expected.runId) ||
-    !POSITIVE_INTEGER.test(expected.runAttempt) ||
-    !/^[0-9a-f]{40,64}$/u.test(expected.tagObjectOid ?? "") ||
-    !SHA256.test(expected.tagObjectSha256 ?? "")
-  ) {
-    throw new Error("provider release provenance expected bindings are invalid");
-  }
-  return expected;
 }
 
 function verifyProviderCandidate(
@@ -4113,433 +3502,6 @@ function providerRecoverDraft(context, options, descriptor) {
   );
 }
 
-function readProviderPublicRelease(
-  context,
-  descriptor,
-  temporaryRoot,
-  releaseCommit,
-) {
-  validateProviderIdentityLedger(context.repo, descriptor);
-  const names = providerAssetNames(descriptor);
-  const release = getRelease(context, descriptor.tag);
-  if (!release || !Array.isArray(release.assets)) {
-    throw new Error("provider GitHub Release is unavailable");
-  }
-  const assets = new Map(
-    release.assets.map((asset) => [
-      asset.name,
-      { name: asset.name, sha256: asset.digest, path: null },
-    ]),
-  );
-  if (
-    assets.size !== names.all.length ||
-    names.all.some((name) => !SHA256.test(assets.get(name)?.sha256 ?? ""))
-  ) {
-    throw new Error("provider GitHub Release inventory is not the exact 15 assets");
-  }
-  const output = join(temporaryRoot, "provider-public");
-  mkdirSync(output);
-  command(context, "gh", [
-    "release",
-    "download",
-    descriptor.tag,
-    "--repo",
-    GITHUB_REPOSITORY,
-    "--dir",
-    output,
-  ]);
-  for (const [name, asset] of assets) {
-    asset.path = join(output, name);
-  }
-  validateReleaseReadback(release, descriptor.tag, assets, {
-    prerelease: descriptor.version.includes("-"),
-    expectedReleaseId: release.id,
-    expectedName: descriptor.tag,
-    expectedBody: providerReleaseBody(descriptor),
-    expectedTargetCommitish: "main",
-    expectedAssetsURL:
-      `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${release.id}/assets`,
-    expectedUploadURL:
-      `https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${release.id}/assets{?name,label}`,
-  });
-  const actual = listRegularFiles(output);
-  if (JSON.stringify(actual) !== JSON.stringify(names.all)) {
-    throw new Error("downloaded provider release inventory differs");
-  }
-  for (const [name, asset] of assets) {
-    if (fileDigest(asset.path) !== asset.sha256) {
-      throw new Error(`provider release readback digest mismatch: ${name}`);
-    }
-  }
-  verifyNamedChecksums(output, names.checksum, [
-    ...names.archives,
-    names.manifest,
-  ]);
-  verifyProviderSignature(context, output, names);
-  const provenance = providerProvenanceExpectations(output, descriptor);
-  const localObject = localTagOID(context, descriptor.tag);
-  const tagObject = command(context, "git", [
-    "cat-file",
-    "tag",
-    provenance.tagObjectOid,
-  ]);
-  if (
-    provenance.sourceCommit !== releaseCommit ||
-    provenance.toolingCommit !== releaseCommit ||
-    provenance.tagObjectOid !== localObject ||
-    sha256(Buffer.from(tagObject, "utf8")) !== provenance.tagObjectSha256
-  ) {
-    throw new Error(
-      "public provider provenance does not bind the current exact signed tag",
-    );
-  }
-  verifyProviderReleaseProvenance(
-    context,
-    output,
-    descriptor,
-    provenance,
-  );
-  command(context, "go", [
-    "-C",
-    "cmd/provider-release",
-    "run",
-    ".",
-    "verify-sbom",
-    ...names.archives.map((name) => join(output, `${name}.spdx.json`)),
-  ]);
-  return { release, assets };
-}
-
-function assertProviderReadbackCommitBinding(
-  context,
-  { sourceCommit, providerReleaseCommit },
-) {
-  assertCommitAncestor(
-    context,
-    providerReleaseCommit,
-    sourceCommit,
-    "provider readback release/current-source ancestry",
-  );
-  return { sourceCommit, providerReleaseCommit };
-}
-
-function providerReadback(context, options, descriptor) {
-  const currentCommit = options["expected-commit"];
-  assertCurrentProtectedMain(context, currentCommit);
-  const localObject = localTagOID(context, descriptor.tag);
-  if (!localObject) throw new Error(`local provider tag ${descriptor.tag} is missing`);
-  const releaseCommit = git(
-    context,
-    "rev-list",
-    "-n",
-    "1",
-    descriptor.tag,
-  );
-  assertProviderReadbackCommitBinding(context, {
-    sourceCommit: currentCommit,
-    providerReleaseCommit: releaseCommit,
-  });
-  assertExactRemoteTag(
-    context,
-    descriptor.tag,
-    releaseCommit,
-    localObject,
-  );
-  return withTemporaryDirectory("takoform-provider-readback", (temporaryRoot) => {
-    readProviderPublicRelease(
-      context,
-      descriptor,
-      temporaryRoot,
-      releaseCommit,
-    );
-    const status = registryStatus(context, descriptor.version);
-    if (status !== "200") {
-      throw new Error(
-        `Terraform Registry has not indexed ${descriptor.version}: HTTP ${status}`,
-      );
-    }
-    ownerGateAndFence(context, currentCommit);
-    const dispatched = dispatchWorkflow(
-      context,
-      "provider-registry-readback.yml",
-      {},
-      { headSha: currentCommit },
-    );
-    return emit(context, {
-      kind: "takos.deploy-result@v1",
-      surface: PROVIDER_SURFACE,
-      phase: "readback",
-      target: PROVIDER_ADDRESS,
-      commit: currentCommit,
-      sourceCommit: currentCommit,
-      providerReleaseCommit: releaseCommit,
-      tag: descriptor.tag,
-      dispatchStatus: "DISPATCHED",
-      status: "AWAITING_REVIEW",
-      workflowRun: dispatched,
-    });
-  });
-}
-
-function providerVerify(context, options, descriptor) {
-  const expectedCommit = options["expected-commit"];
-  assertCurrentProtectedMain(context, expectedCommit);
-  const run = requireSuccessfulRun(
-    context,
-    options["run-id"],
-    options["run-attempt"],
-    {
-      workflowName: "Build signed provider Registry readback",
-      headSha: expectedCommit,
-    },
-  );
-  return withTemporaryDirectory("takoform-registry-proof", (temporaryRoot) => {
-    const candidate = downloadArtifact(
-      context,
-      options["run-id"],
-      `takoform-provider-registry-readback-candidate-${run.displayTitle}-${options["run-id"]}-${options["run-attempt"]}-${expectedCommit.slice(0, 12)}`,
-      join(temporaryRoot, "candidate"),
-    );
-    const proof = verifyRegistryCandidate(context, candidate, {
-      descriptor,
-      expectedCommit,
-      runId: options["run-id"],
-      runAttempt: options["run-attempt"],
-      requestId: run.displayTitle,
-    });
-    return emit(context, {
-      kind: "takos.deploy-result@v1",
-      surface: PROVIDER_SURFACE,
-      phase: "verify",
-      target: PROVIDER_ADDRESS,
-      commit: expectedCommit,
-      sourceCommit: expectedCommit,
-      providerReleaseCommit: proof.providerReleaseCommit,
-      tag: descriptor.tag,
-      candidateRun: { id: options["run-id"], attempt: options["run-attempt"], url: run.url },
-      candidateDigest: fileDigest(join(candidate, "SHA256SUMS")),
-      installedProviderDigest: proof.installedProviderDigest,
-      status: "VERIFIED",
-    });
-  });
-}
-
-function verifyRegistryCandidate(
-  context,
-  root,
-  { descriptor, expectedCommit, runId, runAttempt, requestId },
-) {
-  validateProviderIdentityLedger(context.repo, descriptor);
-  verifyLocalReleaseToolchain(context);
-  const expectedFiles = [
-    "SHA256SUMS",
-    "provider-lifecycle-matrix.json",
-    "provider-readback.json",
-    "provider-readback.sigstore.json",
-    "provider-registry-readback-manifest.json",
-    "signed-provider-registry-readback-candidate.json",
-  ].sort();
-  verifyChecksumClosure(root);
-  if (JSON.stringify(listRegularFiles(root)) !== JSON.stringify(expectedFiles)) {
-    throw new Error("Registry readback candidate is not the exact six-file closure");
-  }
-  const manifestRaw = readFileSync(
-    join(root, "provider-registry-readback-manifest.json"),
-  );
-  const manifest = JSON.parse(manifestRaw);
-  const signedRaw = readFileSync(
-    join(root, "signed-provider-registry-readback-candidate.json"),
-  );
-  const signed = JSON.parse(signedRaw);
-  requireCanonicalSortedJSON(
-    manifestRaw,
-    manifest,
-    "Registry readback manifest",
-  );
-  requireCanonicalSortedJSON(
-    signedRaw,
-    signed,
-    "signed Registry readback candidate",
-  );
-  requireExactKeys(
-    manifest,
-    [
-      "format",
-      "status",
-      "proofType",
-      "generation",
-      "source",
-      "provider",
-      "matrix",
-      "readback",
-    ],
-    "Registry readback manifest",
-  );
-  requireExactKeys(manifest.source, ["repository", "commit"], "Registry source");
-  requireExactKeys(
-    manifest.provider,
-    ["address", "version", "tag", "commit"],
-    "Registry provider",
-  );
-  requireExactKeys(manifest.matrix, ["path", "digest"], "Registry matrix");
-  requireExactKeys(
-    manifest.readback,
-    ["path", "digest", "bundlePath"],
-    "Registry readback",
-  );
-  requireExactKeys(
-    signed,
-    [
-      "format",
-      "status",
-      "proofType",
-      "generation",
-      "certificateIdentity",
-      "workflow",
-      "requestId",
-      "workflowRunId",
-      "workflowRunAttempt",
-      "source",
-      "manifest",
-      "readback",
-    ],
-    "signed Registry readback candidate",
-  );
-  requireExactKeys(signed.source, ["repository", "commit"], "signed Registry source");
-  requireExactKeys(signed.manifest, ["path", "digest"], "signed Registry manifest");
-  requireExactKeys(
-    signed.readback,
-    ["path", "digest", "bundlePath", "bundleDigest"],
-    "signed Registry readback",
-  );
-  const providerCommit = git(context, "rev-list", "-n", "1", descriptor.tag);
-  assertProviderReadbackCommitBinding(context, {
-    sourceCommit: expectedCommit,
-    providerReleaseCommit: providerCommit,
-  });
-  const certificateIdentity =
-    `https://github.com/${GITHUB_REPOSITORY}/.github/workflows/` +
-    "provider-registry-readback.yml@refs/heads/main";
-  if (
-    manifest.format !== "takoform.provider-registry-readback-candidate@v1" ||
-    manifest.status !== "candidate-only" ||
-    manifest.proofType !== "registry-readback" ||
-    manifest.generation !== "portable-v1" ||
-    manifest.source.repository !== SOURCE_REPOSITORY ||
-    manifest.source?.commit !== expectedCommit ||
-    manifest.provider?.address !== PROVIDER_ADDRESS ||
-    manifest.provider?.tag !== descriptor.tag ||
-    manifest.provider?.version !== descriptor.version ||
-    manifest.provider?.commit !== providerCommit ||
-    manifest.matrix?.path !== "provider-lifecycle-matrix.json" ||
-    manifest.matrix?.digest !==
-      fileDigest(join(root, "provider-lifecycle-matrix.json")) ||
-    manifest.readback?.path !== "provider-readback.json" ||
-    manifest.readback?.bundlePath !== "provider-readback.sigstore.json" ||
-    manifest.readback?.digest !==
-      fileDigest(join(root, "provider-readback.json")) ||
-    signed.format !==
-      "takoform.provider-registry-readback-signed-candidate@v1" ||
-    signed.status !== "candidate-only" ||
-    signed.proofType !== "registry-readback" ||
-    signed.generation !== "portable-v1" ||
-    signed.certificateIdentity !== certificateIdentity ||
-    signed.workflow !==
-      ".github/workflows/provider-registry-readback.yml" ||
-    signed.requestId !== requestId ||
-    !REQUEST_ID.test(signed.requestId ?? "") ||
-    signed.workflowRunId?.toString() !== runId ||
-    normalizedPositiveInteger(
-      signed.workflowRunAttempt,
-      "signed Registry workflowRunAttempt",
-    ) !== runAttempt ||
-    signed.source?.repository !== SOURCE_REPOSITORY ||
-    signed.source?.commit !== expectedCommit ||
-    signed.manifest?.path !==
-      "provider-registry-readback-manifest.json" ||
-    signed.manifest?.digest !== sha256(manifestRaw) ||
-    signed.readback?.path !== "provider-readback.json" ||
-    signed.readback?.digest !== manifest.readback.digest ||
-    signed.readback?.bundlePath !== "provider-readback.sigstore.json" ||
-    signed.readback?.bundleDigest !==
-      fileDigest(join(root, "provider-readback.sigstore.json"))
-  ) {
-    throw new Error("Registry readback signed metadata binding mismatch");
-  }
-  const rebuilt = command(context, "go", [
-    "run",
-    "./cmd/provider-registry-readback",
-    "--matrix",
-    join(root, "provider-lifecycle-matrix.json"),
-    "--provider-release-commit",
-    providerCommit,
-  ]);
-  const retained = readFileSync(join(root, "provider-readback.json"), "utf8");
-  if (rebuilt !== retained) {
-    throw new Error("Registry readback is not the canonical semantic rebuild");
-  }
-  const readback = JSON.parse(retained);
-  if (
-    !Array.isArray(readback.installs) ||
-    readback.installs.length !== 2 ||
-    JSON.stringify(
-      readback.installs.map((install) => install.product).sort(),
-    ) !== JSON.stringify(["OpenTofu", "Terraform"]) ||
-    readback.installs.some(
-      (install) => !SHA256.test(install.providerBinarySha256 ?? ""),
-    ) ||
-    new Set(
-      readback.installs.map((install) => install.providerBinarySha256),
-    ).size !== 1
-  ) {
-    throw new Error(
-      "Registry readback must bind Terraform and OpenTofu to one provider binary digest",
-    );
-  }
-  command(context, "cosign", [
-    "verify-blob",
-    join(root, "provider-readback.json"),
-    "--bundle",
-    join(root, "provider-readback.sigstore.json"),
-    "--trusted-root",
-    join(context.repo, TRUSTED_ROOT),
-    "--certificate-identity",
-    certificateIdentity,
-    "--certificate-oidc-issuer",
-    OIDC_ISSUER,
-  ]);
-  return {
-    installedProviderDigest: readback.installs[0].providerBinarySha256,
-    providerReleaseCommit: providerCommit,
-  };
-}
-
-function formAssetNames(entry) {
-  const artifactId = entry.artifactId ?? entry.version;
-  if (
-    typeof artifactId !== "string" ||
-    (!CURRENT_FORM_TAG.test(`forms/${entry.releaseId}/${artifactId}`) &&
-      !LEGACY_FORM_TAG.test(`forms/${entry.releaseId}/v${artifactId}`))
-  ) {
-    throw new Error("Form Package entry has no canonical artifact identity");
-  }
-  const base = `takoform-form-${entry.releaseId}_${artifactId}`;
-  return {
-    base,
-    index: `${base}_package-index.json`,
-    bundle: `${base}_package-index.sigstore.json`,
-    all: [
-      `${base}.tar.gz`,
-      `${base}_package-index.json`,
-      `${base}_package-index.sigstore.json`,
-      `${base}_provenance.intoto.json`,
-      `${base}_sbom.spdx.json`,
-      "release-manifest.json",
-      "SHA256SUMS",
-    ].sort(),
-  };
-}
-
 function revocationAssetNames(tag) {
   const match = REVOCATION_TAG.exec(tag);
   if (!match) {
@@ -4644,204 +3606,9 @@ function withTrustedRootAtCommit(context, toolingCommit, operation) {
   });
 }
 
-function verifyFormSemanticClosure(
-  context,
-  root,
-  entry,
-  sourceCommit,
-  toolingCommit,
-  trustedRoot,
-) {
-  const raw = command(context, "go", [
-    "run",
-    "./cmd/published-package-set",
-    "verify-plan-directory",
-    "--asset-root",
-    root,
-    "--source-root",
-    context.repo,
-    "--kind",
-    entry.kind,
-    "--tag",
-    entry.tag,
-    "--source-commit",
-    sourceCommit,
-    "--tooling-commit",
-    toolingCommit,
-    "--trusted-root",
-    trustedRoot,
-  ]);
-  const report = JSON.parse(raw);
-  if (
-    report.kind !== entry.kind ||
-    report.releaseId !== entry.releaseId ||
-    (report.artifactId ?? report.version) !==
-      (entry.artifactId ?? entry.version)
-  ) {
-    throw new Error("Form Package deep semantic report plan binding mismatch");
-  }
-  return report;
-}
-
-function verifyFormPublicAssets(context, root, entry, { metadata } = {}) {
-  const names = formAssetNames(entry);
-  const actual = listRegularFiles(root);
-  if (JSON.stringify(actual) !== JSON.stringify(names.all)) {
-    throw new Error(`Form Package asset inventory differs: ${actual.join(", ")}`);
-  }
-  const manifest = readJSON(
-    join(root, "release-manifest.json"),
-    "Form Package release manifest",
-  );
-  const currentIdentity = entry.artifactId !== undefined;
-  const manifestIdentityMatches = currentIdentity
-    ? manifest.artifactId === entry.artifactId &&
-      !("packageVersion" in manifest)
-    : manifest.packageVersion === entry.version &&
-      !("artifactId" in manifest);
-  if (
-    manifest.schemaVersion !== 1 ||
-    manifest.releaseType !== "form-package" ||
-    manifest.tag !== entry.tag ||
-    manifest.sourceRepository !== `github.com/${GITHUB_REPOSITORY}` ||
-    !COMMIT.test(manifest.sourceCommit ?? "") ||
-    !COMMIT.test(manifest.toolingCommit ?? "") ||
-    manifest.workflow !== ".github/workflows/form-package-release.yml" ||
-    !manifestIdentityMatches ||
-    manifest.releaseId !== entry.releaseId ||
-    manifest.packageDigest !== entry.packageDigest ||
-    JSON.stringify(manifest.formRef) !== JSON.stringify(entry.formRef) ||
-    manifest.signedSubject !== names.index ||
-    manifest.signatureBundle !== names.bundle ||
-    manifest.publicationReady !== true ||
-    !Array.isArray(manifest.publicationBlockers) ||
-    manifest.publicationBlockers.length !== 0 ||
-    !Array.isArray(manifest.assets) ||
-    manifest.assets.length !== 5
-  ) {
-    throw new Error("Form Package manifest does not bind the exact plan entry");
-  }
-  if (
-    metadata &&
-    (manifest.sourceCommit !== metadata.sourceCommit ||
-      manifest.toolingCommit !== metadata.toolingCommit)
-  ) {
-    throw new Error("Form Package manifest commit binding differs from candidate");
-  }
-  const manifestAssets = new Map();
-  for (const asset of manifest.assets) {
-    if (
-      typeof asset.name !== "string" ||
-      !SHA256.test(asset.digest ?? "") ||
-      manifestAssets.has(asset.name) ||
-      fileDigest(join(root, asset.name)) !== asset.digest
-    ) {
-      throw new Error(`Form Package manifest asset is invalid: ${asset?.name}`);
-    }
-    manifestAssets.set(asset.name, asset.digest);
-  }
-  const checksumTargets = [
-    ...manifestAssets.keys(),
-    "release-manifest.json",
-  ].sort();
-  verifyNamedChecksums(root, "SHA256SUMS", checksumTargets);
-  if (fileDigest(join(root, names.index)) !== entry.packageDigest) {
-    throw new Error("signed package index digest differs from release plan");
-  }
-  withTrustedRootAtCommit(
-    context,
-    manifest.toolingCommit,
-    (trustedRoot, trustedRootDigest) => {
-      const deepReport = verifyFormSemanticClosure(
-        context,
-        root,
-        entry,
-        manifest.sourceCommit,
-        manifest.toolingCommit,
-        trustedRoot,
-      );
-      verifyDeepAssetReport(context, root, deepReport, {
-        format: "takoform.form-package-directory-verification@v1",
-        label: "Form Package",
-        names: names.all,
-        tag: entry.tag,
-        sourceCommit: manifest.sourceCommit,
-        toolingCommit: manifest.toolingCommit,
-        trustedRootDigest,
-      });
-      verifySigstoreSubject(
-        context,
-        root,
-        names.index,
-        names.bundle,
-        ".github/workflows/form-package-release.yml",
-        trustedRoot,
-      );
-    },
-  );
-  return manifest;
-}
-
-function verifyFormCandidate(
-  context,
-  root,
-  { entry, runId, runAttempt, requestId, expectedCommit, toolingCommit },
-) {
-  const metadata = verifyCandidateRoot(root, { tagObject: true });
-  requireExactKeys(
-    metadata,
-    [
-      "format",
-      "repository",
-      "workflowPath",
-      "workflowRef",
-      "sourceRef",
-      "runId",
-      "runAttempt",
-      "tag",
-      "sourceCommit",
-      "toolingCommit",
-      "objectFormat",
-      "tagObjectOid",
-      "tagObjectSha256",
-      "requestId",
-      "assets",
-    ],
-    "Form Package candidate metadata",
-  );
-  if (
-    metadata.format !== "takoform.form-package-release-candidate@v1" ||
-    metadata.repository !== GITHUB_REPOSITORY ||
-    metadata.workflowPath !== ".github/workflows/form-package-release.yml" ||
-    metadata.workflowRef !==
-      `${GITHUB_REPOSITORY}/.github/workflows/form-package-release.yml@refs/heads/main` ||
-    metadata.sourceRef !== "refs/heads/main" ||
-    metadata.requestId !== requestId ||
-    normalizedPositiveInteger(metadata.runId, "metadata runId") !== runId ||
-    normalizedPositiveInteger(metadata.runAttempt, "metadata runAttempt") !==
-      runAttempt ||
-    metadata.tag !== entry.tag ||
-    metadata.sourceCommit !== expectedCommit ||
-    metadata.toolingCommit !== toolingCommit
-  ) {
-    throw new Error("Form Package candidate metadata binding mismatch");
-  }
-  const names = formAssetNames(entry);
-  const assets = validateCandidateAssets(root, metadata, names.all);
-  verifyFormPublicAssets(context, join(root, "assets"), entry, { metadata });
-  verifyTagObjectWorkflowBinding(
-    context,
-    root,
-    metadata,
-    runId,
-    runAttempt,
-  );
-  return { assets, metadata };
-}
-
 function expectedFormTagObject(
   context,
-  { tag, sourceCommit, requestId, runId, runAttempt, revocation = false },
+  { tag, sourceCommit, requestId, runId, runAttempt },
 ) {
   const epoch = git(
     context,
@@ -4853,18 +3620,13 @@ function expectedFormTagObject(
   if (!/^(?:0|[1-9][0-9]*)$/u.test(epoch)) {
     throw new Error("tag source commit timestamp is not a Unix epoch");
   }
-  const actor = revocation
-    ? "Takoform Form Package Revocation"
-    : "Takoform Form Package Release";
-  const title = revocation
-    ? `Takoform Form Package revocation checkpoint ${tag}`
-    : `Takoform Form Package ${tag}`;
   return (
     `object ${sourceCommit}\n` +
     "type commit\n" +
     `tag ${tag}\n` +
-    `tagger ${actor} <release@takoform.invalid> ${epoch} +0000\n\n` +
-    `${title}\n\n` +
+    "tagger Takoform Form Package Revocation " +
+    `<release@takoform.invalid> ${epoch} +0000\n\n` +
+    `Takoform Form Package revocation checkpoint ${tag}\n\n` +
     `source-commit: ${sourceCommit}\n` +
     `request-id: ${requestId}\n` +
     `workflow-run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/` +
@@ -4878,7 +3640,6 @@ function verifyTagObjectWorkflowBinding(
   metadata,
   runId,
   runAttempt,
-  { revocation = false } = {},
 ) {
   const text = readFileSync(join(root, "tag-object"), "utf8");
   const expected = expectedFormTagObject(context, {
@@ -4887,7 +3648,6 @@ function verifyTagObjectWorkflowBinding(
     requestId: metadata.requestId,
     runId,
     runAttempt,
-    revocation,
   });
   if (text !== expected) {
     throw new Error(
@@ -5079,7 +3839,6 @@ function verifyRevocationCandidate(
     metadata,
     runId,
     runAttempt,
-    { revocation: true },
   );
   return { assets, metadata };
 }
@@ -5110,629 +3869,6 @@ function readExactPublicRelease(
   const assets = publicAssets(output, actualNames);
   validateReleaseReadback(release, tag, assets, { prerelease });
   return { release, output, assets };
-}
-
-function formPlan(context, plan) {
-  const commit = assertCurrentProtectedMain(context);
-  const commands = plan.releases.map(
-    (entry) =>
-      `bun run deploy -- ${FORM_SURFACE} prepare --tag ${entry.tag} --expected-commit ${commit}`,
-  );
-  context.stdout.write(`${commands.join("\n")}\n`);
-  return emit(context, {
-    kind: "takos.deploy-result@v1",
-    surface: FORM_SURFACE,
-    phase: "plan",
-    authority: plan.format,
-    commit,
-    releases: commands.length,
-    status: "VERIFIED",
-  });
-}
-
-function formPrepare(context, options, plan) {
-  const entry = plannedRelease(plan, options.tag);
-  const sourceCommit = options["expected-commit"];
-  const commit = assertCurrentProtectedMain(context, sourceCommit, {
-    exact: false,
-  });
-  assertTagAbsent(context, entry.tag);
-  assertReleaseAbsent(context, entry.tag);
-  ownerGateAndFence(context, commit);
-  const dispatched = dispatchWorkflow(context, "form-package-release.yml", {
-    tag: entry.tag,
-    expected_commit: sourceCommit,
-  }, { headSha: commit });
-  return emit(context, {
-    kind: "takos.deploy-result@v1",
-    surface: FORM_SURFACE,
-    phase: "prepare",
-    commit: sourceCommit,
-    toolingCommit: commit,
-    tag: entry.tag,
-    packageDigest: entry.packageDigest,
-    dispatchStatus: "DISPATCHED",
-    status: "AWAITING_REVIEW",
-    workflowRun: dispatched,
-  });
-}
-
-function readFormPublishBatch(
-  input,
-  plan,
-  {
-    open = openSync,
-    fstat = fstatSync,
-    read = readSync,
-    close = closeSync,
-  } = {},
-) {
-  let descriptor;
-  try {
-    descriptor = open(
-      input,
-      fsConstants.O_RDONLY |
-        fsConstants.O_NOFOLLOW |
-        fsConstants.O_NONBLOCK,
-    );
-  } catch (error) {
-    throw new Error(
-      `Form Package batch input cannot be opened without following symbolic links: ${error.message}`,
-    );
-  }
-  let raw;
-  let stat;
-  try {
-    stat = fstat(descriptor);
-    if (!stat.isFile()) {
-      throw new Error("Form Package batch input must be a regular file");
-    }
-    if (stat.size > FORM_BATCH_MAX_BYTES) {
-      throw new Error("Form Package batch input exceeds 1 MiB");
-    }
-    const buffer = Buffer.alloc(FORM_BATCH_MAX_BYTES + 1);
-    let offset = 0;
-    while (offset < buffer.length) {
-      const bytesRead = read(
-        descriptor,
-        buffer,
-        offset,
-        buffer.length - offset,
-        null,
-      );
-      if (
-        !Number.isSafeInteger(bytesRead) ||
-        bytesRead < 0 ||
-        bytesRead > buffer.length - offset
-      ) {
-        throw new Error(
-          "Form Package batch input read returned an invalid byte count",
-        );
-      }
-      if (bytesRead === 0) break;
-      offset += bytesRead;
-    }
-    if (offset > FORM_BATCH_MAX_BYTES) {
-      throw new Error("Form Package batch input exceeds 1 MiB");
-    }
-    raw = buffer.subarray(0, offset);
-    if (raw.length !== stat.size) {
-      throw new Error("Form Package batch input changed while it was read");
-    }
-  } finally {
-    close(descriptor);
-  }
-  const value = parseCanonicalCandidateMetadata(
-    raw,
-    "Form Package batch input",
-  );
-  if (
-    !Array.isArray(value) ||
-    value.length === 0 ||
-    value.length > plan.releases.length
-  ) {
-    throw new Error(
-      `Form Package batch input must contain 1-${plan.releases.length} entries`,
-    );
-  }
-  const tags = new Set();
-  const runs = new Set();
-  return value.map((entry, index) => {
-    const label = `Form Package batch input entry ${index + 1}`;
-    if (
-      !entry ||
-      typeof entry !== "object" ||
-      Array.isArray(entry) ||
-      JSON.stringify(Object.keys(entry).sort()) !==
-        JSON.stringify(
-          ["expectedCommit", "runAttempt", "runId", "tag"].sort(),
-        )
-    ) {
-      throw new Error(
-        `${label} must contain exactly tag, expectedCommit, runId, and runAttempt`,
-      );
-    }
-    for (const [name, field] of [
-      ["tag", entry.tag],
-      ["expectedCommit", entry.expectedCommit],
-      ["runId", entry.runId],
-      ["runAttempt", entry.runAttempt],
-    ]) {
-      if (typeof field !== "string" || field === "") {
-        throw new Error(`${label} ${name} must be a non-empty string`);
-      }
-    }
-    const options = parseReleaseSurfaceArgs(FORM_SURFACE, [
-      "publish",
-      "--tag",
-      entry.tag,
-      "--expected-commit",
-      entry.expectedCommit,
-      "--run-id",
-      entry.runId,
-      "--run-attempt",
-      entry.runAttempt,
-    ]);
-    plannedRelease(plan, options.tag);
-    const run = `${options["run-id"]}/${options["run-attempt"]}`;
-    if (tags.has(options.tag)) {
-      throw new Error(`${label} duplicates tag ${options.tag}`);
-    }
-    if (runs.has(run)) {
-      throw new Error(`${label} duplicates workflow run/attempt ${run}`);
-    }
-    tags.add(options.tag);
-    runs.add(run);
-    return options;
-  });
-}
-
-function formPublishBatch(
-  context,
-  options,
-  plan,
-  publishOne = formPublish,
-) {
-  const entries = readFormPublishBatch(options.input, plan);
-  const proof = establishFormPublishBatchOwnerGateProof(context);
-  const results = [];
-  let active = null;
-  try {
-    for (const entry of entries) {
-      active = entry;
-      results.push(publishOne(context, entry, plan));
-    }
-  } catch (error) {
-    context.stderr.write(
-      `${JSON.stringify({
-        kind: "takos.deploy-failure@v1",
-        surface: FORM_SURFACE,
-        phase: "publish-batch",
-        ownerGateCommit: proof.commit,
-        completedTags: results.map((result) => result.tag),
-        failedTag: active?.tag ?? null,
-        instruction:
-          "stop; inspect the exact failed tag and Release state, then create a new input containing only identities authoritatively proven absent",
-      })}\n`,
-    );
-    throw error;
-  } finally {
-    delete context.formPublishBatchOwnerGateProof;
-  }
-  return emit(context, {
-    kind: "takos.deploy-result@v1",
-    surface: FORM_SURFACE,
-    phase: "publish-batch",
-    commit: proof.commit,
-    ownerGateTree: proof.tree,
-    releases: results.map((result) => ({
-      tag: result.tag,
-      commit: result.commit,
-      tagObject: result.tagObject,
-      candidateRun: result.candidateRun,
-      releaseId: result.releaseId,
-      releaseUrl: result.releaseUrl,
-      assetDigests: result.assetDigests,
-      productionReadback: result.productionReadback,
-    })),
-    status: "VERIFIED",
-  });
-}
-
-function formPublicationMutationFence(
-  context,
-  { expectedCommit, toolingCommit, entry, label },
-) {
-  const currentMain = ownerGateAndFence(context);
-  assertFormReleaseAuthorityFence(context, {
-    sourceCommit: expectedCommit,
-    toolingCommit,
-    currentMain,
-    sourcePath: entry.sourcePath,
-    label,
-  });
-  return currentMain;
-}
-
-function formPublish(context, options, plan) {
-  const entry = plannedRelease(plan, options.tag);
-  const expectedCommit = options["expected-commit"];
-  const initialMain = assertCurrentProtectedMain(context, expectedCommit, {
-    exact: false,
-  });
-  assertTagAbsent(context, entry.tag);
-  assertReleaseAbsent(context, entry.tag);
-  const run = requireSuccessfulRun(
-    context,
-    options["run-id"],
-    options["run-attempt"],
-    {
-      workflowName: "Prepare signed Form Package release candidate",
-    },
-  );
-  const toolingCommit = run.headSha;
-  assertFormReleaseAuthorityFence(context, {
-    sourceCommit: expectedCommit,
-    toolingCommit,
-    currentMain: initialMain,
-    sourcePath: entry.sourcePath,
-    label: "Form Package reviewed candidate fence",
-  });
-  return withTemporaryDirectory("takoform-form-publish", (temporaryRoot) => {
-    const candidate = downloadArtifact(
-      context,
-      options["run-id"],
-      `form-package-release-candidate-${options["run-id"]}-${options["run-attempt"]}`,
-      join(temporaryRoot, "candidate"),
-    );
-    const verified = verifyFormCandidate(context, candidate, {
-      entry,
-      runId: options["run-id"],
-      runAttempt: options["run-attempt"],
-      requestId: run.displayTitle,
-      expectedCommit,
-      toolingCommit,
-    });
-    let tagObject = "";
-    try {
-      formPublicationMutationFence(context, {
-        expectedCommit,
-        toolingCommit,
-        entry,
-        label: "Form Package tag mutation fence",
-      });
-      tagObject = ensureCandidateTagPublished(
-        context,
-        entry.tag,
-        expectedCommit,
-        candidate,
-        verified.metadata,
-      );
-      formPublicationMutationFence(context, {
-        expectedCommit,
-        toolingCommit,
-        entry,
-        label: "Form Package release mutation fence",
-      });
-      const release = publishReleaseLocally(context, {
-        tag: entry.tag,
-        assets: verified.assets,
-        body:
-          "Data-only Takoform Form Package release. Verify the canonical package index, Sigstore bundle, and publisher identity before installation.",
-        temporaryRoot,
-        prePublishFence: () => {
-          formPublicationMutationFence(context, {
-            expectedCommit,
-            toolingCommit,
-            entry,
-            label: "Form Package pre-publish fence",
-          });
-        },
-      });
-      return emit(context, {
-        kind: "takos.deploy-result@v1",
-        surface: FORM_SURFACE,
-        phase: "publish",
-        commit: expectedCommit,
-        tag: entry.tag,
-        tagObject,
-        candidateRun: { id: options["run-id"], attempt: options["run-attempt"], url: run.url },
-        releaseId: release.id,
-        releaseUrl: release.html_url,
-        assetDigests: Object.fromEntries(
-          [...verified.assets].map(([name, asset]) => [name, asset.sha256]),
-        ),
-        productionReadback: "EXACT_IMMUTABLE_RELEASE",
-        status: "VERIFIED",
-      });
-    } catch (error) {
-      reportTagFailure(context, entry.tag, tagObject);
-      throw error;
-    }
-  });
-}
-
-function formRecoverTagOnly(context, options, plan) {
-  const entry = plannedRelease(plan, options.tag);
-  const expectedCommit = options["expected-commit"];
-  const expectedObject = options["expected-tag-object"];
-  const recoveryCommit = options["expected-recovery-commit"];
-  const initialMain = assertCurrentProtectedMain(context, recoveryCommit);
-  const run = requireSuccessfulRun(
-    context,
-    options["run-id"],
-    options["run-attempt"],
-    {
-      workflowName: "Prepare signed Form Package release candidate",
-    },
-  );
-  const toolingCommit = run.headSha;
-  assertFormTagOnlyRecoveryFence(context, {
-    sourceCommit: expectedCommit,
-    toolingCommit,
-    recoveryCommit: initialMain,
-    sourcePath: entry.sourcePath,
-    label: "Form Package tag-only reviewed candidate fence",
-  });
-  return withTemporaryDirectory(
-    "takoform-form-tag-only-recovery",
-    (temporaryRoot) => {
-      const candidate = downloadArtifact(
-        context,
-        options["run-id"],
-        `form-package-release-candidate-${options["run-id"]}-${options["run-attempt"]}`,
-        join(temporaryRoot, "candidate"),
-      );
-      const verified = verifyFormCandidate(context, candidate, {
-        entry,
-        runId: options["run-id"],
-        runAttempt: options["run-attempt"],
-        requestId: run.displayTitle,
-        expectedCommit,
-        toolingCommit,
-      });
-      try {
-        const candidateObject = reconstructCandidateTagObject(
-          context,
-          entry.tag,
-          expectedCommit,
-          candidate,
-          verified.metadata,
-        );
-        if (
-          candidateObject !== expectedObject ||
-          verified.metadata.tagObjectOid !== expectedObject
-        ) {
-          throw new Error(
-            `tag-only recovery candidate object ${candidateObject} does not equal explicitly expected ${expectedObject}`,
-          );
-        }
-        assertTagOnlyRecoveryState(context, {
-          tag: entry.tag,
-          expectedCommit,
-          expectedObject,
-        });
-        const mutationMain = ownerGateAndFence(context, recoveryCommit);
-        assertFormTagOnlyRecoveryFence(context, {
-          sourceCommit: expectedCommit,
-          toolingCommit,
-          recoveryCommit: mutationMain,
-          sourcePath: entry.sourcePath,
-          label: "Form Package tag-only release mutation fence",
-        });
-        assertTagOnlyRecoveryState(context, {
-          tag: entry.tag,
-          expectedCommit,
-          expectedObject,
-        });
-        const release = publishReleaseLocally(context, {
-          tag: entry.tag,
-          assets: verified.assets,
-          body: FORM_TAG_ONLY_RELEASE_BODY,
-          temporaryRoot,
-          prePublishFence: () => {
-            const publishMain = ownerGateAndFence(context, recoveryCommit);
-            assertFormTagOnlyRecoveryFence(context, {
-              sourceCommit: expectedCommit,
-              toolingCommit,
-              recoveryCommit: publishMain,
-              sourcePath: entry.sourcePath,
-              label: "Form Package tag-only pre-publish fence",
-            });
-            const state = assertExactRemoteTag(
-              context,
-              entry.tag,
-              expectedCommit,
-              expectedObject,
-            );
-            const local = localTagOID(context, entry.tag);
-            if (local !== expectedObject) {
-              throw new Error(
-                `tag-only recovery local tag changed before publication: ${local || "absent"}`,
-              );
-            }
-            return state;
-          },
-        });
-        return emit(context, {
-          kind: "takos.deploy-result@v1",
-          surface: FORM_SURFACE,
-          phase: "recover-tag-only",
-          commit: expectedCommit,
-          toolingCommit,
-          recoveryCommit,
-          tag: entry.tag,
-          tagObject: expectedObject,
-          recoveredFrom: "EXACT_TAG_PRESENT_RELEASE_ABSENT",
-          candidateRun: {
-            id: options["run-id"],
-            attempt: options["run-attempt"],
-            url: run.url,
-          },
-          releaseId: release.id,
-          releaseUrl: release.html_url,
-          assetDigests: Object.fromEntries(
-            [...verified.assets].map(([name, asset]) => [name, asset.sha256]),
-          ),
-          productionReadback: "EXACT_IMMUTABLE_RELEASE",
-          status: "VERIFIED",
-        });
-      } catch (error) {
-        reportTagFailure(context, entry.tag, "", {
-          phase: "recover-tag-only",
-        });
-        throw error;
-      }
-    },
-  );
-}
-
-function formRecoverDraft(context, options, plan) {
-  const entry = plannedRelease(plan, options.tag);
-  const expectedCommit = options["expected-commit"];
-  const expectedObject = options["expected-tag-object"];
-  const recoveryCommit = options["expected-recovery-commit"];
-  const releaseId = Number(options["release-id"]);
-  const initialMain = assertCurrentProtectedMain(context, recoveryCommit);
-  const run = requireSuccessfulRun(
-    context,
-    options["run-id"],
-    options["run-attempt"],
-    {
-      workflowName: "Prepare signed Form Package release candidate",
-    },
-  );
-  const toolingCommit = run.headSha;
-  assertFormTagOnlyRecoveryFence(context, {
-    sourceCommit: expectedCommit,
-    toolingCommit,
-    recoveryCommit: initialMain,
-    sourcePath: entry.sourcePath,
-    label: "Form Package retained-draft reviewed candidate fence",
-  });
-  return withTemporaryDirectory(
-    "takoform-form-draft-recovery",
-    (temporaryRoot) => {
-      const candidate = downloadArtifact(
-        context,
-        options["run-id"],
-        `form-package-release-candidate-${options["run-id"]}-${options["run-attempt"]}`,
-        join(temporaryRoot, "candidate"),
-      );
-      const verified = verifyFormCandidate(context, candidate, {
-        entry,
-        runId: options["run-id"],
-        runAttempt: options["run-attempt"],
-        requestId: run.displayTitle,
-        expectedCommit,
-        toolingCommit,
-      });
-      try {
-        const candidateObject = reconstructCandidateTagObject(
-          context,
-          entry.tag,
-          expectedCommit,
-          candidate,
-          verified.metadata,
-        );
-        if (
-          candidateObject !== expectedObject ||
-          verified.metadata.tagObjectOid !== expectedObject
-        ) {
-          throw new Error(
-            `draft recovery candidate object ${candidateObject} does not equal explicitly expected ${expectedObject}`,
-          );
-        }
-        assertExactRemoteTag(
-          context,
-          entry.tag,
-          expectedCommit,
-          expectedObject,
-        );
-        const local = localTagOID(context, entry.tag);
-        if (local !== expectedObject) {
-          throw new Error(
-            `draft recovery local tag differs: ${local || "absent"}`,
-          );
-        }
-        const mutationMain = ownerGateAndFence(context, recoveryCommit);
-        assertFormTagOnlyRecoveryFence(context, {
-          sourceCommit: expectedCommit,
-          toolingCommit,
-          recoveryCommit: mutationMain,
-          sourcePath: entry.sourcePath,
-          label: "Form Package retained-draft mutation fence",
-        });
-        assertExactRemoteTag(
-          context,
-          entry.tag,
-          expectedCommit,
-          expectedObject,
-        );
-        const release = resumeDraftReleaseLocally(context, {
-          releaseId,
-          tag: entry.tag,
-          assets: verified.assets,
-          body: FORM_TAG_ONLY_RELEASE_BODY,
-          temporaryRoot,
-          prePublishFence: () => {
-            const publishMain = ownerGateAndFence(context, recoveryCommit);
-            assertFormTagOnlyRecoveryFence(context, {
-              sourceCommit: expectedCommit,
-              toolingCommit,
-              recoveryCommit: publishMain,
-              sourcePath: entry.sourcePath,
-              label: "Form Package retained-draft pre-publish fence",
-            });
-            const publishState = assertExactRemoteTag(
-              context,
-              entry.tag,
-              expectedCommit,
-              expectedObject,
-            );
-            const publishLocal = localTagOID(context, entry.tag);
-            if (publishLocal !== expectedObject) {
-              throw new Error(
-                `draft recovery local tag changed before publication: ${publishLocal || "absent"}`,
-              );
-            }
-            return publishState;
-          },
-        });
-        return emit(context, {
-          kind: "takos.deploy-result@v1",
-          surface: FORM_SURFACE,
-          phase: "recover-draft",
-          commit: expectedCommit,
-          toolingCommit,
-          recoveryCommit,
-          tag: entry.tag,
-          tagObject: expectedObject,
-          recoveredFrom: "EXACT_RETAINED_DRAFT",
-          candidateRun: {
-            id: options["run-id"],
-            attempt: options["run-attempt"],
-            url: run.url,
-          },
-          releaseId: release.id,
-          releaseUrl: release.html_url,
-          assetDigests: Object.fromEntries(
-            [...verified.assets].map(([name, asset]) => [
-              name,
-              asset.sha256,
-            ]),
-          ),
-          productionReadback: "EXACT_IMMUTABLE_RELEASE",
-          status: "VERIFIED",
-        });
-      } catch (error) {
-        reportTagFailure(context, entry.tag, "", {
-          phase: "recover-draft",
-        });
-        throw error;
-      }
-    },
-  );
 }
 
 function reportTagFailure(
@@ -5788,250 +3924,6 @@ function reportTagFailure(
   } catch {
     // Preserve the primary exception even if stderr itself is unavailable.
   }
-}
-
-function formVerify(context, options) {
-  const identity = formReleaseIdentity(options.tag);
-  const currentMain = assertCurrentProtectedMain(
-    context,
-    options["expected-commit"],
-    {
-    exact: false,
-    },
-  );
-  assertExactRemoteTag(context, identity.tag, options["expected-commit"]);
-  return withTemporaryDirectory("takoform-form-verify", (temporaryRoot) => {
-    const names = formAssetNames(identity);
-    const live = readExactPublicRelease(
-      context,
-      identity.tag,
-      names.all,
-      temporaryRoot,
-    );
-    const releaseManifest = readJSON(
-      join(live.output, "release-manifest.json"),
-      "Form Package release manifest",
-    );
-    if (!COMMIT.test(releaseManifest.toolingCommit ?? "")) {
-      throw new Error("public Form Package tooling commit is invalid");
-    }
-    const entry = plannedRelease(
-      formReleaseAuthorityAtSourceCommit(
-        context,
-        releaseManifest.sourceCommit,
-      ),
-      identity.tag,
-    );
-    const manifest = verifyFormPublicAssets(context, live.output, entry);
-    if (manifest.sourceCommit !== options["expected-commit"]) {
-      throw new Error("public Form Package source commit differs");
-    }
-    assertCommitAncestor(
-      context,
-      manifest.sourceCommit,
-      manifest.toolingCommit,
-      "public Form Package source/tooling binding",
-    );
-    assertCommitAncestor(
-      context,
-      manifest.toolingCommit,
-      currentMain,
-      "public Form Package tooling/current-main binding",
-    );
-    return emit(context, {
-      kind: "takos.deploy-result@v1",
-      surface: FORM_SURFACE,
-      phase: "verify",
-      tag: entry.tag,
-      commit: manifest.sourceCommit,
-      toolingCommit: manifest.toolingCommit,
-      releaseId: live.release.id,
-      releaseUrl: live.release.html_url,
-      assetDigests: Object.fromEntries(
-        [...live.assets].map(([name, asset]) => [name, asset.sha256]),
-      ),
-      status: "VERIFIED",
-    });
-  });
-}
-
-function requireAtomicOutputCommitResult(raw, phase) {
-  let result;
-  try {
-    result = JSON.parse(raw);
-  } catch (error) {
-    throw new Error(`atomic output ${phase} returned invalid JSON`, {
-      cause: error,
-    });
-  }
-  requireExactKeys(result, ["format", "status"], `atomic output ${phase}`);
-  if (
-    result.format !== "takoform.release-output-commit@v1" ||
-    result.status !== "verified"
-  ) {
-    throw new Error(`atomic output ${phase} protocol drifted`);
-  }
-}
-
-function commitVerifiedOutput(context, stagingParent, staging, output) {
-  requireAtomicOutputCommitResult(
-    command(context, "go", [
-      "run",
-      "./cmd/release-output-commit",
-      "probe",
-      "--parent",
-      stagingParent,
-    ]),
-    "capability probe",
-  );
-  if (existsSync(output)) {
-    throw new Error("--output-root appeared after the atomic capability probe");
-  }
-  requireAtomicOutputCommitResult(
-    command(context, "go", [
-      "run",
-      "./cmd/release-output-commit",
-      "commit",
-      "--source",
-      staging,
-      "--target",
-      output,
-    ]),
-    "commit",
-  );
-}
-
-function formVerifyAll(context, options, plan) {
-  verifyLocalReleaseToolchain(context);
-  const commit = assertCurrentProtectedMain(context);
-  const output = resolve(options["output-root"]);
-  const inside =
-    output === context.repo ||
-    (!relative(context.repo, output).startsWith(`..${sep}`) &&
-      relative(context.repo, output) !== "..");
-  if (inside || existsSync(output)) {
-    throw new Error(
-      "--output-root must be a new absent directory outside the repository",
-    );
-  }
-  const stagingParent = mkdtempSync(
-    join(dirname(output), `.${basename(output)}.takoform-staging-`),
-  );
-  const staging = join(stagingParent, "verified-output");
-  let publicationSet;
-  try {
-    progress(context, "deep-read all 34 immutable Form Package releases");
-    command(
-      context,
-      "go",
-      [
-        "run",
-        "./cmd/published-package-set",
-        "download-plan",
-        "--output-root",
-        staging,
-      ],
-      {
-        echo: true,
-        env: {
-          ...environmentWithoutGitHubAuthority(),
-          GITHUB_TOKEN: process.env.GH_TOKEN,
-        },
-      },
-    );
-    publicationSet = readJSON(
-      join(staging, "form-package-publication-set.json"),
-      "Form Package publication set",
-    );
-    if (
-      publicationSet.format !== "takoform.form-package-publication-set@v1" ||
-      publicationSet.generation !== plan.generation ||
-      publicationSet.repository !== GITHUB_REPOSITORY ||
-      publicationSet.protectedMainCommit !== commit ||
-      !Array.isArray(publicationSet.entries) ||
-      publicationSet.entries.length !== 34
-    ) {
-      throw new Error("all-Form publication set identity drifted");
-    }
-    for (const entry of publicationSet.entries) {
-      const identity = formReleaseIdentity(entry.tag);
-      if (
-        entry.releaseId !== identity.releaseId ||
-        entry.version !== identity.version ||
-        !COMMIT.test(entry.toolingCommit ?? "")
-      ) {
-        throw new Error(
-          `publication set entry has an invalid historical tooling identity: ${entry.tag}`,
-        );
-      }
-      const authorityPrefix = `authority/${entry.toolingCommit}`;
-      for (const [label, authority, expectedPath, expectedSourcePath] of [
-        [
-          "release plan",
-          entry.releasePlan,
-          `${authorityPrefix}/release-plan.json`,
-          "forms/release-plan.json",
-        ],
-        [
-          "trusted root",
-          entry.trustedRoot,
-          `${authorityPrefix}/trusted-root.json`,
-          TRUSTED_ROOT,
-        ],
-      ]) {
-        requireExactKeys(
-          authority,
-          ["path", "sourcePath", "sha256"],
-          `publication entry ${label}`,
-        );
-        const retained = join(staging, ...expectedPath.split("/"));
-        if (
-          authority.path !== expectedPath ||
-          authority.sourcePath !== expectedSourcePath ||
-          !SHA256.test(authority.sha256 ?? "") ||
-          !existsSync(retained) ||
-          fileDigest(retained) !== authority.sha256
-        ) {
-          throw new Error(
-            `publication entry ${label} does not bind retained tooling authority: ${entry.tag}`,
-          );
-        }
-      }
-      const names = formAssetNames(identity);
-      verifySigstoreSubject(
-        context,
-        join(staging, "releases", identity.releaseId, identity.version),
-        names.index,
-        names.bundle,
-        ".github/workflows/form-package-release.yml",
-        join(staging, ...entry.trustedRoot.path.split("/")),
-      );
-    }
-    if (existsSync(output)) {
-      throw new Error("--output-root appeared during verification; refusing overwrite");
-    }
-    commitVerifiedOutput(context, stagingParent, staging, output);
-    if (existsSync(staging) || !existsSync(output)) {
-      throw new Error(
-        "--output-root appeared during create-only publication; verified staging was not published",
-      );
-    }
-  } finally {
-    rmSync(stagingParent, { recursive: true, force: true });
-  }
-  return emit(context, {
-    kind: "takos.deploy-result@v1",
-    surface: FORM_SURFACE,
-    phase: "verify-all",
-    commit,
-    generation: plan.generation,
-    releases: 34,
-    outputRoot: output,
-    publicationSetDigest: fileDigest(
-      join(output, "form-package-publication-set.json"),
-    ),
-    status: "VERIFIED",
-  });
 }
 
 function requireRevocationSource(context, tag, expectedCommit) {
@@ -6107,7 +3999,6 @@ function revocationPublish(context, options) {
     sourceCommit: commit,
     toolingCommit,
     currentMain: initialMain,
-    revocation: true,
     label: "revocation reviewed candidate fence",
   });
   return withTemporaryDirectory("takoform-revocation-publish", (temporaryRoot) => {
@@ -6132,7 +4023,6 @@ function revocationPublish(context, options) {
         sourceCommit: commit,
         toolingCommit,
         currentMain: mutationMain,
-        revocation: true,
         label: "revocation tag mutation fence",
       });
       tagObject = ensureCandidateTagPublished(
@@ -6147,7 +4037,6 @@ function revocationPublish(context, options) {
         sourceCommit: commit,
         toolingCommit,
         currentMain: releaseMain,
-        revocation: true,
         label: "revocation release mutation fence",
       });
       const release = publishReleaseLocally(context, {
@@ -6162,7 +4051,6 @@ function revocationPublish(context, options) {
             sourceCommit: commit,
             toolingCommit,
             currentMain: publishMain,
-            revocation: true,
             label: "revocation pre-publish fence",
           });
         },
@@ -6253,22 +4141,12 @@ export const releaseDeployTestHooks = Object.freeze({
   assertPinnedProviderGpgVerification,
   assertReleaseImmutabilityEnabled,
   assertFormReleaseAuthorityFence,
-  assertFormTagOnlyRecoveryFence,
   assertProviderRecoveryFence,
-  assertProviderReadbackCommitBinding,
-  assertReusableOwnerGateProof,
   assertReleaseAbsent,
   assertRegistryVersionAbsent,
-  assertTagOnlyRecoveryState,
   command,
   dispatchWorkflow,
-  establishFormPublishBatchOwnerGateProof,
-  currentReleasePlanFromLifecycle,
   expectedFormTagObject,
-  formReleaseAuthorityAtSourceCommit,
-  formPublishBatch,
-  formPublicationMutationFence,
-  formVerifyAll,
   githubUploadEnvironment,
   ownerGateAndFence,
   observeTagFailureState,
@@ -6283,15 +4161,11 @@ export const releaseDeployTestHooks = Object.freeze({
   reportTagFailure,
   resumeDraftReleaseLocally,
   reconstructCandidateTagObject,
-  readFormPublishBatch,
-  releaseIdForKind,
   requireSuccessfulRun,
   validateReleaseReadback,
   validateDraftBeforePublication,
   verifyChecksumClosure,
-  verifyFormSemanticClosure,
   verifyProviderCandidate,
-  verifyRegistryCandidate,
   verifyProviderReleaseProvenance,
   verifyProviderSignature,
   verifyRevocationSemanticClosure,

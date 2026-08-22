@@ -90,7 +90,6 @@ const SITE = {
   worker: "takoform-website",
   assets: "website/public",
   config: "website/wrangler.jsonc",
-  authorityGate: "check:public-authority",
   gate: "check:public-surfaces",
   snapshotGate: "check:public-snapshot",
   websiteGate: "check:website-snapshot",
@@ -121,7 +120,6 @@ const CONTRACT = {
       covers: ["website/wrangler.jsonc"],
       requiresScripts: [
         SITE.gate,
-        SITE.authorityGate,
         SITE.snapshotGate,
         SITE.websiteGate,
       ],
@@ -131,7 +129,7 @@ const CONTRACT = {
       // 持ちません。ただし schema $id は consumer が固定する公開 identity です。
       triggers: ["irreversible", "authority", "published-identity"],
       obligations: {
-        provenance: `refuses a dirty or shallow worktree, rejects ignored and untracked publication files, requires main HEAD to equal a fresh read of the canonical HTTPS origin/main ref, creates both an isolated git-archive content snapshot and an independent non-local detached Git authority clone of that exact commit, and removes the clone's remote. The source-retained publication/admission authority gate runs only in the frozen clone; the static public-surface gate, credential scan, digest manifest, and Wrangler input run only in the archive. The committed website output is re-derived by a fresh VitePress build from the same frozen commit, using the pinned lock installed in a managed home outside the archive; that build must reproduce every committed page semantically, every non-HTML published file byte-for-byte (including /.well-known/takoform-site.json, the sitemap, and every mirrored spec, forms and schema file), and the whole content-addressed asset set by role, with no extra or missing published file. The build output itself never enters the archive. No published byte names a commit, because a commit id inside the tree could only name the parent of the commit that carries it; the commit is bound to the bytes by the version message below instead. Both roots are hardened and re-hashed before and after validation and again before every writer. Every archive byte is also proved against its Git blob. Wrangler is installed from the exact committed lock and executed through the fixed absolute Node entrypoint, bypassing PATH and its environment shebang. \`bun run ${SITE.gate}\` remains the composite source gate, while the repository-wide \`bun run check\` remains separate handoff evidence because its other Go and OpenTofu checks do not validate these static bytes.`,
+        provenance: `refuses a dirty or shallow worktree, rejects ignored and untracked publication files, requires main HEAD to equal a fresh read of the canonical HTTPS origin/main ref, creates both an isolated git-archive content snapshot and an independent non-local detached Git authority clone of that exact commit, and removes the clone's remote. The frozen clone binds committed Git authority and the publication manifests (the withdrawn epochs' Legacy authority gate went with them, decision 0042); the static public-surface gate, credential scan, digest manifest, and Wrangler input run only in the archive. The committed website output is re-derived by a fresh VitePress build from the same frozen commit, using the pinned lock installed in a managed home outside the archive; that build must reproduce every committed page semantically, every non-HTML published file byte-for-byte (including /.well-known/takoform-site.json, the sitemap, and every mirrored spec, forms and schema file), and the whole content-addressed asset set by role, with no extra or missing published file. The build output itself never enters the archive. No published byte names a commit, because a commit id inside the tree could only name the parent of the commit that carries it; the commit is bound to the bytes by the version message below instead. Both roots are hardened and re-hashed before and after validation and again before every writer. Every archive byte is also proved against its Git blob. Wrangler is installed from the exact committed lock and executed through the fixed absolute Node entrypoint, bypassing PATH and its environment shebang. \`bun run ${SITE.gate}\` remains the composite source gate, while the repository-wide \`bun run check\` remains separate handoff evidence because its other Go and OpenTofu checks do not validate these static bytes.`,
         "post-conditions": `requires the exact three-domain Cloudflare control-plane closure, queries every hostname independently, and reads back ${SITE.url}/, the www root, docs, spec, sitemap, static assets, the /.well-known/takoform-site.json status document, the custom 404 body/status, and every normative schema $id with the exact committed digest. The version message names the source commit, so the deployed bytes are bound to one reviewed commit even though no published byte states one.`,
         reversal: `the current version id is read and printed before publishing. A previous version may be restored with \`wrangler versions deploy <previous-id>@100%\` only after proving it still serves every already-minted schema $id byte-for-byte. An initial origin mint or append-only identity mint has no schema-safe rollback to a version without those identities; repair it forward while preserving the minted bytes.`,
         "failure-handling":
@@ -517,15 +515,8 @@ const ledgerObjectAt = (revision) => {
   }
   return match[1];
 };
-const authorityGateHome = resolve(publicationRepo, "..", "authority-gate-home");
 const snapshotGateHome = resolve(publicationRepo, "..", "snapshot-gate-home");
-mkdirSync(authorityGateHome, { mode: 0o700 });
 mkdirSync(snapshotGateHome, { mode: 0o700 });
-const authorityGateEnvironment = createHardenedGateEnvironment(
-  process.env,
-  process.execPath,
-  authorityGateHome,
-);
 const snapshotGateEnvironment = createHardenedGateEnvironment(
   process.env,
   process.execPath,
@@ -538,22 +529,14 @@ process.stdout.write(
   `Git authority snapshot ${verifiedAuthorityManifest.entries.length} files sha256 ${verifiedAuthorityManifest.sha256}\n`,
 );
 
-// The Go authority checks need complete Git history and immutable tag objects,
-// so they run in a separate non-local clone frozen at the same exact commit.
-// The archive remains free of Git metadata; only its static bytes reach the
-// public-surface checks and Wrangler.
-process.stdout.write(`\n==> bun run ${SITE.authorityGate}\n`);
+// The Git-authority assertions need complete history and immutable tag
+// objects, so they run in a separate non-local clone frozen at the same exact
+// commit. The archive remains free of Git metadata; only its static bytes
+// reach the public-surface checks and Wrangler. The withdrawn epochs' Legacy
+// authority subcommands went with their epochs (decision 0042); the ledger
+// history walks inside the composite gate carry the append-only teeth now.
+process.stdout.write(`\n==> Git authority clone assertions\n`);
 try {
-  process.stdout.write(
-    run(
-      process.execPath,
-      ["--config=/dev/null", "--no-env-file", "run", SITE.authorityGate],
-      {
-        cwd: authorityRepo,
-        environment: authorityGateEnvironment,
-      },
-    ),
-  );
   assertCommittedGitAuthority({
     authorityRoot: authorityRepo,
     commit,

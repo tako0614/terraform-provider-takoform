@@ -1,7 +1,0 @@
-{
-  "domains": [
-    "portable-conformance.invalid"
-  ],
-  "keyAlgorithm": "rsa_1024",
-  "name": "tls-certificate"
-}

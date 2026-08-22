@@ -1,29 +1,29 @@
 import { describe, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 import {
+  FROZEN_EXTRA_ASSETS,
   FROZEN_HASHMAP_ENTRIES,
   FROZEN_PUBLIC_IDENTITIES,
+  FROZEN_PUBLIC_PAGES,
 } from "./frozen-public-identities.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const publicRoot = path.join(repositoryRoot, "website", "public");
 
-describe("frozen v1alpha3 public route", () => {
-  test("pins both full and lean chunks and the hashmap route", () => {
-    expect(FROZEN_HASHMAP_ENTRIES.get("spec_host-api_v1alpha3.md")).toBe(
-      "B4iy7DrK",
-    );
-    for (const suffix of [".js", ".lean.js"]) {
-      const relative = `assets/spec_host-api_v1alpha3.md.B4iy7DrK${suffix}`;
-      const expected = FROZEN_PUBLIC_IDENTITIES.get(relative);
-      expect(expected).toMatch(/^[0-9a-f]{64}$/u);
-      const actual = createHash("sha256")
-        .update(readFileSync(path.join(publicRoot, relative)))
-        .digest("hex");
-      expect(actual).toBe(expected);
-    }
+describe("frozen public identities after the epoch withdrawal", () => {
+  test("no page is frozen and the withdrawn route is gone", () => {
+    // Decision 0042 withdrew the one frozen page with its epoch. An entry
+    // reappearing here must come with a new page that actually needs pinning;
+    // the withdrawn route coming back would be a retired address answering
+    // again, which release/published-document-lanes.json exists to refuse.
+    expect(FROZEN_PUBLIC_IDENTITIES.size).toBe(0);
+    expect(FROZEN_PUBLIC_PAGES.size).toBe(0);
+    expect(FROZEN_HASHMAP_ENTRIES.size).toBe(0);
+    expect(FROZEN_EXTRA_ASSETS.size).toBe(0);
+    expect(
+      existsSync(path.join(publicRoot, "spec", "host-api", "v1alpha3.html")),
+    ).toBe(false);
   });
 });

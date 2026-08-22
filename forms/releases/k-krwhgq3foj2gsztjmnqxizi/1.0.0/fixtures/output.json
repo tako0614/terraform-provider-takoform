@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "TlsCertificate/tls-certificate",
-  "kind": "TlsCertificate",
-  "name": "tls-certificate",
-  "portability": "portable"
-}

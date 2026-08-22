@@ -323,7 +323,7 @@ type providerTagPreflight struct {
 	ProviderCandidateManifestSHA256 string `json:"providerCandidateManifestSha256"`
 	ProviderSBOMSHA256              string `json:"providerSBOMSha256"`
 	ProviderProvenanceSHA256        string `json:"providerProvenanceSha256"`
-	ProviderLifecycleMatrixSHA256   string `json:"providerLifecycleMatrixSha256"`
+	WorkerAuthoringMatrixSHA256     string `json:"workerAuthoringMatrixSha256"`
 }
 
 type signedTagArtifactEvidence struct {
@@ -818,8 +818,8 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 		return signedTagArtifactEvidence{}, errors.New("expected commit must be an exact lowercase 40-character object id")
 	}
 	if err := verifyClosedChecksums(preflightPath,
-		[]string{"SHA256SUMS", "preflight.json", "provider-candidate-manifest.json", "provider-lifecycle-matrix.json", "provider-provenance.json", "provider-sbom.spdx.json"},
-		[]string{"preflight.json", "provider-candidate-manifest.json", "provider-lifecycle-matrix.json", "provider-provenance.json", "provider-sbom.spdx.json"}); err != nil {
+		[]string{"SHA256SUMS", "preflight.json", "provider-candidate-manifest.json", "worker-authoring-matrix.json", "provider-provenance.json", "provider-sbom.spdx.json"},
+		[]string{"preflight.json", "provider-candidate-manifest.json", "worker-authoring-matrix.json", "provider-provenance.json", "provider-sbom.spdx.json"}); err != nil {
 		return signedTagArtifactEvidence{}, fmt.Errorf("verify preflight artifact: %w", err)
 	}
 	if err := verifyClosedChecksums(artifactPath, []string{"SHA256SUMS", "metadata.json", "tag-object"}, []string{"metadata.json", "tag-object"}); err != nil {
@@ -837,7 +837,7 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 		!sha256Pattern.MatchString(preflight.ProviderCandidateManifestSHA256) ||
 		!sha256Pattern.MatchString(preflight.ProviderSBOMSHA256) ||
 		!sha256Pattern.MatchString(preflight.ProviderProvenanceSHA256) ||
-		!sha256Pattern.MatchString(preflight.ProviderLifecycleMatrixSHA256) {
+		!sha256Pattern.MatchString(preflight.WorkerAuthoringMatrixSHA256) {
 		return signedTagArtifactEvidence{}, errors.New("provider tag preflight does not bind the exact closed evidence")
 	}
 	var metadata signedTagArtifactMetadata
@@ -946,7 +946,7 @@ func verifySignedTagArtifact(repo string, desc descriptor, artifactPath, preflig
 }
 
 func verifyProviderTagPreflightBinding(preflight providerTagPreflight, expectedRequestID, expectedRunID, expectedRunAttempt, expectedCommit string) error {
-	if preflight.Format != "takoform.provider-tag-preflight@v1" ||
+	if preflight.Format != "takoform.provider-tag-preflight@v2" ||
 		preflight.RequestID != expectedRequestID ||
 		preflight.RunID != expectedRunID ||
 		preflight.RunAttempt != expectedRunAttempt ||

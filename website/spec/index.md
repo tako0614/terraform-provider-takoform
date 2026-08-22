@@ -13,19 +13,14 @@ is a protocol compatibility identity independent of any nested Form group.
 | Current Form Family | `edge.forms.takoform.com/v1beta1` (Beta family; 15 Experimental `0.1.0` Forms) |
 | Current Host API wire | `forms.takoform.com/v1beta1`, discovered at `/.well-known/takoform/v1beta1` |
 | Current package envelope | `packages.forms.takoform.com/v1alpha4` |
-| Retained provider-v2 FormRef | `forms.takoform.com/v1alpha2`, wire discovered at `/.well-known/takoform/v1alpha2` |
-| Retained provider-v2 package envelope | `packages.forms.takoform.com/v1alpha3` |
-| Legacy FormRef | `forms.takoform.com/v1alpha1` (frozen) |
-| Provider distribution | **Provider 2.1.1** Registry-published stable distribution (descriptor `candidate-only` metadata by design) · **Provider 2.0.0** published compatibility predecessor · **Provider 1.0.3** Legacy |
+| Provider distribution | **Provider 2.1.1** Registry-published stable distribution (descriptor `candidate-only` metadata by design) · **Provider 2.0.0** and **Provider 1.0.3** immutable Registry history for the withdrawn epochs |
 
-The `forms.takoform.com/v1alpha2` epoch and its nine `0.1.0` candidates are
-retained provider-v2 preview source; they are not the basis for new
-specification work. The provider's SemVer is independent of every API
-identity.
-
-The 34 published Form Package identities are immutable Legacy history. There
-is no current central approval or admission derived from that historical
-package count.
+The pre-Beta epochs (`forms.takoform.com/v1alpha1` and `/v1alpha2`) were
+withdrawn ([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
+their identities are retired in the published ledgers and their bytes stay in
+repository history. The provider's SemVer is independent of every API
+identity, and no current central approval or admission derives from anything
+the withdrawn epochs published.
 
 ## Current-lane contracts
 
@@ -49,15 +44,9 @@ Published at `forms.takoform.com/schemas/...`. Current Beta identities:
 - [host-api-wire v1beta1](/schemas/v1beta1/host-api-wire.schema.json)
 - [package-index v1alpha4](/schemas/v1alpha4/package-index.schema.json)
 
-Retained provider-v2 compatibility schemas:
-
-- [form-ref v1alpha2](/schemas/v1alpha2/form-ref.schema.json)
-- [form-definition v1alpha2](/schemas/v1alpha2/form-definition.schema.json)
-- [package-index v1alpha3](/schemas/v1alpha3/package-index.schema.json)
-- [host-api-wire v1alpha2](/schemas/v1alpha2/host-api-wire.schema.json)
-
-The v1alpha3 schema identities remain immutable retained history and are never
-rewritten as Beta.
+The withdrawn epochs' schema identities are recorded as retired in
+[`release/public-schema-identities.json`](/release/public-schema-identities.json)
+and are never reused.
 
 ## Lifecycle
 

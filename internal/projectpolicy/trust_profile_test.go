@@ -455,27 +455,6 @@ func TestReleaseWorkflowsOnlyPrepareChecksumClosedCandidates(t *testing.T) {
 			},
 		},
 		{
-			name:         "Form Package",
-			path:         ".github/workflows/form-package-release.yml",
-			environment:  "form-package-release",
-			artifact:     "form-package-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}",
-			signing:      "cosign sign-blob",
-			executionRef: "refs/heads/main",
-			required: []string{
-				"id-token: write",
-				"takoform.form-package-release-candidate@v1",
-				`candidate="$RUNNER_TEMP/form-package-release-candidate"`,
-				`output="$candidate/assets"`,
-				`cd "$candidate"`,
-				"cosign sign-blob",
-				"cosign verify-blob",
-				"sha256sum metadata.json tag-object",
-				`test "$(wc -l < SHA256SUMS)" -eq 9`,
-				"path: ${{ runner.temp }}/form-package-release-candidate",
-				"refusing overwrite",
-			},
-		},
-		{
 			name:         "Form Package revocation",
 			path:         ".github/workflows/form-package-revocation.yml",
 			environment:  "form-package-release",
@@ -532,24 +511,20 @@ func TestReleaseWorkflowsOnlyPrepareChecksumClosedCandidates(t *testing.T) {
 		})
 	}
 
-	packageWorkflow := readText(t, filepath.Join(root, ".github", "workflows", "form-package-release.yml"))
 	revocationWorkflow := readText(t, filepath.Join(root, ".github", "workflows", "form-package-revocation.yml"))
-	if !strings.Contains(packageWorkflow, `^forms/k-[a-z2-7]`) ||
-		!strings.Contains(revocationWorkflow, `^forms/revocations/`) {
-		t.Fatal("package and revocation tag namespaces are not disjoint")
+	if !strings.Contains(revocationWorkflow, `^forms/revocations/`) {
+		t.Fatal("revocation tags must stay inside their own namespace")
 	}
 }
 
 func TestReleaseIdentityAbsenceProbesFailClosedOnTransportAndAmbiguousStatus(t *testing.T) {
 	root := repositoryRoot(t)
 	providerTag := readText(t, filepath.Join(root, ".github", "workflows", "provider-release-tag.yml"))
-	packageRelease := readText(t, filepath.Join(root, ".github", "workflows", "form-package-release.yml"))
 	revocation := readText(t, filepath.Join(root, ".github", "workflows", "form-package-revocation.yml"))
 	providerRelease := readText(t, filepath.Join(root, ".github", "workflows", "release.yml"))
 
 	for name, workflow := range map[string]string{
 		"provider tag":            providerTag,
-		"Form Package":            packageRelease,
 		"Form Package revocation": revocation,
 	} {
 		t.Run(name+" remote tag", func(t *testing.T) {
@@ -574,7 +549,6 @@ func TestReleaseIdentityAbsenceProbesFailClosedOnTransportAndAmbiguousStatus(t *
 	for name, workflow := range map[string]string{
 		"provider tag":            providerTag,
 		"provider release":        providerRelease,
-		"Form Package":            packageRelease,
 		"Form Package revocation": revocation,
 	} {
 		t.Run(name+" GitHub release", func(t *testing.T) {
@@ -630,10 +604,7 @@ func TestDispatchedReleaseWorkflowsRequireExactRequestCorrelation(t *testing.T) 
 	workflows := []string{
 		".github/workflows/provider-release-tag.yml",
 		".github/workflows/release.yml",
-		".github/workflows/provider-registry-readback.yml",
-		".github/workflows/form-package-release.yml",
 		".github/workflows/form-package-revocation.yml",
-		".github/workflows/standard-provider-report.yml",
 	}
 	const canonicalRequestIDValidation = `[[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]`
 	for _, path := range workflows {
@@ -660,28 +631,6 @@ func TestDispatchedReleaseWorkflowsRequireExactRequestCorrelation(t *testing.T) 
 			} {
 				if !strings.Contains(workflow, required) {
 					t.Errorf("workflow lacks request correlation binding %q", required)
-				}
-			}
-			if path == ".github/workflows/standard-provider-report.yml" {
-				for _, required := range []string{
-					"workflowRunId",
-					"workflowRunAttempt",
-					"headSha",
-				} {
-					if !strings.Contains(workflow, required) {
-						t.Errorf("provider-report signed metadata lacks exact run binding %q", required)
-					}
-				}
-			}
-			if path == ".github/workflows/provider-registry-readback.yml" {
-				for _, required := range []string{
-					"workflowRunAttempt:Number(process.env.GITHUB_RUN_ATTEMPT)",
-					"takoform-provider-registry-readback-unsigned-${{ inputs.request_id }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.source.outputs.source_commit_short }}",
-					"takoform-provider-registry-readback-candidate-${{ inputs.request_id }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ needs.generate.outputs.source_commit_short }}",
-				} {
-					if !strings.Contains(workflow, required) {
-						t.Errorf("Registry candidate lacks exact rerun binding %q", required)
-					}
 				}
 			}
 		})

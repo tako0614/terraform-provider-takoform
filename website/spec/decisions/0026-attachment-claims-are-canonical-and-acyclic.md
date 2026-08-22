@@ -42,7 +42,7 @@ the identity those bytes name.
 ## Decision
 
 The rules below are normative; the operative text lives in
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md#an-attachment-s-claim-is-decided-on-canonical-resolved-identity).
+`../host-api/v1alpha3.md`.
 Both fail `invalid_argument` (400) before any mutation, on `apply` and on
 `import` alike, and are **re-verified when an accepted `202` commits** — the
 precedent of [decision 0016](0016-the-worker-aggregate-has-one-active-deployment.md)

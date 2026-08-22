@@ -311,7 +311,6 @@ test("website deploy contract declares the published identity obligation", () =>
   ]);
   expect(website.requiresScripts).toEqual([
     "check:public-surfaces",
-    "check:public-authority",
     "check:public-snapshot",
     "check:website-snapshot",
   ]);

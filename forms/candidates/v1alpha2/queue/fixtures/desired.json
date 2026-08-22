@@ -1,5 +1,0 @@
-{
-  "messageRetentionSeconds": 345600,
-  "name": "queue",
-  "ordering": "best_effort"
-}

@@ -1,5 +1,0 @@
-{
-  "consistency": "strong",
-  "defaultTtlSeconds": 3600,
-  "name": "key-value-store"
-}

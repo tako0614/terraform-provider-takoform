@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
-  constants as fsConstants,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -11,7 +10,6 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -115,207 +113,6 @@ test("provider descriptor and identity ledger are exact Beta release inputs", ()
   ).toHaveLength(15);
 });
 
-describe("current Form release authority", () => {
-  test("uses the same lowercase unpadded base32 release identity as Takoform", () => {
-    expect(releaseDeployTestHooks.releaseIdForKind("ObjectBucket")).toBe(
-      "k-j5rguzldorbhky3lmv2a",
-    );
-    expect(releaseDeployTestHooks.releaseIdForKind("Example")).toBe(
-      "k-iv4gc3lqnrsq",
-    );
-  });
-
-  test("derives only current Experimental or Stable package releases", () => {
-    const formRef = {
-      apiVersion: "forms.takoform.com/v1alpha2",
-      kind: "Example",
-      definitionVersion: "0.1.0",
-      schemaDigest: `sha256:${"1".repeat(64)}`,
-    };
-    const lifecycle = {
-      format: "takoform.form-lifecycle@v2",
-      projectStatus: "experimental",
-      currentEpoch: "forms.takoform.com/v1alpha2",
-      states: ["proposal", "experimental", "stable", "legacy"],
-      legacy: {},
-      proposals: [],
-      currentForms: [
-        {
-          proposalId: "p-example",
-          state: "experimental",
-          owner: "maintainer:example",
-          formRef,
-          packageDigest: `sha256:${"2".repeat(64)}`,
-          packagePath: `forms/releases/k-iv4gc3lqnrsq/sha256-${"2".repeat(64)}`,
-          history: [],
-          evidence: {},
-        },
-      ],
-    };
-    const plan = releaseDeployTestHooks.currentReleasePlanFromLifecycle(
-      lifecycle,
-      () => ({
-        apiVersion: "packages.forms.takoform.com/v1alpha3",
-        kind: "FormPackage",
-        formRef,
-        definitionPath: "definition.json",
-        files: [],
-      }),
-    );
-    expect(plan).toEqual({
-      format: "takoform.current-form-release-plan@v2",
-      repository: "tako0614/terraform-provider-takoform",
-      releases: [
-        {
-          proposalId: "p-example",
-          state: "experimental",
-          kind: "Example",
-          releaseId: "k-iv4gc3lqnrsq",
-          artifactId: `sha256-${"2".repeat(64)}`,
-          tag: `forms/k-iv4gc3lqnrsq/sha256-${"2".repeat(64)}`,
-          sourcePath: `forms/releases/k-iv4gc3lqnrsq/sha256-${"2".repeat(64)}`,
-          formRef,
-          packageDigest: `sha256:${"2".repeat(64)}`,
-        },
-      ],
-    });
-
-    const legacyFormLifecycle = structuredClone(lifecycle);
-    legacyFormLifecycle.currentForms[0].formRef.apiVersion =
-      "forms.takoform.com/v1alpha1";
-    expect(() =>
-      releaseDeployTestHooks.currentReleasePlanFromLifecycle(
-        legacyFormLifecycle,
-        () => ({
-          apiVersion: "packages.forms.takoform.com/v1alpha3",
-          kind: "FormPackage",
-          formRef: legacyFormLifecycle.currentForms[0].formRef,
-          definitionPath: "definition.json",
-          files: [],
-        }),
-      ),
-    ).toThrow("current Form lifecycle currentForms[0] exact identity is invalid");
-
-    expect(() =>
-      releaseDeployTestHooks.currentReleasePlanFromLifecycle(
-        lifecycle,
-        () => ({
-          apiVersion: "packages.forms.takoform.com/v1alpha2",
-          kind: "FormPackage",
-          formRef,
-          definitionPath: "definition.json",
-          files: [],
-        }),
-      ),
-    ).toThrow("current Form lifecycle currentForms[0] package release identity is invalid");
-  });
-
-  test("reconstructs recovery authority from the immutable source commit", () => {
-    const fixtureRoot = temporaryDirectory("current-source-authority");
-    const current = experimentalReleaseEntryFixture();
-    writeCurrentReleaseAuthorityFixture(fixtureRoot, current);
-    const historical = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const fake = (executable, args) => {
-      if (executable !== "git") {
-        throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-      }
-      if (
-        args[0] === "cat-file" &&
-        args[1] === "-e" &&
-        args[2] === `${commit}:forms/lifecycle.json`
-      ) {
-        return "";
-      }
-      if (args[0] === "show" && args[1] === `${commit}:forms/lifecycle.json`) {
-        return readFileSync(join(fixtureRoot, "forms/lifecycle.json"), "utf8");
-      }
-      if (
-        args[0] === "show" &&
-        args[1] === `${commit}:${current.sourcePath}/package-index.json`
-      ) {
-        return readFileSync(
-          join(fixtureRoot, ...current.sourcePath.split("/"), "package-index.json"),
-          "utf8",
-        );
-      }
-      if (
-        args[0] === "show" &&
-        args[1] === `${commit}:forms/release-plan.json`
-      ) {
-        return JSON.stringify(historical);
-      }
-      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-    };
-    const authority = releaseDeployTestHooks.formReleaseAuthorityAtSourceCommit(
-      context(fake),
-      commit,
-    );
-    expect(authority.releases).toHaveLength(historical.releases.length + 1);
-    expect(authority.releases.some((entry) => entry.tag === current.tag)).toBe(true);
-    expect(
-      authority.releases.some((entry) => entry.tag === historical.releases[0].tag),
-    ).toBe(true);
-  });
-
-  test("uses Legacy authority only when lifecycle did not exist at the source commit", () => {
-    const historical = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const fake = (executable, args) => {
-      if (
-        executable === "git" &&
-        args[0] === "cat-file" &&
-        args[1] === "-e" &&
-        args[2] === `${commit}:forms/lifecycle.json`
-      ) {
-        throw commandFailure("missing lifecycle", 128);
-      }
-      if (
-        executable === "git" &&
-        args[0] === "show" &&
-        args[1] === `${commit}:forms/release-plan.json`
-      ) {
-        return JSON.stringify(historical);
-      }
-      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-    };
-    const authority = releaseDeployTestHooks.formReleaseAuthorityAtSourceCommit(
-      context(fake),
-      commit,
-    );
-    expect(authority.releases).toEqual(historical.releases);
-  });
-
-  test("does not fall back to Legacy when a present lifecycle authority is invalid", () => {
-    const fake = (executable, args) => {
-      if (
-        executable === "git" &&
-        args[0] === "cat-file" &&
-        args[1] === "-e" &&
-        args[2] === `${commit}:forms/lifecycle.json`
-      ) {
-        return "";
-      }
-      if (
-        executable === "git" &&
-        args[0] === "show" &&
-        args[1] === `${commit}:forms/lifecycle.json`
-      ) {
-        return "{}";
-      }
-      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-    };
-    expect(() =>
-      releaseDeployTestHooks.formReleaseAuthorityAtSourceCommit(
-        context(fake),
-        commit,
-      ),
-    ).toThrow("current Form lifecycle authority fields differ");
-  });
-});
-
 function context(execFile, overrides = {}) {
   const io = memoryIO();
   return {
@@ -377,85 +174,19 @@ function writeChecksumFixture(root, names, destination = "SHA256SUMS") {
   writeFileSync(join(root, destination), `${lines.join("\n")}\n`);
 }
 
-function experimentalReleaseEntryFixture() {
-  const formRef = {
-    apiVersion: "forms.takoform.com/v1alpha2",
-    kind: "Example",
-    definitionVersion: "0.1.0",
-    schemaDigest: `sha256:${"1".repeat(64)}`,
-  };
-  const releaseId = releaseDeployTestHooks.releaseIdForKind(formRef.kind);
-  const packageDigest = sha256(Buffer.from('{"fixture":"package-index"}\n'));
-  const artifactId = packageDigest.replace(":", "-");
-  return {
-    proposalId: "p-example",
-    state: "experimental",
-    kind: formRef.kind,
-    releaseId,
-    artifactId,
-    tag: `forms/${releaseId}/${artifactId}`,
-    sourcePath: `forms/releases/${releaseId}/${artifactId}`,
-    formRef,
-    packageDigest,
-  };
-}
-
-function writeCurrentReleaseAuthorityFixture(repo, entry) {
-  const packageRoot = join(repo, ...entry.sourcePath.split("/"));
-  mkdirSync(packageRoot, { recursive: true });
-  writeFileSync(
-    join(packageRoot, "package-index.json"),
-    JSON.stringify({
-      apiVersion: "packages.forms.takoform.com/v1alpha3",
-      kind: "FormPackage",
-      formRef: entry.formRef,
-      definitionPath: "definition.json",
-      files: [],
-    }),
-  );
-  writeFileSync(
-    join(repo, "forms", "lifecycle.json"),
-    JSON.stringify({
-      format: "takoform.form-lifecycle@v2",
-      projectStatus: "experimental",
-      currentEpoch: "forms.takoform.com/v1alpha2",
-      states: ["proposal", "experimental", "stable", "legacy"],
-      legacy: {},
-      proposals: [],
-      currentForms: [
-        {
-          proposalId: entry.proposalId,
-          state: entry.state,
-          owner: "maintainer:example",
-          formRef: entry.formRef,
-          packageDigest: entry.packageDigest,
-          packagePath: entry.sourcePath,
-          history: [],
-          evidence: {},
-        },
-      ],
-    }),
-  );
-}
-
 function tagObjectFixture({
   tag,
   sourceCommit,
   request = requestId,
   runId,
   runAttempt,
-  revocation = false,
 }) {
-  const actor = revocation
-    ? "Takoform Form Package Revocation"
-    : "Takoform Form Package Release";
-  const title = revocation
-    ? `Takoform Form Package revocation checkpoint ${tag}`
-    : `Takoform Form Package ${tag}`;
   const raw = Buffer.from(
     `object ${sourceCommit}\ntype commit\ntag ${tag}\n` +
-      `tagger ${actor} <release@takoform.invalid> 1 +0000\n\n` +
-      `${title}\n\nsource-commit: ${sourceCommit}\n` +
+      "tagger Takoform Form Package Revocation " +
+      "<release@takoform.invalid> 1 +0000\n\n" +
+      `Takoform Form Package revocation checkpoint ${tag}\n\n` +
+      `source-commit: ${sourceCommit}\n` +
       `request-id: ${request}\n` +
       `workflow-run: https://github.com/tako0614/terraform-provider-takoform/actions/runs/${runId}/attempts/${runAttempt}\n`,
   );
@@ -470,72 +201,37 @@ function tagObjectFixture({
 
 function writeDeepFailureCandidate(
   destination,
-  { type, entry, tag, runId, runAttempt, sourceCommit, toolingCommit },
+  { tag, runId, runAttempt, sourceCommit, toolingCommit },
 ) {
-  const revocation = type === "revocation";
-  const version = revocation
-    ? /^forms\/revocations\/v(.+)$/u.exec(tag)[1]
-    : (entry.artifactId ?? entry.version);
-  const releaseId = revocation ? null : entry.releaseId;
-  const base = revocation
-    ? `takoform-form-revocation_${version}`
-    : `takoform-form-${releaseId}_${version}`;
-  const names = revocation
-    ? [
-        `${base}_checkpoint.json`,
-        `${base}_checkpoint.sigstore.json`,
-        `${base}_statement.json`,
-        `${base}_provenance.intoto.json`,
-        "release-manifest.json",
-        "SHA256SUMS",
-      ].sort()
-    : [
-        `${base}.tar.gz`,
-        `${base}_package-index.json`,
-        `${base}_package-index.sigstore.json`,
-        `${base}_provenance.intoto.json`,
-        `${base}_sbom.spdx.json`,
-        "release-manifest.json",
-        "SHA256SUMS",
-      ].sort();
-  const subject = revocation
-    ? `${base}_checkpoint.json`
-    : `${base}_package-index.json`;
-  const bundle = revocation
-    ? `${base}_checkpoint.sigstore.json`
-    : `${base}_package-index.sigstore.json`;
+  const version = /^forms\/revocations\/v(.+)$/u.exec(tag)[1];
+  const base = `takoform-form-revocation_${version}`;
+  const names = [
+    `${base}_checkpoint.json`,
+    `${base}_checkpoint.sigstore.json`,
+    `${base}_statement.json`,
+    `${base}_provenance.intoto.json`,
+    "release-manifest.json",
+    "SHA256SUMS",
+  ].sort();
+  const subject = `${base}_checkpoint.json`;
+  const bundle = `${base}_checkpoint.sigstore.json`;
   const payloadNames = names.filter(
     (name) => name !== "release-manifest.json" && name !== "SHA256SUMS",
   );
   const assetsRoot = join(destination, "assets");
   mkdirSync(assetsRoot, { recursive: true });
   for (const name of payloadNames) {
-    const raw =
-      !revocation && name === subject
-        ? Buffer.from('{"fixture":"package-index"}\n')
-        : Buffer.from(`${name}\n`);
-    writeFileSync(join(assetsRoot, name), raw);
+    writeFileSync(join(assetsRoot, name), Buffer.from(`${name}\n`));
   }
   const manifest = {
     schemaVersion: 1,
-    releaseType: revocation ? "form-package-revocation" : "form-package",
+    releaseType: "form-package-revocation",
     tag,
     sourceRepository: "github.com/tako0614/terraform-provider-takoform",
     sourceCommit,
     toolingCommit,
-    workflow: revocation
-      ? ".github/workflows/form-package-revocation.yml"
-      : ".github/workflows/form-package-release.yml",
-    ...(revocation || entry.version !== undefined
-      ? { packageVersion: version }
-      : { artifactId: version }),
-    ...(revocation
-      ? {}
-      : {
-          releaseId,
-          packageDigest: entry.packageDigest,
-          formRef: entry.formRef,
-        }),
+    workflow: ".github/workflows/form-package-revocation.yml",
+    packageVersion: version,
     signedSubject: subject,
     signatureBundle: bundle,
     publicationReady: true,
@@ -558,18 +254,13 @@ function writeDeepFailureCandidate(
     name,
     sha256: sha256(readFileSync(join(assetsRoot, name))),
   }));
-  const workflow = revocation
-    ? "form-package-revocation.yml"
-    : "form-package-release.yml";
   const metadata = {
-    format: revocation
-      ? "takoform.form-package-revocation-candidate@v1"
-      : "takoform.form-package-release-candidate@v1",
+    format: "takoform.form-package-revocation-candidate@v1",
     repository: "tako0614/terraform-provider-takoform",
-    workflowPath: `.github/workflows/${workflow}`,
+    workflowPath: ".github/workflows/form-package-revocation.yml",
     workflowRef:
-      `tako0614/terraform-provider-takoform/.github/workflows/${workflow}` +
-      "@refs/heads/main",
+      "tako0614/terraform-provider-takoform/.github/workflows/" +
+      "form-package-revocation.yml@refs/heads/main",
     sourceRef: "refs/heads/main",
     runId,
     runAttempt,
@@ -580,7 +271,7 @@ function writeDeepFailureCandidate(
     tagObjectOid: "",
     tagObjectSha256: "",
     requestId,
-    ...(revocation ? { assetCount: names.length } : {}),
+    assetCount: names.length,
     assets: metadataAssets,
   };
   const tagObject = tagObjectFixture({
@@ -588,15 +279,12 @@ function writeDeepFailureCandidate(
     sourceCommit,
     runId,
     runAttempt,
-    revocation,
   });
   metadata.tagObjectOid = tagObject.oid;
   metadata.tagObjectSha256 = sha256(tagObject.raw);
   writeFileSync(
     join(destination, "metadata.json"),
-    revocation
-      ? `${JSON.stringify(recursivelySorted(metadata), null, 2)}\n`
-      : JSON.stringify(recursivelySorted(metadata)),
+    `${JSON.stringify(recursivelySorted(metadata), null, 2)}\n`,
   );
   writeFileSync(join(destination, "tag-object"), tagObject.raw);
   writeChecksumFixture(destination, [
@@ -604,40 +292,6 @@ function writeDeepFailureCandidate(
     "metadata.json",
     "tag-object",
   ]);
-}
-
-function writePublicationSetFixture(staging, plan) {
-  const authorityRoot = join(staging, "authority", commit);
-  mkdirSync(authorityRoot, { recursive: true });
-  const planRaw = Buffer.from(JSON.stringify(plan));
-  const trustedRootRaw = Buffer.from("{}\n");
-  writeFileSync(join(authorityRoot, "release-plan.json"), planRaw);
-  writeFileSync(join(authorityRoot, "trusted-root.json"), trustedRootRaw);
-  writeFileSync(
-    join(staging, "form-package-publication-set.json"),
-    JSON.stringify({
-      format: "takoform.form-package-publication-set@v1",
-      generation: plan.generation,
-      repository: "tako0614/terraform-provider-takoform",
-      protectedMainCommit: commit,
-      entries: plan.releases.map((entry) => ({
-        tag: entry.tag,
-        releaseId: entry.releaseId,
-        version: entry.version,
-        toolingCommit: commit,
-        releasePlan: {
-          path: `authority/${commit}/release-plan.json`,
-          sourcePath: "forms/release-plan.json",
-          sha256: sha256(planRaw),
-        },
-        trustedRoot: {
-          path: `authority/${commit}/trusted-root.json`,
-          sourcePath: "admission/v4/trust/trusted-root.json",
-          sha256: sha256(trustedRootRaw),
-        },
-      })),
-    }),
-  );
 }
 
 describe("release surface contract and strict parsing", () => {
@@ -720,48 +374,64 @@ describe("release surface contract and strict parsing", () => {
       ).toThrow();
     }
 
-    const recovery = parseReleaseSurfaceArgs(
-      "takoform-form-package-release",
-      [
-        "recover-tag-only",
+    expect(
+      parseReleaseSurfaceArgs("takoform-form-package-release", [
+        "prepare-revocation",
         "--tag",
-        "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0",
+        "forms/revocations/v1.0.0",
         "--expected-commit",
         commit,
-        "--expected-tag-object",
-        "a".repeat(40),
-        "--expected-recovery-commit",
-        "89abcdef0123456789abcdef0123456789abcdef",
+      ]).phase,
+    ).toBe("prepare-revocation");
+    expect(
+      parseReleaseSurfaceArgs("takoform-form-package-release", [
+        "publish-revocation",
+        "--tag",
+        "forms/revocations/v1.0.0",
+        "--expected-commit",
+        commit,
         "--run-id",
         "123",
         "--run-attempt",
         "1",
-      ],
-    );
-    expect(recovery.phase).toBe("recover-tag-only");
-    expect(recovery["expected-tag-object"]).toBe("a".repeat(40));
-    const draftRecovery = parseReleaseSurfaceArgs(
-      "takoform-form-package-release",
-      [
-        "recover-draft",
+      ]),
+    ).toEqual({
+      phase: "publish-revocation",
+      tag: "forms/revocations/v1.0.0",
+      "expected-commit": commit,
+      "run-id": "123",
+      "run-attempt": "1",
+    });
+    expect(
+      parseReleaseSurfaceArgs("takoform-form-package-release", [
+        "verify-revocation",
         "--tag",
-        "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0",
+        "forms/revocations/v1.0.0",
         "--expected-commit",
         commit,
-        "--expected-tag-object",
-        "a".repeat(40),
-        "--expected-recovery-commit",
-        "89abcdef0123456789abcdef0123456789abcdef",
-        "--release-id",
-        "362120999",
-        "--run-id",
-        "123",
-        "--run-attempt",
-        "1",
-      ],
-    );
-    expect(draftRecovery.phase).toBe("recover-draft");
-    expect(draftRecovery["release-id"]).toBe("362120999");
+      ]).phase,
+    ).toBe("verify-revocation");
+    for (const withdrawn of [
+      "plan",
+      "prepare",
+      "publish",
+      "publish-batch",
+      "recover-tag-only",
+      "recover-draft",
+      "verify",
+      "verify-all",
+    ]) {
+      expect(() =>
+        parseReleaseSurfaceArgs("takoform-form-package-release", [
+          withdrawn,
+          "--tag",
+          "forms/revocations/v1.0.0",
+          "--expected-commit",
+          commit,
+        ]),
+      ).toThrow("usage:");
+    }
+
     const providerRecovery = parseReleaseSurfaceArgs(
       "takoform-provider-release",
       [
@@ -811,11 +481,11 @@ describe("release surface contract and strict parsing", () => {
     ).toBe("362120999");
     for (const invalid of ["HEAD", "A".repeat(40), "a".repeat(39), "a".repeat(41)]) {
       expect(() =>
-        parseReleaseSurfaceArgs("takoform-form-package-release", [
+        parseReleaseSurfaceArgs("takoform-provider-release", [
           "recover-tag-only",
           "--tag",
-          "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0",
-          "--expected-commit",
+          "v1.0.1",
+          "--expected-release-commit",
           commit,
           "--expected-tag-object",
           invalid,
@@ -830,11 +500,11 @@ describe("release surface contract and strict parsing", () => {
     }
     for (const releaseId of ["0", "-1", "1.0", "9007199254740992"]) {
       expect(() =>
-        parseReleaseSurfaceArgs("takoform-form-package-release", [
+        parseReleaseSurfaceArgs("takoform-provider-release", [
           "recover-draft",
           "--tag",
-          "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0",
-          "--expected-commit",
+          "v1.0.1",
+          "--expected-release-commit",
           commit,
           "--expected-tag-object",
           "a".repeat(40),
@@ -1244,486 +914,7 @@ describe("owner gate final fence and pinned release tools", () => {
   });
 });
 
-describe("serial Form Package batch publication", () => {
-  const tree = "a".repeat(40);
-
-  function writeBatchInput(entries) {
-    const directory = temporaryDirectory("form-publish-batch");
-    const path = join(directory, "input.json");
-    writeFileSync(
-      path,
-      `${JSON.stringify(recursivelySorted(entries))}\n`,
-    );
-    return path;
-  }
-
-  function batchExec(calls, timeline = []) {
-    return (executable, args) => {
-      calls.push({ executable, args: [...args] });
-      if (executable === "gh" && args[0] === "--version") {
-        return "gh version 2.96.0 (2026-07-02)\n";
-      }
-      if (executable === "cosign" && args[0] === "version") {
-        return "GitVersion:    v3.0.6\n";
-      }
-      if (executable === "bun" && args.join(" ") === "run check:release-owner-gate") {
-        return "";
-      }
-      if (executable === "git") {
-        if (args[0] === "status") return "";
-        if (args.join(" ") === "rev-parse --is-shallow-repository") {
-          return "false\n";
-        }
-        if (args.join(" ") === "remote get-url origin") {
-          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
-        }
-        if (args[0] === "symbolic-ref") return "main\n";
-        if (args[0] === "fetch") {
-          timeline.push("fresh-protected-main");
-          return "";
-        }
-        if (
-          args.join(" ") === "rev-parse HEAD" ||
-          args.join(" ") === "rev-parse refs/remotes/origin/main"
-        ) {
-          return `${commit}\n`;
-        }
-        if (args.join(" ") === "rev-parse HEAD^{tree}") {
-          return `${tree}\n`;
-        }
-        if (args[0] === "diff") {
-          timeline.push("authority-path-fence");
-          return "";
-        }
-        if (args[0] === "cat-file" || args[0] === "merge-base") {
-          return "";
-        }
-      }
-      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-    };
-  }
-
-  test("two entries share exactly one owner check and retain serial mutation fences", () => {
-    const plan = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const selected = plan.releases.slice(0, 2);
-    const input = writeBatchInput(
-      selected.map((entry, index) => ({
-        tag: entry.tag,
-        expectedCommit: commit,
-        runId: String(100 + index),
-        runAttempt: "1",
-      })),
-    );
-    const calls = [];
-    const timeline = [];
-    const execution = context(batchExec(calls, timeline));
-    const result = releaseDeployTestHooks.formPublishBatch(
-      execution,
-      { input },
-      plan,
-      (activeContext, options) => {
-        timeline.push(`start:${options.tag}`);
-        const entry = selected.find(
-          (candidate) => candidate.tag === options.tag,
-        );
-        for (const phase of ["tag", "release", "publish"]) {
-          releaseDeployTestHooks.formPublicationMutationFence(
-            activeContext,
-            {
-              expectedCommit: options["expected-commit"],
-              toolingCommit: commit,
-              entry,
-              label: `${phase} test fence`,
-            },
-          );
-          timeline.push(`mutation:${options.tag}:${phase}`);
-        }
-        timeline.push(`done:${options.tag}`);
-        return {
-          tag: options.tag,
-          commit: options["expected-commit"],
-          tagObject: "b".repeat(40),
-          candidateRun: {
-            id: options["run-id"],
-            attempt: options["run-attempt"],
-          },
-          releaseId: Number(options["run-id"]),
-          releaseUrl: `https://example.invalid/${options["run-id"]}`,
-          assetDigests: {},
-          productionReadback: "EXACT_IMMUTABLE_RELEASE",
-        };
-      },
-    );
-
-    expect(
-      calls.filter(
-        (call) =>
-          call.executable === "bun" &&
-          call.args.join(" ") === "run check:release-owner-gate",
-      ),
-    ).toHaveLength(1);
-    expect(result.releases.map((release) => release.tag)).toEqual(
-      selected.map((entry) => entry.tag),
-    );
-    for (const entry of selected) {
-      const start = timeline.indexOf(`start:${entry.tag}`);
-      const done = timeline.indexOf(`done:${entry.tag}`);
-      expect(start).toBeGreaterThanOrEqual(0);
-      expect(done).toBeGreaterThan(start);
-      const segment = timeline.slice(start + 1, done);
-      expect(segment).toEqual([
-        "fresh-protected-main",
-        "authority-path-fence",
-        `mutation:${entry.tag}:tag`,
-        "fresh-protected-main",
-        "authority-path-fence",
-        `mutation:${entry.tag}:release`,
-        "fresh-protected-main",
-        "authority-path-fence",
-        `mutation:${entry.tag}:publish`,
-      ]);
-    }
-    expect(timeline.indexOf(`done:${selected[0].tag}`)).toBeLessThan(
-      timeline.indexOf(`start:${selected[1].tag}`),
-    );
-  });
-
-  test("an invalid later candidate stops before its own mutation", () => {
-    const plan = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const selected = plan.releases.slice(0, 2);
-    const input = writeBatchInput(
-      selected.map((entry, index) => ({
-        tag: entry.tag,
-        expectedCommit: commit,
-        runId: String(200 + index),
-        runAttempt: "1",
-      })),
-    );
-    const calls = [];
-    const mutations = [];
-    const execution = context(batchExec(calls));
-    expect(() =>
-      releaseDeployTestHooks.formPublishBatch(
-        execution,
-        { input },
-        plan,
-        (activeContext, options) => {
-          if (options.tag === selected[1].tag) {
-            throw new Error("reviewed candidate is invalid");
-          }
-          releaseDeployTestHooks.formPublicationMutationFence(
-            activeContext,
-            {
-              expectedCommit: options["expected-commit"],
-              toolingCommit: commit,
-              entry: selected[0],
-              label: "tag test fence",
-            },
-          );
-          mutations.push(options.tag);
-          return {
-            tag: options.tag,
-            commit: options["expected-commit"],
-            tagObject: "b".repeat(40),
-            candidateRun: {
-              id: options["run-id"],
-              attempt: options["run-attempt"],
-            },
-            releaseId: Number(options["run-id"]),
-            releaseUrl: `https://example.invalid/${options["run-id"]}`,
-            assetDigests: {},
-            productionReadback: "EXACT_IMMUTABLE_RELEASE",
-          };
-        },
-      ),
-    ).toThrow("reviewed candidate is invalid");
-    expect(mutations).toEqual([selected[0].tag]);
-    expect(execution.io.errors).toContain(
-      `"failedTag":"${selected[1].tag}"`,
-    );
-  });
-
-  test("blocks dirty, HEAD, origin/main, and tree drift after the proof before a writer", () => {
-    const plan = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const entry = plan.releases[0];
-    const advanced = "89abcdef0123456789abcdef0123456789abcdef";
-    for (const drift of ["dirty", "head", "origin-main", "tree"]) {
-      let proofEstablished = false;
-      let writerCalled = false;
-      const fake = (executable, args) => {
-        if (executable === "gh" && args[0] === "--version") {
-          return "gh version 2.96.0 (2026-07-02)\n";
-        }
-        if (executable === "cosign" && args[0] === "version") {
-          return "GitVersion:    v3.0.6\n";
-        }
-        if (executable === "bun" && args.join(" ") === "run check:release-owner-gate") {
-          return "";
-        }
-        if (executable === "git") {
-          if (args[0] === "status") {
-            return proofEstablished && drift === "dirty"
-              ? " M scripts/release-deploy.mjs\n"
-              : "";
-          }
-          if (args.join(" ") === "rev-parse --is-shallow-repository") {
-            return "false\n";
-          }
-          if (args.join(" ") === "remote get-url origin") {
-            return "https://github.com/tako0614/terraform-provider-takoform.git\n";
-          }
-          if (args[0] === "symbolic-ref") return "main\n";
-          if (args[0] === "fetch") return "";
-          if (args.join(" ") === "rev-parse HEAD") {
-            return `${proofEstablished && drift === "head" ? advanced : commit}\n`;
-          }
-          if (args.join(" ") === "rev-parse refs/remotes/origin/main") {
-            return `${proofEstablished && drift === "origin-main" ? advanced : commit}\n`;
-          }
-          if (args.join(" ") === "rev-parse HEAD^{tree}") {
-            return `${proofEstablished && drift === "tree" ? advanced : tree}\n`;
-          }
-          if (
-            args[0] === "cat-file" ||
-            args[0] === "merge-base" ||
-            args[0] === "diff"
-          ) {
-            return "";
-          }
-        }
-        throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-      };
-      const execution = context(fake);
-      releaseDeployTestHooks.establishFormPublishBatchOwnerGateProof(
-        execution,
-      );
-      proofEstablished = true;
-      expect(() => {
-        releaseDeployTestHooks.formPublicationMutationFence(execution, {
-          expectedCommit: commit,
-          toolingCommit: commit,
-          entry,
-          label: `${drift} test fence`,
-        });
-        writerCalled = true;
-      }).toThrow();
-      expect(writerCalled).toBe(false);
-    }
-  });
-
-  test("clears the reusable proof after both success and failure", () => {
-    const plan = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const entry = plan.releases[0];
-    const input = writeBatchInput([
-      {
-        tag: entry.tag,
-        expectedCommit: commit,
-        runId: "250",
-        runAttempt: "1",
-      },
-    ]);
-    for (const outcome of ["success", "failure"]) {
-      const calls = [];
-      const execution = context(batchExec(calls));
-      const run = () =>
-        releaseDeployTestHooks.formPublishBatch(
-          execution,
-          { input },
-          plan,
-          (_activeContext, options) => {
-            if (outcome === "failure") {
-              throw new Error("candidate failed");
-            }
-            return {
-              tag: options.tag,
-              commit: options["expected-commit"],
-              tagObject: "b".repeat(40),
-              candidateRun: {
-                id: options["run-id"],
-                attempt: options["run-attempt"],
-              },
-              releaseId: Number(options["run-id"]),
-              releaseUrl: `https://example.invalid/${options["run-id"]}`,
-              assetDigests: {},
-              productionReadback: "EXACT_IMMUTABLE_RELEASE",
-            };
-          },
-        );
-      if (outcome === "failure") {
-        expect(run).toThrow("candidate failed");
-      } else {
-        expect(run().status).toBe("VERIFIED");
-      }
-      releaseDeployTestHooks.ownerGateAndFence(execution, commit);
-      expect(
-        calls.filter(
-          (call) =>
-            call.executable === "bun" &&
-            call.args.join(" ") === "run check:release-owner-gate",
-        ),
-      ).toHaveLength(2);
-    }
-  });
-
-  test("opens without following links and inspects and reads the same file descriptor", () => {
-    const plan = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const entry = plan.releases[0];
-    const raw = Buffer.from(
-      `${JSON.stringify(
-        recursivelySorted([
-          {
-            tag: entry.tag,
-            expectedCommit: commit,
-            runId: "275",
-            runAttempt: "1",
-          },
-        ]),
-      )}\n`,
-    );
-    const descriptor = 91;
-    const events = [];
-    const parsed = releaseDeployTestHooks.readFormPublishBatch(
-      "/absolute/operator/input.json",
-      plan,
-      {
-        open: (path, flags) => {
-          events.push(["open", path, flags]);
-          return descriptor;
-        },
-        fstat: (fd) => {
-          events.push(["fstat", fd]);
-          return { isFile: () => true, size: raw.length };
-        },
-        read: (fd, buffer, offset, length, position) => {
-          events.push([
-            "read",
-            fd,
-            buffer.length,
-            offset,
-            length,
-            position,
-          ]);
-          if (offset === 0) {
-            raw.copy(buffer, offset);
-            return raw.length;
-          }
-          return 0;
-        },
-        close: (fd) => {
-          events.push(["close", fd]);
-        },
-      },
-    );
-    expect(events).toEqual([
-      [
-        "open",
-        "/absolute/operator/input.json",
-        fsConstants.O_RDONLY |
-          fsConstants.O_NOFOLLOW |
-          fsConstants.O_NONBLOCK,
-      ],
-      ["fstat", descriptor],
-      [
-        "read",
-        descriptor,
-        1024 * 1024 + 1,
-        0,
-        1024 * 1024 + 1,
-        null,
-      ],
-      [
-        "read",
-        descriptor,
-        1024 * 1024 + 1,
-        raw.length,
-        1024 * 1024 + 1 - raw.length,
-        null,
-      ],
-      ["close", descriptor],
-    ]);
-    expect(parsed).toEqual([
-      {
-        phase: "publish",
-        tag: entry.tag,
-        "expected-commit": commit,
-        "run-id": "275",
-        "run-attempt": "1",
-      },
-    ]);
-  });
-
-  test("rejects non-canonical, duplicate, symlink, oversized, and relative input", () => {
-    const plan = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const [entry, second] = plan.releases;
-    const exact = {
-      tag: entry.tag,
-      expectedCommit: commit,
-      runId: "300",
-      runAttempt: "1",
-    };
-    const duplicateInput = writeBatchInput([exact, exact]);
-    expect(() =>
-      releaseDeployTestHooks.readFormPublishBatch(duplicateInput, plan),
-    ).toThrow("duplicates tag");
-
-    const duplicateRunInput = writeBatchInput([
-      exact,
-      { ...exact, tag: second.tag },
-    ]);
-    expect(() =>
-      releaseDeployTestHooks.readFormPublishBatch(duplicateRunInput, plan),
-    ).toThrow("duplicates workflow run/attempt");
-
-    const nonCanonicalDirectory = temporaryDirectory(
-      "form-publish-batch-noncanonical",
-    );
-    const nonCanonicalInput = join(nonCanonicalDirectory, "input.json");
-    writeFileSync(nonCanonicalInput, JSON.stringify([exact], null, 2));
-    expect(() =>
-      releaseDeployTestHooks.readFormPublishBatch(nonCanonicalInput, plan),
-    ).toThrow("canonical JSON");
-
-    const symlinkDirectory = temporaryDirectory(
-      "form-publish-batch-symlink",
-    );
-    const symlinkInput = join(symlinkDirectory, "input.json");
-    symlinkSync(duplicateInput, symlinkInput);
-    expect(() =>
-      releaseDeployTestHooks.readFormPublishBatch(symlinkInput, plan),
-    ).toThrow("without following symbolic links");
-
-    const oversizedDirectory = temporaryDirectory(
-      "form-publish-batch-oversized",
-    );
-    const oversizedInput = join(oversizedDirectory, "input.json");
-    writeFileSync(oversizedInput, Buffer.alloc(1024 * 1024 + 1));
-    expect(() =>
-      releaseDeployTestHooks.readFormPublishBatch(oversizedInput, plan),
-    ).toThrow("exceeds 1 MiB");
-
-    expect(() =>
-      parseReleaseSurfaceArgs("takoform-form-package-release", [
-        "publish-batch",
-        "--input",
-        "relative.json",
-      ]),
-    ).toThrow("--input must be an absolute path");
-  });
-});
-
-test("deep Form and revocation semantic verifier failures block publication", () => {
+test("deep revocation semantic verifier failures block publication", () => {
   const calls = [];
   const fake = (executable, args) => {
     calls.push({ executable, args: [...args] });
@@ -1735,21 +926,6 @@ test("deep Form and revocation semantic verifier failures block publication", ()
   };
   const execution = context(fake);
   expect(() =>
-    releaseDeployTestHooks.verifyFormSemanticClosure(
-      execution,
-      "/tmp/untrusted-form-assets",
-      {
-        kind: "StaticSite",
-        releaseId: "k-kn2gc5djmnjws5df",
-        version: "1.0.0",
-        tag: "forms/k-kn2gc5djmnjws5df/v1.0.0",
-      },
-      commit,
-      commit,
-      "/tmp/historical-trusted-root.json",
-    ),
-  ).toThrow("deep semantic report plan binding");
-  expect(() =>
     releaseDeployTestHooks.verifyRevocationSemanticClosure(
       execution,
       "/tmp/untrusted-revocation-assets",
@@ -1759,13 +935,6 @@ test("deep Form and revocation semantic verifier failures block publication", ()
       "/tmp/historical-trusted-root.json",
     ),
   ).toThrow("deep semantic report binding");
-  expect(
-    calls.some(
-      (call) =>
-        call.executable === "go" &&
-        call.args.includes("verify-plan-directory"),
-    ),
-  ).toBe(true);
   expect(
     calls.some(
       (call) =>
@@ -1781,251 +950,20 @@ test("deep Form and revocation semantic verifier failures block publication", ()
 });
 
 test("top-level deep semantic rejection cannot push a tag, mutate a Release, or emit VERIFIED", () => {
-  const cases = [
-    {
-      type: "form",
-      phase: "publish",
-      workflowName: "Prepare signed Form Package release candidate",
-      deepCommand: "verify-plan-directory",
-      expectedError: "Form Package deep semantic report identity mismatch",
-    },
-    {
-      type: "revocation",
-      phase: "publish-revocation",
-      workflowName:
-        "Prepare signed Form Package revocation checkpoint",
-      deepCommand: "verify-revocation-directory",
-      expectedError: "revocation deep semantic report identity mismatch",
-    },
-  ];
-  for (const scenario of cases) {
-    const repo = temporaryDirectory(`release-top-level-${scenario.type}`);
-    const plan = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const entry =
-      scenario.type === "form"
-        ? experimentalReleaseEntryFixture()
-        : plan.releases[0];
-    entry.packageDigest = sha256(Buffer.from('{"fixture":"package-index"}\n'));
-    mkdirSync(join(repo, "forms"), { recursive: true });
-    writeFileSync(
-      join(repo, "forms", "release-plan.json"),
-      JSON.stringify(plan),
-    );
-    if (scenario.type === "form") {
-      writeCurrentReleaseAuthorityFixture(repo, entry);
-    }
-    const tag =
-      scenario.type === "form"
-        ? entry.tag
-        : "forms/revocations/v1.0.0";
-    if (scenario.type === "revocation") {
-      mkdirSync(join(repo, "forms", "revocations", "checkpoints"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(repo, "forms", "revocations", "1.0.0.json"),
-        "{}\n",
-      );
-      writeFileSync(
-        join(repo, "forms", "revocations", "checkpoints", "1.0.0.json"),
-        "{}\n",
-      );
-    }
-    const calls = [];
-    const io = memoryIO();
-    const fake = (executable, args) => {
-      calls.push({ executable, args: [...args] });
-      if (executable === "git") {
-        if (args[0] === "status") return "";
-        if (args.join(" ") === "rev-parse --is-shallow-repository") {
-          return "false\n";
-        }
-        if (args.join(" ") === "remote get-url origin") {
-          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
-        }
-        if (args[0] === "symbolic-ref") return "main\n";
-        if (args[0] === "fetch") return "";
-        if (
-          args.join(" ") === "rev-parse HEAD" ||
-          args.join(" ") === "rev-parse refs/remotes/origin/main"
-        ) {
-          return `${commit}\n`;
-        }
-        if (
-          args[0] === "show" &&
-          args[1] === `${commit}:admission/v4/trust/trusted-root.json`
-        ) {
-          return "{}\n";
-        }
-        if (
-          ["cat-file", "merge-base", "diff", "for-each-ref", "ls-remote"].includes(
-            args[0],
-          )
-        ) {
-          return "";
-        }
-      }
-      if (executable === "gh" && isReleaseList(args)) return "[[]]";
-      if (
-        executable === "gh" &&
-        args[0] === "run" &&
-        args[1] === "view"
-      ) {
-        return JSON.stringify({
-          databaseId: 123,
-          attempt: 1,
-          workflowName: scenario.workflowName,
-          event: "workflow_dispatch",
-          headBranch: "main",
-          headSha: commit,
-          status: "completed",
-          conclusion: "success",
-          displayTitle: requestId,
-          url:
-            "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123/attempts/1",
-        });
-      }
-      if (
-        executable === "gh" &&
-        args[0] === "run" &&
-        args[1] === "download"
-      ) {
-        writeDeepFailureCandidate(args[args.indexOf("--dir") + 1], {
-          type: scenario.type,
-          entry,
-          tag,
-          runId: "123",
-          runAttempt: "1",
-          sourceCommit: commit,
-          toolingCommit: commit,
-        });
-        return "";
-      }
-      if (
-        executable === "go" &&
-        args.includes(scenario.deepCommand)
-      ) {
-        return JSON.stringify(
-          scenario.type === "form"
-            ? {
-                format:
-                  "takoform.form-package-directory-verification@v1",
-                semanticStatus: "rejected",
-                cryptographicStatus: "external-required",
-                kind: entry.kind,
-                releaseId: entry.releaseId,
-                artifactId: entry.artifactId,
-                tag,
-                sourceCommit: commit,
-                toolingCommit: commit,
-                trustedRoot: {},
-                assets: [],
-              }
-            : {
-                format:
-                  "takoform.form-package-revocation-directory-verification@v1",
-                semanticStatus: "rejected",
-                cryptographicStatus: "external-required",
-                version: "1.0.0",
-                checkpointSequence: 1,
-                checkpointDigest: `sha256:${"c".repeat(64)}`,
-                packageDigest: `sha256:${"d".repeat(64)}`,
-                formRef: {},
-                tag,
-                sourceCommit: commit,
-                toolingCommit: commit,
-                trustedRoot: {},
-                assets: [],
-              },
-        );
-      }
-      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-    };
-    expect(() =>
-      runReleaseSurface({
-        surface: "takoform-form-package-release",
-        args: [
-          scenario.phase,
-          "--tag",
-          tag,
-          "--expected-commit",
-          commit,
-          "--run-id",
-          "123",
-          "--run-attempt",
-          "1",
-        ],
-        repo,
-        stdout: io.stdout,
-        stderr: io.stderr,
-        execFile: fake,
-        uuidFactory: () => requestId,
-        wait: () => {},
-      }),
-    ).toThrow(scenario.expectedError);
-    expect(
-      calls.some(
-        (call) => call.executable === "go" && call.args.includes(scenario.deepCommand),
-      ),
-    ).toBe(true);
-    expect(
-      calls.some(
-        (call) => call.executable === "git" && call.args[0] === "push",
-      ),
-    ).toBe(false);
-    expect(
-      calls.some(
-        (call) =>
-          call.executable === "gh" &&
-          call.args[0] === "api" &&
-          (call.args.includes("POST") || call.args.includes("PATCH")),
-      ),
-    ).toBe(false);
-    expect(io.output).not.toContain("VERIFIED");
-  }
-});
-
-test("tag-only recovery completes the exact candidate Release without any tag mutation", () => {
-  const repo = temporaryDirectory("release-tag-only-top-level");
-  const plan = JSON.parse(
-    readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
+  const repo = temporaryDirectory("release-top-level-revocation");
+  const tag = "forms/revocations/v1.0.0";
+  mkdirSync(join(repo, "forms", "revocations", "checkpoints"), {
+    recursive: true,
+  });
+  writeFileSync(join(repo, "forms", "revocations", "1.0.0.json"), "{}\n");
+  writeFileSync(
+    join(repo, "forms", "revocations", "checkpoints", "1.0.0.json"),
+    "{}\n",
   );
-  const entry = plan.releases.find((candidate) => candidate.kind === "ModelEndpoint");
-  entry.packageDigest = sha256(Buffer.from('{"fixture":"package-index"}\n'));
-  mkdirSync(join(repo, "forms"), { recursive: true });
-  writeFileSync(join(repo, "forms", "release-plan.json"), JSON.stringify(plan));
-  const recoveryCommit = "89abcdef0123456789abcdef0123456789abcdef";
-  const expectedTagObject = tagObjectFixture({
-    tag: entry.tag,
-    sourceCommit: commit,
-    runId: "123",
-    runAttempt: "1",
-  }).oid;
   const calls = [];
   const io = memoryIO();
-  let candidateRoot;
-  let metadata;
-  let draftCreated = false;
-  let published = false;
-  const releaseAssets = [];
-  const releaseIdentity = () => ({
-    id: 7,
-    tag_name: entry.tag,
-    draft: !published,
-    prerelease: false,
-    immutable: published,
-    html_url: "https://github.com/example/recovered-release",
-    assets: releaseAssets,
-  });
-  const fake = (executable, args, options) => {
+  const fake = (executable, args) => {
     calls.push({ executable, args: [...args] });
-    if (executable === "bun") return "";
-    if (executable === "cosign") {
-      if (args[0] === "version") return "GitVersion:    v3.0.6\n";
-      if (args[0] === "verify-blob") return "";
-    }
     if (executable === "git") {
       if (args[0] === "status") return "";
       if (args.join(" ") === "rev-parse --is-shallow-repository") {
@@ -2040,90 +978,32 @@ test("tag-only recovery completes the exact candidate Release without any tag mu
         args.join(" ") === "rev-parse HEAD" ||
         args.join(" ") === "rev-parse refs/remotes/origin/main"
       ) {
-        return `${recoveryCommit}\n`;
-      }
-      if (args.join(" ") === "rev-parse --show-object-format") {
-        return "sha1\n";
-      }
-      if (args.join(" ") === `rev-parse refs/tags/${entry.tag}^{commit}`) {
         return `${commit}\n`;
       }
-      if (args[0] === "for-each-ref") {
-        return metadata ? `${metadata.tagObjectOid}\n` : "";
-      }
-      if (
-        args[0] === "cat-file" &&
-        args[1] === "-t" &&
-        args[2] === `refs/tags/${entry.tag}`
-      ) {
-        return "tag\n";
-      }
-      if (
-        args[0] === "cat-file" &&
-        args[1] === "-e" &&
-        args[2] === `${commit}:forms/lifecycle.json`
-      ) {
-        throw new Error("historical source has no lifecycle authority");
-      }
-      if (args[0] === "cat-file" || args[0] === "merge-base" || args[0] === "diff") {
-        return "";
-      }
       if (
         args[0] === "show" &&
-        args[1] === `${commit}:forms/release-plan.json`
-      ) {
-        return JSON.stringify(plan);
-      }
-      if (
-        args[0] === "show" &&
-        args[1] === `${commit}:admission/v4/trust/trusted-root.json`
+        args[1] === `${commit}:release/trust/trusted-root.json`
       ) {
         return "{}\n";
       }
-      if (args[0] === "show" && args.includes("--format=%ct")) return "1\n";
-      if (args[0] === "mktag") return `${metadata.tagObjectOid}\n`;
-      if (args[0] === "ls-remote") {
-        const ref = `refs/tags/${entry.tag}`;
-        return (
-          `${metadata.tagObjectOid}\t${ref}\n` +
-          `${commit}\t${ref}^{}\n`
-        );
+      if (
+        ["cat-file", "merge-base", "diff", "for-each-ref", "ls-remote"].includes(
+          args[0],
+        )
+      ) {
+        return "";
       }
     }
-    if (executable === "go" && args.includes("verify-plan-directory")) {
-      const assetRoot = args[args.indexOf("--asset-root") + 1];
-      const trustedRoot = args[args.indexOf("--trusted-root") + 1];
-      return JSON.stringify({
-        format: "takoform.form-package-directory-verification@v1",
-        semanticStatus: "verified",
-        cryptographicStatus: "external-required",
-        kind: entry.kind,
-        releaseId: entry.releaseId,
-        version: entry.version,
-        tag: entry.tag,
-        sourceCommit: commit,
-        toolingCommit: commit,
-        trustedRoot: {
-          path: resolve(repo, "admission/v4/trust/trusted-root.json"),
-          sha256: sha256(readFileSync(trustedRoot)),
-        },
-        assets: readdirSync(assetRoot)
-          .sort()
-          .map((name) => ({
-            name,
-            sha256: sha256(readFileSync(join(assetRoot, name))),
-            size: readFileSync(join(assetRoot, name)).length,
-          })),
-      });
-    }
-    if (executable === "gh" && args[0] === "--version") {
-      return "gh version 2.96.0 (2026-07-02)\n";
-    }
-    if (executable === "gh" && args[0] === "run" && args[1] === "view") {
+    if (executable === "gh" && isReleaseList(args)) return "[[]]";
+    if (
+      executable === "gh" &&
+      args[0] === "run" &&
+      args[1] === "view"
+    ) {
       return JSON.stringify({
         databaseId: 123,
         attempt: 1,
-        workflowName: "Prepare signed Form Package release candidate",
+        workflowName: "Prepare signed Form Package revocation checkpoint",
         event: "workflow_dispatch",
         headBranch: "main",
         headSha: commit,
@@ -2134,346 +1014,229 @@ test("tag-only recovery completes the exact candidate Release without any tag mu
           "https://github.com/tako0614/terraform-provider-takoform/actions/runs/123/attempts/1",
       });
     }
-    if (executable === "gh" && args[0] === "run" && args[1] === "download") {
-      candidateRoot = args[args.indexOf("--dir") + 1];
-      writeDeepFailureCandidate(candidateRoot, {
-        type: "form",
-        entry,
-        tag: entry.tag,
+    if (
+      executable === "gh" &&
+      args[0] === "run" &&
+      args[1] === "download"
+    ) {
+      writeDeepFailureCandidate(args[args.indexOf("--dir") + 1], {
+        tag,
         runId: "123",
         runAttempt: "1",
         sourceCommit: commit,
         toolingCommit: commit,
       });
-      metadata = JSON.parse(readFileSync(join(candidateRoot, "metadata.json"), "utf8"));
       return "";
     }
-    if (executable === "gh" && isReleaseList(args)) {
-      if (!draftCreated) return "[[]]";
-      return JSON.stringify([
-        [{ id: 7, tag_name: entry.tag, draft: !published }],
-      ]);
-    }
     if (
-      executable === "gh" &&
-      args[0] === "api" &&
-      args.includes("POST") &&
-      args.some((argument) => argument.includes("/assets?name="))
+      executable === "go" &&
+      args.includes("verify-revocation-directory")
     ) {
-      const path = args[args.indexOf("--input") + 1];
-      const name = decodeURIComponent(
-        args
-          .find((argument) => argument.includes("/assets?name="))
-          .split("/assets?name=")[1],
-      );
-      const asset = {
-        id: releaseAssets.length + 100,
-        name,
-        state: "uploaded",
-        digest: sha256(readFileSync(path)),
-        size: readFileSync(path).length,
-      };
-      releaseAssets.push(asset);
-      return JSON.stringify(asset);
-    }
-    if (executable === "gh" && args[0] === "api" && args.includes("POST")) {
-      draftCreated = true;
       return JSON.stringify({
-        id: 7,
-        tag_name: entry.tag,
-        draft: true,
-        upload_url:
-          "https://uploads.github.com/repos/tako0614/terraform-provider-takoform/releases/7/assets{?name,label}",
+        format:
+          "takoform.form-package-revocation-directory-verification@v1",
+        semanticStatus: "rejected",
+        cryptographicStatus: "external-required",
+        version: "1.0.0",
+        checkpointSequence: 1,
+        checkpointDigest: `sha256:${"c".repeat(64)}`,
+        packageDigest: `sha256:${"d".repeat(64)}`,
+        formRef: {},
+        tag,
+        sourceCommit: commit,
+        toolingCommit: commit,
+        trustedRoot: {},
+        assets: [],
       });
-    }
-    if (executable === "gh" && args[0] === "api" && args.includes("PATCH")) {
-      published = true;
-      return JSON.stringify(releaseIdentity());
-    }
-    if (
-      executable === "gh" &&
-      args[0] === "api" &&
-      (args[1] ===
-        "repos/tako0614/terraform-provider-takoform/releases/7" ||
-        args[1]?.includes("/releases/tags/"))
-    ) {
-      return JSON.stringify(releaseIdentity());
-    }
-    if (executable === "gh" && args[0] === "release" && args[1] === "download") {
-      const destination = args[args.indexOf("--dir") + 1];
-      for (const asset of releaseAssets) {
-        copyFileSync(join(candidateRoot, "assets", asset.name), join(destination, asset.name));
-      }
-      return "";
     }
     throw new Error(`unexpected ${executable} ${args.join(" ")}`);
   };
-
-  const result = runReleaseSurface({
-    surface: "takoform-form-package-release",
-    args: [
-      "recover-tag-only",
-      "--tag",
-      entry.tag,
-      "--expected-commit",
-      commit,
-      "--expected-tag-object",
-      expectedTagObject,
-      "--expected-recovery-commit",
-      recoveryCommit,
-      "--run-id",
-      "123",
-      "--run-attempt",
-      "1",
-    ],
-    repo,
-    stdout: io.stdout,
-    stderr: io.stderr,
-    execFile: fake,
-    uuidFactory: () => requestId,
-    wait: () => {},
-  });
-  expect(result.status).toBe("VERIFIED");
-  expect(result.phase).toBe("recover-tag-only");
-  expect(published).toBe(true);
-  expect(releaseAssets).toHaveLength(7);
+  expect(() =>
+    runReleaseSurface({
+      surface: "takoform-form-package-release",
+      args: [
+        "publish-revocation",
+        "--tag",
+        tag,
+        "--expected-commit",
+        commit,
+        "--run-id",
+        "123",
+        "--run-attempt",
+        "1",
+      ],
+      repo,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      execFile: fake,
+      uuidFactory: () => requestId,
+      wait: () => {},
+    }),
+  ).toThrow("revocation deep semantic report identity mismatch");
   expect(
     calls.some(
-      (call) =>
-        call.executable === "git" &&
-        ["push", "update-ref"].includes(call.args[0]),
-    ),
-  ).toBe(false);
-  expect(
-    calls.some(
-      (call) =>
-        call.args.includes("DELETE") ||
-        (call.executable === "git" && call.args.includes("-d")),
-    ),
-  ).toBe(false);
-  expect(
-    calls.filter(
-      (call) => call.executable === "gh" && call.args.includes("POST"),
-    ).length,
-  ).toBe(8);
-  expect(
-    calls.filter(
-      (call) => call.executable === "gh" && call.args.includes("PATCH"),
-    ),
-  ).toHaveLength(1);
-  expect(
-    calls.filter(
-      (call) =>
-        call.executable === "bun" &&
-        call.args[0] === "run" &&
-        call.args[1] === "check:release-owner-gate",
-    ),
-  ).toHaveLength(2);
-  expect(
-    calls.filter(
       (call) =>
         call.executable === "go" &&
-        call.args.includes("verify-plan-directory"),
+        call.args.includes("verify-revocation-directory"),
     ),
-  ).toHaveLength(1);
+  ).toBe(true);
+  expect(
+    calls.some(
+      (call) => call.executable === "git" && call.args[0] === "push",
+    ),
+  ).toBe(false);
+  expect(
+    calls.some(
+      (call) =>
+        call.executable === "gh" &&
+        call.args[0] === "api" &&
+        (call.args.includes("POST") || call.args.includes("PATCH")),
+    ),
+  ).toBe(false);
+  expect(io.output).not.toContain("VERIFIED");
 });
 
 test("top-level public verify cannot emit VERIFIED after deep semantic rejection", () => {
-  for (const scenario of [
-    {
-      type: "form",
-      phase: "verify",
-      deepCommand: "verify-plan-directory",
-      expectedError: "Form Package deep semantic report identity mismatch",
-    },
-    {
-      type: "revocation",
-      phase: "verify-revocation",
-      deepCommand: "verify-revocation-directory",
-      expectedError: "revocation deep semantic report identity mismatch",
-    },
-  ]) {
-    const repo = temporaryDirectory(`release-public-verify-${scenario.type}`);
-    const plan = JSON.parse(
-      readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-    );
-    const entry = plan.releases[0];
-    entry.packageDigest = sha256(
-      Buffer.from('{"fixture":"package-index"}\n'),
-    );
-    const tag =
-      scenario.type === "form"
-        ? entry.tag
-        : "forms/revocations/v1.0.0";
-    const fixture = join(repo, "fixture");
-    mkdirSync(fixture);
-    writeDeepFailureCandidate(fixture, {
-      type: scenario.type,
-      entry,
-      tag,
-      runId: "123",
-      runAttempt: "1",
-      sourceCommit: commit,
-      toolingCommit: commit,
-    });
-    const publicRoot = join(fixture, "assets");
-    const publicNames = readdirSync(publicRoot).sort();
-    const remoteAssets = publicNames.map((name, index) => ({
-      id: index + 100,
-      name,
-      state: "uploaded",
-      digest: sha256(readFileSync(join(publicRoot, name))),
-      size: readFileSync(join(publicRoot, name)).length,
-    }));
-    const calls = [];
-    const io = memoryIO();
-    const fake = (executable, args) => {
-      calls.push({ executable, args: [...args] });
-      if (executable === "git") {
-        if (args[0] === "status") return "";
-        if (args.join(" ") === "rev-parse --is-shallow-repository") {
-          return "false\n";
-        }
-        if (args.join(" ") === "remote get-url origin") {
-          return "https://github.com/tako0614/terraform-provider-takoform.git\n";
-        }
-        if (args[0] === "symbolic-ref") return "main\n";
-        if (args[0] === "fetch") return "";
-        if (
-          args.join(" ") === "rev-parse HEAD" ||
-          args.join(" ") === "rev-parse refs/remotes/origin/main"
-        ) {
-          return `${commit}\n`;
-        }
-        if (
-          args[0] === "cat-file" &&
-          args[1] === "-e" &&
-          args[2] === `${commit}:forms/lifecycle.json`
-        ) {
-          throw new Error("historical source has no lifecycle authority");
-        }
-        if (args[0] === "cat-file" || args[0] === "merge-base") return "";
-        if (args[0] === "ls-remote") {
-          const ref = `refs/tags/${tag}`;
-          return `${"a".repeat(40)}\t${ref}\n${commit}\t${ref}^{}\n`;
-        }
-        if (
-          args[0] === "show" &&
-          args[1] === `${commit}:forms/release-plan.json`
-        ) {
-          return JSON.stringify(plan);
-        }
-        if (
-          args[0] === "show" &&
-          args[1] === `${commit}:admission/v4/trust/trusted-root.json`
-        ) {
-          return "{}\n";
-        }
+  const repo = temporaryDirectory("release-public-verify-revocation");
+  const tag = "forms/revocations/v1.0.0";
+  const fixture = join(repo, "fixture");
+  mkdirSync(fixture);
+  writeDeepFailureCandidate(fixture, {
+    tag,
+    runId: "123",
+    runAttempt: "1",
+    sourceCommit: commit,
+    toolingCommit: commit,
+  });
+  const publicRoot = join(fixture, "assets");
+  const publicNames = readdirSync(publicRoot).sort();
+  const remoteAssets = publicNames.map((name, index) => ({
+    id: index + 100,
+    name,
+    state: "uploaded",
+    digest: sha256(readFileSync(join(publicRoot, name))),
+    size: readFileSync(join(publicRoot, name)).length,
+  }));
+  const calls = [];
+  const io = memoryIO();
+  const fake = (executable, args) => {
+    calls.push({ executable, args: [...args] });
+    if (executable === "git") {
+      if (args[0] === "status") return "";
+      if (args.join(" ") === "rev-parse --is-shallow-repository") {
+        return "false\n";
+      }
+      if (args.join(" ") === "remote get-url origin") {
+        return "https://github.com/tako0614/terraform-provider-takoform.git\n";
+      }
+      if (args[0] === "symbolic-ref") return "main\n";
+      if (args[0] === "fetch") return "";
+      if (
+        args.join(" ") === "rev-parse HEAD" ||
+        args.join(" ") === "rev-parse refs/remotes/origin/main"
+      ) {
+        return `${commit}\n`;
+      }
+      if (args[0] === "cat-file" || args[0] === "merge-base") return "";
+      if (args[0] === "ls-remote") {
+        const ref = `refs/tags/${tag}`;
+        return `${"a".repeat(40)}\t${ref}\n${commit}\t${ref}^{}\n`;
       }
       if (
-        executable === "gh" &&
-        args[0] === "api" &&
-        args[1]?.includes("/releases/tags/")
+        args[0] === "show" &&
+        args[1] === `${commit}:release/trust/trusted-root.json`
       ) {
-        return JSON.stringify({
-          id: 7,
-          tag_name: tag,
-          draft: false,
-          prerelease: false,
-          immutable: true,
-          html_url: "https://github.com/example/release",
-          assets: remoteAssets,
-        });
+        return "{}\n";
       }
-      if (
-        executable === "gh" &&
-        args[0] === "release" &&
-        args[1] === "download"
-      ) {
-        const destination = args[args.indexOf("--dir") + 1];
-        for (const name of publicNames) {
-          copyFileSync(join(publicRoot, name), join(destination, name));
-        }
-        return "";
+    }
+    if (
+      executable === "gh" &&
+      args[0] === "api" &&
+      args[1]?.includes("/releases/tags/")
+    ) {
+      return JSON.stringify({
+        id: 7,
+        tag_name: tag,
+        draft: false,
+        prerelease: false,
+        immutable: true,
+        html_url: "https://github.com/example/release",
+        assets: remoteAssets,
+      });
+    }
+    if (
+      executable === "gh" &&
+      args[0] === "release" &&
+      args[1] === "download"
+    ) {
+      const destination = args[args.indexOf("--dir") + 1];
+      for (const name of publicNames) {
+        copyFileSync(join(publicRoot, name), join(destination, name));
       }
-      if (
-        executable === "go" &&
-        args.includes(scenario.deepCommand)
-      ) {
-        return JSON.stringify(
-          scenario.type === "form"
-            ? {
-                format:
-                  "takoform.form-package-directory-verification@v1",
-                semanticStatus: "rejected",
-                cryptographicStatus: "external-required",
-                kind: entry.kind,
-                releaseId: entry.releaseId,
-                version: entry.version,
-                tag,
-                sourceCommit: commit,
-                toolingCommit: commit,
-                trustedRoot: {},
-                assets: [],
-              }
-            : {
-                format:
-                  "takoform.form-package-revocation-directory-verification@v1",
-                semanticStatus: "rejected",
-                cryptographicStatus: "external-required",
-                version: "1.0.0",
-                checkpointSequence: 1,
-                checkpointDigest: `sha256:${"c".repeat(64)}`,
-                packageDigest: `sha256:${"d".repeat(64)}`,
-                formRef: {},
-                tag,
-                sourceCommit: commit,
-                toolingCommit: commit,
-                trustedRoot: {},
-                assets: [],
-              },
-        );
-      }
-      throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-    };
-    expect(() =>
-      runReleaseSurface({
-        surface: "takoform-form-package-release",
-        args: [
-          scenario.phase,
-          "--tag",
-          tag,
-          "--expected-commit",
-          commit,
-        ],
-        repo,
-        stdout: io.stdout,
-        stderr: io.stderr,
-        execFile: fake,
-        wait: () => {},
-      }),
-    ).toThrow(scenario.expectedError);
-    expect(
-      calls.some(
-        (call) => call.executable === "go" && call.args.includes(scenario.deepCommand),
-      ),
-    ).toBe(true);
-    expect(io.output).not.toContain("VERIFIED");
-    expect(
-      calls.some(
-        (call) =>
-          (call.executable === "git" && call.args[0] === "push") ||
-          (call.executable === "gh" &&
-            call.args[0] === "api" &&
-            (call.args.includes("POST") || call.args.includes("PATCH"))),
-      ),
-    ).toBe(false);
-  }
+      return "";
+    }
+    if (
+      executable === "go" &&
+      args.includes("verify-revocation-directory")
+    ) {
+      return JSON.stringify({
+        format:
+          "takoform.form-package-revocation-directory-verification@v1",
+        semanticStatus: "rejected",
+        cryptographicStatus: "external-required",
+        version: "1.0.0",
+        checkpointSequence: 1,
+        checkpointDigest: `sha256:${"c".repeat(64)}`,
+        packageDigest: `sha256:${"d".repeat(64)}`,
+        formRef: {},
+        tag,
+        sourceCommit: commit,
+        toolingCommit: commit,
+        trustedRoot: {},
+        assets: [],
+      });
+    }
+    throw new Error(`unexpected ${executable} ${args.join(" ")}`);
+  };
+  expect(() =>
+    runReleaseSurface({
+      surface: "takoform-form-package-release",
+      args: [
+        "verify-revocation",
+        "--tag",
+        tag,
+        "--expected-commit",
+        commit,
+      ],
+      repo,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      execFile: fake,
+      wait: () => {},
+    }),
+  ).toThrow("revocation deep semantic report identity mismatch");
+  expect(
+    calls.some(
+      (call) =>
+        call.executable === "go" &&
+        call.args.includes("verify-revocation-directory"),
+    ),
+  ).toBe(true);
+  expect(io.output).not.toContain("VERIFIED");
+  expect(
+    calls.some(
+      (call) =>
+        (call.executable === "git" && call.args[0] === "push") ||
+        (call.executable === "gh" &&
+          call.args[0] === "api" &&
+          (call.args.includes("POST") || call.args.includes("PATCH"))),
+    ),
+  ).toBe(false);
 });
 
-describe("deterministic Form tag objects", () => {
+describe("deterministic revocation tag objects", () => {
   const metadata = {
-    tag: "forms/k-kn2gc5djmnjws5df/v1.0.0",
+    tag: "forms/revocations/v1.0.0",
     sourceCommit: commit,
     requestId,
   };
@@ -2488,60 +1251,12 @@ describe("deterministic Form tag objects", () => {
   };
 
   test("accepts only the exact workflow-generated byte sequence", () => {
-    const root = temporaryDirectory("form-tag-object");
+    const root = temporaryDirectory("revocation-tag-object");
     const execution = context(fake);
     const exact = releaseDeployTestHooks.expectedFormTagObject(execution, {
       ...metadata,
-      runId: "123",
-      runAttempt: "2",
-    });
-    writeFileSync(join(root, "tag-object"), exact);
-    expect(() =>
-      releaseDeployTestHooks.verifyTagObjectWorkflowBinding(
-        execution,
-        root,
-        metadata,
-        "123",
-        "2",
-      ),
-    ).not.toThrow();
-
-    for (const changed of [
-      exact.replace("type commit\n", "type commit\nobject deadbeef\n"),
-      exact.replace("Takoform Form Package Release", "Wrong Tagger"),
-      exact.replace(
-        `Takoform Form Package ${metadata.tag}`,
-        "Wrong title",
-      ),
-      exact.replace(`source-commit: ${commit}`, `source-commit: ${"f".repeat(40)}`),
-      `${exact}extra-message: forbidden\n`,
-    ]) {
-      writeFileSync(join(root, "tag-object"), changed);
-      expect(() =>
-        releaseDeployTestHooks.verifyTagObjectWorkflowBinding(
-          execution,
-          root,
-          metadata,
-          "123",
-          "2",
-        ),
-      ).toThrow("exact deterministic workflow object");
-    }
-  });
-
-  test("uses the distinct exact revocation identity and title", () => {
-    const root = temporaryDirectory("revocation-tag-object");
-    const execution = context(fake);
-    const revocation = {
-      tag: "forms/revocations/v1.0.0",
-      sourceCommit: commit,
-      requestId,
-    };
-    const exact = releaseDeployTestHooks.expectedFormTagObject(execution, {
-      ...revocation,
       runId: "456",
       runAttempt: "3",
-      revocation: true,
     });
     expect(exact).toContain(
       "tagger Takoform Form Package Revocation <release@takoform.invalid>",
@@ -2554,12 +1269,33 @@ describe("deterministic Form tag objects", () => {
       releaseDeployTestHooks.verifyTagObjectWorkflowBinding(
         execution,
         root,
-        revocation,
+        metadata,
         "456",
         "3",
-        { revocation: true },
       ),
     ).not.toThrow();
+
+    for (const changed of [
+      exact.replace("type commit\n", "type commit\nobject deadbeef\n"),
+      exact.replace("Takoform Form Package Revocation", "Wrong Tagger"),
+      exact.replace(
+        `Takoform Form Package revocation checkpoint ${metadata.tag}`,
+        "Wrong title",
+      ),
+      exact.replace(`source-commit: ${commit}`, `source-commit: ${"f".repeat(40)}`),
+      `${exact}extra-message: forbidden\n`,
+    ]) {
+      writeFileSync(join(root, "tag-object"), changed);
+      expect(() =>
+        releaseDeployTestHooks.verifyTagObjectWorkflowBinding(
+          execution,
+          root,
+          metadata,
+          "456",
+          "3",
+        ),
+      ).toThrow("exact deterministic workflow object");
+    }
   });
 });
 
@@ -3843,91 +2579,6 @@ describe("local immutable GitHub Release publication", () => {
     expect(pushEnvironment.GIT_CONFIG_VALUE_4).toBe("/dev/null");
   });
 
-  test("tag-only recovery accepts only the exact local/remote annotated object and absent Release", () => {
-    const tag = "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0";
-    const object = "a".repeat(40);
-    const ref = `refs/tags/${tag}`;
-    const exactRemote = `${object}\t${ref}\n${commit}\t${ref}^{}\n`;
-    const execute = ({
-      local = object,
-      localType = "tag",
-      localCommit = commit,
-      remote = exactRemote,
-      releases = "[[]]",
-    } = {}) => {
-      const calls = [];
-      const fake = (_executable, args) => {
-        calls.push([...args]);
-        if (args[0] === "for-each-ref") {
-          if (local instanceof Error) throw local;
-          return `${local}\n`;
-        }
-        if (args[0] === "cat-file" && args[1] === "-t") {
-          if (localType instanceof Error) throw localType;
-          return `${localType}\n`;
-        }
-        if (args[0] === "rev-parse") {
-          if (localCommit instanceof Error) throw localCommit;
-          return `${localCommit}\n`;
-        }
-        if (args[0] === "ls-remote") {
-          if (remote instanceof Error) throw remote;
-          return remote;
-        }
-        if (isReleaseList(args)) return releases;
-        throw new Error(`unexpected command ${args.join(" ")}`);
-      };
-      return {
-        calls,
-        run: () =>
-          releaseDeployTestHooks.assertTagOnlyRecoveryState(context(fake), {
-            tag,
-            expectedCommit: commit,
-            expectedObject: object,
-          }),
-      };
-    };
-
-    expect(() => execute().run()).not.toThrow();
-    for (const scenario of [
-      { local: "" },
-      { local: "b".repeat(40) },
-      { local: commandFailure("local unreadable") },
-      { localType: "commit" },
-      { localType: commandFailure("local type unreadable") },
-      { localCommit: "b".repeat(40) },
-      { localCommit: commandFailure("local peel unreadable") },
-      { remote: "" },
-      { remote: `${object}\t${ref}\n` },
-      { remote: `${"b".repeat(40)}\t${ref}\n${commit}\t${ref}^{}\n` },
-      { remote: `${object}\t${ref}\n${"b".repeat(40)}\t${ref}^{}\n` },
-      { remote: commandFailure("remote unreadable") },
-      {
-        releases: JSON.stringify([
-          [{ id: 7, tag_name: tag, draft: true }],
-        ]),
-      },
-      {
-        releases: JSON.stringify([
-          [{ id: 8, tag_name: tag, draft: false }],
-        ]),
-      },
-    ]) {
-      const execution = execute(scenario);
-      expect(() => execution.run()).toThrow();
-      expect(
-        execution.calls.some(
-          (args) =>
-            args.includes("push") ||
-            args.includes("update-ref") ||
-            args.includes("DELETE") ||
-            args.includes("POST") ||
-            args.includes("PATCH"),
-        ),
-      ).toBe(false);
-    }
-  });
-
   test("tag-only recovery reconstructs the reviewed object without changing a ref", () => {
     const root = temporaryDirectory("release-recovery-tag-object");
     const tag = "forms/k-jvxwizlmivxgi4dpnfxhi/v3.0.0";
@@ -3968,58 +2619,6 @@ describe("local immutable GitHub Release publication", () => {
           args.includes("DELETE"),
       ),
     ).toBe(false);
-  });
-
-  test("tag-only recovery fence permits current recovery code but rejects candidate input drift", () => {
-    const root = temporaryDirectory("release-tag-only-fence");
-    const runGit = (...args) =>
-      execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
-    runGit("init", "-b", "main");
-    runGit("config", "user.name", "Takoform release test");
-    runGit("config", "user.email", "release-test@example.invalid");
-    mkdirSync(join(root, "forms", "releases", "k-test", "1.0.0"), {
-      recursive: true,
-    });
-    mkdirSync(join(root, "scripts"), { recursive: true });
-    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
-    writeFileSync(join(root, "forms", "release-plan.json"), "{}\n");
-    writeFileSync(
-      join(root, "forms", "releases", "k-test", "1.0.0", "package-index.json"),
-      "{}\n",
-    );
-    writeFileSync(
-      join(root, ".github", "workflows", "form-package-release.yml"),
-      "name: exact\n",
-    );
-    writeFileSync(join(root, "scripts", "release-deploy.mjs"), "old\n");
-    runGit("add", ".");
-    runGit("commit", "-m", "reviewed candidate tooling");
-    const toolingCommit = runGit("rev-parse", "HEAD");
-
-    writeFileSync(join(root, "scripts", "release-deploy.mjs"), "recovery\n");
-    runGit("add", "scripts/release-deploy.mjs");
-    runGit("commit", "-m", "reviewed recovery");
-    const recoveryCommit = runGit("rev-parse", "HEAD");
-    const execution = context(execFileSync, { repo: root });
-    const fence = (current) =>
-      releaseDeployTestHooks.assertFormTagOnlyRecoveryFence(execution, {
-        sourceCommit: toolingCommit,
-        toolingCommit,
-        recoveryCommit: current,
-        sourcePath: "forms/releases/k-test/1.0.0",
-        label: "tag-only recovery test",
-      });
-    expect(() => fence(recoveryCommit)).not.toThrow();
-
-    writeFileSync(
-      join(root, "forms", "releases", "k-test", "1.0.0", "package-index.json"),
-      '{"drift":true}\n',
-    );
-    runGit("add", ".");
-    runGit("commit", "-m", "candidate source drift");
-    expect(() => fence(runGit("rev-parse", "HEAD"))).toThrow(
-      "candidate generation, identity, signing, or trust inputs changed",
-    );
   });
 
   test("provider recovery permits only the reviewed implementation, tests, and documentation between E and F", () => {
@@ -4112,36 +2711,6 @@ describe("local immutable GitHub Release publication", () => {
     }
     expect(renameError).toContain("private/provider-helper.mjs");
     expect(renameError).toContain("scripts/check-public-surfaces.mjs");
-  });
-
-  test("provider public readback binds current source F separately from immutable release E", () => {
-    const root = temporaryDirectory("provider-readback-binding");
-    const runGit = (...args) =>
-      execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
-    runGit("init", "-b", "main");
-    runGit("config", "user.name", "Takoform release test");
-    runGit("config", "user.email", "release-test@example.invalid");
-    writeFileSync(join(root, "release.txt"), "E\n");
-    runGit("add", ".");
-    runGit("commit", "-m", "provider release E");
-    const providerReleaseCommit = runGit("rev-parse", "HEAD");
-    writeFileSync(join(root, "recovery.txt"), "F\n");
-    runGit("add", ".");
-    runGit("commit", "-m", "readback source F");
-    const sourceCommit = runGit("rev-parse", "HEAD");
-    const execution = context(execFileSync, { repo: root });
-    expect(
-      releaseDeployTestHooks.assertProviderReadbackCommitBinding(execution, {
-        sourceCommit,
-        providerReleaseCommit,
-      }),
-    ).toEqual({ sourceCommit, providerReleaseCommit });
-    expect(() =>
-      releaseDeployTestHooks.assertProviderReadbackCommitBinding(execution, {
-        sourceCommit: providerReleaseCommit,
-        providerReleaseCommit: sourceCommit,
-      }),
-    ).toThrow();
   });
 
   test("provider recovery rechecks the exact signed tag after immutable publication and before VERIFIED", () => {
@@ -4416,7 +2985,7 @@ describe("local immutable GitHub Release publication", () => {
     }
   });
 
-  test("pre-PATCH authority fence allows unrelated main advance and blocks Form or revocation drift", () => {
+  test("pre-PATCH authority fence allows unrelated main advance and blocks revocation authority drift", () => {
     const root = temporaryDirectory("release-authority-fence");
     const runGit = (...args) =>
       execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -4424,16 +2993,8 @@ describe("local immutable GitHub Release publication", () => {
     runGit("config", "user.name", "Takoform release test");
     runGit("config", "user.email", "release-test@example.invalid");
     mkdirSync(join(root, "scripts"), { recursive: true });
-    mkdirSync(join(root, "forms", "releases", "k-test", "1.0.0"), {
-      recursive: true,
-    });
     mkdirSync(join(root, "forms", "revocations"), { recursive: true });
     writeFileSync(join(root, "scripts", "release-deploy.mjs"), "authority\n");
-    writeFileSync(join(root, "forms", "release-plan.json"), "{}\n");
-    writeFileSync(
-      join(root, "forms", "releases", "k-test", "1.0.0", "package-index.json"),
-      "{}\n",
-    );
     writeFileSync(
       join(root, "forms", "revocations", "checkpoint.json"),
       "{}\n",
@@ -4453,39 +3014,6 @@ describe("local immutable GitHub Release publication", () => {
         sourceCommit: toolingCommit,
         toolingCommit,
         currentMain: unrelatedMain,
-        sourcePath: "forms/releases/k-test/1.0.0",
-        label: "Form Package pre-publish fence",
-      }),
-    ).not.toThrow();
-    expect(() =>
-      releaseDeployTestHooks.assertFormReleaseAuthorityFence(execution, {
-        sourceCommit: toolingCommit,
-        toolingCommit,
-        currentMain: unrelatedMain,
-        revocation: true,
-        label: "revocation pre-publish fence",
-      }),
-    ).not.toThrow();
-
-    writeFileSync(join(root, "forms", "release-plan.json"), '{"drift":true}\n');
-    runGit("add", "forms/release-plan.json");
-    runGit("commit", "-m", "Form authority drift");
-    const formDriftMain = runGit("rev-parse", "HEAD");
-    expect(() =>
-      releaseDeployTestHooks.assertFormReleaseAuthorityFence(execution, {
-        sourceCommit: toolingCommit,
-        toolingCommit,
-        currentMain: formDriftMain,
-        sourcePath: "forms/releases/k-test/1.0.0",
-        label: "Form Package pre-publish fence",
-      }),
-    ).toThrow("release authority paths changed");
-    expect(() =>
-      releaseDeployTestHooks.assertFormReleaseAuthorityFence(execution, {
-        sourceCommit: toolingCommit,
-        toolingCommit,
-        currentMain: formDriftMain,
-        revocation: true,
         label: "revocation pre-publish fence",
       }),
     ).not.toThrow();
@@ -4496,13 +3024,23 @@ describe("local immutable GitHub Release publication", () => {
     );
     runGit("add", "forms/revocations/checkpoint.json");
     runGit("commit", "-m", "revocation authority drift");
-    const revocationDriftMain = runGit("rev-parse", "HEAD");
     expect(() =>
       releaseDeployTestHooks.assertFormReleaseAuthorityFence(execution, {
         sourceCommit: toolingCommit,
         toolingCommit,
-        currentMain: revocationDriftMain,
-        revocation: true,
+        currentMain: runGit("rev-parse", "HEAD"),
+        label: "revocation pre-publish fence",
+      }),
+    ).toThrow("release authority paths changed");
+
+    writeFileSync(join(root, "scripts", "release-deploy.mjs"), "drift\n");
+    runGit("add", "scripts/release-deploy.mjs");
+    runGit("commit", "-m", "tooling authority drift");
+    expect(() =>
+      releaseDeployTestHooks.assertFormReleaseAuthorityFence(execution, {
+        sourceCommit: toolingCommit,
+        toolingCommit,
+        currentMain: runGit("rev-parse", "HEAD"),
         label: "revocation pre-publish fence",
       }),
     ).toThrow("release authority paths changed");
@@ -4646,153 +3184,3 @@ describe("local immutable GitHub Release publication", () => {
   });
 });
 
-test("verify-all leaves no final or plausible set when trusted-root Cosign fails", () => {
-  const parent = temporaryDirectory("release-verify-all");
-  const output = join(parent, "publication-set");
-  const plan = JSON.parse(
-    readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-  );
-  const calls = [];
-  const fake = (executable, args, options) => {
-    calls.push({ executable, args: [...args], env: { ...options.env } });
-    if (executable === "gh" && args[0] === "--version") {
-      return "gh version 2.96.0 (2026-07-02)\n";
-    }
-    if (executable === "cosign" && args[0] === "version") {
-      return "GitVersion:    v3.0.6\n";
-    }
-    if (executable === "git") {
-      if (args[0] === "status") return "";
-      if (args.join(" ") === "rev-parse --is-shallow-repository") {
-        return "false\n";
-      }
-      if (args.join(" ") === "remote get-url origin") {
-        return "https://github.com/tako0614/terraform-provider-takoform.git\n";
-      }
-      if (args[0] === "symbolic-ref") return "main\n";
-      if (args[0] === "fetch") return "";
-      if (args.join(" ") === "rev-parse HEAD") return `${commit}\n`;
-      if (args.join(" ") === "rev-parse refs/remotes/origin/main") {
-        return `${commit}\n`;
-      }
-      if (
-        args[0] === "show" &&
-        args[1] === `${commit}:admission/v4/trust/trusted-root.json`
-      ) {
-        return "{}\n";
-      }
-    }
-    if (executable === "go") {
-      const staging = args[args.indexOf("--output-root") + 1];
-      mkdirSync(staging, { recursive: true });
-      writePublicationSetFixture(staging, plan);
-      return "";
-    }
-    if (executable === "cosign") {
-      throw commandFailure("trusted-root verification failed");
-    }
-    throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-  };
-  expect(() =>
-    releaseDeployTestHooks.formVerifyAll(
-      context(fake),
-      { "output-root": output },
-      plan,
-    ),
-  ).toThrow("cosign verify-blob");
-  expect(existsSync(output)).toBe(false);
-  expect(
-    readdirSync(parent).filter((name) =>
-      name.includes(".publication-set.takoform-staging-"),
-    ),
-  ).toEqual([]);
-  const goCall = calls.find((call) => call.executable === "go");
-  expect(goCall.env.GH_TOKEN).toBeUndefined();
-  expect(goCall.env.GITHUB_TOKEN).toBe("operator-only-test-token");
-  const cosignCall = calls.find((call) => call.executable === "cosign");
-  expect(cosignCall.env.GH_TOKEN).toBeUndefined();
-  expect(cosignCall.env.GITHUB_TOKEN).toBeUndefined();
-});
-
-test("verify-all atomic commit preserves a destination that appears at commit instant", () => {
-  const parent = temporaryDirectory("release-verify-all-race");
-  const output = join(parent, "publication-set");
-  const plan = JSON.parse(
-    readFileSync(join(repositoryRoot, "forms/release-plan.json"), "utf8"),
-  );
-  const calls = [];
-  const fake = (executable, args, options) => {
-    calls.push({ executable, args: [...args], env: { ...options.env } });
-    if (executable === "gh" && args[0] === "--version") {
-      return "gh version 2.96.0 (2026-07-02)\n";
-    }
-    if (executable === "cosign" && args[0] === "version") {
-      return "GitVersion:    v3.0.6\n";
-    }
-    if (executable === "git") {
-      if (args[0] === "status") return "";
-      if (args.join(" ") === "rev-parse --is-shallow-repository") {
-        return "false\n";
-      }
-      if (args.join(" ") === "remote get-url origin") {
-        return "https://github.com/tako0614/terraform-provider-takoform.git\n";
-      }
-      if (args[0] === "symbolic-ref") return "main\n";
-      if (args[0] === "fetch") return "";
-      if (args.join(" ") === "rev-parse HEAD") return `${commit}\n`;
-      if (args.join(" ") === "rev-parse refs/remotes/origin/main") {
-        return `${commit}\n`;
-      }
-      if (
-        args[0] === "show" &&
-        args[1] === `${commit}:admission/v4/trust/trusted-root.json`
-      ) {
-        return "{}\n";
-      }
-    }
-    if (
-      executable === "go" &&
-      args.includes("./cmd/published-package-set") &&
-      args.includes("download-plan")
-    ) {
-      const staging = args[args.indexOf("--output-root") + 1];
-      mkdirSync(staging, { recursive: true });
-      writePublicationSetFixture(staging, plan);
-      return "";
-    }
-    if (
-      executable === "go" &&
-      args.includes("./cmd/release-output-commit") &&
-      args.includes("probe")
-    ) {
-      return '{"format":"takoform.release-output-commit@v1","status":"verified"}\n';
-    }
-    if (
-      executable === "go" &&
-      args.includes("./cmd/release-output-commit") &&
-      args.includes("commit")
-    ) {
-      const target = args[args.indexOf("--target") + 1];
-      mkdirSync(target);
-      writeFileSync(join(target, "racer.txt"), "racer-owned\n");
-      return execFileSync(executable, args, options);
-    }
-    if (executable === "cosign" && args[0] === "verify-blob") return "";
-    throw new Error(`unexpected ${executable} ${args.join(" ")}`);
-  };
-  expect(() =>
-    releaseDeployTestHooks.formVerifyAll(
-      context(fake),
-      { "output-root": output },
-      plan,
-    ),
-  ).toThrow("go run ./cmd/release-output-commit commit");
-  expect(readFileSync(join(output, "racer.txt"), "utf8")).toBe("racer-owned\n");
-  expect(readdirSync(output)).toEqual(["racer.txt"]);
-  expect(
-    readdirSync(parent).filter((name) =>
-      name.includes(".publication-set.takoform-staging-"),
-    ),
-  ).toEqual([]);
-  expect(calls.some((call) => call.executable === "mv")).toBe(false);
-});

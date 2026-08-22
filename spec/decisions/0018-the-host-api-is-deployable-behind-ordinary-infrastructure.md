@@ -60,8 +60,8 @@ These are MUST-level host, wire, and provider semantics, so this repository's
 The lane is defined so that an ordinary deployment can serve it, an id is a
 handle rather than a key, and the state a client keeps is the state the host
 reports. The rules below are normative; the operative text lives in
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md),
-[`../host-api/operations-v1alpha3.json`](../host-api/operations-v1alpha3.json),
+`../host-api/v1alpha3.md`,
+`../host-api/operations-v1alpha3.json`,
 and the generated provider resource documents.
 
 1. **A namespaced group travels as two ordinary path segments.** Every URL

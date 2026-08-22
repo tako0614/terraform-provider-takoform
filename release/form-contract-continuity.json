@@ -4,7 +4,7 @@
     {
       "from": "edge.forms.takoform.com/v1alpha1",
       "to": "edge.forms.takoform.com/v1beta1",
-      "fromCommit": "bc4b276072a19a9629c3755581e63b0aee981aea",
+      "fromCommit": "7d4d1d0a0c2c1a39498872d3f52bc86ded3a79c7",
       "fromTree": "forms/candidates/edge/v1alpha1",
       "toTree": "forms/candidates/edge/v1beta1",
       "contractChanged": [

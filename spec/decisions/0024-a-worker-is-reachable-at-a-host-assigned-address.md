@@ -44,7 +44,7 @@ for them.
 The Edge Platform Family gains `WorkerEndpoint`, an `attachment`-role Form whose
 desired state is one Module Worker reference and nothing else. The rules below
 are normative; the operative text lives in
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md) and
+`../host-api/v1alpha3.md` and
 [`../form-families.md`](../form-families.md).
 
 1. **The author asks for reachability; the host decides the address.** The

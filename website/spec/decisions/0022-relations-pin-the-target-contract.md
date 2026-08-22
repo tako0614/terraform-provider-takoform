@@ -60,7 +60,7 @@ them.
 A host answers for one EXACT Form identity at a time, and a relation states —
 and a host verifies — what contract its target must satisfy. The rules below are
 normative; the operative text lives in
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md) and
+`../host-api/v1alpha3.md` and
 [`../binding-contract/README.md`](../binding-contract/index.md).
 
 1. **The installed catalog is keyed by the whole identity.** A host's installed

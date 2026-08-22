@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "IdentityClient/identity-client",
-  "kind": "IdentityClient",
-  "name": "identity-client",
-  "portability": "portable"
-}

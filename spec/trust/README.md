@@ -98,8 +98,9 @@ The FormRef, Form Definition, package-index and revocation schemas, RFC
 8785/I-JSON implementation, closed local verifier, positive/negative corpus,
 release builder, keyless Sigstore workflow, and append-only revocation delivery
 lane now exist. The retired `1.0.1` packages have real immutable releases; their
-exact release closures and signed indexes are retained under `admission/v1`
-with a TUF-authenticated production root and a digest-pinned, version-bound
+exact release closures and signed indexes are retained in repository history
+(the admission trees were withdrawn with the Legacy epoch, decision 0042) with
+a TUF-authenticated production root and a digest-pinned, version-bound
 historical aggregate package publisher policy. All 34 retained Legacy Form Packages
 also have signed immutable releases, and provider `v1.0.1` has retained
 authenticated direct-Registry readback. No revocation statement has been
@@ -145,168 +146,24 @@ does not reinterpret old evidence under current lifecycle rules. There is no
 current publication job, approval controller, or set-wide stability
 transition.
 
-## Offline Legacy admission-evidence verification
+## Withdrawn offline admission evidence
 
-The repository retains the old offline verifier formats so historical bytes
-remain explainable. The current authority gate does not rebuild a central
-candidate or rerun its semantic approval: it verifies the exact Legacy package
-publication snapshot, then checks the closed admission identity ledger against
-historical annotated tag objects, commits, retained trees, and set digests.
+The offline Legacy admission-evidence verifier, its `admission/v1` and
+`admission/v4` retained trees, pinned offline Sigstore trust material, and the
+history gates that authenticated them were withdrawn with the Legacy epoch
+([decision 0042](../decisions/0042-the-pre-beta-epochs-are-withdrawn.md)).
+The evidence bytes, formats (`takoform.standard-admission-set@v2`/`@v3`,
+`takoform.standard-runner-report@v1`,
+`takoform.standard-provider-runner-report@v2`), and the verifiers that read
+them are all preserved in this repository's git history, where the withdrawal
+left them exactly as published; nothing reinterprets that history under
+current lifecycle rules, and no current approval derives from it.
 
-The retained admission directory must contain these reviewed source inputs:
-
-```text
-admission/v1/trust/offline-sigstore-pins.json
-admission/v1/trust/trusted-root.json
-admission/v1/trust/publisher-policy.json
-admission/v1/trust/host-report-policy.json
-admission/v1/trust/provider-report-policy.json
-admission/v1/trust/package-index-policy.json
-admission/v1/trust/registry-readback-policy.json
-admission/v1/registry/provider-readback.json
-admission/v1/registry/provider-readback.sigstore.json
-admission/v1/registry/provider-lifecycle-matrix.json
-admission/v1/packages/<slug>/evidence.json
-admission/v1/packages/<slug>/evidence.sigstore.json
-admission/v1/packages/<slug>/host-report.json
-admission/v1/packages/<slug>/host-report.sigstore.json
-admission/v1/packages/<slug>/provider-report.json
-admission/v1/packages/<slug>/provider-report.sigstore.json
-admission/v1/releases/<release-id>/<version>/release-manifest.json
-admission/v1/releases/<release-id>/<version>/<five exact release assets>
-```
-
-All retained identities and readback bytes are reviewed source. Historical
-`admission/v1` deliberately omits
-`registry/provider-readback.sigstore.json`; that incomplete historical lane is
-not reusable as evidence for another identity. The retained v4 lane required
-the signed Registry candidate to be retained in source before evidence
-assembly. The offline gate authenticates that retained bundle like every other
-subject; it neither creates an activation archive, publishes a release, nor
-promotes current Form maturity.
-
-The `takoform.offline-sigstore-pins@v2` manifest binds the exact trusted-root
-and five role-specific publisher-policy byte sets by canonical
-`sha256:<lowercase-hex>` digest. Each strict publisher policy pins one exact
-Fulcio OIDC issuer, certificate identity, and Sigstore v0.3 media type. The
-five `(issuer, certificate identity)` pairs must be mutually distinct, so an
-admission-evidence publisher, host runner, provider runner, package publisher,
-or Registry-readback/admission authority cannot silently substitute for
-another role. The
-verifier accepts only keyless blob message signatures over the exact retained
-subject SHA-256, requires a verified Rekor inclusion proof and signed
-integrated time, validates the Fulcio chain and exact identity, and requires a
-verified certificate-transparency SCT. It reads only retained regular files
-below `admission/v1`; parent-directory symlinks and network lookups are
-rejected by construction.
-
-The historical `admission/v1` set uses
-`takoform.standard-admission-set@v2`; retained `admission/v4` material uses
-`takoform.standard-admission-set@v3`. The earlier v1 formats were
-an intentionally non-opening pre-release foundation: no real set or trust pins
-were installed and no provider release could pass them. Therefore v2 was a
-clean pre-publication contract replacement, not a migration of admitted or
-customer state, while v3 added the generation-aware historical closure. Test
-fixtures use an explicit in-process fake subject verifier and are never written
-under the repository's `admission/` path; they do not represent signatures or
-live evidence.
-
-Canonical host reports remain
-`takoform.standard-runner-report@v1`. Historical provider reports may also use
-that format; v1 contains only its runner subject and version, exact
-`(FormRef, packageDigest)`, `passed` status, all eight lifecycle booleans,
-named positive fixture results, and named negative results normalized to
-`invalid_argument`. Fixture closure is role-specific and stage-derived: the
-host report covers the exact `desired` negatives it can submit through the
-portable API, while the provider report covers those plus exact `observed`
-response negatives. Neither role may claim an `output` negative until a
-normative execution contract exists for that stage.
-The historical standard-admission candidate contract required at least one
-`desired` negative, so both the host and provider report closures were
-non-empty.
-
-The later historical provider reports use the distinct
-`takoform.standard-provider-runner-report@v2` format. It adds the required
-`providerBinarySha256` field so the report binds the exact provider executable
-used by the lifecycle and fixture runs. The retained closure format required
-all provider reports to carry the same digest and requires that digest and
-provider version to equal every direct Registry installation readback. The
-evidence-tooling source commit remains provenance for the report generator; it
-is not incorrectly equated with the older immutable provider-release commit.
-`profile.json` schema v2 locks the host/provider format split and digest
-algorithm.
-
-Each canonical report SHA-256 must equal both the admission set entry's role
-digest and the corresponding
-`AdmissionEvidence.conformance.*.evidenceDigest`. Unknown fields,
-duplicate/failed fixtures, incomplete lifecycle, identity substitution, and
-non-portable negative codes fail closed.
-
-The deterministic package readback does not trust a download URL. The v2 set
-pins the exact release-manifest bytes; the validator rereads all five assets,
-checks every size and digest, requires the canonical index, archive, Sigstore
-bundle, SPDX SBOM, and in-toto provenance names/media types, compares the index
-to the provider-compiled candidate, verifies the deterministic tar entry order,
-metadata, payload sizes/digests, and absence of unlisted archive entries, and
-then authenticates that exact index. The SBOM and provenance are themselves
-RFC 8785 canonical, strictly decoded evidence: the verifier recomputes the
-SPDX file closure and package verification code and requires SLSA subjects,
-source repository, tag, tagged-source commit, distinct protected-main tooling
-commit, commit-versioned workflow builder, and canonicalization parameters to
-match the exact retained package release. The historical `1.0.1` publisher
-policy evidence pins the retired aggregate
-`standard-form-package-set-release.yml@refs/tags/standard-forms/v1.0.1`
-certificate identity and the same release commit. Unknown, duplicate, omitted,
-or substituted metadata fails closed.
-The canonical `takoform.provider-registry-readback@v1` similarly binds the
-provider version/tag/commit, current release descriptor, candidate-set and
-schema digests, both CLI/FQN/binary identities, and the exact direct-install
-matrix digest. `cmd/admission-readback` renders this unsigned canonical subject
-from a validated direct matrix. Historical v1 evidence retains its original
-publisher identity. Later Registry evidence was signed only by
-`.github/workflows/provider-registry-readback.yml`, whose identity is distinct
-from package, provider-report, host-report, and admission-evidence publishers.
-
-### Historical generation-aware successor lane
-
-`admission/v3` is immutable `ga-core-v1` history. Its
-`published-package-set@v2` authenticates the exact ten per-Form releases,
-including `HttpService@1.0.0`, with the independent
-`form-package-release.yml` identity. The retained signed report candidates
-remain evidence of what ran, but do not grant admission and are not reused for
-the successor.
-
-`admission/v4` is the retained historical `ga-core-v2` closure. It selects the
-exact mixed-version ten-Form subset containing the provider-neutral
-`EdgeWorker@3.0.0`. Provider reports use generation `portable-v1` and close
-over all 34 Legacy Forms before the historical builder selects the ten exact
-evidence identities. Host reports use generation `ga-core-v2` and contain
-exactly those ten identities. Neither manifest carries a false uniform
-definition or package version. The exact-ten selection is not reused as a
-current maturity or Host Support authority.
-
-The retired assembly command and `standard-admission-evidence.yml` workflow
-produced the retained material; neither is a current surface. Authentication
-now uses `legacy-admission-evidence-check`, which resolves the closed ledger's
-historical admission tags and verifies their exact tag objects, commits,
-retained trees, and set digests. Package publication authentication remains a
-separate Legacy evidence check.
-
-The production Sigstore trusted-root snapshot, the distinct package-index and
-Registry-readback publisher policies, every retired package-index bundle, and the exact immutable release
-readbacks are retained and digest-pinned by
-`admission/v1/published-package-set.json`. They pass the separate offline
-`published-package-check` but grant no admission authority. Exact mutually
-distinct admission-evidence, host-report, and provider-report policies and the
-five-role offline pin manifest are retained. The v4 signed host/provider and
-admission reports, canonical Registry readback, and
-`standard-admission-set.json` are retained as historical evidence.
-The historical canonical Registry matrix/readback for provider `v0.1.3` are also
-retained under the retired v1 evidence lane, but grant no current admission
-authority. The v4 material bound a separately signed readback for exact
-provider `v1.0.1` and its two-CLI direct-Registry matrix. Historical admission
-checkpoint versions were independent from bound Form and provider versions.
-No such checkpoint is assigned now.
+What remains standing from that machinery is what published bytes still need:
+the pinned Sigstore trust root now lives at
+[`release/trust/trusted-root.json`](../../release/trust/trusted-root.json),
+and the append-only revocation delivery lane continues to serve every epoch's
+published packages.
 
 ## Rotation and revocation
 

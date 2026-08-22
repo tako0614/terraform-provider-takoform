@@ -253,7 +253,7 @@ func TestProviderTagPreflightRejectsRerunAndRequestSubstitution(t *testing.T) {
 	requestID := "123e4567-e89b-42d3-a456-426614174000"
 	commit := strings.Repeat("a", 40)
 	preflight := providerTagPreflight{
-		Format:       "takoform.provider-tag-preflight@v1",
+		Format:       "takoform.provider-tag-preflight@v2",
 		RequestID:    requestID,
 		RunID:        "123",
 		RunAttempt:   "2",
@@ -590,9 +590,9 @@ func TestProviderReleaseWorkflowExercisesTheExactReproducibleFinalArchiveBeforeC
 		`unzip -Z1 "$archive"`,
 		`unzip -p "$archive" "$entry" > "$binary"`,
 		`test "$("$binary" -version)" = "$version"`,
-		`go -C release-source run ./cmd/provider-lifecycle-conformance render-matrix`,
+		`go -C release-source run ./cmd/worker-authoring-conformance render-matrix`,
 		`--provider-binary "$binary"`,
-		`.providerBinary.sha256 == $sha256`,
+		`.providerBinarySha256 == $sha256`,
 		`test "$(sha256sum "$archive" | cut -d' ' -f1)" = "$archive_sha256"`,
 		`test "sha256:$(sha256sum "$binary" | cut -d' ' -f1)" = "$binary_sha256"`,
 	} {
@@ -600,7 +600,7 @@ func TestProviderReleaseWorkflowExercisesTheExactReproducibleFinalArchiveBeforeC
 			t.Fatalf("exact final provider lifecycle step lacks %q", required)
 		}
 	}
-	if strings.Contains(text[:firstBuild], "provider-lifecycle-conformance matrix --") {
+	if strings.Contains(text[:firstBuild], "worker-authoring-conformance matrix --") {
 		t.Fatal("provider lifecycle must not be satisfied by rebuilding a pre-GoReleaser provider")
 	}
 	for _, required := range []string{
@@ -742,7 +742,7 @@ func TestProviderReleaseWorkflowDestroysSigningAuthorityBeforeRepositoryCode(t *
 		"go -C ",
 		"bun ",
 		"release-source/",
-		"provider-lifecycle-conformance",
+		"worker-authoring-conformance",
 		"./cmd/",
 		"unzip ",
 	} {

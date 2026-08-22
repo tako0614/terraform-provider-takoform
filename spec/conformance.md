@@ -89,10 +89,6 @@ Every Experimental or Stable Form MUST declare at least one `desired`-stage
 negative fixture. Host Support and provider compatibility evidence therefore
 both have a non-empty negative-fixture set to execute.
 
-A host **MAY** additionally implement the optional read-only interface
-declaration surface ([`interface-declaration/`](interface-declaration/)). A host
-that does not is still fully conforming.
-
 A host decides placement, capacity, credentials, and commercial terms. Those
 decisions are outside this specification, and a host MUST NOT require them to
 appear in portable desired state.

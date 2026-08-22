@@ -11,17 +11,10 @@ and the evidence required to change maturity. Exact version compatibility is
 defined in [`versioning.md`](versioning.md); package and implementation
 conformance are defined in [`conformance.md`](conformance.md).
 
-Machine authority is scoped by identity family. The retained central epochs
-and their proposals are recorded in
-[`../forms/lifecycle.json`](../forms/lifecycle.json). Its repository-local authoring schema is
-[`../forms/lifecycle.schema.json`](../forms/lifecycle.schema.json), and
-`standard-form-conformance verify` is the fail-closed semantic validator. The
-JSON Schema documents shape; the validator additionally verifies referenced
-files, exact package bytes, transition order, owner continuity, independent
-maintainers, and the pinned Legacy inventory. The authoring schema has no
-public `$id` and is not a published Form contract. Current family maturity and
-exact identity are recorded in the generated family candidate set; for the
-Beta Edge family that is
+Machine authority is scoped by identity family. The withdrawn central
+epochs' lifecycle ledger went with them (decision 0042) and stays in git
+history. Current family maturity and exact identity are recorded in the
+generated family candidate set; for the Beta Edge family that is
 [`../forms/candidates/edge/v1beta1/candidate-set.json`](../forms/candidates/edge/v1beta1/candidate-set.json).
 The provider compatibility copy is independently locked in
 [`../release/provider-form-identities.json`](../release/provider-form-identities.json).

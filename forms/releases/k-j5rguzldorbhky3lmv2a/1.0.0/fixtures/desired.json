@@ -1,7 +1,0 @@
-{
-  "interfaces": [
-    "s3_api"
-  ],
-  "name": "assets",
-  "storageClass": "standard"
-}

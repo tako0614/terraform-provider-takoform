@@ -2,10 +2,10 @@
 
 An Interface is a repository-distributed, digest-bound contract for one
 portable operation surface. It replaces the open `(name, version,
-operations)` descriptors of the retained v1alpha2 lane for all new-lane Forms
-([decision 0010](../decisions/0010-exact-interface-and-binding-contracts.md)).
-The retained projection contract remains documented in
-[`../interface-declaration/`](../interface-declaration/) for the frozen lanes.
+operations)` descriptors of the withdrawn v1alpha2 lane
+([decision 0010](../decisions/0010-exact-interface-and-binding-contracts.md));
+that lane's projection contract was withdrawn with its epoch and stays in
+this repository's git history (decision 0042).
 
 ## InterfaceRef
 

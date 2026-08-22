@@ -1,6 +1,0 @@
-{
-  "maxRetries": 5,
-  "messageRetentionSeconds": 0,
-  "name": "queue",
-  "ordering": "best_effort"
-}

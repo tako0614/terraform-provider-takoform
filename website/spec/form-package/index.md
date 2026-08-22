@@ -3,18 +3,17 @@
 A Form Package is a closed local directory with a root `package-index.json` and
 exactly the payload files listed by that index. Requirement keywords are used
 as described in [`../conformance.md`](../conformance.md). The normative Draft
-2020-12 index schemas are the current family
+2020-12 index schema is the current family
 [`v1alpha4`](/schemas/v1alpha4/package-index.schema.json) profile carrying
-namespaced-group `forms.takoform.com` family FormRefs, the retained
-provider-v2
-[`v1alpha3`](../../formpackage/schemas/package-index-v1alpha3.schema.json)
-profile for v1alpha2 FormRefs, and the retained Legacy
-[`v1alpha2`](../../formpackage/schemas/package-index-v1alpha2.schema.json) and
-[`v1alpha1`](../../formpackage/schemas/package-index.schema.json) profiles.
-The v1alpha2 envelope is immutable and content-addressed, but it refers to a
-v1alpha1 FormRef; it cannot carry a current v1alpha2 Form. The v1alpha3
-envelope likewise carries only `forms.takoform.com/v1alpha2` FormRefs and
-cannot carry a family Form.
+namespaced-group `forms.takoform.com` family FormRefs. The three earlier
+envelope identities were withdrawn with their epochs
+([decision 0042](../decisions/0042-the-pre-beta-epochs-are-withdrawn.md));
+the `formpackage` verifier keeps embedded copies of
+every epoch's schemas
+([`v1alpha3`](../../formpackage/schemas/package-index-v1alpha3.schema.json),
+[`v1alpha2`](../../formpackage/schemas/package-index-v1alpha2.schema.json),
+[`v1alpha1`](../../formpackage/schemas/package-index.schema.json)) so package
+bytes retained in git history and `forms/*` release tags stay verifiable.
 
 One package MUST contain exactly one Form Definition and therefore exactly one
 FormRef. There is no `packageId` and no multi-form `definitions` collection in
@@ -35,10 +34,7 @@ one — the index is closed, fixes `kind` to `FormPackage`, and requires a
 
 The current family index has the fixed identity
 `packages.forms.takoform.com/v1alpha4` / `FormPackage` with an exact
-namespaced-group `FormRef`; the retained provider-v2 index has the identity
-`packages.forms.takoform.com/v1alpha3` / `FormPackage` with an exact
-`forms.takoform.com/v1alpha2` `FormRef`. Both carry one
-`definitionPath` and a
+namespaced-group `FormRef`. It carries one `definitionPath` and a
 lexicographically sorted `files` array. Every file entry records a canonical
 relative slash path, an allowlisted data media type, its byte length, and a
 lowercase `sha256:` digest over the exact payload bytes.
@@ -51,13 +47,11 @@ to either identity.
 `packageDigest` is the verifier result used by an external catalog or mapping;
 it is not a self-referential field inside `package-index.json`.
 
-The content-addressed v1alpha2 and v1alpha3 profiles deliberately have no
-`packageVersion`. Their publication locators use the full Package Digest as
-`sha256-<hex>` while
+A content-addressed profile deliberately has no `packageVersion`: the
+publication locator uses the full Package Digest as `sha256-<hex>` while
 `FormRef.definitionVersion` remains the only Form compatibility SemVer. The
-v1alpha2 profile remains accepted only for exact Legacy v1alpha1 FormRefs. The
-v1alpha1 profile and its required `packageVersion` likewise remain accepted
-only for exact Legacy read, verification, recovery, and migration.
+withdrawn v1alpha1/v1alpha2/v1alpha3 profiles remain accepted by the verifier
+only for reading, verifying, and recovering bytes retained in history.
 
 ## Local verifier
 
@@ -131,28 +125,26 @@ go run ./cmd/form-package canonicalize FILE.json
 go run ./cmd/form-package digest FILE.json
 go run ./cmd/form-package validate-revocation STATEMENT.json
 go run ./cmd/form-package validate-revocation-checkpoint CHECKPOINT.json
-go run ./cmd/form-package conformance
 ```
 
 ## Release boundary
 
-The repository-owned release tooling and protected workflows are documented in
-[`../../release/form-packages.md`](../../release/form-packages.md). A
-package source under
-`forms/releases/<release-id>/sha256-<package-digest-hex>/` is re-verified,
-canonicalized, deterministically archived, described by SPDX 2.3 and SLSA v1
-evidence, and signed through a keyless Sigstore v0.3 bundle whose identity is
-bound to the exact repository and protected-main workflow. The reversible
-release ID is `k-` plus lowercase unpadded base32 of the exact FormRef Kind;
-the dispatcher separately verifies the exact
-`forms/<release-id>/sha256-<package-digest-hex>` source tag and approved commit
-before signing. Legacy v1alpha1 locators retain their existing
-`<packageVersion>` directory and `v<packageVersion>` tag unchanged. Legacy
-content-addressed v1alpha2 packages and retained provider-v2 v1alpha3
-packages use their full digest locator, but only v1alpha3 may carry a
-retained v1alpha2 FormRef.
-The canonical index bytes—not archive metadata—remain the signed semantic
-subject.
+Form Packages have no independent release cadence: they publish with the
+provider release that embeds them, when the publication blockers clear
+([decision 0041](../decisions/0041-form-packages-publish-with-the-provider-release.md)).
+`cmd/form-package-release` remains the
+tooling that re-verifies, canonicalizes, deterministically archives, describes
+(SPDX 2.3, SLSA v1), and signs a package through a keyless Sigstore v0.3
+bundle whose identity is bound to the exact repository and protected-main
+workflow; the reversible release ID is `k-` plus lowercase unpadded base32 of
+the exact FormRef Kind, and the canonical index bytes — not archive metadata —
+are the signed semantic subject. The historical epochs' locator and tag
+grammars are recorded with their withdrawal
+([decision 0042](../decisions/0042-the-pre-beta-epochs-are-withdrawn.md));
+their published `forms/*` tags stay immutable. The append-only revocation
+delivery lane (`.github/workflows/form-package-revocation.yml`) remains a
+standing workflow, because published bytes stay revocable even after their
+epoch is withdrawn.
 
 ## Deliberate non-goals of the local verifier
 

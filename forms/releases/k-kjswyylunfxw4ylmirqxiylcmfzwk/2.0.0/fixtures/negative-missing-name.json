@@ -1,8 +1,0 @@
-{
-  "databaseName": "app",
-  "engine": "postgres",
-  "engineVersion": "16",
-  "highAvailability": false,
-  "sizeClass": "db.small",
-  "storageGib": 20
-}

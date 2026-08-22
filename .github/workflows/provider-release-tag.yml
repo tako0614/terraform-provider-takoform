@@ -98,9 +98,10 @@ jobs:
           set -euo pipefail
           go mod verify
           go test ./...
-          go run ./cmd/provider-lifecycle-conformance render-matrix \
-            --opentofu tofu --terraform terraform > "$RUNNER_TEMP/provider-lifecycle-matrix.json"
-          go run ./cmd/standard-form-conformance candidate-publication-check
+          go run ./cmd/worker-authoring-conformance render-matrix \
+            --opentofu tofu --terraform terraform > "$RUNNER_TEMP/worker-authoring-matrix.json"
+          jq -e '.publicationStatus == "candidate-only"' release/version.json > /dev/null
+          go run ./cmd/standard-form-conformance verify
           go -C cmd/provider-release mod verify
           go -C cmd/provider-release test ./...
           go -C cmd/provider-release run . verify-source --allow-untagged-candidate
@@ -120,14 +121,14 @@ jobs:
           install -m 0644 "$RUNNER_TEMP/provider-candidate/manifest.json" "$output/provider-candidate-manifest.json"
           install -m 0644 "$RUNNER_TEMP/provider-candidate/sbom.spdx.json" "$output/provider-sbom.spdx.json"
           install -m 0644 "$RUNNER_TEMP/provider-candidate/provenance.json" "$output/provider-provenance.json"
-          jq -S -c . "$RUNNER_TEMP/provider-lifecycle-matrix.json" > "$output/provider-lifecycle-matrix.json"
+          jq -S -c . "$RUNNER_TEMP/worker-authoring-matrix.json" > "$output/worker-authoring-matrix.json"
           descriptor_digest="sha256:$(sha256sum release/version.json | cut -d' ' -f1)"
           manifest_digest="sha256:$(sha256sum "$output/provider-candidate-manifest.json" | cut -d' ' -f1)"
           sbom_digest="sha256:$(sha256sum "$output/provider-sbom.spdx.json" | cut -d' ' -f1)"
           provenance_digest="sha256:$(sha256sum "$output/provider-provenance.json" | cut -d' ' -f1)"
-          matrix_digest="sha256:$(sha256sum "$output/provider-lifecycle-matrix.json" | cut -d' ' -f1)"
+          matrix_digest="sha256:$(sha256sum "$output/worker-authoring-matrix.json" | cut -d' ' -f1)"
           jq -n -S -c \
-            --arg format "takoform.provider-tag-preflight@v1" \
+            --arg format "takoform.provider-tag-preflight@v2" \
             --arg requestId "$REQUEST_ID" \
             --arg runId "$GITHUB_RUN_ID" \
             --arg runAttempt "$GITHUB_RUN_ATTEMPT" \
@@ -136,13 +137,13 @@ jobs:
             --arg providerCandidateManifestSha256 "$manifest_digest" \
             --arg providerSBOMSha256 "$sbom_digest" \
             --arg providerProvenanceSha256 "$provenance_digest" \
-            --arg providerLifecycleMatrixSha256 "$matrix_digest" \
-            '{format:$format,requestId:$requestId,runId:$runId,runAttempt:$runAttempt,sourceCommit:$sourceCommit,releaseDescriptorSha256:$releaseDescriptorSha256,providerCandidateManifestSha256:$providerCandidateManifestSha256,providerSBOMSha256:$providerSBOMSha256,providerProvenanceSha256:$providerProvenanceSha256,providerLifecycleMatrixSha256:$providerLifecycleMatrixSha256}' \
+            --arg workerAuthoringMatrixSha256 "$matrix_digest" \
+            '{format:$format,requestId:$requestId,runId:$runId,runAttempt:$runAttempt,sourceCommit:$sourceCommit,releaseDescriptorSha256:$releaseDescriptorSha256,providerCandidateManifestSha256:$providerCandidateManifestSha256,providerSBOMSha256:$providerSBOMSha256,providerProvenanceSha256:$providerProvenanceSha256,workerAuthoringMatrixSha256:$workerAuthoringMatrixSha256}' \
             > "$output/preflight.json"
           (cd "$output" && sha256sum \
             preflight.json \
             provider-candidate-manifest.json \
-            provider-lifecycle-matrix.json \
+            worker-authoring-matrix.json \
             provider-provenance.json \
             provider-sbom.spdx.json > SHA256SUMS)
 
@@ -206,13 +207,13 @@ jobs:
             SHA256SUMS \
             preflight.json \
             provider-candidate-manifest.json \
-            provider-lifecycle-matrix.json \
+            worker-authoring-matrix.json \
             provider-provenance.json \
             provider-sbom.spdx.json | sort > "$RUNNER_TEMP/expected-evidence.txt"
           diff -u "$RUNNER_TEMP/expected-evidence.txt" "$RUNNER_TEMP/actual-evidence.txt"
           (cd "$evidence" && sha256sum --check --strict SHA256SUMS)
           descriptor_digest="sha256:$(sha256sum release/version.json | cut -d' ' -f1)"
-          test "$(jq -r .format "$evidence/preflight.json")" = "takoform.provider-tag-preflight@v1"
+          test "$(jq -r .format "$evidence/preflight.json")" = "takoform.provider-tag-preflight@v2"
           test "$(jq -r .requestId "$evidence/preflight.json")" = "$REQUEST_ID"
           test "$(jq -r .runId "$evidence/preflight.json")" = "$GITHUB_RUN_ID"
           test "$(jq -r .runAttempt "$evidence/preflight.json")" = "$GITHUB_RUN_ATTEMPT"
@@ -221,7 +222,7 @@ jobs:
           test "$(jq -r .providerCandidateManifestSha256 "$evidence/preflight.json")" = "sha256:$(sha256sum "$evidence/provider-candidate-manifest.json" | cut -d' ' -f1)"
           test "$(jq -r .providerSBOMSha256 "$evidence/preflight.json")" = "sha256:$(sha256sum "$evidence/provider-sbom.spdx.json" | cut -d' ' -f1)"
           test "$(jq -r .providerProvenanceSha256 "$evidence/preflight.json")" = "sha256:$(sha256sum "$evidence/provider-provenance.json" | cut -d' ' -f1)"
-          test "$(jq -r .providerLifecycleMatrixSha256 "$evidence/preflight.json")" = "sha256:$(sha256sum "$evidence/provider-lifecycle-matrix.json" | cut -d' ' -f1)"
+          test "$(jq -r .workerAuthoringMatrixSha256 "$evidence/preflight.json")" = "sha256:$(sha256sum "$evidence/worker-authoring-matrix.json" | cut -d' ' -f1)"
           test "$(jq -r .version "$evidence/provider-candidate-manifest.json")" = "${RELEASE_TAG#v}"
           test "$(jq -r .tag "$evidence/provider-candidate-manifest.json")" = "$RELEASE_TAG"
           test "$(jq -r .sourceCommit "$evidence/provider-candidate-manifest.json")" = "$EXPECTED_COMMIT"
@@ -233,11 +234,9 @@ jobs:
           jq -e '.materials | has("SHA256SUMS") and has("sbom.spdx.json")' "$evidence/provider-candidate-manifest.json" >/dev/null
           jq -e . "$evidence/provider-sbom.spdx.json" >/dev/null
           jq -e . "$evidence/provider-provenance.json" >/dev/null
-          test "$(jq -r .releaseDescriptorSha256 "$evidence/provider-lifecycle-matrix.json")" = "$descriptor_digest"
-          test "$(jq -r .installationSource "$evidence/provider-lifecycle-matrix.json")" = "local-dev-override"
-          test "$(jq -r .publicationReady "$evidence/provider-lifecycle-matrix.json")" = "false"
-          test "$(jq '.reports | length' "$evidence/provider-lifecycle-matrix.json")" = "2"
-          jq -e '.reports | all(.installationSource == "local-dev-override")' "$evidence/provider-lifecycle-matrix.json" >/dev/null
+          test "$(jq -r .format "$evidence/worker-authoring-matrix.json")" = "takoform.worker-authoring-conformance-matrix@v1"
+          test "$(jq -r .publicationReady "$evidence/worker-authoring-matrix.json")" = "false"
+          test "$(jq '.reports | length' "$evidence/worker-authoring-matrix.json")" = "2"
           if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
             echo "Local history already contains $RELEASE_TAG" >&2
             exit 1

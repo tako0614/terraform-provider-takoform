@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "ContainerService/agent",
-  "kind": "ContainerService",
-  "name": "agent",
-  "portability": "portable"
-}

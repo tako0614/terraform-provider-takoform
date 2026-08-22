@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "HttpService/http-service",
-  "kind": "HttpService",
-  "name": "http-service",
-  "portability": "portable"
-}

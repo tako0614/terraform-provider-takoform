@@ -1,8 +1,0 @@
-{
-  "accessProtocols": [
-    "s3_api"
-  ],
-  "name": "object-bucket",
-  "storageClass": "standard",
-  "versioning": true
-}

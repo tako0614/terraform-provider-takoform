@@ -15,17 +15,19 @@ pre-release label for another axis.
 | Form Package envelope | **`packages.forms.takoform.com/v1alpha4`** | Separate package/distribution schema identifier. Package artifacts remain unpublished.                                                                                                       |
 
 Provider distribution is a separate axis. **Provider 2.1.1** is the current
-Registry-readback client, **Provider 2.0.0** is the published compatibility
-predecessor for the retained surface, and **Provider 1.0.3** remains the
-published Legacy client for existing v1 state.
+Registry-published client. **Provider 2.0.0** and **Provider 1.0.3** remain
+installable Registry history for the withdrawn pre-Beta epochs
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
+the next release from this repository will be the major **3.0.0**
+([v2 to v3 migration boundary](/release/migrations/v2-to-v3.html)).
 
 ## Published compatibility mapping
 
 | Client or distribution      | Host API          | Forms and definitions                                               | Status / use                                                                |
 | --------------------------- | ----------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Provider 2.1.1 distribution | Host API v1beta1  | Edge Form Family v1beta1; 15 Experimental Forms at definition 0.1.0 | Registry-published current client; descriptor remains `candidate-only` metadata by design. |
-| Provider 2.0.0 distribution | Host API v1alpha2 | Retained provider-v2 Forms at their retained definition identities  | Registry-published compatibility client.                                    |
-| Provider 1.0.3 Legacy       | Host API v1alpha1 | The immutable v1 Form Package identities                            | Registry-published migration and recovery client.                           |
+| Provider 2.0.0 distribution | Host API v1alpha2 (withdrawn epoch) | The nine withdrawn v1alpha2 Forms | Immutable Registry history; exact-pin only, no successors. |
+| Provider 1.0.3 Legacy       | Host API v1alpha1 (withdrawn epoch) | The withdrawn v1 Form Package identities | Immutable Registry history; recovery and migration only.   |
 
 The host API and Form family are not interchangeable labels: Host API v1beta1
 is the wire protocol, while Edge Form Family v1beta1 names the group of Forms
@@ -69,55 +71,17 @@ terraform {
 The repository descriptor remains `candidate-only` metadata by design after
 owner publication; that metadata does not revoke the Registry client.
 
-## Published compatibility / Migration / History
+## Withdrawn epochs
 
-<details>
-<summary>Retained Provider 2.0.0 and Legacy Provider 1.0.3</summary>
-
-### Provider 2.0.0 / Host API v1alpha2 {#provider-2-0-0}
-
-The retained provider-v2 surface remains reachable through the existing
-resource URLs. These nine resources are kept as compatibility history, not as
-the current Edge Form Family:
-
-- [`takoform_edge_worker`](/docs/resources/edge_worker.html)
-- [`takoform_relational_database`](/docs/resources/relational_database.html)
-- [`takoform_object_bucket`](/docs/resources/object_bucket.html)
-- [`takoform_key_value_store`](/docs/resources/key_value_store.html)
-- [`takoform_queue`](/docs/resources/queue.html)
-- [`takoform_schedule`](/docs/resources/schedule.html)
-- [`takoform_container_service`](/docs/resources/container_service.html)
-- [`takoform_stateful_entity`](/docs/resources/stateful_entity.html)
-- [`takoform_vector_index`](/docs/resources/vector_index.html)
-- [Interface data source](/docs/data-sources/interface.html)
-
-Provider 2.0.0 discovers exact retained FormRefs at
-`/.well-known/takoform/v1alpha2`. The retained package index is
-`packages.forms.takoform.com/v1alpha3`; neither identity is silently remapped
-to the current v1beta1 stack.
-
-### Provider 1.0.3 / Host API v1alpha1 {#provider-1-0-3}
-
-Provider 1.0.3 remains the immutable Legacy client. Keep it pinned for existing
-v1 state, refresh/delete/recovery, and any migration step that still needs the
-v1 wire. Its discovery boundary is `/.well-known/takoform/v1alpha1`, and the
-published v1 Form Package identities remain historical evidence.
-
-### Migration
-
-Migration is explicit rather than an automatic state rewrite:
-
-1. Pin Provider 1.0.3 and refresh the Legacy resource.
-2. Record non-secret desired configuration and required public outputs.
-3. Create under an exact Host API v1alpha2 FormRef, or import only with host
-   conformance proof, using Provider 2.0.0.
-4. Move consumers, observe the result, and delete Legacy only after rollback is
-   no longer needed.
-
-See the [Provider 1 to 2 migration guide](/release/migrations/v1-to-v2.html)
-for the operational sequence. Published identities are immutable: compatibility
-means retaining the old URL and meaning, not relabeling it as v1beta1.
-
-</details>
+The pre-Beta epochs and their documentation were withdrawn
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html)).
+The withdrawn resource pages no longer exist on this site; the identities are
+recorded as retired in the published ledgers, and the bytes stay in the
+repository's git history and release tags. Existing users of the withdrawn
+resources keep an exact pin (`= 2.0.0` or `= 2.1.1`, `= 1.0.3` for v1 state)
+or follow the [v2 to v3 migration boundary](/release/migrations/v2-to-v3.html):
+stay pinned, remove from state, or destroy while still pinned. Nothing is
+migrated automatically, and upgrading past the withdrawal with one of the nine
+still in state fails closed before any lifecycle request.
 
 <StatusNote />

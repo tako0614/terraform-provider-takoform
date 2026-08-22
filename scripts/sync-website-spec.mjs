@@ -100,9 +100,6 @@ function transformLink(target) {
   ) {
     return null;
   }
-  if (/^\.\.\/forms\/candidates\/v1alpha2\/$/.test(rewritten)) {
-    return "/forms/candidates/v1alpha2/candidate-set.json";
-  }
   rewritten = rewritten.replace(/README\.md$/i, "index.md");
   return rewritten;
 }
@@ -144,13 +141,11 @@ for (const file of markdownFiles(path.join(repositoryRoot, "spec"))) {
 for (const directory of [
   "artifact-transport",
   "binding-contract",
-  "data-indexed",
   "decisions",
   "form-definition",
   "form-package",
   "host-api",
   "interface-contract",
-  "interface-declaration",
   "schemas",
   "trust",
 ]) {
@@ -198,7 +193,6 @@ for (const [canonical, site] of [
   [path.join(repositoryRoot, "forms", "README.md"), path.join(websiteRoot, "forms", "index.md")],
   [path.join(repositoryRoot, "conformance", "README.md"), path.join(websiteRoot, "conformance", "index.md")],
   [path.join(repositoryRoot, "release", "README.md"), path.join(websiteRoot, "release", "index.md")],
-  [path.join(repositoryRoot, "release", "form-packages.md"), path.join(websiteRoot, "release", "form-packages.md")],
   [path.join(repositoryRoot, "docs", "index.md"), path.join(websiteRoot, "docs", "reference.md")],
 ]) {
   pages.push({ canonical, site });
@@ -216,13 +210,7 @@ const staticDirectories = [
   [
     path.join(repositoryRoot, "forms"),
     path.join(staticRoot, "forms"),
-    (file) =>
-      file === "lifecycle.json" ||
-      file === "lifecycle.schema.json" ||
-      file === "release-plan.json" ||
-      file === "retired-package-set.json" ||
-      file === "standard-package-set.json" ||
-      file.startsWith("candidates/"),
+    (file) => file.startsWith("candidates/"),
   ],
   [
     path.join(repositoryRoot, "conformance"),
@@ -239,6 +227,7 @@ const staticDirectories = [
     path.join(staticRoot, "release"),
     (file) =>
       (file === "form-contract-continuity.json" ||
+        file === "trust/trusted-root.json" ||
         file === "public-schema-identities.json" ||
         file === "provider-form-identities.json" ||
         file === "published-document-lanes.json" ||
@@ -249,11 +238,6 @@ const staticDirectories = [
     path.join(repositoryRoot, "spec"),
     path.join(staticRoot, "spec"),
     (file) => !file.endsWith(".md") && !file.endsWith(".go"),
-  ],
-  [
-    path.join(repositoryRoot, "admission"),
-    path.join(staticRoot, "admission"),
-    (file) => file === "admission-identities.json",
   ],
 ];
 function collect(directory, relative = "") {

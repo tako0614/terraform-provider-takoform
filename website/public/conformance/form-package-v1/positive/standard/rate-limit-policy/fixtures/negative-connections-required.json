@@ -1,7 +1,0 @@
-{
-  "burst": 100,
-  "connections": {},
-  "name": "rate-limit-policy",
-  "requestsPerMinute": 600,
-  "scope": "client"
-}

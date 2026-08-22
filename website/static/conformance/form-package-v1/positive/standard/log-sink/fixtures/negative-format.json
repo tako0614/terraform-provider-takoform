@@ -1,5 +1,0 @@
-{
-  "format": "not-a-declared-choice",
-  "name": "log-sink",
-  "retentionDays": 30
-}

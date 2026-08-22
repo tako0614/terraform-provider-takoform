@@ -158,10 +158,20 @@ describe("the gate refuses", () => {
     );
   });
 
-  test("a providerCurrent that contradicts the retained Registry evidence", () => {
-    const failures = fixture((root) =>
-      verifySiteStatusDocument(root, { providerVersion: "9.9.9" }),
-    );
+  test("a providerPublished that contradicts the readback-backed derivation", () => {
+    // providerPublished derives from the append-only registryReadback entries
+    // in release/provider-form-identities.json; a document claiming another
+    // version disagrees with that derivation and fails.
+    const failures = fixture((root) => {
+      for (const relativePath of [
+        SITE_STATUS_REPOSITORY_PATH,
+        SITE_STATUS_PUBLISHED_PATH,
+      ]) {
+        const document = read(root, relativePath);
+        write(root, relativePath, { ...document, providerPublished: "9.9.9" });
+      }
+      return verifySiteStatusDocument(root);
+    });
     for (const relativePath of [
       SITE_STATUS_REPOSITORY_PATH,
       SITE_STATUS_PUBLISHED_PATH,
@@ -169,8 +179,8 @@ describe("the gate refuses", () => {
       expect(
         failures.some(
           (failure) =>
-            failure.startsWith(`${relativePath}: providerCurrent`) &&
-            failure.includes("retained Registry readback evidence names v9.9.9"),
+            failure.startsWith(`${relativePath}: providerPublished`) &&
+            failure.includes('"9.9.9"'),
         ),
       ).toBe(true);
     }

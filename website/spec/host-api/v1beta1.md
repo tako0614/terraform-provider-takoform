@@ -4,11 +4,10 @@
 ([decision 0035](../decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)).
 It carries namespaced FormRef groups, UID/generation/revision resource
 identity, long-running Operations, content-addressed artifact upload, and
-Host Support Profiles. The retained v1alpha2 contract in
-[`README.md`](index.md) continues to govern the frozen provider-v2 lane;
-rules stated there and not changed here (space identity, I-JSON raw-first
-decoding, idempotency-key namespacing, replay fingerprinting, same-origin
-endpoint negotiation) apply to this lane unchanged.
+Host Support Profiles. This document is normatively self-contained: the
+shared wire rules this lane originally inherited from the since-withdrawn
+provider-v2 contract (decision 0042) are stated in
+[Shared wire rules](#shared-wire-rules) below, unchanged in substance.
 
 The wire schema is
 [`../schemas/host-api-wire-v1beta1.schema.json`](/schemas/v1beta1/host-api-wire.schema.json);
@@ -35,6 +34,58 @@ A client negotiates each lane independently, under a deadline of its own that
 is short and separate from its resource-operation deadline. Nothing about one
 lane's outcome may make another lane's resources unusable, and each resource
 type reports its own lane's negotiation error.
+
+## Shared wire rules
+
+These rules predate this lane and are restated here so the lane's contract is
+closed under this document alone.
+
+**Same-origin endpoints.** JSON Schema cannot compare URL origins. After
+schema validation, an implementation MUST parse and normalize every advertised
+URL and MUST reject any endpoint whose scheme, host, and effective port do not
+equal those of `endpoints.api`. Userinfo, query, and fragment components are
+forbidden. Plain HTTP is allowed only for a loopback development origin. A
+provider sends bearer credentials only to same-origin advertised URLs.
+
+**Space identity.** `SpaceID` is the portable scope identity used by Resource
+bodies, query parameters, idempotency scope, provider configuration, and
+provider state. It is an opaque, case-sensitive string, not a `PatternName`. A
+valid `SpaceID` is valid UTF-8 containing 1 through 255 Unicode code points;
+does not start or end with a Unicode `White_Space` code point or `U+FEFF`;
+contains no C0 or C1 control code point; and contains no `/`. The normative
+code-point sets are encoded explicitly in
+[`../schemas/host-api-wire-v1beta1.schema.json`](/schemas/v1beta1/host-api-wire.schema.json)
+under `$defs.spaceId`. Embedded non-control whitespace is data and is valid.
+Every participant MUST preserve the exact decoded value: no trimming, Unicode
+normalization, or case folding. URL percent-encoding MAY represent that value
+on the wire, but decoding MUST recover the same code-point sequence. Import
+uses either `NAME` with a configured default or `SPACE/NAME`; forbidding `/`
+in `SpaceID` makes that split unambiguous.
+
+**I-JSON raw-first decoding.** Every Host API request and response document
+MUST be UTF-8 I-JSON. Before typed decoding, an implementation MUST validate
+the complete raw document, including nested objects, and reject invalid UTF-8,
+duplicate object member names, invalid Unicode, non-I-JSON numbers, excessive
+nesting, and trailing data. A request with a duplicate member or an unknown
+envelope/metadata field fails as `invalid_argument` / HTTP 400 before
+mutation. A response with duplicate members is protocol-invalid before any
+typed or stable-error semantics are applied. The same raw-first rule applies
+when decoding this repository's digest-pinned conformance contract; a
+duplicate member is verification failure, never last-member-wins.
+
+**Idempotency-key namespacing and replay fingerprinting.** Every fenced
+mutation request carries a deterministic `Idempotency-Key`, and a retry reuses
+the same key. The key is not a bearer capability and never a global cache
+address: a host MUST namespace a replay record by its authenticated
+tenant/security domain, authenticated principal, exact Space, and
+`Idempotency-Key`, and MUST authenticate and authorize the current request
+before consulting or returning that record. A same-key request from another
+principal or tenant is an independent request, and a principal whose
+credential or permission has since been revoked receives the current
+`unauthenticated`, `permission_denied`, or `policy_denied` result rather than
+a cached success. The replay fingerprint also binds the method, exact request
+target, generation preconditions, and exact request body bytes; reusing a key
+for different request bytes fails as `invalid_argument`.
 
 ## Path shape
 

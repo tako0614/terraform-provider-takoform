@@ -1,7 +1,0 @@
-{
-  "generation": 1,
-  "id": "VectorIndex/embeddings",
-  "kind": "VectorIndex",
-  "name": "embeddings",
-  "portability": "portable"
-}

@@ -11,6 +11,17 @@ import (
 	"github.com/blang/semver"
 )
 
+func readJSONFile(t *testing.T, path string, into any) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, into); err != nil {
+		t.Fatalf("%s: %v", path, err)
+	}
+}
+
 type providerMigrationAudit struct {
 	Format string `json:"format"`
 	From   struct {
@@ -134,25 +145,13 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 		t.Fatalf("provider-address transition is unsafe: %#v", audit.ProviderAddressBoundary)
 	}
 
-	candidateRaw, err := os.ReadFile(filepath.Join(root, "internal", "formregistry", "candidate-refs.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	// The recorded target digest is a fact about the v1.0.1 boundary, not a
-	// claim about today's tree. Requiring the live candidate refs to still
-	// hash to it asserted that no Form has been versioned since v1.0.1, which
-	// stops being true the first time any Form contract moves. What this test
-	// exists to hold is that the boundary itself stays fail-closed.
+	// claim about today's tree — the Legacy candidate refs it hashed were
+	// withdrawn with their epoch (decision 0042), so only the recorded shape
+	// is checked here.
 	if !strings.HasPrefix(audit.To.CandidateRefsSHA256, "sha256:") ||
 		len(audit.To.CandidateRefsSHA256) != len("sha256:")+64 {
 		t.Fatalf("migration target candidate digest is malformed: %s", audit.To.CandidateRefsSHA256)
-	}
-	var candidates map[string]json.RawMessage
-	if err := json.Unmarshal(candidateRaw, &candidates); err != nil {
-		t.Fatal(err)
-	}
-	if len(candidates) != audit.To.FormResourceCount {
-		t.Fatalf("migration target count = %d, Legacy compatibility count = %d", audit.To.FormResourceCount, len(candidates))
 	}
 
 	var release releaseDescriptor
@@ -209,7 +208,7 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	}
 	localPublisher := string(localPublisherRaw)
 	providerPublishStart := strings.Index(localPublisher, "function providerPublish(")
-	providerPublishEnd := strings.Index(localPublisher, "\nfunction providerReadback(")
+	providerPublishEnd := strings.Index(localPublisher, "\nfunction providerRecoveryMutationFence(")
 	if providerPublishStart < 0 || providerPublishEnd <= providerPublishStart {
 		t.Fatal("cannot locate owner-local provider publication body")
 	}
@@ -225,15 +224,14 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Nine retained provider-v2 docs and the fifteen Edge Platform Family docs
-	// of the Host API v1beta1 channel. There is no extra document: the generic
-	// exact-FormRef carrier was withdrawn (spec/decisions/0021), so every
-	// resource document now describes a resource backed by a Form — which is
-	// also why the package-digest exemption it needed is gone. Every doc, in
-	// either lane, must state the exact Form identity fields the state boundary
-	// fences on.
-	if len(resourceDocs) != 9+15 {
-		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), 9+15)
+	// The fifteen Edge Platform Family docs of the Host API v1beta1 channel,
+	// and nothing else: the generic exact-FormRef carrier was withdrawn
+	// (spec/decisions/0021) and the nine retained provider-v2 docs were
+	// withdrawn with their epoch (decision 0042). Every resource document
+	// describes a resource backed by a Form and must state the exact Form
+	// identity fields the state boundary fences on.
+	if len(resourceDocs) != 15 {
+		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), 15)
 	}
 	for _, filename := range resourceDocs {
 		raw, err := os.ReadFile(filename)
@@ -244,6 +242,49 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 			if !strings.Contains(string(raw), "`"+field+"`") {
 				t.Errorf("%s omits exact state identity field %s", filename, field)
 			}
+		}
+	}
+}
+
+// The v1alpha2 epoch's nine resources were withdrawn with no successors
+// (decision 0042), so the release that removes them from the published
+// surface is a major. This holds the descriptor to that: it may name the
+// published 2.1.1, or the 3.x major the migration boundary requires — never a
+// 2.x successor cut by habit.
+func TestNextReleaseAfterTheWithdrawalIsAMajor(t *testing.T) {
+	root := repositoryRoot(t)
+	descriptor := struct {
+		Version string `json:"version"`
+	}{}
+	readJSONFile(t, filepath.Join(root, "release", "version.json"), &descriptor)
+	version, err := semver.Parse(descriptor.Version)
+	if err != nil {
+		t.Fatalf("release/version.json version %q is not SemVer: %v", descriptor.Version, err)
+	}
+	if descriptor.Version != "2.1.1" && version.Major < 3 {
+		t.Fatalf(
+			"release/version.json names %s; after the v1alpha2 withdrawal the descriptor stays at the published 2.1.1 until the owner assigns a 3.x major (release/migrations/v2-to-v3.md)",
+			descriptor.Version,
+		)
+	}
+
+	migration := readText(t, filepath.Join(root, "release", "migrations", "v2-to-v3.md"))
+	for _, required := range []string{
+		"`3.0.0`",
+		"takoform_edge_worker",
+		"takoform_relational_database",
+		"takoform_object_bucket",
+		"takoform_key_value_store",
+		"takoform_queue",
+		"takoform_schedule",
+		"takoform_container_service",
+		"takoform_stateful_entity",
+		"takoform_vector_index",
+		"state rm",
+		"= 2.1.1",
+	} {
+		if !strings.Contains(migration, required) {
+			t.Errorf("release/migrations/v2-to-v3.md no longer states %q; the migration contract must keep naming the withdrawn resources and every path an operator has", required)
 		}
 	}
 }

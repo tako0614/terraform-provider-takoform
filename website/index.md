@@ -36,9 +36,10 @@ below and in the [machine-readable status](/.well-known/takoform-site.json).
 Use the [current quick start](/docs/) for an executable configuration.
 
 Provider 2.1.1 is Registry-published; its descriptor remains `candidate-only`
-metadata after owner publication. The 34 published Form Package identities
-belong to immutable Legacy history. No current central Takoform-wide approval
-or admission is implied by that historical publication set.
+metadata after owner publication. The pre-Beta epochs were withdrawn
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html));
+their identities are retired, their bytes stay in repository history, and no
+current approval or admission is implied by anything they published.
 
 ```hcl
 terraform {
@@ -103,104 +104,18 @@ host. Implementations with different semantics are different Forms; what is
 exchangeable is the host, never the meaning
 ([decision 0008](/spec/decisions/0008-forms-preserve-service-shape.html)).
 
-## Published compatibility / Migration / History
+## Withdrawn epochs and published history
 
-<details>
-<summary>Published compatibility: Provider 2.0.0, retained v1alpha2 resources, and Legacy Provider 1.0.3</summary>
-
-### Provider 2.0.0 / Host API v1alpha2
-
-Provider 2.0.0 is the Registry-published compatibility client for the retained
-`forms.takoform.com/v1alpha2` surface. It retains these nine resources:
-
-```hcl
-terraform {
-  required_providers {
-    takoform = {
-      source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 2.0.0"
-    }
-  }
-}
-
-provider "takoform" {
-  endpoint = "https://host.example.com"
-  space    = "prod"
-}
-
-resource "takoform_key_value_store" "cache" {
-  name                = "cache"
-  consistency         = "eventual"
-  default_ttl_seconds = 3600
-}
-
-resource "takoform_queue" "jobs" {
-  name                      = "jobs"
-  message_retention_seconds = 345600
-  ordering                  = "best_effort"
-}
-
-resource "takoform_edge_worker" "api" {
-  name                = "api"
-  artifact_media_type = "application/vnd.takoform.edge-worker+tar"
-  artifact_sha256     = "sha256:0f2c0c7ec3d0e2f34f1ea1f6b5f04f0b3aa03d0e6f2f2f8a7f0c5d9e4b1a8c37"
-  artifact_url        = "https://artifacts.example.com/api.tar"
-  entrypoint          = "worker.mjs"
-  runtime             = "javascript"
-  runtime_version     = "2026.1"
-  configuration       = { "LOG_LEVEL" = "info" }
-
-  connections = [
-    {
-      name        = "data"
-      resource    = "KeyValueStore/cache"
-      permissions = ["read", "write"]
-      projection  = "keyvalue.binding.v1"
-    },
-  ]
-}
-```
-
-No credentials, no placement, no pricing — the host decides those and keeps
-them out of your state. Provider 2.0.0 discovers exact retained FormRefs at
-`/.well-known/takoform/v1alpha2`; its retained package index is
-`packages.forms.takoform.com/v1alpha3`
-([decision 0035](/spec/decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.html)).
-
-| Resource                                                                   | What it declares                                         |
-| -------------------------------------------------------------------------- | -------------------------------------------------------- |
-| [`takoform_edge_worker`](/docs/resources/edge_worker.html)                 | a request/event application from a digest-bound artifact |
-| [`takoform_relational_database`](/docs/resources/relational_database.html) | a relational database by open engine token               |
-| [`takoform_object_bucket`](/docs/resources/object_bucket.html)             | object storage                                           |
-| [`takoform_key_value_store`](/docs/resources/key_value_store.html)         | key/value state                                          |
-| [`takoform_queue`](/docs/resources/queue.html)                             | at-least-once message delivery                           |
-| [`takoform_schedule`](/docs/resources/schedule.html)                       | a cron that invokes one connected resource               |
-| [`takoform_container_service`](/docs/resources/container_service.html)     | a service from an OCI image digest                       |
-| [`takoform_stateful_entity`](/docs/resources/stateful_entity.html)         | addressable persistent entities                          |
-| [`takoform_vector_index`](/docs/resources/vector_index.html)               | a vector index with fixed dimensions                     |
-
-### Provider 1.0.3 / Host API v1alpha1
-
-Provider 1.0.3 is the published Legacy client for existing v1 state. Keep it
-pinned for refresh, delete, recovery, and migration steps that still need the
-v1 wire. Its Host API boundary is `forms.takoform.com/v1alpha1`, with discovery
-at `/.well-known/takoform/v1alpha1`; published v1 Form Package identities are
-immutable history.
-
-### Migration
-
-Migration is explicit create/import, never an automatic state rewrite:
-
-1. Pin Provider 1.0.3 and refresh the Legacy resource.
-2. Capture non-secret desired configuration and required public outputs.
-3. Create under an exact v1alpha2 FormRef, or import only with host conformance
-   proof, using Provider 2.0.0.
-4. Move consumers, observe the result, then delete Legacy after rollback is no
-   longer needed.
-
-See the [Provider 1 to 2 migration guide](/release/migrations/v1-to-v2.html).
-
-</details>
+Two pre-Beta epochs preceded the current stack and were withdrawn
+([decision 0042](/spec/decisions/0042-the-pre-beta-epochs-are-withdrawn.html)).
+Published provider releases that carried them remain immutable Registry
+history: **Provider 2.0.0** (the `forms.takoform.com/v1alpha2` compatibility
+client) and **Provider 1.0.3** (the `forms.takoform.com/v1alpha1` Legacy
+client) stay installable under exact pins for existing state, recovery, and
+migration, but their resources have no successors and this site no longer
+documents them. The next release published from this repository will be a
+major, `3.0.0`; existing users of the withdrawn resources follow the
+[v2 to v3 migration boundary](/release/migrations/v2-to-v3.html).
 
 ## How it works
 

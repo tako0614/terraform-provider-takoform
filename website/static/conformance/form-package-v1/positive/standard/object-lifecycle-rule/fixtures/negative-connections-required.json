@@ -1,7 +1,0 @@
-{
-  "action": "expire",
-  "afterDays": 90,
-  "connections": {},
-  "name": "object-lifecycle-rule",
-  "prefix": "logs/"
-}

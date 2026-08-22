@@ -1,9 +1,0 @@
-{
-  "databaseName": "app",
-  "engine": "postgres",
-  "engineVersion": "16",
-  "name": "relational-database",
-  "schemaFormat": "sql.ordered",
-  "schemaSha256": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-  "schemaUrl": "https://artifacts.portable-conformance.invalid/relational-schema.json"
-}

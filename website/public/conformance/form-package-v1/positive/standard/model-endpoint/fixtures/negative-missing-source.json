@@ -1,5 +1,0 @@
-{
-  "maxConcurrency": 8,
-  "name": "model-endpoint",
-  "task": "embedding"
-}

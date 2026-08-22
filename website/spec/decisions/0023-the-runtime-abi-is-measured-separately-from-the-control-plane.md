@@ -11,7 +11,7 @@ Module Worker ABI an exact Interface contract, `worker.runtime@1.0.0`, and put
 three required checks in the Host API v1alpha3 lane. That lane is a Host API
 runner: it drives desired state over HTTP, so it can prove what a host
 ADVERTISES and what it REFUSES to store, and nothing else.
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md#what-the-lane-proves-and-what-stays-a-host-obligation)
+`../host-api/v1alpha3.md`
 already says so, and lists what it leaves unproven: the default export's shape
 and the three-argument handler signatures, `handler_not_exported` for arbitrary
 bytes, streaming request and response bodies, `env` carrying exactly the
@@ -198,7 +198,7 @@ The handler is not merely hard to measure; it is unreachable. Removing it from
 recommendation rather than performing it: the Interface bytes are the input to
 the generated Form chain, and moving them is a change to be made with that
 regeneration rather than beside it. New blocker V3-011 holds the decision, and
-[`../host-api/v1alpha3.md`](../host-api/v1alpha3.md) now lists `tail` among the
+`../host-api/v1alpha3.md` now lists `tail` among the
 obligations the Host API lane does not prove, marked unmeasurable rather than
 merely unproven.
 

@@ -33,7 +33,7 @@ that produces. Those are normative contract decisions, and this repository's
 
 A **relation** is one reference from a resource's desired spec to another
 resource in the same space. The rules below are normative; the operative text
-lives in [`../host-api/v1alpha3.md`](../host-api/v1alpha3.md) and
+lives in `../host-api/v1alpha3.md` and
 [`../binding-contract/README.md`](../binding-contract/index.md).
 
 1. **Shape.** A reference MUST be the closed three-member object

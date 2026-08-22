@@ -1,8 +1,0 @@
-{
-  "databaseName": "app",
-  "engineVersion": "16",
-  "highAvailability": false,
-  "name": "relational-database",
-  "sizeClass": "db.small",
-  "storageGib": 20
-}

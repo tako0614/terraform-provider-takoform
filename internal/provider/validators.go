@@ -3,14 +3,13 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	"regexp"
 	"strings"
 	"unicode"
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	"github.com/tako0614/terraform-provider-takoform/internal/client"
 )
 
 // stringOneOfValidator validates that a configured string is one of a fixed
@@ -93,7 +92,7 @@ func (stringSpaceIDValidator) ValidateString(_ context.Context, req validator.St
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
-	if err := client.ValidateSpaceID(req.ConfigValue.ValueString()); err != nil {
+	if err := clientv3.ValidateSpaceID(req.ConfigValue.ValueString()); err != nil {
 		resp.Diagnostics.AddAttributeError(req.Path, "Invalid SpaceID", err.Error())
 	}
 }

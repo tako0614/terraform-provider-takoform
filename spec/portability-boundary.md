@@ -103,12 +103,9 @@ fixture tree and change only API version, status, or SemVer. Reusing the
 shared schema vocabulary and retaining a semantic field after explicit review
 are allowed; inheriting an old field set is not.
 
-The retained v1alpha2 candidates under
-[`forms/candidates/v1alpha2`](../forms/candidates/v1alpha2/) remain frozen
-provider-v2 preview source generated from
-[`internal/currentformcatalog`](../internal/currentformcatalog/). New
-family-based candidates are generated from their family catalog sources into
+Family-based candidates are generated from their family catalog sources into
 family-scoped candidate trees; the catalog tests pin every reviewed field set,
 reject known substrate and operator fields, and reject open semantic tokens.
 Reproducibility checks prove the tracked package bytes still come from that
-source.
+source. The withdrawn v1alpha2 candidate tree and its catalog are readable in
+git history (decision 0042); they are prior art, not a source to copy from.

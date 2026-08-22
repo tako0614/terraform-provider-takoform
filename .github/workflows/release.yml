@@ -128,7 +128,8 @@ jobs:
           test "$(git -C release-source rev-parse HEAD)" = "$EXPECTED_COMMIT"
           test -z "$(git -C release-source status --porcelain=v1 --untracked-files=all)"
           test "$(jq -r .tag release-source/release/version.json)" = "$RELEASE_TAG"
-          go -C release-source run ./cmd/standard-form-conformance candidate-publication-check
+          jq -e '.publicationStatus == "candidate-only"' release-source/release/version.json > /dev/null
+          go -C release-source run ./cmd/standard-form-conformance verify
           go -C release-source/cmd/provider-release test ./...
           go -C release-source/cmd/provider-release run . verify-source --expected-trigger-tag "$RELEASE_TAG"
 
@@ -227,18 +228,16 @@ jobs:
           chmod 0755 "$binary"
           test "$("$binary" -version)" = "$version"
           binary_sha256="sha256:$(sha256sum "$binary" | cut -d' ' -f1)"
-          report="$RUNNER_TEMP/final-provider-lifecycle-matrix.json"
-          go -C release-source run ./cmd/provider-lifecycle-conformance render-matrix \
+          report="$RUNNER_TEMP/final-worker-authoring-matrix.json"
+          go -C release-source run ./cmd/worker-authoring-conformance render-matrix \
             --opentofu tofu \
             --terraform terraform \
             --provider-binary "$binary" > "$report"
-          jq -e --arg version "$version" --arg sha256 "$binary_sha256" '
-            .installationSource == "local-dev-override" and
-            (.reports | length) == 2 and
-            all(.reports[];
-              .installationSource == "local-dev-override" and
-              .providerBinary.version == $version and
-              .providerBinary.sha256 == $sha256)
+          jq -e --arg sha256 "$binary_sha256" '
+            .format == "takoform.worker-authoring-conformance-matrix@v1" and
+            .publicationReady == false and
+            .providerBinarySha256 == $sha256 and
+            (.reports | length) == 2
           ' "$report" >/dev/null
           test "$(sha256sum "$archive" | cut -d' ' -f1)" = "$archive_sha256"
           test "sha256:$(sha256sum "$binary" | cut -d' ' -f1)" = "$binary_sha256"

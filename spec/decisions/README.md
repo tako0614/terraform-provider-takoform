@@ -44,3 +44,4 @@ record does not replace them.
 - [0039 — A Host API lane is minted for one of exactly two reasons](0039-a-lane-is-minted-for-one-of-two-reasons.md)
 - [0040 — The package envelope names a manifest format, not a Form generation](0040-the-package-envelope-is-a-format-not-an-axis.md)
 - [0041 — Takoform's Form Packages publish with the provider release that embeds them](0041-form-packages-publish-with-the-provider-release.md)
+- [0042 — The pre-Beta epochs are withdrawn](0042-the-pre-beta-epochs-are-withdrawn.md)

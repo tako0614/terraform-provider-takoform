@@ -1,8 +1,0 @@
-{
-  "accessProtocols": [
-    "not a token"
-  ],
-  "name": "object-bucket",
-  "storageClass": "standard",
-  "versioning": true
-}

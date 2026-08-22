@@ -27,7 +27,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 
-	"github.com/tako0614/terraform-provider-takoform/internal/client"
 	"github.com/tako0614/terraform-provider-takoform/internal/clientv3"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 )
@@ -98,7 +97,7 @@ func v3ParseImportDocument(raw string) (v3ImportIdentity, error) {
 		return v3ImportIdentity{}, fmt.Errorf("import identity name is invalid: %w", err)
 	}
 	if document.Space != "" {
-		if err := client.ValidateSpaceID(document.Space); err != nil {
+		if err := clientv3.ValidateSpaceID(document.Space); err != nil {
 			return v3ImportIdentity{}, fmt.Errorf("import identity SpaceID is invalid: %w", err)
 		}
 	}

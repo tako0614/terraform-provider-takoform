@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 
@@ -174,50 +173,8 @@ func TestV3HostRepairsCoverTheClosedTaxonomy(t *testing.T) {
 	}
 }
 
-// TestInterfaceDataSourceReportsItsLane is the regression for the audited
-// defect: against a v3-only host the data source answered "Provider not
-// configured" and discarded the recorded v1alpha2 negotiation error, while the
-// v2 form resources reported both.
-func TestInterfaceDataSourceReportsItsLane(t *testing.T) {
-	t.Parallel()
-	source := &interfaceDataSource{data: &providerData{
-		clientV3: &clientv3.Client{},
-		v2Err:    errors.New("this endpoint does not expose the Takoform Service Form API"),
-	}}
-	var response datasource.ReadResponse
-	source.Read(context.Background(), datasource.ReadRequest{}, &response)
-	if !response.Diagnostics.HasError() {
-		t.Fatal("a v3-only host produced no diagnostic")
-	}
-	rendered := response.Diagnostics.Errors()[0]
-	if rendered.Summary() != "Takoform v1alpha2 lane unavailable" {
-		t.Fatalf("summary = %q, want the lane it needs", rendered.Summary())
-	}
-	detail := rendered.Detail()
-	for _, want := range []string{
-		"data.takoform_interface",
-		"does not expose the Takoform Service Form API",
-		"Code: " + v3CodeLaneUnavailable,
-		"the other lane negotiated",
-		"Point `endpoint` at a host that serves the v1alpha2 lane",
-	} {
-		if !strings.Contains(detail, want) {
-			t.Errorf("detail does not carry %q:\n%s", want, detail)
-		}
-	}
-
-	// A genuinely unconfigured provider is still reported as the provider bug it
-	// is, and not as a lane fact.
-	unconfigured := &interfaceDataSource{}
-	var bug datasource.ReadResponse
-	unconfigured.Read(context.Background(), datasource.ReadRequest{}, &bug)
-	if !bug.Diagnostics.HasError() || bug.Diagnostics.Errors()[0].Summary() != "Provider not configured" {
-		t.Fatalf("an unconfigured provider produced %v", bug.Diagnostics)
-	}
-}
-
-// TestV3LaneDiagnosticsCarryTheRecordedError proves the same for the v1beta1
-// resources, so the two lanes stay symmetrical.
+// TestV3LaneDiagnosticsCarryTheRecordedError proves the resources report the
+// recorded negotiation error rather than a generic not-configured shrug.
 func TestV3LaneDiagnosticsCarryTheRecordedError(t *testing.T) {
 	t.Parallel()
 	resource := v3TestFormResource(t, "WorkerBundle", &providerData{

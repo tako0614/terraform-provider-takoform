@@ -201,7 +201,7 @@ func discoverWithDoc(t *testing.T, mutate func(doc map[string]any, origin string
 
 func TestDiscoverRejectsWrongAPIVersions(t *testing.T) {
 	err := discoverWithDoc(t, func(doc map[string]any, _ string) {
-		doc["api_versions"] = []string{"forms.takoform.com/v1alpha2"}
+		doc["api_versions"] = []string{"forms.takoform.com/v9"}
 	})
 	if err == nil || !strings.Contains(err.Error(), "must advertise only API version") {
 		t.Fatalf("expected api_versions rejection, got %v", err)

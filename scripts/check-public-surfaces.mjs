@@ -11,10 +11,6 @@ import {
   discoverPublicSchemas,
   PUBLIC_SCHEMA_ROUTE,
 } from "./public-schema-manifest.mjs";
-import {
-  loadPublicationTruth,
-  validatePublicationClaimText,
-} from "./publication-truth.mjs";
 import { verifySiteStatusDocument } from "./site-status.mjs";
 import {
   FAMILY_CANDIDATE_SET,
@@ -177,7 +173,6 @@ function checkMarkdownLinks() {
     path.join(repositoryRoot, "spec"),
     path.join(repositoryRoot, "forms"),
     path.join(repositoryRoot, "release"),
-    path.join(repositoryRoot, "admission"),
     path.join(repositoryRoot, "conformance"),
   ];
   const markdownFiles = [
@@ -445,15 +440,6 @@ function checkDocsPageLinks(expectedResourceDocNames) {
         `${relative(docsPage)}: missing resource documentation link for ${docName}`,
       );
     }
-  }
-  if (
-    !hrefs.some((href) =>
-      hrefTargetsDocumentation(href, "data-sources", "interface"),
-    )
-  ) {
-    fail(
-      `${relative(docsPage)}: missing data source documentation link for interface`,
-    );
   }
 }
 
@@ -757,265 +743,38 @@ function handAuthoredPages() {
   });
 }
 
-function checkPublishedProviderExamples(truth) {
-  if (truth === null) {
-    return;
-  }
-  const historicalLegacyProviderVersion =
-    deriveHistoricalLegacyProviderVersion();
-  if (historicalLegacyProviderVersion === null) {
-    fail(
-      "release/provider-release-identities.json: missing an assigned, signed major-1 Legacy provider identity",
-    );
-    return;
-  }
-  const docsIndex = path.join(repositoryRoot, "docs", "index.md");
-  const docsSource = read(docsIndex);
-  const docsBlocks = providerCodeBlocksFromMarkdown(docsSource);
-  if (docsBlocks.length === 0) {
-    fail("docs/index.md: missing provider source example");
-  }
-  if (!docsBlocks.some((block) => hasExactProviderPin(block, truth.providerVersion))) {
-    fail(`docs/index.md: missing current published provider v${truth.providerVersion} pin`);
-  }
-  if (!docsBlocks.some((block) => hasExactProviderPin(block, truth.legacyProviderVersion))) {
-    fail(`docs/index.md: missing Legacy provider v${truth.legacyProviderVersion} pin`);
-  }
-  checkImmutableProviderTagDocs(docsSource, truth);
-
-  // Historical migration guides legitimately pin older provider versions, so
-  // the exact-pin requirement covers only the hand-authored pages.
-  const htmlFiles = handAuthoredPages();
-  let sawPublished = false;
-  let sawLegacy = false;
-  let sawHistoricalLegacy = false;
-  for (const filePath of htmlFiles) {
-    const source = read(filePath);
-    const blocks = providerCodeBlocksFromHtml(source);
-    if (blocks.length === 0) {
-      continue;
-    }
-    for (const [index, block] of blocks.entries()) {
-      const published = hasExactProviderPin(block, truth.providerVersion);
-      const legacy = hasExactProviderPin(block, truth.legacyProviderVersion);
-      const historicalLegacy = hasExactProviderPin(
-        block,
-        historicalLegacyProviderVersion,
-      );
-      sawPublished ||= published;
-      sawLegacy ||= legacy;
-      sawHistoricalLegacy ||= historicalLegacy;
-      if (
-        historicalLegacy &&
-        !/(?:published\s+Legacy|Legacy\s+Provider|公開済み[^\n]*Legacy)/i.test(
-          block,
-        )
-      ) {
-        fail(
-          `${relative(filePath)}: provider example ${index + 1} must label ` +
-            `v${historicalLegacyProviderVersion} as published Legacy`,
-        );
-      }
-      if (!published && !legacy && !historicalLegacy) {
-        fail(
-          `${relative(filePath)}: provider example ${index + 1} must contain ` +
-            `a current v${truth.providerVersion}, compatibility v${truth.legacyProviderVersion}, ` +
-            `or published Legacy v${historicalLegacyProviderVersion} exact pin`,
-        );
-      }
-    }
-  }
-  if (!sawPublished || !sawLegacy) {
-    fail("website/public: provider examples must distinguish published current v2 from published Legacy v1");
-  }
-  if (!sawHistoricalLegacy) {
-    fail(
-      `website/public: provider examples must include published Legacy v${historicalLegacyProviderVersion}`,
-    );
-  }
-}
-
-function checkRetainedPublicationTruthCopy(truth) {
-  if (truth === null) {
-    return;
-  }
-  const truthFiles = [
-    path.join(repositoryRoot, "README.md"),
-    path.join(repositoryRoot, "SECURITY.md"),
-    path.join(repositoryRoot, "docs", "index.md"),
-    path.join(repositoryRoot, "website", "README.md"),
-    path.join(publicRoot, "index.html"),
-    path.join(publicRoot, "docs", "index.html"),
-    path.join(publicRoot, "spec", "index.html"),
-  ];
-  const textByFile = new Map(
-    truthFiles.map((filePath) => {
-      const source = read(filePath);
-      const text = filePath.endsWith(".html")
-        ? visibleHtmlText(source)
-        : source.replace(/\s+/g, " ");
-      return [filePath, text];
-    }),
-  );
-
-  for (const filePath of truthFiles) {
-    const text = textByFile.get(filePath) ?? "";
-    for (const [label, value] of [
-      ["provider version", truth.providerVersion],
-      ["Legacy provider version", truth.legacyProviderVersion],
-      ["project status", "Experimental"],
-      ["published identity classification", "Legacy"],
-    ]) {
-      if (!text.includes(value)) {
-        fail(`${relative(filePath)}: missing evidence-derived ${label} ${value}`);
-      }
-    }
-    try {
-      validatePublicationClaimText(text, truth, relative(filePath));
-    } catch (error) {
-      fail(error.message);
-    }
-  }
-
-  const apiTruthFiles = truthFiles.filter(
-    (filePath) => filePath !== path.join(repositoryRoot, "SECURITY.md"),
-  );
-  for (const filePath of apiTruthFiles) {
-    const text = textByFile.get(filePath) ?? "";
-    if (!text.includes("forms.takoform.com/v1alpha1")) {
-      fail(`${relative(filePath)}: missing v1alpha1 API boundary`);
-    }
-    if (!text.includes("forms.takoform.com/v1alpha2")) {
-      fail(`${relative(filePath)}: missing retained provider-v2 v1alpha2 boundary`);
-    }
-    if (!text.includes("packages.forms.takoform.com/v1alpha3")) {
-      fail(
-        `${relative(filePath)}: missing retained provider-v2 v1alpha3 package boundary`,
-      );
-    }
-  }
-
-  const descriptorFiles = new Set([
-    path.join(repositoryRoot, "README.md"),
-    path.join(repositoryRoot, "SECURITY.md"),
-    path.join(repositoryRoot, "docs", "index.md"),
-    path.join(repositoryRoot, "website", "README.md"),
-    path.join(publicRoot, "index.html"),
-    path.join(publicRoot, "docs", "index.html"),
-  ]);
-  for (const [filePath, text] of textByFile) {
-    const escapedVersion = escapeRegExp(truth.providerVersion);
-    const staleProvider = new RegExp(
-      `\\bv?${escapedVersion}\\b[^.。]{0,180}` +
-        `(?:\\bunpublished\\b|\\bunavailable\\b|` +
-        `\\bnot (?:yet )?installable\\b|未公開|インストールできません)`,
-      "i",
-    );
-    if (staleProvider.test(text)) {
-      fail(`${relative(filePath)}: contains stale provider publication status`);
-    }
-    if (descriptorFiles.has(filePath) && /\bcandidate-only\b/i.test(text)) {
-      if (
-        !new RegExp(`\\bv?${escapeRegExp(PROVIDER_RELEASE_TARGET_VERSION)}\\b`, "i").test(text) ||
-        !/(?:release target|stable provider)/i.test(text) ||
-        !/(?:descriptor|release\/version\.json)/i.test(text) ||
-        !/(?:owner[^.。]{0,80}(?:publish(?:es|ed)?|publication)|owner[^.。]{0,80}公開)/i.test(text) ||
-        !/(?:Registry[- ](?:published|readback)|公開済み)/i.test(text)
-      ) {
-        fail(
-          `${relative(filePath)}: candidate-only is not bound to the stable ` +
-            `${PROVIDER_RELEASE_TARGET_VERSION} release target and owner-publication boundary`,
-        );
-      }
-    }
-  }
-
-  const websiteReadme =
-    textByFile.get(path.join(repositoryRoot, "website", "README.md")) ?? "";
-  for (const required of [
-    /Cloudflare is used only to host/,
-    /provider-neutral `EdgeWorker`/,
-    /do not require Cloudflare/,
-  ]) {
-    if (!required.test(websiteReadme)) {
-      fail("website/README.md: missing static-hosting-only Cloudflare boundary");
-    }
-  }
-}
-
-function checkContractLaneDocumentation(retainedSet) {
-  const legacyHostWire = "forms.takoform.com/v1alpha1";
-  const retainedHostWire = "forms.takoform.com/v1alpha2";
-  const retainedForm = retainedSet.formApiVersion;
-  const retainedPackage = retainedSet.packageApiVersion;
+function checkContractLaneDocumentation() {
+  // The identities every lane-narrating document must still state. The
+  // withdrawn epochs' identities are deliberately NOT required any more: a
+  // document may mention them as history, but nothing forces it to, and the
+  // current identities must always be present.
   const currentHostWire = "forms.takoform.com/v1beta1";
   const currentFamily = "edge.forms.takoform.com/v1beta1";
   const currentPackage = "packages.forms.takoform.com/v1alpha4";
   const documents = [
     {
       file: path.join(repositoryRoot, "spec", "README.md"),
-      required: [
-        legacyHostWire,
-        retainedHostWire,
-        currentHostWire,
-        currentFamily,
-        retainedPackage,
-        currentPackage,
-        "/.well-known/takoform/v1beta1",
-        "protocol compatibility identity",
-      ],
+      required: [currentHostWire, currentFamily, currentPackage, "/.well-known/takoform/v1beta1"],
     },
     {
       file: path.join(repositoryRoot, "spec", "form-definition", "README.md"),
-      required: [
-        currentFamily,
-        retainedForm,
-        "form-definition-v1beta1.schema.json",
-        "form-ref-v1beta1.schema.json",
-        "retained v1alpha1 Legacy profiles",
-      ],
+      required: [currentFamily, "form-definition-v1beta1.schema.json", "form-ref-v1beta1.schema.json"],
     },
     {
       file: path.join(repositoryRoot, "spec", "form-package", "README.md"),
-      required: [
-        retainedForm,
-        retainedPackage,
-        currentPackage,
-        "package-index-v1alpha4.schema.json",
-      ],
+      required: [currentPackage, "package-index-v1alpha4.schema.json"],
     },
     {
       file: path.join(repositoryRoot, "spec", "versioning.md"),
-      required: [
-        legacyHostWire,
-        retainedHostWire,
-        currentHostWire,
-        currentFamily,
-        retainedPackage,
-        currentPackage,
-        "/.well-known/takoform/v1beta1",
-        "Form epoch",
-      ],
+      required: [currentHostWire, currentFamily, currentPackage, "/.well-known/takoform/v1beta1"],
     },
     {
       file: path.join(repositoryRoot, "release", "README.md"),
-      required: [
-        legacyHostWire,
-        retainedHostWire,
-        currentHostWire,
-        currentFamily,
-        retainedPackage,
-        currentPackage,
-        "outer Host API wire",
-      ],
+      required: [currentHostWire, currentFamily, currentPackage],
     },
     {
       file: path.join(repositoryRoot, "proposals", "README.md"),
-      required: [
-        "retained v1alpha2 Proposal set",
-        "v1alpha3 package",
-        "forms/candidates/edge/v1beta1/candidate-set.json",
-      ],
+      required: ["forms/candidates/edge/v1beta1/candidate-set.json"],
     },
   ];
 
@@ -1024,28 +783,8 @@ function checkContractLaneDocumentation(retainedSet) {
     const normalized = source.replace(/\s+/gu, " ");
     for (const text of required) {
       if (!normalized.includes(text.replace(/\s+/gu, " "))) {
-        fail(`${relative(file)}: missing retained/current lane boundary ${JSON.stringify(text)}`);
+        fail(`${relative(file)}: contract-lane documentation is missing ${JSON.stringify(text)}`);
       }
-    }
-  }
-
-  const staleClaims = [
-    [
-      path.join(repositoryRoot, "spec", "form-definition", "README.md"),
-      "The current family profile is\n[`form-definition-v1alpha3.schema.json`",
-    ],
-    [
-      path.join(repositoryRoot, "release", "README.md"),
-      "release/version.json continues to describe provider v2.0.0",
-    ],
-    [
-      path.join(repositoryRoot, "release", "README.md"),
-      "until release assigns 2.1.1",
-    ],
-  ];
-  for (const [file, stale] of staleClaims) {
-    if (read(file).includes(stale)) {
-      fail(`${relative(file)}: retains stale current-lane claim ${JSON.stringify(stale)}`);
     }
   }
 }
@@ -1222,7 +961,6 @@ function checkSingleRegistryVocabulary() {
   ]);
   const documentationFiles = [
     path.join(repositoryRoot, "README.md"),
-    path.join(repositoryRoot, "admission", "v4", "README.md"),
     ...["docs", "forms", "release", "spec", "website"].flatMap((directory) =>
       walkFiles(path.join(repositoryRoot, directory), (filePath) =>
         filePath.endsWith(".md"),
@@ -1273,10 +1011,7 @@ function checkProviderReleaseCommitBindings() {
   for (const required of [
     "--expected-release-commit <signed-tag-peeled-release-commit-E>",
     "--expected-recovery-commit <current-reviewed-protected-main-commit-F>",
-    "After an exact recovery, `--expected-commit` is instead the current",
-    "release provenance and provider commit remain the tag's peeled commit `E`.",
-    "require `E` to be an ancestor of `F`",
-    "--expected-commit <current-reviewed-protected-main-source-commit>",
+    "requires `E` to be an ancestor of `F`",
   ]) {
     if (!releaseGuide.includes(required)) {
       fail(
@@ -1319,16 +1054,6 @@ function checkWebsiteDocsProjection(formDocNames) {
       path.join(repositoryRoot, "website", "static", "examples", "resources", `takoform_${name}`, "resource.tf"),
     );
   }
-  byteEqual(
-    "website/docs/data-sources/interface.md",
-    path.join(repositoryRoot, "docs", "data-sources", "interface.md"),
-    path.join(repositoryRoot, "website", "docs", "data-sources", "interface.md"),
-  );
-  byteEqual(
-    "website/static/examples/data-sources/takoform_interface/data-source.tf",
-    path.join(repositoryRoot, "examples", "data-sources", "takoform_interface", "data-source.tf"),
-    path.join(repositoryRoot, "website", "static", "examples", "data-sources", "takoform_interface", "data-source.tf"),
-  );
 }
 
 // Every hand-written inventory of the resource set, and what each one must say
@@ -1340,12 +1065,9 @@ function checkWebsiteDocsProjection(formDocNames) {
 // production missing from the README, the sidebar and the Japanese docs index
 // while every generated surface carried it. A Form now cannot be added or
 // removed without every one of these learning about it.
-function checkHandWrittenInventories(retainedForms, familyRoster) {
-  const retainedKinds = retainedForms.map(({ kind }) => kind);
+function checkHandWrittenInventories(familyRoster) {
   const familyKinds = familyRoster.map(({ kind }) => kind);
-  const retainedDocNames = retainedForms.map(({ docName }) => docName);
   const familyDocNames = familyRoster.map(({ docName }) => docName);
-  const retainedSlugs = retainedForms.map(({ slug }) => slug);
   const familySlugs = familyRoster.map(({ slug }) => slug);
 
   const resourceDocLinks = (names) =>
@@ -1364,56 +1086,32 @@ function checkHandWrittenInventories(retainedForms, familyRoster) {
       })),
     },
     {
-      file: "README.md",
-      label: "the retained v1alpha2 list",
-      required: retainedKinds.map((kind) => ({
-        needle: `\`${kind}\``,
-        subject: kind,
-      })),
-    },
-    {
       file: "website/.vitepress/config.mts",
-      label: "the Edge preview resource sidebar",
+      label: "the resource sidebar",
       required: resourceDocLinks(familyDocNames),
     },
     {
       file: "website/.vitepress/config.mts",
-      label: "the current published resource sidebar",
-      required: [
-        ...resourceDocLinks(retainedDocNames),
-        { needle: "/docs/data-sources/interface.html", subject: "interface" },
-      ],
-    },
-    {
-      file: "website/.vitepress/config.mts",
-      label: "the Edge preview proposal sidebar",
+      label: "the proposal sidebar",
       required: familySlugs.map((slug) => ({
         needle: `/proposals/edge/${slug}.html`,
         subject: slug,
       })),
     },
     {
-      file: "website/.vitepress/config.mts",
-      label: "the current published proposal sidebar",
-      required: retainedSlugs.map((slug) => ({
-        needle: `/proposals/${slug}.html`,
-        subject: slug,
-      })),
-    },
-    {
       file: "website/docs/index.md",
       label: "the English resource reference",
-      required: resourceDocLinks([...retainedDocNames, ...familyDocNames]),
+      required: resourceDocLinks(familyDocNames),
     },
     {
       file: "website/ja/docs/index.md",
       label: "the Japanese resource reference",
-      required: resourceDocLinks([...retainedDocNames, ...familyDocNames]),
+      required: resourceDocLinks(familyDocNames),
     },
     {
       file: "website/index.md",
       label: "the English landing inventory",
-      required: [...retainedDocNames, ...familyDocNames].map((name) => ({
+      required: familyDocNames.map((name) => ({
         needle: `takoform_${name}`,
         subject: name,
       })),
@@ -1421,7 +1119,7 @@ function checkHandWrittenInventories(retainedForms, familyRoster) {
     {
       file: "website/ja/index.md",
       label: "the Japanese landing inventory",
-      required: [...retainedDocNames, ...familyDocNames].map((name) => ({
+      required: familyDocNames.map((name) => ({
         needle: `takoform_${name}`,
         subject: name,
       })),
@@ -1429,7 +1127,7 @@ function checkHandWrittenInventories(retainedForms, familyRoster) {
     {
       file: "forms/README.md",
       label: "the generated Form inventory",
-      required: [...retainedKinds, ...familyKinds].map((kind) => ({
+      required: familyKinds.map((kind) => ({
         needle: `\`${kind}\``,
         subject: kind,
       })),
@@ -1459,17 +1157,9 @@ function checkHandWrittenInventories(retainedForms, familyRoster) {
 // hand every time a lane moves, and when v1alpha3 became v1beta1 it was not:
 // portable-host-v3 kept its name and changed its contract, so one published
 // address began answering about a different lane. A name that states the lane
-// cannot rot that way, so a NEW corpus must carry one.
-//
-// The three generation-named corpora below are published addresses. Their
-// names are retained history and are supposed to stay, which is exactly why
-// they are listed one by one rather than matched by a pattern: adding a fourth
-// is an edit somebody has to justify.
-const RETAINED_GENERATION_NAMED_CORPORA = new Map([
-  ["portable-host-v1", "forms.takoform.com/v1alpha1"],
-  ["portable-host-v2", "forms.takoform.com/v1alpha2"],
-]);
-
+// cannot rot that way, so a NEW corpus must carry one. The two
+// generation-named corpora that used to be listed here as retained history
+// (portable-host-v1 and -v2) were withdrawn with their epochs (decision 0042).
 // A Host API lane is minted for one of exactly two reasons, and this table says
 // which for every lane that exists (decision 0039).
 //
@@ -1486,27 +1176,32 @@ const RETAINED_GENERATION_NAMED_CORPORA = new Map([
 // Form count, package publication, provider major, historical admission, or one
 // host's conformance report — and it is the rule v1beta1 was minted against.
 const HOST_API_LANES = new Map([
+  // The three pre-Beta lanes were withdrawn with their epochs (decision 0042):
+  // their schemas, corpora and served documents are gone, and their identities
+  // are recorded as retired in the published ledgers so they can never be
+  // reused meaning something else. The mint reasons stay as history.
   ["forms.takoform.com/v1alpha1", {
-    wireSchema: "spec/schemas/host-api-wire.schema.json",
     mintedFor: "protocol",
+    withdrawn: "the Legacy v1alpha1 epoch was withdrawn before Beta (decision 0042)",
   }],
   ["forms.takoform.com/v1alpha2", {
-    wireSchema: "spec/schemas/host-api-wire-v1alpha2.schema.json",
     mintedFor: "protocol",
+    withdrawn: "the v1alpha2 epoch was withdrawn before Beta (decision 0042)",
   }],
   ["forms.takoform.com/v1alpha3", {
-    wireSchema: "spec/schemas/host-api-wire-v1alpha3.schema.json",
     mintedFor: "protocol",
+    withdrawn: "the v1alpha3 identities were withdrawn with the v1alpha2 epoch that served them (decision 0042)",
   }],
   ["forms.takoform.com/v1beta1", {
     wireSchema: "spec/schemas/host-api-wire-v1beta1.schema.json",
     mintedFor: "graduation",
     // Recorded as it happened rather than as it should have. This lane was
     // minted alongside the Edge family channel move in #132, and its wire
-    // contract is structurally identical to v1alpha3's — measured in decision
-    // 0038. No lane-specific evidence was stated, which is exactly what the
-    // rule above now requires. It is frozen into Registry-published provider
-    // v2.1.1 and cannot be withdrawn; the entry stands as the record.
+    // contract was structurally identical to v1alpha3's — measured in decision
+    // 0038, before v1alpha3's bytes were withdrawn. No lane-specific evidence
+    // was stated, which is exactly what the rule above now requires. It is
+    // frozen into Registry-published provider v2.1.1 and cannot be withdrawn;
+    // the entry stands as the record.
     evidence: "none stated; minted with the family channel move (decision 0038)",
   }],
 ]);
@@ -1542,18 +1237,22 @@ function wireContractShape(relativePath) {
 //               carried two family generations without moving, which is the
 //               proof it never needed to track them.
 const PACKAGE_ENVELOPES = new Map([
+  // The first three envelopes were withdrawn with the epochs whose FormRefs
+  // they wrapped (decision 0042). Their mint reasons stay as history: one real
+  // format change (v1alpha1 -> v1alpha2 introduced content addressing) and one
+  // rename that followed a FormRef grammar.
   ["packages.forms.takoform.com/v1alpha1", {
-    schema: "spec/schemas/package-index.schema.json",
     mintedFor: "format",
+    withdrawn: "withdrawn with the Legacy v1alpha1 epoch (decision 0042)",
   }],
   ["packages.forms.takoform.com/v1alpha2", {
-    schema: "spec/schemas/package-index-v1alpha2.schema.json",
     mintedFor: "format",
+    withdrawn: "withdrawn with the v1alpha2 epoch (decision 0042)",
   }],
   ["packages.forms.takoform.com/v1alpha3", {
-    schema: "spec/schemas/package-index-v1alpha3.schema.json",
     mintedFor: "carried",
     evidence: "re-minted for the retained provider-v2 FormRef grammar; format unchanged (decision 0040)",
+    withdrawn: "withdrawn with the v1alpha2 epoch (decision 0042)",
   }],
   ["packages.forms.takoform.com/v1alpha4", {
     schema: "spec/schemas/package-index-v1alpha4.schema.json",
@@ -1565,6 +1264,18 @@ const PACKAGE_ENVELOPES = new Map([
 function checkVersionedIdentitiesAreMintedForAReason(label, table, kinds) {
   const shapes = new Map();
   for (const [identity, entry] of table) {
+    if (typeof entry.withdrawn === "string") {
+      // A withdrawn identity keeps its row so the name can never be reused,
+      // and must keep no bytes: a schema still on disk would be the withdrawal
+      // not having happened.
+      if (entry.withdrawn.trim() === "") {
+        fail(`${identity}: a withdrawn ${label} must say why it was withdrawn`);
+      }
+      if (entry.schema !== undefined) {
+        fail(`${identity}: withdrawn, but still names schema ${entry.schema}`);
+      }
+      continue;
+    }
     if (!existsSync(path.join(repositoryRoot, entry.schema))) {
       fail(`${identity}: schema ${entry.schema} does not exist`);
       continue;
@@ -1572,6 +1283,7 @@ function checkVersionedIdentitiesAreMintedForAReason(label, table, kinds) {
     shapes.set(identity, wireContractShape(entry.schema));
   }
   for (const [identity, entry] of table) {
+    if (typeof entry.withdrawn === "string") continue;
     if (entry.mintedFor === kinds.exempt) {
       if (typeof entry.evidence !== "string" || entry.evidence.trim() === "") {
         fail(
@@ -1612,6 +1324,15 @@ function checkPackageEnvelopesAreMintedForAReason() {
 function checkHostApiLanesAreMintedForAReason() {
   const shapes = new Map();
   for (const [apiVersion, lane] of HOST_API_LANES) {
+    if (typeof lane.withdrawn === "string") {
+      if (lane.withdrawn.trim() === "") {
+        fail(`${apiVersion}: a withdrawn lane must say why it was withdrawn`);
+      }
+      if (lane.wireSchema !== undefined) {
+        fail(`${apiVersion}: withdrawn, but still names wire schema ${lane.wireSchema}`);
+      }
+      continue;
+    }
     if (!existsSync(path.join(repositoryRoot, lane.wireSchema))) {
       fail(`${apiVersion}: wire schema ${lane.wireSchema} does not exist`);
       continue;
@@ -1619,6 +1340,7 @@ function checkHostApiLanesAreMintedForAReason() {
     shapes.set(apiVersion, wireContractShape(lane.wireSchema));
   }
   for (const [apiVersion, lane] of HOST_API_LANES) {
+    if (typeof lane.withdrawn === "string") continue;
     if (lane.mintedFor === "graduation") {
       if (typeof lane.evidence !== "string" || lane.evidence.trim() === "") {
         fail(
@@ -1695,17 +1417,6 @@ function checkCorpusNamesStateTheirLane() {
     const apiVersion = readJson(contractPath)?.apiVersion;
     if (typeof apiVersion !== "string") {
       fail(`${contractPath}: corpus states no apiVersion`);
-      continue;
-    }
-    const retainedLane = RETAINED_GENERATION_NAMED_CORPORA.get(entry.name);
-    if (retainedLane !== undefined) {
-      if (retainedLane !== apiVersion) {
-        fail(
-          `conformance/${entry.name}: retained corpus measures ${apiVersion}, ` +
-            `but this address is retained history for ${retainedLane}; serve a ` +
-            `new lane from a new directory named for it`,
-        );
-      }
       continue;
     }
     const expected = `portable-host-${apiVersion.split("/").pop()}`;
@@ -1910,128 +1621,6 @@ function checkPublicSchemas() {
   }
 }
 
-const standardSetPath = path.join(
-  repositoryRoot,
-  "forms",
-  "standard-package-set.json",
-);
-const standardSet = readJson(standardSetPath);
-if (standardSet.publicationReady !== false) {
-  fail("forms/standard-package-set.json: publicationReady must be false");
-}
-if (standardSet.admissionStatus !== "external-required") {
-  fail(
-    "forms/standard-package-set.json: admissionStatus must be external-required",
-  );
-}
-
-const legacyPackages = Array.isArray(standardSet.packages)
-  ? standardSet.packages
-  : [];
-if (legacyPackages.length === 0) {
-  fail(
-    "forms/standard-package-set.json: packages must not be empty",
-  );
-}
-
-const legacyKinds = legacyPackages.map((entry, index) => {
-  const kind = entry.formRef?.kind;
-  if (entry.admissionStatus !== "external-required") {
-    fail(
-      `forms/standard-package-set.json: packages[${index}].admissionStatus must be external-required`,
-    );
-  }
-  if (typeof kind !== "string" || kind === "" || entry.kind !== kind) {
-    fail(
-      `forms/standard-package-set.json: packages[${index}] kind/formRef.kind must match`,
-    );
-  }
-  return typeof kind === "string" ? kind : "";
-});
-
-const retainedProviderV2SetPath = path.join(
-  repositoryRoot,
-  "forms",
-  "candidates",
-  "v1alpha2",
-  "candidate-set.json",
-);
-const retainedProviderV2Set = readJson(retainedProviderV2SetPath);
-if (
-  retainedProviderV2Set.format !== "takoform.current-form-candidates@v2" ||
-  retainedProviderV2Set.formApiVersion !== "forms.takoform.com/v1alpha2" ||
-  retainedProviderV2Set.packageApiVersion !== "packages.forms.takoform.com/v1alpha3" ||
-  retainedProviderV2Set.authoringSource !== "internal/currentformcatalog" ||
-  retainedProviderV2Set.authoringPolicy !== "independent-semantic-contract" ||
-  retainedProviderV2Set.publicationStatus !== "unpublished" ||
-  retainedProviderV2Set.lifecycleAuthority !== "forms/lifecycle.json" ||
-  Object.hasOwn(retainedProviderV2Set, "classification") ||
-  Object.hasOwn(retainedProviderV2Set, "targetLifecycleState") ||
-  Object.hasOwn(retainedProviderV2Set, "publicationReady")
-) {
-  fail("forms/candidates/v1alpha2/candidate-set.json: invalid retained provider-v2 candidate boundary");
-}
-const retainedProviderV2Entries = Array.isArray(retainedProviderV2Set.forms)
-  ? retainedProviderV2Set.forms
-  : [];
-if (retainedProviderV2Entries.length !== 9) {
-  fail(`forms/candidates/v1alpha2/candidate-set.json: forms must contain exactly 9 independently authored candidates`);
-}
-
-const forms = retainedProviderV2Entries.map((entry, index) => {
-  const pathValue = typeof entry.path === "string" ? entry.path : "";
-  const slug = path.posix.basename(pathValue);
-  const kind = entry.formRef?.kind;
-  const version = entry.formRef?.definitionVersion;
-  if (
-    entry.formRef?.apiVersion !== "forms.takoform.com/v1alpha2" ||
-    version !== "0.1.0"
-  ) {
-    fail(
-      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] must be retained provider-v2 definition 0.1.0`,
-    );
-  }
-  if (typeof kind !== "string" || kind === "" || entry.kind !== kind) {
-    fail(
-      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] kind/formRef.kind must match`,
-    );
-  }
-	if (typeof entry.proposalId !== "string" || entry.proposalId === "") {
-	  fail(
-		`forms/candidates/v1alpha2/candidate-set.json: forms[${index}] has no Proposal identity`,
-	  );
-	}
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-    fail(
-      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] has invalid Form slug ${JSON.stringify(slug)}`,
-    );
-  }
-  if (
-    typeof version !== "string" ||
-    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)
-  ) {
-    fail(
-      `forms/candidates/v1alpha2/candidate-set.json: forms[${index}] has invalid definitionVersion ${JSON.stringify(version)}`,
-    );
-  }
-  return {
-    docName: slug.replaceAll("-", "_"),
-    kind: typeof kind === "string" ? kind : "",
-    slug,
-    version: typeof version === "string" ? version : "",
-  };
-});
-compareExact(
-  "retained provider-v2 Form slugs",
-  forms.map(({ slug }) => slug),
-  new Set(forms.map(({ slug }) => slug)),
-);
-compareExact(
-  "retained provider-v2 Form kinds",
-  forms.map(({ kind }) => kind),
-  new Set(forms.map(({ kind }) => kind)),
-);
-
 const releaseVersion = readJson(
   path.join(repositoryRoot, "release", "version.json"),
 );
@@ -2048,20 +1637,6 @@ if (
 }
 if (releaseVersion.tag !== `v${releaseVersion.version}`) {
   fail("release/version.json: tag must match version");
-}
-
-let publicationTruth = null;
-try {
-  publicationTruth = loadPublicationTruth(repositoryRoot);
-} catch (error) {
-  fail(`retained publication truth: ${error.message}`);
-}
-if (publicationTruth !== null) {
-  compareExact(
-    "published Form Package kinds",
-    publicationTruth.publishedKinds,
-    legacyKinds,
-  );
 }
 
 // The Host API v1beta1 channel: exactly the fifteen Edge Platform Family
@@ -2142,7 +1717,7 @@ compareExact(
   edgeFamilyRoster.map(({ slug }) => slug),
 );
 
-const formDocNames = [...forms.map(({ docName }) => docName), ...edgeFamilyDocNames];
+const formDocNames = [...edgeFamilyDocNames];
 const expectedResourceDocs = formDocNames.map((name) => `${name}.md`);
 const docsResourceDirectory = path.join(repositoryRoot, "docs", "resources");
 const docsResourceEntries = directoryEntries(docsResourceDirectory);
@@ -2186,37 +1761,8 @@ for (const example of resourceExampleFiles) {
   if (edgeFamilyExampleDirectories.has(directoryName)) {
     checkEdgeFamilyProviderExample(example);
   } else {
-    checkTerraformProviderExample(example, publicationTruth?.providerVersion ?? "");
+    checkTerraformProviderExample(example, releaseVersion.version);
   }
-}
-
-const dataSourceDocs = path.join(repositoryRoot, "docs", "data-sources");
-const dataSourceDocEntries = directoryEntries(dataSourceDocs);
-compareExact(
-  "docs/data-sources",
-  dataSourceDocEntries.map(({ name }) => name),
-  ["interface.md"],
-);
-for (const entry of dataSourceDocEntries) {
-  if (!entry.isFile()) {
-    fail(`docs/data-sources/${entry.name}: expected a regular file`);
-  }
-}
-const dataSourceExamples = path.join(
-  repositoryRoot,
-  "examples",
-  "data-sources",
-);
-const dataSourceExampleFiles = walkFiles(dataSourceExamples);
-compareExact(
-  "examples/data-sources files",
-  dataSourceExampleFiles.map((filePath) =>
-    path.relative(dataSourceExamples, filePath).split(path.sep).join("/"),
-  ),
-  ["takoform_interface/data-source.tf"],
-);
-for (const example of dataSourceExampleFiles) {
-  checkTerraformProviderExample(example, publicationTruth?.providerVersion ?? "");
 }
 
 const docsIndexPath = path.join(repositoryRoot, "docs", "index.md");
@@ -2235,37 +1781,25 @@ for (const docName of formDocNames) {
     fail(`docs/index.md: missing link to resources/${docName}.md`);
   }
 }
-const interfaceDataSourceDoc = path.resolve(
-  repositoryRoot,
-  "docs",
-  "data-sources",
-  "interface.md",
-);
-if (!docsIndexTargets.includes(interfaceDataSourceDoc)) {
-  fail("docs/index.md: missing link to data-sources/interface.md");
-}
-
 checkMarkdownLinks();
 checkWebsiteMarkdownLinks();
 checkHtmlFiles();
 checkResourceInventory(formDocNames);
 checkDocsPageLinks(formDocNames);
 checkStaleWebsiteContent();
-checkPublishedProviderExamples(publicationTruth);
-checkRetainedPublicationTruthCopy(publicationTruth);
-checkContractLaneDocumentation(retainedProviderV2Set);
+checkContractLaneDocumentation();
 checkCurrentLaneSemanticResidue();
 checkSingleRegistryVocabulary();
 checkProviderReleaseCommitBindings();
 checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
-checkHandWrittenInventories(forms, edgeFamilyRoster);
+checkHandWrittenInventories(edgeFamilyRoster);
 checkHostApiLanesAreMintedForAReason();
 checkPackageEnvelopesAreMintedForAReason();
 checkDocumentedWalkIsRunnable();
 checkCorpusNamesStateTheirLane();
 checkConformanceCorpusCounts();
-for (const failure of verifySiteStatusDocument(repositoryRoot, publicationTruth)) {
+for (const failure of verifySiteStatusDocument(repositoryRoot)) {
   fail(failure);
 }
 
@@ -2279,10 +1813,8 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(
-    `Public surfaces OK: provider v${publicationTruth.providerVersion}, ` +
-      `${publicationTruth.publishedCount} published Legacy Form Packages, ` +
-      `no current central admission, interface data ` +
-      "source, docs, examples, website links, and normative schema URLs " +
-      "are consistent.",
+    `Public surfaces OK: provider v${releaseVersion.version}, ` +
+      "one current epoch, no current central admission, docs, examples, " +
+      "website links, and normative schema URLs are consistent.",
   );
 }

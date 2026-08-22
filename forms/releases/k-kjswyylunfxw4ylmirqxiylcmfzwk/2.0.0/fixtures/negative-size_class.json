@@ -1,9 +1,0 @@
-{
-  "databaseName": "app",
-  "engine": "postgres",
-  "engineVersion": "16",
-  "highAvailability": false,
-  "name": "relational-database",
-  "sizeClass": "not a token",
-  "storageGib": 20
-}

@@ -29,17 +29,12 @@ const projectNavItems = [
   { text: "Release", link: "/release/" },
 ];
 
-// Current design target comes before historical compatibility in every sidebar.
+// Current design target comes before withdrawn history in every sidebar.
 const compatibilityNavItems = [
   { text: "Versions & compatibility", link: "/docs/versions.html" },
-  { text: "Migration guide", link: "/release/migrations/v1-to-v2.html" },
   {
-    text: "Provider 2.0.0 / Host API v1alpha2",
-    link: "/docs/versions.html#provider-2-0-0",
-  },
-  {
-    text: "Provider 1.0.3 / Host API v1alpha1",
-    link: "/docs/versions.html#provider-1-0-3",
+    text: "v2 to v3 migration boundary",
+    link: "/release/migrations/v2-to-v3.html",
   },
 ];
 
@@ -67,16 +62,8 @@ const japaneseProjectNavItems = [
 const japaneseCompatibilityNavItems = [
   { text: "Versions & compatibility (英語のみ)", link: "/docs/versions.html" },
   {
-    text: "Migration guide (英語のみ)",
-    link: "/release/migrations/v1-to-v2.html",
-  },
-  {
-    text: "Provider 2.0.0 / Host API v1alpha2 (英語のみ)",
-    link: "/docs/versions.html#provider-2-0-0",
-  },
-  {
-    text: "Provider 1.0.3 / Host API v1alpha1 (英語のみ)",
-    link: "/docs/versions.html#provider-1-0-3",
+    text: "v2 to v3 migration boundary (英語のみ)",
+    link: "/release/migrations/v2-to-v3.html",
   },
 ];
 
@@ -130,25 +117,6 @@ const edgeResourceItems = [
   { text: "Queue consumer", link: "/docs/resources/queue_consumer.html" },
 ];
 
-const resourceItems = [
-  { text: "Edge worker", link: "/docs/resources/edge_worker.html" },
-  {
-    text: "Relational database",
-    link: "/docs/resources/relational_database.html",
-  },
-  { text: "Object bucket", link: "/docs/resources/object_bucket.html" },
-  { text: "Key value store", link: "/docs/resources/key_value_store.html" },
-  { text: "Queue", link: "/docs/resources/queue.html" },
-  { text: "Schedule", link: "/docs/resources/schedule.html" },
-  { text: "Container service", link: "/docs/resources/container_service.html" },
-  { text: "Stateful entity", link: "/docs/resources/stateful_entity.html" },
-  { text: "Vector index", link: "/docs/resources/vector_index.html" },
-  { text: "Interface data source", link: "/docs/data-sources/interface.html" },
-];
-
-// The current stack is listed first. Retained provider-v2 resources stay in
-// the compatibility group below so the first read of the sidebar answers
-// "what is current?" before showing migration and history.
 const currentStackResourceItems = edgeResourceItems;
 
 const specSidebar = [
@@ -179,18 +147,17 @@ const specSidebar = [
       { text: "Interface contracts", link: "/spec/interface-contract/" },
       { text: "Binding contracts", link: "/spec/binding-contract/" },
       { text: "Artifact transport", link: "/spec/artifact-transport/" },
-      { text: "Interface declaration", link: "/spec/interface-declaration/" },
       { text: "Trust", link: "/spec/trust/" },
       { text: "Decisions", link: "/spec/decisions/" },
     ],
   },
   {
-    text: "Published compatibility / Migration / History",
+    text: "Withdrawn epochs / Migration",
     collapsed: true,
     items: [
       { text: "Versions & compatibility", link: "/docs/versions.html" },
-      { text: "Host API (retained v1alpha2)", link: "/spec/host-api/" },
-      { text: "Migration guide", link: "/release/migrations/v1-to-v2.html" },
+      { text: "Host API lanes", link: "/spec/host-api/" },
+      { text: "v2 to v3 migration boundary", link: "/release/migrations/v2-to-v3.html" },
     ],
   },
 ];
@@ -232,18 +199,6 @@ const edgeProposalItems = [
   { text: "Queue consumer", link: "/proposals/edge/queue-consumer.html" },
 ];
 
-const proposalItems = [
-  { text: "Edge worker", link: "/proposals/edge-worker.html" },
-  { text: "Relational database", link: "/proposals/relational-database.html" },
-  { text: "Object bucket", link: "/proposals/object-bucket.html" },
-  { text: "Key value store", link: "/proposals/key-value-store.html" },
-  { text: "Queue", link: "/proposals/queue.html" },
-  { text: "Schedule", link: "/proposals/schedule.html" },
-  { text: "Container service", link: "/proposals/container-service.html" },
-  { text: "Stateful entity", link: "/proposals/stateful-entity.html" },
-  { text: "Vector index", link: "/proposals/vector-index.html" },
-];
-
 const englishSidebar = {
   "/docs/": [
     {
@@ -260,19 +215,14 @@ const englishSidebar = {
       items: currentStackResourceItems,
     },
     {
-      text: "Published compatibility / Migration / History",
+      text: "Withdrawn epochs / Migration",
       collapsed: true,
       items: [
+        { text: "Versions & compatibility", link: "/docs/versions.html" },
         {
-          text: "Provider 2.0.0 / Host API v1alpha2 — retained resources",
-          collapsed: true,
-          items: resourceItems,
+          text: "v2 to v3 migration boundary",
+          link: "/release/migrations/v2-to-v3.html",
         },
-        {
-          text: "Provider 1.0.3 / Host API v1alpha1 — Legacy",
-          link: "/docs/versions.html#provider-1-0-3",
-        },
-        { text: "Migration guide", link: "/release/migrations/v1-to-v2.html" },
       ],
     },
   ],
@@ -280,12 +230,7 @@ const englishSidebar = {
   "/proposals/": [
     {
       text: "Current design target — Edge Form Family v1beta1 proposals",
-      items: [...edgeProposalItems],
-    },
-    {
-      text: "Published compatibility / Migration / History — retained proposals",
-      collapsed: true,
-      items: [{ text: "Overview", link: "/proposals/" }, ...proposalItems],
+      items: [{ text: "Overview", link: "/proposals/" }, ...edgeProposalItems],
     },
   ],
   "/forms/": [
@@ -323,21 +268,16 @@ const japaneseSidebar = {
       items: currentStackResourceItems,
     },
     {
-      text: "Published compatibility / Migration / History",
+      text: "Withdrawn epochs / Migration",
       collapsed: true,
       items: [
         {
-          text: "Provider 2.0.0 / Host API v1alpha2 — retained resources",
-          collapsed: true,
-          items: resourceItems,
+          text: "Versions & compatibility (英語のみ)",
+          link: "/ja/docs/versions.html",
         },
         {
-          text: "Provider 1.0.3 / Host API v1alpha1 — Legacy",
-          link: "/ja/docs/versions.html#provider-1-0-3",
-        },
-        {
-          text: "Migration guide (英語のみ)",
-          link: "/release/migrations/v1-to-v2.html",
+          text: "v2 to v3 migration boundary (英語のみ)",
+          link: "/release/migrations/v2-to-v3.html",
         },
       ],
     },

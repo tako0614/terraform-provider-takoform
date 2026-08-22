@@ -1,7 +1,0 @@
-{
-  "cacheControlSeconds": 300,
-  "errorDocument": "404.html",
-  "indexDocument": "index.html",
-  "name": "static-site",
-  "singlePageApp": false
-}

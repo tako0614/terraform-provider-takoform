@@ -1,8 +1,0 @@
-{
-  "engine": "postgres",
-  "generation": 1,
-  "id": "RelationalDatabase/relational-database",
-  "kind": "RelationalDatabase",
-  "name": "relational-database",
-  "portability": "portable"
-}
