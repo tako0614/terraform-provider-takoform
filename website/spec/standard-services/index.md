@@ -37,7 +37,7 @@ credential.** The declaration a consuming Form's desired schema embeds is:
   `smtp`. Widening it is a reviewed spec change held to decision 0043's test —
   the protocol must be a de-facto standard, or the category belongs to a Form
   Family instead. Decision 0043's landscape survey records the growth roadmap
-  (`kafka`, `amqp`, `mongodb`, `elasticsearch-compatible`,
+  (`kafka`, `amqp`, `mysql`, `mongodb`, `elasticsearch-compatible`,
   `openai-compatible`, `otlp`).
 
 The host or operator **satisfies** a slot by supplying connection material for

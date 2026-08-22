@@ -48,6 +48,7 @@ splitting them by "does a de-facto standard API exist":
 | Telemetry export | OTLP (OpenTelemetry) | integrate |
 | LLM inference serving | OpenAI-compatible API (standardizing) | integrate |
 | Browser push | RFC 8030 Web Push | integrate |
+| TLS certificate issuance | ACME | integrate (a host duty behind domain attachments; no slot protocol needed) |
 | Regional FaaS (Lambda, Cloud Functions) | none | **Form Family** |
 | Serverless containers (Cloud Run, Fargate, Container Apps) | none | **Form Family** |
 | Document/KV table (DynamoDB, Firestore, Cosmos native) | none | **Form Family** |
@@ -62,6 +63,13 @@ splitting them by "does a de-facto standard API exist":
 | Realtime client push (managed WebSocket) | none | family candidate |
 | Identity pool management (Cognito, Firebase Auth admin) | none | family candidate |
 | Batch compute | none | family candidate |
+| Data warehouse (BigQuery, Redshift, Snowflake) | none (SQL dialects diverge) | family candidate |
+| Media transform/streaming (Images, Cloudinary, Mux) | none | family candidate |
+| Notification delivery (SMS, mobile push) | none for SMS; FCM/APNs are their platforms' de-facto channels | family candidate |
+| Secrets manager | none | skip — sealed slots are already this project's secret interface (decision 0045); a secret-container Form would duplicate the doctrine |
+| DNS zone/record management | the data plane is DNS itself | skip — native provider tooling is ubiquitous and the app-side need is covered by domain-attachment Forms |
+| CI/CD and build pipelines | none | skip — tooling, not runtime desired state |
+| Inbound mail routing | none (webhook shapes diverge) | skip — niche |
 | Custom metrics/analytics (Analytics Engine) | OTLP covers export; the query side is niche | skip |
 | Trace/diagnostic taps (Tail Workers) | single-vendor diagnostics | skip |
 | Managed browser rendering | single-vendor, niche | skip |
@@ -94,7 +102,7 @@ standard protocol is the contract, and the host resolves the endpoint and
 credential the way it already resolves sensitive slots, so neither ever
 enters portable desired state. The protocol vocabulary starts at
 `s3-compatible`, `postgresql`, `redis`, `smtp`; the survey above is its
-growth roadmap (`kafka`, `amqp`, `mongodb`, `elasticsearch-compatible`,
+growth roadmap (`kafka`, `amqp`, `mysql`, `mongodb`, `elasticsearch-compatible`,
 `openai-compatible`, `otlp` are the recorded candidates), and every widening
 is a reviewed change held to this record's test.
 
@@ -138,10 +146,15 @@ survey: analytics, tail taps, and browser rendering, each with its reason.
 
 `workflow` (the declarative state-machine shape — the durable code-defined
 shape lands in the Edge family instead), `eventbus`, `realtime`, `identity`,
-and `batch` are recorded as family candidates: each satisfies the rule, and
-each is deferred for its own reason (state-language size, coupling to
-`workflow`, protocol churn, security surface, narrower demand) rather than by
-the rule.
+`batch`, `warehouse`, `media`, and `notify` are recorded as family
+candidates: each satisfies the rule, and each is deferred for its own reason
+(state-language size, coupling to `workflow`, protocol churn, security
+surface, narrower demand, analytics surface area, breadth of the media
+category, delivery-network dependence) rather than by the rule. Every
+withdrawn v1alpha2 kind has a recorded successor or integration: the lineup
+table's last column accounts for seven, `StatefulEntity` splits between the
+Edge `ActorNamespace` and `table`, and `RelationalDatabase` became the
+`postgresql` integration.
 
 What is deliberately **excluded**: every integrate-side row above. The
 earlier `postgres`-family idea dies here — PostgreSQL is a standard, so it is
@@ -164,7 +177,7 @@ own conformance obligations.
 
 ## Consequences
 
-The lineup grows to eight families plus two Edge-family additions, with five
+The lineup grows to eight families plus two Edge-family additions, with eight
 recorded candidates, every one justified by the same sentence, and the
 catalog stops being one platform's silhouette. Where the industry already solved portability, Takoform rides the
 standard instead of fighting it — which is also what keeps the spec small
