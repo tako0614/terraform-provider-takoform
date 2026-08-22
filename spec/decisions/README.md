@@ -41,3 +41,4 @@ record does not replace them.
 - [0036 — An artifact's name states the lane it describes, not its place in a sequence](0036-artifact-names-state-the-lane-they-describe.md)
 - [0037 — Immutability begins at Stable; a pre-Stable identity may be withdrawn](0037-immutability-begins-at-stable.md)
 - [0038 — A generation move is measured, and what it costs is recorded](0038-a-generation-move-is-measured-not-assumed.md)
+- [0039 — A Host API lane is minted for one of exactly two reasons](0039-a-lane-is-minted-for-one-of-two-reasons.md)
