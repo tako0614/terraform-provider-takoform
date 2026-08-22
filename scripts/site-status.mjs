@@ -90,12 +90,12 @@ function verifyOneCopy(document, relativePath, facts, truth, failures) {
   // independent. A stale document that labels the family Experimental can no
   // longer pass merely because the candidate set still says its definitions
   // are Experimental.
-  if (document.formFamilyMaturity !== "beta") {
-    failures.push(
-      `${relativePath}: formFamilyMaturity must be "beta" for the current ` +
-        "Edge Form Family; definition maturity is formMaturity",
-    );
-  }
+  //
+  // formFamilyMaturity is deliberately NOT pinned to a literal here. The loop
+  // above already requires it to equal what the repository derives, which is
+  // the stronger statement; adding "and that value must be beta" froze today's
+  // channel into the check that reports where the family is, so advancing the
+  // family would have meant editing this file to permit it.
   if (document.formMaturity !== "experimental") {
     failures.push(
       `${relativePath}: formMaturity must be "experimental" for the current ` +

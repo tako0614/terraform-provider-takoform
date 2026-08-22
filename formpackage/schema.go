@@ -66,16 +66,33 @@ type compiledSchemas struct {
 	revocationCheckpoint     *jsonschema.Schema
 }
 
-// namespacedFormGroupPattern mirrors the apiVersion grammar of the v1alpha3
+// namespacedFormGroupPattern mirrors the apiVersion grammar of the family
 // FormRef schema: a DNS-like Form group plus its group version. The two frozen
 // central groups are recognized before this pattern is consulted, so a match
-// always selects the family (v1alpha3) validation lane.
+// selects one of the two family validation lanes below.
 var namespacedFormGroupPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$`)
 
-// betaFamilyGroupPattern selects the new public Beta family schema. Older
-// namespaced family groups remain readable through the immutable v1alpha3
-// schema closure; no existing package is reinterpreted as Beta.
-var betaFamilyGroupPattern = regexp.MustCompile(`/v1beta1$`)
+// retainedFamilyGroups are the namespaced families published under the
+// immutable v1alpha3 schema closure, listed one by one. Everything else — the
+// current family and any family minted after it — validates against the
+// current schema.
+//
+// This used to be the other way round: a `/v1beta1$` pattern selected the
+// current schema and ANY other namespaced group silently fell through to the
+// retained one. A family minted at a version the pattern did not anticipate,
+// including the `edge.forms.takoform.com/v1` that
+// internal/currentformregistry/registry_v3_test.go already pins as the stable
+// successor, would have been validated against the wrong published $id without
+// an error. Naming the retained set instead makes the default correct and
+// makes adding to it an edit somebody has to justify.
+var retainedFamilyGroups = map[string]struct{}{
+	"edge.forms.takoform.com/v1alpha1": {},
+}
+
+func retainedFamilyGroup(apiVersion string) bool {
+	_, retained := retainedFamilyGroups[apiVersion]
+	return retained
+}
 
 // reservedFormsTakoformNamespaces are the subdomains of forms.takoform.com the
 // specification reserves for envelope identities rather than Form groups:
@@ -277,10 +294,10 @@ func validateFormRef(raw []byte) (FormRef, error) {
 	case envelope.APIVersion == CurrentFormAPIVersion:
 		schema = schemas.currentFormRef
 	case NamespacedFormGroup(envelope.APIVersion):
-		if betaFamilyGroupPattern.MatchString(envelope.APIVersion) {
-			schema = schemas.betaFamilyFormRef
-		} else {
+		if retainedFamilyGroup(envelope.APIVersion) {
 			schema = schemas.retainedFamilyFormRef
+		} else {
+			schema = schemas.betaFamilyFormRef
 		}
 	default:
 		return FormRef{}, fmt.Errorf("FormRef: unsupported apiVersion %q", envelope.APIVersion)
@@ -322,10 +339,10 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 	case envelope.APIVersion == CurrentFormAPIVersion:
 		schema = schemas.currentDefinition
 	case NamespacedFormGroup(envelope.APIVersion):
-		if betaFamilyGroupPattern.MatchString(envelope.APIVersion) {
-			schema = schemas.betaFamilyDefinition
-		} else {
+		if retainedFamilyGroup(envelope.APIVersion) {
 			schema = schemas.retainedFamilyDefinition
+		} else {
+			schema = schemas.betaFamilyDefinition
 		}
 	default:
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition: unsupported apiVersion %q", envelope.APIVersion)

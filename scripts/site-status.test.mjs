@@ -191,9 +191,13 @@ describe("the gate refuses", () => {
       }
       return verifySiteStatusDocument(root);
     });
+    // The document no longer has to say one frozen channel word; it has to say
+    // what the repository derives. A document claiming the family is
+    // Experimental therefore fails as a disagreement with the derivation,
+    // which is the stronger statement and survives the family advancing.
     expect(
       failures.filter((failure) =>
-        failure.includes("formFamilyMaturity must be \"beta\""),
+        failure.includes("formFamilyMaturity = \"experimental\""),
       ),
     ).toHaveLength(2);
     expect(

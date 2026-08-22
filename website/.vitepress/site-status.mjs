@@ -202,11 +202,18 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     );
   }
   const formFamilyCurrent = candidateSet.family;
-  const formFamilyMaturityMatch =
+  // Symmetric with the Host API derivation above: a bare `/vN` is a stable
+  // channel. The family half used to have no such branch and threw instead,
+  // which made the graduation this repository has already committed to —
+  // `edge.forms.takoform.com/v1`, pinned as a literal in
+  // internal/currentformregistry/registry_v3_test.go and
+  // internal/provider/v3_continuity_test.go — impossible to express here. The
+  // asymmetry was forty lines apart in one function.
+  const formFamilyMaturity =
     typeof formFamilyCurrent === "string"
-      ? formFamilyCurrent.match(/\/v\d+(alpha|beta)\d+$/)
+      ? (formFamilyCurrent.match(/\/v\d+(alpha|beta)\d+$/)?.[1] ??
+        (/\/v\d+$/.test(formFamilyCurrent) ? "stable" : null))
       : null;
-  const formFamilyMaturity = formFamilyMaturityMatch?.[1] ?? null;
   const formMaturity = candidateSet.formMaturity;
   const formPackageApiCurrent = candidateSet.packageApiVersion;
   if (typeof formFamilyCurrent !== "string" || formFamilyCurrent === "") {
@@ -214,12 +221,15 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   }
   if (formFamilyMaturity === null) {
     throw new Error(
-      `${FAMILY_CANDIDATE_SET}: family must end in a version with alpha/beta maturity`,
+      `${FAMILY_CANDIDATE_SET}: cannot derive Form Family maturity from ${JSON.stringify(formFamilyCurrent)}`,
     );
   }
-  if (formFamilyMaturity !== "beta") {
+  // A recognised channel rather than one frozen literal. Pinning "beta" froze
+  // today's value into a derivation, so the only way to advance the family was
+  // to edit the code that reports where it is.
+  if (!["alpha", "beta", "stable"].includes(formFamilyMaturity)) {
     throw new Error(
-      `${FAMILY_CANDIDATE_SET}: Form Family maturity must be beta, derived from ${JSON.stringify(formFamilyCurrent)}`,
+      `${FAMILY_CANDIDATE_SET}: Form Family maturity ${JSON.stringify(formFamilyMaturity)} is not a recognised channel`,
     );
   }
   if (typeof formMaturity !== "string" || formMaturity === "") {
