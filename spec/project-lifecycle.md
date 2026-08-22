@@ -140,9 +140,12 @@ approval applied to a preferred subset.
 
 An Experimental Form MUST NOT become Stable until:
 
-- at least two independently maintained host implementations exercise the same
-  exact semantics, or equivalent evidence demonstrates that the contract is
-  implementable without relying on one host's private model;
+- at least two independent host implementations from distinct codebases —
+  neither derived from the other's host internals — exercise the same exact
+  semantics through the same conformance corpus, at least one of them in
+  production for real consumers; a shared maintainer is permitted and is named
+  in the graduation record
+  ([decision 0044](decisions/0044-graduation-evidence-is-implementation-independence.md));
 - real consumers have operated the Form across a documented compatibility
   window;
 - immutable fields, replacement, import, drift, delete, and recovery behavior
@@ -164,10 +167,11 @@ Stable `1.0.0` identity; all others remain Experimental/Beta without being
 renamed or overwritten.
 
 The machine record requires the exact transition history `proposal →
-experimental → stable`, two distinct host subjects with two independently
-named maintainers, real-consumer evidence, lifecycle agreement,
-interoperability, independent publication, migration, deprecation-exercise,
-and security-revocation-exercise files. A direct Proposal-to-Stable record is
+experimental → stable`, two distinct host subjects from independent codebases
+(a shared maintainer named rather than hidden, per decision 0044),
+real-consumer evidence, lifecycle agreement, interoperability, independent
+publication, migration, deprecation-exercise, and security-revocation-exercise
+files. A direct Proposal-to-Stable record is
 invalid even if other evidence is present.
 
 ### Legacy

@@ -39,8 +39,10 @@ Takoform has five public contract interfaces:
 4. **Interface, Binding, and artifact contracts.**
    [`interface-contract/`](interface-contract/) defines exact digest-bound
    Interface contracts, [`binding-contract/`](binding-contract/) defines typed
-   Binding contracts, and [`artifact-transport/`](artifact-transport/) defines
-   content-addressed artifact upload.
+   Binding contracts, [`artifact-transport/`](artifact-transport/) defines
+   content-addressed artifact upload, and
+   [`standard-services/`](standard-services/) defines sealed-slot access to
+   external services speaking de-facto standard protocols.
 5. **Trust, lifecycle, version, and release identity.**
    [`trust/`](trust/) defines immutable publisher evidence and revocation;
    [`project-lifecycle.md`](project-lifecycle.md) separates Form maturity from
