@@ -107,7 +107,14 @@ minted only when the manifest format itself changes structurally, never because
 a Form generation moved: `v1alpha4` already admits any namespaced group and has
 carried two family generations without moving, which is the proof it never
 needed to track them. Both halves are checked the same way the Host API lane's
-minting reasons are. Content-addressed packages have no independent
+minting reasons are.
+
+**Takoform's own Form Packages publish with the provider release that embeds
+them** ([decision 0041](decisions/0041-form-packages-publish-with-the-provider-release.md)):
+one release train, with each release's exact package digests locked append-only
+in [`../release/provider-form-identities.json`](../release/provider-form-identities.json).
+The identity stays content-addressed and provider-free, because a third-party
+publisher — which the Stable criteria require — publishes under its own cadence. Content-addressed packages have no independent
 SemVer. Their exact package digest produces the publication artifact ID
 `sha256-<hex>` and therefore the source path and tag. Existing v1alpha1
 `packageVersion` values and the published content-addressed v1alpha2 package
