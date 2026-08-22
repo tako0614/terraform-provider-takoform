@@ -1527,6 +1527,88 @@ function wireContractShape(relativePath) {
   ).replace(/v1(?:alpha|beta)\d+/gu, "vN");
 }
 
+// The package envelope gets the same rule as the lane, because it has the same
+// history: one real format change and two renames that followed the grammar of
+// the FormRef they wrap (decision 0040).
+//
+//   "format"  — the manifest format itself changed. Provable: the envelope's
+//               schema must differ structurally from every other "format"
+//               envelope's, version words normalised. That has happened once:
+//               v1alpha1 -> v1alpha2 introduced content addressing.
+//   "carried" — the envelope was re-minted because the FormRef grammar it
+//               wraps moved, not because the format did. v1alpha3 and v1alpha4
+//               are structurally identical to v1alpha2. Recorded as history;
+//               the rule prevents the next one, and v1alpha4 has already
+//               carried two family generations without moving, which is the
+//               proof it never needed to track them.
+const PACKAGE_ENVELOPES = new Map([
+  ["packages.forms.takoform.com/v1alpha1", {
+    schema: "spec/schemas/package-index.schema.json",
+    mintedFor: "format",
+  }],
+  ["packages.forms.takoform.com/v1alpha2", {
+    schema: "spec/schemas/package-index-v1alpha2.schema.json",
+    mintedFor: "format",
+  }],
+  ["packages.forms.takoform.com/v1alpha3", {
+    schema: "spec/schemas/package-index-v1alpha3.schema.json",
+    mintedFor: "carried",
+    evidence: "re-minted for the retained provider-v2 FormRef grammar; format unchanged (decision 0040)",
+  }],
+  ["packages.forms.takoform.com/v1alpha4", {
+    schema: "spec/schemas/package-index-v1alpha4.schema.json",
+    mintedFor: "carried",
+    evidence: "re-minted for the namespaced family FormRef grammar; format unchanged, and it has since carried two family generations (decision 0040)",
+  }],
+]);
+
+function checkVersionedIdentitiesAreMintedForAReason(label, table, kinds) {
+  const shapes = new Map();
+  for (const [identity, entry] of table) {
+    if (!existsSync(path.join(repositoryRoot, entry.schema))) {
+      fail(`${identity}: schema ${entry.schema} does not exist`);
+      continue;
+    }
+    shapes.set(identity, wireContractShape(entry.schema));
+  }
+  for (const [identity, entry] of table) {
+    if (entry.mintedFor === kinds.exempt) {
+      if (typeof entry.evidence !== "string" || entry.evidence.trim() === "") {
+        fail(
+          `${identity}: a ${label} minted as ${JSON.stringify(kinds.exempt)} must ` +
+            `say why; that is not provable from bytes`,
+        );
+      }
+      continue;
+    }
+    if (entry.mintedFor !== kinds.proved) {
+      fail(
+        `${identity}: mintedFor must be ${JSON.stringify(kinds.proved)} or ${JSON.stringify(kinds.exempt)}`,
+      );
+      continue;
+    }
+    const shape = shapes.get(identity);
+    for (const [other, otherShape] of table) {
+      if (other === identity || otherShape.mintedFor !== kinds.proved) continue;
+      if (shape === shapes.get(other)) {
+        fail(
+          `${identity}: minted as ${JSON.stringify(kinds.proved)}, but its schema is ` +
+            `structurally identical to ${other}; an identity that changes no bytes ` +
+            `is a rename`,
+        );
+        break;
+      }
+    }
+  }
+}
+
+function checkPackageEnvelopesAreMintedForAReason() {
+  checkVersionedIdentitiesAreMintedForAReason("package envelope", PACKAGE_ENVELOPES, {
+    proved: "format",
+    exempt: "carried",
+  });
+}
+
 function checkHostApiLanesAreMintedForAReason() {
   const shapes = new Map();
   for (const [apiVersion, lane] of HOST_API_LANES) {
@@ -2179,6 +2261,7 @@ checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
 checkHandWrittenInventories(forms, edgeFamilyRoster);
 checkHostApiLanesAreMintedForAReason();
+checkPackageEnvelopesAreMintedForAReason();
 checkDocumentedWalkIsRunnable();
 checkCorpusNamesStateTheirLane();
 checkConformanceCorpusCounts();
