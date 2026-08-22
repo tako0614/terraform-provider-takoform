@@ -1441,6 +1441,34 @@ const RETAINED_GENERATION_NAMED_CORPORA = new Map([
   ["portable-host-v2", "forms.takoform.com/v1alpha2"],
 ]);
 
+// The README stopped telling a reader to point a provider at a placeholder and
+// started telling them to run something. A command named in a walk somebody is
+// expected to follow has to exist, and the walk has to name the command that
+// exists — the failure mode here is a getting-started that quietly stops
+// working, which is what the placeholder already was.
+function checkDocumentedWalkIsRunnable() {
+  const readme = read(path.join(repositoryRoot, "README.md"));
+  const named = [...readme.matchAll(/go run \.\/(cmd\/[a-z0-9-]+)/gu)].map(
+    ([, command]) => command,
+  );
+  if (named.length === 0) {
+    fail("README.md: the getting-started walk names no command to run");
+  }
+  for (const command of new Set(named)) {
+    if (!existsSync(path.join(repositoryRoot, command, "main.go"))) {
+      fail(`README.md: names \`go run ./${command}\`, which does not exist`);
+    }
+  }
+  // Prose wraps, so compare against normalized whitespace the way the corpus
+  // count claims do.
+  if (!readme.replace(/\s+/gu, " ").includes("serves no application traffic")) {
+    fail(
+      "README.md: the walk must say the reference host serves no application " +
+        "traffic; a host a reader can start is a host they will believe in",
+    );
+  }
+}
+
 function checkCorpusNamesStateTheirLane() {
   const conformanceRoot = path.join(repositoryRoot, "conformance");
   for (const entry of readdirSync(conformanceRoot, { withFileTypes: true })) {
@@ -2023,6 +2051,7 @@ checkProviderReleaseCommitBindings();
 checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
 checkHandWrittenInventories(forms, edgeFamilyRoster);
+checkDocumentedWalkIsRunnable();
 checkCorpusNamesStateTheirLane();
 checkConformanceCorpusCounts();
 for (const failure of verifySiteStatusDocument(repositoryRoot, publicationTruth)) {

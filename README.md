@@ -141,6 +141,43 @@ provider "takoform" {
 `endpoint`, `space`, and bearer `token` may instead come from
 `TAKOFORM_ENDPOINT`, `TAKOFORM_SPACE`, and `TAKOFORM_TOKEN`.
 
+### Run it against a host on your machine
+
+`forms.example.com` above is a placeholder, and a provider with nowhere to point
+is not something anyone can try. This repository carries a host you can start:
+
+```console
+go run ./cmd/reference-host --addr 127.0.0.1:8080
+```
+
+Then, in a directory of your own, with the configuration above pointing at
+`http://127.0.0.1:8080` and `token = "reference-primary-token"`:
+
+```console
+tofu init
+tofu apply
+tofu destroy
+```
+
+That creates a real `ModuleWorker` under the exact
+`edge.forms.takoform.com/v1beta1` FormRef, reports the conditions the host
+computes for it — a worker with no deployment is `Ready=False` / `Provisioning`,
+and says so — and destroys it. It is the same host `bun run check` drives an
+OpenTofu and a Terraform CLI against on every run
+(`cmd/worker-authoring-conformance`), so the walk above cannot quietly stop
+working.
+
+**What that host is not.** It stores desired state and serves no application
+traffic: the worker you create has no isolate, a `WorkerEndpoint`'s address
+answers nothing, and a queue delivers no message. This lane drives desired state
+and never moves a byte of application data
+([`spec/host-api/v1beta1.md`](spec/host-api/v1beta1.md)). It also implements the
+runner-only conformance probe headers and its credentials are three constants
+compiled into this repository, so keep it on loopback. It is a host to learn and
+develop against; measuring a real one is what
+[`spec/publication-blockers.json`](spec/publication-blockers.json) is still open
+about.
+
 The published `v2.0.0` compatibility predecessor remains available for the
 retained v1alpha2 lane:
 
