@@ -21,13 +21,59 @@ work (which is how one platform's shapes became the whole catalog).
 The rule falls out of asking where a host-neutral desired-state contract adds
 value at all. A service category can be popular and portable already — object
 storage has the S3-compatible API, relational databases have the PostgreSQL
-wire protocol, caches have the Redis protocol, mail submission has SMTP. There
-a portability layer already exists, an ecosystem of clients speaks it, and a
-Takoform respecification would compete with a standard instead of adding one.
-The categories that actually lock applications in are the popular managed
-services whose provisioning and service APIs are vendor-specific: serverless
-containers, document/KV tables, schedulers, vector indexes, workflow engines —
-offered by every major cloud, portable to none of them.
+wire protocol, caches have the Redis protocol. There a portability layer
+already exists, an ecosystem of clients speaks it, and a Takoform
+respecification would compete with a standard instead of adding one. The
+categories that actually lock applications in are the popular managed
+services whose provisioning and service APIs are vendor-specific — offered by
+every major cloud, portable to none of them.
+
+## The landscape, partitioned
+
+The rule is only as good as the survey behind it, so the survey is recorded.
+Sweeping the popular managed-service categories of the major clouds and
+splitting them by "does a de-facto standard API exist":
+
+| Category | De-facto standard | Side |
+| --- | --- | --- |
+| Object storage | S3-compatible API | integrate |
+| Relational database | PostgreSQL / MySQL wire | integrate |
+| Cache | Redis protocol | integrate |
+| Message broker | Kafka protocol, AMQP | integrate |
+| Document store (Mongo-flavored) | MongoDB wire (Cosmos/DocumentDB emulate it) | integrate |
+| Search | Elasticsearch API (OpenSearch emulates it) | integrate |
+| Mail submission | SMTP | integrate |
+| Container orchestration | Kubernetes API | integrate |
+| Auth flow | OIDC / OAuth2 | integrate |
+| Telemetry export | OTLP (OpenTelemetry) | integrate |
+| LLM inference serving | OpenAI-compatible API (standardizing) | integrate |
+| Browser push | RFC 8030 Web Push | integrate |
+| Regional FaaS (Lambda, Cloud Functions) | none | **Form Family** |
+| Serverless containers (Cloud Run, Fargate, Container Apps) | none | **Form Family** |
+| Document/KV table (DynamoDB, Firestore, Cosmos native) | none | **Form Family** |
+| Pull queue (SQS, Cloud Tasks) | none | **Form Family** |
+| Pub/sub fanout (SNS, EventGrid) | none | **Form Family** |
+| Scheduler (Cloud Scheduler, EventBridge Scheduler) | none | **Form Family** |
+| Vector index (Pinecone, Vertex, serverless vector stores) | none | **Form Family** |
+| Workflow engine (Step Functions, Durable Functions) | none | family candidate |
+| Event bus/router (EventBridge) | none | family candidate |
+| Realtime client push (managed WebSocket) | none | family candidate |
+| Identity pool management (Cognito, Firebase Auth admin) | none | family candidate |
+| Batch compute | none | family candidate |
+| Addressable actors (Durable Objects) | none | family candidate |
+| Edge workers (Workers, Fastly Compute) | none | **Form Family** (edge, existing) |
+
+The split is not "clouds have no originality" — it is an asymmetry: **data
+planes have largely standardized while the serverless control planes have
+not**, and the unstandardized half is exactly where a host-neutral contract
+is the only portability there is. One platform sits almost entirely on the
+locked side — the Workers platform speaks essentially no external standard
+except R2's S3 compatibility — which is why the first family filled itself
+with one platform's shapes and why the catalog must not stop there.
+
+Virtual machines and other substrate stay out on separate grounds: decision
+[0007](0007-current-forms-exclude-substrate-operation.md) excludes substrate
+operation from portable desired state regardless of standards.
 
 ## Decision
 
@@ -37,34 +83,43 @@ standard API — the category where a host-neutral contract is the only
 portability there is.**
 
 **A category with a de-facto standard API is never respecified as a Form.
-Takoform integrates with it instead**: a Form's runtime reaches an
-S3-compatible bucket, a PostgreSQL database, a Redis cache, or an SMTP
-submission endpoint as an **external standard-service binding** — the standard
-protocol is the contract, and the host resolves the endpoint and credential
-the way it already resolves sensitive slots, so neither ever enters portable
-desired state. That binding contract is its own reviewed spec change; this
-record fixes the direction.
+Takoform integrates with it instead**: a Form's runtime reaches the standard
+service as an external standard-service binding
+([decision 0045](0045-external-standard-services-are-sealed-slots.md)) — the
+standard protocol is the contract, and the host resolves the endpoint and
+credential the way it already resolves sensitive slots, so neither ever
+enters portable desired state. The protocol vocabulary starts at
+`s3-compatible`, `postgresql`, `redis`, `smtp`; the survey above is its
+growth roadmap (`kafka`, `amqp`, `mongodb`, `elasticsearch-compatible`,
+`openai-compatible`, `otlp` are the recorded candidates), and every widening
+is a reviewed change held to this record's test.
 
-Under this rule the v1 lineup is:
+Under this rule the v1 lineup is **eight families**:
 
 | Family group | Fixed shape | Replaces (withdrawn) |
 | --- | --- | --- |
 | `edge.forms.takoform.com` | the Workers platform model (existing, 15 Forms) | — |
+| `function.forms.takoform.com` | regional FaaS: artifact + handler + event invocation, concurrency, timeout (the Lambda shape) | `EdgeWorker` in part |
 | `container.forms.takoform.com` | OCI-image service with immutable revisions and traffic splitting (the Cloud Run/Knative shape) | `ContainerService` |
 | `table.forms.takoform.com` | document/KV table with declared keys and secondary indexes (the DynamoDB shape) | `KeyValueStore`, `StatefulEntity` in part |
+| `queue.forms.takoform.com` | pull-based at-least-once queue with visibility timeout and dead-lettering (the SQS shape) | `Queue` |
+| `topic.forms.takoform.com` | fanout topic with push subscriptions and filter policies (the SNS shape) | — |
 | `schedule.forms.takoform.com` | standalone cron invoking a declared target with a retry policy (the Cloud Scheduler shape) | `Schedule` |
 | `vector.forms.takoform.com` | fixed-dimension vector index with declared metric and namespaces | `VectorIndex` |
 
-`workflow` (the Step Functions category) satisfies the rule and is recorded as
-a candidate; its state-language surface is large enough to be its own design
-effort. An `actor` family is deliberately not minted now: its proven shape is
-one vendor's, and the Edge family's SQLite/queue primitives cover most of its
-current use.
+The Edge family's `AtLeastOnceQueue` is not the same Form as `queue`'s: one is
+push-delivery into a worker consumer, the other is pull with visibility
+semantics — two proven shapes, two contracts, per decision 0008.
 
-What is deliberately **excluded** by the rule: object storage beyond the Edge
-family's own bucket (S3-compatible is the standard), relational databases
-(PostgreSQL is the standard — the earlier `postgres` family idea dies here),
-caches (Redis), mail (SMTP). Each is an integration target, not a Form.
+`workflow`, `eventbus`, `realtime`, `identity`, `batch`, and `actor` are
+recorded as family candidates: each satisfies the rule, and each is deferred
+for its own reason (state-language size, coupling to `workflow`, protocol
+churn, security surface, narrower demand, single-vendor shape) rather than by
+the rule.
+
+What is deliberately **excluded**: every integrate-side row above. The
+earlier `postgres`-family idea dies here — PostgreSQL is a standard, so it is
+an integration target.
 
 The same principle is adopted ecosystem-wide: takoserver builds on de-facto
 standards where they exist and defines contracts only where the category is
@@ -73,16 +128,17 @@ shared principle.
 
 ## Enforcement
 
-Minting a family is a reviewed spec change, and this record is what the review
-holds it against: a proposed family must name the popular category, show the
-absence of a de-facto standard API, and name the one proven shape it fixes
-(decision 0008). The external standard-service binding contract arrives as its
-own spec change with its own conformance surface; until it lands, nothing
-claims it exists.
+Minting a family is a reviewed spec change, and this record is what the
+review holds it against: a proposed family must name the popular category,
+show the absence of a de-facto standard API, and name the one proven shape it
+fixes (decision 0008). Widening the standard-service protocol vocabulary is
+held to the same table. The external standard-service binding contract is
+[decision 0045](0045-external-standard-services-are-sealed-slots.md) with its
+own conformance obligations.
 
 ## Consequences
 
-The lineup grows by four families and a recorded candidate, every one of them
+The lineup grows to eight families with six recorded candidates, every one
 justified by the same sentence, and the catalog stops being one platform's
 silhouette. Where the industry already solved portability, Takoform rides the
 standard instead of fighting it — which is also what keeps the spec small

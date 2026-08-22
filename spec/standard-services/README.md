@@ -36,7 +36,9 @@ credential.** The declaration a consuming Form's desired schema embeds is:
   The protocol vocabulary is closed: `s3-compatible`, `postgresql`, `redis`,
   `smtp`. Widening it is a reviewed spec change held to decision 0043's test —
   the protocol must be a de-facto standard, or the category belongs to a Form
-  Family instead.
+  Family instead. Decision 0043's landscape survey records the growth roadmap
+  (`kafka`, `amqp`, `mongodb`, `elasticsearch-compatible`,
+  `openai-compatible`, `otlp`).
 
 The host or operator **satisfies** a slot by supplying connection material for
 a service that actually speaks the declared protocol. Where that service runs —
