@@ -1066,8 +1066,36 @@ function checkCurrentLaneSemanticResidue() {
     "internal/runtimeconformance",
     "internal/workerauthoring",
     "cmd/portable-host-conformance",
+    "cmd/reference-host",
     "cmd/worker-authoring-conformance",
   ].map((entry) => path.join(repositoryRoot, entry));
+
+  // The identities current code may not carry are DERIVED, not listed. They are
+  // the ones this project has withdrawn, minus the ones it still serves — a
+  // hand-written list of "the previous generation" is the same relative name
+  // that went stale when the lane moved (decision 0036), and it would have to
+  // be edited by whoever performs the next withdrawal, which is exactly the
+  // edit that gets missed.
+  const withdrawnIdentities = new Set(
+    (readJson(path.join(repositoryRoot, "release", "published-document-lanes.json"))
+      ?.retired ?? []).map(({ apiVersion }) => apiVersion),
+  );
+  const siteStatus = readJson(
+    path.join(repositoryRoot, "website", "public", ".well-known", "takoform-site.json"),
+  );
+  for (const served of [
+    siteStatus?.hostApiCurrent,
+    siteStatus?.formFamilyCurrent,
+    siteStatus?.formPackageApiCurrent,
+  ]) {
+    withdrawnIdentities.delete(served);
+  }
+  if (withdrawnIdentities.size === 0) {
+    fail(
+      "release/published-document-lanes.json records no withdrawn identity that " +
+        "current code could still be carrying; this check would pass vacuously",
+    );
+  }
   const retainedCodeFiles = new Set([
     path.join(
       repositoryRoot,
@@ -1084,9 +1112,10 @@ function checkCurrentLaneSemanticResidue() {
   );
   for (const filePath of currentCodeFiles) {
     const source = read(filePath);
+    // The prose spellings stay hand-listed: they are phrases rather than
+    // identities, so nothing derives them.
     for (const stale of [
-      "forms.takoform.com/v1alpha3",
-      "edge.forms.takoform.com/v1alpha1",
+      ...withdrawnIdentities,
       "v1alpha3 client",
       "v1alpha3 reference host",
       "Host API v1alpha3 lane",
