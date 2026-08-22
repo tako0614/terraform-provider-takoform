@@ -55,12 +55,16 @@ splitting them by "does a de-facto standard API exist":
 | Pub/sub fanout (SNS, EventGrid) | none | **Form Family** |
 | Scheduler (Cloud Scheduler, EventBridge Scheduler) | none | **Form Family** |
 | Vector index (Pinecone, Vertex, serverless vector stores) | none | **Form Family** |
-| Workflow engine (Step Functions, Durable Functions) | none | family candidate |
+| Durable code-defined execution (Workflows, Temporal, Durable Functions, Inngest) | none (Temporal is open source, not a de-facto standard) | **Form** (edge family addition) |
+| Declarative state machines (Step Functions ASL, Cloud Workflows) | none | family candidate |
+| Addressable actors (Durable Objects) | none | **Form** (edge family addition) |
 | Event bus/router (EventBridge) | none | family candidate |
 | Realtime client push (managed WebSocket) | none | family candidate |
 | Identity pool management (Cognito, Firebase Auth admin) | none | family candidate |
 | Batch compute | none | family candidate |
-| Addressable actors (Durable Objects) | none | family candidate |
+| Custom metrics/analytics (Analytics Engine) | OTLP covers export; the query side is niche | skip |
+| Trace/diagnostic taps (Tail Workers) | single-vendor diagnostics | skip |
+| Managed browser rendering | single-vendor, niche | skip |
 | Edge workers (Workers, Fastly Compute) | none | **Form Family** (edge, existing) |
 
 The split is not "clouds have no originality" — it is an asymmetry: **data
@@ -111,10 +115,32 @@ The Edge family's `AtLeastOnceQueue` is not the same Form as `queue`'s: one is
 push-delivery into a worker consumer, the other is pull with visibility
 semantics — two proven shapes, two contracts, per decision 0008.
 
-`workflow`, `eventbus`, `realtime`, `identity`, `batch`, and `actor` are
-recorded as family candidates: each satisfies the rule, and each is deferred
-for its own reason (state-language size, coupling to `workflow`, protocol
-churn, security surface, narrower demand, single-vendor shape) rather than by
+**The Edge family also closes its own gaps.** Its platform grew two core
+primitives after the family's shapes were fixed, and both sit squarely on the
+locked side of the survey, in the family's own model:
+
+- `DurableWorkflow` — the code-defined durable-execution shape (a workflow is
+  a class on a worker with `step.do`/`step.sleep`/`waitForEvent`, step results
+  persisted, at-least-once execution with memoized replay); instances are
+  runtime data reached through a `workflow` binding, not Resources.
+- `ActorNamespace` — the addressable-actor shape (a class on a worker,
+  single-threaded per object, addressed by name/id, per-object storage and
+  alarms), reached through an `actor` binding.
+
+Both enter as new `0.1.0` Experimental identities with their own ABI and
+binding contracts; the published v1beta1 definitions are frozen and unchanged
+(decision 0037), and the existing Edge Forms adopt the decision-0045
+external-service declaration only when a graduation mints their next
+identities. The standalone `actor` family candidate is retired into this
+addition — it returns only if a second platform's actor shape warrants a
+family of its own. What the platform has that stays out is recorded in the
+survey: analytics, tail taps, and browser rendering, each with its reason.
+
+`workflow` (the declarative state-machine shape — the durable code-defined
+shape lands in the Edge family instead), `eventbus`, `realtime`, `identity`,
+and `batch` are recorded as family candidates: each satisfies the rule, and
+each is deferred for its own reason (state-language size, coupling to
+`workflow`, protocol churn, security surface, narrower demand) rather than by
 the rule.
 
 What is deliberately **excluded**: every integrate-side row above. The
@@ -138,8 +164,8 @@ own conformance obligations.
 
 ## Consequences
 
-The lineup grows to eight families with six recorded candidates, every one
-justified by the same sentence, and the catalog stops being one platform's
-silhouette. Where the industry already solved portability, Takoform rides the
+The lineup grows to eight families plus two Edge-family additions, with five
+recorded candidates, every one justified by the same sentence, and the
+catalog stops being one platform's silhouette. Where the industry already solved portability, Takoform rides the
 standard instead of fighting it — which is also what keeps the spec small
 enough to graduate.
