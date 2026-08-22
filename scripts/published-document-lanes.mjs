@@ -24,6 +24,7 @@
 // It deliberately reads the BUILT site rather than the sources, because the
 // thing that must not move is the address a reader fetches.
 
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -138,6 +139,44 @@ function writeLedger(found, previous) {
   );
 }
 
+// The refusal to forget lives in the writer, and a writer is something a
+// person chooses to run. An entry deleted by hand — from the ledger and from
+// the tree in one edit — would leave nothing behind to notice it, so the same
+// promise is enforced here against the ledger's own committed history, the way
+// scripts/deploy.mjs enforces the schema identity ledger.
+//
+// A recorded address must still be one of two things: served under the lane it
+// declared, or withdrawn under that same lane. Vanishing is neither.
+function ledgerHistory() {
+  const git = (...args) => {
+    try {
+      return execFileSync("git", args, {
+        cwd: repositoryRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+    } catch {
+      return undefined;
+    }
+  };
+  const relative = path.relative(repositoryRoot, ledgerPath);
+  const log = git("log", "--full-history", "--format=%H", "HEAD", "--", relative);
+  if (log === undefined) return undefined;
+  const revisions = [];
+  for (const commit of log.split("\n").filter((value) => value !== "")) {
+    const blob = git("show", `${commit}:${relative}`);
+    if (blob === undefined) continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(blob);
+    } catch {
+      continue;
+    }
+    revisions.push({ commit, documents: parsed?.documents ?? [] });
+  }
+  return revisions;
+}
+
 const found = scanPublishedDocuments();
 const previous = readLedger();
 
@@ -181,6 +220,39 @@ for (const [documentPath, retiredLane] of retired) {
   }
 }
 
+const history = ledgerHistory();
+let historyNote = "no committed ledger history here, so no erasure was refuted";
+if (history !== undefined && history.length > 0) {
+  // One address answered for across many revisions is one problem, not one per
+  // revision it appears in.
+  const reported = new Set();
+  for (const { commit, documents } of history) {
+    for (const entry of documents) {
+      if (reported.has(entry.path)) continue;
+      reported.add(entry.path);
+      const servedLane = recorded.get(entry.path);
+      const withdrawnLane = retired.get(entry.path);
+      if (servedLane === undefined && withdrawnLane === undefined) {
+        problems.push(
+          `${entry.path} declared ${entry.apiVersion} at ${commit.slice(0, 8)} ` +
+            `and is in neither list now; an address is served or withdrawn, ` +
+            `never erased`,
+        );
+        continue;
+      }
+      const lane = servedLane ?? withdrawnLane;
+      if (lane !== entry.apiVersion) {
+        problems.push(
+          `${entry.path} declared ${entry.apiVersion} at ${commit.slice(0, 8)} ` +
+            `and is now recorded as ${lane}; the ledger records what an address ` +
+            `meant and does not restate it`,
+        );
+      }
+    }
+  }
+  historyNote = `${history.length} committed ledger revision(s) checked`;
+}
+
 const added = [...found.keys()].filter(
   (each) => !recorded.has(each) && !retired.has(each),
 );
@@ -203,6 +275,7 @@ process.stdout.write(
   `published document lanes OK: ${recorded.size} addresses hold their lane` +
     (retired.size > 0 ? `, ${retired.size} withdrawn` : "") +
     (added.length > 0
-      ? `, ${added.length} newly published address(es) not yet recorded\n`
-      : "\n"),
+      ? `, ${added.length} newly published address(es) not yet recorded`
+      : "") +
+    `; ${historyNote}\n`,
 );

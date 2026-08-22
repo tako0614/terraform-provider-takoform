@@ -144,11 +144,84 @@ function observationDetail(observation) {
   }
 }
 
+// A withdrawn identity is not served any more, so there is no candidate to
+// compare it against and it is absent from the inspection above (decision
+// 0037). What still has to hold is the half that made retirement safe: the
+// address may stop answering, and it may keep answering the bytes it was
+// published with, but it may never answer something NEW. A reader who kept
+// that URL is owed a 404 or the document they remember — never a different one
+// wearing its name.
+//
+// Unreachable is therefore a pass. Only a 200 carrying different bytes fails,
+// so a network problem during a deploy cannot manufacture a refusal about an
+// address nobody is publishing.
+export async function inspectRetiredSchemaIdentities(
+  retired,
+  { fetchImpl = globalThis.fetch, lookupImpl = lookup } = {},
+) {
+  return Promise.all(
+    retired.map(async ({ id, sha256: publishedDigest }) => {
+      try {
+        await lookupImpl(new URL(id).hostname);
+      } catch {
+        return { id, kind: "withdrawn", detail: "origin does not resolve" };
+      }
+      let response;
+      try {
+        response = await fetchImpl(id, {
+          headers: { "cache-control": "no-cache", pragma: "no-cache" },
+          redirect: "error",
+        });
+      } catch (error) {
+        return { id, kind: "withdrawn", detail: errorDetail(error) };
+      }
+      if (response.status !== 200) {
+        return { id, kind: "withdrawn", detail: `HTTP ${response.status}` };
+      }
+      let served;
+      try {
+        served = Buffer.from(await response.arrayBuffer());
+      } catch (error) {
+        return { id, kind: "withdrawn", detail: errorDetail(error) };
+      }
+      // The ledger records `sha256:<hex>`; this module's digests are bare hex.
+      const servedDigest = `sha256:${sha256(served)}`;
+      return servedDigest === publishedDigest
+        ? { id, kind: "withdrawn-still-served", detail: servedDigest }
+        : { id, kind: "reused", detail: servedDigest, publishedDigest };
+    }),
+  );
+}
+
+export function enforceRetiredSchemaIdentitiesAreNotReused(observations) {
+  const reused = observations.filter(({ kind }) => kind === "reused");
+  if (reused.length > 0) {
+    throw new Error(
+      `withdrawn schema identities answer different bytes: ` +
+        reused
+          .map(
+            ({ id, publishedDigest, detail }) =>
+              `${id} was published as ${publishedDigest} and now serves ${detail}`,
+          )
+          .join("; ") +
+        `; a withdrawn address may stop answering or keep answering what it ` +
+        `published, never something new`,
+    );
+  }
+  return {
+    withdrawn: observations.length,
+    stillServed: observations.filter(
+      ({ kind }) => kind === "withdrawn-still-served",
+    ).length,
+  };
+}
+
 export function enforceSchemaPublicationNoOverwrite(
   observations,
   {
     initialOriginMintAcknowledged = false,
     publishedIdentityIds = [],
+    retiredIdentityIds = [],
   } = {},
 ) {
   if (observations.length === 0) {
@@ -172,13 +245,22 @@ export function enforceSchemaPublicationNoOverwrite(
     }
     observationsById.set(observation.id, observation);
   }
-  const published = publishedIdentityIds.map((id) => {
-    const observation = observationsById.get(id);
-    if (!observation) {
-      throw new Error(`deployed source ledger identity ${id} was not inspected`);
-    }
-    return observation;
-  });
+  // An identity the candidate has withdrawn is deliberately absent from the
+  // inspection: it has no candidate bytes to compare against any more. Holding
+  // the deployed ledger's copy of it to an observation would make the first
+  // recorded withdrawal fail the deploy it was meant to be possible under.
+  const withdrawn = new Set(retiredIdentityIds);
+  const published = publishedIdentityIds
+    .filter((id) => !withdrawn.has(id))
+    .map((id) => {
+      const observation = observationsById.get(id);
+      if (!observation) {
+        throw new Error(
+          `deployed source ledger identity ${id} was not inspected`,
+        );
+      }
+      return observation;
+    });
 
   if (observations.every(({ kind }) => kind === "match")) {
     if (initialOriginMintAcknowledged) {

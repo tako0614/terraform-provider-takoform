@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 
 import {
+  enforceRetiredSchemaIdentitiesAreNotReused,
   enforceSchemaPublicationNoOverwrite,
   INITIAL_SCHEMA_ORIGIN_MINT_ACK,
+  inspectRetiredSchemaIdentities,
   inspectSchemaPublicationIdentities,
   readPublishedDigest,
 } from "./schema-publication-guard.mjs";
@@ -342,4 +344,95 @@ test("website deploy parsing cannot route a release surface through website writ
   expect(result.exitCode).toBe(1);
   expect(result.stderr.toString()).toContain("usage:");
   expect(result.stderr.toString()).not.toContain("publishing");
+});
+
+// Decision 0037. Retirement had to be possible without the deploy refusing it,
+// and impossible to use as a way to change what an address means.
+describe("withdrawn schema identities", () => {
+  const retiredId = "https://forms.takoform.com/schemas/gone.json";
+  const publishedBytes = "gone\n";
+  const publishedDigest = `sha256:${createHash("sha256").update(publishedBytes).digest("hex")}`;
+  const retired = [
+    {
+      id: retiredId,
+      public: "website/public/schemas/gone.json",
+      retiredBecause: "pre-Stable lane withdrawn",
+      sha256: publishedDigest,
+      source: "spec/schemas/gone.json",
+    },
+  ];
+
+  test("a withdrawal is not held to an observation it cannot have", async () => {
+    const observations = await inspectSchemaPublicationIdentities(
+      [schema("kept")],
+      {
+        fetchImpl: async () => new Response("kept\n", { status: 200 }),
+        lookupImpl: dnsPresent,
+      },
+    );
+
+    // The deployed ledger still lists the identity the candidate withdrew.
+    // Before decision 0037 was carried into this guard, that combination threw
+    // and no first retirement could ever deploy.
+    expect(() =>
+      enforceSchemaPublicationNoOverwrite(observations, {
+        publishedIdentityIds: [schema("kept").id, retiredId],
+      }),
+    ).toThrow(`deployed source ledger identity ${retiredId} was not inspected`);
+
+    expect(
+      enforceSchemaPublicationNoOverwrite(observations, {
+        publishedIdentityIds: [schema("kept").id, retiredId],
+        retiredIdentityIds: [retiredId],
+      }),
+    ).toEqual({ count: 1, mode: "EXISTING_IDENTITIES_UNCHANGED" });
+  });
+
+  test("an address that stopped answering passes", async () => {
+    const observations = await inspectRetiredSchemaIdentities(retired, {
+      fetchImpl: async () => new Response("", { status: 404 }),
+      lookupImpl: dnsPresent,
+    });
+    expect(observations[0].kind).toBe("withdrawn");
+    expect(enforceRetiredSchemaIdentitiesAreNotReused(observations)).toEqual({
+      withdrawn: 1,
+      stillServed: 0,
+    });
+  });
+
+  test("an address still answering what it published passes", async () => {
+    const observations = await inspectRetiredSchemaIdentities(retired, {
+      fetchImpl: async () => new Response(publishedBytes, { status: 200 }),
+      lookupImpl: dnsPresent,
+    });
+    expect(observations[0].kind).toBe("withdrawn-still-served");
+    expect(enforceRetiredSchemaIdentitiesAreNotReused(observations)).toEqual({
+      withdrawn: 1,
+      stillServed: 1,
+    });
+  });
+
+  test("an address answering something new is refused", async () => {
+    const observations = await inspectRetiredSchemaIdentities(retired, {
+      fetchImpl: async () => new Response("something else\n", { status: 200 }),
+      lookupImpl: dnsPresent,
+    });
+    expect(observations[0].kind).toBe("reused");
+    expect(() => enforceRetiredSchemaIdentitiesAreNotReused(observations)).toThrow(
+      "answer different bytes",
+    );
+  });
+
+  test("an unreachable origin is a withdrawal, not a refusal", async () => {
+    const observations = await inspectRetiredSchemaIdentities(retired, {
+      fetchImpl: async () => {
+        throw new Error("connection reset");
+      },
+      lookupImpl: dnsPresent,
+    });
+    expect(observations[0].kind).toBe("withdrawn");
+    expect(() =>
+      enforceRetiredSchemaIdentitiesAreNotReused(observations),
+    ).not.toThrow();
+  });
 });

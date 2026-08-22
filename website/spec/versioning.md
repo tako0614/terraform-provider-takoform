@@ -39,8 +39,10 @@ in place instead. One published address then answered about a different contract
 than it had answered about the day before, which the retention rule of
 [decision 0035](decisions/0035-beta-contracts-ship-in-stable-provider-v2-1.md)
 forbids. The corpus now lives at `conformance/portable-host-v1beta1`, named for
-its lane; `conformance/portable-host-v3` holds the v1alpha3 bytes again; and two
-checks in `bun run check` refuse both the symptom and the cause.
+its lane, and two checks in `bun run check` refuse both the symptom and the
+cause. The v1alpha3 corpus was restored to its own address first and then
+withdrawn with the family it measured
+([decision 0037](decisions/0037-immutability-begins-at-stable.md)).
 
 So: **a new artifact whose name carries a version word names the lane it
 describes, never its place in a sequence.** Already-published relative names are
@@ -73,7 +75,8 @@ That is decided by what has already published it.
 | Every `spec/schemas/` filename and `$id` | [`../release/public-schema-identities.json`](../release/public-schema-identities.json), enforced append-only across the whole committed history of that ledger |
 | `packages.forms.takoform.com/v1alpha4` | it is inside published schema bytes |
 | The lane each published document declares | [`../release/published-document-lanes.json`](../release/published-document-lanes.json) |
-| `forms.takoform.com/v1alpha1`, `/v1alpha2`, `/v1alpha3`, `edge.forms.takoform.com/v1alpha1`, and every published package byte | retained history |
+| `forms.takoform.com/v1alpha1`, `/v1alpha2`, `/v1alpha3`, and every published package byte | retained history |
+| `edge.forms.takoform.com/v1alpha1` and the `forms.takoform.com/v1alpha3` host corpus | **withdrawn** under [decision 0037](decisions/0037-immutability-begins-at-stable.md); recorded in [`../release/published-document-lanes.json`](../release/published-document-lanes.json) |
 | Internal package, directory, and script names | nothing; they are free to be made absolute |
 
 Since [decision 0009](decisions/0009-form-families-and-namespaced-api-versions.md)

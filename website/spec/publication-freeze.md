@@ -75,8 +75,12 @@ Publication is per identity, not per product lane.
   contracts remain immutable.
 - The 34 Legacy Form Packages and retained admission evidence remain
   byte-for-byte history.
-- The old `edge.forms.takoform.com/v1alpha1` candidate tree is retained as
-  source history. The Beta family was minted in a new directory and identity.
+- The Beta family was minted in a new directory and identity. The old
+  `edge.forms.takoform.com/v1alpha1` candidate tree and the
+  `forms.takoform.com/v1alpha3` host corpus that measured it were later
+  withdrawn under [decision 0037](decisions/0037-immutability-begins-at-stable.md);
+  their addresses are recorded in `release/published-document-lanes.json` and
+  their bytes remain in this repository's history.
 
 Only contracts that have satisfied the recorded qualification obligations may
 be promoted to stable `v1`/`1.0.0` identities by a Takoform lifecycle

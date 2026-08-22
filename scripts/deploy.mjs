@@ -51,8 +51,10 @@ import {
   readPublicSchemaIdentityLedger,
 } from "./public-schema-manifest.mjs";
 import {
+  enforceRetiredSchemaIdentitiesAreNotReused,
   enforceSchemaPublicationNoOverwrite,
   INITIAL_SCHEMA_ORIGIN_MINT_ACK,
+  inspectRetiredSchemaIdentities,
   inspectSchemaPublicationIdentities,
   readPublishedDigest,
 } from "./schema-publication-guard.mjs";
@@ -994,10 +996,13 @@ const readSchemaPublicationObservations = () =>
       id: schema.id,
     })),
   );
+const retiredSchemaIdentities =
+  readRetiredPublicSchemaIdentities(publicationRepo);
 const enforceCurrentSchemaPublicationPrecondition = (observations) =>
   enforceSchemaPublicationNoOverwrite(observations, {
     initialOriginMintAcknowledged: acknowledgedInitialSchemaOriginMint,
     publishedIdentityIds: deployedSchemaIdentities.map(({ id }) => id),
+    retiredIdentityIds: retiredSchemaIdentities.map(({ id }) => id),
   });
 const inspectSchemaPublicationPrecondition = async () =>
   enforceCurrentSchemaPublicationPrecondition(
@@ -1034,6 +1039,27 @@ process.stdout.write(
   `schema identity precondition ${schemaPublicationPrecondition.mode} (${schemaPublicationPrecondition.count} candidate identities` +
     `${schemaPublicationPrecondition.newCount === undefined ? "" : `, ${schemaPublicationPrecondition.newCount} new`})\n`,
 );
+
+// The withdrawn half of the same promise (decision 0037). A retired address is
+// allowed to stop answering and allowed to keep answering what it published;
+// it is never allowed to answer something else. Unreachable passes, so this
+// cannot turn a network problem into a refusal.
+if (retiredSchemaIdentities.length > 0) {
+  let withdrawnPrecondition;
+  try {
+    withdrawnPrecondition = enforceRetiredSchemaIdentitiesAreNotReused(
+      await inspectRetiredSchemaIdentities(retiredSchemaIdentities),
+    );
+  } catch (error) {
+    die(
+      `withdrawn schema identity proof failed before publication; production is unchanged: ${error.message}`,
+    );
+  }
+  process.stdout.write(
+    `withdrawn schema identities OK: ${withdrawnPrecondition.withdrawn} recorded` +
+      `, ${withdrawnPrecondition.stillServed} still answering their published bytes\n`,
+  );
+}
 
 const domainOrigins = HOSTNAMES.map((hostname) => ({
   hostname,

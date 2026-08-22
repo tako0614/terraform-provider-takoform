@@ -183,13 +183,13 @@ probe, concurrency/idempotency rules, stable errors, and required cross-repo
 black-box checks. The retained-lane provider client consumes this contract in
 adversarial HTTP tests.
 
-`portable-host-v3/` is the retained `forms.takoform.com/v1alpha3` corpus: 114
-retained v1alpha3 checks, published at the address that has always named them. It is
-retained bytes rather than a runnable corpus — the v1alpha3 runner became the
-v1beta1 runner instead of being copied — so `bun run check` guarantees that it
-does not change rather than that it executes. Its own
-`portable-host-v3/RETAINED.md` states why it keeps a generation-numbered name
-while the current corpus does not.
+The `forms.takoform.com/v1alpha3` corpus was withdrawn. It measured the
+`edge.forms.takoform.com/v1alpha1` family, and once that family was withdrawn
+the corpus named Form contracts no longer in the tree — a corpus that cannot
+resolve what it measures proves nothing by existing. Both are recorded in
+[`../release/published-document-lanes.json`](../release/published-document-lanes.json)
+with the lane each declared, and the bytes remain in this repository's history
+(decision 0037).
 
 Every count this page states about a corpus — the size of a check matrix, of an
 error taxonomy, of a retryable set — is bound by `bun run check:public-surfaces`

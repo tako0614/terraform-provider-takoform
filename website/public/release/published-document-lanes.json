@@ -342,14 +342,6 @@
       "apiVersion": "forms.takoform.com/v1alpha2"
     },
     {
-      "path": "conformance/portable-host-v3/contract.json",
-      "apiVersion": "forms.takoform.com/v1alpha3"
-    },
-    {
-      "path": "conformance/portable-host-v3/fixtures/synthetic-module-worker-second-definition.json",
-      "apiVersion": "edge.forms.takoform.com/v1alpha1"
-    },
-    {
       "path": "conformance/revocation-checkpoint-v1/positive/checkpoint-1.json",
       "apiVersion": "trust.forms.takoform.com/v1alpha1"
     },
@@ -560,154 +552,164 @@
   ],
   "retired": [
     {
+      "path": "conformance/portable-host-v3/contract.json",
+      "apiVersion": "forms.takoform.com/v1alpha3",
+      "retiredBecause": "the forms.takoform.com/v1alpha3 host corpus measured the edge.forms.takoform.com/v1alpha1 family, which was withdrawn, so it named Form contracts no longer in the tree; withdrawn while Takoform is pre-Stable (decision 0037) and the bytes stay in this repository's history"
+    },
+    {
+      "path": "conformance/portable-host-v3/fixtures/synthetic-module-worker-second-definition.json",
+      "apiVersion": "edge.forms.takoform.com/v1alpha1",
+      "retiredBecause": "the forms.takoform.com/v1alpha3 host corpus measured the edge.forms.takoform.com/v1alpha1 family, which was withdrawn, so it named Form contracts no longer in the tree; withdrawn while Takoform is pre-Stable (decision 0037) and the bytes stay in this repository's history"
+    },
+    {
       "path": "forms/candidates/edge/v1alpha1/at-least-once-queue/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/at-least-once-queue/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/edge-kv-namespace/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/edge-kv-namespace/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/module-worker/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/module-worker/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/object-bucket/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/object-bucket/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/queue-consumer/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/queue-consumer/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/sqlite-database/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/sqlite-database/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/sqlite-migration-application/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/sqlite-migration-application/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/sqlite-migration-set/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/sqlite-migration-set/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/static-asset-bundle/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/static-asset-bundle/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-bundle/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-bundle/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-cron-trigger/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-cron-trigger/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-custom-domain/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-custom-domain/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-deployment/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-deployment/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-endpoint/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-endpoint/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-version/definition.json",
       "apiVersion": "edge.forms.takoform.com/v1alpha1",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "the edge.forms.takoform.com/v1alpha1 family was superseded by v1beta1 and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
     },
     {
       "path": "forms/candidates/edge/v1alpha1/worker-version/package-index.json",
       "apiVersion": "packages.forms.takoform.com/v1alpha4",
-      "retiredBecause": "superseded by the edge.forms.takoform.com/v1beta1 family and withdrawn while Takoform is pre-Stable (decision 0037); the bytes stay in this repository's history"
+      "retiredBecause": "this package index addressed a Form of the withdrawn edge.forms.takoform.com/v1alpha1 family, so it stopped answering with the Form it indexed; its envelope packages.forms.takoform.com/v1alpha4 is current and is still declared by 15 served package indexes"
     }
   ]
 }

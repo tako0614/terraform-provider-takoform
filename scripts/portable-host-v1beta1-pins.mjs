@@ -69,14 +69,7 @@ let pinnedForms = 0;
 for (const probe of Object.values(contract.runnerInput)) {
   const ref = probe?.identity?.formRef;
   if (ref === undefined) continue;
-  // The one-time alpha-to-Beta mint keeps the corpus's behavior and Kind
-  // roster while replacing every exact identity. Once --write completes all
-  // refs match by family and this retained-alpha fallback is no longer used.
-  const candidate =
-    formsByFamily.get(formFamily(ref)) ??
-    (ref.apiVersion === "edge.forms.takoform.com/v1alpha1"
-      ? formsByKind.get(ref.kind)
-      : undefined);
+  const candidate = formsByFamily.get(formFamily(ref));
   if (candidate === undefined) {
     throw new Error(
       `portable-host-v1beta1 references unknown current Form family ${ref.apiVersion}/${ref.kind}`,
