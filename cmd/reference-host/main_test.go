@@ -133,3 +133,16 @@ func TestReferenceHostDefaultsToTheMeasuredCorpus(t *testing.T) {
 		t.Fatalf("internal/workerauthoring no longer verifies %s", corpus)
 	}
 }
+
+// The loopback boundary is enforced, not stated: a non-loopback bind is
+// refused before serving, whatever --addr said.
+func TestReferenceHostRefusesNonLoopbackAddresses(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runErr := run([]string{"--addr", "0.0.0.0:0", "--repo-root", root}, io.Discard)
+	if runErr == nil || !strings.Contains(runErr.Error(), "loopback") {
+		t.Fatalf("non-loopback bind was not refused: %v", runErr)
+	}
+}
