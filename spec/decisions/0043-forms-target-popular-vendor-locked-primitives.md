@@ -160,15 +160,16 @@ What is deliberately **excluded**: every integrate-side row above. The
 earlier `postgres`-family idea dies here — PostgreSQL is a standard, so it is
 an integration target.
 
-The same principle is adopted ecosystem-wide, and for takoserver it runs in
-both directions: where a de-facto standard exists, takoserver **serves that
-standard API itself** (an S3-compatible endpoint, an OpenAI-compatible
-Responses API endpoint, onward down the same roadmap) rather than inventing a
-surface; where none exists, takoserver implements the Takoform contracts as a
-host. One server offers the standard half as standards and the vendor-locked
-half as Takoform, and a workload connects to either through the same
-decision-0045 sealed slots. That obligation lives with takoserver; this
-record states the shared principle.
+This record binds only Takoform: it decides which categories this project
+specifies and which it reaches through decision-0045 sealed slots. The
+maintainer has directed the complementary half for takoserver — serving the
+de-facto standard APIs themselves (an S3-compatible endpoint, an
+OpenAI-compatible Responses API endpoint) while implementing the Takoform
+contracts as a host for the vendor-locked remainder — and that direction is
+recorded and coordinated where cross-repository scope lives, the takos-control
+task ledger (TASK-0032); takoserver's own decision record adopts it there.
+What this ADR contributes to that picture is the boundary itself: Takoform
+exists to specify exactly the non-standard remainder.
 
 ## Enforcement
 
