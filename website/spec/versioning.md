@@ -169,9 +169,28 @@ The first reproducible public version of a new Form line is `0.1.0`.
 - A compatible correction that does not change the accepted desired contract
   increments the patch version.
 
-Every released `0.x` identity remains immutable. Experimental means the next
-release may break according to this policy; it never permits overwriting the
-current release.
+A `0.x` identity is never OVERWRITTEN: while it is served it means exactly what
+it meant when it was published, and a breaking correction mints a new identity
+rather than editing an occupied one. That rule has no exceptions and is what
+makes an exact FormRef worth recording in state.
+
+What a `0.x` identity does NOT carry is a promise to be served forever. It MAY
+be **withdrawn** while Takoform is pre-Stable
+([decision 0037](decisions/0037-immutability-begins-at-stable.md)); permanence
+begins at Stable, with the identity that earns it. Withdrawal is a recorded act
+and never a silence: the identity moves to the `retired` list of the ledger that
+published it — `release/public-schema-identities.json` for a schema,
+`release/published-document-lanes.json` for a served document — keeping the
+bytes and the lane it was published with, so the ledger still answers what that
+address meant after it stops answering. A writer will not drop a published
+address for you, a withdrawn address may not be reused for something else, and
+none of this weakens the rule above: an identity that is still served must still
+match, byte for byte.
+
+Retiring an identity does not destroy it. The bytes stay in this repository's
+history and under its immutable tags, and a released provider embeds the schemas
+it needs rather than fetching them, so a withdrawal changes what this project
+serves and not what an installed client can do.
 
 The 15 current Beta family Forms are exactly `0.1.0` and Experimental. A
 breaking correction to the Beta protocol or family contract mints

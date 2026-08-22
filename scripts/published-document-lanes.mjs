@@ -11,9 +11,15 @@
 // gate compared the corpus against itself.
 //
 // This ledger records which lane each published document declares. A new
-// document may be added. An existing one may never change what it means, and
-// may never disappear: both are the same promise decision 0035 makes about
-// v1alpha3 schemas, specifications, operation tables, public URLs, and bytes.
+// document may be added. An existing one may never change what it means.
+//
+// While Takoform is pre-Stable an address may be WITHDRAWN, and decision 0037
+// makes that a recorded act rather than a deletion: the entry moves to
+// `retired`, keeping the lane it declared, so the ledger still answers what
+// that URL meant. What stops is the promise that it keeps answering. Silence
+// is still refused — `--write` will not drop a recorded document, because a
+// regenerating writer that quietly forgets an address is the same laundering
+// this file exists to prevent.
 //
 // It deliberately reads the BUILT site rather than the sources, because the
 // thing that must not move is the address a reader fetches.
@@ -75,30 +81,72 @@ function readLedger() {
   for (const entry of ledger.documents ?? []) {
     recorded.set(entry.path, entry.apiVersion);
   }
-  return recorded;
+  const retired = new Map();
+  for (const [index, entry] of (ledger.retired ?? []).entries()) {
+    if (
+      typeof entry?.retiredBecause !== "string" ||
+      entry.retiredBecause.trim() === ""
+    ) {
+      throw new Error(
+        `${ledgerPath}: retired ${index} must say why the address was withdrawn`,
+      );
+    }
+    if (recorded.has(entry.path)) {
+      throw new Error(
+        `${ledgerPath}: ${entry.path} is both published and retired; ` +
+          `an address is one or the other`,
+      );
+    }
+    retired.set(entry.path, entry.apiVersion);
+  }
+  return { recorded, retired };
 }
 
-function writeLedger(found) {
+function writeLedger(found, previous) {
+  const dropped = [...previous.recorded.keys()].filter(
+    (each) => !found.has(each),
+  );
+  if (dropped.length > 0) {
+    process.stderr.write(
+      `Refusing to forget ${dropped.length} recorded address(es):\n`,
+    );
+    for (const each of dropped) {
+      process.stderr.write(`- ${each}\n`);
+    }
+    process.stderr.write(
+      "\nA writer that regenerates from what happens to be on disk would drop a " +
+        "published address without anyone deciding to. Move each entry to the " +
+        "ledger's `retired` list, with the lane it declared and why it was " +
+        "withdrawn, and run this again.\n",
+    );
+    process.exit(1);
+  }
   const documents = [...found.entries()]
+    .filter(([documentPath]) => !previous.retired.has(documentPath))
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([documentPath, apiVersion]) => ({ path: documentPath, apiVersion }));
-  writeFileSync(
-    ledgerPath,
-    `${JSON.stringify({ kind: LEDGER_KIND, documents }, null, 2)}\n`,
-  );
+  const ledger = { kind: LEDGER_KIND, documents };
+  if (previous.retired.size > 0) {
+    ledger.retired = JSON.parse(readFileSync(ledgerPath, "utf8")).retired;
+  }
+  writeFileSync(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`);
   process.stdout.write(
-    `recorded the lane of ${documents.length} published documents\n`,
+    `recorded the lane of ${documents.length} published documents` +
+      (previous.retired.size > 0
+        ? `, ${previous.retired.size} retired\n`
+        : "\n"),
   );
 }
 
 const found = scanPublishedDocuments();
+const previous = readLedger();
 
 if (mode === "--write") {
-  writeLedger(found);
+  writeLedger(found, previous);
   process.exit(0);
 }
 
-const recorded = readLedger();
+const { recorded, retired } = previous;
 const problems = [];
 
 for (const [documentPath, recordedLane] of recorded) {
@@ -106,7 +154,8 @@ for (const [documentPath, recordedLane] of recorded) {
   if (currentLane === undefined) {
     problems.push(
       `${documentPath} declared ${recordedLane} and is no longer published; ` +
-        `a published address is retained history and does not disappear`,
+        `withdraw it by moving it to the ledger's retired list, so the ledger ` +
+        `still answers what that address meant`,
     );
     continue;
   }
@@ -119,7 +168,22 @@ for (const [documentPath, recordedLane] of recorded) {
   }
 }
 
-const added = [...found.keys()].filter((each) => !recorded.has(each));
+// A retired address that answers again is the dangerous case the ledger exists
+// for: the URL a reader knows now means whatever was published on top of it.
+for (const [documentPath, retiredLane] of retired) {
+  const currentLane = found.get(documentPath);
+  if (currentLane !== undefined) {
+    problems.push(
+      `${documentPath} was retired declaring ${retiredLane} and is published ` +
+        `again declaring ${currentLane}; a withdrawn address is not free real ` +
+        `estate, so serve this at a new address`,
+    );
+  }
+}
+
+const added = [...found.keys()].filter(
+  (each) => !recorded.has(each) && !retired.has(each),
+);
 
 if (problems.length > 0) {
   process.stderr.write(
@@ -129,15 +193,15 @@ if (problems.length > 0) {
     process.stderr.write(`- ${problem}\n`);
   }
   process.stderr.write(
-    "\nRun bun run sync:published-document-lanes only after the address that " +
-      "moved has been restored; the ledger records history and never launders " +
-      "a change to it.\n",
+    "\nThe ledger records history. It never launders a change to it, and " +
+      "sync:published-document-lanes will not forget an address for you.\n",
   );
   process.exit(1);
 }
 
 process.stdout.write(
   `published document lanes OK: ${recorded.size} addresses hold their lane` +
+    (retired.size > 0 ? `, ${retired.size} withdrawn` : "") +
     (added.length > 0
       ? `, ${added.length} newly published address(es) not yet recorded\n`
       : "\n"),

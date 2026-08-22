@@ -109,16 +109,95 @@ export function readPublicSchemaIdentityLedger(repositoryRoot) {
   );
 }
 
+// A published identity may be withdrawn while Takoform is pre-Stable, and the
+// withdrawal is a recorded act rather than a deletion (decision 0037). The
+// retired entry carries the bytes the identity had when it was served, so the
+// ledger still answers what that URL meant; what it stops promising is that
+// the URL keeps answering. Retirement never launders a CHANGE: an identity
+// that is still served must still match, and a retired one must record the
+// same bytes it was published with.
+export function parseRetiredPublicSchemaIdentities(raw, label = "ledger") {
+  let document;
+  try {
+    document = JSON.parse(raw);
+  } catch (error) {
+    fail(`${label} is invalid JSON (${error.message})`);
+  }
+  if (document?.retired === undefined) {
+    return [];
+  }
+  if (!Array.isArray(document.retired)) {
+    fail(`${label} retired must be an array when present`);
+  }
+
+  const retired = [];
+  const seenIDs = new Set();
+  for (const [index, identity] of document.retired.entries()) {
+    const keys =
+      identity !== null && typeof identity === "object"
+        ? Object.keys(identity).sort()
+        : [];
+    if (keys.join(",") !== "id,public,retiredBecause,sha256,source") {
+      fail(
+        `${label} retired ${index} must have exactly id, sha256, source, public, retiredBecause`,
+      );
+    }
+    if (
+      typeof identity.retiredBecause !== "string" ||
+      identity.retiredBecause.trim() === ""
+    ) {
+      fail(`${label} retired ${index} must say why it was withdrawn`);
+    }
+    if (!SHA256.test(identity.sha256)) {
+      fail(`${label} retired ${index} has an invalid sha256`);
+    }
+    if (seenIDs.has(identity.id)) fail(`${label} duplicates retired id ${identity.id}`);
+    seenIDs.add(identity.id);
+    retired.push({ ...identity });
+  }
+  return retired;
+}
+
+export function readRetiredPublicSchemaIdentities(repositoryRoot) {
+  const ledgerPath = path.join(repositoryRoot, PUBLIC_SCHEMA_IDENTITY_LEDGER);
+  return parseRetiredPublicSchemaIdentities(
+    readFileSync(ledgerPath, "utf8"),
+    PUBLIC_SCHEMA_IDENTITY_LEDGER,
+  );
+}
+
 export function enforceAppendOnlyPublicSchemaIdentities(
   current,
   historicalSets,
+  retired = [],
 ) {
   const currentByID = new Map(current.map((identity) => [identity.id, identity]));
+  const retiredByID = new Map(retired.map((identity) => [identity.id, identity]));
   for (const { identities, label } of historicalSets) {
     for (const historical of identities) {
       const candidate = currentByID.get(historical.id);
       if (!candidate) {
-        fail(`${label} identity ${historical.id} was removed`);
+        const withdrawn = retiredByID.get(historical.id);
+        if (!withdrawn) {
+          fail(`${label} identity ${historical.id} was removed`);
+        }
+        if (
+          withdrawn.sha256 !== historical.sha256 ||
+          withdrawn.source !== historical.source ||
+          withdrawn.public !== historical.public
+        ) {
+          fail(
+            `${label} identity ${historical.id} was retired under different bytes; ` +
+              `a withdrawal records what was served, it does not restate it`,
+          );
+        }
+        continue;
+      }
+      if (retiredByID.has(historical.id)) {
+        fail(
+          `${label} identity ${historical.id} is both served and retired; ` +
+            `an identity is one or the other`,
+        );
       }
       if (
         candidate.sha256 !== historical.sha256 ||

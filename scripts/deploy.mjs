@@ -46,6 +46,7 @@ import {
   discoverPublicSchemas,
   enforceAppendOnlyPublicSchemaIdentities,
   parsePublicSchemaIdentityLedger,
+  readRetiredPublicSchemaIdentities,
   PUBLIC_SCHEMA_IDENTITY_LEDGER,
   readPublicSchemaIdentityLedger,
 } from "./public-schema-manifest.mjs";
@@ -735,6 +736,7 @@ try {
   enforceAppendOnlyPublicSchemaIdentities(
     schemaIdentities,
     historicalSets,
+    readRetiredPublicSchemaIdentities(publicationRepo),
   );
   process.stdout.write(
     `schema identity ledger retains ${schemaIdentities.length} identities across ${historicalSets.length} committed revision(s)\n`,
@@ -960,12 +962,16 @@ try {
     authorityGitRaw("cat-file", "blob", deployedLedgerObject),
     `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@deployed:${deployedSourceCommit}`,
   );
-  enforceAppendOnlyPublicSchemaIdentities(schemaIdentities, [
-    {
-      identities: deployedSchemaIdentities,
-      label: `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@deployed:${deployedSourceCommit}`,
-    },
-  ]);
+  enforceAppendOnlyPublicSchemaIdentities(
+    schemaIdentities,
+    [
+      {
+        identities: deployedSchemaIdentities,
+        label: `${PUBLIC_SCHEMA_IDENTITY_LEDGER}@deployed:${deployedSourceCommit}`,
+      },
+    ],
+    readRetiredPublicSchemaIdentities(publicationRepo),
+  );
 } catch (error) {
   die(
     `cannot bind the current production version to its retained schema authority: ${error.message}`,

@@ -38,4 +38,42 @@ describe("public schema identity history", () => {
       ),
     ).toThrow("identity https://forms.takoform.com/schemas/retained.json was changed");
   });
+
+  test("allows a recorded withdrawal of a retained identity", () => {
+    const retained = identity("retained");
+    expect(() =>
+      enforceAppendOnlyPublicSchemaIdentities(
+        [],
+        [{ identities: [retained], label: "previous" }],
+        [{ ...retained, retiredBecause: "pre-Stable lane withdrawn" }],
+      ),
+    ).not.toThrow();
+  });
+
+  test("rejects a withdrawal that restates the bytes it was published with", () => {
+    const retained = identity("retained");
+    expect(() =>
+      enforceAppendOnlyPublicSchemaIdentities(
+        [],
+        [{ identities: [retained], label: "previous" }],
+        [
+          {
+            ...identity("retained", `sha256:${"b".repeat(64)}`),
+            retiredBecause: "pre-Stable lane withdrawn",
+          },
+        ],
+      ),
+    ).toThrow("was retired under different bytes");
+  });
+
+  test("rejects an identity that is both served and retired", () => {
+    const retained = identity("retained");
+    expect(() =>
+      enforceAppendOnlyPublicSchemaIdentities(
+        [retained],
+        [{ identities: [retained], label: "previous" }],
+        [{ ...retained, retiredBecause: "pre-Stable lane withdrawn" }],
+      ),
+    ).toThrow("is both served and retired");
+  });
 });
