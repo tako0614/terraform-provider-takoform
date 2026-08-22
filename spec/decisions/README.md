@@ -42,3 +42,4 @@ record does not replace them.
 - [0037 — Immutability begins at Stable; a pre-Stable identity may be withdrawn](0037-immutability-begins-at-stable.md)
 - [0038 — A generation move is measured, and what it costs is recorded](0038-a-generation-move-is-measured-not-assumed.md)
 - [0039 — A Host API lane is minted for one of exactly two reasons](0039-a-lane-is-minted-for-one-of-two-reasons.md)
+- [0040 — The package envelope names a manifest format, not a Form generation](0040-the-package-envelope-is-a-format-not-an-axis.md)

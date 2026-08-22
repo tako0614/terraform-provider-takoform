@@ -95,7 +95,19 @@ change a Form or provider version.
 Current family packages use the `packages.forms.takoform.com/v1alpha4`
 envelope, which carries namespaced FormRef groups; the
 `packages.forms.takoform.com/v1alpha3` envelope remains the retained
-provider-v2 candidate profile. Content-addressed packages have no independent
+provider-v2 candidate profile.
+
+**The envelope is a manifest format, not a version axis**
+([decision 0040](decisions/0040-the-package-envelope-is-a-format-not-an-axis.md)).
+Its four published values record one real format change — `v1alpha1` to
+`v1alpha2` introduced content addressing — and two re-mints that followed the
+FormRef grammar they wrap; normalising version words, the `v1alpha2`,
+`v1alpha3` and `v1alpha4` schemas are structurally identical. A new envelope is
+minted only when the manifest format itself changes structurally, never because
+a Form generation moved: `v1alpha4` already admits any namespaced group and has
+carried two family generations without moving, which is the proof it never
+needed to track them. Both halves are checked the same way the Host API lane's
+minting reasons are. Content-addressed packages have no independent
 SemVer. Their exact package digest produces the publication artifact ID
 `sha256-<hex>` and therefore the source path and tag. Existing v1alpha1
 `packageVersion` values and the published content-addressed v1alpha2 package
