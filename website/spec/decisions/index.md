@@ -45,3 +45,5 @@ record does not replace them.
 - [0040 — The package envelope names a manifest format, not a Form generation](0040-the-package-envelope-is-a-format-not-an-axis.md)
 - [0041 — Takoform's Form Packages publish with the provider release that embeds them](0041-form-packages-publish-with-the-provider-release.md)
 - [0042 — The pre-Beta epochs are withdrawn](0042-the-pre-beta-epochs-are-withdrawn.md)
+- [0043 — A Form Family targets a popular primitive whose APIs are vendor-locked](0043-forms-target-popular-vendor-locked-primitives.md)
+- [0044 — Graduation evidence is implementation independence, honestly attributed](0044-graduation-evidence-is-implementation-independence.md)
