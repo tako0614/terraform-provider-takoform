@@ -420,6 +420,20 @@ func TestResourceAPIHTTPClientWaitsForServerSideOpenTofuRuns(t *testing.T) {
 	}
 }
 
+func TestResourceAPIHTTPClientBoundsStalledHostResponseHeaders(t *testing.T) {
+	client := newResourceAPIHTTPClient()
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("Resource API transport = %T, want *http.Transport", client.Transport)
+	}
+	if transport.ResponseHeaderTimeout <= 0 || transport.ResponseHeaderTimeout > time.Minute {
+		t.Fatalf(
+			"Resource API response header timeout must fail a stalled host within one minute, got %s",
+			transport.ResponseHeaderTimeout,
+		)
+	}
+}
+
 func TestResourceAPIHTTPClientDoesNotForwardBearerThroughRedirect(t *testing.T) {
 	redirectTargetRequests := 0
 	redirectTarget := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
