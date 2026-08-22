@@ -1470,6 +1470,104 @@ const RETAINED_GENERATION_NAMED_CORPORA = new Map([
   ["portable-host-v2", "forms.takoform.com/v1alpha2"],
 ]);
 
+// A Host API lane is minted for one of exactly two reasons, and this table says
+// which for every lane that exists (decision 0039).
+//
+//   "protocol"   — the wire contract changed. Provable: the lane's wire schema
+//                  must differ structurally from every other lane's, with
+//                  version words normalised so a rename cannot masquerade as a
+//                  contract.
+//   "graduation" — the lane itself advanced a maturity channel on the evidence
+//                  spec/versioning.md names. Not provable from bytes, so the
+//                  entry has to say what it satisfied.
+//
+// What a lane may NOT be minted for is the family or the Forms moving. That is
+// the rule spec/versioning.md already states — the group MUST NOT graduate on a
+// Form count, package publication, provider major, historical admission, or one
+// host's conformance report — and it is the rule v1beta1 was minted against.
+const HOST_API_LANES = new Map([
+  ["forms.takoform.com/v1alpha1", {
+    wireSchema: "spec/schemas/host-api-wire.schema.json",
+    mintedFor: "protocol",
+  }],
+  ["forms.takoform.com/v1alpha2", {
+    wireSchema: "spec/schemas/host-api-wire-v1alpha2.schema.json",
+    mintedFor: "protocol",
+  }],
+  ["forms.takoform.com/v1alpha3", {
+    wireSchema: "spec/schemas/host-api-wire-v1alpha3.schema.json",
+    mintedFor: "protocol",
+  }],
+  ["forms.takoform.com/v1beta1", {
+    wireSchema: "spec/schemas/host-api-wire-v1beta1.schema.json",
+    mintedFor: "graduation",
+    // Recorded as it happened rather than as it should have. This lane was
+    // minted alongside the Edge family channel move in #132, and its wire
+    // contract is structurally identical to v1alpha3's — measured in decision
+    // 0038. No lane-specific evidence was stated, which is exactly what the
+    // rule above now requires. It is frozen into Registry-published provider
+    // v2.1.1 and cannot be withdrawn; the entry stands as the record.
+    evidence: "none stated; minted with the family channel move (decision 0038)",
+  }],
+]);
+
+// Version words are the one thing a lane rename is guaranteed to move, so they
+// are exactly what must not count as a contract difference.
+function wireContractShape(relativePath) {
+  const sortDeep = (value) =>
+    Array.isArray(value)
+      ? value.map(sortDeep)
+      : value !== null && typeof value === "object"
+        ? Object.fromEntries(
+            Object.keys(value).sort().map((key) => [key, sortDeep(value[key])]),
+          )
+        : value;
+  return JSON.stringify(
+    sortDeep(readJson(path.join(repositoryRoot, relativePath))),
+  ).replace(/v1(?:alpha|beta)\d+/gu, "vN");
+}
+
+function checkHostApiLanesAreMintedForAReason() {
+  const shapes = new Map();
+  for (const [apiVersion, lane] of HOST_API_LANES) {
+    if (!existsSync(path.join(repositoryRoot, lane.wireSchema))) {
+      fail(`${apiVersion}: wire schema ${lane.wireSchema} does not exist`);
+      continue;
+    }
+    shapes.set(apiVersion, wireContractShape(lane.wireSchema));
+  }
+  for (const [apiVersion, lane] of HOST_API_LANES) {
+    if (lane.mintedFor === "graduation") {
+      if (typeof lane.evidence !== "string" || lane.evidence.trim() === "") {
+        fail(
+          `${apiVersion}: a lane minted for a graduation must say what evidence ` +
+            `it satisfied; spec/versioning.md names the prerequisites`,
+        );
+      }
+      continue;
+    }
+    if (lane.mintedFor !== "protocol") {
+      fail(`${apiVersion}: mintedFor must be "protocol" or "graduation"`);
+      continue;
+    }
+    const shape = shapes.get(apiVersion);
+    for (const [other, otherShape] of shapes) {
+      // A graduation lane deliberately carries an existing contract under a new
+      // maturity name, so it is expected to match one. Only two lanes both
+      // claiming to be distinct CONTRACTS may not be the same bytes.
+      if (HOST_API_LANES.get(other)?.mintedFor !== "protocol") continue;
+      if (other !== apiVersion && shape === otherShape) {
+        fail(
+          `${apiVersion}: minted for a protocol change, but its wire contract is ` +
+            `structurally identical to ${other}; a lane that changes no bytes is a ` +
+            `rename, and every client renegotiates for nothing`,
+        );
+        break;
+      }
+    }
+  }
+}
+
 // The README stopped telling a reader to point a provider at a placeholder and
 // started telling them to run something. A command named in a walk somebody is
 // expected to follow has to exist, and the walk has to name the command that
@@ -2080,6 +2178,7 @@ checkProviderReleaseCommitBindings();
 checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
 checkHandWrittenInventories(forms, edgeFamilyRoster);
+checkHostApiLanesAreMintedForAReason();
 checkDocumentedWalkIsRunnable();
 checkCorpusNamesStateTheirLane();
 checkConformanceCorpusCounts();

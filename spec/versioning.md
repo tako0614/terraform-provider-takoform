@@ -333,6 +333,35 @@ unchanged history. Each lane has its own discovery path and API base; a Host
 wire version never implies Form maturity. Breaking protocol changes require a
 new Host API group identity, starting with `v1beta2` for a breaking Beta fix.
 
+### A lane is minted for one of exactly two reasons
+
+Two questions were being answered as one, and they are separate
+([decision 0039](decisions/0039-a-lane-is-minted-for-one-of-two-reasons.md)):
+
+- **What may cause a lane to move.** Only two things. The wire contract changed,
+  or the lane ITSELF advanced a maturity channel on the evidence named below.
+  A lane MUST NOT be minted because a Form Family moved, because Forms changed,
+  or because a provider was released. That prohibition is the paragraph after
+  this one, and it is what a generation move most easily violates: everything
+  moves together and no reason is stated for the lane in particular.
+- **What a graduation looks like when it does happen.** A new exact identity,
+  never a relabelling of an occupied one. A served identity means what it meant
+  when it was published
+  ([decision 0037](decisions/0037-immutability-begins-at-stable.md)), and a lane
+  published at a Beta channel asserted that channel; graduating it in place
+  would make an address a reader already holds quietly mean something stronger.
+
+Both halves are checked. A lane minted for a protocol change must have a wire
+contract structurally different from every other protocol lane's, compared with
+version words normalised so a rename cannot present itself as a contract. A lane
+minted for a graduation must say which of the prerequisites below it satisfied,
+because that is not provable from bytes. `forms.takoform.com/v1beta1` is
+recorded as a graduation whose lane-specific evidence was never stated — it was
+minted with the family channel move and carries v1alpha3's wire contract
+unchanged ([decision 0038](decisions/0038-a-generation-move-is-measured-not-assumed.md)).
+It is frozen into Registry-published provider `v2.1.1`; the record stands as
+history rather than as a precedent.
+
 The API group MUST NOT graduate based on a Form count, package publication,
 provider major, historical admission, or one host's conformance report. A
 future graduation decision requires, at minimum:
