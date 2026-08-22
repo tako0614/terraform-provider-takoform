@@ -147,6 +147,7 @@ for (const directory of [
   "host-api",
   "interface-contract",
   "schemas",
+  "standard-services",
   "trust",
 ]) {
   const dir = path.join(repositoryRoot, "spec", directory);

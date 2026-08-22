@@ -381,7 +381,12 @@ The API group MUST NOT graduate based on a Form count, package publication,
 provider major, historical admission, or one host's conformance report. A
 future graduation decision requires, at minimum:
 
-1. two independently operated hosts exercising the same lifecycle semantics;
+1. two independent host implementations from distinct codebases — neither
+   derived from the other's host internals — exercising the same lifecycle
+   semantics through the same conformance corpus, at least one operating in
+   production for real consumers; a shared maintainer is permitted and MUST be
+   named in the graduation ADR
+   ([decision 0044](decisions/0044-graduation-evidence-is-implementation-independence.md));
 2. a documented compatibility window with no breaking operation change;
 3. end-to-end materialization of each optional surface the lane declares;
 4. cross-publisher package installation and lifecycle evidence;
@@ -392,8 +397,8 @@ Takoform's lifecycle authority owns promotion; a provider release or host
 milestone is not a maturity decision. Only Host API and Form contracts that
 have satisfied the applicable qualification above MAY mint stable identities
 and Form `1.0.0` lines; every other contract remains Beta or Experimental. A
-Takosumi deployment may be one independent adopter, but a Takosumi product GA
-is neither required nor sufficient evidence. Any graduation is a separate ADR
+Takosumi host implementation may be one of the two subjects, but a Takosumi
+product GA is neither required nor sufficient evidence. Any graduation is a separate ADR
 and public migration plan. Until then, the project and API MUST NOT be
 described as stable or GA.
 

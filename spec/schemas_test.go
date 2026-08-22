@@ -33,6 +33,7 @@ func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 		"artifact-manifest-v1alpha1.schema.json":    true,
 		"operation-v1alpha1.schema.json":            true,
 		"host-support-profile-v1alpha1.schema.json": true,
+		"standard-service-ref-v1alpha1.schema.json": true,
 	}
 	entries, err := os.ReadDir("schemas")
 	if err != nil {

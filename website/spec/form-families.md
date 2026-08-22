@@ -14,7 +14,7 @@ Each family owns a DNS-like API group with its own version:
 
 ```text
 edge.forms.takoform.com/v1beta1
-containers.forms.takoform.com/v1alpha1   (future)
+container.forms.takoform.com/v1beta1     (future; decision 0043)
 forms.example.com/v1alpha1               (third party)
 ```
 
