@@ -238,7 +238,8 @@ const staticDirectories = [
     path.join(repositoryRoot, "release"),
     path.join(staticRoot, "release"),
     (file) =>
-      (file === "public-schema-identities.json" ||
+      (file === "form-contract-continuity.json" ||
+        file === "public-schema-identities.json" ||
         file === "provider-form-identities.json" ||
         file === "published-document-lanes.json" ||
         file.startsWith("migrations/")) &&
