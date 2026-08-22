@@ -15,7 +15,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/formpackage"
 )
 
-const testFamilyGroup = "edge.forms.takoform.com/v1alpha1"
+const testFamilyGroup = "edge.forms.takoform.com/v1beta1"
 
 // stageFamilyPackage copies the real published Edge Family ModuleWorker
 // package into a throwaway repository and returns its verified digest.
@@ -23,7 +23,7 @@ func stageFamilyPackage(t *testing.T) (repo, packageDir string, report formpacka
 	t.Helper()
 	repo = makeTestRepo(t)
 	packageDir = filepath.Join(repo, "package")
-	copyTree(t, filepath.Join(repositoryRoot(t), "forms", "candidates", "edge", "v1alpha1", "module-worker"), packageDir)
+	copyTree(t, filepath.Join(repositoryRoot(t), "forms", "candidates", "edge", "v1beta1", "module-worker"), packageDir)
 	verified, err := formpackage.VerifyDirectory(packageDir)
 	if err != nil {
 		t.Fatalf("staged family package does not verify: %v", err)

@@ -1,7 +1,0 @@
-{
-  "migrationSet": {
-    "apiVersion": "edge.forms.takoform.com/v1alpha1",
-    "kind": "SQLiteMigrationSet",
-    "name": "sqlite-migration-set"
-  }
-}

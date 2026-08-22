@@ -103,7 +103,7 @@ func TestRenderedFormsVerifyAsV1Alpha4Packages(t *testing.T) {
 func TestWorkerBundleWireSpecIsOnlyTheManifestDigest(t *testing.T) {
 	t.Parallel()
 	raw, err := os.ReadFile(filepath.Join(
-		"..", "..", "forms", "candidates", "edge", "v1alpha1", "worker-bundle", "definition.json",
+		"..", "..", "forms", "candidates", "edge", "v1beta1", "worker-bundle", "definition.json",
 	))
 	if err != nil {
 		t.Fatal(err)
