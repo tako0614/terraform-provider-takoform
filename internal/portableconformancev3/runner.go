@@ -37,6 +37,11 @@ type EndpointOptions struct {
 	HTTPClient           *http.Client
 	Classification       string
 	Subject              string
+	// Survey continues past failing steps and reports the whole gap surface
+	// as one failure, instead of stopping at the first. It exists for
+	// MEASURING a real host mid-implementation; it never yields a passed
+	// report, so nothing downstream can mistake a survey for evidence.
+	Survey bool
 }
 
 // ErrorProbeEvidence records one probed stable error outcome.
@@ -150,8 +155,27 @@ func RunEndpoint(ctx context.Context, contract Contract, options EndpointOptions
 		httpClient:           &transportClient,
 		apiBase:              endpoint + contract.APIPath,
 		completed:            map[string]bool{},
+		survey:               options.Survey,
 	}
 	if err := runner.run(); err != nil {
+		if options.Survey {
+			// The survey's product is the gap list, stated with the completed
+			// count so a measurement is comparable run to run. It is a FAILURE:
+			// a survey never produces a passed report.
+			completedCount := 0
+			missing := make([]string, 0)
+			for _, check := range contract.RequiredRunnerChecks {
+				if runner.completed[check] {
+					completedCount++
+				} else {
+					missing = append(missing, check)
+				}
+			}
+			return HostRunnerReport{}, fmt.Errorf(
+				"survey: %d/%d required checks completed; missing: %s\n%w",
+				completedCount, len(contract.RequiredRunnerChecks),
+				strings.Join(missing, ", "), err)
+		}
 		return HostRunnerReport{}, err
 	}
 	checks := make([]string, 0, len(contract.RequiredRunnerChecks))
@@ -203,6 +227,8 @@ type v3Runner struct {
 	desiredSchemas map[FormRef]map[string]any
 
 	completed              map[string]bool
+	survey                 bool
+	surveyFailures         []string
 	errorProbes            []ErrorProbeEvidence
 	negativeFixtures       []NegativeFixtureEvidence
 	uidTransitions         []string
