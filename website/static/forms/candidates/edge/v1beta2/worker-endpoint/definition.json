@@ -60,13 +60,15 @@
         "description": "Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where DNS is case-insensitive and no trailing root dot. The GRAMMAR admits exactly that form, so the rule and the pattern say one thing. An author's hostname admits both variant spellings because a host canonicalizes what it is given; an assigned name has no earlier spelling to preserve. The value is IMMUTABLE for the lifetime of this endpoint's attachment UID: it does not change on deployment promotion, on status refresh, on a host's internal placement change, or on a backend migration, so a consumer may store it; a host that must change the address deletes the endpoint and the author creates a new one. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable configuration never parses it, never asserts a suffix, and never reconstructs it from the resource name.",
         "maxLength": 253,
         "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$",
-        "type": "string"
+        "type": "string",
+        "x-takoform-host-assigned": true
       },
       "url": {
         "description": "Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + `/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and no port, so a consumer composes deeper paths onto this value rather than deriving an origin. It admits exactly the hostnames the hostname member admits, and it is immutable for exactly as long, because it IS that hostname.",
         "maxLength": 262,
         "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$",
-        "type": "string"
+        "type": "string",
+        "x-takoform-host-assigned": true
       }
     },
     "required": [

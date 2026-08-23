@@ -168,6 +168,12 @@ type Field struct {
 	// change whenever a family gained a value that is claimed rather than
 	// merely unique.
 	Claimed bool
+	// HostAssigned marks a declared OUTPUT the host mints: it is immutable for
+	// the lifetime of the resource's UID and no desired property may state it.
+	// It was a paragraph in the protocol document about one Form's endpoint
+	// address, which is a reason the protocol had to change whenever a family
+	// gained an address it hands out.
+	HostAssigned bool
 
 	// Example is the value used by the canonical conformance fixture.
 	Example any
@@ -582,6 +588,12 @@ func validateField(kind string, field Field) error {
 	}
 	if err := validateFieldDefault(kind, field); err != nil {
 		return err
+	}
+	if field.HostAssigned && field.Kind != KindString {
+		return fmt.Errorf(
+			"form %s output %s is host-assigned on kind %q; a minted address is a string",
+			kind, field.Wire, field.Kind,
+		)
 	}
 	if field.Claimed && field.Kind != KindString {
 		return fmt.Errorf(

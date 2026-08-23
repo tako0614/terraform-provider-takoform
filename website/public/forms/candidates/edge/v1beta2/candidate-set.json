@@ -87,9 +87,9 @@
         "apiVersion": "edge.forms.takoform.com/v1beta2",
         "kind": "WorkerEndpoint",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:e89d827f9d6017e6924822302d1e9f774f2e7a65cb41044014d12934dabe0f13"
+        "schemaDigest": "sha256:510bd4cdfcd7232e6d170503e47c0771713f8781eaaf78046d30c2838733f812"
       },
-      "packageDigest": "sha256:34863ab759a39d89aae7400378f8379e3e86c5710fa98473b2a4b9e5a7f5ef75"
+      "packageDigest": "sha256:306d7f38f2f7ac8639b7afbbaa34dcbd76085fada5c42e59ef198011bfe0bf62"
     },
     {
       "kind": "WorkerCronTrigger",

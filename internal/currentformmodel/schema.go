@@ -36,6 +36,10 @@ const (
 	// resource per tenant may hold. The canonical form is the property's own
 	// schema's to define; that the comparison happens on it is the lane's.
 	ClaimAnnotationKey = "x-takoform-claim"
+	// HostAssignedAnnotationKey marks the declared output the host mints. A
+	// client reads it to know the value is not derivable from anything it
+	// wrote and must not be reconstructed from a resource name.
+	HostAssignedAnnotationKey = "x-takoform-host-assigned"
 	// RequiredEntrypointAnnotationKey marks the reference whose inward
 	// activation invokes one entrypoint of the target's runtime contract. The
 	// lane's attachment gate reads it, so a family adds an attachment without
@@ -230,6 +234,9 @@ func (f Form) OutputSchema() (map[string]any, error) {
 		schema, err := output.jsonSchema(f.Family.APIVersion(), nil)
 		if err != nil {
 			return nil, fmt.Errorf("form %s output %s: %w", f.Kind, output.Wire, err)
+		}
+		if output.HostAssigned {
+			schema[HostAssignedAnnotationKey] = true
 		}
 		properties[output.Wire] = schema
 		required = append(required, output.Wire)

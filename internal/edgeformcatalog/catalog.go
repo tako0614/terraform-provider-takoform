@@ -535,7 +535,11 @@ var Forms = []model.Form{
 		// portability boundary forbids.
 		Outputs: []model.Field{
 			{HCL: "hostname", Wire: "hostname", Kind: model.KindString,
-				Pattern: model.PatternCanonicalHostname, MaxLength: 253,
+				// The host mints this address; nothing an author wrote decides
+				// it, and a configuration that reconstructed it from the
+				// resource name would be guessing.
+				HostAssigned: true,
+				Pattern:      model.PatternCanonicalHostname, MaxLength: 253,
 				Doc: "Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where " +
 					"DNS is case-insensitive and no trailing root dot. The GRAMMAR admits exactly that form, so the " +
 					"rule and the pattern say one thing. An author's hostname admits both variant spellings because a " +
@@ -547,7 +551,8 @@ var Forms = []model.Form{
 					"detail, so a portable configuration never parses it, never asserts a suffix, and never " +
 					"reconstructs it from the resource name."},
 			{HCL: "url", Wire: "url", Kind: model.KindString,
-				Pattern: `^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$`,
+				HostAssigned: true,
+				Pattern:      `^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$`,
 				// The value IS "https://" + the assigned hostname + "/", so its
 				// bound is that construction and nothing else: 8 + 253 + 1. A
 				// looser number would admit a url this Form cannot produce,
