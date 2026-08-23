@@ -25,13 +25,22 @@ route (`/v1/organizations/{org}/resources/{uid}/s3-credentials`) that vends a
 short-lived, bucket-scoped key. Nothing about the endpoint or the credential is
 in portable state. That is exactly the shape the question is looking for.
 
-But `ObjectBucket` also declares `edge.objects@1.0.0`, and that contract
-specifies object storage in **nine operations** — head, get, put, delete, list,
-and the four multipart calls — with its own key, object, and part limits. It is
-a respecification of the very data plane the S3-compatible API already
-standardizes, which is the thing 0043 exists to forbid. It predates 0043, its
-bytes are published, and [decision 0037](0037-immutability-begins-at-stable.md)
-keeps it exactly as it is — but it is not the shape to copy.
+`ObjectBucket` also declares `edge.objects@1.0.0`, and it is worth being exact
+about what that is, because the obvious reading is wrong. `edge.objects` is not
+an HTTP wire protocol competing with S3: it fixes the storage's SEMANTICS —
+strong read-after-write, streaming bodies, last-writer-wins per key, no
+cross-key atomicity, no versioning, a 5 GiB object ceiling — and a Binding
+projects those operations into the consumer's own runtime, where the code
+writes `env.MEDIA.get(...)` rather than signing a request. The two live at
+different layers, and the binding is a surface S3 does not provide at all.
+
+Where they DO overlap is the semantics, and 0043's test is about the category
+rather than the layer: object storage has a de-facto standard API, so a
+contract specifying object-storage semantics is one 0043 would question today.
+What follows from that is not that `edge.objects` should be withdrawn — its
+bytes are published and [decision 0037](0037-immutability-begins-at-stable.md)
+keeps them — but that a bucket needs no SECOND Form to be reachable by an
+ordinary S3 client.
 
 takoserver's `/v1/ai` is the second answer, and a different shape: nothing is
 provisioned per tenant, an organization key is simply granted `ai:invoke`. That
@@ -69,6 +78,15 @@ way the host resolves the endpoint and the credential, and neither enters
 portable state; the difference is only whether the thing on the other end is
 something the same document asked for.
 
+**One resource, two projections — never two Forms for one thing.** A bucket
+already exists as a Form, so a standard-backed bucket is not minted beside it.
+What is added is the second way to reach the same resource: a typed binding
+projects the Interface into code running on the host's own runtime, and a
+sealed slot hands credentials to everything else — a laptop, a CI job, a
+process on another cloud. Splitting the resource in two would make an author
+choose between them at provisioning time for a difference that only shows up
+at consumption time.
+
 **A call-only standard gets no Form.** Inference, mail submission, telemetry
 export: nothing is provisioned per tenant, so there is no instance to own and
 nothing for a lifecycle to hold. The slot is the whole mechanism, and what such
@@ -85,8 +103,11 @@ is held to 0043's table. A proposed standard-backed Form is a reviewed change
 whose review asks one question: does its desired state state anything the
 standard already states? If yes, it is a respecification wearing a lifecycle.
 
-`edge.objects` and `ObjectBucket` are retained as published and recorded here
-as the shape this record exists to stop repeating.
+`edge.objects` and `ObjectBucket` are retained as published. What this record
+stops is not their existence but the reflex to mint a parallel Form whenever a
+standard is involved: the question a review asks is whether the resource
+already exists, and only then whether a new one would state anything the
+standard already states.
 
 ## Consequences
 
@@ -100,3 +121,9 @@ The cost is that Takoform gains Forms in categories 0043 sent to the integrate
 column. That is not a reversal of 0043: those Forms carry no semantics, and the
 moment one of them grows a member the standard already defines, this record
 says it has become the thing 0043 refused.
+
+This record also corrects itself on one point, because the first draft asserted
+more than the evidence carried: it called `edge.objects` a respecification of
+the S3 data plane. It is not — it is a semantic contract with a runtime
+projection, and S3 is a wire protocol. The overlap is real and worth naming,
+and the overstatement was not.
