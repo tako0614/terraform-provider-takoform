@@ -886,7 +886,7 @@ func validateContract(contract Contract) error {
 	if !reflect.DeepEqual(contract.ErrorEnvelope.HTTPStatusByCode, got.ErrorHTTPStatus) {
 		return errors.New("portable host v3 error HTTP status map drifted")
 	}
-	if !reflect.DeepEqual(contract.RequiredRunnerChecks, got.RequiredChecks) {
+	if !reflect.DeepEqual(contract.RequiredRunnerChecks, requiredChecksFor(got, contract.RunnerInput)) {
 		return errors.New("portable host v3 required runner checks drifted")
 	}
 	input := contract.RunnerInput

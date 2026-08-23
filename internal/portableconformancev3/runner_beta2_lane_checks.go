@@ -835,21 +835,29 @@ func (r *v3Runner) checkPortableDefaultsMaterialized(target probeTarget) error {
 	if err != nil {
 		return fmt.Errorf("creating a resource with its defaults omitted: %w", err)
 	}
-	for key, value := range defaults {
-		got, present := created.Spec[key]
-		if !present {
-			return fmt.Errorf(
-				"the echo of a spec omitting %s carries no %s; a host materializes every declared default "+
-					"at the entry point, and the effective spec IS the wire spec",
-				key, key,
-			)
-		}
-		if canonicalScalar(got) != canonicalScalar(value) {
-			return fmt.Errorf(
-				"the echo materialized %s as %v, want the declared default %v",
-				key, got, value,
-			)
-		}
+	// The whole materialized document, not the defaulted keys. Checking only
+	// what the caller sent plus what it expected back would let a host add an
+	// undeclared property, bind its digest, echo it consistently, and pass —
+	// while the client's desired state silently contains something it never
+	// wrote. The corpus's own materialization is the expected value, and it is
+	// compared as canonical JSON so a number that decoded to another Go type
+	// is not mistaken for a different value.
+	expected := r.materialize(omitted.Ref, omitted.Spec)
+	wantSpec, err := canonicalJSON(expected)
+	if err != nil {
+		return err
+	}
+	gotSpec, err := canonicalJSON(created.Spec)
+	if err != nil {
+		return err
+	}
+	if gotSpec != wantSpec {
+		return fmt.Errorf(
+			"the echo of a spec omitting its defaults is %s, want the materialized %s; the effective "+
+				"spec IS the wire spec, so the echo is the client's own desired state and carries "+
+				"nothing it did not write and nothing the Definition did not default",
+			gotSpec, wantSpec,
+		)
 	}
 
 	// Writing the default explicitly is the SAME desired state: no update.
@@ -893,12 +901,6 @@ func (r *v3Runner) declaredDefaults(ref FormRef) map[string]any {
 		}
 	}
 	return out
-}
-
-// canonicalScalar compares two JSON scalars that may have decoded as
-// different Go numeric types.
-func canonicalScalar(value any) string {
-	return fmt.Sprintf("%v", value)
 }
 
 // formsExactQuery builds the /forms filter query naming one whole identity.

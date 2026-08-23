@@ -202,8 +202,7 @@ function generate(outputRoots) {
       !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(
         definition.definitionVersion ?? "",
       ) ||
-      definition.role !== role ||
-      !/^takoform_[a-z0-9_]+$/u.test(rendered.resourceType)
+      definition.role !== role
     ) {
       throw new Error(`${slug}: family catalog emitted an invalid candidate identity`);
     }
@@ -272,7 +271,6 @@ function generate(outputRoots) {
     manifest.forms.push({
       kind,
       role,
-      resourceType: rendered.resourceType,
       path: `forms/candidates/edge/v1beta2/${slug}`,
       formRef,
       packageDigest: digestCanonicalJSON(indexPath),
@@ -490,9 +488,12 @@ function unionSupportedIdentities(manifest, embeddedIdentities) {
   for (const form of embeddedIdentities) {
     byKey.set(canonicalJson(form.formRef), form);
   }
-  for (const { resourceType, formRef, packageDigest } of manifest.forms) {
+  for (const { formRef, packageDigest } of manifest.forms) {
     const key = canonicalJson(formRef);
-    if (!byKey.has(key)) byKey.set(key, { resourceType, formRef, packageDigest });
+    // A candidate contributes its IDENTITY. The provider's authoring name is
+    // the provider's, and a released ledger entry that carries one keeps it
+    // (decision 0047).
+    if (!byKey.has(key)) byKey.set(key, { formRef, packageDigest });
   }
   return [...byKey.values()];
 }

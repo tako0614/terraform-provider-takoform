@@ -46,8 +46,12 @@ func TestVerifyCorpus(t *testing.T) {
 	if len(contract.ErrorEnvelope.AutomaticallyRetryable) != 4 {
 		t.Fatalf("retryable set carries %d codes, want 4", len(contract.ErrorEnvelope.AutomaticallyRetryable))
 	}
-	if len(contract.RequiredRunnerChecks) != len(lane.RequiredChecks) {
-		t.Fatalf("required checks = %d, want the lane's %d", len(contract.RequiredRunnerChecks), len(lane.RequiredChecks))
+	// The lane's checks PLUS the ones this corpus's family generation adds:
+	// comparing against the lane alone would say a lane can only ever be
+	// driven against one family (decision 0047).
+	wantChecks := requiredChecksFor(lane, contract.RunnerInput)
+	if len(contract.RequiredRunnerChecks) != len(wantChecks) {
+		t.Fatalf("required checks = %d, want %d", len(contract.RequiredRunnerChecks), len(wantChecks))
 	}
 	if contract.RunnerInput.Space == contract.RunnerInput.AlternateSpace {
 		t.Fatalf("runner spaces must differ")

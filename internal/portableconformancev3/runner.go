@@ -758,18 +758,26 @@ func (r *v3Runner) prepareWithFenceAs(token string, target probeTarget, generati
 			"prepare bound a specDigest that is not the digest of the spec it echoed",
 		)
 	}
-	// The echo must still be the caller's own desired state: every property
-	// the caller WROTE survives unchanged. Materialization fills absences; it
-	// never rewrites a written value.
-	for key, sent := range target.Spec {
-		got, present := result.Resource.Spec[key]
-		if !present || canonicalScalar(got) != canonicalScalar(sent) {
-			return prepareOutcome{}, fmt.Errorf(
-				"prepare echoed %s as %v, want the written %v; materialization fills absent properties "+
-					"and never rewrites a written one",
-				key, got, sent,
-			)
-		}
+	// The echo must be the caller's own desired state MATERIALIZED and nothing
+	// else: every property the caller wrote survives unchanged, every declared
+	// default is filled, and nothing the caller never wrote appears. Comparing
+	// only the written keys would let a host add a property of its own and
+	// echo it consistently forever. Canonical JSON, so a number that decoded
+	// to another Go type is not read as a different value.
+	wantEcho, err := canonicalJSON(r.materialize(target.Ref, target.Spec))
+	if err != nil {
+		return prepareOutcome{}, err
+	}
+	gotEcho, err := canonicalJSON(result.Resource.Spec)
+	if err != nil {
+		return prepareOutcome{}, err
+	}
+	if gotEcho != wantEcho {
+		return prepareOutcome{}, fmt.Errorf(
+			"prepare echoed %s, want the materialized %s; materialization fills absent properties, "+
+				"never rewrites a written one, and never adds one the caller did not write",
+			gotEcho, wantEcho,
+		)
 	}
 	if !formpackage.ValidDigest(result.Review.PrepareDigest) {
 		return prepareOutcome{}, errors.New("prepare returned an invalid prepareDigest")

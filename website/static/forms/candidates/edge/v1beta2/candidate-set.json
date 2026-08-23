@@ -10,7 +10,6 @@
     {
       "kind": "ModuleWorker",
       "role": "identity",
-      "resourceType": "takoform_module_worker",
       "path": "forms/candidates/edge/v1beta2/module-worker",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -23,7 +22,6 @@
     {
       "kind": "WorkerBundle",
       "role": "revision",
-      "resourceType": "takoform_worker_bundle",
       "path": "forms/candidates/edge/v1beta2/worker-bundle",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -36,7 +34,6 @@
     {
       "kind": "StaticAssetBundle",
       "role": "revision",
-      "resourceType": "takoform_static_asset_bundle",
       "path": "forms/candidates/edge/v1beta2/static-asset-bundle",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -49,7 +46,6 @@
     {
       "kind": "WorkerVersion",
       "role": "revision",
-      "resourceType": "takoform_worker_version",
       "path": "forms/candidates/edge/v1beta2/worker-version",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -62,7 +58,6 @@
     {
       "kind": "WorkerDeployment",
       "role": "deployment",
-      "resourceType": "takoform_worker_deployment",
       "path": "forms/candidates/edge/v1beta2/worker-deployment",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -75,7 +70,6 @@
     {
       "kind": "WorkerCustomDomain",
       "role": "attachment",
-      "resourceType": "takoform_worker_custom_domain",
       "path": "forms/candidates/edge/v1beta2/worker-custom-domain",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -88,7 +82,6 @@
     {
       "kind": "WorkerEndpoint",
       "role": "attachment",
-      "resourceType": "takoform_worker_endpoint",
       "path": "forms/candidates/edge/v1beta2/worker-endpoint",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -101,7 +94,6 @@
     {
       "kind": "WorkerCronTrigger",
       "role": "attachment",
-      "resourceType": "takoform_worker_cron_trigger",
       "path": "forms/candidates/edge/v1beta2/worker-cron-trigger",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -114,7 +106,6 @@
     {
       "kind": "EdgeKVNamespace",
       "role": "identity",
-      "resourceType": "takoform_edge_kv_namespace",
       "path": "forms/candidates/edge/v1beta2/edge-kv-namespace",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -127,7 +118,6 @@
     {
       "kind": "ObjectBucket",
       "role": "identity",
-      "resourceType": "takoform_edge_object_bucket",
       "path": "forms/candidates/edge/v1beta2/object-bucket",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -140,7 +130,6 @@
     {
       "kind": "SQLiteDatabase",
       "role": "identity",
-      "resourceType": "takoform_sqlite_database",
       "path": "forms/candidates/edge/v1beta2/sqlite-database",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -153,7 +142,6 @@
     {
       "kind": "SQLiteMigrationSet",
       "role": "revision",
-      "resourceType": "takoform_sqlite_migration_set",
       "path": "forms/candidates/edge/v1beta2/sqlite-migration-set",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -166,7 +154,6 @@
     {
       "kind": "SQLiteMigrationApplication",
       "role": "attachment",
-      "resourceType": "takoform_sqlite_migration_application",
       "path": "forms/candidates/edge/v1beta2/sqlite-migration-application",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -179,7 +166,6 @@
     {
       "kind": "AtLeastOnceQueue",
       "role": "identity",
-      "resourceType": "takoform_at_least_once_queue",
       "path": "forms/candidates/edge/v1beta2/at-least-once-queue",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -192,7 +178,6 @@
     {
       "kind": "QueueConsumer",
       "role": "attachment",
-      "resourceType": "takoform_queue_consumer",
       "path": "forms/candidates/edge/v1beta2/queue-consumer",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -205,7 +190,6 @@
     {
       "kind": "DurableWorkflow",
       "role": "identity",
-      "resourceType": "takoform_durable_workflow",
       "path": "forms/candidates/edge/v1beta2/durable-workflow",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",
@@ -218,7 +202,6 @@
     {
       "kind": "ActorNamespace",
       "role": "identity",
-      "resourceType": "takoform_actor_namespace",
       "path": "forms/candidates/edge/v1beta2/actor-namespace",
       "formRef": {
         "apiVersion": "edge.forms.takoform.com/v1beta2",

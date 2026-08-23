@@ -82,12 +82,21 @@ type providerFormRef struct {
 }
 
 type providerCandidateSet struct {
-	Format            string           `json:"format"`
-	Family            string           `json:"family"`
-	FormMaturity      string           `json:"formMaturity"`
-	PackageAPIVersion string           `json:"packageApiVersion"`
-	PublicationStatus string           `json:"publicationStatus"`
-	Forms             []providerFormID `json:"forms"`
+	Format            string                `json:"format"`
+	Family            string                `json:"family"`
+	FormMaturity      string                `json:"formMaturity"`
+	PackageAPIVersion string                `json:"packageApiVersion"`
+	PublicationStatus string                `json:"publicationStatus"`
+	Forms             []providerCandidateID `json:"forms"`
+}
+
+// providerCandidateID is one candidate Form's IDENTITY. It carries no
+// resourceType: that is the provider's authoring name, and a family's
+// published surface states no client's vocabulary (decision 0047). A released
+// ledger entry that carries one keeps it, because its bytes are frozen.
+type providerCandidateID struct {
+	FormRef       providerFormRef `json:"formRef"`
+	PackageDigest string          `json:"packageDigest"`
 }
 
 type descriptor struct {
@@ -1287,7 +1296,14 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 		// than merely redundant: a later generation adds Forms by design
 		// (decision 0043), and requiring it to keep the released one's
 		// cardinality would forbid exactly that.
-		if !reflect.DeepEqual(candidate.Forms, current.Forms) {
+		// Compared by IDENTITY, because that is what the two documents share:
+		// the ledger records the provider's authoring name for its own
+		// resources and the candidate set no longer states one.
+		released := make([]providerCandidateID, 0, len(current.Forms))
+		for _, form := range current.Forms {
+			released = append(released, providerCandidateID{FormRef: form.FormRef, PackageDigest: form.PackageDigest})
+		}
+		if !reflect.DeepEqual(candidate.Forms, released) {
 			return ledger, errors.New("provider v2.1 identity ledger differs from the exact Beta candidate set")
 		}
 	} else {

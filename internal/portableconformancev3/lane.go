@@ -243,12 +243,37 @@ var beta2RequiredChecks = append(append([]string{}, beta1RequiredChecks...),
 	// probe is materialized locally, so without this the whole portable
 	// defaults section was unmeasured while reporting green.
 	"portable-defaults-materialized",
-	// The class-export gate. It lives here rather than in the shared list
-	// because the Forms it gates exist only in the generation this lane's
-	// corpus installs — a check is required of a corpus that can drive it,
-	// and the family axis decides that (decision 0047).
-	"class-holder-rules-enforced",
 )
+
+// familyDerivedChecks are required of a corpus by the FAMILY generation it
+// installs, not by the lane it drives. Putting one in a lane's list would say
+// that lane can only ever be driven against a generation carrying those Forms,
+// which is the coupling decision 0047 exists to end: the second lane is
+// perfectly able to serve a family with no class-selecting identities in it,
+// and a corpus that did so would be required to produce a check its runner
+// correctly skips.
+var familyDerivedChecks = []struct {
+	Name     string
+	Declared func(RunnerInput) bool
+}{
+	{
+		// The class-export gate needs Forms that select a class.
+		Name:     "class-holder-rules-enforced",
+		Declared: func(input RunnerInput) bool { return input.DurableWorkflow.Name != "" },
+	},
+}
+
+// requiredChecksFor is the complete list one corpus must produce: its lane's,
+// plus each family-derived check whose subject that corpus declares.
+func requiredChecksFor(lane lane, input RunnerInput) []string {
+	out := append([]string(nil), lane.RequiredChecks...)
+	for _, derived := range familyDerivedChecks {
+		if derived.Declared(input) {
+			out = append(out, derived.Name)
+		}
+	}
+	return out
+}
 
 // ConvergingReason is what a lane calls the state "the host is actively
 // converging this resource toward its desired generation". v1beta1 published a
