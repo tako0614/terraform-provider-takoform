@@ -77,6 +77,7 @@ type lane struct {
 var lanes = map[string]lane{
 	beta1Lane.APIVersion: beta1Lane,
 	beta2Lane.APIVersion: beta2Lane,
+	beta3Lane.APIVersion: beta3Lane,
 }
 
 // beta1Lane is the retained lane. Registry-published provider 2.1.1 speaks it
@@ -211,6 +212,39 @@ var beta2Lane = lane{
 	RequiredChecks:                beta2RequiredChecks,
 }
 
+// beta3Lane states its cross-resource rules as MECHANISMS a family
+// instantiates rather than as rules about particular Forms. Its wire envelope
+// is v1beta2's: what changed is not what a host puts on the wire but what it
+// must DO — derive the rules from a Definition's declarations instead of
+// carrying a table of Form kinds. That is why its document names no Form kind,
+// and why a check enforces that rather than the prose claiming it.
+var beta3Lane = lane{
+	APIVersion:     "forms.takoform.com/v1beta3",
+	ContractFormat: "takoform.portable-host-conformance@v1beta3",
+	ManifestFormat: "takoform.portable-host-conformance-manifest@v1beta3",
+	DiscoveryPath:  "/.well-known/takoform/v1beta3",
+	APIPath:        "/apis/forms.takoform.com/v1beta3",
+
+	ErrorCodeOrder:        beta2Lane.ErrorCodeOrder,
+	ErrorHTTPStatus:       beta2Lane.ErrorHTTPStatus,
+	ConditionReasons:      beta2Lane.ConditionReasons,
+	LifecycleCapabilities: beta2Lane.LifecycleCapabilities,
+
+	AvailabilityCarriesDeprecated: false,
+	FormsResponseEnumerates:       true,
+	StatusCarriesObserved:         false,
+	OperationSchemaVersion:        "v1alpha2",
+	SupportProfileSchemaVersion:   "v1alpha2",
+	RequiredChecks:                beta3RequiredChecks,
+}
+
+// beta3RequiredChecks is v1beta2's plus the one that measures what this lane
+// states: that a declared exclusive hold is enforced, and enforced by the
+// declaration rather than by a rule the host happens to carry for one Form.
+var beta3RequiredChecks = append(append([]string{}, beta2RequiredChecks...),
+	"declared-exclusive-holds-enforced",
+)
+
 // TerminalErrorIsClosed reports whether this lane's operation schema holds a
 // terminal error to the closed shape: a required requestId and retryable
 // false. v1alpha2 does; v1alpha1 left both open, which is why a host could
@@ -261,6 +295,20 @@ var familyDerivedChecks = []struct {
 		Name:     "class-holder-rules-enforced",
 		Declared: func(input RunnerInput) bool { return input.DurableWorkflow.Name != "" },
 	},
+}
+
+// requires reports whether this lane's own check list names one check. A step
+// guarded by "is this lane X" stops running the moment a LATER lane inherits
+// the rule, which is how a v1beta3 run silently skipped every check v1beta2
+// introduced; guarding on the requirement itself cannot drift from the list
+// the run is graded against.
+func (l lane) requires(name string) bool {
+	for _, check := range l.RequiredChecks {
+		if check == name {
+			return true
+		}
+	}
+	return false
 }
 
 // requiredChecksFor is the complete list one corpus must produce: its lane's,

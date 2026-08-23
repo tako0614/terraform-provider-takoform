@@ -120,6 +120,12 @@
       "sha256": "sha256:b5220a17f7d22862fa66cd0ceddcdd561612662a3336e3063f910166a0b96cac",
       "source": "spec/schemas/host-discovery-v1beta2.schema.json",
       "public": "website/public/schemas/v1beta2/host-discovery.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1beta3/host-api-wire.schema.json",
+      "sha256": "sha256:7895095ee7e8b89a63c98aa145c065c8ae4c273e348313388c06b0c018f11913",
+      "source": "spec/schemas/host-api-wire-v1beta3.schema.json",
+      "public": "website/public/schemas/v1beta3/host-api-wire.schema.json"
     }
   ],
   "retired": [

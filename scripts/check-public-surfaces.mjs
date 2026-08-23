@@ -1192,6 +1192,20 @@ const HOST_API_LANES = new Map([
     mintedFor: "protocol",
     withdrawn: "the v1alpha3 identities were withdrawn with the v1alpha2 epoch that served them (decision 0042)",
   }],
+  ["forms.takoform.com/v1beta3", {
+    wireSchema: "spec/schemas/host-api-wire-v1beta3.schema.json",
+    document: "spec/host-api/v1beta3.md",
+    // The claim this lane makes about itself, and the reason it may be
+    // checked: its rules are mechanisms a family instantiates rather than
+    // paragraphs about particular Forms.
+    namesNoFormKind: true,
+    // Minted for a structural change to what the protocol STATES: the
+    // cross-resource rules that were written one Form at a time became
+    // declared mechanisms a Definition carries, so a family may gain a Form
+    // without the protocol document changing (decision 0039's protocol
+    // reason; decision 0048).
+    mintedFor: "protocol",
+  }],
   ["forms.takoform.com/v1beta2", {
     wireSchema: "spec/schemas/host-api-wire-v1beta2.schema.json",
     // Minted for the Beta 2 hardening review's structural wire changes
@@ -1330,6 +1344,62 @@ function checkPackageEnvelopesAreMintedForAReason() {
   });
 }
 
+// A lane marked `namesNoFormKind` is one whose rules are stated as mechanisms a
+// family instantiates rather than as paragraphs about particular Forms. That
+// claim is only worth making if it is checked, and it is checkable exactly:
+// collect every Form kind of every family on disk and fail if the protocol
+// document contains one.
+//
+// The earlier lanes are not held to it. They name Form kinds, they are
+// published, and their bytes do not move — the point of the new lane is that
+// the NEXT family change does not touch a protocol document, not that the old
+// ones are rewritten.
+function checkExtensibleLanesNameNoFormKind() {
+  const kinds = new Map();
+  const candidateRoot = path.join(repositoryRoot, "forms", "candidates");
+  const families = [];
+  for (const family of readdirSync(candidateRoot)) {
+    const familyRoot = path.join(candidateRoot, family);
+    if (!statSync(familyRoot).isDirectory()) continue;
+    for (const generation of readdirSync(familyRoot)) {
+      const setPath = path.join("forms", "candidates", family, generation, "candidate-set.json");
+      if (existsSync(path.join(repositoryRoot, setPath))) families.push(setPath);
+    }
+  }
+  for (const setPath of families) {
+    const set = readJson(path.join(repositoryRoot, setPath));
+    for (const form of set.forms ?? []) {
+      const kind = form?.formRef?.kind;
+      if (typeof kind === "string" && kind !== "") kinds.set(kind, setPath);
+    }
+  }
+  if (kinds.size === 0) {
+    fail("no Form kinds were collected; the extensible-lane check would pass vacuously");
+  }
+  for (const [apiVersion, lane] of HOST_API_LANES) {
+    if (lane.namesNoFormKind !== true) continue;
+    const documentPath = lane.document;
+    if (typeof documentPath !== "string" || !existsSync(path.join(repositoryRoot, documentPath))) {
+      fail(`${apiVersion}: claims to name no Form kind but names no document to check`);
+      continue;
+    }
+    const source = read(path.join(repositoryRoot, documentPath));
+    const named = [];
+    for (const [kind, setPath] of kinds) {
+      if (new RegExp(`\\b${escapeRegExp(kind)}\\b`, "u").test(source)) {
+        named.push(`${kind} (${setPath})`);
+      }
+    }
+    if (named.length > 0) {
+      fail(
+        `${documentPath}: an extensible lane names ${named.length} Form kind(s) — ` +
+          `${named.slice(0, 6).join(", ")}${named.length > 6 ? ", …" : ""}. ` +
+          "A rule about one Form belongs to that Form's family, stated through a mechanism this lane declares.",
+      );
+    }
+  }
+}
+
 function checkHostApiLanesAreMintedForAReason() {
   const shapes = new Map();
   for (const [apiVersion, lane] of HOST_API_LANES) {
@@ -1369,14 +1439,28 @@ function checkHostApiLanesAreMintedForAReason() {
       // maturity name, so it is expected to match one. Only two lanes both
       // claiming to be distinct CONTRACTS may not be the same bytes.
       if (HOST_API_LANES.get(other)?.mintedFor !== "protocol") continue;
-      if (other !== apiVersion && shape === otherShape) {
-        fail(
-          `${apiVersion}: minted for a protocol change, but its wire contract is ` +
-            `structurally identical to ${other}; a lane that changes no bytes is a ` +
-            `rename, and every client renegotiates for nothing`,
-        );
-        break;
+      if (other === apiVersion || shape !== otherShape) continue;
+      // Identical bytes are usually a rename. They are not when the lane
+      // changes what a conforming host must DO rather than what it puts on
+      // the wire — a rule that used to be written per Form and is now derived
+      // from a declaration moves no envelope member and is still a different
+      // protocol to implement.
+      //
+      // The exception is tied to `namesNoFormKind`, which is CHECKED against
+      // the document, so a lane can only claim it by actually being the thing
+      // it claims. A lane asserting a difference nothing verifies would be
+      // the rename this check exists to catch.
+      // Either side of the pair may carry the exception: the two lanes are
+      // the same bytes because ONE of them changed something else.
+      if (lane.namesNoFormKind === true || HOST_API_LANES.get(other)?.namesNoFormKind === true) {
+        continue;
       }
+      fail(
+        `${apiVersion}: minted for a protocol change, but its wire contract is ` +
+          `structurally identical to ${other}; a lane that changes no bytes is a ` +
+          `rename, and every client renegotiates for nothing`,
+      );
+      break;
     }
   }
 }
@@ -1814,6 +1898,7 @@ checkPublicSchemas();
 checkWebsiteDocsProjection(formDocNames);
 checkHandWrittenInventories(edgeFamilyRoster);
 checkHostApiLanesAreMintedForAReason();
+checkExtensibleLanesNameNoFormKind();
 checkPackageEnvelopesAreMintedForAReason();
 checkDocumentedWalkIsRunnable();
 checkCorpusNamesStateTheirLane();

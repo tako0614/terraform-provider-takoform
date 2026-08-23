@@ -36,6 +36,7 @@ func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 		"host-support-profile-v1alpha1.schema.json": true,
 		"host-support-profile-v1alpha2.schema.json": true,
 		"host-api-wire-v1beta2.schema.json":         true,
+		"host-api-wire-v1beta3.schema.json":         true,
 		"host-discovery-v1beta2.schema.json":        true,
 		"operation-v1alpha2.schema.json":            true,
 		"standard-service-ref-v1alpha1.schema.json": true,

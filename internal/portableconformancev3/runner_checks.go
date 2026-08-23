@@ -103,6 +103,17 @@ func (r *v3Runner) run() error {
 			}
 			return r.checkClassHolderRules()
 		},
+		// The third lane's own addition, here because this is where the
+		// resources its declarations are about are live: every exclusive hold
+		// the installed family declares is driven, discovered from the served
+		// Definitions rather than from a list. On an earlier lane's corpus the
+		// step is a no-op and its required-check list does not name it.
+		func() error {
+			if !r.contract.lane.requires("declared-exclusive-holds-enforced") {
+				return nil
+			}
+			return r.checkDeclaredExclusiveHoldsEnforced()
+		},
 		// The two attachment rules a schema cannot state: a cron expression is a
 		// schedule rather than a shape, and one queue has one consumer
 		// (spec/decisions/0020). Both run against the worker the gate check just
@@ -205,7 +216,7 @@ func (r *v3Runner) run() error {
 	// They are appended rather than interleaved because each measures a rule
 	// that exists only in this lane: on a v1beta1 corpus the list is empty and
 	// the run is exactly what it always was.
-	if r.contract.lane.APIVersion == beta2Lane.APIVersion {
+	if r.contract.lane.requires("fence-matrix-observed") {
 		steps = append(steps,
 			func() error { return r.checkFenceMatrixObserved(kv) },
 			func() error { return r.checkFormsRouteEnumerates(mw) },

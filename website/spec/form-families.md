@@ -173,3 +173,92 @@ container designs are separate family work with their own proposals.
   states that subset in its Host Support Profile.
 - It does not admit vendor identity: adapter profiles map family Forms to
   concrete backends outside the contract.
+
+## The Edge Platform Family's artifact semantics
+
+These two rulebooks lived in the Host API document until
+`forms.takoform.com/v1beta3`, which states mechanisms rather than rules about
+particular Forms. They are family material: they say what an artifact MEANS to
+the Form that references it, which is exactly the knowledge a family owns. The
+protocol's own obligation — resolve the referenced manifest and hold it to the
+contract the referring Form states, before any mutation — is unchanged and
+stays there.
+
+### Static assets on a Worker Version
+
+The rules here are decided by
+[decision 0033](decisions/0033-edge-app-assets-and-sqlite-migrations-are-content-addressed.md).
+A `WorkerVersion` with no `assets` member performs no asset lookup. When the
+member is present it is one closed object with three required members:
+
+```json
+{
+  "bundle": {
+    "apiVersion": "edge.forms.takoform.com/v1beta2",
+    "kind": "StaticAssetBundle",
+    "name": "static-assets"
+  },
+  "runWorkerFirst": true,
+  "notFoundHandling": "single_page_application"
+}
+```
+
+The bundle relation requires the target's exact FormRef and is UID-pinned like
+every other relation. `notFoundHandling` is exactly `none` or
+`single_page_application`.
+
+- With `runWorkerFirst=false`, the host performs asset lookup first and invokes
+  `fetch` only when that stage produces no response.
+- With `runWorkerFirst=true`, it invokes `fetch` first and performs asset lookup
+  only when the worker returns 404. An asset response wins; if asset lookup
+  misses, the worker's 404 is preserved.
+- `none` leaves a missing exact path as a miss.
+- `single_page_application` answers a missing path with `index.html`. The host
+  MUST resolve the exact referenced manifest and refuse the Worker Version with
+  `invalid_argument` (400), before mutation, when it contains no `index.html`.
+
+Asset lookup maps the runtime URL `pathname` to a manifest path as one closed
+operation. Query strings and fragments are ignored; the escaped pathname is
+percent-decoded once as strict UTF-8, and exactly one leading `/` is removed.
+The host MUST reject encoded `/` or `\\`, repeated or empty interior segments,
+dot segments, backslashes, controls, Unicode noncharacters, malformed escapes,
+and invalid UTF-8. A valid path must still match the manifest's relative path
+grammar. Invalid paths fail closed and MUST NOT enter SPA fallback. A valid
+missing path is a miss under `none`, or resolves to `index.html` under
+`single_page_application`; the root pathname `/` is the canonical empty-path
+miss and follows that same fallback rule.
+
+The attachment never grants a runtime binding and never changes the asset
+bundle. A provider may author the manifest from local files, but desired state
+and provider state carry no file bytes.
+
+### SQLite migration history
+
+A `MigrationBundle` is an ordered non-empty `files` list and every entry MUST
+use `application/sql`; other media types are `artifact_invalid` (400).
+`SQLiteMigrationApplication` pins exact `SQLiteDatabase` and
+`SQLiteMigrationSet` relations. The host keeps a durable ordered ledger in the
+database, whose entry identity is `(path, digest)`.
+
+Before mutation, and again when an accepted operation commits, the host MUST
+serialize against other migration applications for the database and prove the
+ledger is an exact prefix of the referenced manifest. An applied entry that is
+absent, moved, or has another digest is `migration_required` (409) and changes
+nothing. Only the unapplied suffix may execute. Each file's SQL execution and
+its ledger insertion are one SQLite transaction: failure rolls back both for
+that file, keeps earlier committed entries, and makes a retry resume at the
+same suffix boundary. Ready means the durable ledger equals the exact ordered
+set.
+
+A database has AT MOST ONE live `SQLiteMigrationApplication`, over its UID
+exactly like the deployment and consumer rules; a second application against
+the same database incarnation fails `invalid_argument` (400) before any
+mutation. Advancing a database's schema is deleting the application and
+creating one referencing the longer set — the ledger check makes the new
+application resume at the unapplied suffix, so the handover replays nothing.
+
+Deleting `SQLiteMigrationApplication` removes the attachment and its relation
+holders only. It MUST NOT execute down SQL, remove ledger entries, reinterpret
+the schema, or delete the database. The database and set are protected by
+ordinary `dependency_in_use` while the attachment lives; database deletion
+after it is gone is a separate database policy, not migration rollback.

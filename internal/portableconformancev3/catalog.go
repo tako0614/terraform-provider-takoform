@@ -323,6 +323,7 @@ func newCatalog(served string) *Catalog {
 var laneOrder = map[string]int{
 	"forms.takoform.com/v1beta1": 1,
 	"forms.takoform.com/v1beta2": 2,
+	"forms.takoform.com/v1beta3": 3,
 }
 
 // satisfiesRequirement reports whether a host serving `served` may install a
