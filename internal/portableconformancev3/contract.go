@@ -806,6 +806,12 @@ func (c Contract) Root() string { return c.root }
 // Lane returns the protocol lane apiVersion this corpus measures.
 func (c Contract) Lane() string { return c.lane.APIVersion }
 
+// LaneDiscoveryPath returns the well-known path the lane this corpus measures
+// is discovered at. It is here rather than read off a package constant because
+// the constants name the RETAINED lane, and a host told to serve one corpus
+// while announcing another lane's address sends its operator to a 404.
+func (c Contract) LaneDiscoveryPath() string { return c.lane.DiscoveryPath }
+
 type manifest struct {
 	Format   string `json:"format"`
 	Contract string `json:"contract"`

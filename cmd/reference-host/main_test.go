@@ -72,7 +72,26 @@ func TestReferenceHostServesTheCurrentLaneDiscovery(t *testing.T) {
 		t.Fatal("reference host never announced an origin")
 	}
 
-	request, err := http.NewRequest(http.MethodGet, origin+clientv3.DiscoveryPath, nil)
+	// The banner is the operator-facing surface: it is what a reader copies to
+	// point a provider at this host. It named the RETAINED lane's address while
+	// the host served the current one, so the URL it printed answered 404 —
+	// which is why the address is driven from the banner here rather than
+	// composed from a constant the banner does not use.
+	var announcedDiscovery string
+	for _, line := range strings.Split(announced.String(), "\n") {
+		if _, address, found := strings.Cut(line, "discovery "); found {
+			announcedDiscovery = strings.TrimSpace(address)
+		}
+	}
+	if announcedDiscovery != origin+clientv3.DiscoveryPath {
+		t.Fatalf(
+			"the banner announces %q, but this host serves its discovery at %q; an operator "+
+				"following the banner reaches a lane that does not answer",
+			announcedDiscovery, origin+clientv3.DiscoveryPath,
+		)
+	}
+
+	request, err := http.NewRequest(http.MethodGet, announcedDiscovery, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
