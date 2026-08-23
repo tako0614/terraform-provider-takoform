@@ -176,7 +176,7 @@ for (const file of markdownFiles(path.join(repositoryRoot, "proposals"))) {
     ),
   });
 }
-for (const familyDirectory of ["edge"]) {
+for (const familyDirectory of ["container", "edge", "function", "queue", "schedule", "table", "topic", "vector"]) {
   const dir = path.join(repositoryRoot, "proposals", familyDirectory);
   for (const file of markdownFiles(dir)) {
     pages.push({
