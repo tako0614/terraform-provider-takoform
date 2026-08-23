@@ -11,7 +11,7 @@ func collidingForm(varsExample map[string]any) Form {
 	return Form{
 		Family: Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"},
 		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
-		Role: RoleRevision, Title: "Worker Version", DefinitionVersion: "0.1.0",
+		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleRevision, Title: "Worker Version", DefinitionVersion: "0.1.0",
 		Fields: []Field{
 			{HCL: "vars", Wire: "vars", Kind: KindJSONMap, Default: map[string]any{},
 				ProjectsEnvironmentNames: true, Doc: "Environment values.", Example: varsExample},
@@ -54,7 +54,7 @@ func TestProjectsEnvironmentNamesIsBoundedToNameCarryingKinds(t *testing.T) {
 	form := Form{
 		Family: Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"},
 		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
-		Role: RoleRevision, Title: "Worker Version", DefinitionVersion: "0.1.0",
+		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleRevision, Title: "Worker Version", DefinitionVersion: "0.1.0",
 		Fields: []Field{{
 			HCL: "activation_delay_seconds", Wire: "activationDelaySeconds", Kind: KindInteger,
 			Required: true, Doc: "A duration in seconds, which names nothing in a runtime environment.", Example: 30,

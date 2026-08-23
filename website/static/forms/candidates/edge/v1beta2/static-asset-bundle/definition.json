@@ -5,6 +5,7 @@
   "title": "Static Asset Bundle",
   "description": "Immutable content-addressed set of files served beside one Worker Version. The whole portable desired state is the digest of a committed artifacts.takoform.com/v1alpha1 StaticAssetBundle manifest; the manifest is the sole ordered inventory of path, media type, exact size, and sha256 digest for every file. Raw file bytes, upload locations, backend identities, and serving policy never enter this resource. Serving order and not-found behavior belong to the Worker Version attachment so the same bytes can participate in different immutable versions without giving the bundle two meanings.",
   "role": "revision",
+  "requiresHostApi": "forms.takoform.com/v1beta1",
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,

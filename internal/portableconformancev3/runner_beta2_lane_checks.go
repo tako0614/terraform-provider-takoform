@@ -786,6 +786,123 @@ func (r *v3Runner) formsQuery(query url.Values) ([]formsAvailabilityEntry, error
 // formsExactQuery is the six-key exact-availability probe: the same question
 // v1beta1 asked with five keys, now expressed in the vocabulary that splits an
 // apiVersion the way every path in this lane already splits it.
+// checkPortableDefaultsMaterialized drives the one request the runner never
+// otherwise sends: a spec with a defaulted property OMITTED.
+//
+// Every other probe is materialized locally before it leaves the runner
+// (target), so no request in the corpus has ever exercised the rule. A host
+// that stores the wire spec verbatim — never materializing anything — passed
+// every check, which made an entire normative section unmeasured while
+// reporting green.
+//
+// The rule's consequences are what a client actually depends on: the echo it
+// gets back IS its desired state, the digest is the materialized spec's, and
+// omitting a default is the same desired state as writing it — same
+// generation, no update.
+func (r *v3Runner) checkPortableDefaultsMaterialized(target probeTarget) error {
+	defaults := r.declaredDefaults(target.Ref)
+	if len(defaults) == 0 {
+		return fmt.Errorf(
+			"the corpus pins no declared default for %s, so the materialization rule cannot be driven here",
+			target.Ref.Kind,
+		)
+	}
+
+	// The same desired state, written two ways: once with every default
+	// omitted, once with each written out at its declared value.
+	omitted := probeTarget{
+		Ref: target.Ref, PackageDigest: target.PackageDigest, Space: target.Space,
+		Name: "portable-defaults-probe", Lifecycle: target.Lifecycle,
+		Spec: map[string]any{},
+	}
+	for key, value := range target.Spec {
+		if _, defaulted := defaults[key]; !defaulted {
+			omitted.Spec[key] = value
+		}
+	}
+	written := omitted
+	written.Spec = map[string]any{}
+	for key, value := range omitted.Spec {
+		written.Spec[key] = value
+	}
+	for key, value := range defaults {
+		written.Spec[key] = value
+	}
+
+	created, _, err := r.applyResource(omitted, applyOptions{
+		Create: true, IdempotencyKey: "key-portable-defaults-create",
+	}, http.StatusCreated)
+	if err != nil {
+		return fmt.Errorf("creating a resource with its defaults omitted: %w", err)
+	}
+	// The whole materialized document, not the defaulted keys. Checking only
+	// what the caller sent plus what it expected back would let a host add an
+	// undeclared property, bind its digest, echo it consistently, and pass —
+	// while the client's desired state silently contains something it never
+	// wrote. The corpus's own materialization is the expected value, and it is
+	// compared as canonical JSON so a number that decoded to another Go type
+	// is not mistaken for a different value.
+	expected := r.materialize(omitted.Ref, omitted.Spec)
+	wantSpec, err := canonicalJSON(expected)
+	if err != nil {
+		return err
+	}
+	gotSpec, err := canonicalJSON(created.Spec)
+	if err != nil {
+		return err
+	}
+	if gotSpec != wantSpec {
+		return fmt.Errorf(
+			"the echo of a spec omitting its defaults is %s, want the materialized %s; the effective "+
+				"spec IS the wire spec, so the echo is the client's own desired state and carries "+
+				"nothing it did not write and nothing the Definition did not default",
+			gotSpec, wantSpec,
+		)
+	}
+
+	// Writing the default explicitly is the SAME desired state: no update.
+	updated, _, err := r.applyResource(written, applyOptions{
+		ExpectedGeneration: created.Metadata.Generation,
+		IdempotencyKey:     "key-portable-defaults-rewrite",
+	}, http.StatusOK)
+	if err != nil {
+		return fmt.Errorf("re-applying the same state with its defaults written out: %w", err)
+	}
+	if updated.Metadata.Generation != created.Metadata.Generation {
+		return fmt.Errorf(
+			"writing a default explicitly moved the generation from %s to %s; omitting a defaulted "+
+				"property and writing its default are one desired state",
+			created.Metadata.Generation, updated.Metadata.Generation,
+		)
+	}
+
+	if err := r.deleteExisting(omitted, "key-portable-defaults-delete"); err != nil {
+		return fmt.Errorf("removing the defaults probe: %w", err)
+	}
+	r.complete("portable-defaults-materialized")
+	return nil
+}
+
+// declaredDefaults reads the top-level defaults the CORPUS pins for one Form.
+func (r *v3Runner) declaredDefaults(ref FormRef) map[string]any {
+	schema, pinned := r.desiredSchemas[ref]
+	if !pinned {
+		return nil
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	out := map[string]any{}
+	for name, raw := range properties {
+		node, _ := raw.(map[string]any)
+		if node == nil {
+			continue
+		}
+		if value, declared := node["default"]; declared {
+			out[name] = value
+		}
+	}
+	return out
+}
+
 // formsExactQuery builds the /forms filter query naming one whole identity.
 // It is NOT exactQuery: the filter vocabulary splits `group` from `version`
 // and takes six keys, while a resource route's exact-Form query carries the

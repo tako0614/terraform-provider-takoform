@@ -307,7 +307,7 @@ func TestHandlerGateMatchesTheResolvedWorkerIncarnation(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 	host := NewReferenceHost(contract, catalog)
-	const group, space = edgeFormsGroup, "conformance"
+	const group, space = testEdgeFormsGroup, "conformance"
 	workerReference := map[string]any{"apiVersion": group, "kind": "ModuleWorker", "name": "module-worker-probe"}
 	storeWorker := func(uid string) {
 		host.storeResource(&storedResource{

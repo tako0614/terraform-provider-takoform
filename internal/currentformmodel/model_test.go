@@ -9,7 +9,7 @@ func testForm() Form {
 	return Form{
 		Family: Family{Group: "edge.forms.takoform.com", Version: "v1alpha1"},
 		Kind:   "ExampleRevision", Slug: "example-revision", ResourceType: "takoform_example_revision",
-		Role: RoleRevision, Title: "Example Revision", Description: "Test form.",
+		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleRevision, Title: "Example Revision", Description: "Test form.",
 		DefinitionVersion: "0.1.0",
 		Fields: []Field{
 			{HCL: "main_module", Wire: "mainModule", Kind: KindString, Required: true,
@@ -52,7 +52,7 @@ func TestLifecycleCapabilitiesFollowMutableFields(t *testing.T) {
 
 	fieldless := Form{
 		Kind: "Fieldless", Slug: "fieldless", ResourceType: "takoform_fieldless",
-		Role: RoleIdentity, Title: "Fieldless", DefinitionVersion: "0.1.0",
+		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleIdentity, Title: "Fieldless", DefinitionVersion: "0.1.0",
 	}
 	mutable := fieldless
 	mutable.Fields = []Field{{
@@ -135,7 +135,7 @@ func TestDesiredSchemaEmptyFormHasEmptyProperties(t *testing.T) {
 	t.Parallel()
 	form := Form{
 		Kind: "ExampleIdentity", Slug: "example-identity", ResourceType: "takoform_example_identity",
-		Role: RoleIdentity, Title: "Example Identity", Description: "Identity with no fields.",
+		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleIdentity, Title: "Example Identity", Description: "Identity with no fields.",
 		DefinitionVersion: "0.1.0",
 	}
 	schema := mustDesiredSchema(t, form)
@@ -182,7 +182,7 @@ func TestNegativeCasesDerivation(t *testing.T) {
 
 	empty := Form{
 		Kind: "ExampleIdentity", Slug: "example-identity", ResourceType: "takoform_example_identity",
-		Role: RoleIdentity, Title: "Example Identity", Description: "Identity with no fields.",
+		RequiresHostAPI: "forms.takoform.com/v1beta1", Role: RoleIdentity, Title: "Example Identity", Description: "Identity with no fields.",
 		DefinitionVersion: "0.1.0",
 	}
 	emptyCases, err := empty.NegativeCases()
@@ -257,6 +257,7 @@ func TestValidateRejectsEnvelopeOwnedName(t *testing.T) {
 	form := Form{
 		Kind: "ExampleThing", Slug: "example-thing", ResourceType: "takoform_example_thing",
 		Title: "Example", DefinitionVersion: "0.1.0", Role: RoleIdentity,
+		RequiresHostAPI: "forms.takoform.com/v1beta1",
 		Fields: []Field{{
 			HCL: "name", Wire: "name", Kind: KindString, Doc: "Resource name.",
 			Required: true, Example: "example",

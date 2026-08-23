@@ -5,15 +5,15 @@
     "apiVersion": "edge.forms.takoform.com/v1beta2",
     "kind": "ObjectBucket",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:4f82026968c3ae98785acfba3c9e4d8e9b8f110c09b9b34ac3043e2d362b5fff"
+    "schemaDigest": "sha256:1e07aa334630b4834f90bea29875fac375f869bef594516ab9a03dfed50d7e33"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 2103,
-      "digest": "sha256:f38630d101533bec403d8224342bc41aa91f0ac7a16224d96debcdaf1a426f8f"
+      "size": 2154,
+      "digest": "sha256:3120c6799084692aae2060243e89019b2d79bff8640b21581777ca76142d937b"
     },
     {
       "path": "fixtures/desired.json",

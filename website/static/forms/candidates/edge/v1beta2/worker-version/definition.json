@@ -5,6 +5,7 @@
   "title": "Worker Version",
   "description": "Immutable executable snapshot of one Module Worker: a bundle, the handlers its module exports, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is not a field of this Form: it is fixed by the worker.runtime@1.1.0 contract the Module Worker identity provides, so a version carries no compatibility date and no compatibility flag (decision 0019).",
   "role": "revision",
+  "requiresHostApi": "forms.takoform.com/v1beta2",
   "desiredSchema": {
     "$defs": {
       "jsonValueDepth1": {
@@ -277,7 +278,7 @@
                 "apiVersion": "edge.forms.takoform.com/v1beta2",
                 "definitionVersion": "0.1.0",
                 "kind": "StaticAssetBundle",
-                "schemaDigest": "sha256:9dd6ad8235ab7bc65c457fb119b67dcddf3d5f1f0a0062a4363c634214befb6a"
+                "schemaDigest": "sha256:a6bf24517afa91917789c599f14c2717dfbfa2942651b1d0f17a907afba4ce78"
               }
             ]
           },
@@ -385,7 +386,7 @@
             "apiVersion": "edge.forms.takoform.com/v1beta2",
             "definitionVersion": "0.1.0",
             "kind": "WorkerBundle",
-            "schemaDigest": "sha256:34952a4003122ea40f394dccc7bd0dc711f2d241036c11ef86ef6cf2782def36"
+            "schemaDigest": "sha256:d9fadb910964b9c260b8ebc9e2f9af3567d23de099b215cb1e1d585e01fde7c2"
           }
         ]
       },

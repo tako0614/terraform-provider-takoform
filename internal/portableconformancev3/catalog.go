@@ -63,6 +63,18 @@ type InstalledForm struct {
 	// against them, never assumed.
 	ProvidedInterfaces []formpackage.InterfaceRef
 	AcceptedBindings   []formpackage.BindingRef
+	// EnforcedFamily is the family generation whose cross-resource semantics
+	// this host enforces, stamped at install time. A Form of any OTHER group —
+	// the corpus installs one deliberately — carries a different value here
+	// and is skipped by every family guard, which is what makes "this host
+	// enforces one family's semantics" a fact about the installed set rather
+	// than about a compiled-in constant.
+	EnforcedFamily string
+	// RequiresHostAPI is the earliest Host API lane this Form's contract needs
+	// (decision 0047). A host serving an earlier lane refuses to install it:
+	// installing a Form whose rules the served protocol does not have means
+	// accepting desired state nothing will ever enforce.
+	RequiresHostAPI string
 	// Relations are DERIVED from DesiredSchema at install time, never read
 	// from a wire member. A host has the desired schema by construction, so
 	// deriving costs nothing and removes the second source of truth a declared
@@ -176,7 +188,7 @@ func (form *InstalledForm) declaresUpdate() bool {
 // same generation, and so do two clients that spell one hostname two ways
 // (spec/decisions/0026).
 func (form *InstalledForm) materialize(spec map[string]any) map[string]any {
-	return canonicalizeEdgeSpec(form, currentformmodel.MaterializeDefaults(form.DesiredSchema, spec))
+	return canonicalizeEdgeSpec(form.EnforcedFamily, form, currentformmodel.MaterializeDefaults(form.DesiredSchema, spec))
 }
 
 // supportRef is one interface or binding contract the host declares support
@@ -263,7 +275,17 @@ func runtimeHandlerVocabulary(document interfaceDefinitionDocument) []string {
 // would answer it about a different contract, successfully, with nothing
 // downstream able to tell (decision 0022).
 type Catalog struct {
-	Forms map[ExactFormKey]*InstalledForm
+	// served is the Host API lane this catalog's host speaks. It decides
+	// which Forms may be installed at all: a Form whose contract needs a
+	// later lane would be accepted into desired state nothing enforces.
+	served string
+	// family is the namespaced Form Family generation this catalog installed,
+	// READ from the candidate set rather than compiled in. A host whose
+	// cross-resource semantics were keyed to a constant would load a
+	// different generation, pass every structural check, and then enforce
+	// nothing — every one of those guards is a silent early return.
+	family string
+	Forms  map[ExactFormKey]*InstalledForm
 	// lines indexes group+kind+definitionVersion onto the one exact key that
 	// names it. It exists for the support surface, whose published path carries
 	// no schemaDigest segment; installing two definitions that agree on the
@@ -275,8 +297,9 @@ type Catalog struct {
 	abis       map[string]interfaceContract // name@version
 }
 
-func newCatalog() *Catalog {
+func newCatalog(served string) *Catalog {
 	return &Catalog{
+		served:     served,
 		Forms:      map[ExactFormKey]*InstalledForm{},
 		lines:      map[string]ExactFormKey{},
 		interfaces: map[string]supportRef{},
@@ -294,6 +317,71 @@ func newCatalog() *Catalog {
 // are an identity conflict, because a definition version names one set of
 // definition bytes and a host holding two of them cannot say which one a
 // version-addressed request means.
+// laneOrder ranks the Host API lanes by publication order, which is what makes
+// "at least this lane" answerable. A lane absent from it is unknown to this
+// host, and an unknown REQUIREMENT is refused rather than assumed satisfied.
+var laneOrder = map[string]int{
+	"forms.takoform.com/v1beta1": 1,
+	"forms.takoform.com/v1beta2": 2,
+}
+
+// satisfiesRequirement reports whether a host serving `served` may install a
+// Form requiring `required`. The requirement is a LOWER BOUND (decision 0047):
+// a later lane serves an earlier requirement, and the lane's own compatibility
+// obligation is what makes that true.
+func satisfiesRequirement(served, required string) bool {
+	if required == "" {
+		return false
+	}
+	servedRank, known := laneOrder[served]
+	if !known {
+		return false
+	}
+	requiredRank, known := laneOrder[required]
+	if !known {
+		return false
+	}
+	return servedRank >= requiredRank
+}
+
+// requireEnforceableFamily proves the installed generation is one this host
+// has cross-resource semantics for. The kinds below are the ones every family
+// guard keys on; a generation that renamed or dropped them all is a generation
+// this build cannot enforce, and saying so is the difference between a host
+// that refuses and a host that silently permits.
+func (catalog *Catalog) requireEnforceableFamily() error {
+	if catalog.family == "" {
+		return errors.New("takoform: the catalog installed Forms before it knew which family it enforces")
+	}
+	enforced := []string{
+		workerVersionKind, workerDeploymentKind, queueConsumerKind,
+		workerCustomDomainKind, sqliteMigrationApplicationKind,
+	}
+	for _, form := range catalog.Forms {
+		// The stamp is what every guard reads. An unstamped Form is one the
+		// guards will skip, so an empty one is a silent loss of semantics
+		// rather than a Form with nothing to enforce.
+		if form.EnforcedFamily == "" {
+			return fmt.Errorf("takoform: installed Form %s carries no enforced family", exactFormKey(form.Ref))
+		}
+	}
+	for _, form := range catalog.Forms {
+		if form.Ref.APIVersion != catalog.family {
+			continue
+		}
+		for _, kind := range enforced {
+			if form.Ref.Kind == kind {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf(
+		"takoform: the installed family %s carries none of the kinds this host has semantics for, "+
+			"so every cross-resource guard would silently pass",
+		catalog.family,
+	)
+}
+
 func (catalog *Catalog) install(form *InstalledForm) error {
 	key := exactFormKey(form.Ref)
 	if _, installed := catalog.Forms[key]; installed {
@@ -304,6 +392,18 @@ func (catalog *Catalog) install(form *InstalledForm) error {
 		return fmt.Errorf(
 			"takoform: %s %s definition version %s is already installed at digest %s",
 			form.Ref.APIVersion, form.Ref.Kind, form.Ref.DefinitionVersion, existing.SchemaDigest,
+		)
+	}
+	form.EnforcedFamily = catalog.family
+	// A Form states the substrate it needs, and a host that cannot provide it
+	// refuses the Form rather than serving desired state it has no rules for
+	// (decision 0047). An absent declaration is not a hole: the Definition
+	// profile requires the member, so a published Form always carries one, and
+	// the corpus's hand-authored Definitions carry one for the same reason.
+	if form.RequiresHostAPI != "" && !satisfiesRequirement(catalog.served, form.RequiresHostAPI) {
+		return fmt.Errorf(
+			"takoform: %s requires Host API %s and this host serves %s",
+			key, form.RequiresHostAPI, catalog.served,
 		)
 	}
 	if err := form.compileDesiredSchema(); err != nil {
@@ -441,12 +541,19 @@ type bindingCandidateSet struct {
 // identity comes from the generated registry (currentformregistry.V3Current),
 // so registry/candidate drift fails closed.
 func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
-	catalog := newCatalog()
+	catalog := newCatalog(contract.APIVersion)
 	var set candidateSet
-	setPath := filepath.Join(repoRoot, "forms", "candidates", "edge", "v1beta2", "candidate-set.json")
+	if contract.FamilyCandidateSet == "" {
+		return nil, errors.New("takoform: the corpus does not say which Form Family generation it installs")
+	}
+	setPath := filepath.Join(repoRoot, filepath.FromSlash(contract.FamilyCandidateSet), "candidate-set.json")
 	if err := decodeStrictFile(setPath, &set); err != nil {
 		return nil, err
 	}
+	// Before anything installs: every installed Form is stamped with the
+	// family this host enforces, so recording it after the install loop would
+	// stamp them all empty and silence every guard.
+	catalog.family = set.Family
 	if set.FormMaturity != "experimental" {
 		return nil, fmt.Errorf("takoform: Beta family maturity is %q, want experimental", set.FormMaturity)
 	}
@@ -493,6 +600,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 			Lifecycle:          definition.LifecycleCapabilities,
 			ProvidedInterfaces: definition.ProvidedInterfaces,
 			AcceptedBindings:   definition.AcceptedBindings,
+			RequiresHostAPI:    definition.RequiresHostAPI,
 		}
 		if err := catalog.install(form); err != nil {
 			return nil, err
@@ -513,6 +621,15 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 	}
 	if len(catalog.Forms) != currentSupported {
 		return nil, errors.New("takoform: candidate set does not cover its generation of the v3 registry")
+	}
+	// Fail closed on the failure this whole change exists to prevent. Every
+	// family guard is a silent early return, so a host holding a family whose
+	// kinds it has no semantics for would install, cover the registry, and
+	// enforce nothing — passing conformance while proving nothing. If the
+	// installed set contains none of the kinds the semantics are written for,
+	// that is not a host with less to do; it is a host that has lost them.
+	if err := catalog.requireEnforceableFamily(); err != nil {
+		return nil, err
 	}
 	if err := catalog.installSyntheticSecondGroup(contract); err != nil {
 		return nil, err
@@ -611,8 +728,9 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 // tests can run without a repository checkout; SelfTest uses the real
 // LoadCatalog.
 func FallbackCatalog(contract Contract) (*Catalog, error) {
-	catalog := newCatalog()
+	catalog := newCatalog(contract.APIVersion)
 	group := contract.RunnerInput.EdgeKvNamespace.Identity.FormRef.APIVersion
+	catalog.family = group
 	// The fallback Interface and Binding contracts are the ones the support
 	// probes name, so the in-memory catalog is internally consistent: the KV
 	// Form provides the Interface the binding requires, and the WorkerVersion
@@ -861,6 +979,7 @@ func (catalog *Catalog) installSyntheticSecondDefinitionVersion(contract Contrac
 		Lifecycle:          definition.LifecycleCapabilities,
 		ProvidedInterfaces: definition.ProvidedInterfaces,
 		AcceptedBindings:   definition.AcceptedBindings,
+		RequiresHostAPI:    definition.RequiresHostAPI,
 	})
 }
 

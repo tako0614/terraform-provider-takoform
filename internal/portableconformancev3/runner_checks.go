@@ -94,7 +94,15 @@ func (r *v3Runner) run() error {
 		r.checkHandlerGatedAttachments,
 		// The two members that name a CLASS rather than a handler, and whose
 		// gate is therefore the opposite way round from an attachment's.
-		r.checkClassHolderRules,
+		// Only where the generation carries the Forms it gates. A corpus
+		// installing a family without class-selecting identities has nothing
+		// to drive here, and its required-check list says so.
+		func() error {
+			if r.contract.RunnerInput.DurableWorkflow.Name == "" {
+				return nil
+			}
+			return r.checkClassHolderRules()
+		},
 		// The two attachment rules a schema cannot state: a cron expression is a
 		// schedule rather than a shape, and one queue has one consumer
 		// (spec/decisions/0020). Both run against the worker the gate check just
@@ -204,6 +212,7 @@ func (r *v3Runner) run() error {
 			func() error { return r.checkAvailabilityTruthConditions(kv) },
 			func() error { return r.checkCancelOutcomesClosed(kv) },
 			func() error { return r.checkExternalServiceSlotsSealed(version) },
+			func() error { return r.checkPortableDefaultsMaterialized(queue) },
 		)
 	}
 	for _, step := range steps {
@@ -534,7 +543,7 @@ func (r *v3Runner) checkFormDefinitions() error {
 		packageDigest string
 		schema        map[string]any
 	}
-	inventory := probeInventory(&input)
+	inventory := declaredProbes(&input)
 	pinned := make([]pinnedDefinition, 0, len(inventory)+1)
 	for _, entry := range inventory {
 		pinned = append(pinned, pinnedDefinition{

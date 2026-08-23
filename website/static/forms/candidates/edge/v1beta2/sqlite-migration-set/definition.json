@@ -5,6 +5,7 @@
   "title": "SQLite Migration Set",
   "description": "Immutable ordered SQLite migration history backed by one committed artifacts.takoform.com/v1alpha1 MigrationBundle manifest. The manifest files array is the migration order; every entry has a unique portable path, media type application/sql, exact size, and sha256 digest. SQL bytes travel only through the content-addressed artifact upload and never enter desired state. A new set may append entries, but an application refuses any set whose prefix rewrites, reorders, or removes an already applied path+digest pair.",
   "role": "revision",
+  "requiresHostApi": "forms.takoform.com/v1beta1",
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,

@@ -23,19 +23,26 @@ const corpusRoot = path.join(repositoryRoot, "conformance", "portable-host-v1bet
 const contractPath = path.join(corpusRoot, "contract.json");
 const manifestPath = path.join(corpusRoot, "manifest.json");
 
+// The family generation this corpus installs is the CORPUS's statement, not
+// this script's. It is a separate axis from the protocol lane (decision 0047),
+// and reading it from a literal here is exactly how a Host API v1beta1 corpus
+// came to be pinned to the v1beta2 family.
+const declaredFamilyTree = readJSON(contractPath).familyCandidateSet;
+if (typeof declaredFamilyTree !== "string" || declaredFamilyTree === "") {
+  throw new Error("portable-host-v1beta1 contract does not declare familyCandidateSet");
+}
 const forms = readJSON(
-  path.join(repositoryRoot, "forms", "candidates", "edge", "v1beta2", "candidate-set.json"),
+  path.join(repositoryRoot, declaredFamilyTree, "candidate-set.json"),
 );
 const interfaces = readJSON(
   path.join(repositoryRoot, "interfaces", "candidates", "v1alpha1", "candidate-set.json"),
 );
 if (
   forms.format !== "takoform.form-family-candidates@v1" ||
-  forms.publicationStatus !== "unpublished" ||
   interfaces.format !== "takoform.interface-candidates@v1" ||
   interfaces.publicationStatus !== "unpublished"
 ) {
-  throw new Error("portable-host-v1beta1 pins require the unpublished family candidate lane");
+  throw new Error("portable-host-v1beta1 pins require a family candidate lane and the interface candidate lane");
 }
 
 const formsByFamily = new Map(
@@ -66,18 +73,57 @@ if (interfacesByIdentity.size !== interfaces.interfaces.length) {
 const contract = readJSON(contractPath);
 const fixtureOutputs = [];
 let pinnedForms = 0;
+// repointFamilyReferences rewrites every nested apiVersion that names ANOTHER
+// generation of the same Form Family group. It leaves other groups alone: the
+// corpus deliberately installs a second group, and rewriting that one would
+// erase the very thing it exists to prove.
+function repointFamilyReferences(node, family) {
+  const groupName = family.slice(0, family.lastIndexOf("/"));
+  const walk = (value) => {
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item);
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    for (const [key, member] of Object.entries(value)) {
+      if (
+        key === "apiVersion" &&
+        typeof member === "string" &&
+        member.startsWith(`${groupName}/`) &&
+        member !== family
+      ) {
+        value[key] = family;
+        continue;
+      }
+      walk(member);
+    }
+  };
+  walk(node);
+}
+
 for (const probe of Object.values(contract.runnerInput)) {
   const ref = probe?.identity?.formRef;
   if (ref === undefined) continue;
-  const candidate = formsByFamily.get(formFamily(ref));
+  // Matched by KIND, not by the whole family identity: re-pinning is exactly
+  // the operation that moves a probe from one family generation to another,
+  // and matching on the old apiVersion would make the corpus unable to follow
+  // its own declared tree (decision 0047).
+  const candidate = formsByKind.get(ref.kind);
   if (candidate === undefined) {
     throw new Error(
-      `portable-host-v1beta1 references unknown current Form family ${ref.apiVersion}/${ref.kind}`,
+      `portable-host-v1beta1 references ${ref.kind}, which the declared family tree ` +
+        `${declaredFamilyTree} does not carry`,
     );
   }
 
   probe.identity.formRef = structuredClone(candidate.formRef);
   probe.identity.packageDigest = candidate.packageDigest;
+  // A probe's DESIRED document names other Forms by reference, and those
+  // references carry the family group too. Re-pinning the identity without
+  // them would leave a spec whose every nested reference names the generation
+  // the corpus just stopped installing — which a conforming host refuses,
+  // correctly, and which looks like a host bug rather than a corpus one.
+  repointFamilyReferences(probe.desired, forms.family);
   pinnedForms++;
 
   if (probe.desiredSchema === undefined) continue;

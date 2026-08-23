@@ -5,6 +5,7 @@
   "title": "Worker Deployment",
   "description": "Selects which Worker Versions of one Module Worker serve traffic and in what proportion. Weights are basis points and must sum to exactly 10000 across entries; the sum is host-validated semantics because a schema cannot add weights. Rollback is re-weighting, never mutating a revision.",
   "role": "deployment",
+  "requiresHostApi": "forms.takoform.com/v1beta1",
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -51,7 +52,7 @@
                   "apiVersion": "edge.forms.takoform.com/v1beta2",
                   "definitionVersion": "0.2.0",
                   "kind": "WorkerVersion",
-                  "schemaDigest": "sha256:255a6bbb5e11c6c1af1ca1cd37a5babc2e67214010840c929118d7b419f48132"
+                  "schemaDigest": "sha256:f63d1c6939e01e5f5e4f043f1bb3f81c146b6ee40e63b10cab49f730f323da34"
                 }
               ]
             }
@@ -97,7 +98,7 @@
             "apiVersion": "edge.forms.takoform.com/v1beta2",
             "definitionVersion": "0.1.0",
             "kind": "ModuleWorker",
-            "schemaDigest": "sha256:49a3802e53618c372ffa94a4d2c49d0c6867b7a97d9af685a11c5314d42a160e"
+            "schemaDigest": "sha256:2c2ab478e32966c8dc6d2c7fe49c016b80bbb809682e1994685f9e75d34e6a6b"
           }
         ]
       }

@@ -185,10 +185,10 @@ func TestResourceAddressCarriesTheTenant(t *testing.T) {
 	primary := referencePrimaryAuth.scope("conformance")
 	foreign := referenceOtherTenantAuth.scope("conformance")
 
-	key := resourceKey(primary, edgeFormsGroup, moduleWorkerKind, "api")
+	key := resourceKey(primary, testEdgeFormsGroup, moduleWorkerKind, "api")
 	members := strings.Split(key, "\x00")
 	want := []string{
-		referencePrimaryAuth.Tenant, "conformance", edgeFormsGroup, moduleWorkerKind, "api",
+		referencePrimaryAuth.Tenant, "conformance", testEdgeFormsGroup, moduleWorkerKind, "api",
 	}
 	if len(members) != len(want) {
 		t.Fatalf("resource address has %d members, want %d: %q", len(members), len(want), members)
@@ -199,16 +199,16 @@ func TestResourceAddressCarriesTheTenant(t *testing.T) {
 		}
 	}
 	// Two principals of one tenant address ONE resource; two tenants do not.
-	if resourceKey(referenceAlternateAuth.scope("conformance"), edgeFormsGroup, moduleWorkerKind, "api") != key {
+	if resourceKey(referenceAlternateAuth.scope("conformance"), testEdgeFormsGroup, moduleWorkerKind, "api") != key {
 		t.Fatal("two principals of one tenant address two resources; the boundary is the tenant, not the credential")
 	}
-	if resourceKey(foreign, edgeFormsGroup, moduleWorkerKind, "api") == key {
+	if resourceKey(foreign, testEdgeFormsGroup, moduleWorkerKind, "api") == key {
 		t.Fatal("two tenants naming one resource in one space address one record")
 	}
 	// And a resource's own key is derived from its own scope, so a record cannot
 	// be stored under an address that is not its own.
 	resource := &storedResource{
-		Ref:  FormRef{APIVersion: edgeFormsGroup, Kind: moduleWorkerKind},
+		Ref:  FormRef{APIVersion: testEdgeFormsGroup, Kind: moduleWorkerKind},
 		Name: "api", Tenant: referencePrimaryAuth.Tenant, Space: "conformance",
 	}
 	if resource.key() != key {
@@ -316,7 +316,7 @@ func TestRelationScopeSurvivesAnIdenticalNameInAnotherTenant(t *testing.T) {
 // it. The corpus proves the REFUSAL over HTTP; this proves the mechanism, so a
 // host that refused by some other means would still have to state which.
 func TestPrepareBindingIsMintedForOneTenant(t *testing.T) {
-	ref := FormRef{APIVersion: edgeFormsGroup, Kind: moduleWorkerKind, DefinitionVersion: "0.1.0"}
+	ref := FormRef{APIVersion: testEdgeFormsGroup, Kind: moduleWorkerKind, DefinitionVersion: "0.1.0"}
 	specDigest, err := specCanonicalDigest(map[string]any{})
 	if err != nil {
 		t.Fatal(err)

@@ -292,7 +292,7 @@ func TestV1Alpha3HostAdvertisesNoRefresh(t *testing.T) {
 // through materialization rather than through the request body.
 func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 	form := &InstalledForm{
-		Ref: FormRef{APIVersion: edgeFormsGroup, Kind: "WorkerDeployment"},
+		Ref: FormRef{APIVersion: testEdgeFormsGroup, Kind: "WorkerDeployment"},
 		DesiredSchema: map[string]any{
 			"type": "object", "additionalProperties": false,
 			"properties": map[string]any{
@@ -317,7 +317,7 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 	if _, ok := entry["weight"].(json.Number); !ok {
 		t.Fatalf("materialized weight is %T, want json.Number", entry["weight"])
 	}
-	if hostErr := validateDeploymentWeightSum(form, materialized); hostErr != nil {
+	if hostErr := validateDeploymentWeightSum(testEdgeFormsGroup, form, materialized); hostErr != nil {
 		t.Fatalf("a host semantic rule rejected a materialized value: %+v", hostErr)
 	}
 	// And the rule still rejects a wrong total that arrived the same way.
@@ -326,7 +326,7 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 			"workerVersion": map[string]any{"kind": "WorkerVersion", "name": "worker-version-probe"},
 			"weight":        9999,
 		}}
-	if hostErr := validateDeploymentWeightSum(form, form.materialize(nil)); hostErr == nil {
+	if hostErr := validateDeploymentWeightSum(testEdgeFormsGroup, form, form.materialize(nil)); hostErr == nil {
 		t.Fatal("a materialized weight total of 9999 was accepted")
 	}
 }

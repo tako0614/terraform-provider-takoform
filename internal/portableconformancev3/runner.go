@@ -353,7 +353,7 @@ func (r *v3Runner) materialize(ref FormRef, spec map[string]any) map[string]any 
 func (r *v3Runner) pinDesiredSchemas() {
 	input := r.contract.RunnerInput
 	r.desiredSchemas = map[FormRef]map[string]any{}
-	for _, entry := range probeInventory(&input) {
+	for _, entry := range declaredProbes(&input) {
 		r.desiredSchemas[entry.Probe.Identity.FormRef] = entry.Probe.DesiredSchema.Schema
 	}
 }
@@ -744,16 +744,40 @@ func (r *v3Runner) prepareWithFenceAs(token string, target probeTarget, generati
 		result.Resource.Metadata.Space != target.Space {
 		return prepareOutcome{}, errors.New("prepare substituted the requested identity")
 	}
-	wantSpecDigest, err := specCanonicalDigest(target.Spec)
+	// The digest is of the MATERIALIZED spec, which is what the echo carries.
+	// Comparing against the spec as SENT would be wrong for the one request
+	// that omits a defaulted property — and that is not an exception, it is
+	// the rule: a host materializes at the entry point, so the effective spec
+	// is what came back, and a client's own desired state is the echo.
+	echoedSpecDigest, err := specCanonicalDigest(result.Resource.Spec)
 	if err != nil {
 		return prepareOutcome{}, err
 	}
-	gotSpecDigest, err := specCanonicalDigest(result.Resource.Spec)
+	if result.Review.SpecDigest != echoedSpecDigest {
+		return prepareOutcome{}, errors.New(
+			"prepare bound a specDigest that is not the digest of the spec it echoed",
+		)
+	}
+	// The echo must be the caller's own desired state MATERIALIZED and nothing
+	// else: every property the caller wrote survives unchanged, every declared
+	// default is filled, and nothing the caller never wrote appears. Comparing
+	// only the written keys would let a host add a property of its own and
+	// echo it consistently forever. Canonical JSON, so a number that decoded
+	// to another Go type is not read as a different value.
+	wantEcho, err := canonicalJSON(r.materialize(target.Ref, target.Spec))
 	if err != nil {
 		return prepareOutcome{}, err
 	}
-	if gotSpecDigest != wantSpecDigest || result.Review.SpecDigest != wantSpecDigest {
-		return prepareOutcome{}, errors.New("prepare did not bind the exact requested spec digest")
+	gotEcho, err := canonicalJSON(result.Resource.Spec)
+	if err != nil {
+		return prepareOutcome{}, err
+	}
+	if gotEcho != wantEcho {
+		return prepareOutcome{}, fmt.Errorf(
+			"prepare echoed %s, want the materialized %s; materialization fills absent properties, "+
+				"never rewrites a written one, and never adds one the caller did not write",
+			gotEcho, wantEcho,
+		)
 	}
 	if !formpackage.ValidDigest(result.Review.PrepareDigest) {
 		return prepareOutcome{}, errors.New("prepare returned an invalid prepareDigest")

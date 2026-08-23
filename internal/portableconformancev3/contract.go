@@ -125,7 +125,6 @@ var beta1RequiredChecks = []string{
 	"deployment-version-duplicate-rejected",
 	"attachment-requires-active-deployment",
 	"handler-gated-attachments",
-	"class-holder-rules-enforced",
 	"binding-name-collision-rejected",
 	"deployment-change-preserves-dependents",
 	"deployment-delete-blocked-by-dependent",
@@ -724,6 +723,24 @@ func probeInventory(input *RunnerInput) []probeEntry {
 	}
 }
 
+// declaredProbes is probeInventory minus the probes this corpus does not
+// declare. A Form its family generation does not carry is an ABSENCE, not an
+// omission: what makes that safe is the required-check list, which is per lane
+// and says which checks a corpus must be able to drive (decision 0047).
+// Callers use this rather than filtering for themselves, because every caller
+// that forgot turned an absence into a request for an empty identity.
+func declaredProbes(input *RunnerInput) []probeEntry {
+	all := probeInventory(input)
+	out := make([]probeEntry, 0, len(all))
+	for _, entry := range all {
+		if entry.Probe.Name == "" {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
 // IdentityContract carries the normative uid/generation/revision semantics
 // strings.
 type IdentityContract struct {
@@ -750,6 +767,13 @@ type Contract struct {
 	ErrorEnvelope        ErrorEnvelopeContract `json:"errorEnvelope"`
 	RunnerInput          RunnerInput           `json:"runnerInput"`
 	RequiredRunnerChecks []string              `json:"requiredRunnerChecks"`
+	// FamilyCandidateSet is the Form Family generation this corpus installs,
+	// as a repository-relative directory. It is a SEPARATE axis from
+	// APIVersion: a corpus states which protocol it drives and which family
+	// generation it drives it against, and neither implies the other
+	// (decision 0047). Conflating them is how a Host API v1beta1 corpus came
+	// to install the v1beta2 family.
+	FamilyCandidateSet string `json:"familyCandidateSet"`
 
 	// root is the verified corpus directory; it is derived, never decoded.
 	root string
@@ -862,7 +886,7 @@ func validateContract(contract Contract) error {
 	if !reflect.DeepEqual(contract.ErrorEnvelope.HTTPStatusByCode, got.ErrorHTTPStatus) {
 		return errors.New("portable host v3 error HTTP status map drifted")
 	}
-	if !reflect.DeepEqual(contract.RequiredRunnerChecks, got.RequiredChecks) {
+	if !reflect.DeepEqual(contract.RequiredRunnerChecks, requiredChecksFor(got, contract.RunnerInput)) {
 		return errors.New("portable host v3 required runner checks drifted")
 	}
 	input := contract.RunnerInput
@@ -870,7 +894,7 @@ func validateContract(contract Contract) error {
 		input.Space == input.AlternateSpace {
 		return errors.New("portable host v3 runner spaces are invalid")
 	}
-	for _, entry := range probeInventory(&contract.RunnerInput) {
+	for _, entry := range declaredProbes(&contract.RunnerInput) {
 		if err := validateProbe(entry.Label, *entry.Probe, entry.Kind); err != nil {
 			return err
 		}
@@ -1461,6 +1485,11 @@ func validateCrossResourceProbes(input RunnerInput) error {
 		{"durableWorkflow", input.DurableWorkflow},
 		{"actorNamespace", input.ActorNamespace},
 	} {
+		// A generation without class-selecting identities declares no such
+		// probe, and there is nothing here to hold it to.
+		if holder.probe.Name == "" {
+			continue
+		}
 		if nestedName(holder.probe.Desired, "worker") != input.ModuleWorker.Name {
 			return fmt.Errorf("portable host v3 %s probe must reference the moduleWorker probe", holder.label)
 		}
@@ -1566,7 +1595,7 @@ func hydrateNegativeFixtures(root string, contract *Contract) error {
 // runner materializes against and what `form-definition-exact` holds a served
 // document to.
 func hydrateDesiredSchemas(root string, contract *Contract) error {
-	for _, entry := range probeInventory(&contract.RunnerInput) {
+	for _, entry := range declaredProbes(&contract.RunnerInput) {
 		pin := &entry.Probe.DesiredSchema
 		raw, err := readPinnedCorpusFile(root, entry.Label+" desiredSchema", pin.Path, pin.SHA256)
 		if err != nil {

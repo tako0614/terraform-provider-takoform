@@ -646,6 +646,17 @@ var Forms = []model.Form{
 
 // Validate proves every structural catalog rule: per-form model rules, the
 // open-token guard, unique identities, and resolvable contract references.
+// The published v1beta1 profile has no requiresHostApi member, so these
+// Definitions do not carry one and their frozen bytes are unchanged. The
+// declaration still exists on the model, because "every Form states the
+// substrate it needs" is an invariant of the model rather than of one wire
+// format — and what these Forms needed is the lane they were published for.
+func init() {
+	for index := range Forms {
+		Forms[index].RequiresHostAPI = "forms.takoform.com/v1beta1"
+	}
+}
+
 func Validate() error {
 	if err := model.ValidateNoOpenTokens(Forms); err != nil {
 		return err

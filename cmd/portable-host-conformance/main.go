@@ -29,7 +29,12 @@ func run(args []string, stdout io.Writer) error {
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	contractPath := flags.String("contract", "conformance/portable-host-v1beta1", "portable host contract directory")
+	// The current lane. The v1beta1 corpus is retained but not runnable by this
+	// build: it drives the first protocol lane against the SECOND family
+	// generation, a pairing decision 0047 makes invalid, and restoring the
+	// valid one needs frozen interface and binding trees this repository has no
+	// writer for (conformance/README.md).
+	contractPath := flags.String("contract", "conformance/portable-host-v1beta2", "portable host contract directory")
 	endpoint := flags.String("endpoint", "", "disposable conformance endpoint origin")
 	tokenEnv := flags.String("token-env", "", "environment variable containing the bearer token")
 	alternateTokenEnv := flags.String(

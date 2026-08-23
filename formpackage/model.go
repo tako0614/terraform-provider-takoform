@@ -58,8 +58,14 @@ type FormDefinition struct {
 	Status string `json:"status,omitempty"`
 	// Role is the closed family resource role (decision 0009). The frozen
 	// v1alpha1/v1alpha2 schemas forbid it, so it stays empty on those epochs.
-	Role          string         `json:"role,omitempty"`
-	DesiredSchema map[string]any `json:"desiredSchema"`
+	Role string `json:"role,omitempty"`
+	// RequiresHostAPI is the earliest Host API lane whose rules this contract
+	// needs — a lower bound, not a pin (decision 0047). It is the one
+	// dependency every Form has and the only one that used to travel by
+	// convention, which is why a family and a lane could never move apart.
+	// Empty on the epochs whose frozen schemas forbid it.
+	RequiresHostAPI string         `json:"requiresHostApi,omitempty"`
+	DesiredSchema   map[string]any `json:"desiredSchema"`
 	// ObservedSchema is required by the frozen v1alpha1/v1alpha2 schemas and
 	// optional in the family lanes, where the envelope owns status.
 	ObservedSchema        map[string]any        `json:"observedSchema,omitempty"`
