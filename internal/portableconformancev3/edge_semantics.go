@@ -3,6 +3,7 @@ package portableconformancev3
 import (
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -360,36 +361,53 @@ func canonicalizeEdgeSpec(familyGroup string, form *InstalledForm, spec map[stri
 // already names one resource inside one tenant; a hostname is a name DNS owns,
 // so the comparison carries no boundary of its own and a scan over the store
 // alone would silently enforce the rule host-wide (spec/decisions/0026).
-func (h *ReferenceHost) validateSingleHostnameClaim(
+func (h *ReferenceHost) validateClaimedValues(
+	form *InstalledForm,
 	scope resourceScope,
 	name string,
 	spec map[string]any,
 ) *hostError {
-	hostname, _ := spec["hostname"].(string)
-	if hostname == "" {
-		return stableError("invalid_argument", "a WorkerCustomDomain requires a hostname")
+	properties, _ := form.DesiredSchema["properties"].(map[string]any)
+	claimed := make([]string, 0, len(properties))
+	for property, raw := range properties {
+		node, _ := raw.(map[string]any)
+		if node == nil {
+			continue
+		}
+		if held, _ := node[currentformmodel.ClaimAnnotationKey].(bool); held {
+			claimed = append(claimed, property)
+		}
 	}
-	selfKey := resourceKey(scope, h.edgeGroup(), workerCustomDomainKind, name)
-	for _, candidate := range h.sortedResources() {
-		if candidate.Tenant != scope.Tenant {
-			continue
+	sort.Strings(claimed)
+	selfKey := resourceKey(scope, form.Ref.APIVersion, form.Ref.Kind, name)
+	for _, property := range claimed {
+		value, _ := spec[property].(string)
+		if value == "" {
+			return stableError("invalid_argument", "a claimed "+property+" is required")
 		}
-		if candidate.group() != h.edgeGroup() || candidate.kind() != workerCustomDomainKind {
-			continue
+		for _, candidate := range h.sortedResources() {
+			// The scan stops at the TENANT. What one tenant may claim is a
+			// question about who controls the value — authority this contract
+			// does not answer — so a value another tenant holds is none of
+			// this scan's business (spec/decisions/0026). Every OTHER
+			// cross-resource rule is decided on a host-issued uid, which
+			// already names one resource inside one tenant; a claimed value
+			// carries no boundary of its own.
+			if candidate.Tenant != scope.Tenant || candidate.key() == selfKey {
+				continue
+			}
+			if candidate.group() != form.Ref.APIVersion || candidate.kind() != form.Ref.Kind {
+				continue
+			}
+			if held, _ := candidate.Spec[property].(string); held == value {
+				return stableError(
+					"invalid_argument",
+					property+" "+quoteText(value)+" is already held by "+form.Ref.Kind+" "+candidate.Name+
+						" in space "+quoteText(candidate.Space)+
+						"; a claimed value has one holder per tenant, and the comparison is on the canonical spelling",
+				)
+			}
 		}
-		if candidate.key() == selfKey {
-			continue
-		}
-		claimed, _ := candidate.Spec["hostname"].(string)
-		if claimed != hostname {
-			continue
-		}
-		return stableError(
-			"invalid_argument",
-			"hostname "+quoteText(hostname)+" is already served by WorkerCustomDomain "+candidate.Name+
-				" in space "+quoteText(candidate.Space)+
-				"; one DNS hostname has one answer, and the comparison is on the canonical spelling",
-		)
 	}
 	return nil
 }

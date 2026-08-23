@@ -75,9 +75,9 @@
         "apiVersion": "edge.forms.takoform.com/v1beta2",
         "kind": "WorkerCustomDomain",
         "definitionVersion": "0.1.0",
-        "schemaDigest": "sha256:ce83fa6a959ea66b7be375c5ed077db61aaf52b5088adfb64c83c55c9af1cec1"
+        "schemaDigest": "sha256:8f812c186e4baa2897672fc1d9df46b0171a9f8f95a235350aad3d71b8d22f5e"
       },
-      "packageDigest": "sha256:5a771ed3c87bce7d5e4eb87440f7e3e55b80aaf609a50cbe8a524b58980d54bd"
+      "packageDigest": "sha256:d0661cc88ce77f549377a774540822bdb7b2165daacf9e3d0c623be297f9143d"
     },
     {
       "kind": "WorkerEndpoint",

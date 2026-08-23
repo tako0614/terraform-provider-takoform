@@ -161,6 +161,13 @@ type Field struct {
 	// Form's traffic weights — which is a reason the protocol had to change
 	// whenever a family gained a list that sums.
 	Sum *SummedMember
+	// Claimed declares that this property's value is held by at most one live
+	// resource per tenant, across every space, compared on the canonical form
+	// the property's own schema defines. It was a paragraph in the protocol
+	// document about one Form's hostnames — a reason the protocol had to
+	// change whenever a family gained a value that is claimed rather than
+	// merely unique.
+	Claimed bool
 
 	// Example is the value used by the canonical conformance fixture.
 	Example any
@@ -575,6 +582,13 @@ func validateField(kind string, field Field) error {
 	}
 	if err := validateFieldDefault(kind, field); err != nil {
 		return err
+	}
+	if field.Claimed && field.Kind != KindString {
+		return fmt.Errorf(
+			"form %s field %s is claimed on kind %q; a claim is compared on a canonical STRING, "+
+				"and a value with no canonical spelling has nothing to compare",
+			kind, field.Wire, field.Kind,
+		)
 	}
 	if field.Sum != nil {
 		if field.Kind != KindObjectList {

@@ -32,6 +32,10 @@ const (
 	// cannot add a column, so a host reading only the Definition would
 	// otherwise have no way to know the total is part of the contract.
 	SumAnnotationKey = "x-takoform-sum"
+	// ClaimAnnotationKey marks the property whose value at most one live
+	// resource per tenant may hold. The canonical form is the property's own
+	// schema's to define; that the comparison happens on it is the lane's.
+	ClaimAnnotationKey = "x-takoform-claim"
 	// RequiredEntrypointAnnotationKey marks the reference whose inward
 	// activation invokes one entrypoint of the target's runtime contract. The
 	// lane's attachment gate reads it, so a family adds an attachment without
@@ -170,6 +174,9 @@ func (f Form) DesiredSchema(resolver TargetContractResolver) (map[string]any, er
 		schema, err := field.jsonSchema(group, resolver)
 		if err != nil {
 			return nil, fmt.Errorf("form %s field %s: %w", f.Kind, field.Wire, err)
+		}
+		if field.Claimed {
+			schema[ClaimAnnotationKey] = true
 		}
 		properties[field.Wire] = schema
 		if field.Required {

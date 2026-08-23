@@ -488,6 +488,10 @@ var Forms = []model.Form{
 		Fields: []model.Field{
 			activatingWorkerRef("Module Worker served on this hostname.", "fetch"),
 			{HCL: "hostname", Wire: "hostname", Kind: model.KindString, Required: true, Immutable: true,
+				// One DNS hostname has one answer, so the value is CLAIMED:
+				// at most one live resource per tenant holds it, compared on
+				// the canonical spelling this property's own pattern admits.
+				Claimed: true,
 				Pattern: model.PatternHostname, MaxLength: 253,
 				Doc: "Dotted DNS hostname this attachment serves. Changing it replaces the attachment. The pattern " +
 					"admits the spellings DNS treats as one name — an uppercase letter, a trailing root dot — because " +

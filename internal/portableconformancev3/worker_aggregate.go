@@ -352,7 +352,7 @@ func (h *ReferenceHost) validateWorkerAggregate(
 		case workerCustomDomainKind:
 			// One DNS hostname has one answer, per tenant, on the canonical
 			// spelling this host stored.
-			return h.validateSingleHostnameClaim(scope, name, spec)
+			return h.validateClaimedValues(form, scope, name, spec)
 		}
 		if form.Ref.Kind == workerEndpointKind {
 			return h.validateSingleWorkerEndpoint(scope, name, relations)
