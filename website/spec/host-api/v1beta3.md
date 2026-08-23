@@ -687,13 +687,12 @@ A host derives the relation set from the same `desiredSchema` it serves: every
 closed object that requires AT LEAST `apiVersion`, `kind`, and `name` with the
 first two `const` is a relation, identified by its JSON Pointer with `*`
 standing for an array element (`/owner`, `/versions/*/revision`,
-`/bindings/*/resource`). A reference MAY require additional members — a
-resource that selects a named export of its target names that export beside
-the reference — and then the reference node carries the
-`x-takoform-relation-extras` annotation listing exactly those member names;
-extra members select WITHIN the pinned target and never weaken the pin. A
-closed reference-shaped object with extra members and no annotation is a
-Definition defect a package verifier refuses, never a silently un-derived
+`/bindings/*/resource`). A resource that selects a named export of its target
+names that export as its OWN top-level property, beside the reference rather
+than inside it: the export selects WITHIN the pinned target and never weakens
+the pin, and a sibling property needs no annotation to be found. A closed
+reference-shaped object carrying members the reference itself does not declare
+is a Definition defect a package verifier refuses, never a silently un-derived
 relation. A binding-list property additionally carries the
 `x-takoform-binding` annotation naming the Binding contract that governs the
 references inside it; the exact digest-bound BindingRef is the Definition's own
@@ -970,9 +969,8 @@ running one: gating on it would admit an activation against code no selection
 serves.
 
 A resource that SELECTS a named export rather than activating one states the
-same requirement through its own property, named by
-`x-takoform-relation-extras`, and is gated on it wherever a selection exists to
-contradict it. It differs in the absent-selection case, and the difference is
+same requirement through its own top-level property, and is gated on it
+wherever a selection exists to contradict it. It differs in the absent-selection case, and the difference is
 structural rather than a concession: a revision may declare a binding to the
 selector its own identity serves, so identity, revision, and selection are
 ordinarily created in ONE apply and no order exists in which the selection
