@@ -13,8 +13,14 @@ ever edits a version in place.
 
 ## Observable semantics
 
+`function` is the immutable reference pinning this version to its owning
+[Function](function.md) identity, resolved and uid-pinned like every relation
+and carrying `x-takoform-target-formrefs` — exactly the Edge family's
+`WorkerVersion.worker` shape, and for the same reason: without the parent
+reference a host cannot say which function's aggregate a version belongs to.
+
 The runtime a version runs on is not a field of this Form. It is the exact
-`function.runtime@1.0.0` contract the [Function](function.md) identity
+`function.runtime@1.0.0` contract the Function identity
 provides, so there is no `compatibilityDate` and no `compatibilityFlags`
 ([decision 0019](../../spec/decisions/0019-the-module-worker-abi-is-an-exact-contract.md)).
 
