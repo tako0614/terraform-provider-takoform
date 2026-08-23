@@ -111,7 +111,7 @@ func TestV3CreateAcceptedButUnfinishedWritesRecoverableState(t *testing.T) {
 // group, an earlier definition version, different bytes. It is what a Form line
 // that has advanced leaves behind in existing state.
 var v3PriorModuleWorkerRef = currentformregistry.V3Ref{
-	APIVersion:        "edge.forms.takoform.com/v1beta2",
+	APIVersion:        "edge.forms.takoform.com",
 	Kind:              "ModuleWorker",
 	DefinitionVersion: "0.0.9",
 	SchemaDigest:      "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",

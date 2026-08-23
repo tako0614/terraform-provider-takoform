@@ -222,7 +222,7 @@ func runBuildPackage(arguments []string, output io.Writer) error {
 	// decoded value against the bare FormRef kind therefore never matches a
 	// family package, and nothing in a family could be tagged at all.
 	wantTagIdentity := index.FormRef.Kind
-	if verifiedLocator.APIVersion == formpackage.FamilyPackageAPIVersion {
+	if formpackage.FamilyPackageLane(verifiedLocator.APIVersion) {
 		wantTagIdentity = index.FormRef.APIVersion + "/" + index.FormRef.Kind
 	}
 	if tagKind != wantTagIdentity {

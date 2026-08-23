@@ -42,7 +42,7 @@ credential.** The declaration a consuming Form's desired schema embeds is:
 - The array property embedding the slots carries the
   `x-takoform-standard-services` annotation so a host holding only the
   Definition derives every slot it must enforce
-  ([`../host-api/v1beta2.md`](../host-api/v1beta2.md)).
+  ([`../host-api/v1beta4.md`](../host-api/v1beta4.md)).
 - `service` validates against
   [`standard-service-ref-v1alpha1.schema.json`](../schemas/standard-service-ref-v1alpha1.schema.json).
   The protocol vocabulary is closed: `s3-compatible`, `postgresql`, `redis`,

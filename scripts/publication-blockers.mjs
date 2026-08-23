@@ -239,7 +239,7 @@ export function assertLaneStillUnpublished(repositoryRoot, ledger, open) {
     return;
   }
   const candidateSet = JSON.parse(
-    readFileSync(path.join(repositoryRoot, "forms/candidates/edge/v1beta2/candidate-set.json"), "utf8"),
+    readFileSync(path.join(repositoryRoot, "forms/candidates/edge.forms.takoform.com/candidate-set.json"), "utf8"),
   );
   if (candidateSet.publicationStatus !== "unpublished") {
     fail(
@@ -265,7 +265,7 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
   );
   const candidate = JSON.parse(
     readFileSync(
-      path.join(repositoryRoot, "forms/candidates/edge/v1beta2/candidate-set.json"),
+      path.join(repositoryRoot, "forms/candidates/edge.forms.takoform.com/candidate-set.json"),
       "utf8",
     ),
   );
@@ -281,13 +281,13 @@ export function assertProviderReleaseCandidate(repositoryRoot) {
     fail("provider release descriptor is not candidate-only v2.1.1 on Host API v1beta1");
   }
   if (
-    candidate.family !== "edge.forms.takoform.com/v1beta2" ||
+    candidate.family !== "edge.forms.takoform.com" ||
     candidate.formMaturity !== "experimental" ||
-    candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha4" ||
+    candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha5" ||
     candidate.publicationStatus !== "unpublished" ||
     candidate.forms?.length !== 17
   ) {
-    fail("the current candidate lane must carry exactly 17 Experimental Beta Forms in v1alpha4 package envelopes");
+    fail("the current candidate lane must carry exactly 17 Experimental Beta Forms in v1alpha5 package envelopes");
   }
   const embedded = identities.releases?.find(
     (entry) => entry.providerVersion === descriptor.version,

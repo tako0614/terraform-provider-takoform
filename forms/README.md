@@ -19,7 +19,7 @@ Conversely, shipping a Form through a stable Provider SemVer does not make that
 Form Stable. The 15 current Form Packages remain unpublished until their own
 publication authority advances them.
 
-## Edge Platform Family (edge.forms.takoform.com/v1beta2)
+## Edge Platform Family (edge.forms.takoform.com)
 
 The first official Form Family fixes the shape of a proven edge developer
 platform without naming its vendor (spec/form-families.md). Its members are

@@ -13,9 +13,9 @@ import (
 // revision resource.
 
 // BindingAPIVersion is the fixed group of typed Binding contracts.
-const BindingAPIVersion = "bindings.takoform.com/v1alpha1"
+const BindingAPIVersion = "bindings.takoform.com/v1alpha2"
 
-// BindingDefinition mirrors binding-definition-v1alpha1.schema.json.
+// BindingDefinition mirrors binding-definition-v1alpha2.schema.json.
 type BindingDefinition struct {
 	APIVersion         string                   `json:"apiVersion"`
 	Kind               string                   `json:"kind"`

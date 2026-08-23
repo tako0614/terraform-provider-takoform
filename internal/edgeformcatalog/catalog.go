@@ -1,5 +1,5 @@
 // Package edgeformcatalog declares, as data, the Edge Platform Family:
-// the current public Beta Form Family (edge.forms.takoform.com/v1beta2,
+// the current public Beta Form Family (edge.forms.takoform.com,
 // decisions 0009 and 0035) together with its exact Interface and Binding
 // contracts (decision 0010). Every member fixes the application-visible
 // semantics of one proven
@@ -17,7 +17,10 @@ import (
 )
 
 // Family is the Edge Platform Family group.
-var Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1beta2"}
+// The group is the whole family identity: no version segment, because one
+// never varied independently of the exact FormRef and its only effect was to
+// make every member move together (decision 0049).
+var Family = model.Family{Group: "edge.forms.takoform.com"}
 
 // edgeDefinitionVersion is the definition SemVer every MVP member starts at.
 const edgeDefinitionVersion = "0.1.0"
@@ -40,13 +43,17 @@ const (
 	// second Beta lane added: create, read, update, delete, import, observe,
 	// fences, relations, and the attachment gate all predate it.
 	firstBetaLane = "forms.takoform.com/v1beta1"
-	// secondBetaLane is required by the members whose contract uses a rule
-	// that lane introduced — the sealed external standard-service slot
+	// currentBetaLane is required by the members whose contract uses a rule a
+	// later lane introduced — the sealed external standard-service slot
 	// (decision 0045) and the annotated class-export gate a class-selecting
 	// identity is admitted by. An earlier host would install these and then
 	// have no rule to enforce them with, which is exactly what the
 	// requirement exists to refuse.
-	secondBetaLane = "forms.takoform.com/v1beta2"
+	//
+	// It names v1beta4 rather than the withdrawn lane that first introduced
+	// those rules, because a requirement is a lower bound on a lane a host can
+	// actually serve, and a withdrawn identity is not one (decision 0051).
+	currentBetaLane = "forms.takoform.com/v1beta4"
 )
 
 // laneRequirements names the members that need more than firstBetaLane. A Form
@@ -54,9 +61,9 @@ const (
 // is a deliberate statement that its contract cannot be served by an older
 // host — never something a generation move does to a whole family at once.
 var laneRequirements = map[string]string{
-	"WorkerVersion":   secondBetaLane,
-	"DurableWorkflow": secondBetaLane,
-	"ActorNamespace":  secondBetaLane,
+	"WorkerVersion":   currentBetaLane,
+	"DurableWorkflow": currentBetaLane,
+	"ActorNamespace":  currentBetaLane,
 }
 
 // requiredLane is the lane one member declares.

@@ -119,13 +119,17 @@ func (h *v3RendezvousHost) servePrepare(w http.ResponseWriter, r *http.Request) 
 
 // serveApply blocks until `want` applies are in flight simultaneously.
 func (h *v3RendezvousHost) serveApply(w http.ResponseWriter, r *http.Request, remainder string) {
-	// /resources/{formGroup}/{formVersion}/{kind}/{name}: the namespaced group
-	// travels as two ordinary path segments (spec/decisions/0018).
-	segments := strings.Split(remainder, "/")
-	groupName, _ := unescapeSegment(segments[0])
-	groupVersion, _ := unescapeSegment(segments[1])
-	group := groupName + "/" + groupVersion
-	kind, name := segments[2], segments[3]
+	// /resources/{formGroup}[/{formVersion}]/{kind}/{name}: the namespaced
+	// group travels as ordinary path segments (spec/decisions/0018) and is
+	// split by the client's own rule, since a group carries a version or does
+	// not (decision 0049).
+	group, tail, ok := clientv3.SplitGroupPath(strings.Split(remainder, "/"))
+	if !ok || len(tail) < 2 {
+		h.t.Errorf("unexpected resource path %q", remainder)
+		http.NotFound(w, r)
+		return
+	}
+	kind, name := tail[0], tail[1]
 	raw, _ := io.ReadAll(r.Body)
 	var body map[string]any
 	if err := json.Unmarshal(raw, &body); err != nil {

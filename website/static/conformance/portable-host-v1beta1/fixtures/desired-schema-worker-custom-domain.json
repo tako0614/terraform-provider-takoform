@@ -14,7 +14,7 @@
       "description": "Module Worker served on this hostname.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1beta2",
+          "const": "edge.forms.takoform.com",
           "type": "string"
         },
         "kind": {

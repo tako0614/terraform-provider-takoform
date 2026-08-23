@@ -5,4 +5,4 @@ package portableconformancev3
 // compiled-in family made every cross-resource guard a silent early return for
 // any other generation. A test knows which fixtures it wrote, so it may say so;
 // a host must ask the candidate set it installed.
-const testEdgeFormsGroup = "edge.forms.takoform.com/v1beta2"
+const testEdgeFormsGroup = "edge.forms.takoform.com"

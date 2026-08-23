@@ -27,7 +27,7 @@ const PROVIDER_HOST_API = "forms.takoform.com/v1beta1";
 const PROVIDER_FORM_FAMILY = "edge.forms.takoform.com/v1beta1";
 const PROVIDER_IDENTITY_LEDGER = "release/provider-form-identities.json";
 const PROVIDER_CANDIDATE_SET =
-  "forms/candidates/edge/v1beta2/candidate-set.json";
+  "forms/candidates/edge.forms.takoform.com/candidate-set.json";
 const PROVIDER_FORM_KINDS = Object.freeze({
   takoform_module_worker: "ModuleWorker",
   takoform_worker_bundle: "WorkerBundle",
@@ -1006,7 +1006,7 @@ export function validateProviderIdentityLedger(repo, descriptor) {
   if (
     candidate.format !== "takoform.form-family-candidates@v1" ||
     candidate.formMaturity !== "experimental" ||
-    candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha4" ||
+    candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha5" ||
     candidate.publicationStatus !== "unpublished" ||
     !Array.isArray(candidate.forms) ||
     candidate.forms.length === 0

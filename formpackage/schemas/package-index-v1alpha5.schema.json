@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/v1alpha5/package-index.schema.json",
+  "title": "Takoform content-addressed Form Package index v1alpha5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "formRef",
+    "definitionPath",
+    "files"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "packages.forms.takoform.com/v1alpha5"
+    },
+    "kind": {
+      "const": "FormPackage"
+    },
+    "formRef": {
+      "$ref": "https://forms.takoform.com/schemas/v1beta2/form-ref.schema.json",
+      "$comment": "The successor to v1alpha4 exists for this reference alone: its predecessor points at the v1beta1 FormRef schema, which requires a version segment inside the family group, and decision 0049 removed that segment. v1alpha4 is served at takoform.com, so it is succeeded rather than widened."
+    },
+    "definitionPath": {
+      "$ref": "#/$defs/packagePath"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "contains": {
+        "type": "object",
+        "properties": {
+          "mediaType": {
+            "const": "application/vnd.takoform.form-definition.v1+json"
+          }
+        },
+        "required": [
+          "mediaType"
+        ]
+      },
+      "minContains": 1,
+      "maxContains": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "mediaType",
+          "size",
+          "digest"
+        ],
+        "properties": {
+          "path": {
+            "$ref": "#/$defs/packagePath"
+          },
+          "mediaType": {
+            "enum": [
+              "application/vnd.takoform.form-definition.v1+json",
+              "application/schema+json",
+              "application/json",
+              "text/markdown",
+              "text/plain"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 67108864
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "packagePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
+      "not": {
+        "pattern": "(^|/)\\.\\.?($|/)"
+      }
+    }
+  }
+}

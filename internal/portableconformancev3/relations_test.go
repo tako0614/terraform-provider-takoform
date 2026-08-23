@@ -202,7 +202,7 @@ func TestRecreatedTargetIsNotRebound(t *testing.T) {
 // spec/binding-contract/README.md by breaking exactly one at a time. Each must
 // be refused before anything is stored.
 func TestBindingContractRulesAreVerified(t *testing.T) {
-	group := "edge.forms.takoform.com/v1beta2"
+	group := "edge.forms.takoform.com"
 	cases := []struct {
 		name    string
 		break_  func(host *ReferenceHost, source, target *InstalledForm)

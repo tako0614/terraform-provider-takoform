@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/bindings/v1alpha2/binding-ref.schema.json",
+  "title": "Takoform exact BindingRef v1alpha2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "name", "version", "schemaDigest"],
+  "properties": {
+    "apiVersion": {
+      "const": "bindings.takoform.com/v1alpha2"
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z][a-z0-9]*)*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "schemaDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

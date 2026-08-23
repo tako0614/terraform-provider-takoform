@@ -532,7 +532,10 @@ func (f Form) Validate() error {
 	// A reference names its target group as a constant, so a Form that declares
 	// one must know which group it belongs to. Without it the emitted schema
 	// would pin an empty apiVersion and every reference would be unresolvable.
-	if f.declaresReference() && (f.Family.Group == "" || f.Family.Version == "") {
+	// The GROUP is what must be present; the version segment is optional,
+	// because a group carries one only while it has a published generation to
+	// keep apart (decision 0049).
+	if f.declaresReference() && f.Family.Group == "" {
 		return fmt.Errorf("form %s declares a cross-resource reference without a Family group", f.Kind)
 	}
 	return nil

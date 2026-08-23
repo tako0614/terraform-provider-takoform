@@ -456,16 +456,18 @@ func (r *v3Runner) request(method, target string, headers map[string]string, bod
 
 func encodeRunnerJSON(value any) ([]byte, error) { return json.Marshal(value) }
 
-// groupSegments renders a namespaced Form group as the two ordinary path
-// segments the lane's URL templates declare, {formGroup}/{formVersion}. No
-// path segment the runner builds ever percent-encodes a slash
-// (spec/decisions/0018).
+// groupSegments renders a namespaced Form group as its own ordinary path
+// segments, which is what the lane's URL templates mean by {formGroup}: a
+// group that carries a version segment travels as two, one that does not
+// travels as one (spec/decisions/0049). No path segment the runner builds ever
+// percent-encodes a slash (spec/decisions/0018), so each segment is escaped
+// on its own and the separators survive.
 func groupSegments(group string) string {
-	name, version, split := strings.Cut(group, "/")
-	if !split {
-		return url.PathEscape(group)
+	segments := strings.Split(group, "/")
+	for index, segment := range segments {
+		segments[index] = url.PathEscape(segment)
 	}
-	return url.PathEscape(name) + "/" + url.PathEscape(version)
+	return strings.Join(segments, "/")
 }
 
 func (r *v3Runner) resourceURL(ref FormRef, name, action string, query url.Values) string {

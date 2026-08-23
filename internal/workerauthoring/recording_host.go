@@ -86,13 +86,17 @@ func (h *recordingHost) withholdSupport(w http.ResponseWriter, request *http.Req
 		return false
 	}
 	parts := apiPathSegments(request.URL.Path)
-	// {api}/support/forms/{group}/{version}/{kind}/{definitionVersion}
-	if len(parts) == 6 && parts[0] == "support" && parts[1] == "forms" && h.unsupportedKinds[parts[4]] {
-		writeHostError(w, http.StatusNotFound, "form_unknown",
-			"this host implements no support profile for "+parts[4])
-		return true
+	// {api}/support/forms/{group}[/{version}]/{kind}/{definitionVersion}
+	if len(parts) < 5 || parts[0] != "support" || parts[1] != "forms" {
+		return false
 	}
-	return false
+	_, tail, ok := clientv3.SplitGroupPath(parts[2:])
+	if !ok || len(tail) != 2 || !h.unsupportedKinds[tail[0]] {
+		return false
+	}
+	writeHostError(w, http.StatusNotFound, "form_unknown",
+		"this host implements no support profile for "+tail[0])
+	return true
 }
 
 // resourceMutationTarget reports the kind and name of a resource write.
@@ -101,11 +105,20 @@ func resourceMutationTarget(request *http.Request) (string, string, bool) {
 		return "", "", false
 	}
 	parts := apiPathSegments(request.URL.Path)
-	// {api}/resources/{group}/{version}/{kind}/{name}
-	if len(parts) != 5 || parts[0] != "resources" {
+	// {api}/resources/{group}[/{version}]/{kind}/{name}
+	//
+	// The group is split by the client's own grammar, not by counting: a group
+	// carries a version or does not (decision 0049), and a recorder that
+	// counted five segments would silently record NOTHING for the versionless
+	// shape — a timeline assertion passing on an empty timeline.
+	if len(parts) < 4 || parts[0] != "resources" {
 		return "", "", false
 	}
-	return parts[3], parts[4], true
+	_, tail, ok := clientv3.SplitGroupPath(parts[1:])
+	if !ok || len(tail) != 2 {
+		return "", "", false
+	}
+	return tail[0], tail[1], true
 }
 
 func apiPathSegments(path string) []string {

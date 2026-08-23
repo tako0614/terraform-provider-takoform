@@ -61,7 +61,7 @@ export const EDGE_PREVIEW_PROVIDER_VERSION = PROVIDER_RELEASE_TARGET_VERSION;
 export const EDGE_PREVIEW_PROVIDER = `${EDGE_PREVIEW_PROVIDER_VERSION}-candidate-only`;
 
 export const FAMILY_CANDIDATE_SET =
-  "forms/candidates/edge/v1beta2/candidate-set.json";
+  "forms/candidates/edge.forms.takoform.com/candidate-set.json";
 const BLOCKER_LEDGER = "spec/publication-blockers.json";
 const RELEASE_VERSION = "release/version.json";
 const PROVIDER_RELEASE_IDENTITIES = "release/provider-release-identities.json";
@@ -81,7 +81,6 @@ export const SITE_STATUS_FIELDS = [
   "hostApiCurrent",
   "hostApiMaturity",
   "formFamilyCurrent",
-  "formFamilyMaturity",
   "formPackageApiCurrent",
   "formPackageStatus",
   "currentFormCount",
@@ -202,35 +201,16 @@ export function deriveSiteStatusFacts(repositoryRoot) {
     );
   }
   const formFamilyCurrent = candidateSet.family;
-  // Symmetric with the Host API derivation above: a bare `/vN` is a stable
-  // channel. The family half used to have no such branch and threw instead,
-  // which made the graduation this repository has already committed to —
-  // `edge.forms.takoform.com/v1`, pinned as a literal in
-  // internal/currentformregistry/registry_v3_test.go and
-  // internal/provider/v3_continuity_test.go — impossible to express here. The
-  // asymmetry was forty lines apart in one function.
-  const formFamilyMaturity =
-    typeof formFamilyCurrent === "string"
-      ? (formFamilyCurrent.match(/\/v\d+(alpha|beta)\d+$/)?.[1] ??
-        (/\/v\d+$/.test(formFamilyCurrent) ? "stable" : null))
-      : null;
+  // There is no family maturity axis to derive. It was read out of the version
+  // segment inside the group, and a group carries none (decision 0049): a
+  // channel is a property of a generation, and the family has no generations
+  // left to attach one to. What survives is per-Form, which is the axis
+  // formMaturity already publishes and the only one the repository can still
+  // state truthfully.
   const formMaturity = candidateSet.formMaturity;
   const formPackageApiCurrent = candidateSet.packageApiVersion;
   if (typeof formFamilyCurrent !== "string" || formFamilyCurrent === "") {
     throw new Error(`${FAMILY_CANDIDATE_SET}: family must be a non-empty string`);
-  }
-  if (formFamilyMaturity === null) {
-    throw new Error(
-      `${FAMILY_CANDIDATE_SET}: cannot derive Form Family maturity from ${JSON.stringify(formFamilyCurrent)}`,
-    );
-  }
-  // A recognised channel rather than one frozen literal. Pinning "beta" froze
-  // today's value into a derivation, so the only way to advance the family was
-  // to edit the code that reports where it is.
-  if (!["alpha", "beta", "stable"].includes(formFamilyMaturity)) {
-    throw new Error(
-      `${FAMILY_CANDIDATE_SET}: Form Family maturity ${JSON.stringify(formFamilyMaturity)} is not a recognised channel`,
-    );
   }
   if (typeof formMaturity !== "string" || formMaturity === "") {
     throw new Error(
@@ -263,14 +243,13 @@ export function deriveSiteStatusFacts(repositoryRoot) {
   ).length;
 
   const facts = {
-    format: "takoform.site-status@v2",
+    format: "takoform.site-status@v3",
     providerPublished,
     providerTarget: providerReleaseTarget,
     providerTargetStatus,
     hostApiCurrent,
     hostApiMaturity,
     formFamilyCurrent,
-    formFamilyMaturity,
     formPackageApiCurrent,
     formPackageStatus: formPackagePublicationStatus,
     currentFormCount: candidateSet.forms.length,

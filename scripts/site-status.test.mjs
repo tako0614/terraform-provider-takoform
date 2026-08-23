@@ -62,12 +62,20 @@ describe("the committed status document", () => {
     expect(document.sourceCommit).toBeUndefined();
   });
 
-  test("publishes independent family, definition, and package axes", () => {
+  test("publishes independent definition and package axes, and no family maturity", () => {
     const document = read(repositoryRoot, SITE_STATUS_REPOSITORY_PATH);
-    expect(document.formFamilyMaturity).toBe("beta");
+    // The family group carries no version (decision 0049), so there is no
+    // group maturity to derive: the axes that remain are the Form's own
+    // maturity, the package envelope's publication status, and the Host API
+    // lane — each with its own source. A group maturity would have to be read
+    // off a version string that no longer exists.
+    expect(document.formFamilyCurrent).toBe("edge.forms.takoform.com");
+    expect(document.formFamilyCurrent).not.toMatch(/\/v\d/u);
+    expect(document.formFamilyMaturity).toBeUndefined();
     expect(document.formMaturity).toBe("experimental");
     expect(document.formPackagePublicationStatus).toBe("unpublished");
-    expect(document.formFamilyMaturity).not.toBe(document.formMaturity);
+    expect(document.hostApiMaturity).toBe("beta");
+    expect(document.hostApiMaturity).not.toBe(document.formMaturity);
     expect(document.formPackageStatus).toBe(
       document.formPackagePublicationStatus,
     );
@@ -186,7 +194,7 @@ describe("the gate refuses", () => {
     }
   });
 
-  test("rejects a document that conflates family and definition maturity", () => {
+  test("refuses a document that reintroduces a family maturity axis", () => {
     const failures = fixture((root) => {
       for (const relativePath of [
         SITE_STATUS_REPOSITORY_PATH,
@@ -195,26 +203,21 @@ describe("the gate refuses", () => {
         const document = read(root, relativePath);
         write(root, relativePath, {
           ...document,
-          formFamilyMaturity: "experimental",
-          formMaturity: "experimental",
+          formFamilyMaturity: "beta",
         });
       }
       return verifySiteStatusDocument(root);
     });
-    // The document no longer has to say one frozen channel word; it has to say
-    // what the repository derives. A document claiming the family is
-    // Experimental therefore fails as a disagreement with the derivation,
-    // which is the stronger statement and survives the family advancing.
+    // Before decision 0049 this was guarded by a bespoke rule naming the two
+    // fields it knew could be confused. The exact-field-set rule is the
+    // stronger one and needs no such list: an axis with no derivation cannot
+    // appear in the document at all, whatever it is called.
     expect(
-      failures.filter((failure) =>
-        failure.includes("formFamilyMaturity = \"experimental\""),
-      ),
+      failures.filter((failure) => failure.includes("want exactly")),
     ).toHaveLength(2);
-    expect(
-      failures.filter((failure) =>
-        failure.includes("formFamilyMaturity and formMaturity are conflated"),
-      ),
-    ).toHaveLength(2);
+    for (const failure of failures) {
+      expect(failure).toContain("formFamilyMaturity");
+    }
   });
 });
 
@@ -235,7 +238,6 @@ describe("the derivation", () => {
       });
       return deriveSiteStatusFacts(root);
     });
-    expect(changed.formFamilyMaturity).toBe("beta");
     expect(changed.formMaturity).toBe("experimental");
     expect(changed.formPackagePublicationStatus).toBe("still-unpublished");
     expect(changed.formPackageStatus).toBe("still-unpublished");

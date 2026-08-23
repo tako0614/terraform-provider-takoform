@@ -227,34 +227,41 @@ func (r *v3Runner) checkFenceMatrixObserved(target probeTarget) error {
 // host had. Enumeration is the repair, and the fully-keyed probe is now the
 // narrowest case of one rule rather than the only case of another.
 func (r *v3Runner) checkFormsRouteEnumerates(target probeTarget) error {
-	group, version, ok := splitAPIVersion(target.Ref.APIVersion)
-	if !ok {
-		return fmt.Errorf("probe FormRef apiVersion %q is not a namespaced group", target.Ref.APIVersion)
-	}
-
-	// Narrowing by group and version alone must answer MORE than one Form:
-	// that is the difference between enumerating and probing, and a host that
-	// kept the v1beta1 cap would fail here rather than silently under-report.
+	// The group keys the lane states, whether that is the whole group or its
+	// two halves. Below this point the check reads the keys back from the
+	// values it set, so it measures the same rule on either vocabulary.
 	narrowed := url.Values{}
 	narrowed.Set("space", target.Space)
-	narrowed.Set("group", group)
-	narrowed.Set("version", version)
+	if r.contract.lane.FormsFilterGroupIsWhole {
+		narrowed.Set("group", target.Ref.APIVersion)
+	} else {
+		group, version, ok := splitAPIVersion(target.Ref.APIVersion)
+		if !ok {
+			return fmt.Errorf("probe FormRef apiVersion %q is not a namespaced group", target.Ref.APIVersion)
+		}
+		narrowed.Set("group", group)
+		narrowed.Set("version", version)
+	}
+
+	// Narrowing by the group alone must answer MORE than one Form: that is the
+	// difference between enumerating and probing, and a host that kept the
+	// v1beta1 cap would fail here rather than silently under-report.
 	family, err := r.formsQuery(narrowed)
 	if err != nil {
 		return err
 	}
 	if len(family) < 2 {
 		return fmt.Errorf(
-			"forms narrowed to %s/%s answered %d entries; the route enumerates the installed set, "+
+			"forms narrowed to %s answered %d entries; the route enumerates the installed set, "+
 				"and this corpus installs more than one Form of that family",
-			group, version, len(family),
+			target.Ref.APIVersion, len(family),
 		)
 	}
 	for _, entry := range family {
 		if entry.Identity.FormRef.APIVersion != target.Ref.APIVersion {
 			return fmt.Errorf(
-				"forms narrowed to %s/%s answered a %s entry; a narrowing key narrows",
-				group, version, entry.Identity.FormRef.APIVersion,
+				"forms narrowed to %s answered a %s entry; a narrowing key narrows",
+				target.Ref.APIVersion, entry.Identity.FormRef.APIVersion,
 			)
 		}
 	}
@@ -909,11 +916,15 @@ func (r *v3Runner) declaredDefaults(ref FormRef) map[string]any {
 // apiVersion whole under `group`. Sending one route's spelling to the other
 // answers an empty set rather than an error.
 func (r *v3Runner) formsExactQuery(space string, ref FormRef) url.Values {
-	group, version, _ := splitAPIVersion(ref.APIVersion)
 	query := url.Values{}
 	query.Set("space", space)
-	query.Set("group", group)
-	query.Set("version", version)
+	if r.contract.lane.FormsFilterGroupIsWhole {
+		query.Set("group", ref.APIVersion)
+	} else {
+		group, version, _ := splitAPIVersion(ref.APIVersion)
+		query.Set("group", group)
+		query.Set("version", version)
+	}
 	query.Set("kind", ref.Kind)
 	query.Set("definitionVersion", ref.DefinitionVersion)
 	query.Set("schemaDigest", ref.SchemaDigest)

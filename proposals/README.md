@@ -11,9 +11,11 @@ selected by [decision 0043](../spec/decisions/0043-forms-target-popular-vendor-l
 
 - [Edge Platform Family](edge/README.md) — the first family; its candidates
   are tracked by
-  [`../forms/candidates/edge/v1beta2/candidate-set.json`](../forms/candidates/edge/v1beta2/candidate-set.json),
-  and its Beta 2 additions (`DurableWorkflow`, `ActorNamespace`) are proposed
-  in this tree.
+  [`../forms/candidates/edge.forms.takoform.com/candidate-set.json`](../forms/candidates/edge.forms.takoform.com/candidate-set.json).
+  The group carries no version
+  ([decision 0049](../spec/decisions/0049-a-form-versions-alone.md)), so a
+  candidate is proposed in this tree and joins that one set rather than
+  waiting for a generation to be minted around it.
 - [Regional Function Family](function/README.md) — regional FaaS.
 - [Serverless Container Family](container/README.md) — OCI-image services.
 - [Table Family](table/README.md) — key-addressed document tables.

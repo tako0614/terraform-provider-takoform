@@ -54,7 +54,7 @@ func TestCatalogIsExactSeventeenFormFamily(t *testing.T) {
 			t.Fatalf("form[%d] = %s@%s, want %s@%s", index, form.Kind, form.DefinitionVersion, orderedKinds[index], want)
 		}
 	}
-	if Family.APIVersion() != "edge.forms.takoform.com/v1beta2" {
+	if Family.APIVersion() != "edge.forms.takoform.com" {
 		t.Fatalf("family apiVersion = %q", Family.APIVersion())
 	}
 }

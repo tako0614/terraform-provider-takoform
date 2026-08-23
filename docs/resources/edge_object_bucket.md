@@ -2,7 +2,7 @@
 page_title: "takoform_edge_object_bucket Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Object Bucket (edge.forms.takoform.com/v1beta2, role identity).
+  Object Bucket (edge.forms.takoform.com, role identity).
 ---
 
 # takoform_edge_object_bucket
@@ -11,7 +11,7 @@ Flat-namespace object store with strong read-after-write consistency, streaming 
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com/v1beta2 identity is not yet carried by any
+This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com identity is not yet carried by any
 Registry-published provider release: it ships with the next provider release
 (decision 0046). Registry-published provider v2.1.1 serves this resource type
 under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
@@ -89,7 +89,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_edge_object_bucket.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"ObjectBucket","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com","kind":"ObjectBucket","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

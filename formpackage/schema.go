@@ -15,16 +15,21 @@ import (
 )
 
 const (
-	legacyFormRefSchemaID                = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
-	currentFormRefSchemaID               = "https://forms.takoform.com/schemas/v1alpha2/form-ref.schema.json"
-	legacyFormDefinitionSchemaID         = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
-	currentFormDefinitionSchemaID        = "https://forms.takoform.com/schemas/v1alpha2/form-definition.schema.json"
-	packageIndexV1Alpha1SchemaID         = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
-	packageIndexV1Alpha2SchemaID         = "https://forms.takoform.com/schemas/v1alpha2/package-index.schema.json"
-	packageIndexV1Alpha3SchemaID         = "https://forms.takoform.com/schemas/v1alpha3/package-index.schema.json"
-	packageIndexV1Alpha4SchemaID         = "https://forms.takoform.com/schemas/v1alpha4/package-index.schema.json"
-	retainedFamilyFormRefSchemaID        = "https://forms.takoform.com/schemas/v1alpha3/form-ref.schema.json"
-	betaFamilyFormRefSchemaID            = "https://forms.takoform.com/schemas/v1beta1/form-ref.schema.json"
+	legacyFormRefSchemaID         = "https://forms.takoform.com/schemas/v1alpha1/form-ref.schema.json"
+	currentFormRefSchemaID        = "https://forms.takoform.com/schemas/v1alpha2/form-ref.schema.json"
+	legacyFormDefinitionSchemaID  = "https://forms.takoform.com/schemas/v1alpha1/form-definition.schema.json"
+	currentFormDefinitionSchemaID = "https://forms.takoform.com/schemas/v1alpha2/form-definition.schema.json"
+	packageIndexV1Alpha1SchemaID  = "https://forms.takoform.com/schemas/v1alpha1/package-index.schema.json"
+	packageIndexV1Alpha2SchemaID  = "https://forms.takoform.com/schemas/v1alpha2/package-index.schema.json"
+	packageIndexV1Alpha3SchemaID  = "https://forms.takoform.com/schemas/v1alpha3/package-index.schema.json"
+	packageIndexV1Alpha4SchemaID  = "https://forms.takoform.com/schemas/v1alpha4/package-index.schema.json"
+	packageIndexV1Alpha5SchemaID  = "https://forms.takoform.com/schemas/v1alpha5/package-index.schema.json"
+	retainedFamilyFormRefSchemaID = "https://forms.takoform.com/schemas/v1alpha3/form-ref.schema.json"
+	betaFamilyFormRefSchemaID     = "https://forms.takoform.com/schemas/v1beta1/form-ref.schema.json"
+	// betaTwoFamilyFormRefSchemaID admits a group with no version segment. Its
+	// predecessor requires one, and its bytes are published, so the widening
+	// is a successor identity rather than an edit (decisions 0037 and 0049).
+	betaTwoFamilyFormRefSchemaID         = "https://forms.takoform.com/schemas/v1beta2/form-ref.schema.json"
 	retainedFamilyFormDefinitionSchemaID = "https://forms.takoform.com/schemas/v1alpha3/form-definition.schema.json"
 	betaFamilyFormDefinitionSchemaID     = "https://forms.takoform.com/schemas/v1beta1/form-definition.schema.json"
 	// betaTwoFamilyFormDefinitionSchemaID is the CURRENT profile. It exists
@@ -33,8 +38,6 @@ const (
 	// v1beta1 document would have changed what a published identity means, so
 	// the defect got a successor instead (decisions 0037 and 0046).
 	betaTwoFamilyFormDefinitionSchemaID = "https://forms.takoform.com/schemas/v1beta2/form-definition.schema.json"
-	interfaceRefSchemaID                = "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-ref.schema.json"
-	bindingRefSchemaID                  = "https://forms.takoform.com/schemas/bindings/v1alpha1/binding-ref.schema.json"
 	revocationSchemaID                  = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
 	revocationCheckpointSchemaID        = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json"
 	portableMapKeyPattern               = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
@@ -60,6 +63,7 @@ type compiledSchemas struct {
 	currentFormRef           *jsonschema.Schema
 	retainedFamilyFormRef    *jsonschema.Schema
 	betaFamilyFormRef        *jsonschema.Schema
+	betaTwoFamilyFormRef     *jsonschema.Schema
 	legacyDefinition         *jsonschema.Schema
 	currentDefinition        *jsonschema.Schema
 	retainedFamilyDefinition *jsonschema.Schema
@@ -69,15 +73,19 @@ type compiledSchemas struct {
 	indexV1Alpha2            *jsonschema.Schema
 	indexV1Alpha3            *jsonschema.Schema
 	indexV1Alpha4            *jsonschema.Schema
+	indexV1Alpha5            *jsonschema.Schema
 	revocation               *jsonschema.Schema
 	revocationCheckpoint     *jsonschema.Schema
 }
 
 // namespacedFormGroupPattern mirrors the apiVersion grammar of the family
-// FormRef schema: a DNS-like Form group plus its group version. The two frozen
-// central groups are recognized before this pattern is consulted, so a match
-// selects one of the two family validation lanes below.
-var namespacedFormGroupPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$`)
+// FormRef schema: a DNS-like Form group and, OPTIONALLY, a group version. The
+// version is optional because a group carries one only while it has a
+// published generation to keep apart; kind, definitionVersion and schemaDigest
+// already name the exact contract (decision 0049). The two frozen central
+// groups are recognized before this pattern is consulted, so a match selects
+// one of the family validation lanes below.
+var namespacedFormGroupPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:/v[0-9]+(?:(?:alpha|beta)[0-9]+)?)?$`)
 
 // retainedFamilyGroups are the namespaced families published under the
 // immutable v1alpha3 schema closure, listed one by one. Everything else — the
@@ -136,24 +144,28 @@ var reservedFormsTakoformNamespaces = map[string]struct{}{
 // forms.takoform.com/v1alpha1 and forms.takoform.com/v1alpha2. On top of that
 // minimum this function also rejects:
 //
-//   - every OTHER version of the bare forms.takoform.com group, not just the
-//     two frozen epochs. That domain names retained Form epochs and Host API
-//     wire identities (forms.takoform.com/v1alpha3 is the Host API lane, not a
-//     Form group), while official families use subdomains of it.
+//   - the bare forms.takoform.com group in every version AND with no version
+//     at all. That domain names retained Form epochs and Host API wire
+//     identities (forms.takoform.com/v1alpha3 is the Host API lane, not a Form
+//     group), while official families use subdomains of it.
 //   - the reserved envelope namespaces packages.forms.takoform.com and
-//     trust.forms.takoform.com in every version.
+//     trust.forms.takoform.com, likewise versioned or not.
 //
 // Both exclusions are a strict superset of the schema's, so every apiVersion
 // this function accepts also satisfies the normative schema; the extra rules
 // only ever refuse. Loosening them is a specification change, not a Go change.
 func NamespacedFormGroup(apiVersion string) bool {
-	if group, _, ok := strings.Cut(apiVersion, "/"); ok {
-		if group == "forms.takoform.com" {
-			return false
-		}
-		if _, reserved := reservedFormsTakoformNamespaces[group]; reserved {
-			return false
-		}
+	// The group is everything before the first slash, and since decision 0049
+	// a group may carry no version at all — so the reserved names are checked
+	// against the group whether or not one follows. Reading them only when a
+	// version was present let the bare Host API domain and both envelope
+	// namespaces through the moment versionless groups became legal.
+	group, _, _ := strings.Cut(apiVersion, "/")
+	if group == "forms.takoform.com" {
+		return false
+	}
+	if _, reserved := reservedFormsTakoformNamespaces[group]; reserved {
+		return false
 	}
 	return len(apiVersion) <= 320 && namespacedFormGroupPattern.MatchString(apiVersion)
 }
@@ -170,7 +182,7 @@ func loadSchemas() (compiledSchemas, error) {
 		compiler.DefaultDraft(jsonschema.Draft2020)
 		compiler.AssertFormat()
 		compiler.UseLoader(closedSchemaLoader{})
-		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-ref-v1alpha3.schema.json", "form-ref-v1beta1.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "form-definition-v1alpha3.schema.json", "form-definition-v1beta1.schema.json", "form-definition-v1beta2.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "package-index-v1alpha4.schema.json", "interface-ref-v1alpha1.schema.json", "binding-ref-v1alpha1.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
+		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-ref-v1alpha3.schema.json", "form-ref-v1beta1.schema.json", "form-ref-v1beta2.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "form-definition-v1alpha3.schema.json", "form-definition-v1beta1.schema.json", "form-definition-v1beta2.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "package-index-v1alpha4.schema.json", "package-index-v1alpha5.schema.json", "interface-ref-v1alpha1.schema.json", "binding-ref-v1alpha1.schema.json", "binding-ref-v1alpha2.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
 		entries, err := schemaFiles.ReadDir("schemas")
 		if err != nil {
 			schemasErr = fmt.Errorf("read embedded schema closure: %w", err)
@@ -244,6 +256,11 @@ func loadSchemas() (compiledSchemas, error) {
 			schemasErr = fmt.Errorf("compile Beta family FormRef schema: %w", schemasErr)
 			return
 		}
+		schemasValue.betaTwoFamilyFormRef, schemasErr = compiler.Compile(betaTwoFamilyFormRefSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile Beta 2 family FormRef schema: %w", schemasErr)
+			return
+		}
 		schemasValue.legacyDefinition, schemasErr = compiler.Compile(legacyFormDefinitionSchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile legacy Form Definition schema: %w", schemasErr)
@@ -290,6 +307,11 @@ func loadSchemas() (compiledSchemas, error) {
 			schemasErr = fmt.Errorf("compile v1alpha4 package-index schema: %w", schemasErr)
 			return
 		}
+		schemasValue.indexV1Alpha5, schemasErr = compiler.Compile(packageIndexV1Alpha5SchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile v1alpha5 package-index schema: %w", schemasErr)
+			return
+		}
 		schemasValue.revocation, schemasErr = compiler.Compile(revocationSchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile Form Package revocation schema: %w", schemasErr)
@@ -321,10 +343,16 @@ func validateFormRef(raw []byte) (FormRef, error) {
 	case envelope.APIVersion == CurrentFormAPIVersion:
 		schema = schemas.currentFormRef
 	case NamespacedFormGroup(envelope.APIVersion):
-		if retainedFamilyGroup(envelope.APIVersion) {
+		// Mirrors the Definition profile selection below: a group keeps the
+		// FormRef schema its packages were published under, and everything
+		// minted afterwards reads the current one.
+		switch {
+		case retainedFamilyGroup(envelope.APIVersion):
 			schema = schemas.retainedFamilyFormRef
-		} else {
+		case retainedProfileFamilyGroup(envelope.APIVersion):
 			schema = schemas.betaFamilyFormRef
+		default:
+			schema = schemas.betaTwoFamilyFormRef
 		}
 	default:
 		return FormRef{}, fmt.Errorf("FormRef: unsupported apiVersion %q", envelope.APIVersion)
@@ -475,6 +503,8 @@ func validateIndex(raw []byte) (PackageIndex, any, error) {
 		schema = schemas.indexV1Alpha3
 	case FamilyPackageAPIVersion:
 		schema = schemas.indexV1Alpha4
+	case VersionlessFamilyPackageAPIVersion:
+		schema = schemas.indexV1Alpha5
 	default:
 		return PackageIndex{}, nil, fmt.Errorf("package index: unsupported apiVersion %q", envelope.APIVersion)
 	}

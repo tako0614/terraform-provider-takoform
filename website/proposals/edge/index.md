@@ -22,7 +22,7 @@ envelope owns identity and status
 The catalog source of truth is `internal/edgeformcatalog`; the generated
 candidates live in `forms/candidates/edge/v1beta1`, the exact Interface and
 Binding candidates in `interfaces/candidates/v1alpha1` and
-`bindings/candidates/v1alpha1`.
+`bindings/candidates/v1alpha2`.
 
 ## MVP members
 

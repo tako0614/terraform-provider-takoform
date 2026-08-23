@@ -28,12 +28,16 @@ const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const FAMILY = "edge.forms.takoform.com/v1beta2";
-const PACKAGE_API_VERSION = "packages.forms.takoform.com/v1alpha4";
+// The group is the whole identity. It carries no version, so this constant
+// cannot drift from a generation number and the tree below is named by the
+// identity it holds rather than by a number that has to be kept in step
+// (decision 0049).
+const FAMILY = "edge.forms.takoform.com";
+const PACKAGE_API_VERSION = "packages.forms.takoform.com/v1alpha5";
 const trackedTargets = {
-  forms: path.join(repositoryRoot, "forms", "candidates", "edge", "v1beta2"),
+  forms: path.join(repositoryRoot, "forms", "candidates", FAMILY),
   interfaces: path.join(repositoryRoot, "interfaces", "candidates", "v1alpha1"),
-  bindings: path.join(repositoryRoot, "bindings", "candidates", "v1alpha1"),
+  bindings: path.join(repositoryRoot, "bindings", "candidates", "v1alpha2"),
 };
 const registryPath = path.join(
   repositoryRoot,
@@ -125,7 +129,7 @@ function main() {
       const stagedRoots = {
         forms: path.join(stagingParent, "forms-v1beta1"),
         interfaces: path.join(stagingParent, "interfaces-v1alpha1"),
-        bindings: path.join(stagingParent, "bindings-v1alpha1"),
+        bindings: path.join(stagingParent, "bindings-v1alpha2"),
       };
       const stagedRegistryPath = path.join(stagingParent, "registry_v3_generated.go");
       const manifest = generate(stagedRoots);
@@ -155,7 +159,7 @@ function main() {
     const generatedRoots = {
       forms: path.join(temporary, "forms-v1beta1"),
       interfaces: path.join(temporary, "interfaces-v1alpha1"),
-      bindings: path.join(temporary, "bindings-v1alpha1"),
+      bindings: path.join(temporary, "bindings-v1alpha2"),
     };
     const manifest = generate(generatedRoots);
     const embeddedIdentities = loadProviderIdentityLedger(manifest);
@@ -271,7 +275,7 @@ function generate(outputRoots) {
     manifest.forms.push({
       kind,
       role,
-      path: `forms/candidates/edge/v1beta2/${slug}`,
+      path: `forms/candidates/${FAMILY}/${slug}`,
       formRef,
       packageDigest: digestCanonicalJSON(indexPath),
     });

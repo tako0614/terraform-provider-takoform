@@ -1,7 +1,0 @@
-{
-  "worker": {
-    "apiVersion": "edge.forms.takoform.com/v1beta2",
-    "kind": "ModuleWorker",
-    "name": "module-worker"
-  }
-}

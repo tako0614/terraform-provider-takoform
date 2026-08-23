@@ -28,13 +28,18 @@ const (
 	// in this lane use DNS-like groups, so there is no single Form apiVersion
 	// constant; validation accepts any namespaced group outside the two frozen
 	// central epochs.
-	FamilyPackageAPIVersion  = "packages.forms.takoform.com/v1alpha4"
-	PackageKind              = "FormPackage"
-	TrustAPIVersion          = "trust.forms.takoform.com/v1alpha1"
-	RevocationKind           = "FormPackageRevocation"
-	RevocationCheckpointKind = "FormPackageRevocationCheckpoint"
-	PackageIndexFilename     = "package-index.json"
-	DefinitionMediaType      = "application/vnd.takoform.form-definition.v1+json"
+	FamilyPackageAPIVersion = "packages.forms.takoform.com/v1alpha4"
+	// VersionlessFamilyPackageAPIVersion identifies content-addressed packages
+	// whose family group carries no version segment (decision 0049). It exists
+	// only because v1alpha4's index schema refers to a FormRef schema that
+	// requires one, and that schema is published.
+	VersionlessFamilyPackageAPIVersion = "packages.forms.takoform.com/v1alpha5"
+	PackageKind                        = "FormPackage"
+	TrustAPIVersion                    = "trust.forms.takoform.com/v1alpha1"
+	RevocationKind                     = "FormPackageRevocation"
+	RevocationCheckpointKind           = "FormPackageRevocationCheckpoint"
+	PackageIndexFilename               = "package-index.json"
+	DefinitionMediaType                = "application/vnd.takoform.form-definition.v1+json"
 )
 
 // FormRef is the exact portable identity of one immutable Form Definition.

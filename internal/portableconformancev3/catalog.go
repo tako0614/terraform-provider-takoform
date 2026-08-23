@@ -339,10 +339,12 @@ func newCatalog(served string) *Catalog {
 // laneOrder ranks the Host API lanes by publication order, which is what makes
 // "at least this lane" answerable. A lane absent from it is unknown to this
 // host, and an unknown REQUIREMENT is refused rather than assumed satisfied.
+// The withdrawn v1beta2 and v1beta3 lanes are absent (decision 0051): they were
+// never served, so no published Form can require one, and listing a rank for a
+// lane that does not exist would let a corpus require it and be satisfied.
 var laneOrder = map[string]int{
 	"forms.takoform.com/v1beta1": 1,
-	"forms.takoform.com/v1beta2": 2,
-	"forms.takoform.com/v1beta3": 3,
+	"forms.takoform.com/v1beta4": 2,
 }
 
 // satisfiesRequirement reports whether a host serving `served` may install a
@@ -700,7 +702,11 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 		}
 	}
 	var bindings bindingCandidateSet
-	bindingsPath := filepath.Join(repoRoot, "bindings", "candidates", "v1alpha1", "candidate-set.json")
+	if contract.BindingCandidateSet == "" {
+		return nil, errors.New("takoform: the corpus does not say which Binding envelope generation it installs")
+	}
+	bindingsRoot := filepath.Join(repoRoot, filepath.FromSlash(contract.BindingCandidateSet))
+	bindingsPath := filepath.Join(bindingsRoot, "candidate-set.json")
 	if err := decodeStrictFile(bindingsPath, &bindings); err != nil {
 		return nil, err
 	}
@@ -711,7 +717,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 		// the required target Interface, or the source role, and would have to
 		// take every declared binding on trust.
 		var document bindingDefinitionDocument
-		path := filepath.Join(repoRoot, "bindings", "candidates", "v1alpha1", candidate.Name, "definition.json")
+		path := filepath.Join(bindingsRoot, candidate.Name, "definition.json")
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err

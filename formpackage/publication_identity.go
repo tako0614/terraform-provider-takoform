@@ -44,13 +44,13 @@ func PublicationLocatorFor(index PackageIndex, packageDigest string) (Publicatio
 			Tag:        "forms/" + releaseID + "/v" + index.PackageVersion,
 			SourcePath: path.Join("forms", "releases", releaseID, index.PackageVersion),
 		}, nil
-	case LegacyContentAddressedPackageAPIVersion, CurrentPackageAPIVersion, FamilyPackageAPIVersion:
+	case LegacyContentAddressedPackageAPIVersion, CurrentPackageAPIVersion, FamilyPackageAPIVersion, VersionlessFamilyPackageAPIVersion:
 		if index.PackageVersion != "" {
 			return PublicationLocator{}, fmt.Errorf("content-addressed package publication identity forbids packageVersion")
 		}
-		if index.APIVersion == FamilyPackageAPIVersion {
+		if FamilyPackageLane(index.APIVersion) {
 			if !NamespacedFormGroup(index.FormRef.APIVersion) {
-				return PublicationLocator{}, fmt.Errorf("v1alpha4 package publication identity requires a namespaced Form group, not %q", index.FormRef.APIVersion)
+				return PublicationLocator{}, fmt.Errorf("family package publication identity requires a namespaced Form group, not %q", index.FormRef.APIVersion)
 			}
 			releaseID = ReleaseIDForGroupKind(index.FormRef.APIVersion, index.FormRef.Kind)
 		}
@@ -102,7 +102,15 @@ func ParsePublicationTag(tag string) (PublicationLocator, error) {
 	if currentPackageArtifactPattern.MatchString(segment) {
 		apiVersion := CurrentPackageAPIVersion
 		if family {
+			// The decoded release id is "<group>/<Kind>", so the group is
+			// recoverable here, and which family lane a tag belongs to is
+			// exactly whether that group carries a version segment: a
+			// versionless one cannot be described by the v1alpha4 index
+			// schema, whose FormRef reference requires one (decision 0049).
 			apiVersion = FamilyPackageAPIVersion
+			if !strings.Contains(strings.TrimSuffix(decoded, "/"+path.Base(decoded)), "/") {
+				apiVersion = VersionlessFamilyPackageAPIVersion
+			}
 		}
 		return PublicationLocator{
 			APIVersion: apiVersion, ReleaseID: releaseID, ArtifactID: segment,
@@ -110,6 +118,13 @@ func ParsePublicationTag(tag string) (PublicationLocator, error) {
 		}, nil
 	}
 	return PublicationLocator{}, fmt.Errorf("Form Package tag %q has an unsupported artifact locator", tag)
+}
+
+// FamilyPackageLane reports whether a package index apiVersion is one of the
+// Form Family lanes, which are distinguished from each other only by whether
+// the family group carries a version segment (decision 0049).
+func FamilyPackageLane(apiVersion string) bool {
+	return apiVersion == FamilyPackageAPIVersion || apiVersion == VersionlessFamilyPackageAPIVersion
 }
 
 // FamilyReleaseID reports whether a release ID encodes the v1alpha4 Form

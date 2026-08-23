@@ -18,13 +18,14 @@
     "apiVersion": {
       "type": "string",
       "maxLength": 320,
-      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:/v[0-9]+(?:(?:alpha|beta)[0-9]+)?)?$",
       "not": {
         "enum": [
           "forms.takoform.com/v1alpha1",
           "forms.takoform.com/v1alpha2"
         ]
-      }
+      },
+      "description": "Namespaced DNS-like Form group, and OPTIONALLY a group version. A group carries one only while it has a published generation to keep apart (decision 0049)."
     },
     "kind": {
       "type": "string",
@@ -155,7 +156,7 @@
       "maxItems": 64,
       "uniqueItems": true,
       "items": {
-        "$ref": "https://forms.takoform.com/schemas/bindings/v1alpha1/binding-ref.schema.json"
+        "$ref": "https://forms.takoform.com/schemas/bindings/v1alpha2/binding-ref.schema.json"
       },
       "description": "Exact Binding contracts resources of this Form may hold as a source. Only revision-role Forms hold capability bindings."
     },

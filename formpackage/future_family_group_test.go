@@ -6,6 +6,7 @@ import "testing"
 // schema, not silently fall through to the retained closure.
 func TestFutureFamilyGroupUsesTheCurrentSchema(t *testing.T) {
 	for _, group := range []string{
+		"edge.forms.takoform.com",
 		"edge.forms.takoform.com/v1",
 		"edge.forms.takoform.com/v1beta2",
 		"containers.forms.takoform.com/v1alpha1",

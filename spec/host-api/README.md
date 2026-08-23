@@ -2,15 +2,15 @@
 
 ## Beta 2 design target: Host API v1beta2
 
-`forms.takoform.com/v1beta2` ([`v1beta2.md`](v1beta2.md)) is the Beta 2
+`forms.takoform.com/v1beta2` ([`v1beta4.md`](v1beta4.md)) is the Beta 2
 generation's lane, minted for protocol reasons out of the hardening review
 (decisions [0039](../decisions/0039-a-lane-is-minted-for-one-of-two-reasons.md),
 [0046](../decisions/0046-stable-arrives-through-a-stable-grade-beta-2.md)):
 
 - discovery: `GET /.well-known/takoform/v1beta2`;
 - API root: `/apis/forms.takoform.com/v1beta2`;
-- wire schema: [`host-api-wire-v1beta2.schema.json`](../schemas/host-api-wire-v1beta2.schema.json);
-- operation table: [`operations-v1beta2.json`](operations-v1beta2.json).
+- wire schema: [`host-api-wire-v1beta4.schema.json`](../schemas/host-api-wire-v1beta4.schema.json);
+- operation table: [`operations-v1beta4.json`](operations-v1beta4.json).
 
 No released provider speaks it yet; the 3.0.0 release will. Until then the
 published current lane below keeps its meaning unchanged.

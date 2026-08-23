@@ -35,18 +35,18 @@ type lane struct {
 	ErrorHTTPStatus map[string]int
 
 	// ConditionReasons is the closed portable reason vocabulary. v1beta1
-	// published twelve; v1beta2 publishes exactly the five its type-reason
+	// published twelve; v1beta4 publishes exactly the five its type-reason
 	// matrix admits, because a reason no type may carry cannot be answered.
 	ConditionReasons []string
 
 	// LifecycleCapabilities is the closed capability vocabulary an
-	// availability answer may name. v1beta2 drops `refresh`, which no lane
+	// availability answer may name. v1beta4 drops `refresh`, which no lane
 	// route ever served.
 	LifecycleCapabilities []string
 
 	// AvailabilityCarriesDeprecated reports whether the availability answer
 	// has a `deprecated` member. v1beta1 carried one with no source of truth
-	// behind it; v1beta2 removed it rather than invent one.
+	// behind it; v1beta4 removed it rather than invent one.
 	AvailabilityCarriesDeprecated bool
 
 	// FormsResponseEnumerates reports whether /forms answers the full
@@ -55,7 +55,7 @@ type lane struct {
 	FormsResponseEnumerates bool
 
 	// StatusCarriesObserved reports whether a resource status carries the
-	// host's observed document. v1beta2 dropped it: the envelope owns status,
+	// host's observed document. v1beta4 dropped it: the envelope owns status,
 	// and an observed document duplicated what outputs already published.
 	StatusCarriesObserved bool
 
@@ -64,8 +64,24 @@ type lane struct {
 	OperationSchemaVersion      string
 	SupportProfileSchemaVersion string
 
+	// FormsFilterGroupIsWhole reports whether the /forms filter's `group` key
+	// carries the WHOLE group. v1beta1 split it into `group` and `version`,
+	// which a group with no version segment cannot fill: the second key would
+	// have to be empty, and an empty filter value is malformed rather than
+	// absent. v1beta4 names the group whole and withdraws `version`, which is
+	// also what makes the filter exact again — under the split, `group` alone
+	// could not tell a versionless group from a versioned one of the same name
+	// (decision 0049).
+	FormsFilterGroupIsWhole bool
+
+	// GroupPathCheck names the check that measures how a Form group travels in
+	// a path. The two lanes name it differently because the rule differs:
+	// v1beta1 requires two segments, v1beta4 requires the group's own segments
+	// whatever their number. A shared name would say the two lanes agree.
+	GroupPathCheck string
+
 	// RequiredChecks is the closed executed-check list a run of this lane must
-	// complete. v1beta2's is v1beta1's plus the checks that measure what it
+	// complete. v1beta4's is v1beta1's plus the checks that measure what it
 	// changed: a lane that added rules and not checks would be exactly the
 	// unmeasured contract decision 0046 forbids.
 	RequiredChecks []string
@@ -76,8 +92,7 @@ type lane struct {
 // guessed at.
 var lanes = map[string]lane{
 	beta1Lane.APIVersion: beta1Lane,
-	beta2Lane.APIVersion: beta2Lane,
-	beta3Lane.APIVersion: beta3Lane,
+	beta4Lane.APIVersion: beta4Lane,
 }
 
 // beta1Lane is the retained lane. Registry-published provider 2.1.1 speaks it
@@ -141,18 +156,16 @@ var beta1Lane = lane{
 	StatusCarriesObserved:         true,
 	OperationSchemaVersion:        "v1alpha1",
 	SupportProfileSchemaVersion:   "v1alpha1",
+	GroupPathCheck:                "namespaced-group-travels-as-two-path-segments",
 	RequiredChecks:                beta1RequiredChecks,
 }
 
-// beta2Lane is the Beta 2 lane (spec/host-api/v1beta2.md, decisions 0039 and
-// 0046). Its differences from beta1Lane are the hardening review's structural
-// findings, and each one is a repair rather than a preference.
-var beta2Lane = lane{
-	APIVersion:     "forms.takoform.com/v1beta2",
-	ContractFormat: "takoform.portable-host-conformance@v1beta2",
-	ManifestFormat: "takoform.portable-host-conformance-manifest@v1beta2",
-	DiscoveryPath:  "/.well-known/takoform/v1beta2",
-	APIPath:        "/apis/forms.takoform.com/v1beta2",
+// hardenedLane is not a lane this runner drives. It is the Beta 2 hardening
+// review's structural findings (decisions 0039 and 0046), held apart from
+// beta4Lane so the current lane's definition still shows which of its values
+// came from which change. The lane that carried these under its own name was
+// withdrawn before it was ever served (decision 0051); the findings were not.
+var hardenedLane = lane{
 
 	// Two codes leave: form_identity_conflict was never given a trigger, and
 	// deletion_protected claimed a policy surface no Form provides. One status
@@ -209,41 +222,64 @@ var beta2Lane = lane{
 	StatusCarriesObserved:         false,
 	OperationSchemaVersion:        "v1alpha2",
 	SupportProfileSchemaVersion:   "v1alpha2",
-	RequiredChecks:                beta2RequiredChecks,
+	GroupPathCheck:                "namespaced-group-travels-as-two-path-segments",
+	RequiredChecks:                hardenedRequiredChecks,
 }
 
-// beta3Lane states its cross-resource rules as MECHANISMS a family
-// instantiates rather than as rules about particular Forms. Its wire envelope
-// is v1beta2's: what changed is not what a host puts on the wire but what it
-// must DO — derive the rules from a Definition's declarations instead of
-// carrying a table of Form kinds. That is why its document names no Form kind,
-// and why a check enforces that rather than the prose claiming it.
-var beta3Lane = lane{
-	APIVersion:     "forms.takoform.com/v1beta3",
-	ContractFormat: "takoform.portable-host-conformance@v1beta3",
-	ManifestFormat: "takoform.portable-host-conformance-manifest@v1beta3",
-	DiscoveryPath:  "/.well-known/takoform/v1beta3",
-	APIPath:        "/apis/forms.takoform.com/v1beta3",
+// beta4Lane is the current lane (spec/host-api/v1beta4.md). It carries the
+// hardening review's wire above, states its cross-resource rules as MECHANISMS
+// a family instantiates rather than as rules about particular Forms (decision
+// 0048), and admits a Form Family group that carries no version segment
+// (decision 0049) — which is what it was minted for and the one thing here
+// that changes the wire.
+var beta4Lane = lane{
+	APIVersion:     "forms.takoform.com/v1beta4",
+	ContractFormat: "takoform.portable-host-conformance@v1beta4",
+	ManifestFormat: "takoform.portable-host-conformance-manifest@v1beta4",
+	DiscoveryPath:  "/.well-known/takoform/v1beta4",
+	APIPath:        "/apis/forms.takoform.com/v1beta4",
 
-	ErrorCodeOrder:        beta2Lane.ErrorCodeOrder,
-	ErrorHTTPStatus:       beta2Lane.ErrorHTTPStatus,
-	ConditionReasons:      beta2Lane.ConditionReasons,
-	LifecycleCapabilities: beta2Lane.LifecycleCapabilities,
+	ErrorCodeOrder:        hardenedLane.ErrorCodeOrder,
+	ErrorHTTPStatus:       hardenedLane.ErrorHTTPStatus,
+	ConditionReasons:      hardenedLane.ConditionReasons,
+	LifecycleCapabilities: hardenedLane.LifecycleCapabilities,
 
 	AvailabilityCarriesDeprecated: false,
 	FormsResponseEnumerates:       true,
 	StatusCarriesObserved:         false,
 	OperationSchemaVersion:        "v1alpha2",
 	SupportProfileSchemaVersion:   "v1alpha2",
-	RequiredChecks:                beta3RequiredChecks,
+	FormsFilterGroupIsWhole:       true,
+	GroupPathCheck:                "namespaced-group-travels-as-path-segments",
+	RequiredChecks:                beta4RequiredChecks,
 }
 
-// beta3RequiredChecks is v1beta2's plus the one that measures what this lane
-// states: that a declared exclusive hold is enforced, and enforced by the
-// declaration rather than by a rule the host happens to carry for one Form.
-var beta3RequiredChecks = append(append([]string{}, beta2RequiredChecks...),
-	"declared-exclusive-holds-enforced",
+// beta4RequiredChecks is the hardened list plus the check that measures the
+// declared mechanisms, with the group path-shape check renamed to what it now
+// measures. The rename is not cosmetic: the rule is no longer "the group
+// travels as two path segments" but "the group travels as its own segments",
+// and a check whose name states an arity the lane dropped would be the first
+// thing a reader trusted and the last thing that was true.
+var beta4RequiredChecks = renameCheck(
+	append(append([]string{}, hardenedRequiredChecks...), "declared-exclusive-holds-enforced"),
+	"namespaced-group-travels-as-two-path-segments",
+	"namespaced-group-travels-as-path-segments",
 )
+
+// renameCheck returns the list with one check renamed in place. Order is the
+// contract: the verifier compares a corpus's list against the lane's in order,
+// so a rename must not move anything.
+func renameCheck(checks []string, from, to string) []string {
+	renamed := make([]string, len(checks))
+	for index, check := range checks {
+		if check == from {
+			renamed[index] = to
+			continue
+		}
+		renamed[index] = check
+	}
+	return renamed
+}
 
 // TerminalErrorIsClosed reports whether this lane's operation schema holds a
 // terminal error to the closed shape: a required requestId and retryable
@@ -254,10 +290,11 @@ func (l lane) TerminalErrorIsClosed() bool {
 	return l.OperationSchemaVersion == "v1alpha2"
 }
 
-// beta2RequiredChecks is v1beta1's list plus one check per rule this lane
-// introduced. Each addition names a rule the v1beta2 document states and the
-// v1beta1 corpus could not have measured, because the rule did not exist.
-var beta2RequiredChecks = append(append([]string{}, beta1RequiredChecks...),
+// hardenedRequiredChecks is v1beta1's list plus one check per rule the
+// hardening review introduced. Each addition names a rule the current document
+// states and the v1beta1 corpus could not have measured, because the rule did
+// not exist.
+var hardenedRequiredChecks = append(append([]string{}, beta1RequiredChecks...),
 	// The fence matrix as behavior: which fence each operation requires, what
 	// an absent one does, and what a stale one answers.
 	"fence-matrix-observed",
@@ -377,5 +414,5 @@ func DrivesManifestFormat(format string) bool {
 // DrivenManifestFormats lists the corpus manifest formats this runner drives,
 // for a diagnostic that has to say what it would have accepted.
 func DrivenManifestFormats() []string {
-	return []string{beta1Lane.ManifestFormat, beta2Lane.ManifestFormat}
+	return []string{beta1Lane.ManifestFormat, beta4Lane.ManifestFormat}
 }

@@ -774,6 +774,13 @@ type Contract struct {
 	// (decision 0047). Conflating them is how a Host API v1beta1 corpus came
 	// to install the v1beta2 family.
 	FamilyCandidateSet string `json:"familyCandidateSet"`
+	// BindingCandidateSet is the typed Binding envelope generation this corpus
+	// installs, on the same footing and for the same reason. The Binding
+	// envelope moved to bindings.takoform.com/v1alpha2 when a Form group
+	// stopped carrying a version (decision 0049) and allowedTargetForms had to
+	// admit one that does not, while the retained generation keeps resolving
+	// the v1alpha1 Bindings its published Forms name.
+	BindingCandidateSet string `json:"bindingCandidateSet"`
 
 	// root is the verified corpus directory; it is derived, never decoded.
 	root string

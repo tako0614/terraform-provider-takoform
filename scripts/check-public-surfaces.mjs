@@ -774,7 +774,7 @@ function checkContractLaneDocumentation() {
     },
     {
       file: path.join(repositoryRoot, "proposals", "README.md"),
-      required: ["forms/candidates/edge/v1beta2/candidate-set.json"],
+      required: ["forms/candidates/edge.forms.takoform.com/candidate-set.json"],
     },
   ];
 
@@ -1192,28 +1192,29 @@ const HOST_API_LANES = new Map([
     mintedFor: "protocol",
     withdrawn: "the v1alpha3 identities were withdrawn with the v1alpha2 epoch that served them (decision 0042)",
   }],
-  ["forms.takoform.com/v1beta3", {
-    wireSchema: "spec/schemas/host-api-wire-v1beta3.schema.json",
-    document: "spec/host-api/v1beta3.md",
+  ["forms.takoform.com/v1beta4", {
+    wireSchema: "spec/schemas/host-api-wire-v1beta4.schema.json",
+    document: "spec/host-api/v1beta4.md",
     // The claim this lane makes about itself, and the reason it may be
     // checked: its rules are mechanisms a family instantiates rather than
     // paragraphs about particular Forms.
     namesNoFormKind: true,
-    // Minted for a structural change to what the protocol STATES: the
-    // cross-resource rules that were written one Form at a time became
-    // declared mechanisms a Definition carries, so a family may gain a Form
-    // without the protocol document changing (decision 0039's protocol
-    // reason; decision 0048).
+    // Minted for a structural wire change: a Form Family group may omit its
+    // version segment (decision 0049), which moves the FormRef grammar every
+    // request and response carries and the shape of every path that names a
+    // group. It also carries what the two withdrawn lanes were minted for.
     mintedFor: "protocol",
   }],
+  // Minted and then withdrawn before either was ever served (decision 0051).
+  // Neither has bytes on disk, and their identities stay here so the names can
+  // never be reused meaning something else.
   ["forms.takoform.com/v1beta2", {
-    wireSchema: "spec/schemas/host-api-wire-v1beta2.schema.json",
-    // Minted for the Beta 2 hardening review's structural wire changes
-    // (decisions 0046 and 0039): /forms became an enumeration surface, the
-    // fence transport was codified, the apply review accepts its echo, the
-    // availability member without a source of truth was removed, and two
-    // dead codes left the taxonomy.
     mintedFor: "protocol",
+    withdrawn: "never served; the Beta 2 hardening review's wire changes are v1beta4's (decision 0051)",
+  }],
+  ["forms.takoform.com/v1beta3", {
+    mintedFor: "protocol",
+    withdrawn: "never served; the declared mechanisms are v1beta4's (decision 0051)",
   }],
   ["forms.takoform.com/v1beta1", {
     wireSchema: "spec/schemas/host-api-wire-v1beta1.schema.json",
@@ -1280,7 +1281,12 @@ const PACKAGE_ENVELOPES = new Map([
   ["packages.forms.takoform.com/v1alpha4", {
     schema: "spec/schemas/package-index-v1alpha4.schema.json",
     mintedFor: "carried",
-    evidence: "re-minted for the namespaced family FormRef grammar; format unchanged, and it has since carried two family generations (decision 0040)",
+    evidence: "re-minted for the namespaced family FormRef grammar; format unchanged, and it carried two family generations (decision 0040)",
+  }],
+  ["packages.forms.takoform.com/v1alpha5", {
+    schema: "spec/schemas/package-index-v1alpha5.schema.json",
+    mintedFor: "carried",
+    evidence: "re-minted because the family group stopped carrying a version segment and v1alpha4's FormRef reference requires one; format unchanged (decisions 0040 and 0049)",
   }],
 ]);
 

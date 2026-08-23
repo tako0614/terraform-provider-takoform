@@ -13,7 +13,6 @@ type SiteStatus = {
   hostApiCurrent: string;
   hostApiMaturity: string;
   formFamilyCurrent: string;
-  formFamilyMaturity: string;
   formPackageApiCurrent: string;
   currentFormCount: number;
   formMaturity: string;
@@ -37,9 +36,6 @@ const hostApiMaturity = computed(() =>
 const formFamilyVersion = computed(() =>
   apiVersion(status.value.formFamilyCurrent),
 );
-const formFamilyMaturity = computed(() =>
-  maturityLabel(status.value.formFamilyMaturity),
-);
 const formMaturity = computed(() => maturityLabel(status.value.formMaturity));
 const providerTargetStatus = computed(() =>
   status.value.providerTargetStatus === "registry-published"
@@ -59,8 +55,8 @@ const providerTargetStatus = computed(() =>
         owner publication 後も <code>candidate-only</code> のままです。Host API
         <code>{{ hostApiVersion }}</code> は
         {{ hostApiMaturity }} protocol、Edge Form Family
-        <code>{{ formFamilyVersion }}</code> は {{ formFamilyMaturity }} family で、
-        その {{ status.currentFormCount }} 個の Form definition は {{ formMaturity }}
+        <code>{{ formFamilyVersion }}</code> の
+        {{ status.currentFormCount }} 個の Form definition は {{ formMaturity }}
         （definition
         <code>0.1.0</code>）です。Form Package envelope は
         <code>{{ status.formPackageApiCurrent }}</code> で、artifact は
@@ -83,9 +79,9 @@ const providerTargetStatus = computed(() =>
         <code>{{ providerTargetStatus }}</code>; repository descriptor metadata
         remains <code>candidate-only</code> after owner publication. Host API
         <code>{{ hostApiVersion }}</code> is a
-        {{ hostApiMaturity }} protocol. Edge Form Family
-        <code>{{ formFamilyVersion }}</code> is a {{ formFamilyMaturity }} family;
-        its {{ status.currentFormCount }} Form definitions are {{ formMaturity }}
+        {{ hostApiMaturity }} protocol. The Edge Form Family
+        <code>{{ formFamilyVersion }}</code> carries
+        {{ status.currentFormCount }} Form definitions, which are {{ formMaturity }}
         at definition <code>0.1.0</code>. The Form Package envelope is
         <code>{{ status.formPackageApiCurrent }}</code
         >, and its artifacts are
