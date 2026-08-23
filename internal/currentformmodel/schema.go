@@ -15,6 +15,18 @@ const (
 	// PatternResourceName is the metadata.name grammar of the v1beta1
 	// envelope, reused wherever a Form references another resource by name.
 	PatternResourceName = `^[a-z][a-z0-9-]{0,62}$`
+	// PatternExternalServiceName is the SCREAMING_SNAKE grammar sealed-value
+	// slots use: the projection mints NAME_-prefixed members, so a lowercase
+	// or $-bearing name would make those unpronounceable
+	// (spec/standard-services).
+	PatternExternalServiceName = `^[A-Z][A-Z0-9_]*$`
+	// StandardServiceAnnotationKey marks the array property embedding sealed
+	// external-service slots, exactly parallel to BindingAnnotationKey, so a
+	// host holding only the Definition derives every slot it must enforce.
+	StandardServiceAnnotationKey = "x-takoform-standard-services"
+	// StandardServiceAPIVersion is the closed slot vocabulary's identity.
+	StandardServiceAPIVersion = "standards.takoform.com/v1alpha1"
+
 	// PatternBindingName is the JavaScript identifier grammar worker-family
 	// binding names use (decision 0010).
 	PatternBindingName = `^[A-Za-z_$][A-Za-z0-9_$]*$`
@@ -69,6 +81,11 @@ const (
 	jsonMapMaxStringLength = 8192
 	// bindingListMaxItems bounds declared bindings per binding list.
 	bindingListMaxItems = 64
+	// externalServiceNameMaxLength bounds one slot name.
+	externalServiceNameMaxLength = 64
+	// externalServiceListMaxItems bounds a revision's slot list.
+	externalServiceListMaxItems = 16
+
 	// bindingNameMaxLength bounds one binding instance name.
 	bindingNameMaxLength = 64
 
@@ -308,6 +325,40 @@ func (f Field) jsonSchemaShape(group string, resolver TargetContractResolver) (m
 		// Definition governs each reference it finds.
 		schema[BindingAnnotationKey] = f.BindingType
 		return schema, nil
+	case KindExternalServiceList:
+		schema := f.arraySchema(map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []string{"name", "service"},
+			"properties": map[string]any{
+				"name": map[string]any{
+					"type":      "string",
+					"pattern":   PatternExternalServiceName,
+					"maxLength": externalServiceNameMaxLength,
+				},
+				"service": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"required":             []string{"apiVersion", "protocol"},
+					"properties": map[string]any{
+						"apiVersion": map[string]any{"const": StandardServiceAPIVersion},
+						"protocol":   map[string]any{"enum": toAnySlice(ExternalServiceProtocols)},
+					},
+				},
+				"required": map[string]any{
+					"type":        "boolean",
+					"description": "Optional, defaulting to true. A REQUIRED slot the host cannot satisfy blocks readiness; an optional one it does not satisfy projects nothing and blocks nothing.",
+				},
+			},
+		})
+		if f.MaxItems == 0 {
+			schema["maxItems"] = externalServiceListMaxItems
+		}
+		// The embedding property is annotated so a host holding only the
+		// desired schema derives every slot it must enforce
+		// (spec/standard-services, decision 0045).
+		schema[StandardServiceAnnotationKey] = StandardServiceAPIVersion
+		return schema, nil
 	case KindObject:
 		return objectSchema(group, f.Fields, resolver)
 	case KindObjectList:
@@ -319,6 +370,34 @@ func (f Field) jsonSchemaShape(group string, resolver TargetContractResolver) (m
 	default:
 		panic(fmt.Sprintf("unknown field kind %q", f.Kind))
 	}
+}
+
+// ExternalServiceProtocols is the closed decision-0045 protocol vocabulary.
+// Widening it is a reviewed spec change held to decision 0043's test.
+var ExternalServiceProtocols = []string{"postgresql", "redis", "s3-compatible", "smtp"}
+
+// ExternalServiceProjectedNames lists the runtime members one slot projects,
+// per protocol (spec/standard-services): env-style consumers receive exactly
+// these, so the single-namespace uniqueness rule is enforced over this
+// closure rather than over the declared slot names alone.
+func ExternalServiceProjectedNames(slotName, protocol string) []string {
+	switch protocol {
+	case "s3-compatible":
+		return []string{
+			slotName + "_ENDPOINT", slotName + "_REGION", slotName + "_BUCKET",
+			slotName + "_ACCESS_KEY_ID", slotName + "_SECRET_ACCESS_KEY",
+		}
+	default:
+		return []string{slotName + "_URL"}
+	}
+}
+
+func toAnySlice(values []string) []any {
+	out := make([]any, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	return out
 }
 
 func (f Field) arraySchema(items map[string]any) map[string]any {

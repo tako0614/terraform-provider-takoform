@@ -22,6 +22,22 @@ var Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1beta2"}
 // edgeDefinitionVersion is the definition SemVer every MVP member starts at.
 const edgeDefinitionVersion = "0.1.0"
 
+// workerVersionDefinitionVersion is ahead of the rest of the generation
+// because Worker Version's contract GAINED a field in Beta 2 — the sealed
+// externalServices slot list (decisions 0043 and 0045) — rather than being the
+// v1beta1 contract re-identified under the new group. The identity says so
+// where a reader will see it: every other member carries 0.1.0, meaning "your
+// contract, re-addressed", and this one does not (decision 0046).
+const workerVersionDefinitionVersion = "0.2.0"
+
+// generationDefinitionVersions enumerates every member whose definition
+// version deliberately differs from the generation line, with the version it
+// must carry. A Form cannot drift off the line by accident, and one that is
+// meant to be off it cannot silently drift back on.
+var generationDefinitionVersions = map[string]string{
+	"WorkerVersion": workerVersionDefinitionVersion,
+}
+
 // ref renders one exact in-family cross-resource reference: the target group,
 // the target kind, and the target name. All three travel on the wire; the HCL
 // surface still asks the author for the bare name.
@@ -31,6 +47,19 @@ func ref(kind, name string) map[string]any {
 
 // bindingInstance renders one typed binding instance: the JavaScript
 // identifier the binding is projected under, plus the exact target reference.
+// externalServiceSlot builds one sealed standard-service slot fixture. The
+// apiVersion is the vocabulary's own identity, never an author input
+// (decision 0045).
+func externalServiceSlot(name, protocol string) map[string]any {
+	return map[string]any{
+		"name": name,
+		"service": map[string]any{
+			"apiVersion": model.StandardServiceAPIVersion,
+			"protocol":   protocol,
+		},
+	}
+}
+
 func bindingInstance(bindingName, kind, targetName string) map[string]any {
 	return map[string]any{"name": bindingName, "resource": ref(kind, targetName)}
 }
@@ -68,7 +97,7 @@ var requiresExactForm = model.TargetContract{ExactForm: true}
 func moduleWorkerRef(hcl, wire, doc string, required, immutable bool) model.Field {
 	return model.Field{
 		HCL: hcl, Wire: wire, Kind: model.KindResourceRef, TargetKind: "ModuleWorker",
-		Target:   requiresInterface(WorkerRuntimeInterfaceName, "1.0.0"),
+		Target:   requiresInterface(WorkerRuntimeInterfaceName, "1.1.0"),
 		Required: required, Immutable: immutable, Doc: doc,
 		Example: ref("ModuleWorker", "module-worker"),
 	}
@@ -83,7 +112,7 @@ var Forms = []model.Form{
 		Title: "Module Worker",
 		Description: "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES " +
 			"Module Worker ABI by identity, and states it exactly: the runtime contract " +
-			"worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, " +
+			"worker.runtime@1.1.0 in this Form's providedInterfaces fixes the module's default-export shape, " +
 			"the fetch, scheduled, and queue handler signatures, the binding environment, " +
 			"ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module " +
 			"loading. A host supporting this Form implements that exact digest; a runtime that behaves " +
@@ -104,7 +133,7 @@ var Forms = []model.Form{
 		// target no binding may point at, and would leave the binding's
 		// allowedTargetForms Form providing no Interface at all.
 		ProvidedInterfaces: []model.InterfaceRefSource{
-			{Name: WorkerRuntimeInterfaceName, Version: "1.0.0"},
+			{Name: WorkerRuntimeInterfaceName, Version: "1.1.0"},
 			{Name: "worker.service", Version: "1.0.0"},
 		},
 	},
@@ -158,12 +187,12 @@ var Forms = []model.Form{
 	{
 		Family: Family,
 		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
-		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
+		Role: model.RoleRevision, DefinitionVersion: workerVersionDefinitionVersion,
 		Title: "Worker Version",
 		Description: "Immutable executable snapshot of one Module Worker: a bundle, the handlers its module " +
 			"exports, non-secret vars, and the typed capability bindings the code may use. A change is a new " +
 			"Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is " +
-			"not a field of this Form: it is fixed by the worker.runtime@1.0.0 contract the Module Worker " +
+			"not a field of this Form: it is fixed by the worker.runtime@1.1.0 contract the Module Worker " +
 			"identity provides, so a version carries no compatibility date and no compatibility flag " +
 			"(decision 0019).",
 		AcceptedBindings: []model.BindingRefSource{
@@ -177,10 +206,10 @@ var Forms = []model.Form{
 			// The worker reference states an ABI requirement, not a Form one: what
 			// this version needs from the identity it belongs to is the runtime
 			// contract that decides which handlers exist at all and what signature
-			// each has. Any worker identity providing worker.runtime@1.0.0 serves
+			// each has. Any worker identity providing worker.runtime@1.1.0 serves
 			// this version, whatever else its Definition declares.
 			{HCL: "worker", Wire: "worker", Kind: model.KindResourceRef, TargetKind: "ModuleWorker", Required: true,
-				Target:  requiresInterface(WorkerRuntimeInterfaceName, "1.0.0"),
+				Target:  requiresInterface(WorkerRuntimeInterfaceName, "1.1.0"),
 				Doc:     "Module Worker identity this version belongs to.",
 				Example: ref("ModuleWorker", "module-worker")},
 			// The bundle reference is the opposite case. A Worker Bundle provides
@@ -231,7 +260,7 @@ var Forms = []model.Form{
 			{HCL: "handlers", Wire: "handlers", Kind: model.KindStringSet, Required: true, MinItems: 1,
 				Enum: runtimeHandlerVocabulary(),
 				Doc: "Module event handlers this version exports, from the closed vocabulary the " +
-					"worker.runtime@1.0.0 contract defines. A host rejects a handler that contract does not " +
+					"worker.runtime@1.1.0 contract defines. A host rejects a handler that contract does not " +
 					"define, and rejects an attachment whose event kind is not declared here.",
 				Example: []any{"fetch"}},
 			{HCL: "vars", Wire: "vars", Kind: model.KindJSONMap,
@@ -287,6 +316,24 @@ var Forms = []model.Form{
 					"Only the names are portable state; values travel through each host's own sealed path. " +
 					"Omitting it requires no sensitive value.",
 				Example: []any{"API_SIGNING_TOKEN_NAME"}, CounterExample: []any{"lowercase name"}},
+			// Where the family stops specifying and starts integrating
+			// (decisions 0043 and 0045). A category with a de-facto standard
+			// API is never respecified as a Form; a version reaches one by
+			// naming the protocol it speaks and letting the host resolve the
+			// endpoint and credential down the same sealed path a sensitive
+			// variable already travels. The slot is closed on purpose: no URL,
+			// no host, no credential, and no vendor can be written here, so
+			// nothing about WHICH service answers ever enters portable desired
+			// state.
+			{HCL: "external_services", Wire: "externalServices", Kind: model.KindExternalServiceList,
+				Default:                  []any{},
+				ProjectsEnvironmentNames: true,
+				Doc: "External standard services this version speaks, each a sealed slot naming only a " +
+					"projected NAME and a standard protocol. The host resolves the endpoint and credential " +
+					"out-of-band and projects the protocol's fixed member set under NAME; neither the address " +
+					"nor the credential is portable state. A required slot the host cannot satisfy keeps the " +
+					"version from becoming Ready. Omitting it declares no external service.",
+				Example: []any{externalServiceSlot("PRIMARY_DB", "postgresql")}},
 		},
 	},
 	{
@@ -654,8 +701,18 @@ func Validate() error {
 		if err := form.Validate(); err != nil {
 			return err
 		}
-		if form.DefinitionVersion != edgeDefinitionVersion {
-			return fmt.Errorf("form %s declares definition version %q; the MVP family line is %q", form.Kind, form.DefinitionVersion, edgeDefinitionVersion)
+		// A generation move re-identifies the whole family, so its members
+		// start together at the generation line; a member that carries a
+		// different version is asserting its contract diverged from that
+		// baseline, which is exactly what decision 0046 requires to be
+		// deliberate rather than incidental. The declared exceptions are
+		// therefore enumerated here, not merely permitted by format.
+		if want, declared := generationDefinitionVersions[form.Kind]; declared {
+			if form.DefinitionVersion != want {
+				return fmt.Errorf("form %s declares definition version %q; its recorded divergence from the family line is %q", form.Kind, form.DefinitionVersion, want)
+			}
+		} else if form.DefinitionVersion != edgeDefinitionVersion {
+			return fmt.Errorf("form %s declares definition version %q; the family line is %q and no divergence is recorded for it", form.Kind, form.DefinitionVersion, edgeDefinitionVersion)
 		}
 		for name, set := range map[string]map[string]struct{}{form.Kind: kinds, form.Slug: slugs, form.ResourceType: resourceTypes} {
 			if _, duplicate := set[name]; duplicate {

@@ -180,7 +180,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Immutable executable snapshot of one Module Worker: a bundle, the handlers its module exports, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is not a field of this Form: it is fixed by the worker.runtime@1.0.0 contract the Module Worker identity provides, so a version carries no compatibility date and no compatibility flag (decision 0019).",
+  "description": "Immutable executable snapshot of one Module Worker: a bundle, the handlers its module exports, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is not a field of this Form: it is fixed by the worker.runtime@1.1.0 contract the Module Worker identity provides, so a version carries no compatibility date and no compatibility flag (decision 0019).",
   "properties": {
     "assets": {
       "additionalProperties": false,
@@ -328,8 +328,56 @@
         }
       ]
     },
+    "externalServices": {
+      "default": [],
+      "description": "External standard services this version speaks, each a sealed slot naming only a projected NAME and a standard protocol. The host resolves the endpoint and credential out-of-band and projects the protocol's fixed member set under NAME; neither the address nor the credential is portable state. A required slot the host cannot satisfy keeps the version from becoming Ready. Omitting it declares no external service.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 64,
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "type": "string"
+          },
+          "required": {
+            "description": "Optional, defaulting to true. A REQUIRED slot the host cannot satisfy blocks readiness; an optional one it does not satisfy projects nothing and blocks nothing.",
+            "type": "boolean"
+          },
+          "service": {
+            "additionalProperties": false,
+            "properties": {
+              "apiVersion": {
+                "const": "standards.takoform.com/v1alpha1"
+              },
+              "protocol": {
+                "enum": [
+                  "postgresql",
+                  "redis",
+                  "s3-compatible",
+                  "smtp"
+                ]
+              }
+            },
+            "required": [
+              "apiVersion",
+              "protocol"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "service"
+        ],
+        "type": "object"
+      },
+      "maxItems": 16,
+      "type": "array",
+      "uniqueItems": true,
+      "x-takoform-standard-services": "standards.takoform.com/v1alpha1"
+    },
     "handlers": {
-      "description": "Module event handlers this version exports, from the closed vocabulary the worker.runtime@1.0.0 contract defines. A host rejects a handler that contract does not define, and rejects an attachment whose event kind is not declared here.",
+      "description": "Module event handlers this version exports, from the closed vocabulary the worker.runtime@1.1.0 contract defines. A host rejects a handler that contract does not define, and rejects an attachment whose event kind is not declared here.",
       "items": {
         "enum": [
           "fetch",
@@ -610,8 +658,8 @@
       "x-takoform-required-interface": {
         "apiVersion": "interfaces.takoform.com/v1alpha1",
         "name": "worker.runtime",
-        "schemaDigest": "sha256:c5d71337fb615f403f00c21a92dc6bcc9fc3cbcffad600e537a55f124441e820",
-        "version": "1.0.0"
+        "schemaDigest": "sha256:41aa3f9cd89ca2ba1d16faf153acfb35521c76168ff7b41dfb910d706b7bfbd9",
+        "version": "1.1.0"
       }
     }
   },

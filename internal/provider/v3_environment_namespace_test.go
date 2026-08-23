@@ -187,6 +187,10 @@ func TestV3EnvironmentNamespaceIsDeclaredOnce(t *testing.T) {
 		"sqliteBindings":        "binding-names",
 		"queueProducerBindings": "binding-names",
 		"serviceBindings":       "binding-names",
+		// The slot list's NAMES are not what joins the namespace: each slot
+		// projects a protocol-fixed member set, and the uniqueness rule is
+		// stated over that closure (decision 0045).
+		"externalServices": "external-service-projections",
 	}
 	if len(declared) != len(want) {
 		t.Fatalf("environment name fields = %v, want %v", declared, want)

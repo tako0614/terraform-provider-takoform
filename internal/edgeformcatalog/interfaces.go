@@ -1487,7 +1487,13 @@ func workerRuntimeInterface() InterfaceDefinition {
 	empty := operationObject(nil, map[string]any{})
 	return InterfaceDefinition{
 		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
-		Name: WorkerRuntimeInterfaceName, Version: "1.0.0",
+		// 1.1.0 is additive over 1.0.0: a Worker Version declaring no
+		// external standard-service slot projects exactly the 1.0.0 closure,
+		// so every module written against 1.0.0 keeps its meaning. What is new
+		// is a fourth source of env names, and the env closure is normative
+		// text — a host that projected slot members without saying so would be
+		// serving a contract nobody published (decision 0045).
+		Name: WorkerRuntimeInterfaceName, Version: "1.1.0",
 		Title: "ES Module Worker runtime ABI",
 		Description: "The exact runtime ABI a conforming host provides to the code of one Module Worker, " +
 			"and the exact shape that code must present. The main module is an ES module whose DEFAULT EXPORT " +
@@ -1499,9 +1505,17 @@ func workerRuntimeInterface() InterfaceDefinition {
 			"Request and response bodies are STREAMS, never buffered strings: a host never requires a handler " +
 			"to read a request body before responding, and streams a response body out as the handler produces it. " +
 			"env is a plain object whose own enumerable properties are exactly the names the Worker Version " +
-			"declares — every vars key, every requiredSensitiveVars name, and every binding name — and nothing " +
+			"declares — every vars key, every requiredSensitiveVars name, every binding name, and every member " +
+			"projected by an externalServices slot — and nothing " +
 			"else portable; a sensitive-variable slot appears as the host-supplied value under its declared name, " +
 			"and that value never enters portable state. " +
+			"An externalServices slot names a standard protocol the host resolves for this version, and projects " +
+			"a fixed member set derived from its declared NAME: a postgresql, redis, or smtp slot projects NAME_URL; " +
+			"an s3-compatible slot projects NAME_ENDPOINT, NAME_REGION, NAME_BUCKET, NAME_ACCESS_KEY_ID, and " +
+			"NAME_SECRET_ACCESS_KEY. Those values are host-resolved endpoints and credentials and never enter " +
+			"portable state, exactly like a sensitive variable; a required slot the host cannot satisfy keeps the " +
+			"version from becoming Ready rather than projecting an absent or empty member, and an optional slot the " +
+			"host does not satisfy projects none of its members at all. " +
 			"ctx.waitUntil(promise) registers work the host keeps the isolate alive for until the promise settles; " +
 			"a rejection is reported to host diagnostics only, never changes an already-sent response, and never " +
 			"turns a successful invocation into a failed one. " +

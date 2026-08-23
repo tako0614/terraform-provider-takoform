@@ -65,6 +65,13 @@ resource "takoform_worker_version" "example" {
       target_name = "auth-worker"
     },
   ]
+
+  external_services = [
+    {
+      name     = "PRIMARY_DB"
+      protocol = "postgresql"
+    },
+  ]
 }
 
 output "worker_version_outputs" {

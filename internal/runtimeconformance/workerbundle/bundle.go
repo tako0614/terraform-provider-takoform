@@ -119,21 +119,50 @@ type Deployment struct {
 	Vars             []string
 	SensitiveVars    []string
 	Bindings         []Binding
+	ExternalServices []ExternalService
 	Cron             string
 	Queue            string
 	Peer             *Deployment
 }
 
+// ExternalService is one sealed external standard-service slot the version
+// declares (decision 0045). The runtime never learns the address or the
+// credential from portable state: the host resolves both and projects the
+// protocol's fixed member set under Name, which is what makes this a fourth
+// source of `env` property names.
+type ExternalService struct {
+	Name     string
+	Protocol string
+}
+
+// ExternalServiceProjectedNames is the fixed member set one slot projects, by
+// protocol. It is stated once here so the ABI, the corpus, and any host
+// derive the same closure.
+func ExternalServiceProjectedNames(name, protocol string) []string {
+	switch protocol {
+	case "s3-compatible":
+		return []string{
+			name + "_ENDPOINT", name + "_REGION", name + "_BUCKET",
+			name + "_ACCESS_KEY_ID", name + "_SECRET_ACCESS_KEY",
+		}
+	default:
+		return []string{name + "_URL"}
+	}
+}
+
 // EnvironmentPropertyNames is the complete set of own enumerable `env`
 // property names the ABI requires, in lexicographic order: every `vars` key,
-// every `requiredSensitiveVars` name, and every binding name. It fails closed
-// on a collision, because the three sources share one namespace.
+// every `requiredSensitiveVars` name, every binding name, and every member
+// each external-service slot projects. It fails closed on a collision, because
+// the four sources share one namespace — and the slot members are exactly why
+// the check is stated over the PROJECTED closure rather than the declared
+// names: two slots with distinct names can still collide once expanded.
 func (d Deployment) EnvironmentPropertyNames() ([]string, error) {
 	seen := map[string]bool{}
-	names := make([]string, 0, len(d.Vars)+len(d.SensitiveVars)+len(d.Bindings))
+	names := make([]string, 0, len(d.Vars)+len(d.SensitiveVars)+len(d.Bindings)+len(d.ExternalServices))
 	add := func(name string) error {
 		if seen[name] {
-			return fmt.Errorf("%s: %q is declared twice across vars, sensitive vars and bindings", ErrorEnvironmentConflict, name)
+			return fmt.Errorf("%s: %q is declared twice across vars, sensitive vars, bindings and external-service projections", ErrorEnvironmentConflict, name)
 		}
 		seen[name] = true
 		names = append(names, name)
@@ -152,6 +181,13 @@ func (d Deployment) EnvironmentPropertyNames() ([]string, error) {
 	for _, binding := range d.Bindings {
 		if err := add(binding.Name); err != nil {
 			return nil, err
+		}
+	}
+	for _, service := range d.ExternalServices {
+		for _, name := range ExternalServiceProjectedNames(service.Name, service.Protocol) {
+			if err := add(name); err != nil {
+				return nil, err
+			}
 		}
 	}
 	sort.Strings(names)

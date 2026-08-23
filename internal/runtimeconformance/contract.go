@@ -45,7 +45,10 @@ const (
 	// InterfaceName is the exact Interface this corpus measures.
 	InterfaceName = "worker.runtime"
 	// InterfaceVersion is the exact Interface version this corpus measures.
-	InterfaceVersion = "1.0.0"
+	// 1.1.0 added a fourth source of `env` names — the members an external
+	// standard-service slot projects (decision 0045) — so a corpus still
+	// measuring 1.0.0 would leave that clause unproven.
+	InterfaceVersion = "1.1.0"
 	// ServiceInterfaceName is the second exact Interface this corpus reaches:
 	// worker-to-worker invocation, measured through the `module-worker.service`
 	// binding the deployment declares. It is pinned separately, and by digest,
@@ -149,6 +152,16 @@ type DeploymentBinding struct {
 	Interface string `json:"interface"`
 }
 
+// DeploymentExternalService is one sealed standard-service slot the measured
+// deployment declares. The operator resolves the endpoint and credential their
+// own way — the run never learns either, and never connects: what is measured
+// is that the ABI projects exactly the members the protocol fixes, under the
+// declared name, and nothing more (decision 0045).
+type DeploymentExternalService struct {
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
+}
+
 // PeerContract is the SECOND worker an operator deploys: the callee the
 // deployment's `worker.service` binding addresses.
 //
@@ -181,15 +194,16 @@ type PeerContract struct {
 // An operator reproduces it exactly; everything the run expects about `env`
 // and about host-driven invocation follows from it.
 type DeploymentContract struct {
-	Bundle                   string              `json:"bundle"`
-	DeclaredHandlers         []string            `json:"declaredHandlers"`
-	Vars                     []string            `json:"vars"`
-	SensitiveVars            []string            `json:"sensitiveVars"`
-	Bindings                 []DeploymentBinding `json:"bindings"`
-	EnvironmentPropertyNames []string            `json:"environmentPropertyNames"`
-	Cron                     string              `json:"cron"`
-	Queue                    string              `json:"queue"`
-	Peer                     *PeerContract       `json:"peer,omitempty"`
+	Bundle                   string                      `json:"bundle"`
+	DeclaredHandlers         []string                    `json:"declaredHandlers"`
+	Vars                     []string                    `json:"vars"`
+	SensitiveVars            []string                    `json:"sensitiveVars"`
+	Bindings                 []DeploymentBinding         `json:"bindings"`
+	ExternalServices         []DeploymentExternalService `json:"externalServices"`
+	EnvironmentPropertyNames []string                    `json:"environmentPropertyNames"`
+	Cron                     string                      `json:"cron"`
+	Queue                    string                      `json:"queue"`
+	Peer                     *PeerContract               `json:"peer,omitempty"`
 }
 
 // ModuleContract is one byte-pinned module of a corpus bundle.
@@ -375,12 +389,19 @@ func (c Contract) WorkerDeployment() (workerbundle.Deployment, error) {
 			Name: binding.Name, Interface: binding.Interface,
 		})
 	}
+	externalServices := make([]workerbundle.ExternalService, 0, len(c.Deployment.ExternalServices))
+	for _, service := range c.Deployment.ExternalServices {
+		externalServices = append(externalServices, workerbundle.ExternalService{
+			Name: service.Name, Protocol: service.Protocol,
+		})
+	}
 	deployment := workerbundle.Deployment{
 		Bundle:           bundle.WorkerBundle(),
 		DeclaredHandlers: append([]string(nil), c.Deployment.DeclaredHandlers...),
 		Vars:             append([]string(nil), c.Deployment.Vars...),
 		SensitiveVars:    append([]string(nil), c.Deployment.SensitiveVars...),
 		Bindings:         bindings,
+		ExternalServices: externalServices,
 		Cron:             c.Deployment.Cron,
 		Queue:            c.Deployment.Queue,
 	}

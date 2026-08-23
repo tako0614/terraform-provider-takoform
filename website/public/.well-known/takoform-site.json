@@ -2,7 +2,7 @@
   "providerCurrent": "2.1.1",
   "edgePreviewProvider": "2.1.1-candidate-only",
   "edgeFamilyStatus": "unpublished",
-  "candidateSetDigest": "sha256:3ca89cc42e57de65b30676ed619b42a9690717b18622402eb35f1759f693d9c9",
+  "candidateSetDigest": "sha256:21bc30bfbe68edebc327edc133a2f51fb1db8eaa9c0e579f821c98df07001fab",
   "openPublicationBlockers": 12,
   "format": "takoform.site-status@v2",
   "providerPublished": "2.1.1",

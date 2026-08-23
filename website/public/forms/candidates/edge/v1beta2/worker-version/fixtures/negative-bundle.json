@@ -23,6 +23,15 @@
     "kind": "WorkerBundle",
     "name": "Not A Resource Name"
   },
+  "externalServices": [
+    {
+      "name": "PRIMARY_DB",
+      "service": {
+        "apiVersion": "standards.takoform.com/v1alpha1",
+        "protocol": "postgresql"
+      }
+    }
+  ],
   "handlers": [
     "fetch"
   ],

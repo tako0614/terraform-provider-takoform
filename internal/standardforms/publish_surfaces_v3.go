@@ -85,7 +85,7 @@ func v3DocType(field model.Field) string {
 		return "Number"
 	case model.KindStringSet:
 		return "Set of String"
-	case model.KindBindingList, model.KindObjectList:
+	case model.KindBindingList, model.KindObjectList, model.KindExternalServiceList:
 		return "List of Object"
 	case model.KindObject:
 		return "Object"
@@ -173,6 +173,11 @@ func v3FieldDocLine(form model.Form, field model.Field) string {
 		doc += " Authored as one JSON object string (for example `jsonencode({...})`); the provider sends the parsed object."
 	case model.KindResourceRef:
 		doc += " Set the name of the target `" + field.TargetKind + "` resource."
+	case model.KindExternalServiceList:
+		doc += " Each entry declares `name` (SCREAMING_SNAKE, the prefix its projected members carry), " +
+			"`protocol` (one of " + strings.Join(model.ExternalServiceProtocols, ", ") + "), and optional " +
+			"`required` (default true). The wire carries the sealed `service` object; the standards apiVersion " +
+			"is the vocabulary's identity, not an author input."
 	case model.KindBindingList:
 		doc += " Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `" +
 			field.TargetKind + "` resource name); the wire carries the typed `resource` reference."
@@ -482,6 +487,8 @@ provider "takoform" {
 				continue
 			}
 			switch field.Kind {
+			case model.KindExternalServiceList:
+				blocks = append(blocks, v3ExternalServiceBlockHCL(field))
 			case model.KindBindingList:
 				blocks = append(blocks, v3BindingBlockHCL(field))
 			case model.KindObjectList:
@@ -526,6 +533,27 @@ provider "takoform" {
 			prefix+"_"+output.AttributeName(), form.ResourceType, output.AttributeName())
 	}
 	return strings.TrimRight(builder.String(), "\n") + "\n"
+}
+
+// v3ExternalServiceBlockHCL renders a slot list in the shape an AUTHOR writes,
+// which is not the wire shape: the sealed apiVersion is the vocabulary's own
+// identity and the provider supplies it, so an example that showed it would be
+// teaching a configuration Terraform refuses (decision 0045).
+func v3ExternalServiceBlockHCL(field model.Field) string {
+	entries, _ := field.Example.([]any)
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "  %s = [\n", field.HCL)
+	for _, raw := range entries {
+		entry, _ := raw.(map[string]any)
+		name, _ := entry["name"].(string)
+		protocol := ""
+		if service, ok := entry["service"].(map[string]any); ok {
+			protocol, _ = service["protocol"].(string)
+		}
+		fmt.Fprintf(&builder, "    {\n      name     = %q\n      protocol = %q\n    },\n", name, protocol)
+	}
+	builder.WriteString("  ]\n")
+	return builder.String()
 }
 
 func v3BindingBlockHCL(field model.Field) string {

@@ -4,112 +4,118 @@
   "formRef": {
     "apiVersion": "edge.forms.takoform.com/v1beta2",
     "kind": "WorkerVersion",
-    "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:f30676be1e801befe9d1f3f02791a7c8e492730cacc0cb915e98ea060fdd52b1"
+    "definitionVersion": "0.2.0",
+    "schemaDigest": "sha256:8c0e6cbbbf7253f1e3a815dcd1fc22dcc113da1e13a484882c80b9defe758aed"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 25639,
-      "digest": "sha256:c473aaaeee07056f61a421f7cd0849edea8100f9f267d2645dc4a495007ab55a"
+      "size": 27773,
+      "digest": "sha256:d12582b393d3d90a7e5537781a26a0f71eef7ac32713968f7b670ffa277c30d0"
     },
     {
       "path": "fixtures/desired.json",
       "mediaType": "application/json",
-      "size": 1717,
-      "digest": "sha256:41935ed6bb16303a72b122c4160d16f26be1122d575c337a3a47440de75a3e2b"
+      "size": 1903,
+      "digest": "sha256:a0ca19fe98d4f84f6d03c06b89a2f1dd6a44c1f9a2af0d7d435e08cb4b9a7e03"
     },
     {
       "path": "fixtures/negative-assets.json",
       "mediaType": "application/json",
-      "size": 1709,
-      "digest": "sha256:56bff16c8eee68f726fe40b63ea8d7f25c09f2920e32ce19a20564445acf26bb"
+      "size": 1895,
+      "digest": "sha256:6796b33769fdaabb4e0361cc1b518c6807b66b03c050784d9791f27aafa9917b"
     },
     {
       "path": "fixtures/negative-bucket-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1721,
-      "digest": "sha256:361fd44e1d627baff4e9d698ec1fde952b802ab56295c927e2d6151285266e74"
+      "size": 1907,
+      "digest": "sha256:bf792a7575a3da3c3e41070f905537fbd2609a4de5d7c9b15f3b01c42c68fec5"
     },
     {
       "path": "fixtures/negative-bundle.json",
       "mediaType": "application/json",
-      "size": 1723,
-      "digest": "sha256:b6e76c652f2c9e534917f3cab881cf6920635ad072a32ace0538f3b84e51a905"
+      "size": 1909,
+      "digest": "sha256:b2c77a209175f5e09257030e83b7b1b01a7b0f4fecb1d070d8ad2f1ea88b3e34"
+    },
+    {
+      "path": "fixtures/negative-external-services-unknown-protocol.json",
+      "mediaType": "application/json",
+      "size": 1913,
+      "digest": "sha256:3c7f028099a85ff6e265f3837d9a31c715ce8176319a0506207e7881cc5114f2"
     },
     {
       "path": "fixtures/negative-handlers.json",
       "mediaType": "application/json",
-      "size": 1733,
-      "digest": "sha256:0e101f25b5a5710a9f9e3534d1c9fb4ee26e96e4fdc54a463337ea35716d17e0"
+      "size": 1919,
+      "digest": "sha256:d964244fe4b8c352ddbdbc71209811dc831bcbac6454e1e79d4cc073db218081"
     },
     {
       "path": "fixtures/negative-kv-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1717,
-      "digest": "sha256:aab5d73e5f4ccdaeb8ca269338e183c2399c0ab5b2638c57366372d935bba57f"
+      "size": 1903,
+      "digest": "sha256:be2600bfc261f2941317e2ada88ac82dd27963802a832e6a71db3d49b7b11965"
     },
     {
       "path": "fixtures/negative-missing-bundle.json",
       "mediaType": "application/json",
-      "size": 1589,
-      "digest": "sha256:6a26a34443ab669d834e912aae11f171cf3e0ad452c3fa3ace129cbfb833e195"
+      "size": 1775,
+      "digest": "sha256:66ee035b314be8e951656b98a8cf981afcd2d27d1cd5419383a468aba0616444"
     },
     {
       "path": "fixtures/negative-missing-handlers.json",
       "mediaType": "application/json",
-      "size": 1684,
-      "digest": "sha256:8a58dcbc8e33eb4e0156015d1eee67692842a22176dd30ee9f06cbe870cc2ae7"
+      "size": 1870,
+      "digest": "sha256:a2f14fc2839f28a2f0e1e7e4d9a174ea3600d49bbb241230c7e80d8fe7f2fc4e"
     },
     {
       "path": "fixtures/negative-missing-worker.json",
       "mediaType": "application/json",
-      "size": 1589,
-      "digest": "sha256:f34bed2854c2ad53d55382fd3c34e335f2027cfa06c5bbd5aca5948c90b3b693"
+      "size": 1775,
+      "digest": "sha256:a5ab20b1a62ca1f24f8e2d095a38805b1ea0f48894956cc4c87bffa79cc8c38b"
     },
     {
       "path": "fixtures/negative-queue-producer-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1714,
-      "digest": "sha256:67e6a8d22a953bcd0180005c5c1fd67bfbb2633dc9d2ba07a8088f56a2e3f758"
+      "size": 1900,
+      "digest": "sha256:f68a8134b3133acfef5d747631fb75e6b874473b878db30fcfaf7e55b8d7cdf3"
     },
     {
       "path": "fixtures/negative-required-sensitive-vars.json",
       "mediaType": "application/json",
-      "size": 1709,
-      "digest": "sha256:5d2ab39da4c7fef639cf585af4c11a91083542f3cbda22c3c8e1aabcc9354198"
+      "size": 1895,
+      "digest": "sha256:d61f1a0d67b7264ba00fc9c1a38b2f25151c300002867f2cdf4b7f08162519b2"
     },
     {
       "path": "fixtures/negative-service-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1724,
-      "digest": "sha256:e61e4d0853514d42e4f9e2ff5be98452f45b41c537f9cb7643c1206d6d766b47"
+      "size": 1910,
+      "digest": "sha256:9eabdc1b8e8355a449d936ed2ea38526b14989a93446f96e08f544020fe54ee3"
     },
     {
       "path": "fixtures/negative-sqlite-bindings-binding-name.json",
       "mediaType": "application/json",
-      "size": 1722,
-      "digest": "sha256:8a33ab31dc8e4c3a63c3db42258d3d37cd654a63a78ce78366c8fffe53d95ffb"
+      "size": 1908,
+      "digest": "sha256:a45f9df4752f5aecff0f0cfdae428521da554b30f4a54945cf9dade87184ca8b"
     },
     {
       "path": "fixtures/negative-unexpected-property.json",
       "mediaType": "application/json",
-      "size": 1747,
-      "digest": "sha256:dd3470e9fc16aa941229bc7a2a35cebdeb3ffb35b0d8742b864fe6a0cf6feb46"
+      "size": 1933,
+      "digest": "sha256:04facf33df89f1422879db6b0fd3a69350c8c3074634bb39a2adde65b37b6950"
     },
     {
       "path": "fixtures/negative-vars.json",
       "mediaType": "application/json",
-      "size": 1722,
-      "digest": "sha256:dce5c6c706c77befa7880bf253e56df33c22fd39df908cfbca114bdb6fa732bd"
+      "size": 1908,
+      "digest": "sha256:0f08b489e4b022044d5d37086460bd3eef9d9cffe53dc627addc24ad4c14a784"
     },
     {
       "path": "fixtures/negative-worker.json",
       "mediaType": "application/json",
-      "size": 1723,
-      "digest": "sha256:a655a05f5cb8702f0aff325a1831689c54e41d193a8553fe2b1b3699ec271fe5"
+      "size": 1909,
+      "digest": "sha256:d438333e49db2d1ad0e3057855dbeb4cc69f3ca93e95800d4acda70e6993f499"
     }
   ]
 }

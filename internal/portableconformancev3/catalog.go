@@ -334,6 +334,25 @@ func (catalog *Catalog) line(group, kind, definitionVersion string) *InstalledFo
 	return catalog.Forms[key]
 }
 
+// onlyLine resolves the single installed line of one group and kind, or nil
+// when none or more than one is installed. A caller that means "this kind's
+// contract" must not hard-code a definition version: a member whose contract
+// diverged from its generation line does not carry that line's version
+// (decision 0046), and a caller that guessed would silently miss it.
+func (catalog *Catalog) onlyLine(group, kind string) *InstalledForm {
+	var found *InstalledForm
+	for _, form := range catalog.sortedForms() {
+		if form.Ref.APIVersion != group || form.Ref.Kind != kind {
+			continue
+		}
+		if found != nil {
+			return nil
+		}
+		found = form
+	}
+	return found
+}
+
 // sortedForms lists every installed Form in one stable exact-identity order.
 func (catalog *Catalog) sortedForms() []*InstalledForm {
 	keys := make([]ExactFormKey, 0, len(catalog.Forms))

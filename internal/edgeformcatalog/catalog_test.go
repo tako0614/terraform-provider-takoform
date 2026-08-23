@@ -38,9 +38,18 @@ func TestCatalogIsExactFifteenFormFamily(t *testing.T) {
 	if len(Forms) != len(orderedKinds) {
 		t.Fatalf("family has %d forms, want %d", len(Forms), len(orderedKinds))
 	}
+	// Worker Version alone is off the generation line: its contract gained
+	// the sealed externalServices slot list in Beta 2, so it is not the
+	// v1beta1 contract re-identified (decision 0046). Spelling the exception
+	// out here means a second Form drifting off the line fails this test.
+	wantVersions := map[string]string{"WorkerVersion": "0.2.0"}
 	for index, form := range Forms {
-		if form.Kind != orderedKinds[index] || form.DefinitionVersion != "0.1.0" {
-			t.Fatalf("form[%d] = %s@%s", index, form.Kind, form.DefinitionVersion)
+		want := wantVersions[form.Kind]
+		if want == "" {
+			want = "0.1.0"
+		}
+		if form.Kind != orderedKinds[index] || form.DefinitionVersion != want {
+			t.Fatalf("form[%d] = %s@%s, want %s@%s", index, form.Kind, form.DefinitionVersion, orderedKinds[index], want)
 		}
 	}
 	if Family.APIVersion() != "edge.forms.takoform.com/v1beta2" {
@@ -62,7 +71,7 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 		// not by a token this project has no behavior registry to interpret
 		// (decision 0019).
 		"WorkerVersion": {
-			"assets", "bucketBindings", "bundle", "handlers", "kvBindings", "queueProducerBindings",
+			"assets", "bucketBindings", "bundle", "externalServices", "handlers", "kvBindings", "queueProducerBindings",
 			"requiredSensitiveVars", "serviceBindings", "sqliteBindings", "vars", "worker",
 		},
 		"WorkerDeployment":   {"versions", "worker"},

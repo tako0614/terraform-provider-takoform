@@ -34,23 +34,23 @@
       "fromTree": "forms/candidates/edge/v1beta1",
       "toTree": "forms/candidates/edge/v1beta2",
       "contractChanged": [
+        "ModuleWorker",
+        "QueueConsumer",
         "SQLiteMigrationApplication",
+        "WorkerCronTrigger",
+        "WorkerCustomDomain",
         "WorkerDeployment",
+        "WorkerEndpoint",
         "WorkerVersion"
       ],
       "reIdentifiedOnly": [
         "AtLeastOnceQueue",
         "EdgeKVNamespace",
-        "ModuleWorker",
         "ObjectBucket",
-        "QueueConsumer",
         "SQLiteDatabase",
         "SQLiteMigrationSet",
         "StaticAssetBundle",
-        "WorkerBundle",
-        "WorkerCronTrigger",
-        "WorkerCustomDomain",
-        "WorkerEndpoint"
+        "WorkerBundle"
       ]
     }
   ]

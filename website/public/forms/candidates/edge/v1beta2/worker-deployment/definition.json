@@ -49,9 +49,9 @@
               "x-takoform-target-formrefs": [
                 {
                   "apiVersion": "edge.forms.takoform.com/v1beta2",
-                  "definitionVersion": "0.1.0",
+                  "definitionVersion": "0.2.0",
                   "kind": "WorkerVersion",
-                  "schemaDigest": "sha256:f30676be1e801befe9d1f3f02791a7c8e492730cacc0cb915e98ea060fdd52b1"
+                  "schemaDigest": "sha256:8c0e6cbbbf7253f1e3a815dcd1fc22dcc113da1e13a484882c80b9defe758aed"
                 }
               ]
             }
@@ -97,7 +97,7 @@
             "apiVersion": "edge.forms.takoform.com/v1beta2",
             "definitionVersion": "0.1.0",
             "kind": "ModuleWorker",
-            "schemaDigest": "sha256:aa0bf9b4b22012f73a4a607e2c0345d9082c8c01cbc4e14d5643dbdcab750c6e"
+            "schemaDigest": "sha256:49a3802e53618c372ffa94a4d2c49d0c6867b7a97d9af685a11c5314d42a160e"
           }
         ]
       }

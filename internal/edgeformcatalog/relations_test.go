@@ -49,20 +49,20 @@ var wantRelations = map[string][]string{
 		"/queueProducerBindings/*/resource -> AtLeastOnceQueue [module-worker.queue-producer] optional iface:edge.queue@1.0.0",
 		"/serviceBindings/*/resource -> ModuleWorker [module-worker.service] optional iface:worker.service@1.0.0",
 		"/sqliteBindings/*/resource -> SQLiteDatabase [module-worker.sqlite] optional iface:edge.sql@1.0.0",
-		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
 	},
 	"WorkerDeployment": {
 		"/versions/*/workerVersion -> WorkerVersion [-] required exact-form",
 		"/worker -> ModuleWorker [-] required exact-form",
 	},
 	"WorkerCustomDomain": {
-		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
 	},
 	"WorkerEndpoint": {
-		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
 	},
 	"WorkerCronTrigger": {
-		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
 	},
 	"EdgeKVNamespace":    nil,
 	"ObjectBucket":       nil,
@@ -76,7 +76,7 @@ var wantRelations = map[string][]string{
 	"QueueConsumer": {
 		"/deadLetterQueue -> AtLeastOnceQueue [-] optional iface:edge.queue@1.0.0",
 		"/queue -> AtLeastOnceQueue [-] required iface:edge.queue@1.0.0",
-		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.0.0",
+		"/worker -> ModuleWorker [-] required iface:worker.runtime@1.1.0",
 	},
 }
 

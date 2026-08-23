@@ -193,7 +193,9 @@ function generate(outputRoots) {
     if (
       definition.kind !== kind ||
       definition.apiVersion !== FAMILY ||
-      definition.definitionVersion !== "0.1.0" ||
+      !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(
+        definition.definitionVersion ?? "",
+      ) ||
       definition.role !== role ||
       !/^takoform_[a-z0-9_]+$/u.test(rendered.resourceType)
     ) {
@@ -243,7 +245,11 @@ function generate(outputRoots) {
     const formRef = {
       apiVersion: FAMILY,
       kind,
-      definitionVersion: "0.1.0",
+      // The version is the Form's own, not the generation's: a member whose
+      // contract diverged from the generation line carries a different one,
+      // and the source catalog is the only place that decides which
+      // (decision 0046).
+      definitionVersion: definition.definitionVersion,
       schemaDigest: digestCanonicalJSON(
         path.join(destinationRoot, "definition.json"),
       ),
@@ -298,7 +304,14 @@ function generate(outputRoots) {
 function writeContractCandidates({ outputRoot, contracts, expectedNames, candidateSet, listKey }) {
   for (const [index, name] of expectedNames.entries()) {
     const contract = contracts[index];
-    if (contract?.name !== name || contract?.version !== "1.0.0") {
+    // A contract's version is its own: worker.runtime went to 1.1.0 when the
+    // env closure gained the external-service projections (decision 0045).
+    // What must not drift is the ORDER and the NAMES, which is what pins the
+    // candidate set to the catalog.
+    if (
+      contract?.name !== name ||
+      !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(contract?.version ?? "")
+    ) {
       throw new Error(`${listKey} catalog order or identity drifted at ${name}`);
     }
     const definitionRaw = contract.definitionJson;

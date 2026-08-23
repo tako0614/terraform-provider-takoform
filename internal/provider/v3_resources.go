@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -454,6 +455,46 @@ func v3FieldAttribute(form model.Form, field model.Field) schema.Attribute {
 			attribute.PlanModifiers = []planmodifier.List{listplanmodifier.RequiresReplace()}
 		}
 		return attribute
+	case model.KindExternalServiceList:
+		// The sealed slot's shape is fixed by the standard-services contract
+		// (decision 0045), so the author writes only what is theirs to write:
+		// the projected NAME and the protocol. The service apiVersion is the
+		// vocabulary's own identity and is never an author input; the provider
+		// supplies it on the wire.
+		attribute := schema.ListNestedAttribute{
+			Optional: optional, Required: field.Required, Computed: computed, Description: description,
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: map[string]schema.Attribute{
+					"name": schema.StringAttribute{
+						Required:    true,
+						Description: "SCREAMING_SNAKE slot name; the runtime members are projected under it.",
+						Validators: []validator.String{StringMatches(
+							model.PatternExternalServiceName,
+							"slot name must be SCREAMING_SNAKE",
+						)},
+					},
+					"protocol": schema.StringAttribute{
+						Required:    true,
+						Description: "Standard protocol this slot speaks: one of " + strings.Join(model.ExternalServiceProtocols, ", ") + ".",
+						Validators:  []validator.String{StringOneOf(model.ExternalServiceProtocols...)},
+					},
+					"required": schema.BoolAttribute{
+						Optional:    true,
+						Computed:    true,
+						Default:     booldefault.StaticBool(true),
+						Description: "Whether the host must satisfy this slot for the resource to be Ready. Defaults to true.",
+					},
+				},
+			},
+			Validators: []validator.List{v3ListSizeValidator{minItems: field.MinItems, maxItems: field.MaxItems}},
+		}
+		if computed {
+			attribute.Default = listdefault.StaticValue(v3DefaultExternalServiceList(field))
+		}
+		if replace {
+			attribute.PlanModifiers = []planmodifier.List{listplanmodifier.RequiresReplace()}
+		}
+		return attribute
 	case model.KindObjectList:
 		nested := map[string]schema.Attribute{}
 		for _, member := range field.Fields {
@@ -653,6 +694,30 @@ func v3DefaultStringSet(field model.Field) types.Set {
 		elements = append(elements, types.StringValue(text))
 	}
 	return types.SetValueMust(types.StringType, elements)
+}
+
+func v3DefaultExternalServiceList(field model.Field) types.List {
+	elementType := v3ExternalServiceObjectType()
+	items := v3DefaultAnySlice(field.Default)
+	elements := make([]attr.Value, 0, len(items))
+	for _, item := range items {
+		entry, _ := item.(map[string]any)
+		name, _ := entry["name"].(string)
+		var protocol string
+		if service, ok := entry["service"].(map[string]any); ok {
+			protocol, _ = service["protocol"].(string)
+		}
+		required := true
+		if declared, ok := entry["required"].(bool); ok {
+			required = declared
+		}
+		elements = append(elements, types.ObjectValueMust(elementType.AttrTypes, map[string]attr.Value{
+			"name":     types.StringValue(name),
+			"protocol": types.StringValue(protocol),
+			"required": types.BoolValue(required),
+		}))
+	}
+	return types.ListValueMust(elementType, elements)
 }
 
 func v3DefaultBindingList(field model.Field) types.List {
@@ -882,6 +947,42 @@ func v3FieldToWire(
 		return parsed, diags
 	case model.KindResourceRef:
 		return v3WireReference(group, field.TargetKind, value.(types.String).ValueString()), diags
+	case model.KindExternalServiceList:
+		list := value.(types.List)
+		out := make([]any, 0, len(list.Elements()))
+		for index, element := range list.Elements() {
+			object, objectDiags := v3KnownObject(attrName, index, element)
+			diags.Append(objectDiags...)
+			if objectDiags.HasError() {
+				return nil, diags
+			}
+			attributes := object.Attributes()
+			name, nameDiags := v3KnownString(attrName, "name", attributes["name"])
+			protocol, protocolDiags := v3KnownString(attrName, "protocol", attributes["protocol"])
+			diags.Append(nameDiags...)
+			diags.Append(protocolDiags...)
+			if diags.HasError() {
+				return nil, diags
+			}
+			entry := map[string]any{
+				"name": name,
+				"service": map[string]any{
+					"apiVersion": model.StandardServiceAPIVersion,
+					"protocol":   protocol,
+				},
+			}
+			if required, ok := attributes["required"].(types.Bool); ok && !required.IsNull() && !required.IsUnknown() {
+				entry["required"] = required.ValueBool()
+			}
+			out = append(out, entry)
+		}
+		if len(out) == 0 {
+			if model.EmptyCollectionDefault(field) {
+				return []any{}, diags
+			}
+			return nil, diags
+		}
+		return out, diags
 	case model.KindBindingList:
 		list := value.(types.List)
 		out := make([]any, 0, len(list.Elements()))
@@ -1061,6 +1162,35 @@ func v3FieldValueFromSpec(ctx context.Context, field model.Field, raw any, diags
 			}
 		}
 		return types.StringNull()
+	case model.KindExternalServiceList:
+		elementType := v3ExternalServiceObjectType()
+		items, ok := raw.([]any)
+		if !ok {
+			return types.ListNull(elementType)
+		}
+		elements := make([]attr.Value, 0, len(items))
+		for _, item := range items {
+			entry, _ := item.(map[string]any)
+			name, _ := entry["name"].(string)
+			var protocol string
+			if service, ok := entry["service"].(map[string]any); ok {
+				protocol, _ = service["protocol"].(string)
+			}
+			// An absent `required` means the contract's default, true; the
+			// state must carry the effective value, not the absence.
+			required := true
+			if declared, ok := entry["required"].(bool); ok {
+				required = declared
+			}
+			elements = append(elements, types.ObjectValueMust(elementType.AttrTypes, map[string]attr.Value{
+				"name":     types.StringValue(name),
+				"protocol": types.StringValue(protocol),
+				"required": types.BoolValue(required),
+			}))
+		}
+		list, listDiags := types.ListValue(elementType, elements)
+		diags.Append(listDiags...)
+		return list
 	case model.KindBindingList:
 		elementType := v3BindingObjectType()
 		items, ok := raw.([]any)
@@ -1129,6 +1259,14 @@ func v3FieldValueFromSpec(ctx context.Context, field model.Field, raw any, diags
 	default:
 		return optionalStringFromAny(raw)
 	}
+}
+
+func v3ExternalServiceObjectType() types.ObjectType {
+	return types.ObjectType{AttrTypes: map[string]attr.Type{
+		"name":     types.StringType,
+		"protocol": types.StringType,
+		"required": types.BoolType,
+	}}
 }
 
 func v3BindingObjectType() types.ObjectType {
