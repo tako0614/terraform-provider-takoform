@@ -579,7 +579,7 @@ func (h *ReferenceHost) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 	probe := request.Header.Get(ErrorProbeHeader)
 	if strings.HasPrefix(probe, ProbeErrorPrefix) {
 		code := strings.TrimPrefix(probe, ProbeErrorPrefix)
-		if _, known := stableErrorHTTPStatusByCode[code]; !known {
+		if _, known := h.contract.lane.ErrorHTTPStatus[code]; !known {
 			h.writeError(w, "invalid_argument", "unknown conformance error probe")
 			return
 		}
@@ -722,22 +722,92 @@ func (h *ReferenceHost) exactQueryForm(query url.Values) (*InstalledForm, string
 }
 
 func (h *ReferenceHost) handleForms(w http.ResponseWriter, request *http.Request) {
+	if h.contract.lane.FormsResponseEnumerates {
+		h.handleFormsEnumerated(w, request)
+		return
+	}
 	form, _, hostErr := h.exactQueryForm(request.URL.Query())
 	if hostErr != nil {
 		h.writeHostError(w, hostErr)
 		return
 	}
 	h.writeJSON(w, http.StatusOK, "", map[string]any{
-		"forms": []map[string]any{{
-			"identity":             h.identityJSON(form),
-			"definitionKnown":      true,
-			"installed":            true,
-			"executable":           true,
-			"activated":            true,
-			"availableToPrincipal": true,
-			"operations":           form.operations(),
-		}},
+		"forms": []map[string]any{h.availabilityJSON(form)},
 	})
+}
+
+// handleFormsEnumerated answers the v1beta2 route: every one of the six query
+// keys is OPTIONAL and narrows the answer, so the route enumerates the
+// installed set and the fully-keyed probe is just the narrowest case of it.
+// The v1beta1 shape required the whole identity and capped the array at one,
+// which made a route named "forms" unable to tell anyone which Forms existed.
+func (h *ReferenceHost) handleFormsEnumerated(w http.ResponseWriter, request *http.Request) {
+	query := request.URL.Query()
+	allowed := map[string]bool{
+		"space": true, "group": true, "version": true, "kind": true,
+		"definitionVersion": true, "schemaDigest": true,
+	}
+	for key, values := range query {
+		if !allowed[key] || len(values) != 1 {
+			h.writeError(w, "invalid_argument", "Form query vocabulary is closed")
+			return
+		}
+	}
+	if space := query.Get("space"); space != "" && !validSpaceID(space) {
+		h.writeError(w, "invalid_argument", "space is malformed")
+		return
+	}
+	// A narrowing key is matched against the whole exact identity it names.
+	// `group` and `version` are the two halves of an apiVersion, because the
+	// path shape already splits them and a client that had to rejoin them
+	// would be re-deriving what the lane took apart.
+	group, version := query.Get("group"), query.Get("version")
+	matches := make([]map[string]any, 0, len(h.catalog.Forms))
+	for _, form := range h.catalog.sortedForms() {
+		formGroup, formVersion, split := splitAPIVersion(form.Ref.APIVersion)
+		if !split {
+			continue
+		}
+		switch {
+		case group != "" && group != formGroup,
+			version != "" && version != formVersion,
+			query.Get("kind") != "" && query.Get("kind") != form.Ref.Kind,
+			query.Get("definitionVersion") != "" && query.Get("definitionVersion") != form.Ref.DefinitionVersion,
+			query.Get("schemaDigest") != "" && query.Get("schemaDigest") != form.Ref.SchemaDigest:
+			continue
+		}
+		matches = append(matches, h.availabilityJSON(form))
+	}
+	h.writeJSON(w, http.StatusOK, "", map[string]any{"forms": matches})
+}
+
+// availabilityJSON renders one availability answer. `deprecated` is a member
+// of the v1beta1 shape only: it was published with no source of truth behind
+// it, so v1beta2 removed it rather than invent one.
+func (h *ReferenceHost) availabilityJSON(form *InstalledForm) map[string]any {
+	answer := map[string]any{
+		"identity":             h.identityJSON(form),
+		"definitionKnown":      true,
+		"installed":            true,
+		"executable":           true,
+		"activated":            true,
+		"availableToPrincipal": true,
+		"operations":           form.operations(),
+	}
+	if h.contract.lane.AvailabilityCarriesDeprecated {
+		answer["deprecated"] = false
+	}
+	return answer
+}
+
+// splitAPIVersion splits a namespaced Form group into its group name and group
+// version, the two path segments the lane carries them as.
+func splitAPIVersion(apiVersion string) (string, string, bool) {
+	cut := strings.LastIndex(apiVersion, "/")
+	if cut <= 0 || cut == len(apiVersion)-1 {
+		return "", "", false
+	}
+	return apiVersion[:cut], apiVersion[cut+1:], true
 }
 
 func (h *ReferenceHost) handleFormDefinition(w http.ResponseWriter, request *http.Request, group, kind string) {
@@ -803,6 +873,11 @@ type resourceWire struct {
 
 type reviewWire struct {
 	PrepareDigest string `json:"prepareDigest"`
+	// SpecDigest is the OPTIONAL echo of what prepare answered. A client that
+	// sends it is asking the host to confirm that the spec it is applying is
+	// the spec it prepared, which is worth something precisely because the
+	// prepare digest alone cannot say so to the client's own satisfaction.
+	SpecDigest string `json:"specDigest,omitempty"`
 }
 
 type applyWire struct {
@@ -1433,6 +1508,14 @@ func (h *ReferenceHost) handleApply(w http.ResponseWriter, request *http.Request
 		h.writeError(w, "invalid_argument", "spec is not canonicalizable I-JSON")
 		return
 	}
+	// Echoing the review object a prepare handed back is never itself a
+	// refusal, so an ABSENT specDigest is fine; a PRESENT one that disagrees
+	// with the spec actually being applied is the substitution this member
+	// exists to catch.
+	if body.Review.SpecDigest != "" && body.Review.SpecDigest != specDigest {
+		h.writeError(w, "invalid_argument", "review.specDigest does not match the spec being applied")
+		return
+	}
 	space := body.Metadata.Space
 	fences := mutationFenceOf(request)
 	prepareDigest := body.Review.PrepareDigest
@@ -1699,7 +1782,7 @@ func (h *ReferenceHost) renderResource(resource *storedResource) map[string]any 
 		"observedGeneration": strconv.FormatInt(resource.Generation, 10),
 		"conditions":         h.derivedConditions(resource),
 	}
-	if resource.StatusTouches > 0 {
+	if h.contract.lane.StatusCarriesObserved && resource.StatusTouches > 0 {
 		status["observed"] = map[string]any{"statusTouches": resource.StatusTouches}
 	}
 	// `status.outputs` is present exactly when the installed Form Definition
@@ -2137,7 +2220,7 @@ func (h *ReferenceHost) completeOperation(operation *hostOperation, result map[s
 		document["error"] = map[string]any{
 			"code":      hostErr.Code,
 			"message":   hostErr.Message,
-			"retryable": isAutomaticallyRetryable(hostErr.Code),
+			"retryable": h.contract.lane.isAutomaticallyRetryable(hostErr.Code),
 		}
 	} else {
 		document["result"] = result
@@ -2665,6 +2748,31 @@ func (h *ReferenceHost) collectStagedBlobs(upload *artifactUpload) {
 	}
 }
 
+// handleStandardServiceSupport answers whether this host can satisfy one
+// external standard-service protocol (decision 0045).
+//
+// It exists so a client learns at PREPARE time that a slot cannot be filled,
+// rather than at apply time from a resource that will never become Ready. The
+// answer is a profile rather than a bare boolean because "can you speak
+// postgresql" and "for whom, and under what identity" are the same question,
+// and a bare boolean could not carry the second half.
+func (h *ReferenceHost) handleStandardServiceSupport(w http.ResponseWriter, protocol string) {
+	if !containsString(h.contract.RunnerInput.ExternalServices.Protocols, protocol) {
+		h.writeError(w, "resource_not_found", "standard-service protocol is unknown")
+		return
+	}
+	satisfiable := true
+	h.writeJSON(w, http.StatusOK, "", map[string]any{
+		"apiVersion": h.contract.APIVersion,
+		"kind":       "StandardServiceSupport",
+		"serviceRef": map[string]any{
+			"apiVersion": h.contract.RunnerInput.ExternalServices.ServiceAPIVersion,
+			"protocol":   protocol,
+		},
+		"satisfiable": satisfiable,
+	})
+}
+
 func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Request, parts []string) {
 	if request.Method != http.MethodGet {
 		h.writeError(w, "resource_not_found", "unknown support operation")
@@ -2692,6 +2800,8 @@ func (h *ReferenceHost) routeSupport(w http.ResponseWriter, request *http.Reques
 			return
 		}
 		h.writeJSON(w, http.StatusOK, "", h.formSupportProfile(form))
+	case len(parts) == 3 && parts[1] == "standard-services":
+		h.handleStandardServiceSupport(w, parts[2])
 	case len(parts) == 4 && parts[1] == "interfaces":
 		reference, ok := h.catalog.interfaces[parts[2]+"@"+parts[3]]
 		if !ok {
@@ -2902,7 +3012,7 @@ func (h *ReferenceHost) writeHostError(w http.ResponseWriter, hostErr *hostError
 }
 
 func (h *ReferenceHost) writeError(w http.ResponseWriter, code, message string) {
-	status, known := stableErrorHTTPStatusByCode[code]
+	status, known := h.contract.lane.ErrorHTTPStatus[code]
 	if !known {
 		status = http.StatusInternalServerError
 		code = "internal_error"
@@ -2916,7 +3026,7 @@ func (h *ReferenceHost) writeError(w http.ResponseWriter, code, message string) 
 			"code":      code,
 			"message":   message,
 			"requestId": "ref3-" + code + "-" + strconv.Itoa(h.requestCounter),
-			"retryable": isAutomaticallyRetryable(code),
+			"retryable": h.contract.lane.isAutomaticallyRetryable(code),
 		},
 	})
 }

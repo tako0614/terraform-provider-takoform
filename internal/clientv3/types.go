@@ -50,12 +50,13 @@ type Condition struct {
 	LastTransitionTime string `json:"lastTransitionTime"`
 }
 
-// Status carries the observed generation, closed conditions, and the Form's
-// portable observed and output documents.
+// Status carries the observed generation, the closed conditions, and the
+// Form's output document. There is no observed document in this lane: the
+// envelope owns status, and what a host observed reached a consumer through
+// outputs already.
 type Status struct {
 	ObservedGeneration string         `json:"observedGeneration"`
 	Conditions         []Condition    `json:"conditions"`
-	Observed           map[string]any `json:"observed,omitempty"`
 	Outputs            map[string]any `json:"outputs,omitempty"`
 }
 
@@ -118,7 +119,7 @@ var (
 			`(-((0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?` +
 			`(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$`,
 	)
-	resourceNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+	resourceNamePattern = regexp.MustCompile(`^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$`)
 	uidPattern          = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 	conditionTypes      = map[string]struct{}{
 		"Ready": {}, "Reconciling": {}, "Degraded": {}, "Drifted": {}, "Blocked": {}, "Deleting": {},
@@ -156,7 +157,7 @@ func ValidateFormRef(ref FormRef) error {
 // normalize, or case-fold them.
 func ValidateResourceName(value string) error {
 	if !resourceNamePattern.MatchString(value) {
-		return errors.New("takoform: resource name must match ^[a-z][a-z0-9-]{0,62}$")
+		return errors.New("takoform: resource name must match ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$")
 	}
 	return nil
 }

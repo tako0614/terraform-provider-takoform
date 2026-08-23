@@ -186,6 +186,19 @@ func (r *v3Runner) run() error {
 		// the matrix is reordered later.
 		r.checkTenantIsolatedResourcePlane,
 	}
+	// The lane's own additions run last, on state every earlier step built.
+	// They are appended rather than interleaved because each measures a rule
+	// that exists only in this lane: on a v1beta1 corpus the list is empty and
+	// the run is exactly what it always was.
+	if r.contract.lane.APIVersion == beta2Lane.APIVersion {
+		steps = append(steps,
+			func() error { return r.checkFenceMatrixObserved(kv) },
+			func() error { return r.checkFormsRouteEnumerates(mw) },
+			func() error { return r.checkAvailabilityTruthConditions(kv) },
+			r.checkCancelOutcomesClosed,
+			func() error { return r.checkExternalServiceSlotsSealed(version) },
+		)
+	}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			if !r.survey {
@@ -372,7 +385,7 @@ func (r *v3Runner) checkErrorTaxonomy() error {
 		r.errorProbes = append(r.errorProbes, ErrorProbeEvidence{
 			Code:       code,
 			HTTPStatus: response.Status,
-			Retryable:  isAutomaticallyRetryable(code),
+			Retryable:  r.contract.lane.isAutomaticallyRetryable(code),
 		})
 	}
 	r.complete("error-envelope-taxonomy")
@@ -380,9 +393,13 @@ func (r *v3Runner) checkErrorTaxonomy() error {
 }
 
 func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
+	// The exact-availability probe is the same question in both lanes, asked
+	// in each lane's own vocabulary: v1beta1 carries the whole apiVersion under
+	// `group`, and v1beta2 splits it into `group` and `version` the way every
+	// path in that lane already splits it.
 	response, err := r.request(
 		http.MethodGet,
-		r.apiBase+"/forms?"+r.exactQuery(target.Space, target.Ref).Encode(),
+		r.apiBase+"/forms?"+r.formsAvailabilityQuery(target.Space, target.Ref).Encode(),
 		nil, nil,
 	)
 	if err != nil {
@@ -434,15 +451,35 @@ func (r *v3Runner) checkFormsAvailability(target probeTarget) error {
 			entry.Operations, target.Lifecycle,
 		)
 	}
-	// A substituted schemaDigest is a different exact Form and must be
-	// unknown, not silently resolved.
-	substituted := r.exactQuery(target.Space, target.Ref)
+	// A substituted schemaDigest is a different exact Form and must not be
+	// silently resolved. How the route SAYS so differs by lane, and the
+	// difference is the point of the v1beta2 change rather than an
+	// inconsistency: a probe that answers about one identity reports an
+	// unknown one as form_unknown, while an enumeration reports it by
+	// enumerating nothing.
+	substituted := r.formsAvailabilityQuery(target.Space, target.Ref)
 	substituted.Set("schemaDigest", formpackage.DigestBytes([]byte("substituted-schema")))
 	wrongResponse, err := r.request(http.MethodGet, r.apiBase+"/forms?"+substituted.Encode(), nil, nil)
 	if err != nil {
 		return err
 	}
-	if err := r.expectStableError(wrongResponse, "form_unknown"); err != nil {
+	if r.contract.lane.FormsResponseEnumerates {
+		var empty struct {
+			Forms []formsAvailabilityEntry `json:"forms"`
+		}
+		if wrongResponse.Status != http.StatusOK {
+			return fmt.Errorf(
+				"forms answered HTTP %d for a substituted schemaDigest; an enumeration answers 200 with no entries",
+				wrongResponse.Status,
+			)
+		}
+		if err := decodeStrictResponse(wrongResponse, &empty); err != nil {
+			return err
+		}
+		if len(empty.Forms) != 0 {
+			return errors.New("forms resolved a substituted schemaDigest to an installed Form")
+		}
+	} else if err := r.expectStableError(wrongResponse, "form_unknown"); err != nil {
 		return err
 	}
 	r.complete("forms-exact-availability")
@@ -724,7 +761,7 @@ func (r *v3Runner) checkCreateLifecycle(kv, mw, queue probeTarget) error {
 	if err != nil {
 		return err
 	}
-	if err := verifyResourceIdentity(created, kv); err != nil {
+	if err := r.contract.lane.verifyResourceIdentity(created, kv); err != nil {
 		return err
 	}
 	// The uid is host-issued and opaque: the runner asserts only the wire
@@ -994,7 +1031,7 @@ func (r *v3Runner) checkConditionReasonsClosed(targets ...probeTarget) error {
 		if resource.Status == nil || len(resource.Status.Conditions) == 0 {
 			return fmt.Errorf("%s returned no conditions to hold to the closed vocabulary", target.Ref.Kind)
 		}
-		if err := verifyClosedConditionReasons(resource); err != nil {
+		if err := r.contract.lane.verifyClosedConditionReasons(resource); err != nil {
 			return err
 		}
 		for _, condition := range resource.Status.Conditions {
@@ -1012,7 +1049,7 @@ func (r *v3Runner) checkConditionReasonsClosed(targets ...probeTarget) error {
 	outside := wireResource{Status: &wireStatus{Conditions: []wireCondition{{
 		Type: "Ready", Status: "True", Reason: "HostSpecificMeltdown",
 	}}}}
-	if err := verifyClosedConditionReasons(outside); err == nil {
+	if err := r.contract.lane.verifyClosedConditionReasons(outside); err == nil {
 		return errors.New("the closed condition reason assertion accepts a non-portable reason")
 	}
 	r.complete("condition-reason-closed")
@@ -1132,7 +1169,7 @@ func (r *v3Runner) checkObserveAndStatusTouch(queue probeTarget) error {
 	if err != nil {
 		return err
 	}
-	if err := verifyResourceIdentity(observed, queue); err != nil {
+	if err := r.contract.lane.verifyResourceIdentity(observed, queue); err != nil {
 		return err
 	}
 	if observed.Metadata.Generation != "2" {
@@ -2492,7 +2529,7 @@ func (r *v3Runner) checkImportFlows(kv, version probeTarget) error {
 	if err != nil {
 		return err
 	}
-	if err := verifyResourceIdentity(resource, adopted); err != nil {
+	if err := r.contract.lane.verifyResourceIdentity(resource, adopted); err != nil {
 		return err
 	}
 	if !uidPattern.MatchString(resource.Metadata.UID) {
@@ -3062,7 +3099,7 @@ func (r *v3Runner) checkOperations(kv probeTarget) error {
 	if err := formpackage.DecodeStrictIJSON(resultResource, &resource); err != nil {
 		return fmt.Errorf("terminal result resource: %w", err)
 	}
-	if err := verifyResourceIdentity(resource, asyncTarget); err != nil {
+	if err := r.contract.lane.verifyResourceIdentity(resource, asyncTarget); err != nil {
 		return err
 	}
 	if _, _, err := r.read(asyncTarget); err != nil {

@@ -26,7 +26,7 @@ import (
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
 )
 
-const v3TestAPIRoot = "/apis/forms.takoform.com/v1beta1"
+const v3TestAPIRoot = "/apis/forms.takoform.com/v1beta2"
 
 // v3ExpectedGenerationHeader is the desired-state fence every mutation of this
 // lane carries, deletes included.
@@ -403,9 +403,15 @@ func unescapeSegment(segment string) (string, error) {
 
 func (h *v3FakeHost) serveForms(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
+	// The enumerating route splits an apiVersion into its two path segments,
+	// so the answer rejoins them to echo the identity that was asked about.
+	apiVersion := query.Get("group")
+	if version := query.Get("version"); version != "" {
+		apiVersion += "/" + version
+	}
 	identity := map[string]any{
 		"formRef": map[string]any{
-			"apiVersion":        query.Get("group"),
+			"apiVersion":        apiVersion,
 			"kind":              query.Get("kind"),
 			"definitionVersion": query.Get("definitionVersion"),
 			"schemaDigest":      query.Get("schemaDigest"),

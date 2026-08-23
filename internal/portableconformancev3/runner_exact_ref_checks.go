@@ -74,7 +74,8 @@ func (r *v3Runner) checkTwoDefinitionVersionsAnswerIndependently() error {
 	descriptions := map[string]string{}
 	for _, ref := range []FormRef{first, second} {
 		availability, err := r.request(
-			http.MethodGet, r.apiBase+"/forms?"+r.exactQuery(r.contract.RunnerInput.Space, ref).Encode(),
+			http.MethodGet,
+			r.apiBase+"/forms?"+r.formsAvailabilityQuery(r.contract.RunnerInput.Space, ref).Encode(),
 			nil, nil,
 		)
 		if err != nil {
@@ -159,23 +160,41 @@ func (r *v3Runner) checkTwoDefinitionVersionsAnswerIndependently() error {
 	// A mixed identity names no installed Definition.
 	mixed := first
 	mixed.DefinitionVersion = second.DefinitionVersion
-	for _, surface := range []struct {
-		label  string
-		target string
-	}{
-		{"availability", r.apiBase + "/forms?" + r.exactQuery(r.contract.RunnerInput.Space, mixed).Encode()},
-		{"the Form Definition surface", r.formDefinitionURL(mixed)},
-	} {
-		response, err := r.request(http.MethodGet, surface.target, nil, nil)
-		if err != nil {
+	// The Form Definition surface answers about ONE identity in both lanes, so
+	// a mixed identity is form_unknown there whatever the lane. The
+	// availability route only answers that way where it is a probe; where it
+	// enumerates, naming no installed Form means enumerating none.
+	if response, err := r.request(
+		http.MethodGet,
+		r.apiBase+"/forms?"+r.formsAvailabilityQuery(r.contract.RunnerInput.Space, mixed).Encode(),
+		nil, nil,
+	); err != nil {
+		return err
+	} else if r.contract.lane.FormsResponseEnumerates {
+		var empty struct {
+			Forms []formsAvailabilityEntry `json:"forms"`
+		}
+		if err := decodeStrictResponse(response, &empty); err != nil {
 			return err
 		}
-		if err := r.expectStableError(response, "form_unknown"); err != nil {
-			return fmt.Errorf(
-				"%s answered a definitionVersion and schemaDigest that belong to different contracts: %w",
-				surface.label, err,
+		if response.Status != http.StatusOK || len(empty.Forms) != 0 {
+			return errors.New(
+				"availability resolved a definitionVersion and schemaDigest that belong to different contracts",
 			)
 		}
+	} else if err := r.expectStableError(response, "form_unknown"); err != nil {
+		return fmt.Errorf(
+			"availability answered a definitionVersion and schemaDigest that belong to different contracts: %w",
+			err,
+		)
+	}
+	if response, err := r.request(http.MethodGet, r.formDefinitionURL(mixed), nil, nil); err != nil {
+		return err
+	} else if err := r.expectStableError(response, "form_unknown"); err != nil {
+		return fmt.Errorf(
+			"the Form Definition surface answered a definitionVersion and schemaDigest that belong to different contracts: %w",
+			err,
+		)
 	}
 	r.complete("two-definition-versions-answer-independently")
 	return nil

@@ -176,7 +176,7 @@ func (r *v3Runner) checkSQLiteMigrationLedgerReadiness() error {
 	if err != nil {
 		return err
 	}
-	if err := requireNotReady(older, "Reconciling"); err != nil {
+	if err := requireNotReady(older, r.contract.lane.ConvergingReason()); err != nil {
 		return fmt.Errorf("older migration application after a later superset: %w", err)
 	}
 	if strings.Contains(readyCondition(older).HostReason, "one live") {

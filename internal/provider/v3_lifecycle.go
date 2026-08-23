@@ -122,7 +122,10 @@ func assertV3Lane(data *providerData, resourceType string, diags *diag.Diagnosti
 		return false
 	}
 	if data.clientV3 == nil {
-		diags.Append(v3LaneDiagnostic(resourceType, "v1beta1", data.v3Err))
+		// The lane label is READ from the client rather than written here: a
+		// hardcoded one drifts the moment the lane moves, and it drifts in the
+		// one place an operator is already confused.
+		diags.Append(v3LaneDiagnostic(resourceType, clientv3.APIVersion, data.v3Err))
 		return false
 	}
 	return true

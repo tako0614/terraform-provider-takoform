@@ -514,7 +514,7 @@ func decodeStrictResponse(response wireResponse, target any) error {
 }
 
 func (r *v3Runner) expectStableError(response wireResponse, code string) error {
-	wantStatus, known := stableErrorHTTPStatusByCode[code]
+	wantStatus, known := r.contract.lane.ErrorHTTPStatus[code]
 	if !known {
 		return fmt.Errorf("unknown stable error code %q", code)
 	}
@@ -541,7 +541,7 @@ func (r *v3Runner) expectStableError(response wireResponse, code string) error {
 		strings.TrimSpace(envelope.Error.Message) == "" ||
 		strings.TrimSpace(envelope.Error.RequestID) == "" ||
 		envelope.Error.Retryable == nil ||
-		*envelope.Error.Retryable != isAutomaticallyRetryable(code) {
+		*envelope.Error.Retryable != r.contract.lane.isAutomaticallyRetryable(code) {
 		return fmt.Errorf("invalid %s error envelope: %s", code, strings.TrimSpace(string(response.Body)))
 	}
 	return nil
@@ -584,7 +584,7 @@ func decodeResourceEnvelope(response wireResponse) (wireResource, error) {
 	return envelope.Resource, nil
 }
 
-func verifyResourceIdentity(got wireResource, target probeTarget) error {
+func (l lane) verifyResourceIdentity(got wireResource, target probeTarget) error {
 	if got.APIVersion != target.Ref.APIVersion || got.Kind != target.Ref.Kind ||
 		got.Form.FormRef != target.Ref {
 		return errors.New("host response changed the exact FormRef identity")
@@ -601,7 +601,7 @@ func verifyResourceIdentity(got wireResource, target probeTarget) error {
 	if got.Status == nil || got.Status.ObservedGeneration != got.Metadata.Generation {
 		return errors.New("host response status.observedGeneration must reflect metadata.generation")
 	}
-	if err := verifyClosedConditionReasons(got); err != nil {
+	if err := l.verifyClosedConditionReasons(got); err != nil {
 		return err
 	}
 	ready := false
@@ -627,16 +627,16 @@ func verifyResourceIdentity(got wireResource, target probeTarget) error {
 // portable reason vocabulary. Two conforming hosts must name one state with
 // one reason, so an unrecognized reason is a portability defect even when it
 // is otherwise well formed; host-specific detail belongs in hostReason.
-func verifyClosedConditionReasons(got wireResource) error {
+func (l lane) verifyClosedConditionReasons(got wireResource) error {
 	if got.Status == nil {
 		return nil
 	}
 	for _, condition := range got.Status.Conditions {
-		if !isPortableConditionReason(condition.Reason) {
+		if !l.isPortableConditionReason(condition.Reason) {
 			return fmt.Errorf(
 				"condition %s carries reason %q outside the closed portable vocabulary %v; "+
 					"host-specific detail belongs in hostReason",
-				condition.Type, condition.Reason, portableConditionReasons,
+				condition.Type, condition.Reason, l.ConditionReasons,
 			)
 		}
 	}
@@ -760,6 +760,11 @@ func (r *v3Runner) prepareWithFenceAs(token string, target probeTarget, generati
 }
 
 type applyOptions struct {
+	// SpecDigestEcho sends the optional review.specDigest. Empty omits it,
+	// which is the ordinary case: the echo is a client's own belt-and-braces
+	// check that the spec it is applying is the spec it prepared.
+	SpecDigestEcho string
+
 	Create             bool
 	ExpectedGeneration string
 	ExpectedUID        string
@@ -772,7 +777,11 @@ type applyOptions struct {
 
 func (r *v3Runner) applyRequestParts(target probeTarget, options applyOptions) (string, map[string]string, []byte, error) {
 	document := r.resourceBody(target)
-	document["review"] = map[string]any{"prepareDigest": options.PrepareDigest}
+	review := map[string]any{"prepareDigest": options.PrepareDigest}
+	if options.SpecDigestEcho != "" {
+		review["specDigest"] = options.SpecDigestEcho
+	}
+	document["review"] = review
 	if options.ExpectedUID != "" {
 		document["expectedUid"] = options.ExpectedUID
 	}
@@ -831,7 +840,7 @@ func (r *v3Runner) applyResource(target probeTarget, options applyOptions, wantS
 	if err != nil {
 		return wireResource{}, wireResponse{}, err
 	}
-	if err := verifyResourceIdentity(resource, target); err != nil {
+	if err := r.contract.lane.verifyResourceIdentity(resource, target); err != nil {
 		return wireResource{}, wireResponse{}, err
 	}
 	if err := verifyRevisionETag(response, resource.Metadata.Revision); err != nil {
@@ -890,7 +899,7 @@ func (r *v3Runner) read(target probeTarget) (wireResource, wireResponse, error) 
 	if err != nil {
 		return wireResource{}, wireResponse{}, err
 	}
-	if err := verifyResourceIdentity(resource, target); err != nil {
+	if err := r.contract.lane.verifyResourceIdentity(resource, target); err != nil {
 		return wireResource{}, wireResponse{}, err
 	}
 	if err := verifyRevisionETag(response, resource.Metadata.Revision); err != nil {
@@ -923,7 +932,7 @@ func (r *v3Runner) readRawResponse(target probeTarget) (wireResource, wireRespon
 	if err != nil {
 		return wireResource{}, wireResponse{}, err
 	}
-	if err := verifyClosedConditionReasons(resource); err != nil {
+	if err := r.contract.lane.verifyClosedConditionReasons(resource); err != nil {
 		return wireResource{}, wireResponse{}, err
 	}
 	return resource, response, nil

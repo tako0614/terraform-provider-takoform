@@ -52,7 +52,7 @@ func run(args []string, stdout io.Writer) error {
 	repoRoot := flags.String("repo-root", ".", "repository root holding the Form candidate catalog")
 	contractPath := flags.String(
 		"contract",
-		filepath.Join("conformance", "portable-host-v1beta1"),
+		filepath.Join("conformance", "portable-host-v1beta2"),
 		"portable host contract directory, relative to --repo-root",
 	)
 	if err := flags.Parse(args); err != nil {

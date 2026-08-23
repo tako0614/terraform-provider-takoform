@@ -73,7 +73,7 @@ func (r *v3Runner) checkOperationResumableAfterSettlement(queue probeTarget) err
 	if err != nil {
 		return err
 	}
-	createdUID, err := operationResultUID(captured.Body, first)
+	createdUID, err := r.contract.lane.operationResultUID(captured.Body, first)
 	if err != nil {
 		return fmt.Errorf("captured terminal operation %s: %w", firstID, err)
 	}
@@ -126,7 +126,7 @@ func (r *v3Runner) checkOperationResumableAfterSettlement(queue probeTarget) err
 			firstID, strings.TrimSpace(string(captured.Body)), strings.TrimSpace(string(replay.Body)),
 		)
 	}
-	replayedUID, err := operationResultUID(replay.Body, first)
+	replayedUID, err := r.contract.lane.operationResultUID(replay.Body, first)
 	if err != nil {
 		return fmt.Errorf("replayed terminal operation %s: %w", firstID, err)
 	}
@@ -186,7 +186,7 @@ func (r *v3Runner) operationResponse(id string) (wireResponse, error) {
 
 // operationResultUID reads the uid out of a terminal operation's result
 // resource, holding it to the exact identity the operation was asked about.
-func operationResultUID(body []byte, target probeTarget) (string, error) {
+func (l lane) operationResultUID(body []byte, target probeTarget) (string, error) {
 	var operation wireOperation
 	if err := decodeStrictResponse(wireResponse{Body: body}, &operation); err != nil {
 		return "", err
@@ -202,7 +202,7 @@ func operationResultUID(body []byte, target probeTarget) (string, error) {
 	if err := decodeStrictResponse(wireResponse{Body: raw}, &resource); err != nil {
 		return "", err
 	}
-	if err := verifyResourceIdentity(resource, target); err != nil {
+	if err := l.verifyResourceIdentity(resource, target); err != nil {
 		return "", err
 	}
 	return resource.Metadata.UID, nil
@@ -247,11 +247,14 @@ func (r *v3Runner) checkExactFormRefFailsClosedOnUnknownDefinition(kv probeTarge
 	} {
 		query := r.exactQuery(kv.Space, unknown.ref).Encode()
 
-		availability, err := r.request(http.MethodGet, r.apiBase+"/forms?"+query, nil, nil)
+		availability, err := r.request(
+			http.MethodGet,
+			r.apiBase+"/forms?"+r.formsAvailabilityQuery(kv.Space, unknown.ref).Encode(), nil, nil,
+		)
 		if err != nil {
 			return err
 		}
-		if err := r.expectStableError(availability, "form_unknown"); err != nil {
+		if err := r.expectNoInstalledForm(availability); err != nil {
 			return fmt.Errorf(
 				"availability matched an unknown %s by group and kind: %w", unknown.label, err,
 			)

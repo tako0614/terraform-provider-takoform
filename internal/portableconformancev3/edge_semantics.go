@@ -271,7 +271,7 @@ func (h *ReferenceHost) sqliteMigrationApplicationUnavailable(
 			return "", "", false
 		}
 	}
-	return "Reconciling", fmt.Sprintf(
+	return h.contract.lane.ConvergingReason(), fmt.Sprintf(
 		"SQLiteMigrationApplication %s declares %d ordered migrations while database uid %s ledger has %d; Ready requires exact ordered-set equality",
 		resource.Name, len(desired), database.UID, len(applied),
 	), true
