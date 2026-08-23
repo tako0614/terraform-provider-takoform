@@ -1,13 +1,21 @@
-# Host API v1beta2
+# Host API v1beta3
 
-`forms.takoform.com/v1beta2` is the current Host API lane. It was minted for
-protocol reasons ([decision 0039](../decisions/0039-a-lane-is-minted-for-one-of-two-reasons.md)):
-the v1beta1 wire changed structurally under the Beta 2 hardening review
-([decision 0046](../decisions/0046-stable-arrives-through-a-stable-grade-beta-2.md)) —
-`/forms` became an enumeration surface, the fence transport was codified, the
-long-running Operation envelope closed its error vocabulary, the two dead
-error codes left the taxonomy, the apply review accepts its own echo, and the
-sourceless availability member was removed. The v1beta1 lane remains served
+`forms.takoform.com/v1beta3` is the current Host API lane. It was minted for
+protocol reasons ([decision 0039](../decisions/0039-a-lane-is-minted-for-one-of-two-reasons.md)),
+and the reason is stated in
+[decision 0048](../decisions/0048-the-protocol-states-mechanisms-not-forms.md):
+**this document states MECHANISMS and names no Form kind of any family.**
+
+Its predecessor named Edge Form kinds sixty-six times, in sections about one
+family's cardinality rules, its assigned address, and its migration ledger —
+which is why a family could not gain a Form without the protocol changing. Here
+a Definition declares which mechanism it instantiates and a host reads that,
+so a family adds a Form, or a rule of a shape this lane already knows, without
+this document moving. A rule of a NEW shape still needs a reviewed protocol
+change, because a new shape is a new thing every host must be able to enforce.
+
+The wire is otherwise its predecessor's, which is what makes the mechanisms the
+whole of the difference. The v1beta2 and v1beta1 lanes remain served
 history at its own discovery path; nothing here restates what its documents
 meant.
 
@@ -23,20 +31,20 @@ the machine operation table is [`operations-v1beta2.json`](operations-v1beta2.js
 
 ## Discovery
 
-`GET /.well-known/takoform/v1beta2` returns a document validating against
+`GET /.well-known/takoform/v1beta3` returns a document validating against
 [`../schemas/host-discovery-v1beta2.schema.json`](/schemas/v1beta2/host-discovery.schema.json):
-`api_versions` is exactly `["forms.takoform.com/v1beta2"]`; the features
+`api_versions` is exactly `["forms.takoform.com/v1beta3"]`; the features
 `service_forms`, `exact_form_ref`, `optimistic_concurrency`,
 `idempotent_lifecycle`, `operations`, `artifact_upload`, and
 `support_profiles` are all required and true; `endpoints.api` is same-origin
-with path `/apis/forms.takoform.com/v1beta2`. Each lane has its own
+with path `/apis/forms.takoform.com/v1beta3`. Each lane has its own
 discovery path; a v1alpha2 client can never select this lane accidentally.
 
 Every advertised endpoint path is compared in its escaped form and MUST carry
 no percent-encoding at all. A client rejects the discovery document otherwise
 ([decision 0018](../decisions/0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)):
 an escaped path describes a shape this lane does not have, and comparing the
-decoded path instead would let `%2Fv1beta2` pass as `/v1beta2`.
+decoded path instead would let `%2Fv1beta3` pass as `/v1beta3`.
 
 A client negotiates each lane independently, under a deadline of its own that
 is short and separate from its resource-operation deadline. Nothing about one
@@ -119,15 +127,15 @@ name, then the group version — wherever a URL template names a group:
 {api}/support/forms/{formGroup}/{formVersion}/{kind}/{definitionVersion}
 ```
 
-So `edge.forms.takoform.com/v1beta2` travels as
-`edge.forms.takoform.com/v1beta2`. **No path segment ever percent-encodes a
+So `edge.forms.takoform.com/v1beta3` travels as
+`edge.forms.takoform.com/v1beta3`. **No path segment ever percent-encodes a
 slash.** Proxies, gateways, and web frameworks disagree about whether `%2F`
 inside a path segment is passed through, decoded, rejected, or normalized, so a
 lane that required it could not be placed behind ordinary infrastructure at all
 ([decision 0018](../decisions/0018-the-host-api-is-deployable-behind-ordinary-infrastructure.md)).
 A host rejoins the two segments into the exact apiVersion; the FormRef
 `apiVersion` string is unchanged everywhere else — request bodies, responses,
-and the `group` query key still carry `edge.forms.takoform.com/v1beta2`
+and the `group` query key still carry `edge.forms.takoform.com/v1beta3`
 verbatim. This is the required conformance check
 `namespaced-group-travels-as-two-path-segments`.
 
@@ -577,7 +585,7 @@ obligations are proved by host-side tests in
 
 ## Lifecycle
 
-Endpoints under `/apis/forms.takoform.com/v1beta2`, keyed by group and
+Endpoints under `/apis/forms.takoform.com/v1beta3`, keyed by group and
 kind so one kind name can exist in many groups. `{formGroup}/{formVersion}` is
 the two-segment group of [Path shape](#path-shape):
 
