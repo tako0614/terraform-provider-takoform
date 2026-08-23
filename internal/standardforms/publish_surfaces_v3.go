@@ -259,8 +259,11 @@ description: |-
 
 `, form.ResourceType, form.Title+" ("+edgeformcatalog.Family.APIVersion()+", role "+string(form.Role)+").", form.ResourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or\n" +
-		"later. Provider v2.1.1 is Registry-published; release/version.json retains\n" +
+	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane. Its " +
+		edgeformcatalog.Family.APIVersion() + " identity is not yet carried by any\n" +
+		"Registry-published provider release: it ships with the next provider release\n" +
+		"(decision 0046). Registry-published provider v2.1.1 serves this resource type\n" +
+		"under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains\n" +
 		"candidate-only descriptor metadata after owner publication. The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
 		"price, or implementation. See the [complete example](https://takoform.com/examples/resources/" +
@@ -439,7 +442,10 @@ func v3ExampleHCL(form model.Form) string {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
       # Provider v2.1.1 is Registry-published; release/version.json remains
-      # candidate-only descriptor metadata after owner publication.
+      # candidate-only descriptor metadata after owner publication. v2.1.1
+      # serves this resource type under the retained v1beta1 identities; the
+      # v1beta2 identity this page documents ships with the next release
+      # (decision 0046).
       version = "= 2.1.1"
     }
   }
@@ -633,8 +639,10 @@ func v3FormInventorySection() string {
 The first official Form Family fixes the shape of a proven edge developer
 platform without naming its vendor (spec/form-families.md). Its members are
 Experimental Forms for the Host API v1beta1 resource lane; their package
-artifacts remain unpublished. The typed resources require provider v2.1.1 or
-later. Roles come from the closed v1beta1 role enum and decide
+artifacts remain unpublished, and no Registry-published provider release
+carries these identities yet — Registry-published provider v2.1.1 embeds the
+retained edge.forms.takoform.com/v1beta1 generation, and the identities below
+ship with the next release (decision 0046). Roles come from the closed v1beta1 role enum and decide
 lifecycle mechanics: revisions are immutable, deployments move traffic,
 attachments activate inward events.
 

@@ -24,8 +24,10 @@ publication authority advances them.
 The first official Form Family fixes the shape of a proven edge developer
 platform without naming its vendor (spec/form-families.md). Its members are
 Experimental Forms for the Host API v1beta1 resource lane; their package
-artifacts remain unpublished. The typed resources require provider v2.1.1 or
-later. Roles come from the closed v1beta1 role enum and decide
+artifacts remain unpublished, and no Registry-published provider release
+carries these identities yet — Registry-published provider v2.1.1 embeds the
+retained edge.forms.takoform.com/v1beta1 generation, and the identities below
+ship with the next release (decision 0046). Roles come from the closed v1beta1 role enum and decide
 lifecycle mechanics: revisions are immutable, deployments move traffic,
 attachments activate inward events.
 

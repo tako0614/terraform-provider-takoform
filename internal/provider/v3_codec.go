@@ -34,6 +34,7 @@ import (
 	model "github.com/tako0614/terraform-provider-takoform/internal/currentformmodel"
 	"github.com/tako0614/terraform-provider-takoform/internal/currentformregistry"
 	"github.com/tako0614/terraform-provider-takoform/internal/edgeformcatalog"
+	"github.com/tako0614/terraform-provider-takoform/internal/retainededgeformcatalog"
 )
 
 // v3FormCodec is one exact FormRef together with the Form declaration that
@@ -65,9 +66,24 @@ func newV3CodecTable(registry *currentformregistry.V3Registry) *v3CodecTable {
 		registry: registry,
 		codecs:   map[currentformregistry.ExactFormKey]model.Form{},
 	}
-	rendered, renderErr := edgeformcatalog.RenderForms()
+	// The supported set spans two generations (decision 0046): the current
+	// catalog declares the v1beta2 identities, and the frozen retained
+	// catalog declares the v1beta1 identities Registry-published provider
+	// v2.1.1 wrote state under. Each generation is decoded only by its own
+	// declarations; the digest check below keeps the pairing exact.
+	generations := []catalogGeneration{
+		{family: edgeformcatalog.Family, forms: edgeformcatalog.Forms},
+		{family: retainededgeformcatalog.Family, forms: retainededgeformcatalog.Forms},
+	}
+	generations[0].rendered, generations[0].renderErr = edgeformcatalog.RenderForms()
+	retainedRendered, retainedErr := retainededgeformcatalog.RenderForms()
+	generations[1].rendered = make([]edgeformcatalog.RenderedForm, 0, len(retainedRendered))
+	for _, form := range retainedRendered {
+		generations[1].rendered = append(generations[1].rendered, edgeformcatalog.RenderedForm(form))
+	}
+	generations[1].renderErr = retainedErr
 	for _, ref := range registry.SupportedRefs() {
-		form, declared := formForExactRef(ref, rendered, renderErr)
+		form, declared := formForExactRef(ref, generations)
 		if !declared {
 			// A supported identity whose field set is not compiled into this
 			// build has no codec. It stays out of the table, so state bound to
@@ -80,28 +96,41 @@ func newV3CodecTable(registry *currentformregistry.V3Registry) *v3CodecTable {
 	return table
 }
 
+// catalogGeneration is one compiled declaration set the codec table may
+// dispatch into: the family it declares, its Forms, and their rendered bytes.
+type catalogGeneration struct {
+	family    model.Family
+	forms     []model.Form
+	rendered  []edgeformcatalog.RenderedForm
+	renderErr error
+}
+
 // formForExactRef keeps the Form declaration selected by the same exact
-// identity as provider state. A future stable catalog may contain a second
-// declaration with the same kind; matching the family, definition version,
-// and rendered schema digest preserves the retained Beta declaration instead
-// of letting the catalog's current ByKind default overwrite it.
+// identity as provider state. Two compiled generations may each declare the
+// same kind; matching the family, definition version, and rendered schema
+// digest binds each exact ref to the one declaration whose published bytes it
+// names, so a retained v1beta1 ref can never be decoded by the v1beta2
+// declaration of the same kind, nor the reverse.
 func formForExactRef(
 	ref currentformregistry.V3Ref,
-	rendered []edgeformcatalog.RenderedForm,
-	renderErr error,
+	generations []catalogGeneration,
 ) (model.Form, bool) {
-	if renderErr != nil || len(rendered) != len(edgeformcatalog.Forms) {
-		return model.Form{}, false
-	}
-	for index, candidate := range edgeformcatalog.Forms {
-		if candidate.Family.APIVersion() == ref.APIVersion &&
-			candidate.Kind == ref.Kind &&
-			candidate.DefinitionVersion == ref.DefinitionVersion {
-			digest, err := formpackage.DigestCanonicalJSON([]byte(rendered[index].DefinitionJSON))
-			if err != nil || digest != ref.SchemaDigest {
-				continue
+	for _, generation := range generations {
+		if generation.family.APIVersion() != ref.APIVersion {
+			continue
+		}
+		if generation.renderErr != nil || len(generation.rendered) != len(generation.forms) {
+			return model.Form{}, false
+		}
+		for index, candidate := range generation.forms {
+			if candidate.Kind == ref.Kind &&
+				candidate.DefinitionVersion == ref.DefinitionVersion {
+				digest, err := formpackage.DigestCanonicalJSON([]byte(generation.rendered[index].DefinitionJSON))
+				if err != nil || digest != ref.SchemaDigest {
+					continue
+				}
+				return candidate, true
 			}
-			return candidate, true
 		}
 	}
 	return model.Form{}, false

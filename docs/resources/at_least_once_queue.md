@@ -11,8 +11,10 @@ Message queue with at-least-once delivery and no ordering guarantee, exactly as 
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or
-later. Provider v2.1.1 is Registry-published; release/version.json retains
+This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com/v1beta2 identity is not yet carried by any
+Registry-published provider release: it ships with the next provider release
+(decision 0046). Registry-published provider v2.1.1 serves this resource type
+under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
 candidate-only descriptor metadata after owner publication. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_at_least_once_queue/resource.tf).
