@@ -416,7 +416,7 @@
       ],
       "properties": {
         "operation": {
-          "$ref": "https://forms.takoform.com/schemas/operations/v1alpha1/operation.schema.json"
+          "$ref": "https://forms.takoform.com/schemas/operations/v1alpha2/operation.schema.json"
         }
       }
     },
@@ -579,7 +579,7 @@
           "type": "array",
           "maxItems": 1024,
           "items": {
-            "$ref": "https://forms.takoform.com/schemas/support/v1alpha1/host-support-profile.schema.json"
+            "$ref": "https://forms.takoform.com/schemas/support/v1alpha2/host-support-profile.schema.json"
           }
         }
       }

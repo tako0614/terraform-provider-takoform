@@ -66,7 +66,7 @@
               "$ref": "#/$defs/httpEndpoint"
             },
             {
-              "pattern": "^https?://[^/?#]+/apis/forms\\.takoform\\.com/v1beta1$"
+              "pattern": "^https?://[^/?#]+/apis/forms\\.takoform\\.com/v1beta2$"
             }
           ]
         },

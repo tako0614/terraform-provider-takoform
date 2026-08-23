@@ -57,7 +57,7 @@
     },
     {
       "id": "https://forms.takoform.com/schemas/support/v1alpha2/host-support-profile.schema.json",
-      "sha256": "sha256:5bcf1a2bccfabe02c69a48f125f6cb53c848831aeafc99cf702360f7c7d1d340",
+      "sha256": "sha256:7ad631c58485644188e4bcd2b4270ee5c486ccd426882d3eb78f97cf4b85c73a",
       "source": "spec/schemas/host-support-profile-v1alpha2.schema.json",
       "public": "website/public/schemas/support/v1alpha2/host-support-profile.schema.json"
     },
@@ -105,13 +105,13 @@
     },
     {
       "id": "https://forms.takoform.com/schemas/v1beta2/host-api-wire.schema.json",
-      "sha256": "sha256:af88503589362640a8efce9598e0aad64b9eaeb929556c5851aac078865e8c35",
+      "sha256": "sha256:4edc73f164eaa42c26f0a4f84adfc80501f6e23412caa3b2c57bd220fe4e412d",
       "source": "spec/schemas/host-api-wire-v1beta2.schema.json",
       "public": "website/public/schemas/v1beta2/host-api-wire.schema.json"
     },
     {
       "id": "https://forms.takoform.com/schemas/v1beta2/host-discovery.schema.json",
-      "sha256": "sha256:3942fe701b2d1be6a50ce26feba5dc71492d964d65782bc61aedf68b161d6073",
+      "sha256": "sha256:4d49724112d7d6577b398c82039edc340e0162822f0bb0e6e120c5df57bd39a9",
       "source": "spec/schemas/host-discovery-v1beta2.schema.json",
       "public": "website/public/schemas/v1beta2/host-discovery.schema.json"
     }

@@ -38,6 +38,12 @@
       "public": "website/public/schemas/operations/v1alpha1/operation.schema.json"
     },
     {
+      "id": "https://forms.takoform.com/schemas/operations/v1alpha2/operation.schema.json",
+      "sha256": "sha256:beeaea107087b3f69c2fb0bbcd75b42b4826fca374f74eee3b2ac3d6efe54cb5",
+      "source": "spec/schemas/operation-v1alpha2.schema.json",
+      "public": "website/public/schemas/operations/v1alpha2/operation.schema.json"
+    },
+    {
       "id": "https://forms.takoform.com/schemas/standards/v1alpha1/standard-service-ref.schema.json",
       "sha256": "sha256:00a59fcda769932bdfa3785f9ddfdb7330c5d597880db1d11e626a5d1f0572f6",
       "source": "spec/schemas/standard-service-ref-v1alpha1.schema.json",
@@ -48,6 +54,12 @@
       "sha256": "sha256:3d093b7637f86c904de1db9d96125427bb6a606411ed3cafaeb46b049abdfff3",
       "source": "spec/schemas/host-support-profile-v1alpha1.schema.json",
       "public": "website/public/schemas/support/v1alpha1/host-support-profile.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/support/v1alpha2/host-support-profile.schema.json",
+      "sha256": "sha256:7ad631c58485644188e4bcd2b4270ee5c486ccd426882d3eb78f97cf4b85c73a",
+      "source": "spec/schemas/host-support-profile-v1alpha2.schema.json",
+      "public": "website/public/schemas/support/v1alpha2/host-support-profile.schema.json"
     },
     {
       "id": "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json",
@@ -90,6 +102,18 @@
       "sha256": "sha256:51ed3208938005d6b7a2908d06acedb227897a2e817340603f6d11b2e1bc0d0c",
       "source": "spec/schemas/host-discovery-v1beta1.schema.json",
       "public": "website/public/schemas/v1beta1/host-discovery.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1beta2/host-api-wire.schema.json",
+      "sha256": "sha256:4edc73f164eaa42c26f0a4f84adfc80501f6e23412caa3b2c57bd220fe4e412d",
+      "source": "spec/schemas/host-api-wire-v1beta2.schema.json",
+      "public": "website/public/schemas/v1beta2/host-api-wire.schema.json"
+    },
+    {
+      "id": "https://forms.takoform.com/schemas/v1beta2/host-discovery.schema.json",
+      "sha256": "sha256:4d49724112d7d6577b398c82039edc340e0162822f0bb0e6e120c5df57bd39a9",
+      "source": "spec/schemas/host-discovery-v1beta2.schema.json",
+      "public": "website/public/schemas/v1beta2/host-discovery.schema.json"
     }
   ],
   "retired": [
