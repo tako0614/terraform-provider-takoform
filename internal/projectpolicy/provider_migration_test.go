@@ -224,14 +224,14 @@ func TestV021ToV1MigrationBoundaryStaysFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The fifteen Edge Platform Family docs of the Host API v1beta1 channel,
+	// The seventeen Edge Platform Family docs of the Host API v1beta1 channel,
 	// and nothing else: the generic exact-FormRef carrier was withdrawn
 	// (spec/decisions/0021) and the nine retained provider-v2 docs were
 	// withdrawn with their epoch (decision 0042). Every resource document
 	// describes a resource backed by a Form and must state the exact Form
 	// identity fields the state boundary fences on.
-	if len(resourceDocs) != 15 {
-		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), 15)
+	if len(resourceDocs) != 17 {
+		t.Fatalf("current resource docs = %d, want %d", len(resourceDocs), 17)
 	}
 	for _, filename := range resourceDocs {
 		raw, err := os.ReadFile(filename)

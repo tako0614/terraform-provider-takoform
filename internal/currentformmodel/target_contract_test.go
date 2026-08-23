@@ -19,6 +19,8 @@ func (stubResolver) TargetFormRefs(targetKind string) ([]TargetFormRef, error) {
 	}}, nil
 }
 
+func (stubResolver) ResourceNamePattern() string { return PatternResourceName }
+
 func (stubResolver) RequiredInterface(name, version string) (RequiredInterface, error) {
 	return RequiredInterface{
 		APIVersion:   "interfaces.takoform.com/v1alpha1",

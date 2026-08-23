@@ -13,7 +13,8 @@
       "const": "FormPackage"
     },
     "formRef": {
-      "$ref": "https://forms.takoform.com/schemas/v1alpha3/form-ref.schema.json"
+      "$ref": "https://forms.takoform.com/schemas/v1beta1/form-ref.schema.json",
+      "$comment": "This reference named https://forms.takoform.com/schemas/v1alpha3/form-ref.schema.json until decision 0042 withdrew that identity, which left this still-current document pointing at a URL that answers 404 — unresolvable for any third party validating a package against the published schema. The two form-ref schemas differ only in one description string: every constraint is identical, so this repair changes no document's validity, only whether the reference can be followed."
     },
     "definitionPath": {
       "$ref": "#/$defs/packagePath"

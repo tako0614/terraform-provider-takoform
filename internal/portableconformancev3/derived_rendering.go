@@ -54,6 +54,10 @@ func (h *ReferenceHost) derivedConditions(resource *storedResource) []map[string
 		ready["status"] = "False"
 		ready["reason"] = reason
 		ready["hostReason"] = hostReason
+	} else if reason, hostReason, unavailable := h.classHolderUnavailable(resource); unavailable {
+		ready["status"] = "False"
+		ready["reason"] = reason
+		ready["hostReason"] = hostReason
 	}
 	return []map[string]any{ready}
 }

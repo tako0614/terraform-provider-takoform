@@ -1,0 +1,573 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "worker.workflow",
+  "version": "1.0.0",
+  "title": "Durable workflow execution",
+  "description": "Multi-step durable execution whose progress survives process death, as CODE: a class the serving Worker Version exports, constructed by the host and invoked as run(event, step) once per instance. event carries the instance id and the data-only JSON params the creator passed. EXECUTION IS AT-LEAST-ONCE PER STEP WITH MEMOIZED REPLAY. An attempt that dies after its effect but before its record commits re-executes, so a step function must be idempotent. A COMPLETED step's recorded result is returned on every later execution without running the function again; the memo is keyed by step NAME, so step names are unique per instance history by construction — a recurring name IS the same step, and distinct work under one name is unobservable. WHAT IS SEALED IS STEP RESULTS, NOT CODE EFFECTS. Code between steps re-executes on every replay and must be side-effect-free and deterministic against its own recorded history. Every execution context an instance gets is created from the worker deployment's THEN-CURRENT selection, exactly like a request, so a promotion mid-instance changes the code the history replays under; authors evolve workflow code compatibly with in-flight instances, as with any at-least-once consumer. A host can verify neither obligation, and this contract states both rather than implying them. AN INSTANCE IS BOUNDED TWICE. Per-wait bounds cannot bound an instance, because run can mint an unlimited sequence of uniquely named steps, so maxStepsPerInstance and maxInstanceLifetimeSeconds are contract facts. An instance that crosses either is terminated BY THE HOST into the terminal errored status carrying step_limit_exceeded or lifetime_exceeded; nothing runs past it. INSTANCES ARE RUNTIME DATA, never resources: unbounded cardinality, runtime addressing, no uid, no generation, nothing for a provider to plan. A terminal instance stays readable for maxTerminalRetentionSeconds, which is exactly how long its id stays taken. THE STATUS VOCABULARY IS CLOSED: queued, running, sleeping, waiting, complete, errored, terminated. A call fails only when the operation could not be performed; a workflow that threw is a successful status read reporting errored.",
+  "operations": [
+    {
+      "name": "create",
+      "description": "Start one instance. id is the author's choice when given and host-minted when absent; an id a RETAINED instance still holds — live or terminal within maxTerminalRetentionSeconds — fails instance_exists rather than resuming or replacing it, because two executions under one id could not be told apart afterwards. params is data-only JSON bounded by maxDocumentBytes. Creating against a workflow no deployment serves fails unsupported_capability: there is no class to replay into.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "params": {
+            "maxProperties": 1024,
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "sleeping",
+              "waiting",
+              "complete",
+              "errored",
+              "terminated"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "instance_exists",
+        "invalid_params",
+        "document_too_large",
+        "unsupported_capability",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "get",
+      "description": "Resolve the handle of one retained instance. It fails unknown_instance when no instance holds the id — including one whose retention has passed — rather than minting an empty handle, so a consumer can tell a forgotten execution from a live one.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "unknown_instance",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "status",
+      "description": "Read one instance's current status. output is present only on complete and error only on errored, whose reason comes from the closed set run_threw, step_failed, step_limit_exceeded, lifetime_exceeded — the last two being the host's own termination at a declared bound, which an operator must be able to tell from code that failed.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "additionalProperties": false,
+            "properties": {
+              "message": {
+                "maxLength": 8192,
+                "type": "string"
+              },
+              "reason": {
+                "enum": [
+                  "run_threw",
+                  "step_failed",
+                  "step_limit_exceeded",
+                  "lifetime_exceeded"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "reason"
+            ],
+            "type": "object"
+          },
+          "output": {
+            "maxProperties": 1024,
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "sleeping",
+              "waiting",
+              "complete",
+              "errored",
+              "terminated"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "unknown_instance",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "sendEvent",
+      "description": "Deliver one typed event to an instance. It resolves when the event is DURABLY RETAINED, not when it is consumed: an event sent before its waitForEvent is held until a matching wait or a terminal state, so a signal cannot be lost to a race with the instance's own progress. Sending to a terminal instance fails instance_terminal — nothing will ever read it.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "payload": {
+            "maxProperties": 1024,
+            "type": "object"
+          },
+          "type": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "unknown_instance",
+        "instance_terminal",
+        "document_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "terminate",
+      "description": "Stop one instance and move it to the terminal terminated status. It is idempotent against an already-terminal instance: the outcome asked for is the outcome that holds, and failing there would make a retry after a lost response indistinguishable from a real error.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "unknown_instance",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "run",
+      "description": "The ENTRYPOINT the host invokes once per instance on the class the active deployment's weighted versions export. It receives the instance id and params and the step surface, and its resolved value is the instance output. An uncaught throw moves the instance to errored with run_threw; crossing a declared instance bound moves it there with step_limit_exceeded or lifetime_exceeded, decided by the host rather than by the code.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "instanceId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "params": {
+            "maxProperties": 1024,
+            "type": "object"
+          }
+        },
+        "required": [
+          "instanceId"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "output": {
+            "maxProperties": 1024,
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "errors": [
+        "run_threw",
+        "step_failed",
+        "step_limit_exceeded",
+        "lifetime_exceeded"
+      ]
+    },
+    {
+      "name": "stepDo",
+      "description": "Run one named unit of work and durably record its JSON result under that name. A completed step never runs again: its recorded result is replayed. retryPolicy is per CALL — maxAttempts, an initial delay, constant or exponential backoff, and a delay ceiling — because two steps of one workflow legitimately want different policies. Exhausted retries fail the step with step_failed.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "instanceId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "retryPolicy": {
+            "additionalProperties": false,
+            "properties": {
+              "backoff": {
+                "enum": [
+                  "constant",
+                  "exponential"
+                ],
+                "type": "string"
+              },
+              "initialDelaySeconds": {
+                "maximum": 43200,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxAttempts": {
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxDelaySeconds": {
+                "maximum": 43200,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "maxAttempts"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "instanceId",
+          "name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "result": {
+            "maxProperties": 1024,
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "errors": [
+        "step_failed",
+        "step_limit_exceeded",
+        "lifetime_exceeded",
+        "document_too_large",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "stepSleep",
+      "description": "Park the instance for a named duration. There is NO execution context while it sleeps, which is what makes a long-lived workflow cost nothing to wait; the host wakes it at-least-once and never early. A sleep that would carry the instance past maxInstanceLifetimeSeconds fails rather than being silently shortened.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "instanceId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "seconds": {
+            "maximum": 31536000,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instanceId",
+          "name",
+          "seconds"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "invalid_duration",
+        "step_limit_exceeded",
+        "lifetime_exceeded",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "stepWaitForEvent",
+      "description": "Park the instance until a sent event of the named type resolves it, or fail the step at the timeout. timeoutSeconds is REQUIRED: an unbounded wait would make the delete refusal a deadlock instead of a delay. An event retained before this call resolves it immediately.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "instanceId": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "timeoutSeconds": {
+            "maximum": 31536000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "type": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "instanceId",
+          "name",
+          "type",
+          "timeoutSeconds"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "payload": {
+            "maxProperties": 1024,
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "errors": [
+        "wait_timeout",
+        "invalid_duration",
+        "step_limit_exceeded",
+        "lifetime_exceeded",
+        "backend_unavailable"
+      ]
+    }
+  ],
+  "semantics": {
+    "consistency": "read_after_write",
+    "delivery": "at_least_once",
+    "ordering": "none"
+  },
+  "limits": {
+    "maxDocumentBytes": 1048576,
+    "maxInstanceLifetimeSeconds": 31536000,
+    "maxSleepSeconds": 31536000,
+    "maxStepsPerInstance": 1024,
+    "maxTerminalRetentionSeconds": 2592000,
+    "maxWaitTimeoutSeconds": 31536000
+  },
+  "fixtures": [
+    {
+      "name": "a-held-instance-id-is-refused",
+      "steps": [
+        {
+          "operation": "create",
+          "input": {
+            "id": "order-4711"
+          },
+          "expected": {
+            "id": "order-4711",
+            "status": "queued"
+          }
+        },
+        {
+          "operation": "create",
+          "input": {
+            "id": "order-4711"
+          },
+          "expectedError": "instance_exists"
+        }
+      ]
+    },
+    {
+      "name": "terminate-is-idempotent",
+      "steps": [
+        {
+          "operation": "create",
+          "input": {
+            "id": "cancel-me"
+          },
+          "expected": {
+            "id": "cancel-me",
+            "status": "queued"
+          }
+        },
+        {
+          "operation": "terminate",
+          "input": {
+            "id": "cancel-me"
+          }
+        },
+        {
+          "operation": "terminate",
+          "input": {
+            "id": "cancel-me"
+          }
+        },
+        {
+          "operation": "status",
+          "input": {
+            "id": "cancel-me"
+          },
+          "expected": {
+            "status": "terminated"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a-terminal-instance-refuses-events",
+      "steps": [
+        {
+          "operation": "create",
+          "input": {
+            "id": "done-1"
+          },
+          "expected": {
+            "id": "done-1",
+            "status": "queued"
+          }
+        },
+        {
+          "operation": "terminate",
+          "input": {
+            "id": "done-1"
+          }
+        },
+        {
+          "operation": "sendEvent",
+          "input": {
+            "id": "done-1",
+            "type": "approval"
+          },
+          "expectedError": "instance_terminal"
+        }
+      ]
+    },
+    {
+      "name": "an-unheld-id-has-no-handle",
+      "steps": [
+        {
+          "operation": "get",
+          "input": {
+            "id": "never-created"
+          },
+          "expectedError": "unknown_instance"
+        }
+      ]
+    }
+  ]
+}

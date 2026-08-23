@@ -2,17 +2,19 @@
 page_title: "takoform_worker_version Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Worker Version (edge.forms.takoform.com/v1beta1, role revision).
+  Worker Version (edge.forms.takoform.com/v1beta2, role revision).
 ---
 
 # takoform_worker_version
 
-Immutable executable snapshot of one Module Worker: a bundle, the handlers its module exports, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is not a field of this Form: it is fixed by the worker.runtime@1.0.0 contract the Module Worker identity provides, so a version carries no compatibility date and no compatibility flag (decision 0019).
+Immutable executable snapshot of one Module Worker: a bundle, the handlers its module exports, non-secret vars, and the typed capability bindings the code may use. A change is a new Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is not a field of this Form: it is fixed by the worker.runtime@1.1.0 contract the Module Worker identity provides, so a version carries no compatibility date and no compatibility flag (decision 0019).
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or
-later. Provider v2.1.1 is Registry-published; release/version.json retains
+This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com/v1beta2 identity is not yet carried by any
+Registry-published provider release: it ships with the next provider release
+(decision 0046). Registry-published provider v2.1.1 serves this resource type
+under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
 candidate-only descriptor metadata after owner publication. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_worker_version/resource.tf).
@@ -24,14 +26,17 @@ price, or implementation. See the [complete example](https://takoform.com/exampl
 - `worker` (String, required, forces replacement) — Module Worker identity this version belongs to. Set the name of the target `ModuleWorker` resource.
 - `bundle` (String, required, forces replacement) — Worker Bundle carrying the exact module bytes this version executes. Set the name of the target `WorkerBundle` resource.
 - `assets` (Object, optional, forces replacement) — Optional static-asset attachment for this immutable version. Without it the host performs no asset lookup. When present, every member is required and the request order is closed: with runWorkerFirst=false the host tries the asset lookup before invoking fetch; with true it invokes fetch first and tries the asset lookup only when that invocation returns 404. An asset result wins; if both stages miss, the worker's 404 is preserved. The attachment never grants a hidden runtime binding and never mutates the referenced bundle. The object declares `bundle`, `run_worker_first`, `not_found_handling`; when the object is present, every member is required.
-- `handlers` (Set of String, required, forces replacement) — Module event handlers this version exports, from the closed vocabulary the worker.runtime@1.0.0 contract defines. A host rejects a handler that contract does not define, and rejects an attachment whose event kind is not declared here. One of `fetch`, `scheduled`, `queue`.
+- `handlers` (Set of String, required, forces replacement) — Module event handlers this version exports, from the closed vocabulary the worker.runtime@1.1.0 contract defines. A host rejects a handler that contract does not define, and rejects an attachment whose event kind is not declared here. One of `fetch`, `scheduled`, `queue`.
 - `vars_json` (String, optional, forces replacement) — Non-secret configuration values projected into the module environment. Sensitive material never enters portable state. Omitting it projects no variable. Authored as one JSON object string (for example `jsonencode({...})`); the provider sends the parsed object. Defaults to the empty object `{}`.
 - `kv_bindings` (List of Object, optional, forces replacement) — Typed module-worker.edge-kv bindings projecting the edge.kv API under JavaScript identifier names. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `EdgeKVNamespace` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `bucket_bindings` (List of Object, optional, forces replacement) — Typed module-worker.object-bucket bindings projecting the edge.objects API. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `ObjectBucket` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `sqlite_bindings` (List of Object, optional, forces replacement) — Typed module-worker.sqlite bindings projecting the edge.sql API. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `SQLiteDatabase` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `queue_producer_bindings` (List of Object, optional, forces replacement) — Typed module-worker.queue-producer bindings projecting only send and sendBatch. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `AtLeastOnceQueue` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `service_bindings` (List of Object, optional, forces replacement) — Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `ModuleWorker` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
+- `workflow_bindings` (List of Object, optional, forces replacement) — Typed module-worker.workflow bindings projecting the instance surface — create, get, status, sendEvent, terminate. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `DurableWorkflow` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
+- `actor_bindings` (List of Object, optional, forces replacement) — Typed module-worker.actor bindings projecting addressing and invocation — idFromName, newUniqueId, get. Omitting it declares no such binding. Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `ActorNamespace` resource name); the wire carries the typed `resource` reference. Defaults to the empty list `[]`.
 - `required_sensitive_vars` (Set of String, optional, forces replacement) — Names of sensitive values this version requires the host to supply out-of-band. Only the names are portable state; values travel through each host's own sealed path. Omitting it requires no sensitive value. Defaults to the empty list `[]`.
+- `external_services` (List of Object, optional, forces replacement) — External standard services this version speaks, each a sealed slot naming only a projected NAME and a standard protocol. The host resolves the endpoint and credential out-of-band and projects the protocol's fixed member set under NAME; neither the address nor the credential is portable state. A required slot the host cannot satisfy keeps the version from becoming Ready. Omitting it declares no external service. Each entry declares `name` (SCREAMING_SNAKE, the prefix its projected members carry), `protocol` (one of postgresql, redis, s3-compatible, smtp), and optional `required` (default true). The wire carries the sealed `service` object; the standards apiVersion is the vocabulary's identity, not an author input. Defaults to the empty list `[]`.
 - `space` (String, optional, forces replacement) — Exact opaque SpaceID; overrides the provider default.
 - `create_timeout` / `delete_timeout` (String, optional) — Go durations bounding each operation (defaults `20m` / `30m`). There is no `update_timeout`: this Form declares no update capability. Changing only these provider-side timeouts is applied in place without any host call.
 
@@ -87,6 +92,8 @@ price, or implementation. See the [complete example](https://takoform.com/exampl
 - `module-worker.sqlite@1.0.0`
 - `module-worker.queue-producer@1.0.0`
 - `module-worker.service@1.0.0`
+- `module-worker.workflow@1.0.0`
+- `module-worker.actor@1.0.0`
 
 Outward capability use is a typed binding held by this revision; inward
 activation (routes, domains, cron, queue consumption) is a separate
@@ -107,7 +114,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_worker_version.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"WorkerVersion","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"WorkerVersion","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

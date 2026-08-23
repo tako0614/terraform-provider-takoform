@@ -28,10 +28,10 @@ const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const FAMILY = "edge.forms.takoform.com/v1beta1";
+const FAMILY = "edge.forms.takoform.com/v1beta2";
 const PACKAGE_API_VERSION = "packages.forms.takoform.com/v1alpha4";
 const trackedTargets = {
-  forms: path.join(repositoryRoot, "forms", "candidates", "edge", "v1beta1"),
+  forms: path.join(repositoryRoot, "forms", "candidates", "edge", "v1beta2"),
   interfaces: path.join(repositoryRoot, "interfaces", "candidates", "v1alpha1"),
   bindings: path.join(repositoryRoot, "bindings", "candidates", "v1alpha1"),
 };
@@ -78,6 +78,8 @@ const forms = [
   ["SQLiteMigrationApplication", "sqlite-migration-application", "attachment"],
   ["AtLeastOnceQueue", "at-least-once-queue", "identity"],
   ["QueueConsumer", "queue-consumer", "attachment"],
+  ["DurableWorkflow", "durable-workflow", "identity"],
+  ["ActorNamespace", "actor-namespace", "identity"],
 ];
 // The interface lane order MUST match edgeformcatalog.InterfaceDefinitions().
 // worker.runtime is the exact ES Module Worker runtime ABI the ModuleWorker
@@ -89,6 +91,8 @@ const interfaceNames = [
   "edge.queue",
   "worker.service",
   "worker.runtime",
+  "worker.workflow",
+  "worker.actor",
 ];
 const bindingNames = [
   "module-worker.edge-kv",
@@ -96,6 +100,8 @@ const bindingNames = [
   "module-worker.sqlite",
   "module-worker.queue-producer",
   "module-worker.service",
+  "module-worker.workflow",
+  "module-worker.actor",
 ];
 
 if (import.meta.main) {
@@ -125,7 +131,10 @@ function main() {
       const manifest = generate(stagedRoots);
       verifyPackages(stagedRoots.forms);
       const embeddedIdentities = loadProviderIdentityLedger(manifest);
-      writeFileSync(stagedRegistryPath, renderRegistry(manifest, embeddedIdentities));
+      writeFileSync(
+        stagedRegistryPath,
+        renderRegistry(manifest, unionSupportedIdentities(manifest, embeddedIdentities)),
+      );
       installGeneratedOutputs(stagingParent, [
         [stagedRoots.forms, trackedTargets.forms],
         [stagedRoots.interfaces, trackedTargets.interfaces],
@@ -133,7 +142,7 @@ function main() {
         [stagedRegistryPath, registryPath],
       ]);
       process.stdout.write(
-        `wrote ${forms.length} Edge Platform Family Form candidates, six interface candidates, five binding candidates, and the provider v3 registry\n`,
+        `wrote ${forms.length} Edge Platform Family Form candidates, ${interfaceNames.length} interface candidates, ${bindingNames.length} binding candidates, and the provider v3 registry\n`,
       );
     } finally {
       rmSync(stagingParent, { recursive: true, force: true });
@@ -155,7 +164,7 @@ function main() {
     }
     verifyPackages(trackedTargets.forms);
     compareFile(
-      renderRegistry(manifest, embeddedIdentities),
+      renderRegistry(manifest, unionSupportedIdentities(manifest, embeddedIdentities)),
       registryPath,
       "provider v3 registry",
     );
@@ -190,7 +199,9 @@ function generate(outputRoots) {
     if (
       definition.kind !== kind ||
       definition.apiVersion !== FAMILY ||
-      definition.definitionVersion !== "0.1.0" ||
+      !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(
+        definition.definitionVersion ?? "",
+      ) ||
       definition.role !== role ||
       !/^takoform_[a-z0-9_]+$/u.test(rendered.resourceType)
     ) {
@@ -240,7 +251,11 @@ function generate(outputRoots) {
     const formRef = {
       apiVersion: FAMILY,
       kind,
-      definitionVersion: "0.1.0",
+      // The version is the Form's own, not the generation's: a member whose
+      // contract diverged from the generation line carries a different one,
+      // and the source catalog is the only place that decides which
+      // (decision 0046).
+      definitionVersion: definition.definitionVersion,
       schemaDigest: digestCanonicalJSON(
         path.join(destinationRoot, "definition.json"),
       ),
@@ -258,7 +273,7 @@ function generate(outputRoots) {
       kind,
       role,
       resourceType: rendered.resourceType,
-      path: `forms/candidates/edge/v1beta1/${slug}`,
+      path: `forms/candidates/edge/v1beta2/${slug}`,
       formRef,
       packageDigest: digestCanonicalJSON(indexPath),
     });
@@ -295,7 +310,14 @@ function generate(outputRoots) {
 function writeContractCandidates({ outputRoot, contracts, expectedNames, candidateSet, listKey }) {
   for (const [index, name] of expectedNames.entries()) {
     const contract = contracts[index];
-    if (contract?.name !== name || contract?.version !== "1.0.0") {
+    // A contract's version is its own: worker.runtime went to 1.1.0 when the
+    // env closure gained the external-service projections (decision 0045).
+    // What must not drift is the ORDER and the NAMES, which is what pins the
+    // candidate set to the catalog.
+    if (
+      contract?.name !== name ||
+      !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(contract?.version ?? "")
+    ) {
       throw new Error(`${listKey} catalog order or identity drifted at ${name}`);
     }
     const definitionRaw = contract.definitionJson;
@@ -457,6 +479,24 @@ function renderRegistry(manifest, supportedIdentities) {
   return formatted.stdout;
 }
 
+
+// unionSupportedIdentities is the state-compatibility fence in two-generation
+// form: every exact identity a RELEASED provider embedded stays supported
+// forever, and the current candidate generation's identities are what this
+// build creates and must equally serve. Before the catalog moved past the
+// published release the two sets were equal and the union is a no-op.
+function unionSupportedIdentities(manifest, embeddedIdentities) {
+  const byKey = new Map();
+  for (const form of embeddedIdentities) {
+    byKey.set(canonicalJson(form.formRef), form);
+  }
+  for (const { resourceType, formRef, packageDigest } of manifest.forms) {
+    const key = canonicalJson(formRef);
+    if (!byKey.has(key)) byKey.set(key, { resourceType, formRef, packageDigest });
+  }
+  return [...byKey.values()];
+}
+
 // The provider identity ledger is independent of package publication. Once a
 // provider release embeds an exact Beta FormRef and package digest, the entry
 // remains in v3Supported forever, even after a later family becomes the create
@@ -485,6 +525,7 @@ function loadProviderIdentityLedger(manifest) {
   const supported = [];
   const exactKeys = new Set();
   const providerVersions = new Set();
+  const families = new Set();
   let currentRelease;
   for (const entry of ledger.releases) {
     if (
@@ -505,6 +546,7 @@ function loadProviderIdentityLedger(manifest) {
       throw new Error(`provider Form identity ledger duplicates ${entry.providerVersion}`);
     }
     providerVersions.add(entry.providerVersion);
+    families.add(entry.family);
     assertFrozenProviderRelease(entry);
     if (entry.providerVersion === release.version) currentRelease = entry;
 
@@ -536,22 +578,40 @@ function loadProviderIdentityLedger(manifest) {
   if (
     currentRelease === undefined ||
     currentRelease.portableApiVersion !== release.versioning.portableApiVersion ||
-    currentRelease.family !== manifest.family ||
     currentRelease.formMaturity !== manifest.formMaturity
   ) {
     throw new Error("provider Form identity ledger has no exact entry for the release descriptor");
   }
-  const currentManifest = manifest.forms.map(
-    ({ resourceType, formRef, packageDigest }) => ({
-      resourceType,
-      formRef,
-      packageDigest,
-    }),
-  );
-  if (canonicalJson(currentRelease.forms) !== canonicalJson(currentManifest)) {
-    throw new Error(
-      "provider v2.1 embedded FormRefs/digests drifted; mint a new family identity and provider release instead of changing the ledger",
+  if (currentRelease.family === manifest.family) {
+    // The catalog builds the generation the descriptor-named release
+    // embeds, so the two must be byte-equal: a drifted digest is a changed
+    // contract hiding inside a published SemVer.
+    const currentManifest = manifest.forms.map(
+      ({ resourceType, formRef, packageDigest }) => ({
+        resourceType,
+        formRef,
+        packageDigest,
+      }),
     );
+    if (canonicalJson(currentRelease.forms) !== canonicalJson(currentManifest)) {
+      throw new Error(
+        "published embedded FormRefs/digests drifted; mint a new family identity and provider release instead of changing the ledger",
+      );
+    }
+  } else {
+    // The catalog has moved PAST the published release: the Beta 2 state
+    // decision 0046 names, with the published generation frozen in its
+    // ledger entry and the current generation awaiting its own release.
+    // What holds then: no released entry may already claim the new family
+    // version (a release's family is immutable), and the frozen-entry
+    // checks above already refused any edit to the published set. The
+    // byte-equality obligation transfers to the next release's gate when
+    // its ledger entry is minted.
+    if (families.has(manifest.family)) {
+      throw new Error(
+        `family ${manifest.family} is already claimed by a released ledger entry; a moved catalog mints a NEW family version`,
+      );
+    }
   }
   return supported;
 }

@@ -2,7 +2,7 @@
 page_title: "takoform_worker_bundle Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Worker Bundle (edge.forms.takoform.com/v1beta1, role revision).
+  Worker Bundle (edge.forms.takoform.com/v1beta2, role revision).
 ---
 
 # takoform_worker_bundle
@@ -11,8 +11,10 @@ Immutable content-addressed module bundle of one worker build, named by the dige
 
 This is a `revision` resource: an immutable snapshot. It is create-only — every desired attribute forces replacement, and rollback means pointing a deployment at an earlier revision, never editing this one.
 
-This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or
-later. Provider v2.1.1 is Registry-published; release/version.json retains
+This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com/v1beta2 identity is not yet carried by any
+Registry-published provider release: it ships with the next provider release
+(decision 0046). Registry-published provider v2.1.1 serves this resource type
+under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
 candidate-only descriptor metadata after owner publication. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_worker_bundle/resource.tf).
@@ -87,7 +89,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_worker_bundle.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"WorkerBundle","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"WorkerBundle","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

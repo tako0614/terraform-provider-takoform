@@ -30,7 +30,10 @@ type NegativeCase struct {
 //   - one unexpected-property case for every Form, proving the closed object;
 //   - one missing-required case per required field;
 //   - one case per declared or derivable field counter-example;
-//   - one invalid-binding-name case per binding list.
+//   - one invalid-binding-name case per binding list;
+//   - one out-of-vocabulary protocol case per external-service list, proving
+//     the closed slot vocabulary is enforced at the desired stage rather than
+//     discovered when a host tries to resolve an unknown protocol.
 //
 // Every Form therefore always ends up with at least one desired-stage
 // negative fixture.
@@ -75,6 +78,20 @@ func (f Form) NegativeCases() ([]NegativeCase, error) {
 			},
 		}}
 		appendCase(fixtureToken(field.HCL)+"-binding-name", desired)
+	}
+	for _, field := range f.Fields {
+		if field.Kind != KindExternalServiceList {
+			continue
+		}
+		desired := f.CanonicalDesired()
+		desired[field.Wire] = []any{map[string]any{
+			"name": "PRIMARY",
+			"service": map[string]any{
+				"apiVersion": StandardServiceAPIVersion,
+				"protocol":   "not-a-standard-protocol",
+			},
+		}}
+		appendCase(fixtureToken(field.HCL)+"-unknown-protocol", desired)
 	}
 
 	seen := map[string]struct{}{}

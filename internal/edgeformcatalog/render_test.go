@@ -249,8 +249,8 @@ func TestContractDefinitionsSatisfyNormativeSchemas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(interfaces) != 6 {
-		t.Fatalf("interface catalog has %d entries, want 6", len(interfaces))
+	if len(interfaces) != 8 {
+		t.Fatalf("interface catalog has %d entries, want 8", len(interfaces))
 	}
 	for _, contract := range interfaces {
 		value, err := jsonschema.UnmarshalJSON(bytes.NewReader([]byte(contract.DefinitionJSON)))
@@ -273,8 +273,8 @@ func TestContractDefinitionsSatisfyNormativeSchemas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bindings) != 5 {
-		t.Fatalf("binding catalog has %d entries, want 5", len(bindings))
+	if len(bindings) != 7 {
+		t.Fatalf("binding catalog has %d entries, want 7", len(bindings))
 	}
 	interfaceDigests := map[string]string{}
 	for _, contract := range interfaces {

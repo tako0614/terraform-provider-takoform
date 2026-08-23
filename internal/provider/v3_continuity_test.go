@@ -79,8 +79,44 @@ func TestFutureStableCodecDoesNotImplicitlyUpgradeBetaState(t *testing.T) {
 		t.Fatalf("future stable create target = %#v (err %v)", got, err)
 	}
 	codec, ok := future.forStateKey(beta.ExactKey())
-	if !ok || codec.Ref != beta || codec.Form.Family.APIVersion() != "edge.forms.takoform.com/v1beta1" {
+	if !ok || codec.Ref != beta || codec.Form.Family.APIVersion() != "edge.forms.takoform.com/v1beta2" {
 		t.Fatalf("Beta state implicitly upgraded: codec=%#v ok=%t", codec, ok)
+	}
+}
+
+// TestV3CodecTableCoversEverySupportedRef is the regression gate for the
+// two-generation build: the supported set spans the retained v1beta1
+// identities Registry-published provider 2.1.1 wrote state under and the
+// current v1beta2 generation, and every one of them must resolve a compiled
+// codec. A supported ref without a codec fails closed at runtime — correct
+// against skew, but a defect when the build itself ships the gap, because it
+// makes released state unreadable before any host is contacted.
+func TestV3CodecTableCoversEverySupportedRef(t *testing.T) {
+	assertGeneratedFamilyBuild(t)
+	table := newV3CodecTable(currentformregistry.V3Current())
+	var missing []string
+	sawRetained := false
+	for _, ref := range table.registry.SupportedRefs() {
+		codec, ok := table.forStateKey(ref.ExactKey())
+		if !ok {
+			missing = append(missing, ref.ExactKey().String())
+			continue
+		}
+		// Each generation decodes only through its own declarations: the
+		// codec's declared family must be the ref's, never the other
+		// generation's declaration of the same kind.
+		if codec.Form.Family.APIVersion() != ref.APIVersion {
+			t.Fatalf("ref %s resolved a %s declaration", ref.ExactKey(), codec.Form.Family.APIVersion())
+		}
+		if ref.APIVersion == "edge.forms.takoform.com/v1beta1" {
+			sawRetained = true
+		}
+	}
+	if len(missing) != 0 {
+		t.Fatalf("supported identities with no compiled codec: %s", strings.Join(missing, ", "))
+	}
+	if !sawRetained {
+		t.Fatal("supported set no longer carries the retained v1beta1 generation; the ledger fence should have refused this")
 	}
 }
 
@@ -323,7 +359,7 @@ func TestV3ImportIdentityForms(t *testing.T) {
 		for _, id := range []string{
 			"",
 			"{",
-			`{"name":"module-worker","apiVersion":"edge.forms.takoform.com/v1beta1"}`,
+			`{"name":"module-worker","apiVersion":"edge.forms.takoform.com/v1beta2"}`,
 			`{"name":"Module-Worker"}`,
 			`{"name":"module-worker","space":"bad/space"}`,
 			`{"name":"module-worker","unknown":"member"}`,

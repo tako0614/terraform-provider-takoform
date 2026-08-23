@@ -137,18 +137,11 @@
           "enum": [
             "Available",
             "Provisioning",
-            "Reconciling",
-            "Failed",
-            "BackendUnavailable",
-            "SpecDrift",
             "ExternalChange",
             "DependencyMissing",
-            "DependencyInUse",
-            "PolicyDenied",
-            "UnsupportedCapability",
-            "Deleting"
+            "UnsupportedCapability"
           ],
-          "description": "Closed portable reason defined by the Core contract. The portable reasons are closed; host-specific detail belongs in hostReason."
+          "description": "Closed portable reason. Exactly the reasons the lane's type-reason matrix admits: a reason no type may carry cannot be answered, and a client cannot be handed one it has no row to interpret. Which reasons each type admits is the matrix in the lane document; host-specific detail belongs in hostReason."
         },
         "hostReason": {
           "type": "string",

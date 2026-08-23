@@ -3,7 +3,10 @@ terraform {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
       # Provider v2.1.1 is Registry-published; release/version.json remains
-      # candidate-only descriptor metadata after owner publication.
+      # candidate-only descriptor metadata after owner publication. v2.1.1
+      # serves this resource type under the retained v1beta1 identities; the
+      # v1beta2 identity this page documents ships with the next release
+      # (decision 0046).
       version = "= 2.1.1"
     }
   }
@@ -60,6 +63,27 @@ resource "takoform_worker_version" "example" {
     {
       name        = "AUTH"
       target_name = "auth-worker"
+    },
+  ]
+
+  workflow_bindings = [
+    {
+      name        = "ORDERS"
+      target_name = "durable-workflow"
+    },
+  ]
+
+  actor_bindings = [
+    {
+      name        = "ROOMS"
+      target_name = "actor-namespace"
+    },
+  ]
+
+  external_services = [
+    {
+      name     = "PRIMARY_DB"
+      protocol = "postgresql"
     },
   ]
 }

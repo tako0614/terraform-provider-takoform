@@ -1,5 +1,5 @@
 // Package edgeformcatalog declares, as data, the Edge Platform Family:
-// the current public Beta Form Family (edge.forms.takoform.com/v1beta1,
+// the current public Beta Form Family (edge.forms.takoform.com/v1beta2,
 // decisions 0009 and 0035) together with its exact Interface and Binding
 // contracts (decision 0010). Every member fixes the application-visible
 // semantics of one proven
@@ -17,16 +17,45 @@ import (
 )
 
 // Family is the Edge Platform Family group.
-var Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1beta1"}
+var Family = model.Family{Group: "edge.forms.takoform.com", Version: "v1beta2"}
 
 // edgeDefinitionVersion is the definition SemVer every MVP member starts at.
 const edgeDefinitionVersion = "0.1.0"
+
+// workerVersionDefinitionVersion is ahead of the rest of the generation
+// because Worker Version's contract GAINED a field in Beta 2 — the sealed
+// externalServices slot list (decisions 0043 and 0045) — rather than being the
+// v1beta1 contract re-identified under the new group. The identity says so
+// where a reader will see it: every other member carries 0.1.0, meaning "your
+// contract, re-addressed", and this one does not (decision 0046).
+const workerVersionDefinitionVersion = "0.2.0"
+
+// generationDefinitionVersions enumerates every member whose definition
+// version deliberately differs from the generation line, with the version it
+// must carry. A Form cannot drift off the line by accident, and one that is
+// meant to be off it cannot silently drift back on.
+var generationDefinitionVersions = map[string]string{
+	"WorkerVersion": workerVersionDefinitionVersion,
+}
 
 // ref renders one exact in-family cross-resource reference: the target group,
 // the target kind, and the target name. All three travel on the wire; the HCL
 // surface still asks the author for the bare name.
 func ref(kind, name string) map[string]any {
 	return map[string]any{"apiVersion": Family.APIVersion(), "kind": kind, "name": name}
+}
+
+// externalServiceSlot builds one sealed standard-service slot fixture. The
+// apiVersion is the vocabulary's own identity, never an author input
+// (decision 0045).
+func externalServiceSlot(name, protocol string) map[string]any {
+	return map[string]any{
+		"name": name,
+		"service": map[string]any{
+			"apiVersion": model.StandardServiceAPIVersion,
+			"protocol":   protocol,
+		},
+	}
 }
 
 // bindingInstance renders one typed binding instance: the JavaScript
@@ -68,10 +97,20 @@ var requiresExactForm = model.TargetContract{ExactForm: true}
 func moduleWorkerRef(hcl, wire, doc string, required, immutable bool) model.Field {
 	return model.Field{
 		HCL: hcl, Wire: wire, Kind: model.KindResourceRef, TargetKind: "ModuleWorker",
-		Target:   requiresInterface(WorkerRuntimeInterfaceName, "1.0.0"),
+		Target:   requiresInterface(WorkerRuntimeInterfaceName, "1.1.0"),
 		Required: required, Immutable: immutable, Doc: doc,
 		Example: ref("ModuleWorker", "module-worker"),
 	}
+}
+
+// activatingWorkerRef is the reference of an inward-activation attachment: it
+// says WHICH runtime entrypoint the attachment's events invoke, so the gate
+// that admits the attachment reads the Definition instead of a table of Form
+// kinds kept somewhere else. A host holding only this document can enforce it.
+func activatingWorkerRef(doc, entrypoint string) model.Field {
+	field := moduleWorkerRef("worker", "worker", doc, true, true)
+	field.RequiredEntrypoint = entrypoint
+	return field
 }
 
 // Forms is the complete Edge Platform Family MVP set, in a stable order.
@@ -83,7 +122,7 @@ var Forms = []model.Form{
 		Title: "Module Worker",
 		Description: "Long-lived logical identity of one ES Module Worker application. The Form fixes the ES " +
 			"Module Worker ABI by identity, and states it exactly: the runtime contract " +
-			"worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, " +
+			"worker.runtime@1.1.0 in this Form's providedInterfaces fixes the module's default-export shape, " +
 			"the fetch, scheduled, and queue handler signatures, the binding environment, " +
 			"ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module " +
 			"loading. A host supporting this Form implements that exact digest; a runtime that behaves " +
@@ -104,7 +143,7 @@ var Forms = []model.Form{
 		// target no binding may point at, and would leave the binding's
 		// allowedTargetForms Form providing no Interface at all.
 		ProvidedInterfaces: []model.InterfaceRefSource{
-			{Name: WorkerRuntimeInterfaceName, Version: "1.0.0"},
+			{Name: WorkerRuntimeInterfaceName, Version: "1.1.0"},
 			{Name: "worker.service", Version: "1.0.0"},
 		},
 	},
@@ -158,12 +197,12 @@ var Forms = []model.Form{
 	{
 		Family: Family,
 		Kind:   "WorkerVersion", Slug: "worker-version", ResourceType: "takoform_worker_version",
-		Role: model.RoleRevision, DefinitionVersion: edgeDefinitionVersion,
+		Role: model.RoleRevision, DefinitionVersion: workerVersionDefinitionVersion,
 		Title: "Worker Version",
 		Description: "Immutable executable snapshot of one Module Worker: a bundle, the handlers its module " +
 			"exports, non-secret vars, and the typed capability bindings the code may use. A change is a new " +
 			"Worker Version; traffic moves only through Worker Deployments. The runtime this code runs on is " +
-			"not a field of this Form: it is fixed by the worker.runtime@1.0.0 contract the Module Worker " +
+			"not a field of this Form: it is fixed by the worker.runtime@1.1.0 contract the Module Worker " +
 			"identity provides, so a version carries no compatibility date and no compatibility flag " +
 			"(decision 0019).",
 		AcceptedBindings: []model.BindingRefSource{
@@ -172,15 +211,17 @@ var Forms = []model.Form{
 			{Name: "module-worker.sqlite", Version: "1.0.0"},
 			{Name: "module-worker.queue-producer", Version: "1.0.0"},
 			{Name: "module-worker.service", Version: "1.0.0"},
+			{Name: "module-worker.workflow", Version: "1.0.0"},
+			{Name: "module-worker.actor", Version: "1.0.0"},
 		},
 		Fields: []model.Field{
 			// The worker reference states an ABI requirement, not a Form one: what
 			// this version needs from the identity it belongs to is the runtime
 			// contract that decides which handlers exist at all and what signature
-			// each has. Any worker identity providing worker.runtime@1.0.0 serves
+			// each has. Any worker identity providing worker.runtime@1.1.0 serves
 			// this version, whatever else its Definition declares.
 			{HCL: "worker", Wire: "worker", Kind: model.KindResourceRef, TargetKind: "ModuleWorker", Required: true,
-				Target:  requiresInterface(WorkerRuntimeInterfaceName, "1.0.0"),
+				Target:  requiresInterface(WorkerRuntimeInterfaceName, "1.1.0"),
 				Doc:     "Module Worker identity this version belongs to.",
 				Example: ref("ModuleWorker", "module-worker")},
 			// The bundle reference is the opposite case. A Worker Bundle provides
@@ -231,7 +272,7 @@ var Forms = []model.Form{
 			{HCL: "handlers", Wire: "handlers", Kind: model.KindStringSet, Required: true, MinItems: 1,
 				Enum: runtimeHandlerVocabulary(),
 				Doc: "Module event handlers this version exports, from the closed vocabulary the " +
-					"worker.runtime@1.0.0 contract defines. A host rejects a handler that contract does not " +
+					"worker.runtime@1.1.0 contract defines. A host rejects a handler that contract does not " +
 					"define, and rejects an attachment whose event kind is not declared here.",
 				Example: []any{"fetch"}},
 			{HCL: "vars", Wire: "vars", Kind: model.KindJSONMap,
@@ -279,6 +320,26 @@ var Forms = []model.Form{
 				Default: []any{},
 				Doc:     "Typed module-worker.service bindings projecting worker.service fetch toward another Module Worker. Omitting it declares no such binding.",
 				Example: []any{bindingInstance("AUTH", "ModuleWorker", "auth-worker")}},
+			// Neither of these two requires its target Ready at bind time, and
+			// that is a deliberate departure from module-worker.service. A
+			// workflow's or a namespace's readiness follows its OWN worker's
+			// deployment, which cannot exist before the version that deployment
+			// weights — so a Ready gate would make the ordinary self-bound
+			// wiring unconstructible in a single apply. What is required is
+			// existence and the exact Interface; the deployment that lands next
+			// is what makes the target serve.
+			{HCL: "workflow_bindings", Wire: "workflowBindings", Kind: model.KindBindingList,
+				TargetKind: "DurableWorkflow", BindingType: "module-worker.workflow",
+				Target:  requiresInterface("worker.workflow", "1.0.0"),
+				Default: []any{},
+				Doc:     "Typed module-worker.workflow bindings projecting the instance surface — create, get, status, sendEvent, terminate. Omitting it declares no such binding.",
+				Example: []any{bindingInstance("ORDERS", "DurableWorkflow", "durable-workflow")}},
+			{HCL: "actor_bindings", Wire: "actorBindings", Kind: model.KindBindingList,
+				TargetKind: "ActorNamespace", BindingType: "module-worker.actor",
+				Target:  requiresInterface("worker.actor", "1.0.0"),
+				Default: []any{},
+				Doc:     "Typed module-worker.actor bindings projecting addressing and invocation — idFromName, newUniqueId, get. Omitting it declares no such binding.",
+				Example: []any{bindingInstance("ROOMS", "ActorNamespace", "actor-namespace")}},
 			{HCL: "required_sensitive_vars", Wire: "requiredSensitiveVars", Kind: model.KindStringSet,
 				ItemPattern:              model.PatternSensitiveVarName,
 				Default:                  []any{},
@@ -287,6 +348,24 @@ var Forms = []model.Form{
 					"Only the names are portable state; values travel through each host's own sealed path. " +
 					"Omitting it requires no sensitive value.",
 				Example: []any{"API_SIGNING_TOKEN_NAME"}, CounterExample: []any{"lowercase name"}},
+			// Where the family stops specifying and starts integrating
+			// (decisions 0043 and 0045). A category with a de-facto standard
+			// API is never respecified as a Form; a version reaches one by
+			// naming the protocol it speaks and letting the host resolve the
+			// endpoint and credential down the same sealed path a sensitive
+			// variable already travels. The slot is closed on purpose: no URL,
+			// no host, no credential, and no vendor can be written here, so
+			// nothing about WHICH service answers ever enters portable desired
+			// state.
+			{HCL: "external_services", Wire: "externalServices", Kind: model.KindExternalServiceList,
+				Default:                  []any{},
+				ProjectsEnvironmentNames: true,
+				Doc: "External standard services this version speaks, each a sealed slot naming only a " +
+					"projected NAME and a standard protocol. The host resolves the endpoint and credential " +
+					"out-of-band and projects the protocol's fixed member set under NAME; neither the address " +
+					"nor the credential is portable state. A required slot the host cannot satisfy keeps the " +
+					"version from becoming Ready. Omitting it declares no external service.",
+				Example: []any{externalServiceSlot("PRIMARY_DB", "postgresql")}},
 		},
 	},
 	{
@@ -350,7 +429,7 @@ var Forms = []model.Form{
 			"A second attachment claiming a hostname a live one already serves is refused before any " +
 			"mutation; releasing the holder makes the claim representable (decision 0026).",
 		Fields: []model.Field{
-			moduleWorkerRef("worker", "worker", "Module Worker served on this hostname.", true, true),
+			activatingWorkerRef("Module Worker served on this hostname.", "fetch"),
 			{HCL: "hostname", Wire: "hostname", Kind: model.KindString, Required: true, Immutable: true,
 				Pattern: model.PatternHostname, MaxLength: 253,
 				Doc: "Dotted DNS hostname this attachment serves. Changing it replaces the attachment. The pattern " +
@@ -384,9 +463,9 @@ var Forms = []model.Form{
 			"host that needs to change the address deletes the endpoint and the author creates a new one, which " +
 			"is a new attachment with a new UID.",
 		Fields: []model.Field{
-			moduleWorkerRef("worker", "worker",
+			activatingWorkerRef(
 				"Module Worker whose active deployment answers requests at the assigned address. Changing it replaces the endpoint.",
-				true, true),
+				"fetch"),
 		},
 		// The two observable facts, and only those. `hostname` is what the host
 		// assigned; `url` is the one address a client uses. Both are published
@@ -407,8 +486,12 @@ var Forms = []model.Form{
 					"detail, so a portable configuration never parses it, never asserts a suffix, and never " +
 					"reconstructs it from the resource name."},
 			{HCL: "url", Wire: "url", Kind: model.KindString,
-				Pattern:   `^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$`,
-				MaxLength: 264,
+				Pattern: `^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$`,
+				// The value IS "https://" + the assigned hostname + "/", so its
+				// bound is that construction and nothing else: 8 + 253 + 1. A
+				// looser number would admit a url this Form cannot produce,
+				// which is the one thing a derived bound must not do.
+				MaxLength: 262,
 				Doc: "Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + " +
 					"`/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and " +
 					"no port, so a consumer composes deeper paths onto this value rather than deriving an origin. It " +
@@ -437,7 +520,7 @@ var Forms = []model.Form{
 			"idempotent. An uncaught exception in the handler is a failed invocation reported to host " +
 			"diagnostics; it is not retried within the matched minute and it never becomes an HTTP response.",
 		Fields: []model.Field{
-			moduleWorkerRef("worker", "worker", "Module Worker whose scheduled handler this trigger invokes.", true, true),
+			activatingWorkerRef("Module Worker whose scheduled handler this trigger invokes.", "scheduled"),
 			{HCL: "cron", Wire: "cron", Kind: model.KindString, Required: true,
 				Pattern: model.PatternCron, MaxLength: 64,
 				Doc: "Portable five-field cron expression, interpreted in UTC only. The pattern bounds the shape; a host " +
@@ -598,7 +681,7 @@ var Forms = []model.Form{
 				Required: true, Immutable: true,
 				Doc:     "Queue this consumer drains. Changing it replaces the attachment.",
 				Example: ref("AtLeastOnceQueue", "at-least-once-queue")},
-			moduleWorkerRef("worker", "worker", "Module Worker whose queue handler receives the batches. Changing it replaces the attachment.", true, true),
+			activatingWorkerRef("Module Worker whose queue handler receives the batches. Changing it replaces the attachment.", "queue"),
 			// Batching, retry, and concurrency decide throughput, duplicate
 			// exposure, and downstream load together. No single value is portable
 			// across workloads, so the consumer states all five rather than
@@ -639,6 +722,74 @@ var Forms = []model.Form{
 				Example: 4},
 		},
 	},
+	{
+		Family: Family,
+		Kind:   "DurableWorkflow", Slug: "durable-workflow", ResourceType: "takoform_durable_workflow",
+		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
+		Title: "Durable Workflow",
+		Description: "Long-lived identity of one code-defined durable workflow: a class the worker's active " +
+			"deployment serves, whose instances survive process death. The Form fixes the execution model by " +
+			"identity — the worker.workflow@1.0.0 contract in its providedInterfaces states memoized replay, " +
+			"at-least-once step execution, the closed status vocabulary, and the two bounds that keep an " +
+			"instance finite. It carries NO implementation snapshot: which code answers is whatever the " +
+			"worker's active Worker Deployment selects, so behavior upgrades and rollback ride the deployment " +
+			"like any other traffic change. Instances are runtime data reached through module-worker.workflow " +
+			"bindings, never Resources. One worker carries at most one Durable Workflow per class name.",
+		Fields: []model.Field{
+			// The reference states an ABI requirement, not a Form one: what a
+			// workflow needs from the identity it belongs to is the runtime
+			// contract that decides a module exists and how the host loads it.
+			moduleWorkerRef("worker", "worker",
+				"Module Worker identity whose active deployment serves this workflow class. Changing it replaces the workflow.",
+				true, true),
+			// The class name is immutable because the instance history is kept
+			// under this identity while the CODE arrives through the worker's
+			// deployment. Repointing a live identity at a different class would
+			// leave one history replaying into code it was never recorded
+			// against, which is exactly the split decision 0008 forbids.
+			{HCL: "class_name", Wire: "className", Kind: model.KindString,
+				Required: true, Immutable: true,
+				Pattern: model.PatternBindingName,
+				Doc: "Class export name the serving module provides, in the JavaScript identifier grammar. Every " +
+					"weighted version of the active deployment must export it; one that does not keeps this workflow " +
+					"from becoming Ready, and creating an instance against it is refused rather than queued.",
+				Example:        "OrderFulfilment",
+				CounterExample: "1-not-an-identifier"},
+		},
+		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "worker.workflow", Version: "1.0.0"}},
+	},
+	{
+		Family: Family,
+		Kind:   "ActorNamespace", Slug: "actor-namespace", ResourceType: "takoform_actor_namespace",
+		Role: model.RoleIdentity, DefinitionVersion: edgeDefinitionVersion,
+		Title: "Actor Namespace",
+		Description: "Long-lived identity of one addressable-actor id space: a class the worker's active " +
+			"deployment serves, with at most one live execution context per actor id, private durable storage " +
+			"per id, and one alarm per id. The Form fixes that model by identity through the " +
+			"worker.actor@1.0.0 contract in its providedInterfaces; it carries no implementation snapshot, so " +
+			"which code answers is whatever the worker's active Worker Deployment selects. Actors are runtime " +
+			"data reached through module-worker.actor bindings, never Resources: every id addresses an actor " +
+			"and the first delivery is its creation. One worker carries at most one Actor Namespace per class " +
+			"name, because two namespaces over one class would give that class two disjoint id spaces.",
+		Fields: []model.Field{
+			moduleWorkerRef("worker", "worker",
+				"Module Worker identity whose active deployment serves this actor class. Changing it replaces the namespace.",
+				true, true),
+			// Immutable for a harder reason than the workflow's: the id space
+			// and every actor's storage hang off this identity, so repointing
+			// it at another class would hand one set of durable stores to code
+			// that never wrote them.
+			{HCL: "class_name", Wire: "className", Kind: model.KindString,
+				Required: true, Immutable: true,
+				Pattern: model.PatternBindingName,
+				Doc: "Class export name the serving module provides, in the JavaScript identifier grammar. Every " +
+					"weighted version of the active deployment must export it; one that does not keeps this namespace " +
+					"from becoming Ready, and invoking a stub of it is refused rather than queued.",
+				Example:        "ChatRoom",
+				CounterExample: "1-not-an-identifier"},
+		},
+		ProvidedInterfaces: []model.InterfaceRefSource{{Name: "worker.actor", Version: "1.0.0"}},
+	},
 }
 
 // Validate proves every structural catalog rule: per-form model rules, the
@@ -654,8 +805,18 @@ func Validate() error {
 		if err := form.Validate(); err != nil {
 			return err
 		}
-		if form.DefinitionVersion != edgeDefinitionVersion {
-			return fmt.Errorf("form %s declares definition version %q; the MVP family line is %q", form.Kind, form.DefinitionVersion, edgeDefinitionVersion)
+		// A generation move re-identifies the whole family, so its members
+		// start together at the generation line; a member that carries a
+		// different version is asserting its contract diverged from that
+		// baseline, which is exactly what decision 0046 requires to be
+		// deliberate rather than incidental. The declared exceptions are
+		// therefore enumerated here, not merely permitted by format.
+		if want, declared := generationDefinitionVersions[form.Kind]; declared {
+			if form.DefinitionVersion != want {
+				return fmt.Errorf("form %s declares definition version %q; its recorded divergence from the family line is %q", form.Kind, form.DefinitionVersion, want)
+			}
+		} else if form.DefinitionVersion != edgeDefinitionVersion {
+			return fmt.Errorf("form %s declares definition version %q; the family line is %q and no divergence is recorded for it", form.Kind, form.DefinitionVersion, edgeDefinitionVersion)
 		}
 		for name, set := range map[string]map[string]struct{}{form.Kind: kinds, form.Slug: slugs, form.ResourceType: resourceTypes} {
 			if _, duplicate := set[name]; duplicate {

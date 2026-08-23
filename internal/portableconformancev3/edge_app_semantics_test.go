@@ -22,7 +22,11 @@ func edgeAppReferenceHost(t *testing.T) (*ReferenceHost, *Catalog) {
 
 func edgeAppForm(t *testing.T, catalog *Catalog, kind string) *InstalledForm {
 	t.Helper()
-	form := catalog.line(edgeFormsGroup, kind, "0.1.0")
+	// The definition version is the Form's own: members whose contract
+	// diverged from the generation line do not sit at it (decision 0046), so
+	// this resolves by kind and takes whatever single line the catalog
+	// installs for it.
+	form := catalog.onlyLine(edgeFormsGroup, kind)
 	if form == nil {
 		t.Fatalf("%s candidate is not installed", kind)
 	}

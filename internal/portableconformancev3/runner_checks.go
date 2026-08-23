@@ -85,6 +85,9 @@ func (r *v3Runner) run() error {
 		r.checkDeploymentWeightSum,
 		r.checkDeploymentIntegrity,
 		r.checkHandlerGatedAttachments,
+		// The two members that name a CLASS rather than a handler, and whose
+		// gate is therefore the opposite way round from an attachment's.
+		r.checkClassHolderRules,
 		// The two attachment rules a schema cannot state: a cron expression is a
 		// schedule rather than a shape, and one queue has one consumer
 		// (spec/decisions/0020). Both run against the worker the gate check just

@@ -1,0 +1,789 @@
+{
+  "apiVersion": "interfaces.takoform.com/v1alpha1",
+  "kind": "InterfaceDefinition",
+  "name": "worker.actor",
+  "version": "1.0.0",
+  "title": "Addressable single-context actor",
+  "description": "Per-entity coordination behind one addressable actor per id: a class the serving Worker Version exports, constructed by the host with the actor's id, storage, and alarm. ADDRESSING. idFromName derives the SAME id for the same name on every call with no host round trip; newUniqueId mints an id no name ever derives; get builds a stub without host work. An id is an OPAQUE, stable string a configuration must not parse. EVERY id addresses an actor: there is no create call and no existence check — the first delivery to an id is the actor's creation, and an actor with no storage, no alarm, and no live context costs nothing. AT MOST ONE LIVE EXECUTION CONTEXT PER ID, across locations, eviction, and process death, and the host delivers to it ONE INVOCATION AT A TIME, each running to completion before the next begins: concurrent callers observe serialization, never interleaving. This is the guarantee the rest of the contract is built on. INVOCATION is exactly worker.service's HTTP-shaped call — bodies stream both ways, a callee throw is the actor's host-generated 500 that the call SUCCEEDS with, and the call fails only when it could not be made — what is new is only WHERE it lands. STORAGE is private per actor id, reachable ONLY from that actor's own execution context, with edge.sql's dialect, EdgeSqlValue domain, and serializable atomicity. Unlike edge.sql it admits SCHEMA statements from the actor's own code: a single-writer store owns its own history, and a per-actor migration resource over unbounded cardinality would be the same category error as a per-message one. ALARM: at most one pending per actor. Setting REPLACES any pending alarm. At or after its time the host invokes the class's alarm handler in the actor's own serialized context; firing is AT-LEAST-ONCE — a handler that throws is re-invoked — and a completed run consumes the alarm unless the handler set a new one. Between deliveries the host may EVICT the execution context; storage and the pending alarm survive, and the next invocation or the alarm revives the actor. The identity outlives every context. Actors are runtime data: unbounded cardinality, runtime addressing, no uid, no generation, nothing to plan.",
+  "operations": [
+    {
+      "name": "idFromName",
+      "description": "Derive the actor id one name addresses. The derivation is DETERMINISTIC and local: the same name yields the same id on every call, in every isolate, with no host round trip, which is what lets two unrelated workers reach the same actor by agreeing on a name alone.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_name"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "newUniqueId",
+      "description": "Mint an actor id NO name ever derives. It is the only way to obtain an actor that cannot be addressed by guessing a name, so the caller must persist the id somewhere to reach it again.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "fetch",
+      "description": "Invoke the actor's fetch handler. Bodies stream in both directions and neither side is buffered; the call completes at the response head. Invocations against one id are SERIALIZED — each runs to completion before the next begins. An uncaught throw in the actor is its host-generated 500 and this operation SUCCEEDS with it; it fails only when the call could not be made at all, which is what an unserved namespace produces.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "bodyStream": {
+            "type": "boolean"
+          },
+          "contentLength": {
+            "maximum": 104857600,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "headers": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 64,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "DELETE",
+              "GET",
+              "HEAD",
+              "OPTIONS",
+              "PATCH",
+              "POST",
+              "PUT"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "bodyStream",
+          "contentLength",
+          "id",
+          "method",
+          "path"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "bodyStream": {
+            "type": "boolean"
+          },
+          "contentLength": {
+            "maximum": 104857600,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "headers": {
+            "additionalProperties": {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "maxProperties": 64,
+            "propertyNames": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "status": {
+            "maximum": 599,
+            "minimum": 100,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bodyStream",
+          "contentLength",
+          "status"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "request_too_large",
+        "request_aborted",
+        "response_aborted",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "storageExecute",
+      "description": "Run one effectful statement against THIS actor's private store. Unlike edge.sql it accepts schema statements: a single-writer store owns its own history. params and returned columns are EdgeSqlValue exactly. It is reachable only from the actor's own execution context, which is what makes every write single-writer without a lock.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "params": {
+            "items": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "number"
+                },
+                {
+                  "maxLength": 1000000,
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "maxLength": 1333336,
+                      "type": "string"
+                    },
+                    "encoding": {
+                      "enum": [
+                        "base64"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "encoding"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "sql": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "items": {
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "number"
+                  },
+                  {
+                    "maxLength": 1000000,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "data": {
+                        "maxLength": 1333336,
+                        "type": "string"
+                      },
+                      "encoding": {
+                        "enum": [
+                          "base64"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "data",
+                      "encoding"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "maxProperties": 100,
+              "propertyNames": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "type": "array"
+          },
+          "rowsWritten": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "rowsWritten"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_sql",
+        "constraint_violation",
+        "numeric_out_of_range",
+        "result_too_large",
+        "storage_full",
+        "busy",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "storageQuery",
+      "description": "Read from this actor's store inside an always-rolled-back transaction, so a read leaves no persistent effect without anyone guessing whether the SQL writes. rowsWritten is always 0.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "params": {
+            "items": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "number"
+                },
+                {
+                  "maxLength": 1000000,
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "maxLength": 1333336,
+                      "type": "string"
+                    },
+                    "encoding": {
+                      "enum": [
+                        "base64"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "encoding"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "sql": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "items": {
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "number"
+                  },
+                  {
+                    "maxLength": 1000000,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "data": {
+                        "maxLength": 1333336,
+                        "type": "string"
+                      },
+                      "encoding": {
+                        "enum": [
+                          "base64"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "data",
+                      "encoding"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "maxProperties": 100,
+              "propertyNames": {
+                "maxLength": 128,
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "type": "array"
+          },
+          "rowsWritten": {
+            "const": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "rowsWritten"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_sql",
+        "numeric_out_of_range",
+        "result_too_large",
+        "busy",
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "storageTransaction",
+      "description": "Run 1 to 100 statements under serializable all-or-none isolation, materializing every result before commit. A transaction that could report only a write count could not carry the rows a SELECT inside it returned, which would make the atomic path strictly weaker than the plain one.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "statements": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "params": {
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "number"
+                      },
+                      {
+                        "maxLength": 1000000,
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "data": {
+                            "maxLength": 1333336,
+                            "type": "string"
+                          },
+                          "encoding": {
+                            "enum": [
+                              "base64"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "data",
+                          "encoding"
+                        ],
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "sql": {
+                  "maxLength": 100000,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sql"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "statements"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "results": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "rows": {
+                  "items": {
+                    "additionalProperties": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "number"
+                        },
+                        {
+                          "maxLength": 1000000,
+                          "type": "string"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "data": {
+                              "maxLength": 1333336,
+                              "type": "string"
+                            },
+                            "encoding": {
+                              "enum": [
+                                "base64"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "data",
+                            "encoding"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "maxProperties": 100,
+                    "propertyNames": {
+                      "maxLength": 128,
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "maxItems": 10000,
+                  "type": "array"
+                },
+                "rowsWritten": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rows",
+                "rowsWritten"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "invalid_sql",
+        "constraint_violation",
+        "numeric_out_of_range",
+        "result_too_large",
+        "storage_full",
+        "busy",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "alarmSet",
+      "description": "Schedule this actor's wake-up, REPLACING any pending one. At most one alarm exists per actor, so there is no cancel-by-handle and no way to accumulate wake-ups. atMillis is milliseconds since the Unix epoch in UTC; a time already past fires as soon as the host can.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "atMillis": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "atMillis"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "invalid_time",
+        "backend_unavailable"
+      ]
+    },
+    {
+      "name": "alarmGet",
+      "description": "Read the pending alarm time, or report that none is pending. The two are different answers: a null time is no alarm at all, never an alarm at the epoch.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "atMillis": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "atMillis"
+        ],
+        "type": "object"
+      },
+      "errors": [
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "alarmClear",
+      "description": "Remove the pending alarm. It succeeds when none was pending: the outcome asked for is the outcome that holds, so a retry after a lost response is not an error.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "errors": [
+        "backend_unavailable"
+      ],
+      "idempotent": true
+    }
+  ],
+  "semantics": {
+    "consistency": "serializable",
+    "delivery": "at_least_once",
+    "ordering": "per_key"
+  },
+  "limits": {
+    "maxAlarmLeadSeconds": 31536000,
+    "maxBoundParameters": 100,
+    "maxRequestBytes": 104857600,
+    "maxRequestHeaders": 64,
+    "maxResponseBytes": 104857600,
+    "maxResponseHeaders": 64,
+    "maxRowsPerStatement": 10000,
+    "maxStatementBytes": 100000,
+    "maxStatementsPerTransaction": 100,
+    "maxStorageBytesPerActor": 1073741824
+  },
+  "fixtures": [
+    {
+      "name": "a-name-always-derives-one-id",
+      "steps": [
+        {
+          "operation": "idFromName",
+          "input": {
+            "name": "room-42"
+          },
+          "expected": {
+            "id": "room-42"
+          }
+        },
+        {
+          "operation": "idFromName",
+          "input": {
+            "name": "room-42"
+          },
+          "expected": {
+            "id": "room-42"
+          }
+        }
+      ]
+    },
+    {
+      "name": "the-first-delivery-creates-the-actor",
+      "steps": [
+        {
+          "operation": "idFromName",
+          "input": {
+            "name": "room-42"
+          },
+          "expected": {
+            "id": "room-42"
+          }
+        },
+        {
+          "operation": "fetch",
+          "input": {
+            "bodyStream": false,
+            "contentLength": 0,
+            "id": "room-42",
+            "method": "GET",
+            "path": "/health"
+          },
+          "expected": {
+            "bodyStream": true,
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "name": "an-actor-throw-is-a-complete-500",
+      "steps": [
+        {
+          "operation": "fetch",
+          "input": {
+            "bodyStream": false,
+            "contentLength": 0,
+            "id": "room-42",
+            "method": "GET",
+            "path": "/throw"
+          },
+          "expected": {
+            "bodyStream": true,
+            "status": 500
+          }
+        }
+      ]
+    },
+    {
+      "name": "no-pending-alarm-is-null-not-zero",
+      "steps": [
+        {
+          "operation": "alarmClear",
+          "input": {}
+        },
+        {
+          "operation": "alarmGet",
+          "input": {},
+          "expected": {
+            "atMillis": null
+          }
+        }
+      ]
+    }
+  ]
+}

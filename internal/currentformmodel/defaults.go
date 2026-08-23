@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 )
 
@@ -225,6 +226,35 @@ func validateFieldDefault(kind string, field Field) error {
 			}
 			if err := validateResourceRefDefault(field.TargetKind, entry["resource"]); err != nil {
 				return fail(err.Error())
+			}
+		}
+		if err := checkItemCount(field, len(items)); err != nil {
+			return fail(err.Error())
+		}
+	case KindExternalServiceList:
+		items, ok := defaultSlice(field.Default)
+		if !ok {
+			return fail("is not an array")
+		}
+		for _, item := range items {
+			entry, ok := item.(map[string]any)
+			if !ok {
+				return fail("carries a non-object slot entry")
+			}
+			name, _ := entry["name"].(string)
+			if err := matchesPattern(PatternExternalServiceName, name); err != nil {
+				return fail("carries a slot name that " + err.Error())
+			}
+			service, ok := entry["service"].(map[string]any)
+			if !ok {
+				return fail("carries a slot with no service declaration")
+			}
+			if service["apiVersion"] != StandardServiceAPIVersion {
+				return fail("carries a slot whose service apiVersion is not " + StandardServiceAPIVersion)
+			}
+			protocol, _ := service["protocol"].(string)
+			if !slices.Contains(ExternalServiceProtocols, protocol) {
+				return fail("carries a slot naming protocol " + protocol + ", which is not in the closed vocabulary")
 			}
 		}
 		if err := checkItemCount(field, len(items)); err != nil {

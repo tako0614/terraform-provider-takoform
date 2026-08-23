@@ -65,7 +65,7 @@ const (
 
 	// edgeFormsGroup is the one namespaced group whose cross-resource
 	// semantics this reference host enforces.
-	edgeFormsGroup                 = "edge.forms.takoform.com/v1beta1"
+	edgeFormsGroup                 = "edge.forms.takoform.com/v1beta2"
 	workerBundleKind               = "WorkerBundle"
 	staticAssetBundleKind          = "StaticAssetBundle"
 	sqliteMigrationSetKind         = "SQLiteMigrationSet"
@@ -343,7 +343,12 @@ type ReferenceHost struct {
 	// default export exposes. See exportedHandlerViolation for why a reference
 	// host that runs no JavaScript can still hold the contract's
 	// handler_not_exported rule, and for exactly how far that reaches.
-	moduleExports  map[string][]string
+	moduleExports map[string][]string
+	// moduleClasses maps one module BLOB digest to the CLASS names that
+	// module exports, for the same reason and by the same key as
+	// moduleExports: a Durable Workflow and an Actor Namespace name a class,
+	// not a handler, and what serves it is the code the deployment selects.
+	moduleClasses  map[string][]string
 	uidCounter     int
 	opCounter      int
 	uploadCounter  int
@@ -368,10 +373,13 @@ func NewReferenceHost(contract Contract, catalog *Catalog) *ReferenceHost {
 		blobTenants:      map[string]map[string]bool{},
 		manifestTenants:  map[string]map[string]bool{},
 		moduleExports:    map[string][]string{},
+		moduleClasses:    map[string][]string{},
 	}
 	input := contract.RunnerInput
 	host.declareModuleExports(input.WorkerBundle.ModuleSource, input.WorkerBundle.ExportedHandlers)
 	host.declareModuleExports(input.FetchOnlyBundle.ModuleSource, input.FetchOnlyBundle.ExportedHandlers)
+	host.declareModuleClasses(input.WorkerBundle.ModuleSource, input.WorkerBundle.ExportedClasses)
+	host.declareModuleClasses(input.FetchOnlyBundle.ModuleSource, input.FetchOnlyBundle.ExportedClasses)
 	return host
 }
 
@@ -385,6 +393,22 @@ func (h *ReferenceHost) declareModuleExports(moduleSource string, handlers []str
 		return
 	}
 	h.moduleExports[formpackage.DigestBytes([]byte(moduleSource))] = append([]string(nil), handlers...)
+}
+
+// declareModuleClasses records which classes one module's bytes export, keyed
+// by their content address. A module with no class export records NOTHING
+// rather than an empty list, so "this host has never been told" stays
+// distinguishable from "these bytes export no class" — the second is a refusal
+// and the first must not be.
+func (h *ReferenceHost) declareModuleClasses(moduleSource string, classes []string) {
+	if moduleSource == "" {
+		return
+	}
+	// An empty list is RECORDED, unlike declareModuleExports's. "These bytes
+	// export no class" is the fact the refusal is built on, and it must stay
+	// distinguishable from "this host was never told about these bytes" —
+	// which is the answer that must never refuse.
+	h.moduleClasses[formpackage.DigestBytes([]byte(moduleSource))] = append([]string{}, classes...)
 }
 
 // holdsBlob and holdsManifest answer the ONE authorization question the

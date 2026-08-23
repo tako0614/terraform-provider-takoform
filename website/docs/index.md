@@ -130,6 +130,8 @@ one is an Experimental Form at definition 0.1.0:
 - [sqlite_migration_application](/docs/resources/sqlite_migration_application.html)
 - [at_least_once_queue](/docs/resources/at_least_once_queue.html)
 - [queue_consumer](/docs/resources/queue_consumer.html)
+- [durable_workflow](/docs/resources/durable_workflow.html)
+- [actor_namespace](/docs/resources/actor_namespace.html)
 
 There is no generic carrier for a Form the provider was not built against: the
 typed surface gives a client a way to verify only the exact FormRefs it

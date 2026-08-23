@@ -5,9 +5,14 @@ service shape. Requirement keywords are used as described in
 [`../conformance.md`](../conformance.md).
 
 The current family profile is
-[`form-definition-v1beta1.schema.json`](/schemas/v1beta1/form-definition.schema.json)
+[`form-definition-v1beta2.schema.json`](/schemas/v1beta2/form-definition.schema.json)
 with
-[`form-ref-v1beta1.schema.json`](/schemas/v1beta1/form-ref.schema.json):
+[`form-ref-v1beta1.schema.json`](/schemas/v1beta1/form-ref.schema.json) —
+the FormRef schema does not move with it, because it admits any namespaced
+group by design and had nothing to correct. Its predecessor
+[`form-definition-v1beta1.schema.json`](/schemas/v1beta1/form-definition.schema.json)
+is retained unchanged and still validates the `edge.forms.takoform.com/v1beta1`
+packages published under it. In both profiles:
 its `apiVersion` is a namespaced Form Family group
 ([decision 0009](../decisions/0009-form-families-and-namespaced-api-versions.md)),
 it declares a required closed `role`
@@ -35,7 +40,7 @@ extensions:
 
 ```json
 {
-  "apiVersion": "edge.forms.takoform.com/v1beta1",
+  "apiVersion": "edge.forms.takoform.com/v1beta2",
   "kind": "ExampleStore",
   "definitionVersion": "0.1.0",
   "schemaDigest": "sha256:<64 lowercase hexadecimal characters>"
@@ -57,7 +62,11 @@ A definition contains:
 - optional immutable JSON Pointer fields;
 - an explicit subset of `create`, `read`, `update`, `delete`, `import`, and
   `observe` — the current family's whole capability vocabulary. `refresh` and
-  `drift` belong to the withdrawn lanes and no current schema admits them;
+  `drift` belong to the withdrawn lanes. The CURRENT profile
+  (`v1beta2/form-definition.schema.json`) admits neither; its predecessor
+  `v1beta1` still admits `refresh` and is retained unchanged for the packages
+  published against it, because narrowing a served identity would change what
+  it meant when it was published;
   the open `(name, version)` Interface descriptors of the withdrawn v1alpha2
   profile are replaced by exact digest-bound `providedInterfaces`
   ([`../interface-contract/`](../interface-contract/index.md));

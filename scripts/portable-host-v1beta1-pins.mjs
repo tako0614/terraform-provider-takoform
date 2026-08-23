@@ -24,7 +24,7 @@ const contractPath = path.join(corpusRoot, "contract.json");
 const manifestPath = path.join(corpusRoot, "manifest.json");
 
 const forms = readJSON(
-  path.join(repositoryRoot, "forms", "candidates", "edge", "v1beta1", "candidate-set.json"),
+  path.join(repositoryRoot, "forms", "candidates", "edge", "v1beta2", "candidate-set.json"),
 );
 const interfaces = readJSON(
   path.join(repositoryRoot, "interfaces", "candidates", "v1alpha1", "candidate-set.json"),

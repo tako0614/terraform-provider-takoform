@@ -85,7 +85,7 @@ func v3DocType(field model.Field) string {
 		return "Number"
 	case model.KindStringSet:
 		return "Set of String"
-	case model.KindBindingList, model.KindObjectList:
+	case model.KindBindingList, model.KindObjectList, model.KindExternalServiceList:
 		return "List of Object"
 	case model.KindObject:
 		return "Object"
@@ -173,6 +173,11 @@ func v3FieldDocLine(form model.Form, field model.Field) string {
 		doc += " Authored as one JSON object string (for example `jsonencode({...})`); the provider sends the parsed object."
 	case model.KindResourceRef:
 		doc += " Set the name of the target `" + field.TargetKind + "` resource."
+	case model.KindExternalServiceList:
+		doc += " Each entry declares `name` (SCREAMING_SNAKE, the prefix its projected members carry), " +
+			"`protocol` (one of " + strings.Join(model.ExternalServiceProtocols, ", ") + "), and optional " +
+			"`required` (default true). The wire carries the sealed `service` object; the standards apiVersion " +
+			"is the vocabulary's identity, not an author input."
 	case model.KindBindingList:
 		doc += " Each entry declares `name` (a JavaScript identifier) and `target_name` (the target `" +
 			field.TargetKind + "` resource name); the wire carries the typed `resource` reference."
@@ -259,8 +264,11 @@ description: |-
 
 `, form.ResourceType, form.Title+" ("+edgeformcatalog.Family.APIVersion()+", role "+string(form.Role)+").", form.ResourceType, form.Description)
 	builder.WriteString(v3RoleSemantics(form.Role) + "\n\n")
-	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or\n" +
-		"later. Provider v2.1.1 is Registry-published; release/version.json retains\n" +
+	builder.WriteString("This Experimental Form speaks the Host API v1beta1 lane. Its " +
+		edgeformcatalog.Family.APIVersion() + " identity is not yet carried by any\n" +
+		"Registry-published provider release: it ships with the next provider release\n" +
+		"(decision 0046). Registry-published provider v2.1.1 serves this resource type\n" +
+		"under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains\n" +
 		"candidate-only descriptor metadata after owner publication. The configured host selects and\n" +
 		"operates the concrete backend; no attribute names a vendor, target, credential,\n" +
 		"price, or implementation. See the [complete example](https://takoform.com/examples/resources/" +
@@ -439,7 +447,10 @@ func v3ExampleHCL(form model.Form) string {
     takoform = {
       source = "registry.terraform.io/tako0614/takoform"
       # Provider v2.1.1 is Registry-published; release/version.json remains
-      # candidate-only descriptor metadata after owner publication.
+      # candidate-only descriptor metadata after owner publication. v2.1.1
+      # serves this resource type under the retained v1beta1 identities; the
+      # v1beta2 identity this page documents ships with the next release
+      # (decision 0046).
       version = "= 2.1.1"
     }
   }
@@ -476,6 +487,8 @@ provider "takoform" {
 				continue
 			}
 			switch field.Kind {
+			case model.KindExternalServiceList:
+				blocks = append(blocks, v3ExternalServiceBlockHCL(field))
 			case model.KindBindingList:
 				blocks = append(blocks, v3BindingBlockHCL(field))
 			case model.KindObjectList:
@@ -520,6 +533,27 @@ provider "takoform" {
 			prefix+"_"+output.AttributeName(), form.ResourceType, output.AttributeName())
 	}
 	return strings.TrimRight(builder.String(), "\n") + "\n"
+}
+
+// v3ExternalServiceBlockHCL renders a slot list in the shape an AUTHOR writes,
+// which is not the wire shape: the sealed apiVersion is the vocabulary's own
+// identity and the provider supplies it, so an example that showed it would be
+// teaching a configuration Terraform refuses (decision 0045).
+func v3ExternalServiceBlockHCL(field model.Field) string {
+	entries, _ := field.Example.([]any)
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "  %s = [\n", field.HCL)
+	for _, raw := range entries {
+		entry, _ := raw.(map[string]any)
+		name, _ := entry["name"].(string)
+		protocol := ""
+		if service, ok := entry["service"].(map[string]any); ok {
+			protocol, _ = service["protocol"].(string)
+		}
+		fmt.Fprintf(&builder, "    {\n      name     = %q\n      protocol = %q\n    },\n", name, protocol)
+	}
+	builder.WriteString("  ]\n")
+	return builder.String()
 }
 
 func v3BindingBlockHCL(field model.Field) string {
@@ -633,8 +667,10 @@ func v3FormInventorySection() string {
 The first official Form Family fixes the shape of a proven edge developer
 platform without naming its vendor (spec/form-families.md). Its members are
 Experimental Forms for the Host API v1beta1 resource lane; their package
-artifacts remain unpublished. The typed resources require provider v2.1.1 or
-later. Roles come from the closed v1beta1 role enum and decide
+artifacts remain unpublished, and no Registry-published provider release
+carries these identities yet — Registry-published provider v2.1.1 embeds the
+retained edge.forms.takoform.com/v1beta1 generation, and the identities below
+ship with the next release (decision 0046). Roles come from the closed v1beta1 role enum and decide
 lifecycle mechanics: revisions are immutable, deployments move traffic,
 attachments activate inward events.
 

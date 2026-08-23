@@ -463,7 +463,8 @@ func (r *v3FormResource) v3ValuesFrom(ctx context.Context, getter v3AttributeGet
 			var value types.Set
 			diags.Append(getter.GetAttribute(ctx, path.Root(name), &value)...)
 			values.Fields[name] = value
-		case model.KindBindingList, model.KindObjectList, model.KindResourceRefList:
+		case model.KindBindingList, model.KindObjectList, model.KindResourceRefList,
+			model.KindExternalServiceList:
 			var value types.List
 			diags.Append(getter.GetAttribute(ctx, path.Root(name), &value)...)
 			values.Fields[name] = value

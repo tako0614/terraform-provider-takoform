@@ -14,7 +14,7 @@
       "description": "Module Worker served on this hostname.",
       "properties": {
         "apiVersion": {
-          "const": "edge.forms.takoform.com/v1beta1",
+          "const": "edge.forms.takoform.com/v1beta2",
           "type": "string"
         },
         "kind": {
@@ -24,7 +24,7 @@
         "name": {
           "maxLength": 63,
           "minLength": 1,
-          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$",
           "type": "string"
         }
       },
@@ -34,11 +34,12 @@
         "name"
       ],
       "type": "object",
+      "x-takoform-required-entrypoint": "fetch",
       "x-takoform-required-interface": {
         "apiVersion": "interfaces.takoform.com/v1alpha1",
         "name": "worker.runtime",
-        "schemaDigest": "sha256:c5d71337fb615f403f00c21a92dc6bcc9fc3cbcffad600e537a55f124441e820",
-        "version": "1.0.0"
+        "schemaDigest": "sha256:41aa3f9cd89ca2ba1d16faf153acfb35521c76168ff7b41dfb910d706b7bfbd9",
+        "version": "1.1.0"
       }
     }
   },

@@ -61,7 +61,7 @@ export const EDGE_PREVIEW_PROVIDER_VERSION = PROVIDER_RELEASE_TARGET_VERSION;
 export const EDGE_PREVIEW_PROVIDER = `${EDGE_PREVIEW_PROVIDER_VERSION}-candidate-only`;
 
 export const FAMILY_CANDIDATE_SET =
-  "forms/candidates/edge/v1beta1/candidate-set.json";
+  "forms/candidates/edge/v1beta2/candidate-set.json";
 const BLOCKER_LEDGER = "spec/publication-blockers.json";
 const RELEASE_VERSION = "release/version.json";
 const PROVIDER_RELEASE_IDENTITIES = "release/provider-release-identities.json";

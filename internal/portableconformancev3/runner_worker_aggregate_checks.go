@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/tako0614/terraform-provider-takoform/formpackage"
 	"strings"
 )
 
@@ -713,5 +715,136 @@ func (r *v3Runner) checkDeploymentDeleteBlockedByDependent() error {
 		return err
 	}
 	r.complete("deployment-delete-blocked-by-inbound-binding")
+	return nil
+}
+
+// classHolderOf builds one Durable Workflow or Actor Namespace target against
+// one named worker and class.
+func (r *v3Runner) classHolderOf(probe ResourceProbe, name, worker, className string) probeTarget {
+	holder := r.target(probe)
+	holder.Name = name
+	holder.Spec = cloneJSONMap(holder.Spec)
+	holder.Spec["worker"] = exactReference(r.target(r.contract.RunnerInput.ModuleWorker), worker)
+	holder.Spec["className"] = className
+	return holder
+}
+
+// checkClassHolderRules proves what a Durable Workflow and an Actor Namespace
+// require of the worker they name, and where that requirement DIFFERS from an
+// attachment's.
+//
+// Three facts, in the order a host must answer them:
+//
+//   - With no deployment at all, the holder is STORED. This is the departure
+//     from the attachment gate, and it is not a relaxation: a workflow's own
+//     worker cannot have a deployment before the version that deployment
+//     weights, so refusing here would make the ordinary self-bound wiring
+//     unconstructible in one apply.
+//   - Once a deployment IS live, a holder naming a class its weighted versions
+//     do not export is refused with unsupported_capability. A stored holder
+//     whose class nothing serves is a promise no host can keep.
+//   - One worker carries at most one holder per class name, refused with
+//     invalid_argument: two workflows over one class would give one instance
+//     history two identities, and two namespaces over one class would give one
+//     class two disjoint id spaces. No schema can see either — the question is
+//     a query over the store.
+func (r *v3Runner) checkClassHolderRules() error {
+	input := r.contract.RunnerInput
+	worker := r.target(input.ModuleWorker)
+	worker.Name = "class-holder-worker"
+	if _, _, err := r.applyResource(worker, applyOptions{
+		Create: true, IdempotencyKey: "key-class-holder-worker",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("class-holder worker: %w", err)
+	}
+
+	workflowClass, _ := input.DurableWorkflow.Desired["className"].(string)
+	actorClass, _ := input.ActorNamespace.Desired["className"].(string)
+
+	// Undeployed: stored, not refused.
+	workflow := r.classHolderOf(input.DurableWorkflow, "undeployed-workflow", worker.Name, workflowClass)
+	if _, _, err := r.applyResource(workflow, applyOptions{
+		Create: true, IdempotencyKey: "key-undeployed-workflow",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("DurableWorkflow of a worker with no deployment: %w", err)
+	}
+	namespace := r.classHolderOf(input.ActorNamespace, "undeployed-namespace", worker.Name, actorClass)
+	if _, _, err := r.applyResource(namespace, applyOptions{
+		Create: true, IdempotencyKey: "key-undeployed-namespace",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("ActorNamespace of a worker with no deployment: %w", err)
+	}
+
+	// One holder per class name, on the same worker.
+	duplicate := r.classHolderOf(input.DurableWorkflow, "duplicate-workflow", worker.Name, workflowClass)
+	if err := r.refuseCreate(
+		duplicate, "invalid_argument", "key-duplicate-workflow",
+		"a second DurableWorkflow over one worker's class",
+	); err != nil {
+		return err
+	}
+	duplicateNamespace := r.classHolderOf(input.ActorNamespace, "duplicate-namespace", worker.Name, actorClass)
+	if err := r.refuseCreate(
+		duplicateNamespace, "invalid_argument", "key-duplicate-namespace",
+		"a second ActorNamespace over one worker's class",
+	); err != nil {
+		return err
+	}
+
+	// Deployed against a module that exports NO class: refused. The check
+	// commits its own copy of the classless module rather than reusing another
+	// check's bundle, so it depends on no state left behind and can be read on
+	// its own.
+	pinned := input.FetchOnlyBundle
+	manifestDigest, err := r.uploadAndCommitManifest(pinned.Manifest, map[string][]byte{
+		formpackage.DigestBytes([]byte(pinned.ModuleSource)): []byte(pinned.ModuleSource),
+	}, "key-classless-artifact")
+	if err != nil {
+		return fmt.Errorf("committing the classless bundle manifest: %w", err)
+	}
+	bundle := r.target(input.WorkerBundle.ResourceProbe)
+	bundle.Name = "classless-bundle"
+	bundle.Spec = map[string]any{"manifestDigest": manifestDigest}
+	if _, _, err := r.applyResource(bundle, applyOptions{
+		Create: true, IdempotencyKey: "key-classless-bundle",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("classless bundle: %w", err)
+	}
+	classless := r.target(input.ModuleWorker)
+	classless.Name = "classless-worker"
+	if _, _, err := r.applyResource(classless, applyOptions{
+		Create: true, IdempotencyKey: "key-classless-worker",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("classless worker: %w", err)
+	}
+	version := r.workerVersionOfBundle(
+		"classless-version", classless.Name, bundle.Name, fetchHandler,
+	)
+	if _, _, err := r.applyResource(version, applyOptions{
+		Create: true, IdempotencyKey: "key-classless-version",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("classless version: %w", err)
+	}
+	deployment := r.deploymentOf("classless-deployment", classless.Name, version.Name)
+	if _, _, err := r.applyResource(deployment, applyOptions{
+		Create: true, IdempotencyKey: "key-classless-deployment",
+	}, http.StatusCreated); err != nil {
+		return fmt.Errorf("classless deployment: %w", err)
+	}
+	unserved := r.classHolderOf(input.DurableWorkflow, "unserved-workflow", classless.Name, workflowClass)
+	if err := r.refuseCreate(
+		unserved, "unsupported_capability", "key-unserved-workflow",
+		"a DurableWorkflow whose live deployment exports no such class",
+	); err != nil {
+		return err
+	}
+	unservedNamespace := r.classHolderOf(input.ActorNamespace, "unserved-namespace", classless.Name, actorClass)
+	if err := r.refuseCreate(
+		unservedNamespace, "unsupported_capability", "key-unserved-namespace",
+		"an ActorNamespace whose live deployment exports no such class",
+	); err != nil {
+		return err
+	}
+	r.complete("class-holder-rules-enforced")
 	return nil
 }

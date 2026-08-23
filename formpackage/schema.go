@@ -27,17 +27,23 @@ const (
 	betaFamilyFormRefSchemaID            = "https://forms.takoform.com/schemas/v1beta1/form-ref.schema.json"
 	retainedFamilyFormDefinitionSchemaID = "https://forms.takoform.com/schemas/v1alpha3/form-definition.schema.json"
 	betaFamilyFormDefinitionSchemaID     = "https://forms.takoform.com/schemas/v1beta1/form-definition.schema.json"
-	interfaceRefSchemaID                 = "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-ref.schema.json"
-	bindingRefSchemaID                   = "https://forms.takoform.com/schemas/bindings/v1alpha1/binding-ref.schema.json"
-	revocationSchemaID                   = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
-	revocationCheckpointSchemaID         = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json"
-	portableMapKeyPattern                = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
-	portableMapPolicyKey                 = "x-takoform-fieldPolicy"
-	portableMapPolicyValue               = "portable-data-only-v1"
-	maxSchemaProofDepth                  = 64
-	maxSchemaProofOps                    = 4096
-	maxSchemaValidationWork              = 16384
-	maxConformanceFixtures               = 32
+	// betaTwoFamilyFormDefinitionSchemaID is the CURRENT profile. It exists
+	// because its predecessor admits `refresh`, a capability the v1beta2 lane
+	// states no Form declares and no host serves; narrowing the served
+	// v1beta1 document would have changed what a published identity means, so
+	// the defect got a successor instead (decisions 0037 and 0046).
+	betaTwoFamilyFormDefinitionSchemaID = "https://forms.takoform.com/schemas/v1beta2/form-definition.schema.json"
+	interfaceRefSchemaID                = "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-ref.schema.json"
+	bindingRefSchemaID                  = "https://forms.takoform.com/schemas/bindings/v1alpha1/binding-ref.schema.json"
+	revocationSchemaID                  = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation.schema.json"
+	revocationCheckpointSchemaID        = "https://forms.takoform.com/schemas/v1alpha1/form-package-revocation-checkpoint.schema.json"
+	portableMapKeyPattern               = `^[A-Za-z][A-Za-z0-9._-]{0,63}$`
+	portableMapPolicyKey                = "x-takoform-fieldPolicy"
+	portableMapPolicyValue              = "portable-data-only-v1"
+	maxSchemaProofDepth                 = 64
+	maxSchemaProofOps                   = 4096
+	maxSchemaValidationWork             = 16384
+	maxConformanceFixtures              = 32
 )
 
 //go:embed schemas/*.schema.json
@@ -58,6 +64,7 @@ type compiledSchemas struct {
 	currentDefinition        *jsonschema.Schema
 	retainedFamilyDefinition *jsonschema.Schema
 	betaFamilyDefinition     *jsonschema.Schema
+	betaTwoFamilyDefinition  *jsonschema.Schema
 	indexV1Alpha1            *jsonschema.Schema
 	indexV1Alpha2            *jsonschema.Schema
 	indexV1Alpha3            *jsonschema.Schema
@@ -91,6 +98,20 @@ var retainedFamilyGroups = map[string]struct{}{
 
 func retainedFamilyGroup(apiVersion string) bool {
 	_, retained := retainedFamilyGroups[apiVersion]
+	return retained
+}
+
+// retainedProfileFamilyGroups are the families whose PUBLISHED packages were
+// validated under the v1beta1 Form Definition profile. They keep it: a package
+// already in the world was accepted against that document, and re-reading it
+// under a narrower successor could reject bytes nobody may now change.
+// Everything minted afterwards uses the current profile.
+var retainedProfileFamilyGroups = map[string]struct{}{
+	"edge.forms.takoform.com/v1beta1": {},
+}
+
+func retainedProfileFamilyGroup(apiVersion string) bool {
+	_, retained := retainedProfileFamilyGroups[apiVersion]
 	return retained
 }
 
@@ -149,7 +170,7 @@ func loadSchemas() (compiledSchemas, error) {
 		compiler.DefaultDraft(jsonschema.Draft2020)
 		compiler.AssertFormat()
 		compiler.UseLoader(closedSchemaLoader{})
-		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-ref-v1alpha3.schema.json", "form-ref-v1beta1.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "form-definition-v1alpha3.schema.json", "form-definition-v1beta1.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "package-index-v1alpha4.schema.json", "interface-ref-v1alpha1.schema.json", "binding-ref-v1alpha1.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
+		files := []string{"form-ref.schema.json", "form-ref-v1alpha2.schema.json", "form-ref-v1alpha3.schema.json", "form-ref-v1beta1.schema.json", "form-definition.schema.json", "form-definition-v1alpha2.schema.json", "form-definition-v1alpha3.schema.json", "form-definition-v1beta1.schema.json", "form-definition-v1beta2.schema.json", "package-index.schema.json", "package-index-v1alpha2.schema.json", "package-index-v1alpha3.schema.json", "package-index-v1alpha4.schema.json", "interface-ref-v1alpha1.schema.json", "binding-ref-v1alpha1.schema.json", "form-package-revocation.schema.json", "form-package-revocation-checkpoint.schema.json"}
 		entries, err := schemaFiles.ReadDir("schemas")
 		if err != nil {
 			schemasErr = fmt.Errorf("read embedded schema closure: %w", err)
@@ -239,6 +260,12 @@ func loadSchemas() (compiledSchemas, error) {
 			return
 		}
 		schemasValue.betaFamilyDefinition, schemasErr = compiler.Compile(betaFamilyFormDefinitionSchemaID)
+		if schemasErr != nil {
+			schemasErr = fmt.Errorf("compile Beta family Form Definition schema: %w", schemasErr)
+			return
+		}
+
+		schemasValue.betaTwoFamilyDefinition, schemasErr = compiler.Compile(betaTwoFamilyFormDefinitionSchemaID)
 		if schemasErr != nil {
 			schemasErr = fmt.Errorf("compile Beta family Form Definition schema: %w", schemasErr)
 			return
@@ -339,10 +366,13 @@ func validateDefinitionWithSchemas(raw []byte) (FormDefinition, any, compiledDef
 	case envelope.APIVersion == CurrentFormAPIVersion:
 		schema = schemas.currentDefinition
 	case NamespacedFormGroup(envelope.APIVersion):
-		if retainedFamilyGroup(envelope.APIVersion) {
+		switch {
+		case retainedFamilyGroup(envelope.APIVersion):
 			schema = schemas.retainedFamilyDefinition
-		} else {
+		case retainedProfileFamilyGroup(envelope.APIVersion):
 			schema = schemas.betaFamilyDefinition
+		default:
+			schema = schemas.betaTwoFamilyDefinition
 		}
 	default:
 		return FormDefinition{}, nil, compiledDefinitionSchemas{}, fmt.Errorf("Form Definition: unsupported apiVersion %q", envelope.APIVersion)

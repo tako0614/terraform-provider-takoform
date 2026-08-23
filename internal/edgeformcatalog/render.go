@@ -148,6 +148,12 @@ func newTargetContractResolver() *targetContractResolver {
 // The family declares one definition version per Form, so the accepted set is
 // exactly one identity; the annotation is a LIST because a Form line that
 // carried two live definition versions would accept either.
+// ResourceNamePattern is this generation's name grammar: the lane's exactly,
+// so a reference can never admit a name the envelope refuses.
+func (r *targetContractResolver) ResourceNamePattern() string {
+	return currentformmodel.PatternResourceName
+}
+
 func (r *targetContractResolver) TargetFormRefs(targetKind string) ([]currentformmodel.TargetFormRef, error) {
 	if ref, known := r.refs[targetKind]; known {
 		return []currentformmodel.TargetFormRef{ref}, nil

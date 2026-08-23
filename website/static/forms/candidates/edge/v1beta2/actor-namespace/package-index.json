@@ -1,0 +1,55 @@
+{
+  "apiVersion": "packages.forms.takoform.com/v1alpha4",
+  "kind": "FormPackage",
+  "formRef": {
+    "apiVersion": "edge.forms.takoform.com/v1beta2",
+    "kind": "ActorNamespace",
+    "definitionVersion": "0.1.0",
+    "schemaDigest": "sha256:09461d93782f053ef489dab0179a96548d972ec6fea2f4fd201296a73a57542e"
+  },
+  "definitionPath": "definition.json",
+  "files": [
+    {
+      "path": "definition.json",
+      "mediaType": "application/vnd.takoform.form-definition.v1+json",
+      "size": 4899,
+      "digest": "sha256:94e0ea02e5d044c31c28637f1be0fc609e478c15c92a17634c38e6d2b973881e"
+    },
+    {
+      "path": "fixtures/desired.json",
+      "mediaType": "application/json",
+      "size": 158,
+      "digest": "sha256:9d3c892d436bcfee8d1e7de62fc4f7882820d9d16f8ff884e08c7b6bad345991"
+    },
+    {
+      "path": "fixtures/negative-class-name.json",
+      "mediaType": "application/json",
+      "size": 169,
+      "digest": "sha256:922d50c6f00d611bc4a3ba5da5f01f3837dd958a9f74a4059418fd0e1746ff84"
+    },
+    {
+      "path": "fixtures/negative-missing-class-name.json",
+      "mediaType": "application/json",
+      "size": 131,
+      "digest": "sha256:9acf0d40bf37861833a683a8718a80345d92ee89ded77488ac48820b02b6e4cd"
+    },
+    {
+      "path": "fixtures/negative-missing-worker.json",
+      "mediaType": "application/json",
+      "size": 30,
+      "digest": "sha256:a25fa3b5c51a27d4344d8e28b0a262c6242764444da4c4ece3d601eab4aa6213"
+    },
+    {
+      "path": "fixtures/negative-unexpected-property.json",
+      "mediaType": "application/json",
+      "size": 188,
+      "digest": "sha256:8f37b01f8db0315a4b01b2fdd62e8fccbfe7914fb983e405c2dc00f9aa287e61"
+    },
+    {
+      "path": "fixtures/negative-worker.json",
+      "mediaType": "application/json",
+      "size": 164,
+      "digest": "sha256:9578091c399ce3874e3fe26b671996c671f61d721d05027bbfdc58f1d5440967"
+    }
+  ]
+}

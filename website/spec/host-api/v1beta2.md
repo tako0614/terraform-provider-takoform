@@ -910,6 +910,14 @@ Before any mutation a host MUST refuse a deployment whose `versions[]`
 - weights a version that is not Ready, or that an accepted delete is already
   removing.
 
+Two bounds are the desired schema's and are stated here because a reader of
+this document is entitled to know them without opening a Definition: a
+deployment carries **at most 8** weighted entries, and each `weight` is an
+integer in **1..10000**. There is no zero weight: a version that receives no
+traffic is absent from the list, so "weighted" and "serving" mean the same
+thing, and the sum rule needs no exception for entries that do not count. The
+ceiling is a portable floor every host meets, not a host's capacity.
+
 Each is `invalid_argument` (400): the request is well formed but states
 something untrue about what will run.
 
@@ -927,16 +935,21 @@ The same rule gates a class-selecting identity (`DurableWorkflow`,
 `x-takoform-relation-extras` member names, and a deployment selecting code
 without that export is refused the same way.
 
-The Edge family's instances of the rule:
+The Edge family's instances of the rule are READ OUT OF its Definitions, not
+out of this document. They are listed here so a reader can see the shape, and
+a host that disagreed with the annotation would be wrong even if it agreed
+with this table:
 
-| Attachment | Required entrypoint |
-| --- | --- |
-| `WorkerCustomDomain` | `fetch` |
-| `WorkerEndpoint` | `fetch` |
-| `WorkerCronTrigger` | `scheduled` |
-| `QueueConsumer` | `queue` |
-| `DurableWorkflow` (class identity) | the declared workflow class export |
-| `ActorNamespace` (class identity) | the declared actor class export | An absent deployment, or a
+| Attachment | Required entrypoint | Where it says so |
+| --- | --- | --- |
+| `WorkerCustomDomain` | `fetch` | `/worker` annotation |
+| `WorkerEndpoint` | `fetch` | `/worker` annotation |
+| `WorkerCronTrigger` | `scheduled` | `/worker` annotation |
+| `QueueConsumer` | `queue` | `/worker` annotation |
+| `DurableWorkflow` | the declared workflow class export | `className` via `x-takoform-relation-extras` |
+| `ActorNamespace` | the declared actor class export | `className` via `x-takoform-relation-extras` |
+
+An absent deployment, or a
 weighted version that does not export the handler, fails
 `unsupported_capability` (422) before any mutation and the message names what is
 missing. A stored version is a history entry, not a running one: gating on it

@@ -19,6 +19,7 @@ func TestNormativeSchemasMatchTheImplementation(t *testing.T) {
 	implementations := map[string]string{
 		"form-ref-v1beta1.schema.json":                   filepath.Join("..", "formpackage", "schemas", "form-ref-v1beta1.schema.json"),
 		"form-definition-v1beta1.schema.json":            filepath.Join("..", "formpackage", "schemas", "form-definition-v1beta1.schema.json"),
+		"form-definition-v1beta2.schema.json":            filepath.Join("..", "formpackage", "schemas", "form-definition-v1beta2.schema.json"),
 		"package-index-v1alpha4.schema.json":             filepath.Join("..", "formpackage", "schemas", "package-index-v1alpha4.schema.json"),
 		"interface-ref-v1alpha1.schema.json":             filepath.Join("..", "formpackage", "schemas", "interface-ref-v1alpha1.schema.json"),
 		"binding-ref-v1alpha1.schema.json":               filepath.Join("..", "formpackage", "schemas", "binding-ref-v1alpha1.schema.json"),

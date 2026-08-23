@@ -32,7 +32,7 @@ import (
 const (
 	descriptorPath             = "release/version.json"
 	providerIdentityLedgerPath = "release/provider-form-identities.json"
-	providerCandidateSetPath   = "forms/candidates/edge/v1beta1/candidate-set.json"
+	providerCandidateSetPath   = "forms/candidates/edge/v1beta2/candidate-set.json"
 	providerFamilyAPIVersion   = "edge.forms.takoform.com/v1beta1"
 	providerHostAPIVersion     = "forms.takoform.com/v1beta1"
 )
@@ -1160,6 +1160,45 @@ var providerFamilyResourceKinds = map[string]string{
 	"takoform_queue_consumer":               "QueueConsumer",
 }
 
+// frozenLedgerEntryDigests pins the canonical digest of every RELEASED ledger
+// entry. A published provider's embedded identity set is immutable; before the
+// candidate lane moved past the published release, byte-equality with the
+// candidate set carried this fence implicitly, and now it is carried
+// explicitly so a mutated published entry is refused in every generation
+// state. The digest matches scripts/current-form-families.mjs's
+// FROZEN_PROVIDER_RELEASES entry for the same release.
+var frozenLedgerEntryDigests = map[string]string{
+	"2.1.1": "sha256:981181257fac1ec43f85eb250fc12dd271236b1bbde94dc93323ee2180c4255d",
+}
+
+func assertFrozenLedgerEntries(raw []byte) error {
+	var generic struct {
+		Releases []map[string]any `json:"releases"`
+	}
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return fmt.Errorf("decode provider Form identity ledger for the frozen-entry fence: %w", err)
+	}
+	for _, entry := range generic.Releases {
+		version, _ := entry["providerVersion"].(string)
+		frozen, pinned := frozenLedgerEntryDigests[version]
+		if !pinned {
+			continue
+		}
+		var buffer bytes.Buffer
+		encoder := json.NewEncoder(&buffer)
+		encoder.SetEscapeHTML(false)
+		if err := encoder.Encode(entry); err != nil {
+			return err
+		}
+		canonical := strings.TrimSuffix(buffer.String(), "\n")
+		digest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(canonical)))
+		if digest != frozen {
+			return fmt.Errorf("immutable provider %s identity ledger entry changed: %s != %s", version, digest, frozen)
+		}
+	}
+	return nil
+}
+
 func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityLedger, error) {
 	var ledger providerIdentityLedger
 	raw, err := os.ReadFile(filepath.Join(repo, providerIdentityLedgerPath))
@@ -1171,6 +1210,9 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 	}
 	if ledger.Format != "takoform.provider-form-identities@v1" || len(ledger.Releases) == 0 {
 		return ledger, errors.New("provider Form identity ledger has an invalid envelope")
+	}
+	if err := assertFrozenLedgerEntries(raw); err != nil {
+		return ledger, err
 	}
 	seenProviderVersions := map[string]bool{}
 	seenFormRefs := map[string]bool{}
@@ -1233,11 +1275,32 @@ func loadProviderIdentityLedger(repo string, desc descriptor) (providerIdentityL
 	if err := json.Unmarshal(candidateRaw, &candidate); err != nil {
 		return ledger, fmt.Errorf("decode provider Beta candidate set: %w", err)
 	}
-	if candidate.Format != "takoform.form-family-candidates@v1" || candidate.Family != providerFamilyAPIVersion ||
+	if candidate.Format != "takoform.form-family-candidates@v1" ||
 		candidate.FormMaturity != "experimental" || candidate.PackageAPIVersion != "packages.forms.takoform.com/v1alpha4" ||
-		candidate.PublicationStatus != "unpublished" || len(candidate.Forms) != len(current.Forms) ||
-		!reflect.DeepEqual(candidate.Forms, current.Forms) {
-		return ledger, errors.New("provider v2.1 identity ledger differs from the exact Beta candidate set")
+		candidate.PublicationStatus != "unpublished" {
+		return ledger, errors.New("provider Beta candidate set is not an unpublished Experimental family set")
+	}
+	if candidate.Family == current.Family {
+		// The candidate lane still builds the generation the descriptor-named
+		// release embeds, so the two must be byte-equal — which subsumes the
+		// count. Comparing counts ACROSS generations would be wrong rather
+		// than merely redundant: a later generation adds Forms by design
+		// (decision 0043), and requiring it to keep the released one's
+		// cardinality would forbid exactly that.
+		if !reflect.DeepEqual(candidate.Forms, current.Forms) {
+			return ledger, errors.New("provider v2.1 identity ledger differs from the exact Beta candidate set")
+		}
+	} else {
+		// The catalog has moved past the published release (decision 0046):
+		// the published entry stays byte-frozen above, and the moved candidate
+		// lane must name a family no released entry has claimed — a release's
+		// family is immutable, so a reused family version would be two
+		// generations wearing one name.
+		for _, release := range ledger.Releases {
+			if release.Family == candidate.Family {
+				return ledger, fmt.Errorf("candidate family %s is already claimed by released provider %s", candidate.Family, release.ProviderVersion)
+			}
+		}
 	}
 	return ledger, nil
 }

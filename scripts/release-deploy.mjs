@@ -27,7 +27,7 @@ const PROVIDER_HOST_API = "forms.takoform.com/v1beta1";
 const PROVIDER_FORM_FAMILY = "edge.forms.takoform.com/v1beta1";
 const PROVIDER_IDENTITY_LEDGER = "release/provider-form-identities.json";
 const PROVIDER_CANDIDATE_SET =
-  "forms/candidates/edge/v1beta1/candidate-set.json";
+  "forms/candidates/edge/v1beta2/candidate-set.json";
 const PROVIDER_FORM_KINDS = Object.freeze({
   takoform_module_worker: "ModuleWorker",
   takoform_worker_bundle: "WorkerBundle",
@@ -1005,26 +1005,44 @@ export function validateProviderIdentityLedger(repo, descriptor) {
   );
   if (
     candidate.format !== "takoform.form-family-candidates@v1" ||
-    candidate.family !== PROVIDER_FORM_FAMILY ||
     candidate.formMaturity !== "experimental" ||
     candidate.packageApiVersion !== "packages.forms.takoform.com/v1alpha4" ||
     candidate.publicationStatus !== "unpublished" ||
     !Array.isArray(candidate.forms) ||
-    candidate.forms.length !== current.forms.length
+    candidate.forms.length === 0
   ) {
-    throw new Error("provider Beta candidate set is not the exact 15-entry family set");
+    throw new Error("provider Beta candidate set is not a populated Experimental family set");
   }
-  const candidateProjection = candidate.forms.map(
-    ({ resourceType, formRef, packageDigest }) => ({
-      resourceType,
-      formRef,
-      packageDigest,
-    }),
-  );
-  if (JSON.stringify(candidateProjection) !== JSON.stringify(current.forms)) {
-    throw new Error(
-      "provider v2.1 identity ledger differs from the exact Beta candidate set",
+  if (candidate.family === current.family) {
+    // The candidate lane still builds the generation the descriptor-named
+    // release embeds, so the two must be byte-equal — which is also where the
+    // entry count is settled. A MOVED lane is free to carry a different
+    // number of Forms; a lane still building the released generation is not.
+    const candidateProjection = candidate.forms.map(
+      ({ resourceType, formRef, packageDigest }) => ({
+        resourceType,
+        formRef,
+        packageDigest,
+      }),
     );
+    if (JSON.stringify(candidateProjection) !== JSON.stringify(current.forms)) {
+      throw new Error(
+        "provider v2.1 identity ledger differs from the exact Beta candidate set",
+      );
+    }
+  } else {
+    // The catalog has moved past the published release (decision 0046). The
+    // published entry above is already held byte-frozen; what the moved
+    // candidate lane must satisfy is that no released entry claims its
+    // family — a release's family is immutable, so a reused family version
+    // would be two generations wearing one name.
+    for (const release of ledger.releases) {
+      if (release.family === candidate.family) {
+        throw new Error(
+          `candidate family ${candidate.family} is already claimed by released provider ${release.providerVersion}`,
+        );
+      }
+    }
   }
   return ledger;
 }

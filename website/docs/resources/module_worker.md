@@ -2,17 +2,19 @@
 page_title: "takoform_module_worker Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  Module Worker (edge.forms.takoform.com/v1beta1, role identity).
+  Module Worker (edge.forms.takoform.com/v1beta2, role identity).
 ---
 
 # takoform_module_worker
 
-Long-lived logical identity of one ES Module Worker application. The Form fixes the ES Module Worker ABI by identity, and states it exactly: the runtime contract worker.runtime@1.0.0 in this Form's providedInterfaces fixes the module's default-export shape, the fetch, scheduled, and queue handler signatures, the binding environment, ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that exact digest; a runtime that behaves differently is a different contract version and a different Form version, never a compatibility date. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.
+Long-lived logical identity of one ES Module Worker application. The Form fixes the ES Module Worker ABI by identity, and states it exactly: the runtime contract worker.runtime@1.1.0 in this Form's providedInterfaces fixes the module's default-export shape, the fetch, scheduled, and queue handler signatures, the binding environment, ctx.waitUntil, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that exact digest; a runtime that behaves differently is a different contract version and a different Form version, never a compatibility date. Code, configuration, and bindings live on Worker Version revisions; traffic selection lives on Worker Deployments.
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or
-later. Provider v2.1.1 is Registry-published; release/version.json retains
+This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com/v1beta2 identity is not yet carried by any
+Registry-published provider release: it ships with the next provider release
+(decision 0046). Registry-published provider v2.1.1 serves this resource type
+under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
 candidate-only descriptor metadata after owner publication. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_module_worker/resource.tf).
@@ -70,7 +72,7 @@ price, or implementation. See the [complete example](https://takoform.com/exampl
 
 ## Provided interfaces
 
-- `worker.runtime@1.0.0` — the exact runtime ABI a conforming host provides to this resource's code: handler signatures, the binding environment, `ctx.waitUntil`, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that contract at its exact digest.
+- `worker.runtime@1.1.0` — the exact runtime ABI a conforming host provides to this resource's code: handler signatures, the binding environment, `ctx.waitUntil`, exception handling, body streaming, the minimum Web API surface, and module loading. A host supporting this Form implements that contract at its exact digest.
 - `worker.service@1.0.0` — the exact Interface contract this Form's service exposes.
 
 ## Import
@@ -88,7 +90,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_module_worker.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"ModuleWorker","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"ModuleWorker","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

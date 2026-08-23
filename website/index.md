@@ -78,6 +78,8 @@ host-assigned address.
 | [`takoform_sqlite_migration_application`](/docs/resources/sqlite_migration_application.html) | attachment | checksum-safe suffix application to one database                               |
 | [`takoform_at_least_once_queue`](/docs/resources/at_least_once_queue.html)                   | identity   | at-least-once delivery with acknowledgement and retry                          |
 | [`takoform_queue_consumer`](/docs/resources/queue_consumer.html)                             | attachment | batch, retry, and dead-letter policy targeting one worker                      |
+| [`takoform_durable_workflow`](/docs/resources/durable_workflow.html)                         | identity   | durable multi-step execution as a class the worker's deployment serves         |
+| [`takoform_actor_namespace`](/docs/resources/actor_namespace.html)                           | identity   | addressable actors with one live context, private storage, and one alarm       |
 
 ::: warning Provider distribution boundary
 Provider 2.1.1 is a Registry-published stable distribution. Its repository

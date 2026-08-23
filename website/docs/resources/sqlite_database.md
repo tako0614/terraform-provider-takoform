@@ -2,7 +2,7 @@
 page_title: "takoform_sqlite_database Resource - takoform"
 subcategory: "Edge Platform Family"
 description: |-
-  SQLite Database (edge.forms.takoform.com/v1beta1, role identity).
+  SQLite Database (edge.forms.takoform.com/v1beta2, role identity).
 ---
 
 # takoform_sqlite_database
@@ -11,8 +11,10 @@ Embedded SQLite database with bounded EdgeSqlValue values, rollback-only queries
 
 This is an `identity` resource: a long-lived logical identity with a stable name, updated in place.
 
-This Experimental Form speaks the Host API v1beta1 lane and requires provider v2.1.1 or
-later. Provider v2.1.1 is Registry-published; release/version.json retains
+This Experimental Form speaks the Host API v1beta1 lane. Its edge.forms.takoform.com/v1beta2 identity is not yet carried by any
+Registry-published provider release: it ships with the next provider release
+(decision 0046). Registry-published provider v2.1.1 serves this resource type
+under the retained edge.forms.takoform.com/v1beta1 identities; release/version.json retains
 candidate-only descriptor metadata after owner publication. The configured host selects and
 operates the concrete backend; no attribute names a vendor, target, credential,
 price, or implementation. See the [complete example](https://takoform.com/examples/resources/takoform_sqlite_database/resource.tf).
@@ -87,7 +89,7 @@ whose only forbidden character is `/`, so no separator can escape it safely:
 
 ```console
 terraform import takoform_sqlite_database.example \
-  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta1","kind":"SQLiteDatabase","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
+  '{"space":"prod","apiVersion":"edge.forms.takoform.com/v1beta2","kind":"SQLiteDatabase","definitionVersion":"0.1.0","schemaDigest":"sha256:…","name":"…"}'
 ```
 
 `space` is optional and falls back to the provider default; the four FormRef

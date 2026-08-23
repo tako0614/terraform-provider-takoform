@@ -67,6 +67,13 @@ const (
 	// KindResourceRef references one resource of an exact target kind by name.
 	KindResourceRef     FieldKind = "resource-ref"
 	KindResourceRefList FieldKind = "resource-ref-list"
+	// KindExternalServiceList declares sealed external standard-service
+	// slots (decision 0045): a SCREAMING_SNAKE name plus a protocol from the
+	// closed standards vocabulary, with an optional requiredness flag.
+	// Portable state never carries the endpoint or credential that satisfies
+	// a slot; the host projects protocol-fixed members into the same runtime
+	// namespace binding names occupy.
+	KindExternalServiceList FieldKind = "external-service-list"
 	// KindBindingList declares typed capability bindings: binding name plus a
 	// target-kind resource reference (decision 0010).
 	KindBindingList FieldKind = "binding-list"
@@ -132,6 +139,13 @@ type Field struct {
 	// agree only on `name`, and no keyword reaches across sibling properties at
 	// all (spec/decisions/0016).
 	ProjectsEnvironmentNames bool
+	// RequiredEntrypoint names the entrypoint of the target's runtime
+	// Interface that this reference's inward activation invokes. It is what
+	// makes the lane's attachment gate derivable from a Definition instead of
+	// from a table of Form kinds the protocol document would have to carry: a
+	// host holding only this document knows which export every weighted
+	// version of the target must have.
+	RequiredEntrypoint string
 
 	// Example is the value used by the canonical conformance fixture.
 	Example any
@@ -335,6 +349,9 @@ func (f Form) Validate() error {
 				f.Kind, field.Wire, field.AttributeName(),
 			)
 		}
+		if field.Kind == KindExternalServiceList && f.Role != RoleRevision {
+			return fmt.Errorf("%s.%s: external-service slots are held by revision-role Forms", f.Kind, field.Wire)
+		}
 		if field.Kind == KindBindingList && f.Role != RoleRevision {
 			return fmt.Errorf("form %s role %s declares binding list %s; capability bindings belong to revision Forms", f.Kind, f.Role, field.Wire)
 		}
@@ -519,13 +536,24 @@ func validateField(kind string, field Field) error {
 	if err := validateFieldDefault(kind, field); err != nil {
 		return err
 	}
+	if field.RequiredEntrypoint != "" && field.Kind != KindResourceRef {
+		return fmt.Errorf(
+			"form %s field %s requires entrypoint %q on kind %q; only a reference activates a target",
+			kind, field.Wire, field.RequiredEntrypoint, field.Kind,
+		)
+	}
 	if field.ProjectsEnvironmentNames {
 		switch field.Kind {
-		case KindJSONMap, KindStringSet:
+		// An external-service list names environment entries INDIRECTLY: what
+		// joins the namespace is the projected closure of each slot, not the
+		// slot names, which is why the uniqueness rule is stated over that
+		// closure (spec/standard-services).
+		case KindJSONMap, KindStringSet, KindExternalServiceList:
 		default:
 			return fmt.Errorf(
-				"form %s field %s marks ProjectsEnvironmentNames on kind %q; only a json-map's keys "+
-					"or a string-set's items can name environment entries",
+				"form %s field %s marks ProjectsEnvironmentNames on kind %q; only a json-map's keys, "+
+					"a string-set's items, or an external-service list's projected members can name "+
+					"environment entries",
 				kind, field.Wire, field.Kind,
 			)
 		}
@@ -583,6 +611,13 @@ func validateField(kind string, field Field) error {
 			if err := validateField(kind, member); err != nil {
 				return err
 			}
+		}
+	case KindExternalServiceList:
+		// The slot shape is fixed by the standard-services contract; nothing
+		// on the Field may vary it, so a declaration that tries to carry a
+		// target kind, contract, or nested members is a defect.
+		if field.TargetKind != "" || field.BindingType != "" || len(field.Fields) != 0 {
+			return fmt.Errorf("form %s external-service list %s carries members the slot shape does not admit", kind, field.Wire)
 		}
 	case KindInteger, KindBoolean, KindJSONMap:
 	default:

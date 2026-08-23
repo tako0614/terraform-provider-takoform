@@ -24,6 +24,8 @@ var orderedKinds = []string{
 	"SQLiteMigrationApplication",
 	"AtLeastOnceQueue",
 	"QueueConsumer",
+	"DurableWorkflow",
+	"ActorNamespace",
 }
 
 func TestCatalogValidates(t *testing.T) {
@@ -33,17 +35,26 @@ func TestCatalogValidates(t *testing.T) {
 	}
 }
 
-func TestCatalogIsExactFifteenFormFamily(t *testing.T) {
+func TestCatalogIsExactSeventeenFormFamily(t *testing.T) {
 	t.Parallel()
 	if len(Forms) != len(orderedKinds) {
 		t.Fatalf("family has %d forms, want %d", len(Forms), len(orderedKinds))
 	}
+	// Worker Version alone is off the generation line: its contract gained
+	// the sealed externalServices slot list in Beta 2, so it is not the
+	// v1beta1 contract re-identified (decision 0046). Spelling the exception
+	// out here means a second Form drifting off the line fails this test.
+	wantVersions := map[string]string{"WorkerVersion": "0.2.0"}
 	for index, form := range Forms {
-		if form.Kind != orderedKinds[index] || form.DefinitionVersion != "0.1.0" {
-			t.Fatalf("form[%d] = %s@%s", index, form.Kind, form.DefinitionVersion)
+		want := wantVersions[form.Kind]
+		if want == "" {
+			want = "0.1.0"
+		}
+		if form.Kind != orderedKinds[index] || form.DefinitionVersion != want {
+			t.Fatalf("form[%d] = %s@%s, want %s@%s", index, form.Kind, form.DefinitionVersion, orderedKinds[index], want)
 		}
 	}
-	if Family.APIVersion() != "edge.forms.takoform.com/v1beta1" {
+	if Family.APIVersion() != "edge.forms.takoform.com/v1beta2" {
 		t.Fatalf("family apiVersion = %q", Family.APIVersion())
 	}
 }
@@ -62,8 +73,9 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 		// not by a token this project has no behavior registry to interpret
 		// (decision 0019).
 		"WorkerVersion": {
-			"assets", "bucketBindings", "bundle", "handlers", "kvBindings", "queueProducerBindings",
-			"requiredSensitiveVars", "serviceBindings", "sqliteBindings", "vars", "worker",
+			"actorBindings", "assets", "bucketBindings", "bundle", "externalServices", "handlers", "kvBindings",
+			"queueProducerBindings", "requiredSensitiveVars", "serviceBindings", "sqliteBindings", "vars",
+			"worker", "workflowBindings",
 		},
 		"WorkerDeployment":   {"versions", "worker"},
 		"WorkerCustomDomain": {"hostname", "worker"},
@@ -81,6 +93,12 @@ func TestCatalogHasReviewedSemanticFields(t *testing.T) {
 			"deadLetterQueue", "maxBatchSize", "maxBatchTimeoutSeconds", "maxConcurrency",
 			"maxRetries", "queue", "retryDelaySeconds", "worker",
 		},
+		// Both carry only the worker and the class. Everything else about a
+		// workflow or an actor — the execution model, the storage, the alarm —
+		// is the exact Interface the identity provides, and what runs is
+		// whatever the worker's deployment selects.
+		"DurableWorkflow": {"className", "worker"},
+		"ActorNamespace":  {"className", "worker"},
 	}
 	for _, form := range Forms {
 		got := make([]string, 0, len(form.Fields))
@@ -112,6 +130,8 @@ func TestRoleRules(t *testing.T) {
 		"SQLiteMigrationApplication": model.RoleAttachment,
 		"AtLeastOnceQueue":           model.RoleIdentity,
 		"QueueConsumer":              model.RoleAttachment,
+		"DurableWorkflow":            model.RoleIdentity,
+		"ActorNamespace":             model.RoleIdentity,
 	}
 	for _, form := range Forms {
 		if form.Role != wantRoles[form.Kind] {
@@ -158,6 +178,10 @@ func TestLifecycleCapabilityTable(t *testing.T) {
 		"SQLiteMigrationApplication": base,
 		"AtLeastOnceQueue":           withUpdate,
 		"QueueConsumer":              withUpdate,
+		// Both members' desired fields are immutable, so neither can advertise
+		// an in-place update: a change of worker or class is a replacement.
+		"DurableWorkflow": base,
+		"ActorNamespace":  base,
 	}
 	if len(want) != len(Forms) {
 		t.Fatalf("capability table covers %d forms, the family has %d", len(want), len(Forms))
@@ -296,8 +320,8 @@ func TestOnlyWorkerVersionAcceptsBindings(t *testing.T) {
 	t.Parallel()
 	for _, form := range Forms {
 		if form.Kind == "WorkerVersion" {
-			if len(form.AcceptedBindings) != 5 {
-				t.Errorf("WorkerVersion accepts %d bindings, want 5", len(form.AcceptedBindings))
+			if len(form.AcceptedBindings) != 7 {
+				t.Errorf("WorkerVersion accepts %d bindings, want 7", len(form.AcceptedBindings))
 			}
 			continue
 		}
@@ -322,6 +346,12 @@ func TestProvidedInterfaceAssignments(t *testing.T) {
 		// allowedTargetForms, and a host verifies that the resolved target's
 		// Form provides the binding's targetInterface.
 		"ModuleWorker": {"worker.runtime", "worker.service"},
+		// Each holds its contract on the IDENTITY for the same reason
+		// ModuleWorker holds worker.runtime: the identity is what a host
+		// implements, and the class a Worker Version exports is the code that
+		// fills it.
+		"DurableWorkflow": {"worker.workflow"},
+		"ActorNamespace":  {"worker.actor"},
 	}
 	for _, form := range Forms {
 		wantInterfaces, expects := want[form.Kind]

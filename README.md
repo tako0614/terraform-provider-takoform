@@ -19,7 +19,7 @@ outside the contract. Hosts are exchangeable; resource semantics are not
 | Axis | Current identity | |
 | --- | --- | --- |
 | Host API lane | `forms.takoform.com/v1beta1` | the wire a provider speaks |
-| Form Family | `edge.forms.takoform.com/v1beta1` | 15 Forms, each `0.1.0` and experimental |
+| Form Family | `edge.forms.takoform.com/v1beta2` | 17 Forms, each `0.1.0` and experimental |
 | Form Package envelope | `packages.forms.takoform.com/v1alpha4` | package artifacts are unpublished |
 | Provider | `2.1.1` | installed from the Terraform Registry |
 
@@ -43,7 +43,8 @@ The specification carries **one epoch**: the Beta Host API lane
 15 Forms: `ModuleWorker`, `WorkerBundle`, `StaticAssetBundle`, `WorkerVersion`,
 `WorkerDeployment`, `WorkerCustomDomain`, `WorkerEndpoint`, `WorkerCronTrigger`,
 `EdgeKVNamespace`, `ObjectBucket`, `SQLiteDatabase`, `SQLiteMigrationSet`,
-`SQLiteMigrationApplication`, `AtLeastOnceQueue`, and `QueueConsumer`, with
+`SQLiteMigrationApplication`, `AtLeastOnceQueue`, `QueueConsumer`,
+`DurableWorkflow`, and `ActorNamespace`, with
 exact Interface and typed Binding contracts under
 `interfaces.takoform.com/v1alpha1` and `bindings.takoform.com/v1alpha1`. All 15
 definitions are `0.1.0` and Experimental; their package artifacts remain

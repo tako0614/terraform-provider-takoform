@@ -191,6 +191,39 @@ const (
 	// has one binary64 number type; SQLite's INTEGER/REAL storage-class
 	// distinction is not projected through the portable value model.
 	sqlMaxNumberMagnitude = 9007199254740991
+
+	// The workflow ceilings. Two of them are not throughput tuning but the
+	// only thing standing between a running instance and forever: per-wait
+	// bounds cannot bound an instance, because run can mint an unlimited
+	// sequence of uniquely named steps. Both are therefore contract facts, so
+	// a delete refusal is a delay with a stated ceiling rather than a
+	// deadlock.
+	workflowMaxStepsPerInstance        = 1024
+	workflowMaxInstanceLifetimeSeconds = 31536000
+	workflowMaxSleepSeconds            = 31536000
+	workflowMaxWaitTimeoutSeconds      = 31536000
+	// workflowTerminalRetentionSeconds is how long a terminal instance stays
+	// readable through status before the host may forget it. It bounds
+	// create's rejection of a held id: an id is reusable once retention has
+	// passed, and never before.
+	workflowTerminalRetentionSeconds = 2592000
+	workflowMaxDocumentBytes         = 1048576
+	workflowMaxDocumentProperties    = 1024
+	workflowMaxNameBytes             = 256
+	workflowMaxAttempts              = 100
+	workflowMaxRetryDelaySeconds     = 43200
+
+	// The actor ceilings. maxStorageBytesPerActor is the portable per-actor
+	// store; the fetch ceilings are worker.service's, because the invocation
+	// semantics are the family's one HTTP-shaped call and a second set of
+	// numbers would make the same call mean two things.
+	actorMaxStorageBytesPerActor = 1073741824
+	actorMaxIDBytes              = 256
+	actorMaxNameBytes            = 2048
+	// actorMaxAlarmLeadSeconds bounds how far ahead an alarm may be set. An
+	// unbounded schedule would oblige a host to retain a wake-up it can never
+	// be released from.
+	actorMaxAlarmLeadSeconds = 31536000
 )
 
 // base64Value builds one encoded-bytes fixture value from its base64 text.
@@ -320,6 +353,8 @@ func InterfaceDefinitions() []InterfaceDefinition {
 		edgeQueueInterface(),
 		workerServiceInterface(),
 		workerRuntimeInterface(),
+		workerWorkflowInterface(),
+		workerActorInterface(),
 	}
 }
 
@@ -1487,7 +1522,13 @@ func workerRuntimeInterface() InterfaceDefinition {
 	empty := operationObject(nil, map[string]any{})
 	return InterfaceDefinition{
 		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
-		Name: WorkerRuntimeInterfaceName, Version: "1.0.0",
+		// 1.1.0 is additive over 1.0.0: a Worker Version declaring no
+		// external standard-service slot projects exactly the 1.0.0 closure,
+		// so every module written against 1.0.0 keeps its meaning. What is new
+		// is a fourth source of env names, and the env closure is normative
+		// text — a host that projected slot members without saying so would be
+		// serving a contract nobody published (decision 0045).
+		Name: WorkerRuntimeInterfaceName, Version: "1.1.0",
 		Title: "ES Module Worker runtime ABI",
 		Description: "The exact runtime ABI a conforming host provides to the code of one Module Worker, " +
 			"and the exact shape that code must present. The main module is an ES module whose DEFAULT EXPORT " +
@@ -1499,9 +1540,17 @@ func workerRuntimeInterface() InterfaceDefinition {
 			"Request and response bodies are STREAMS, never buffered strings: a host never requires a handler " +
 			"to read a request body before responding, and streams a response body out as the handler produces it. " +
 			"env is a plain object whose own enumerable properties are exactly the names the Worker Version " +
-			"declares — every vars key, every requiredSensitiveVars name, and every binding name — and nothing " +
+			"declares — every vars key, every requiredSensitiveVars name, every binding name, and every member " +
+			"projected by an externalServices slot — and nothing " +
 			"else portable; a sensitive-variable slot appears as the host-supplied value under its declared name, " +
 			"and that value never enters portable state. " +
+			"An externalServices slot names a standard protocol the host resolves for this version, and projects " +
+			"a fixed member set derived from its declared NAME: a postgresql, redis, or smtp slot projects NAME_URL; " +
+			"an s3-compatible slot projects NAME_ENDPOINT, NAME_REGION, NAME_BUCKET, NAME_ACCESS_KEY_ID, and " +
+			"NAME_SECRET_ACCESS_KEY. Those values are host-resolved endpoints and credentials and never enter " +
+			"portable state, exactly like a sensitive variable; a required slot the host cannot satisfy keeps the " +
+			"version from becoming Ready rather than projecting an absent or empty member, and an optional slot the " +
+			"host does not satisfy projects none of its members at all. " +
 			"ctx.waitUntil(promise) registers work the host keeps the isolate alive for until the promise settles; " +
 			"a rejection is reported to host diagnostics only, never changes an already-sent response, and never " +
 			"turns a successful invocation into a failed one. " +
@@ -1805,6 +1854,547 @@ func workerRuntimeInterface() InterfaceDefinition {
 						"responseChanged":         false,
 						"invocationFailed":        false,
 					}},
+				},
+			},
+		},
+	}
+}
+
+// workflowStatusVocabulary is the closed instance-status set. It is written
+// once and read back by everything that needs it, so a host, a binding, and a
+// Form cannot each carry a slightly different list.
+var workflowStatusVocabulary = []any{
+	"queued", "running", "sleeping", "waiting", "complete", "errored", "terminated",
+}
+
+// workflowErrorReasons is the closed reason set a terminal `errored` instance
+// carries. Two of them are the host's own doing rather than the code's — an
+// instance the host stopped because it crossed a declared bound — and naming
+// them apart from a code failure is what lets an operator tell "your workflow
+// threw" from "your workflow was too long to keep".
+var workflowErrorReasons = []any{
+	"run_threw", "step_failed", "step_limit_exceeded", "lifetime_exceeded",
+}
+
+// workflowDocument is the shape of every data-only JSON value this contract
+// carries: instance params, a step result, an event payload, an instance
+// output. The structural ceiling bounds PROPERTIES and the declared
+// maxDocumentBytes limit bounds the RFC 8785 canonical encoding, for the same
+// reason the encoded-bytes shape exists — a JSON Schema cannot count bytes.
+func workflowDocument() map[string]any {
+	return map[string]any{
+		"type":          "object",
+		"maxProperties": workflowMaxDocumentProperties,
+	}
+}
+
+// workflowInstanceStatus is what `status` resolves with. output is present
+// only on `complete` and error only on `errored`; neither is ever both, and a
+// non-terminal status carries neither.
+func workflowInstanceStatus() map[string]any {
+	return closedObject([]string{"status"}, map[string]any{
+		"status": map[string]any{"type": "string", "enum": workflowStatusVocabulary},
+		"output": workflowDocument(),
+		"error": closedObject([]string{"reason"}, map[string]any{
+			"reason":  map[string]any{"type": "string", "enum": workflowErrorReasons},
+			"message": stringSchema(0, 8192),
+		}),
+	})
+}
+
+// workflowRetryPolicy is the per-step-call retry policy. It is in CODE, not in
+// desired state: two steps of one workflow legitimately want different
+// policies, and a Form field could only state one for all of them.
+func workflowRetryPolicy() map[string]any {
+	return closedObject([]string{"maxAttempts"}, map[string]any{
+		"maxAttempts":         map[string]any{"type": "integer", "minimum": 1, "maximum": workflowMaxAttempts},
+		"initialDelaySeconds": map[string]any{"type": "integer", "minimum": 0, "maximum": workflowMaxRetryDelaySeconds},
+		"backoff":             map[string]any{"type": "string", "enum": []any{"constant", "exponential"}},
+		"maxDelaySeconds":     map[string]any{"type": "integer", "minimum": 0, "maximum": workflowMaxRetryDelaySeconds},
+	})
+}
+
+// workerWorkflowInterface is code-defined durable execution: the entrypoint
+// ABI a host provides to the workflow class, and the instance surface the
+// module-worker.workflow binding projects to consumers.
+//
+// ONE contract carries both halves because they are stated in each other's
+// terms: what `create` accepts is what `run` receives, and what `sendEvent`
+// sends is what `waitForEvent` resolves with. Splitting them would let a host
+// implement one side at a version the other side was never written against.
+//
+// What the contract seals is step RESULTS, not arbitrary code effects, and
+// that distinction is the whole authoring model: code between steps
+// re-executes on every replay, so it must be side-effect-free and
+// deterministic against its own recorded history, while a completed step's
+// result is returned without running its function again. A host can verify
+// neither obligation. Stating them is the only honest option; leaving them
+// unstated would make a portable workflow unwritable.
+func workerWorkflowInterface() InterfaceDefinition {
+	instanceID := stringSchema(1, workflowMaxNameBytes)
+	stepName := stringSchema(1, workflowMaxNameBytes)
+	eventType := stringSchema(1, workflowMaxNameBytes)
+	return InterfaceDefinition{
+		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
+		Name: "worker.workflow", Version: "1.0.0",
+		Title: "Durable workflow execution",
+		Description: "Multi-step durable execution whose progress survives process death, as CODE: a class the " +
+			"serving Worker Version exports, constructed by the host and invoked as run(event, step) once per " +
+			"instance. event carries the instance id and the data-only JSON params the creator passed. " +
+			"EXECUTION IS AT-LEAST-ONCE PER STEP WITH MEMOIZED REPLAY. An attempt that dies after its effect but " +
+			"before its record commits re-executes, so a step function must be idempotent. A COMPLETED step's " +
+			"recorded result is returned on every later execution without running the function again; the memo is " +
+			"keyed by step NAME, so step names are unique per instance history by construction — a recurring name " +
+			"IS the same step, and distinct work under one name is unobservable. " +
+			"WHAT IS SEALED IS STEP RESULTS, NOT CODE EFFECTS. Code between steps re-executes on every replay and " +
+			"must be side-effect-free and deterministic against its own recorded history. Every execution context " +
+			"an instance gets is created from the worker deployment's THEN-CURRENT selection, exactly like a " +
+			"request, so a promotion mid-instance changes the code the history replays under; authors evolve " +
+			"workflow code compatibly with in-flight instances, as with any at-least-once consumer. A host can " +
+			"verify neither obligation, and this contract states both rather than implying them. " +
+			"AN INSTANCE IS BOUNDED TWICE. Per-wait bounds cannot bound an instance, because run can mint an " +
+			"unlimited sequence of uniquely named steps, so maxStepsPerInstance and maxInstanceLifetimeSeconds are " +
+			"contract facts. An instance that crosses either is terminated BY THE HOST into the terminal errored " +
+			"status carrying step_limit_exceeded or lifetime_exceeded; nothing runs past it. " +
+			"INSTANCES ARE RUNTIME DATA, never resources: unbounded cardinality, runtime addressing, no uid, no " +
+			"generation, nothing for a provider to plan. A terminal instance stays readable for " +
+			"maxTerminalRetentionSeconds, which is exactly how long its id stays taken. " +
+			"THE STATUS VOCABULARY IS CLOSED: queued, running, sleeping, waiting, complete, errored, terminated. " +
+			"A call fails only when the operation could not be performed; a workflow that threw is a successful " +
+			"status read reporting errored.",
+		Semantics: InterfaceSemantics{Consistency: "read_after_write", Delivery: "at_least_once", Ordering: "none"},
+		Limits: map[string]int64{
+			"maxStepsPerInstance":         workflowMaxStepsPerInstance,
+			"maxInstanceLifetimeSeconds":  workflowMaxInstanceLifetimeSeconds,
+			"maxSleepSeconds":             workflowMaxSleepSeconds,
+			"maxWaitTimeoutSeconds":       workflowMaxWaitTimeoutSeconds,
+			"maxTerminalRetentionSeconds": workflowTerminalRetentionSeconds,
+			"maxDocumentBytes":            workflowMaxDocumentBytes,
+		},
+		Operations: []InterfaceOperation{
+			{
+				Name: "create",
+				Description: "Start one instance. id is the author's choice when given and host-minted when absent; " +
+					"an id a RETAINED instance still holds — live or terminal within maxTerminalRetentionSeconds — fails " +
+					"instance_exists rather than resuming or replacing it, because two executions under one id could not " +
+					"be told apart afterwards. params is data-only JSON bounded by maxDocumentBytes. Creating against a " +
+					"workflow no deployment serves fails unsupported_capability: there is no class to replay into.",
+				InputSchema: operationObject(nil, map[string]any{
+					"id":     instanceID,
+					"params": workflowDocument(),
+				}),
+				OutputSchema: operationObject([]string{"id", "status"}, map[string]any{
+					"id":     instanceID,
+					"status": map[string]any{"type": "string", "enum": workflowStatusVocabulary},
+				}),
+				Errors: []string{
+					"instance_exists", "invalid_params", "document_too_large",
+					"unsupported_capability", "backend_unavailable",
+				},
+			},
+			{
+				Name: "get",
+				Description: "Resolve the handle of one retained instance. It fails unknown_instance when no instance " +
+					"holds the id — including one whose retention has passed — rather than minting an empty handle, so a " +
+					"consumer can tell a forgotten execution from a live one.",
+				InputSchema:  operationObject([]string{"id"}, map[string]any{"id": instanceID}),
+				OutputSchema: operationObject([]string{"id"}, map[string]any{"id": instanceID}),
+				Errors:       []string{"unknown_instance", "backend_unavailable"},
+				Idempotent:   true,
+			},
+			{
+				Name: "status",
+				Description: "Read one instance's current status. output is present only on complete and error only on " +
+					"errored, whose reason comes from the closed set run_threw, step_failed, step_limit_exceeded, " +
+					"lifetime_exceeded — the last two being the host's own termination at a declared bound, which an " +
+					"operator must be able to tell from code that failed.",
+				InputSchema:  operationObject([]string{"id"}, map[string]any{"id": instanceID}),
+				OutputSchema: withDialect(workflowInstanceStatus()),
+				Errors:       []string{"unknown_instance", "backend_unavailable"},
+				Idempotent:   true,
+			},
+			{
+				Name: "sendEvent",
+				Description: "Deliver one typed event to an instance. It resolves when the event is DURABLY RETAINED, " +
+					"not when it is consumed: an event sent before its waitForEvent is held until a matching wait or a " +
+					"terminal state, so a signal cannot be lost to a race with the instance's own progress. Sending to a " +
+					"terminal instance fails instance_terminal — nothing will ever read it.",
+				InputSchema: operationObject([]string{"id", "type"}, map[string]any{
+					"id": instanceID, "type": eventType, "payload": workflowDocument(),
+				}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors: []string{
+					"unknown_instance", "instance_terminal", "document_too_large", "backend_unavailable",
+				},
+			},
+			{
+				Name: "terminate",
+				Description: "Stop one instance and move it to the terminal terminated status. It is idempotent against " +
+					"an already-terminal instance: the outcome asked for is the outcome that holds, and failing there " +
+					"would make a retry after a lost response indistinguishable from a real error.",
+				InputSchema:  operationObject([]string{"id"}, map[string]any{"id": instanceID}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors:       []string{"unknown_instance", "backend_unavailable"},
+				Idempotent:   true,
+			},
+			{
+				Name: "run",
+				Description: "The ENTRYPOINT the host invokes once per instance on the class the active deployment's " +
+					"weighted versions export. It receives the instance id and params and the step surface, and its " +
+					"resolved value is the instance output. An uncaught throw moves the instance to errored with " +
+					"run_threw; crossing a declared instance bound moves it there with step_limit_exceeded or " +
+					"lifetime_exceeded, decided by the host rather than by the code.",
+				InputSchema: operationObject([]string{"instanceId"}, map[string]any{
+					"instanceId": instanceID, "params": workflowDocument(),
+				}),
+				OutputSchema: operationObject(nil, map[string]any{"output": workflowDocument()}),
+				Errors: []string{
+					"run_threw", "step_failed", "step_limit_exceeded", "lifetime_exceeded",
+				},
+			},
+			{
+				Name: "stepDo",
+				Description: "Run one named unit of work and durably record its JSON result under that name. A completed " +
+					"step never runs again: its recorded result is replayed. retryPolicy is per CALL — maxAttempts, an " +
+					"initial delay, constant or exponential backoff, and a delay ceiling — because two steps of one " +
+					"workflow legitimately want different policies. Exhausted retries fail the step with step_failed.",
+				InputSchema: operationObject([]string{"instanceId", "name"}, map[string]any{
+					"instanceId": instanceID, "name": stepName, "retryPolicy": workflowRetryPolicy(),
+				}),
+				OutputSchema: operationObject(nil, map[string]any{"result": workflowDocument()}),
+				Errors: []string{
+					"step_failed", "step_limit_exceeded", "lifetime_exceeded",
+					"document_too_large", "backend_unavailable",
+				},
+			},
+			{
+				Name: "stepSleep",
+				Description: "Park the instance for a named duration. There is NO execution context while it sleeps, " +
+					"which is what makes a long-lived workflow cost nothing to wait; the host wakes it at-least-once and " +
+					"never early. A sleep that would carry the instance past maxInstanceLifetimeSeconds fails rather " +
+					"than being silently shortened.",
+				InputSchema: operationObject([]string{"instanceId", "name", "seconds"}, map[string]any{
+					"instanceId": instanceID, "name": stepName,
+					"seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": workflowMaxSleepSeconds},
+				}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors: []string{
+					"invalid_duration", "step_limit_exceeded", "lifetime_exceeded", "backend_unavailable",
+				},
+			},
+			{
+				Name: "stepWaitForEvent",
+				Description: "Park the instance until a sent event of the named type resolves it, or fail the step at " +
+					"the timeout. timeoutSeconds is REQUIRED: an unbounded wait would make the delete refusal a deadlock " +
+					"instead of a delay. An event retained before this call resolves it immediately.",
+				InputSchema: operationObject([]string{"instanceId", "name", "type", "timeoutSeconds"}, map[string]any{
+					"instanceId": instanceID, "name": stepName, "type": eventType,
+					"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": workflowMaxWaitTimeoutSeconds},
+				}),
+				OutputSchema: operationObject(nil, map[string]any{"payload": workflowDocument()}),
+				Errors: []string{
+					"wait_timeout", "invalid_duration", "step_limit_exceeded",
+					"lifetime_exceeded", "backend_unavailable",
+				},
+			},
+		},
+		Fixtures: []InterfaceFixture{
+			{
+				// The one trace that proves the id is not a hint. A host that
+				// resumed, replaced, or silently re-created under a held id
+				// would pass a "create works" trace and fail this one.
+				Name: "a-held-instance-id-is-refused",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "create", Input: map[string]any{"id": "order-4711"},
+						Expected: map[string]any{"id": "order-4711", "status": "queued"}},
+					{Operation: "create", Input: map[string]any{"id": "order-4711"},
+						ExpectedError: "instance_exists"},
+				},
+			},
+			{
+				// Terminate is asked for twice on purpose. The second call is
+				// what a retry after a lost response looks like, and a contract
+				// that failed it would make the retry indistinguishable from a
+				// real error.
+				Name: "terminate-is-idempotent",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "create", Input: map[string]any{"id": "cancel-me"},
+						Expected: map[string]any{"id": "cancel-me", "status": "queued"}},
+					{Operation: "terminate", Input: map[string]any{"id": "cancel-me"}, Expected: map[string]any{}},
+					{Operation: "terminate", Input: map[string]any{"id": "cancel-me"}, Expected: map[string]any{}},
+					{Operation: "status", Input: map[string]any{"id": "cancel-me"},
+						Expected: map[string]any{"status": "terminated"}},
+				},
+			},
+			{
+				// A terminal instance is still readable, and still refuses a
+				// signal. Both halves matter: retention without the refusal
+				// would let a caller believe a signal was delivered to an
+				// execution that ended.
+				Name: "a-terminal-instance-refuses-events",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "create", Input: map[string]any{"id": "done-1"},
+						Expected: map[string]any{"id": "done-1", "status": "queued"}},
+					{Operation: "terminate", Input: map[string]any{"id": "done-1"}, Expected: map[string]any{}},
+					{Operation: "sendEvent", Input: map[string]any{"id": "done-1", "type": "approval"},
+						ExpectedError: "instance_terminal"},
+				},
+			},
+			{
+				// An id nothing holds is a failure, not an empty handle.
+				Name: "an-unheld-id-has-no-handle",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "get", Input: map[string]any{"id": "never-created"},
+						ExpectedError: "unknown_instance"},
+				},
+			},
+		},
+	}
+}
+
+// workerActorInterface is the addressable-actor primitive: one live execution
+// context per id, private durable storage, and one alarm.
+//
+// The four halves are ONE contract because each is stated in the others'
+// terms. The storage is safe to read and write without a cross-actor
+// transaction only because delivery to the id is serialized; the alarm fires
+// into that same serialized context; and the id is the unit all three are
+// scoped by. A host that implemented addressing without the serialization
+// guarantee would satisfy every schema here and none of the reason application
+// code uses an actor at all.
+//
+// The store admits SCHEMA statements, which edge.sql deliberately refuses.
+// That is not a widening of the same rule but a different situation: the
+// migration ledger exists because runtime SQL from many clients cannot own one
+// shared schema history, an actor's store has exactly one writer, and
+// unbounded actor cardinality makes a per-actor migration Resource the same
+// category error as a per-message one.
+func workerActorInterface() InterfaceDefinition {
+	headers := closedStringMap(serviceMaxHeaders)
+	actorID := stringSchema(1, actorMaxIDBytes)
+	// The same nullable count worker.service carries, for the same reason: a
+	// body still being produced has no byte count at the head, and a host
+	// asked for an exact number there could only buffer or invent one.
+	bodyLength := map[string]any{
+		"type": []any{"integer", "null"}, "minimum": 0, "maximum": serviceMaxBodyBytes,
+	}
+	return InterfaceDefinition{
+		APIVersion: InterfaceAPIVersion, Kind: "InterfaceDefinition",
+		Name: "worker.actor", Version: "1.0.0",
+		Title: "Addressable single-context actor",
+		Description: "Per-entity coordination behind one addressable actor per id: a class the serving Worker " +
+			"Version exports, constructed by the host with the actor's id, storage, and alarm. " +
+			"ADDRESSING. idFromName derives the SAME id for the same name on every call with no host round trip; " +
+			"newUniqueId mints an id no name ever derives; get builds a stub without host work. An id is an " +
+			"OPAQUE, stable string a configuration must not parse. EVERY id addresses an actor: there is no " +
+			"create call and no existence check — the first delivery to an id is the actor's creation, and an " +
+			"actor with no storage, no alarm, and no live context costs nothing. " +
+			"AT MOST ONE LIVE EXECUTION CONTEXT PER ID, across locations, eviction, and process death, and the " +
+			"host delivers to it ONE INVOCATION AT A TIME, each running to completion before the next begins: " +
+			"concurrent callers observe serialization, never interleaving. This is the guarantee the rest of the " +
+			"contract is built on. " +
+			"INVOCATION is exactly worker.service's HTTP-shaped call — bodies stream both ways, a callee throw is " +
+			"the actor's host-generated 500 that the call SUCCEEDS with, and the call fails only when it could " +
+			"not be made — what is new is only WHERE it lands. " +
+			"STORAGE is private per actor id, reachable ONLY from that actor's own execution context, with " +
+			"edge.sql's dialect, EdgeSqlValue domain, and serializable atomicity. Unlike edge.sql it admits " +
+			"SCHEMA statements from the actor's own code: a single-writer store owns its own history, and a " +
+			"per-actor migration resource over unbounded cardinality would be the same category error as a " +
+			"per-message one. " +
+			"ALARM: at most one pending per actor. Setting REPLACES any pending alarm. At or after its time the " +
+			"host invokes the class's alarm handler in the actor's own serialized context; firing is " +
+			"AT-LEAST-ONCE — a handler that throws is re-invoked — and a completed run consumes the alarm unless " +
+			"the handler set a new one. " +
+			"Between deliveries the host may EVICT the execution context; storage and the pending alarm survive, " +
+			"and the next invocation or the alarm revives the actor. The identity outlives every context. Actors " +
+			"are runtime data: unbounded cardinality, runtime addressing, no uid, no generation, nothing to plan.",
+		Semantics: InterfaceSemantics{
+			Consistency: "serializable", Delivery: "at_least_once", Ordering: "per_key",
+		},
+		Limits: map[string]int64{
+			"maxStorageBytesPerActor":     actorMaxStorageBytesPerActor,
+			"maxAlarmLeadSeconds":         actorMaxAlarmLeadSeconds,
+			"maxRequestBytes":             serviceMaxBodyBytes,
+			"maxResponseBytes":            serviceMaxBodyBytes,
+			"maxRequestHeaders":           serviceMaxHeaders,
+			"maxResponseHeaders":          serviceMaxHeaders,
+			"maxStatementBytes":           sqlMaxStatementBytes,
+			"maxBoundParameters":          sqlMaxBoundParameters,
+			"maxStatementsPerTransaction": sqlMaxStatementsPerTransaction,
+			"maxRowsPerStatement":         sqlMaxRowsPerStatement,
+		},
+		Operations: []InterfaceOperation{
+			{
+				Name: "idFromName",
+				Description: "Derive the actor id one name addresses. The derivation is DETERMINISTIC and local: the " +
+					"same name yields the same id on every call, in every isolate, with no host round trip, which is what " +
+					"lets two unrelated workers reach the same actor by agreeing on a name alone.",
+				InputSchema:  operationObject([]string{"name"}, map[string]any{"name": stringSchema(1, actorMaxNameBytes)}),
+				OutputSchema: operationObject([]string{"id"}, map[string]any{"id": actorID}),
+				Errors:       []string{"invalid_name"},
+				Idempotent:   true,
+			},
+			{
+				Name: "newUniqueId",
+				Description: "Mint an actor id NO name ever derives. It is the only way to obtain an actor that cannot " +
+					"be addressed by guessing a name, so the caller must persist the id somewhere to reach it again.",
+				InputSchema:  operationObject(nil, map[string]any{}),
+				OutputSchema: operationObject([]string{"id"}, map[string]any{"id": actorID}),
+				Errors:       []string{"backend_unavailable"},
+			},
+			{
+				Name: "fetch",
+				Description: "Invoke the actor's fetch handler. Bodies stream in both directions and neither side is " +
+					"buffered; the call completes at the response head. Invocations against one id are SERIALIZED — each " +
+					"runs to completion before the next begins. An uncaught throw in the actor is its host-generated 500 " +
+					"and this operation SUCCEEDS with it; it fails only when the call could not be made at all, which is " +
+					"what an unserved namespace produces.",
+				InputSchema: operationObject([]string{"bodyStream", "contentLength", "id", "method", "path"}, map[string]any{
+					"id":            actorID,
+					"method":        map[string]any{"type": "string", "enum": []any{"DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"}},
+					"path":          stringSchema(1, serviceMaxPathBytes),
+					"headers":       headers,
+					"bodyStream":    map[string]any{"type": "boolean"},
+					"contentLength": bodyLength,
+				}),
+				OutputSchema: operationObject([]string{"bodyStream", "contentLength", "status"}, map[string]any{
+					"status":        map[string]any{"type": "integer", "minimum": 100, "maximum": 599},
+					"headers":       headers,
+					"bodyStream":    map[string]any{"type": "boolean"},
+					"contentLength": bodyLength,
+				}),
+				Errors: []string{
+					"request_too_large", "request_aborted", "response_aborted", "backend_unavailable",
+				},
+			},
+			{
+				Name: "storageExecute",
+				Description: "Run one effectful statement against THIS actor's private store. Unlike edge.sql it accepts " +
+					"schema statements: a single-writer store owns its own history. params and returned columns are " +
+					"EdgeSqlValue exactly. It is reachable only from the actor's own execution context, which is what " +
+					"makes every write single-writer without a lock.",
+				InputSchema: operationObject([]string{"sql"}, map[string]any{
+					"sql": stringSchema(1, sqlMaxStatementBytes), "params": sqlParams(),
+				}),
+				OutputSchema: withDialect(sqlStatementResult()),
+				Errors: []string{
+					"invalid_sql", "constraint_violation", "numeric_out_of_range",
+					"result_too_large", "storage_full", "busy", "backend_unavailable",
+				},
+			},
+			{
+				Name: "storageQuery",
+				Description: "Read from this actor's store inside an always-rolled-back transaction, so a read leaves no " +
+					"persistent effect without anyone guessing whether the SQL writes. rowsWritten is always 0.",
+				InputSchema: operationObject([]string{"sql"}, map[string]any{
+					"sql": stringSchema(1, sqlMaxStatementBytes), "params": sqlParams(),
+				}),
+				OutputSchema: withDialect(sqlQueryResult()),
+				Errors: []string{
+					"invalid_sql", "numeric_out_of_range", "result_too_large", "busy", "backend_unavailable",
+				},
+				Idempotent: true,
+			},
+			{
+				Name: "storageTransaction",
+				Description: "Run 1 to 100 statements under serializable all-or-none isolation, materializing every " +
+					"result before commit. A transaction that could report only a write count could not carry the rows a " +
+					"SELECT inside it returned, which would make the atomic path strictly weaker than the plain one.",
+				InputSchema: operationObject([]string{"statements"}, map[string]any{
+					"statements": map[string]any{
+						"type": "array", "minItems": 1, "maxItems": sqlMaxStatementsPerTransaction,
+						"items": sqlStatement(),
+					},
+				}),
+				OutputSchema: operationObject([]string{"results"}, map[string]any{
+					"results": map[string]any{
+						"type": "array", "minItems": 1, "maxItems": sqlMaxStatementsPerTransaction,
+						"items": sqlStatementResult(),
+					},
+				}),
+				Errors: []string{
+					"invalid_sql", "constraint_violation", "numeric_out_of_range",
+					"result_too_large", "storage_full", "busy", "backend_unavailable",
+				},
+			},
+			{
+				Name: "alarmSet",
+				Description: "Schedule this actor's wake-up, REPLACING any pending one. At most one alarm exists per " +
+					"actor, so there is no cancel-by-handle and no way to accumulate wake-ups. atMillis is milliseconds " +
+					"since the Unix epoch in UTC; a time already past fires as soon as the host can.",
+				InputSchema: operationObject([]string{"atMillis"}, map[string]any{
+					"atMillis": map[string]any{"type": "integer", "minimum": 0},
+				}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors:       []string{"invalid_time", "backend_unavailable"},
+			},
+			{
+				Name: "alarmGet",
+				Description: "Read the pending alarm time, or report that none is pending. The two are different " +
+					"answers: a null time is no alarm at all, never an alarm at the epoch.",
+				InputSchema: operationObject(nil, map[string]any{}),
+				OutputSchema: operationObject([]string{"atMillis"}, map[string]any{
+					"atMillis": map[string]any{"type": []any{"integer", "null"}, "minimum": 0},
+				}),
+				Errors:     []string{"backend_unavailable"},
+				Idempotent: true,
+			},
+			{
+				Name: "alarmClear",
+				Description: "Remove the pending alarm. It succeeds when none was pending: the outcome asked for is the " +
+					"outcome that holds, so a retry after a lost response is not an error.",
+				InputSchema:  operationObject(nil, map[string]any{}),
+				OutputSchema: operationObject(nil, map[string]any{}),
+				Errors:       []string{"backend_unavailable"},
+				Idempotent:   true,
+			},
+		},
+		Fixtures: []InterfaceFixture{
+			{
+				// Determinism stated as a trace. A host that minted a fresh id
+				// per call would satisfy every schema here and break the one
+				// thing name addressing is for.
+				Name: "a-name-always-derives-one-id",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "idFromName", Input: map[string]any{"name": "room-42"},
+						Expected: map[string]any{"id": "room-42"}},
+					{Operation: "idFromName", Input: map[string]any{"name": "room-42"},
+						Expected: map[string]any{"id": "room-42"}},
+				},
+			},
+			{
+				// Every id addresses an actor, with no create step: the first
+				// delivery IS the creation. A host requiring an explicit create
+				// fails here rather than in production.
+				Name: "the-first-delivery-creates-the-actor",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "idFromName", Input: map[string]any{"name": "room-42"},
+						Expected: map[string]any{"id": "room-42"}},
+					{Operation: "fetch", Input: map[string]any{
+						"id": "room-42", "method": "GET", "path": "/health",
+						"bodyStream": false, "contentLength": 0,
+					}, Expected: map[string]any{"status": 200, "bodyStream": true}},
+				},
+			},
+			{
+				// The actor throws and the CALL succeeds, exactly as
+				// worker.service fixes it. Stating it again here is not
+				// duplication: a host could implement actor invocation on a
+				// separate path and report the throw as a failed call.
+				Name: "an-actor-throw-is-a-complete-500",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "fetch", Input: map[string]any{
+						"id": "room-42", "method": "GET", "path": "/throw",
+						"bodyStream": false, "contentLength": 0,
+					}, Expected: map[string]any{"status": 500, "bodyStream": true}},
+				},
+			},
+			{
+				// No alarm and an alarm at the epoch are different answers.
+				Name: "no-pending-alarm-is-null-not-zero",
+				Steps: []InterfaceFixtureStep{
+					{Operation: "alarmClear", Input: map[string]any{}, Expected: map[string]any{}},
+					{Operation: "alarmGet", Input: map[string]any{}, Expected: map[string]any{"atMillis": nil}},
 				},
 			},
 		},

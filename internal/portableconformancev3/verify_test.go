@@ -64,8 +64,8 @@ func TestVerifyPinsRegistryIdentities(t *testing.T) {
 		t.Fatalf("verify: %v", err)
 	}
 	inventory := probeInventory(&contract.RunnerInput)
-	if len(inventory) != 14 {
-		t.Fatalf("the corpus pins %d resource probes; the Edge Family lane drives fourteen", len(inventory))
+	if len(inventory) != 16 {
+		t.Fatalf("the corpus pins %d resource probes; the Edge Family lane drives sixteen", len(inventory))
 	}
 	for _, entry := range inventory {
 		probe := entry.Probe
