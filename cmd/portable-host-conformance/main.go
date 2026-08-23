@@ -42,6 +42,11 @@ func run(args []string, stdout io.Writer) error {
 		"",
 		"environment variable containing the same-principal alternate-tenant bearer token",
 	)
+	survey := flags.Bool(
+		"survey",
+		false,
+		"continue past failing checks and report the whole gap surface as one failure; a survey never produces a passed report",
+	)
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -64,6 +69,7 @@ func run(args []string, stdout io.Writer) error {
 	return runV3(
 		args[0], *contractPath, *endpoint,
 		*tokenEnv, *alternateTokenEnv, *alternateTenantTokenEnv,
+		*survey,
 		stdout,
 	)
 }
@@ -85,17 +91,29 @@ func manifestFormat(contractPath string) (string, error) {
 func runV3(
 	command, contractPath, endpoint string,
 	tokenEnv, alternateTokenEnv, alternateTenantTokenEnv string,
+	survey bool,
 	stdout io.Writer,
 ) error {
 	contract, err := portableconformancev3.Verify(contractPath)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	// The self-test drives an in-process host and finishes in seconds; a run
+	// against a real endpoint pays real network and real convergence waits, and
+	// a survey deliberately keeps going past failures. Two minutes measured the
+	// reference host, not the task.
+	deadline := 2 * time.Minute
+	if command == "run" {
+		deadline = 30 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
 	var report portableconformancev3.HostRunnerReport
 	switch command {
 	case "self-test":
+		if survey {
+			return errors.New("self-test does not accept --survey; the reference host passes or the corpus is broken")
+		}
 		if endpoint != "" || tokenEnv != "" || alternateTokenEnv != "" || alternateTenantTokenEnv != "" {
 			return errors.New(
 				"self-test does not accept --endpoint, --token-env, --alternate-token-env, or --alternate-tenant-token-env",
@@ -132,6 +150,7 @@ func runV3(
 			AlternateTenantToken: alternateTenantToken,
 			HTTPClient:           &http.Client{Timeout: 30 * time.Second},
 			Classification:       portableconformancev3.EndpointConformanceRun,
+			Survey:               survey,
 		})
 	default:
 		return fmt.Errorf("unknown command %q; use self-test or run", command)

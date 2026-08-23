@@ -318,6 +318,17 @@ go run ./cmd/portable-host-conformance run \
   --alternate-tenant-token-env TAKOFORM_CONFORMANCE_ALTERNATE_TENANT_TOKEN
 ```
 
+`--survey` continues past failing checks and reports the whole gap surface —
+completed count, missing checks, and every failing step — as ONE failure. It
+exists for measuring a host mid-implementation in one pass instead of one
+failure per invocation; a survey never produces a passed report, so nothing
+downstream can mistake a measurement for evidence. Two normalizations keep
+the matrix honest against real deployments: creation-body comparison treats
+each condition's `lastTransitionTime` like the host-issued uid and name
+(legitimately different between two indistinguishable creations), and the
+`run` command's deadline is sized for real network rather than the in-process
+self-test.
+
 Both reports are explicitly `publicationReady: false`. The local reference
 report proves the executable runner, not an external host. Admission still
 requires a signed report from the host workflow that actually executed its

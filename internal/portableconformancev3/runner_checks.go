@@ -185,8 +185,19 @@ func (r *v3Runner) run() error {
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
-			return err
+			if !r.survey {
+				return err
+			}
+			// Survey mode: a failed step is recorded and the run continues, so
+			// a real host's whole gap surface is measured in one pass instead
+			// of one failure per invocation. Later steps may fail on state the
+			// failed step did not build; those cascades are part of the survey.
+			r.surveyFailures = append(r.surveyFailures, err.Error())
 		}
+	}
+	if r.survey && len(r.surveyFailures) > 0 {
+		return fmt.Errorf("survey found %d failing step(s):\n- %s",
+			len(r.surveyFailures), strings.Join(r.surveyFailures, "\n- "))
 	}
 	return nil
 }

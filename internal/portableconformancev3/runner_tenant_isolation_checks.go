@@ -45,7 +45,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
+	"time"
 )
 
 // tenantIsolationNames are the probe resource names this file drives. They are
@@ -780,9 +782,28 @@ func comparableCreation(response wireResponse, name, uid string) (string, error)
 	}
 	body := strings.ReplaceAll(string(response.Body), uid, "{uid}")
 	body = strings.ReplaceAll(body, name, "{name}")
+	// A real host stamps each condition's lastTransitionTime from its own
+	// clock, so two indistinguishable creations legitimately differ there the
+	// way they differ in uid and name. The reference host pins a fixed
+	// timestamp, which HID this from the self-test: comparing the raw member
+	// made the check fail spuriously against every real deployment while
+	// proving nothing extra against the fake. The value's grammar is still
+	// validated where conditions are decoded; equality of the MOMENT is not
+	// part of what this check claims.
+	for _, match := range transitionTimePattern.FindAllStringSubmatch(body, -1) {
+		if _, parseErr := time.Parse(time.RFC3339, match[1]); parseErr != nil {
+			return "", fmt.Errorf("condition lastTransitionTime %q is not RFC 3339; normalization erases only the moment, never the grammar", match[1])
+		}
+	}
+	body = transitionTimePattern.ReplaceAllString(body, `"lastTransitionTime":"{time}"`)
 	etag := strings.ReplaceAll(response.Header.Get("ETag"), uid, "{uid}")
 	return fmt.Sprintf("%d etag=%s %s", response.Status, etag, strings.TrimSpace(body)), nil
 }
+
+// transitionTimePattern matches the serialized condition member wherever it
+// appears in a served body, tolerating JSON's optional whitespace after the
+// colon.
+var transitionTimePattern = regexp.MustCompile(`"lastTransitionTime"\s*:\s*"([^"]*)"`)
 
 // checkResourceUpdateIsTenantIsolated proves a foreign tenant cannot move
 // another tenant's desired state, on both surfaces an update passes through: the
