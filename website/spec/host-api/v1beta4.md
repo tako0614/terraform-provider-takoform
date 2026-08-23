@@ -911,19 +911,40 @@ which of its references, in its own Definitions.** A host reads a Definition
 and enforces what it declares, without knowing what any Form is for. The lane
 therefore names no Form kind, and a check enforces that it does not.
 
+### Where a Form states them
+
+A Definition carries a top-level `constraints` array. Each entry is an object
+whose `kind` is one of a CLOSED vocabulary — `exclusive`, `sum`, `claim`,
+`hostAssigned` — and whose remaining members are exactly the ones that kind's
+rule needs. A host reads this one list; it does not walk the desired schema
+looking for rules, because a rule is not the shape of a document.
+
+Adding a constraint kind is therefore one reviewed change to this lane and to
+the Definition profile, rather than an `x-` key that may appear at any depth of
+any schema
+([decision 0049](../decisions/0049-a-form-versions-alone.md)). The desired
+schema goes back to being plain JSON Schema that any validator reads
+completely.
+
+A host that cannot read an entry — an unknown `kind`, or a kind whose required
+members are absent — refuses the Form at install time with
+`unsupported_capability`, naming the entry. It never installs a Form while
+silently enforcing less than the Form declares: a constraint nobody enforces is
+worse than one nobody wrote, because the Definition promises it.
+
 Every rule below is decided against the UID a reference RESOLVED to, never
 against the name a spec spells.
 
 ### Exclusive holds
 
-A reference may declare `x-takoform-exclusive`: **at most one LIVE resource of
-this Form kind may hold the target this reference resolves to.** A second one
-fails `invalid_argument` (400) before any mutation — the request is well formed
-and what is untrue is what it says about the target it points at.
+`{"kind": "exclusive", "reference": <pointer>}` — **at most one LIVE resource of
+this Form kind may hold the target the named reference resolves to.** A second
+one fails `invalid_argument` (400) before any mutation: the request is well
+formed and what is untrue is what it says about the target it points at.
 
-The annotation is an object. Its optional `keyedBy` member is a JSON Pointer to
-a sibling property of the same desired spec, and it joins the target in the
-key:
+`reference` is a JSON Pointer to the desired property carrying the relation.
+The optional `keyedBy` member is a JSON Pointer to a sibling property of the
+same desired spec, and it joins the target in the key:
 
 | `keyedBy` | The key is | Two holders conflict when |
 | --- | --- | --- |
@@ -941,21 +962,22 @@ carry an exclusive holder of one kind and any number of resources of another.
 
 ### Summed members
 
-An object-list property may declare `x-takoform-sum`: the named integer member
-of its elements MUST total exactly the stated value. A list that does not fails
+`{"kind": "sum", "list": <pointer>, "member": <name>, "total": <integer>}` —
+in the object list at `list`, the integer member named by `member` MUST total
+exactly `total` across the elements. A list that does not fails
 `invalid_argument` (400) before any mutation.
 
 A schema can bound each element and cannot add a column. This is the whole of
-what the annotation adds, and it adds it as data rather than as a sentence
+what the constraint adds, and it adds it as data rather than as a sentence
 about one Form's traffic weights.
 
 ### Claimed values
 
-A property may declare `x-takoform-claim`: its value is held by **at most one
-live resource per tenant**, across every space, compared on the CANONICAL form
-the property's own schema defines. A second claimant fails `invalid_argument`
-(400) before any mutation, and releasing the holder makes the claim
-representable again.
+`{"kind": "claim", "property": <pointer>}` — the value at `property` is held by
+**at most one live resource per tenant**, across every space, compared on the
+CANONICAL form that property's own schema defines. A second claimant fails
+`invalid_argument` (400) before any mutation, and releasing the holder makes
+the claim representable again.
 
 Canonicalization happens before comparison and before storage, so two spellings
 of one value are one claim rather than two. Which spellings are equal is the
@@ -964,9 +986,9 @@ this lane's.
 
 ### Host-assigned outputs
 
-A declared output member may carry `x-takoform-host-assigned`: the host mints
-the value, it is immutable for the lifetime of the resource's UID, and no
-desired property may state it. A consumer may store it; a portable
+`{"kind": "hostAssigned", "output": <pointer>}` — the host mints the value of
+the named declared output, it is immutable for the lifetime of the resource's
+UID, and no desired property may state it. A consumer may store it; a portable
 configuration never parses it, asserts a suffix of it, or reconstructs it from
 a resource name.
 

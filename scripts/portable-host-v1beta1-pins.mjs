@@ -131,6 +131,21 @@ for (const probe of Object.values(contract.runnerInput)) {
   repointFamilyReferences(probe.desired, forms.family);
   pinnedForms++;
 
+  // The constraint list is pinned beside the schema, and for the same reason.
+  // A rule about resources is not shape, so it is not in the desiredSchema the
+  // corpus already pins, and a corpus that pinned only the shape let a host
+  // serve a Definition declaring FEWER holds than the family publishes. The
+  // declared-holds check then discovered only what the host chose to admit and
+  // graded it against itself.
+  const declaredConstraints = readJSON(
+    path.join(repositoryRoot, candidate.path, "definition.json"),
+  ).constraints;
+  if (declaredConstraints === undefined || declaredConstraints.length === 0) {
+    delete probe.constraints;
+  } else {
+    probe.constraints = structuredClone(declaredConstraints);
+  }
+
   if (probe.desiredSchema === undefined) continue;
   const relativeFixture = probe.desiredSchema.path;
   if (!/^fixtures\/desired-schema-[a-z0-9-]+\.json$/u.test(relativeFixture)) {

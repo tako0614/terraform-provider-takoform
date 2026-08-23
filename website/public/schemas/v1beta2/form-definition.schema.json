@@ -65,49 +65,91 @@
       "maxItems": 32,
       "description": "The closed list of rules about RESOURCES this Form declares. These are not the shape of a document, so they are not in the desired schema \u2014 where they rode in extension slots no standard validator reads. As a first-class list with a closed kind vocabulary, adding a constraint kind is one reviewed change in one place (decision 0049). Every pointer is an RFC 6901 JSON Pointer into the desired instance, or into the outputs for a host-assigned member.",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "kind"
-        ],
-        "properties": {
-          "kind": {
-            "enum": [
-              "exclusive",
-              "sum",
-              "claim",
-              "hostAssigned"
-            ]
+        "description": "One constraint. The kind decides which members the entry carries: a branch requires exactly what its rule needs and forbids every member belonging to another kind, so a host reading a valid Definition can always read the rule out of it. A single flat object with one required `kind` accepted {\"kind\":\"sum\"} and a `claim` carrying a sum's members, which a package gate passed and a host could only fail on.",
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "reference"
+            ],
+            "properties": {
+              "kind": {
+                "const": "exclusive"
+              },
+              "reference": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              },
+              "keyedBy": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              }
+            }
           },
-          "reference": {
-            "type": "string",
-            "pattern": "^/[^/]+$"
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "list",
+              "member",
+              "total"
+            ],
+            "properties": {
+              "kind": {
+                "const": "sum"
+              },
+              "list": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              },
+              "member": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "total": {
+                "type": "integer"
+              }
+            }
           },
-          "keyedBy": {
-            "type": "string",
-            "pattern": "^/[^/]+$"
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "property"
+            ],
+            "properties": {
+              "kind": {
+                "const": "claim"
+              },
+              "property": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              }
+            }
           },
-          "list": {
-            "type": "string",
-            "pattern": "^/[^/]+$"
-          },
-          "member": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "total": {
-            "type": "integer"
-          },
-          "property": {
-            "type": "string",
-            "pattern": "^/[^/]+$"
-          },
-          "output": {
-            "type": "string",
-            "pattern": "^/[^/]+$"
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "output"
+            ],
+            "properties": {
+              "kind": {
+                "const": "hostAssigned"
+              },
+              "output": {
+                "type": "string",
+                "pattern": "^/[^/]+$"
+              }
+            }
           }
-        }
+        ]
       }
     },
     "desiredSchema": {

@@ -143,6 +143,13 @@ function classHolderProbe(probeKey, kind) {
       path: fixture,
       sha256: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
     },
+    // These two probes carry the family's class-keyed holds, and they are the
+    // ones a corpus pinning only the source generation's probes had no pin
+    // for — the exact Forms whose rule the declared-holds check exists to
+    // measure. A probe this script mints pins its constraints like any other.
+    ...(definition.constraints?.length > 0
+      ? { constraints: structuredClone(definition.constraints) }
+      : {}),
   };
 }
 

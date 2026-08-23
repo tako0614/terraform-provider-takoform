@@ -359,7 +359,13 @@
       "desiredSchema": {
         "path": "fixtures/desired-schema-sqlite-migration-application.json",
         "sha256": "sha256:053b10c5b68a7a0decd7e19415324a93f9edd963257fa1e5da029d0b440cb965"
-      }
+      },
+      "constraints": [
+        {
+          "kind": "exclusive",
+          "reference": "/database"
+        }
+      ]
     },
     "fetchOnlyBundle": {
       "name": "fetch-only-bundle-probe",
@@ -422,7 +428,19 @@
       "desiredSchema": {
         "path": "fixtures/desired-schema-worker-deployment.json",
         "sha256": "sha256:40b37be1e6f4e80ea803544425bf7ddf24bd27bb21ffade5a07966f000d03e58"
-      }
+      },
+      "constraints": [
+        {
+          "kind": "exclusive",
+          "reference": "/worker"
+        },
+        {
+          "kind": "sum",
+          "list": "/versions",
+          "member": "weight",
+          "total": 10000
+        }
+      ]
     },
     "workerCustomDomain": {
       "name": "custom-domain-probe",
@@ -453,7 +471,13 @@
       "desiredSchema": {
         "path": "fixtures/desired-schema-worker-custom-domain.json",
         "sha256": "sha256:7ac2f2d0ac6a69abfc1d335c93c3070b63b89456342f7b16745df9e6f884f856"
-      }
+      },
+      "constraints": [
+        {
+          "kind": "claim",
+          "property": "/hostname"
+        }
+      ]
     },
     "workerEndpoint": {
       "name": "endpoint-probe",
@@ -508,7 +532,17 @@
       "desiredSchema": {
         "path": "fixtures/desired-schema-worker-endpoint.json",
         "sha256": "sha256:5172c7724d639e1d30da1e983d1d0fc372fcc507fe7e71793dea0fab914b8c09"
-      }
+      },
+      "constraints": [
+        {
+          "kind": "hostAssigned",
+          "output": "/hostname"
+        },
+        {
+          "kind": "hostAssigned",
+          "output": "/url"
+        }
+      ]
     },
     "workerCronTrigger": {
       "name": "cron-trigger-probe",
@@ -581,7 +615,13 @@
       "desiredSchema": {
         "path": "fixtures/desired-schema-queue-consumer.json",
         "sha256": "sha256:26ed1d842c6b80816f9ab1ddf6d42bbc2b3a30c1502ead1ddd4722a8d40d5d18"
-      }
+      },
+      "constraints": [
+        {
+          "kind": "exclusive",
+          "reference": "/queue"
+        }
+      ]
     },
     "durableWorkflow": {
       "name": "durable-workflow-probe",
@@ -612,7 +652,14 @@
       "desiredSchema": {
         "path": "fixtures/desired-schema-durable-workflow.json",
         "sha256": "sha256:31f389e714ef1514a70d2216999d2e4025bb2050953a500d0482c2be0e587ef3"
-      }
+      },
+      "constraints": [
+        {
+          "kind": "exclusive",
+          "reference": "/worker",
+          "keyedBy": "/className"
+        }
+      ]
     },
     "actorNamespace": {
       "name": "actor-namespace-probe",
@@ -643,7 +690,14 @@
       "desiredSchema": {
         "path": "fixtures/desired-schema-actor-namespace.json",
         "sha256": "sha256:721e3d7b5acac8191c96e3e1340d23d888b1fa489c3619a1675aae27c114e88d"
-      }
+      },
+      "constraints": [
+        {
+          "kind": "exclusive",
+          "reference": "/worker",
+          "keyedBy": "/className"
+        }
+      ]
     },
     "syntheticSecondGroup": {
       "apiVersion": "other.forms.takoform.com/v1alpha1",

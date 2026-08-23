@@ -1,6 +1,7 @@
 package currentformmodel
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -128,8 +129,39 @@ func DeriveRelationsWithConstraints(schema map[string]any, constraints []Constra
 	}
 	sort.Slice(walker.out, func(i, j int) bool { return walker.out[i].Pointer < walker.out[j].Pointer })
 	for _, constraint := range constraints {
-		if constraint.Kind != ConstraintExclusive {
+		// The vocabulary is CLOSED, and an unreadable entry is refused rather
+		// than skipped. Skipping is what a `continue` on anything that is not
+		// an exclusive hold did, and it meant a Form could declare a rule this
+		// host does not implement, install cleanly, and enforce nothing — the
+		// Definition promising a constraint no one keeps. Whoever calls this
+		// turns the error into unsupported_capability at install time.
+		switch constraint.Kind {
+		case ConstraintExclusive:
+		case ConstraintSum:
+			if constraint.List == "" || constraint.Member == "" {
+				return nil, fmt.Errorf("a summed member names %q in %q, and a sum needs both",
+					constraint.Member, constraint.List)
+			}
 			continue
+		case ConstraintClaim:
+			if constraint.Property == "" {
+				return nil, errors.New("a claim names no property")
+			}
+			continue
+		case ConstraintHostAssigned:
+			if constraint.Output == "" {
+				return nil, errors.New("a host-assigned constraint names no output")
+			}
+			continue
+		default:
+			return nil, fmt.Errorf(
+				"constraint kind %q is not one this host implements; the closed vocabulary is "+
+					"exclusive, sum, claim, hostAssigned",
+				constraint.Kind,
+			)
+		}
+		if constraint.Reference == "" {
+			return nil, errors.New("an exclusive hold names no reference")
 		}
 		attached := false
 		for index := range walker.out {

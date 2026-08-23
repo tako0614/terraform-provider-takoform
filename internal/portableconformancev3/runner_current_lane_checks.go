@@ -1,13 +1,19 @@
 package portableconformancev3
 
-// runner_beta2_lane_checks.go measures the rules v1beta2 introduced.
+// runner_current_lane_checks.go measures the rules the current lane introduced
+// over the retained v1beta1 one.
 //
 // Every check here exists because the v1beta1 corpus COULD NOT have measured
-// its rule: the rule did not exist in that lane. They run only on a v1beta2
-// corpus, and a v1beta2 corpus cannot pass without them, which is the whole
-// point — decision 0046 makes conformance coverage a precondition of minting
-// an identity, and a lane whose new rules are stated only in prose is exactly
-// the unmeasured contract that rule exists to prevent.
+// its rule: the rule did not exist in that lane. They run only on a corpus
+// whose required-check list names them, and such a corpus cannot pass without
+// them, which is the whole point — decision 0046 makes conformance coverage a
+// precondition of minting an identity, and a lane whose new rules are stated
+// only in prose is exactly the unmeasured contract that rule exists to prevent.
+//
+// The file is named for the lane's ROLE rather than its number, because the
+// two lanes these rules were first drafted in were withdrawn without ever
+// being served (decision 0051) and a filename carrying a withdrawn number
+// tells a reader to look for a document that does not exist.
 
 import (
 	"errors"

@@ -1,8 +1,8 @@
 package portableconformancev3
 
-// runner_beta3_lane_checks.go measures what the v1beta3 lane states: that a
-// cross-resource rule a Definition DECLARES is enforced, and enforced because
-// it was declared.
+// runner_declared_constraint_checks.go measures what the constraint mechanism
+// states: that a cross-resource rule a Definition DECLARES is enforced, and
+// enforced because it was declared.
 //
 // The distinction matters and it is the reason this check is written the way
 // it is. A host carrying a hardcoded rule for one Form kind passes any check
@@ -12,6 +12,12 @@ package portableconformancev3
 // carries, discovering them from the served Definitions rather than from a
 // list written here. A host that hardcoded one and forgot another fails on the
 // one it forgot.
+//
+// The subjects come from the corpus's PINNED constraint lists rather than from
+// what the host serves, and form-definition-exact holds the served lists to
+// those pins. Discovering them from the host was the same defect one layer up:
+// a host omitting a hold shrank the inventory instead of failing it, so it was
+// graded on the rules it chose to admit.
 
 import (
 	"errors"
@@ -31,7 +37,10 @@ import (
 // whole prerequisite graph here, which is the aggregate sequence's job and not
 // this check's.
 func (r *v3Runner) checkDeclaredExclusiveHoldsEnforced() error {
-	subjects := r.declaredExclusiveSubjects()
+	subjects, err := r.declaredExclusiveSubjects()
+	if err != nil {
+		return err
+	}
 	if len(subjects) == 0 {
 		return errors.New(
 			"the corpus's family declares no exclusive hold, so this lane's mechanism " +
@@ -75,32 +84,38 @@ type exclusiveSubject struct {
 // desired schemas. Reading them from the Definitions is the point: a list
 // written here would go stale exactly when a family added a hold, which is the
 // case this whole lane exists to make cheap.
-func (r *v3Runner) declaredExclusiveSubjects() []exclusiveSubject {
+func (r *v3Runner) declaredExclusiveSubjects() ([]exclusiveSubject, error) {
 	var out []exclusiveSubject
 	for _, entry := range declaredProbes(&r.contract.RunnerInput) {
 		schema := entry.Probe.DesiredSchema.Schema
 		if len(schema) == 0 {
-			continue
+			return nil, fmt.Errorf("%s: the corpus pins no desired schema to derive holds from", entry.Label)
 		}
-		// The hold is read from the SERVED Definition's constraint list, not
-		// from the corpus's copy of the schema: a rule about resources is not
-		// shape, so it no longer rides in the schema, and what a client may be
-		// held to is what the host published (decision 0049).
-		definition, err := r.formDefinition(entry.Probe.Identity.FormRef)
-		if err != nil {
-			continue
-		}
-		constraints := make([]currentformmodel.Constraint, 0, len(definition.Constraints))
-		for _, constraint := range definition.Constraints {
+		// The holds come from the CORPUS's pinned constraint list, not from
+		// whatever the host served. Discovering them from the host let the
+		// subject choose its own inventory: omit a hold, and the check simply
+		// had one fewer subject and still passed. form-definition-exact proves
+		// the served list equals this one, so reading the pin here is reading
+		// what the host is separately held to.
+		constraints := make([]currentformmodel.Constraint, 0, len(entry.Probe.Constraints))
+		for _, constraint := range entry.Probe.Constraints {
 			constraints = append(constraints, currentformmodel.Constraint{
 				Kind:      currentformmodel.ConstraintKind(constraint.Kind),
 				Reference: constraint.Reference,
 				KeyedBy:   constraint.KeyedBy,
+				List:      constraint.List,
+				Member:    constraint.Member,
+				Total:     constraint.Total,
+				Property:  constraint.Property,
+				Output:    constraint.Output,
 			})
 		}
 		relations, err := currentformmodel.DeriveRelationsWithConstraints(schema, constraints)
 		if err != nil {
-			continue
+			// An unreadable pin is a corpus defect, and shrinking the
+			// inventory on one is how a corpus grades a host on a subset it
+			// never announced.
+			return nil, fmt.Errorf("%s: deriving the pinned constraints: %w", entry.Label, err)
 		}
 		for _, relation := range relations {
 			if relation.Exclusive == nil {
@@ -109,7 +124,7 @@ func (r *v3Runner) declaredExclusiveSubjects() []exclusiveSubject {
 			out = append(out, exclusiveSubject{probe: r.target(*entry.Probe), relation: relation})
 		}
 	}
-	return out
+	return out, nil
 }
 
 // driveExclusiveHold proves a second holder of an already-held target is
