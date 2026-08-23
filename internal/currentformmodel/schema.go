@@ -179,9 +179,6 @@ func (f Form) DesiredSchema(resolver TargetContractResolver) (map[string]any, er
 		if err != nil {
 			return nil, fmt.Errorf("form %s field %s: %w", f.Kind, field.Wire, err)
 		}
-		if field.Claimed {
-			schema[ClaimAnnotationKey] = true
-		}
 		properties[field.Wire] = schema
 		if field.Required {
 			required = append(required, field.Wire)
@@ -234,9 +231,6 @@ func (f Form) OutputSchema() (map[string]any, error) {
 		schema, err := output.jsonSchema(f.Family.APIVersion(), nil)
 		if err != nil {
 			return nil, fmt.Errorf("form %s output %s: %w", f.Kind, output.Wire, err)
-		}
-		if output.HostAssigned {
-			schema[HostAssignedAnnotationKey] = true
 		}
 		properties[output.Wire] = schema
 		required = append(required, output.Wire)
@@ -404,12 +398,6 @@ func (f Field) jsonSchemaShape(group string, resolver TargetContractResolver) (m
 			return nil, err
 		}
 		list := f.arraySchema(members)
-		if f.Sum != nil {
-			list[SumAnnotationKey] = map[string]any{
-				"member": f.Sum.Member,
-				"total":  f.Sum.Total,
-			}
-		}
 		return list, nil
 	default:
 		panic(fmt.Sprintf("unknown field kind %q", f.Kind))
@@ -552,13 +540,6 @@ func (f Field) resourceRefSchema(group string, resolver TargetContractResolver) 
 		}
 	default:
 		return nil, errors.New("a reference must state either an exact Form contract or a required Interface")
-	}
-	if f.Exclusive != nil {
-		hold := map[string]any{}
-		if f.Exclusive.KeyedBy != "" {
-			hold["keyedBy"] = f.Exclusive.KeyedBy
-		}
-		node[ExclusiveAnnotationKey] = hold
 	}
 	if f.RequiredEntrypoint != "" {
 		node[RequiredEntrypointAnnotationKey] = f.RequiredEntrypoint

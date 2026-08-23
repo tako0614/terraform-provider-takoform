@@ -329,9 +329,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "SQLiteMigrationApplication",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:1f284b4ffe11457059c75c07fd73bac82456ea1a9e5ec57c7fe0fe277501cb9d"
+          "schemaDigest": "sha256:9554daf3c70196a4cc084a4078263338e286a7386642c744d302723bd7c304b6"
         },
-        "packageDigest": "sha256:c803faef0c9e4fe04fc879e4e8aee832854ab706035aae404148307f7d19648f"
+        "packageDigest": "sha256:a24dfe83e3058fde5e88082ab0649b3593e159c7b4e3793c6f05c5adfd9057dd"
       },
       "lifecycleCapabilities": [
         "create",
@@ -354,7 +354,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-sqlite-migration-application.json",
-        "sha256": "sha256:88fcda6546f34c43c6191f7bf6f3bc0dcdfa96e500614fa2539552838cf3c261"
+        "sha256": "sha256:5a386d973e95443830c4a0346dcd994a79028d0099a53fa3ac92416f95d97b0f"
       }
     },
     "fetchOnlyBundle": {
@@ -386,9 +386,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "WorkerDeployment",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:f5acde964d11b6f2aea06e14262b7f4580fcf7d8c2cbcf3843bfb22c83a4af32"
+          "schemaDigest": "sha256:7f15493f14cc9759fe56b12a8fceb04bba064ca23bc65bb95a181bd7e2e2f539"
         },
-        "packageDigest": "sha256:2d6de520902875a5345cae30e10f60512e0ac8951ff159929d4c8a6fc899754c"
+        "packageDigest": "sha256:a9f6a9040dd7747bd0472e3d13a2de0a219dd2135afd0bdb6134c2af4627f545"
       },
       "lifecycleCapabilities": [
         "create",
@@ -417,7 +417,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-worker-deployment.json",
-        "sha256": "sha256:9242671b9648b1fca24c72bf4c7cde9d82793eb0705bd8a01c155504dfbdaaec"
+        "sha256": "sha256:4f36dd9b45e50cb08dd01c266c153a80c075d3b49b9db61aa44ab6646a0e2f11"
       }
     },
     "workerCustomDomain": {
@@ -427,9 +427,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "WorkerCustomDomain",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:8f812c186e4baa2897672fc1d9df46b0171a9f8f95a235350aad3d71b8d22f5e"
+          "schemaDigest": "sha256:e89091c33ceebff0fb14da0fc02f0ed407622e0b3a5c707f0a48cad93292ad06"
         },
-        "packageDigest": "sha256:d0661cc88ce77f549377a774540822bdb7b2165daacf9e3d0c623be297f9143d"
+        "packageDigest": "sha256:e11e3debd67a377e26e904c87b59446c3528757ccfe5ab7360a38587bc521a0f"
       },
       "lifecycleCapabilities": [
         "create",
@@ -448,7 +448,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-worker-custom-domain.json",
-        "sha256": "sha256:9289964ae24b747b6d298f5330a4d3d9dc12150e52726948e477d3b8dae605f7"
+        "sha256": "sha256:a51d61c2635f936c8b97ecdbe09222a6dec96d7b963f3bbb1cd42c01e94aec71"
       }
     },
     "workerEndpoint": {
@@ -458,9 +458,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "WorkerEndpoint",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:510bd4cdfcd7232e6d170503e47c0771713f8781eaaf78046d30c2838733f812"
+          "schemaDigest": "sha256:976392844fd923baa6e83c5321e59fb10813e06b7648aeff5e75ef320ca24d6b"
         },
-        "packageDigest": "sha256:306d7f38f2f7ac8639b7afbbaa34dcbd76085fada5c42e59ef198011bfe0bf62"
+        "packageDigest": "sha256:9e1de8b5a66b4e21c4a953db775658da2e88fb4bc006a57c6ca4b3332e9dc5e0"
       },
       "lifecycleCapabilities": [
         "create",
@@ -478,15 +478,13 @@
             "description": "Dotted DNS hostname the host assigned to this endpoint, in canonical form: lowercase where DNS is case-insensitive and no trailing root dot. The GRAMMAR admits exactly that form, so the rule and the pattern say one thing. An author's hostname admits both variant spellings because a host canonicalizes what it is given; an assigned name has no earlier spelling to preserve. The value is IMMUTABLE for the lifetime of this endpoint's attachment UID: it does not change on deployment promotion, on status refresh, on a host's internal placement change, or on a backend migration, so a consumer may store it; a host that must change the address deletes the endpoint and the author creates a new one. Its VALUE is portable to read and pass on; its SHAPE is host detail, so a portable configuration never parses it, never asserts a suffix, and never reconstructs it from the resource name.",
             "maxLength": 253,
             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$",
-            "type": "string",
-            "x-takoform-host-assigned": true
+            "type": "string"
           },
           "url": {
             "description": "Absolute HTTPS URL of the endpoint's path root: exactly `https://` + the assigned hostname + `/`. The scheme is fixed by the Form and the path root is `/`; there is no plaintext address and no port, so a consumer composes deeper paths onto this value rather than deriving an origin. It admits exactly the hostnames the hostname member admits, and it is immutable for exactly as long, because it IS that hostname.",
             "maxLength": 262,
             "pattern": "^https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/$",
-            "type": "string",
-            "x-takoform-host-assigned": true
+            "type": "string"
           }
         },
         "required": [
@@ -547,9 +545,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "QueueConsumer",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:7b8a68e3f234985db65fd8cd68d2a6437d596ef803d6a4a9653af5df577fb52c"
+          "schemaDigest": "sha256:27cee6cd39d6b5faea7c1f24aa3c7af6b48914310302ac4b84b50de990b2656f"
         },
-        "packageDigest": "sha256:2a85ffeb0e64bdfc5ab6d129bdfdb70c1052ae7c60daaac81303418130d45e19"
+        "packageDigest": "sha256:73193a8b6d427b28e7619c5542fae75c3818e4f452c029733b92ab0c923ab54d"
       },
       "lifecycleCapabilities": [
         "create",
@@ -578,7 +576,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-queue-consumer.json",
-        "sha256": "sha256:8b36346e4c57253b07d8b0db2c3e93925f1dde55f66cdcb8fe037a47c745fcf0"
+        "sha256": "sha256:3074f83f5c40e8baa272049088404c4bf85a166e1561106982ae3752f4c511bb"
       }
     },
     "durableWorkflow": {
@@ -588,9 +586,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "DurableWorkflow",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:80d53080a37e4e8be3090a4fe31756bdd6c0442aba575a32472292dd5fdbcb59"
+          "schemaDigest": "sha256:69fb7023522ef1526e4b35502314098b093240872ebc126ed8a99eb0feed7fdb"
         },
-        "packageDigest": "sha256:082973a2778f54bec8eba4095192816842b8b31c157cd1775d6908c420bb634f"
+        "packageDigest": "sha256:65751e26768bb2286b332fe3d633d20952e86dc40126b139467284686ca5b87e"
       },
       "lifecycleCapabilities": [
         "create",
@@ -609,7 +607,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-durable-workflow.json",
-        "sha256": "sha256:6da3fdcb1d6b7507c38428f4f923e1f8d0c7bd73b18d9365c18ea5771b362d6f"
+        "sha256": "sha256:3d2a5ec17af965da83f805cff2905e0010a0de334bee438a31502dea6a0a1b47"
       }
     },
     "actorNamespace": {
@@ -619,9 +617,9 @@
           "apiVersion": "edge.forms.takoform.com/v1beta2",
           "kind": "ActorNamespace",
           "definitionVersion": "0.1.0",
-          "schemaDigest": "sha256:23fc2a0ea4ed633fccaf7e1498614c61685c3955e7e19a7cdb8fd5f48bd17484"
+          "schemaDigest": "sha256:48de23d0743905d7526d1cdb7a4c8edb9a16482cc20a8d85a68a87fd708cbc55"
         },
-        "packageDigest": "sha256:92a5d3eb6d68e8ca7206fb9d9252492d17cfe4a9958407ae232b7746ce5c57f8"
+        "packageDigest": "sha256:debe20de1f229347ee24804c490c7fafcb1856f7032b561b61c2c6323460ea7f"
       },
       "lifecycleCapabilities": [
         "create",
@@ -640,7 +638,7 @@
       },
       "desiredSchema": {
         "path": "fixtures/desired-schema-actor-namespace.json",
-        "sha256": "sha256:3bb022dcd3bef3f07d2fda598fc807adcf087cf023c60b2441829640f76395a8"
+        "sha256": "sha256:2e3fbe83e303820e7a843e4e05f3eda337a0ebce17bec7a53e45017ce9be78fa"
       }
     },
     "syntheticSecondGroup": {

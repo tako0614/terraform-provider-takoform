@@ -7,8 +7,7 @@
       "description": "Dotted DNS hostname this attachment serves. Changing it replaces the attachment. The pattern admits the spellings DNS treats as one name \u2014 an uppercase letter, a trailing root dot \u2014 because a host canonicalizes rather than refusing them; it admits no non-ASCII byte, so an internationalized name travels as its A-label.",
       "maxLength": 253,
       "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\\.?$",
-      "type": "string",
-      "x-takoform-claim": true
+      "type": "string"
     },
     "worker": {
       "additionalProperties": false,

@@ -6,6 +6,13 @@
   "description": "Long-lived identity of one addressable-actor id space: a class the worker's active deployment serves, with at most one live execution context per actor id, private durable storage per id, and one alarm per id. The Form fixes that model by identity through the worker.actor@1.0.0 contract in its providedInterfaces; it carries no implementation snapshot, so which code answers is whatever the worker's active Worker Deployment selects. Actors are runtime data reached through module-worker.actor bindings, never Resources: every id addresses an actor and the first delivery is its creation. One worker carries at most one Actor Namespace per class name, because two namespaces over one class would give that class two disjoint id spaces.",
   "role": "identity",
   "requiresHostApi": "forms.takoform.com/v1beta2",
+  "constraints": [
+    {
+      "kind": "exclusive",
+      "reference": "/worker",
+      "keyedBy": "/className"
+    }
+  ],
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -41,9 +48,6 @@
           "name"
         ],
         "type": "object",
-        "x-takoform-exclusive": {
-          "keyedBy": "/className"
-        },
         "x-takoform-required-interface": {
           "apiVersion": "interfaces.takoform.com/v1alpha1",
           "name": "worker.runtime",

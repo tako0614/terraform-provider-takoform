@@ -82,7 +82,23 @@ func (r *v3Runner) declaredExclusiveSubjects() []exclusiveSubject {
 		if len(schema) == 0 {
 			continue
 		}
-		relations, err := currentformmodel.DeriveRelations(schema)
+		// The hold is read from the SERVED Definition's constraint list, not
+		// from the corpus's copy of the schema: a rule about resources is not
+		// shape, so it no longer rides in the schema, and what a client may be
+		// held to is what the host published (decision 0049).
+		definition, err := r.formDefinition(entry.Probe.Identity.FormRef)
+		if err != nil {
+			continue
+		}
+		constraints := make([]currentformmodel.Constraint, 0, len(definition.Constraints))
+		for _, constraint := range definition.Constraints {
+			constraints = append(constraints, currentformmodel.Constraint{
+				Kind:      currentformmodel.ConstraintKind(constraint.Kind),
+				Reference: constraint.Reference,
+				KeyedBy:   constraint.KeyedBy,
+			})
+		}
+		relations, err := currentformmodel.DeriveRelationsWithConstraints(schema, constraints)
 		if err != nil {
 			continue
 		}

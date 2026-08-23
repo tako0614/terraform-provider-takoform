@@ -298,11 +298,6 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 			"properties": map[string]any{
 				"versions": map[string]any{
 					"type": "array",
-					// The total is where the rule comes from now: a host reads
-					// it off the Definition rather than knowing this kind.
-					currentformmodel.SumAnnotationKey: map[string]any{
-						"member": "weight", "total": int64(10000),
-					},
 					"default": []any{map[string]any{
 						"workerVersion": map[string]any{"kind": "WorkerVersion", "name": "worker-version-probe"},
 						// A plain Go int in the Definition, exactly as an authored
@@ -313,6 +308,12 @@ func TestMaterializedNumbersSatisfyHostSemanticRules(t *testing.T) {
 			},
 		},
 	}
+	// The total is where the rule comes from now, and it is a CONSTRAINT rather
+	// than a schema annotation: a rule about resources is not shape.
+	form.Constraints = []formpackage.FormConstraint{{
+		Kind: string(currentformmodel.ConstraintSum), List: "/versions",
+		Member: "weight", Total: 10000,
+	}}
 	materialized := form.materialize(nil)
 	versions, _ := materialized["versions"].([]any)
 	if len(versions) != 1 {

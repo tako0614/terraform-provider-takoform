@@ -58,11 +58,7 @@
       "maxItems": 8,
       "minItems": 1,
       "type": "array",
-      "uniqueItems": true,
-      "x-takoform-sum": {
-        "member": "weight",
-        "total": 10000
-      }
+      "uniqueItems": true
     },
     "worker": {
       "additionalProperties": false,
@@ -89,7 +85,6 @@
         "name"
       ],
       "type": "object",
-      "x-takoform-exclusive": {},
       "x-takoform-target-formrefs": [
         {
           "apiVersion": "edge.forms.takoform.com/v1beta2",

@@ -5,15 +5,15 @@
     "apiVersion": "edge.forms.takoform.com/v1beta2",
     "kind": "DurableWorkflow",
     "definitionVersion": "0.1.0",
-    "schemaDigest": "sha256:80d53080a37e4e8be3090a4fe31756bdd6c0442aba575a32472292dd5fdbcb59"
+    "schemaDigest": "sha256:69fb7023522ef1526e4b35502314098b093240872ebc126ed8a99eb0feed7fdb"
   },
   "definitionPath": "definition.json",
   "files": [
     {
       "path": "definition.json",
       "mediaType": "application/vnd.takoform.form-definition.v1+json",
-      "size": 5068,
-      "digest": "sha256:82b4ee84f45ad496bdf119d623b4c786709cb2bc0ba3a2ad6c3916a60da51c43"
+      "size": 5112,
+      "digest": "sha256:88ce09cee26de6352416e2f4bfbcafad6ddb3847f093e63c4c65e63df9e95b77"
     },
     {
       "path": "fixtures/desired.json",

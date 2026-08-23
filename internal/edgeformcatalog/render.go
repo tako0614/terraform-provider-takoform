@@ -209,6 +209,31 @@ func (r *targetContractResolver) renderedForm(form currentformmodel.Form) (Rende
 	return rendered, nil
 }
 
+// renderConstraints publishes the Form's constraint list. It is derived from
+// what the fields and outputs declare, so authoring stays on the member the
+// rule is about and the published document carries one list an implementer can
+// read without walking a schema tree (decision 0049).
+func renderConstraints(form currentformmodel.Form) []formpackage.FormConstraint {
+	declared := form.Constraints()
+	if len(declared) == 0 {
+		return nil
+	}
+	out := make([]formpackage.FormConstraint, 0, len(declared))
+	for _, entry := range declared {
+		out = append(out, formpackage.FormConstraint{
+			Kind:      string(entry.Kind),
+			Reference: entry.Reference,
+			KeyedBy:   entry.KeyedBy,
+			List:      entry.List,
+			Member:    entry.Member,
+			Total:     entry.Total,
+			Property:  entry.Property,
+			Output:    entry.Output,
+		})
+	}
+	return out
+}
+
 // RenderForms renders every catalog Form to its exact Form Definition bytes
 // and derived fixture documents.
 func RenderForms() ([]RenderedForm, error) {
@@ -273,6 +298,7 @@ func renderForm(form currentformmodel.Form, resolver currentformmodel.TargetCont
 		Description:           form.Description,
 		Role:                  string(form.Role),
 		RequiresHostAPI:       form.RequiresHostAPI,
+		Constraints:           renderConstraints(form),
 		DesiredSchema:         desiredSchema,
 		OutputSchema:          outputSchema,
 		ImmutableFields:       form.ImmutableFields(),

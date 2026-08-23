@@ -367,16 +367,12 @@ func (h *ReferenceHost) validateClaimedValues(
 	name string,
 	spec map[string]any,
 ) *hostError {
-	properties, _ := form.DesiredSchema["properties"].(map[string]any)
-	claimed := make([]string, 0, len(properties))
-	for property, raw := range properties {
-		node, _ := raw.(map[string]any)
-		if node == nil {
+	claimed := make([]string, 0, len(form.Constraints))
+	for _, constraint := range form.Constraints {
+		if constraint.Kind != string(currentformmodel.ConstraintClaim) {
 			continue
 		}
-		if held, _ := node[currentformmodel.ClaimAnnotationKey].(bool); held {
-			claimed = append(claimed, property)
-		}
+		claimed = append(claimed, strings.TrimPrefix(constraint.Property, "/"))
 	}
 	sort.Strings(claimed)
 	selfKey := resourceKey(scope, form.Ref.APIVersion, form.Ref.Kind, name)

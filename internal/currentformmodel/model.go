@@ -23,12 +23,23 @@ import (
 // namespaced apiVersion of every member FormRef, for example
 // "edge.forms.takoform.com/v1beta1".
 type Family struct {
-	Group   string
+	Group string
+	// Version is the group's version segment, EMPTY for a family that carries
+	// none. A version here never varied independently of the exact FormRef
+	// that already carries kind, definitionVersion and schemaDigest — its only
+	// effect was to make every member move together (decision 0049). Retained
+	// generations keep theirs because their bytes are published.
 	Version string
 }
 
-// APIVersion renders the DNS-like namespaced group with its version.
-func (f Family) APIVersion() string { return f.Group + "/" + f.Version }
+// APIVersion renders the DNS-like namespaced group, with its version when it
+// has one.
+func (f Family) APIVersion() string {
+	if f.Version == "" {
+		return f.Group
+	}
+	return f.Group + "/" + f.Version
+}
 
 // Role is the closed v1beta1 resource role (decision 0009).
 type Role string
@@ -191,6 +202,91 @@ type SummedMember struct {
 	Member string
 	// Total is the exact value those members must add to.
 	Total int64
+}
+
+// Constraint is one entry of a Form Definition's closed constraint list.
+//
+// These are rules about RESOURCES, not about the shape of a document, so they
+// do not belong in a JSON Schema — where they rode in extension slots no
+// standard validator reads (decision 0049). As a first-class list with a
+// closed `Kind` vocabulary, adding a constraint kind is one reviewed change in
+// one place instead of a new `x-` key that may appear anywhere in a schema
+// tree, and the desired schema goes back to being plain JSON Schema.
+//
+// Every pointer is an RFC 6901 JSON Pointer into the DESIRED instance (or, for
+// a host-assigned member, into the outputs), which is the same addressing the
+// lane already uses for relations.
+type Constraint struct {
+	Kind ConstraintKind `json:"kind"`
+	// Reference is the relation an exclusive hold is taken through.
+	Reference string `json:"reference,omitempty"`
+	// KeyedBy narrows an exclusive hold to one value of a sibling member, so
+	// one target may carry one holder per key rather than one in total.
+	KeyedBy string `json:"keyedBy,omitempty"`
+	// List, Member and Total carry a summed list: which list, which integer
+	// member of its elements, and the exact figure they must reach.
+	List   string `json:"list,omitempty"`
+	Member string `json:"member,omitempty"`
+	Total  int64  `json:"total,omitempty"`
+	// Property is the claimed desired member.
+	Property string `json:"property,omitempty"`
+	// Output is the declared output member the host mints.
+	Output string `json:"output,omitempty"`
+}
+
+// ConstraintKind is the closed vocabulary. A kind outside it is not a
+// constraint this lane knows, and a host refuses a Definition carrying one
+// rather than ignoring it — an ignored constraint is an unenforced rule.
+type ConstraintKind string
+
+const (
+	// ConstraintExclusive: at most one LIVE resource of this Form's kind may
+	// hold the target its reference resolves to.
+	ConstraintExclusive ConstraintKind = "exclusive"
+	// ConstraintSum: the named integer member of a list's elements totals
+	// exactly the stated figure.
+	ConstraintSum ConstraintKind = "sum"
+	// ConstraintClaim: at most one live resource per tenant holds this value,
+	// compared on the canonical form the property's own schema admits.
+	ConstraintClaim ConstraintKind = "claim"
+	// ConstraintHostAssigned: the host mints this output; no desired property
+	// states it and no configuration reconstructs it.
+	ConstraintHostAssigned ConstraintKind = "hostAssigned"
+)
+
+// Constraints derives the Form's constraint list from what its fields and
+// outputs declare. Authoring stays on the member the rule is about — which is
+// where a reader looks for it — and the PUBLISHED document carries one list,
+// which is where an implementer looks for it.
+func (f Form) Constraints() []Constraint {
+	out := []Constraint{}
+	for _, field := range f.Fields {
+		if field.Exclusive != nil {
+			entry := Constraint{Kind: ConstraintExclusive, Reference: "/" + field.Wire}
+			if field.Exclusive.KeyedBy != "" {
+				entry.KeyedBy = field.Exclusive.KeyedBy
+			}
+			out = append(out, entry)
+		}
+		if field.Sum != nil {
+			out = append(out, Constraint{
+				Kind: ConstraintSum, List: "/" + field.Wire,
+				Member: field.Sum.Member, Total: field.Sum.Total,
+			})
+		}
+		if field.Claimed {
+			out = append(out, Constraint{Kind: ConstraintClaim, Property: "/" + field.Wire})
+		}
+	}
+	for _, output := range f.Outputs {
+		if output.HostAssigned {
+			out = append(out, Constraint{Kind: ConstraintHostAssigned, Output: "/" + output.Wire})
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // InterfaceRefSource names an exact Interface contract by name and version.

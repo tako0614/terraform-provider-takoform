@@ -6,6 +6,12 @@
   "description": "Applies one exact SQLite Migration Set to one exact SQLite Database. Both relations are immutable and UID-pinned before mutation. The database's durable migration ledger records each applied manifest entry as its ordered path+digest pair. The requested set must extend that ledger exactly; a rewrite, reorder, or removal is refused before SQL executes, and only the unapplied suffix runs. Each file and its ledger append commit atomically, so an interrupted application retries the same suffix without replaying a recorded migration. Ready means the ledger equals the referenced set. Deleting this attachment only stops managing the application resource: it never runs down-migrations, rewrites the ledger, reverts schema, or deletes the database.",
   "role": "attachment",
   "requiresHostApi": "forms.takoform.com/v1beta1",
+  "constraints": [
+    {
+      "kind": "exclusive",
+      "reference": "/database"
+    }
+  ],
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -36,7 +42,6 @@
           "name"
         ],
         "type": "object",
-        "x-takoform-exclusive": {},
         "x-takoform-target-formrefs": [
           {
             "apiVersion": "edge.forms.takoform.com/v1beta2",

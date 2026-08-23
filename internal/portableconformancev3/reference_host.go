@@ -852,6 +852,12 @@ func (h *ReferenceHost) handleFormDefinition(w http.ResponseWriter, request *htt
 	if form.Description != "" {
 		response["description"] = form.Description
 	}
+	// The constraints travel with the Definition. They are rules a client must
+	// be able to read — a host that enforced a hold it never published would
+	// refuse an apply for a reason nothing in the contract stated.
+	if len(form.Constraints) != 0 {
+		response["constraints"] = form.Constraints
+	}
 	h.writeJSON(w, http.StatusOK, "", response)
 }
 
@@ -1304,25 +1310,13 @@ func (h *ReferenceHost) validateDesiredSemantics(
 // gains a summed list is covered without a host edit — which is the whole
 // difference between this and the paragraph about traffic weights it replaces.
 func validateSummedMembers(form *InstalledForm, spec map[string]any) *hostError {
-	properties, _ := form.DesiredSchema["properties"].(map[string]any)
-	names := make([]string, 0, len(properties))
-	for name := range properties {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		node, _ := properties[name].(map[string]any)
-		if node == nil {
+	for _, constraint := range form.Constraints {
+		if constraint.Kind != string(currentformmodel.ConstraintSum) {
 			continue
 		}
-		declared, _ := node[currentformmodel.SumAnnotationKey].(map[string]any)
-		if declared == nil {
-			continue
-		}
-		member, _ := declared["member"].(string)
-		want, ok := jsonInteger(declared["total"])
-		if member == "" || !ok {
-			return stableError("invalid_argument", "the installed Definition declares an unreadable summed member")
+		name := strings.TrimPrefix(constraint.List, "/")
+		if name == "" || constraint.Member == "" {
+			return stableError("invalid_argument", "the installed Definition declares an unreadable summed list")
 		}
 		elements, present := spec[name].([]any)
 		if !present {
@@ -1331,20 +1325,21 @@ func validateSummedMembers(form *InstalledForm, spec map[string]any) *hostError 
 		total := int64(0)
 		for _, element := range elements {
 			entry, _ := element.(map[string]any)
-			value, ok := jsonInteger(entry[member])
+			value, ok := jsonInteger(entry[constraint.Member])
 			if !ok {
 				return stableError(
 					"invalid_argument",
-					name+" element "+strconv.Quote(member)+" must be an integer",
+					name+" element "+strconv.Quote(constraint.Member)+" must be an integer",
 				)
 			}
 			total += value
 		}
-		if total != want {
+		if total != constraint.Total {
 			return stableError(
 				"invalid_argument",
-				name+" "+strconv.Quote(member)+" values total "+strconv.FormatInt(total, 10)+
-					", and the Definition declares they must total exactly "+strconv.FormatInt(want, 10),
+				name+" "+strconv.Quote(constraint.Member)+" values total "+strconv.FormatInt(total, 10)+
+					", and the Definition declares they must total exactly "+
+					strconv.FormatInt(constraint.Total, 10),
 			)
 		}
 	}

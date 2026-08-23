@@ -367,6 +367,9 @@ type wireFormDefinition struct {
 	DisplayName   string         `json:"displayName,omitempty"`
 	Description   string         `json:"description,omitempty"`
 	DesiredSchema map[string]any `json:"desiredSchema"`
+	// Constraints is the served constraint list. A client reads the rules it
+	// must obey from the same document that states the shape.
+	Constraints []formpackage.FormConstraint `json:"constraints,omitempty"`
 }
 
 func (r *v3Runner) formDefinition(ref FormRef) (wireFormDefinition, error) {

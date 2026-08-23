@@ -112,11 +112,41 @@ func (r Relation) IsBinding() bool { return r.Binding != "" }
 // "any member literally named resource" rule, it finds every reference a Form
 // declares instead of only the ones inside binding lists.
 func DeriveRelations(schema map[string]any) ([]Relation, error) {
+	return DeriveRelationsWithConstraints(schema, nil)
+}
+
+// DeriveRelationsWithConstraints is DeriveRelations plus the Definition's
+// constraint list, which is where an exclusive hold now lives: it is a rule
+// about resources rather than about the shape of a document, so it no longer
+// rides in the schema (decision 0049). A hold naming a pointer no relation
+// occupies is a Definition that contradicts itself and is refused, because a
+// constraint nothing enforces is worse than one nobody wrote.
+func DeriveRelationsWithConstraints(schema map[string]any, constraints []Constraint) ([]Relation, error) {
 	walker := relationWalker{}
 	if err := walker.walk(schema, "", "", true); err != nil {
 		return nil, err
 	}
 	sort.Slice(walker.out, func(i, j int) bool { return walker.out[i].Pointer < walker.out[j].Pointer })
+	for _, constraint := range constraints {
+		if constraint.Kind != ConstraintExclusive {
+			continue
+		}
+		attached := false
+		for index := range walker.out {
+			if walker.out[index].Pointer != constraint.Reference {
+				continue
+			}
+			hold := &ExclusiveHold{KeyedBy: constraint.KeyedBy}
+			walker.out[index].Exclusive = hold
+			attached = true
+		}
+		if !attached {
+			return nil, fmt.Errorf(
+				"an exclusive hold names %s, which is not a reference this Form declares",
+				constraint.Reference,
+			)
+		}
+	}
 	return walker.out, nil
 }
 

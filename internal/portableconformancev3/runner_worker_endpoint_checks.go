@@ -67,20 +67,23 @@ const (
 // one fails here rather than being discovered by whoever tried the URL.
 // hostAssignedOutputs names the declared output members the installed
 // Definition marks as minted by the host, in a stable order.
-func (r *v3Runner) hostAssignedOutputs(ref FormRef) []string {
-	properties, _ := r.contract.RunnerInput.WorkerEndpoint.DeclaredOutputSchema["properties"].(map[string]any)
-	out := make([]string, 0, len(properties))
-	for name, raw := range properties {
-		node, _ := raw.(map[string]any)
-		if node == nil {
+func (r *v3Runner) hostAssignedOutputs(ref FormRef) ([]string, error) {
+	// Read from the SERVED Definition, not from the corpus: what a client can
+	// obey is what the host published, so a host that enforced a minted output
+	// it never declared would be holding callers to an unstated rule.
+	definition, err := r.formDefinition(ref)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(definition.Constraints))
+	for _, constraint := range definition.Constraints {
+		if constraint.Kind != string(currentformmodel.ConstraintHostAssigned) {
 			continue
 		}
-		if assigned, _ := node[currentformmodel.HostAssignedAnnotationKey].(bool); assigned {
-			out = append(out, name)
-		}
+		out = append(out, strings.TrimPrefix(constraint.Output, "/"))
 	}
 	sort.Strings(out)
-	return out
+	return out, nil
 }
 
 func (r *v3Runner) checkWorkerEndpointAddressIsHostAssigned() error {
@@ -95,7 +98,10 @@ func (r *v3Runner) checkWorkerEndpointAddressIsHostAssigned() error {
 	// Which members the host mints is READ from the Definition, not known
 	// here: a family that marks another output host-assigned is held to the
 	// same rule without this check learning its name.
-	assigned := r.hostAssignedOutputs(endpoint.Ref)
+	assigned, err := r.hostAssignedOutputs(endpoint.Ref)
+	if err != nil {
+		return err
+	}
 	if len(assigned) == 0 {
 		return fmt.Errorf(
 			"%s declares no host-assigned output, so this check would assert nothing",

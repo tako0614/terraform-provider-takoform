@@ -58,6 +58,57 @@
       "pattern": "^forms\\.takoform\\.com/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$",
       "description": "The earliest Host API lane whose rules this contract needs. It is a LOWER BOUND, not a pin: a lane's compatibility across its own generations is the lane's obligation, and pinning would re-mint every Form whenever the protocol moved. A host serving an earlier lane refuses this Form with unsupported_capability at install time, naming both identities (decision 0047)."
     },
+    "constraints": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 32,
+      "description": "The closed list of rules about RESOURCES this Form declares. These are not the shape of a document, so they are not in the desired schema \u2014 where they rode in extension slots no standard validator reads. As a first-class list with a closed kind vocabulary, adding a constraint kind is one reviewed change in one place (decision 0049). Every pointer is an RFC 6901 JSON Pointer into the desired instance, or into the outputs for a host-assigned member.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "exclusive",
+              "sum",
+              "claim",
+              "hostAssigned"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "pattern": "^/[^/]+$"
+          },
+          "keyedBy": {
+            "type": "string",
+            "pattern": "^/[^/]+$"
+          },
+          "list": {
+            "type": "string",
+            "pattern": "^/[^/]+$"
+          },
+          "member": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "total": {
+            "type": "integer"
+          },
+          "property": {
+            "type": "string",
+            "pattern": "^/[^/]+$"
+          },
+          "output": {
+            "type": "string",
+            "pattern": "^/[^/]+$"
+          }
+        }
+      }
+    },
     "desiredSchema": {
       "$ref": "#/$defs/jsonSchema"
     },

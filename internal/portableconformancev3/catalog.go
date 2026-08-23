@@ -75,6 +75,10 @@ type InstalledForm struct {
 	// installing a Form whose rules the served protocol does not have means
 	// accepting desired state nothing will ever enforce.
 	RequiresHostAPI string
+	// Constraints is the Definition's closed constraint list — the rules about
+	// resources this Form declares. A host reads them here rather than out of
+	// the desired schema's extension slots (decision 0049).
+	Constraints []formpackage.FormConstraint
 	// Relations are DERIVED from DesiredSchema at install time, never read
 	// from a wire member. A host has the desired schema by construction, so
 	// deriving costs nothing and removes the second source of truth a declared
@@ -108,7 +112,22 @@ func (form *InstalledForm) providesInterface(want formpackage.InterfaceRef) bool
 
 // deriveRelations computes and caches the Form's cross-resource relations.
 func (form *InstalledForm) deriveRelations() error {
-	relations, err := currentformmodel.DeriveRelations(form.DesiredSchema)
+	// The constraint list is part of the derivation now: an exclusive hold is
+	// declared there, not annotated on the schema node.
+	constraints := make([]currentformmodel.Constraint, 0, len(form.Constraints))
+	for _, entry := range form.Constraints {
+		constraints = append(constraints, currentformmodel.Constraint{
+			Kind:      currentformmodel.ConstraintKind(entry.Kind),
+			Reference: entry.Reference,
+			KeyedBy:   entry.KeyedBy,
+			List:      entry.List,
+			Member:    entry.Member,
+			Total:     entry.Total,
+			Property:  entry.Property,
+			Output:    entry.Output,
+		})
+	}
+	relations, err := currentformmodel.DeriveRelationsWithConstraints(form.DesiredSchema, constraints)
 	if err != nil {
 		return fmt.Errorf("takoform: derive %s relations: %w", form.Ref.Kind, err)
 	}
@@ -602,6 +621,7 @@ func LoadCatalog(repoRoot string, contract Contract) (*Catalog, error) {
 			ProvidedInterfaces: definition.ProvidedInterfaces,
 			AcceptedBindings:   definition.AcceptedBindings,
 			RequiresHostAPI:    definition.RequiresHostAPI,
+			Constraints:        definition.Constraints,
 		}
 		if err := catalog.install(form); err != nil {
 			return nil, err
@@ -981,6 +1001,7 @@ func (catalog *Catalog) installSyntheticSecondDefinitionVersion(contract Contrac
 		ProvidedInterfaces: definition.ProvidedInterfaces,
 		AcceptedBindings:   definition.AcceptedBindings,
 		RequiresHostAPI:    definition.RequiresHostAPI,
+		Constraints:        definition.Constraints,
 	})
 }
 

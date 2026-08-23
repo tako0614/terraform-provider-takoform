@@ -6,6 +6,12 @@
   "description": "Attaches one Module Worker as the batch consumer of one At-Least-Once Queue, invoking its queue handler with message batches and redelivering messages that were not acknowledged. Consumption is inward activation and therefore an attachment, never a binding. One queue has at most one consumer, so a second attachment against the same queue is refused. A handler that returns normally without settling anything acknowledges the whole batch; one that throws retries every message it had not already acknowledged. maxRetries counts REDELIVERIES only — the first delivery does not count toward it — so a message is delivered at most 1 + maxRetries times, and a message that exhausts them moves to dead_letter_queue when one is declared and is dropped otherwise. The dead-letter copy is a new message there: new identity, new acceptance timestamp, and an attempt count starting again at 1 (decision 0020). Because that transfer resets the attempt count, dead_letter_queue MUST NOT lead back: a destination resolving to the queue this consumer drains, or closing a cycle of any length through the dead-letter graph, is refused before any mutation, because an exhausted message would circulate forever instead of coming to rest (decision 0026).",
   "role": "attachment",
   "requiresHostApi": "forms.takoform.com/v1beta1",
+  "constraints": [
+    {
+      "kind": "exclusive",
+      "reference": "/queue"
+    }
+  ],
   "desiredSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -92,7 +98,6 @@
           "name"
         ],
         "type": "object",
-        "x-takoform-exclusive": {},
         "x-takoform-required-interface": {
           "apiVersion": "interfaces.takoform.com/v1alpha1",
           "name": "edge.queue",
