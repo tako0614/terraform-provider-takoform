@@ -178,6 +178,13 @@ func RunEndpoint(ctx context.Context, contract Contract, options EndpointOptions
 		}
 		return HostRunnerReport{}, err
 	}
+	if options.Survey {
+		// The guarantee is absolute: a survey is a measurement, never
+		// evidence, even when it measures zero gaps. A conforming endpoint is
+		// re-run without --survey to produce the report.
+		return HostRunnerReport{}, errors.New(
+			"survey completed with every check passing; a survey never produces a passed report - run without --survey for evidence")
+	}
 	checks := make([]string, 0, len(contract.RequiredRunnerChecks))
 	for _, check := range contract.RequiredRunnerChecks {
 		if !runner.completed[check] {
