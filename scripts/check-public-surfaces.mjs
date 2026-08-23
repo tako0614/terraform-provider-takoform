@@ -1192,6 +1192,15 @@ const HOST_API_LANES = new Map([
     mintedFor: "protocol",
     withdrawn: "the v1alpha3 identities were withdrawn with the v1alpha2 epoch that served them (decision 0042)",
   }],
+  ["forms.takoform.com/v1beta2", {
+    wireSchema: "spec/schemas/host-api-wire-v1beta2.schema.json",
+    // Minted for the Beta 2 hardening review's structural wire changes
+    // (decisions 0046 and 0039): /forms became an enumeration surface, the
+    // fence transport was codified, the apply review accepts its echo, the
+    // availability member without a source of truth was removed, and two
+    // dead codes left the taxonomy.
+    mintedFor: "protocol",
+  }],
   ["forms.takoform.com/v1beta1", {
     wireSchema: "spec/schemas/host-api-wire-v1beta1.schema.json",
     mintedFor: "graduation",

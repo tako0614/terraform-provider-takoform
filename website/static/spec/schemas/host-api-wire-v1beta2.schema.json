@@ -1,0 +1,684 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/v1beta2/host-api-wire.schema.json",
+  "title": "Takoform portable host API wire envelopes v1beta2",
+  "$ref": "#/$defs/resourceResponse",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "spaceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "allOf": [
+        {
+          "not": {
+            "pattern": "^[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+          }
+        },
+        {
+          "not": {
+            "pattern": "[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]$"
+          }
+        },
+        {
+          "not": {
+            "pattern": "[/\u0000-\u001f\u007f-\u009f]"
+          }
+        }
+      ],
+      "description": "Case-sensitive opaque SpaceID. It is valid UTF-8 containing 1..255 Unicode code points. Hosts and clients preserve the exact value without trimming, normalization, or case folding. Embedded whitespace is data; leading or trailing Unicode White_Space code points or U+FEFF, C0/C1 control characters, and slash are forbidden."
+    },
+    "uid": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "description": "Host-issued immutable resource identity. Deleting and recreating a same-named resource yields a different UID."
+    },
+    "generation": {
+      "type": "string",
+      "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-7])$",
+      "description": "Canonical positive-decimal desired-state generation in the inclusive range 1..9223372036854775807. It increments only when the portable desired spec changes."
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-7])$",
+      "description": "Canonical positive-decimal representation revision. It increments whenever the full representation, including status and outputs, changes. The HTTP strong ETag is this exact value surrounded by one pair of double quotes."
+    },
+    "formReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formRef"
+      ],
+      "properties": {
+        "formRef": {
+          "$ref": "https://forms.takoform.com/schemas/v1beta1/form-ref.schema.json"
+        },
+        "packageDigest": {
+          "$ref": "#/$defs/digest",
+          "description": "Optional audit evidence recording the package the definition was installed from. It never enters resource identity, queries, or mutation fences."
+        }
+      }
+    },
+    "resourceMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "space"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+        },
+        "space": {
+          "$ref": "#/$defs/spaceId"
+        },
+        "uid": {
+          "$ref": "#/$defs/uid"
+        },
+        "generation": {
+          "$ref": "#/$defs/generation"
+        },
+        "revision": {
+          "$ref": "#/$defs/revision"
+        }
+      }
+    },
+    "responseMetadata": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceMetadata"
+        },
+        {
+          "required": [
+            "uid",
+            "generation",
+            "revision"
+          ]
+        }
+      ]
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "status",
+        "reason",
+        "lastTransitionTime"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "Ready",
+            "Reconciling",
+            "Degraded",
+            "Drifted",
+            "Blocked",
+            "Deleting"
+          ]
+        },
+        "status": {
+          "enum": [
+            "True",
+            "False",
+            "Unknown"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "Available",
+            "Provisioning",
+            "Reconciling",
+            "Failed",
+            "BackendUnavailable",
+            "SpecDrift",
+            "ExternalChange",
+            "DependencyMissing",
+            "DependencyInUse",
+            "PolicyDenied",
+            "UnsupportedCapability",
+            "Deleting"
+          ],
+          "description": "Closed portable reason defined by the Core contract. The portable reasons are closed; host-specific detail belongs in hostReason."
+        },
+        "hostReason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Optional host-internal code; never required for portable interpretation."
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "lastTransitionTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "resourceStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observedGeneration",
+        "conditions"
+      ],
+      "properties": {
+        "observedGeneration": {
+          "$ref": "#/$defs/generation"
+        },
+        "conditions": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "x-takoform-validatesAgainst": "installed Form Definition outputSchema",
+          "x-takoform-requiredWhen": "installed Form Definition declares outputSchema",
+          "x-takoform-omittedWhen": "installed Form Definition does not declare outputSchema"
+        }
+      }
+    },
+    "resourceCore": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "form",
+        "metadata",
+        "spec"
+      ],
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "maxLength": 320,
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/v[0-9]+(?:(?:alpha|beta)[0-9]+)?$",
+          "not": {
+            "enum": [
+              "forms.takoform.com/v1alpha1",
+              "forms.takoform.com/v1alpha2"
+            ]
+          },
+          "x-takoform-equals": "/form/formRef/apiVersion"
+        },
+        "kind": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]{0,63}$",
+          "x-takoform-equals": "/form/formRef/kind"
+        },
+        "form": {
+          "$ref": "#/$defs/formReference"
+        },
+        "metadata": {
+          "$ref": "#/$defs/resourceMetadata"
+        },
+        "spec": {
+          "type": "object",
+          "x-takoform-validatesAgainst": "installed Form Definition desiredSchema"
+        }
+      }
+    },
+    "resourceRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceCore"
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "resourceResponse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceCore"
+        },
+        {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "metadata": {
+              "$ref": "#/$defs/responseMetadata"
+            },
+            "status": {
+              "$ref": "#/$defs/resourceStatus"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "resourceEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource"
+      ],
+      "properties": {
+        "resource": {
+          "$ref": "#/$defs/resourceResponse"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prepareDigest",
+        "specDigest"
+      ],
+      "properties": {
+        "prepareDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "specDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "validateResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valid",
+        "diagnostics"
+      ],
+      "properties": {
+        "valid": {
+          "type": "boolean"
+        },
+        "diagnostics": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "severity",
+              "message"
+            ],
+            "properties": {
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning"
+                ]
+              },
+              "field": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$"
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            }
+          }
+        }
+      },
+      "description": "Validation performs no mutation and issues no prepare digest."
+    },
+    "prepareResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource",
+        "review"
+      ],
+      "properties": {
+        "resource": {
+          "$ref": "#/$defs/resourceRequest"
+        },
+        "review": {
+          "$ref": "#/$defs/review"
+        }
+      }
+    },
+    "applyRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceCore"
+        },
+        {
+          "type": "object",
+          "required": [
+            "review"
+          ],
+          "properties": {
+            "review": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "prepareDigest"
+              ],
+              "properties": {
+                "prepareDigest": {
+                  "$ref": "#/$defs/digest"
+                },
+                "specDigest": {
+                  "$ref": "#/$defs/digest",
+                  "description": "Optional echo of the prepare answer. When present the host MUST verify it equals the digest of the canonical spec being applied and refuse invalid_argument otherwise; echoing the review object a prepare handed back is never itself a refusal."
+                }
+              }
+            },
+            "expectedUid": {
+              "$ref": "#/$defs/uid"
+            },
+            "expectedGeneration": {
+              "$ref": "#/$defs/generation"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "importRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/resourceCore"
+        },
+        {
+          "type": "object",
+          "required": [
+            "nativeId"
+          ],
+          "properties": {
+            "nativeId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "operationEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation"
+      ],
+      "properties": {
+        "operation": {
+          "$ref": "https://forms.takoform.com/schemas/operations/v1alpha2/operation.schema.json"
+        }
+      }
+    },
+    "mutationAccepted": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/resourceResponse"
+        },
+        {
+          "$ref": "#/$defs/operationEnvelope"
+        }
+      ],
+      "description": "A mutation completes synchronously with the terminal resource representation, or returns 202 with an Operation polled to completion."
+    },
+    "formAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "definitionKnown",
+        "installed",
+        "executable",
+        "activated",
+        "availableToPrincipal",
+        "operations"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/formReference"
+        },
+        "definitionKnown": {
+          "type": "boolean"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "executable": {
+          "type": "boolean"
+        },
+        "activated": {
+          "type": "boolean"
+        },
+        "availableToPrincipal": {
+          "type": "boolean"
+        },
+        "operations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "create",
+              "read",
+              "update",
+              "delete",
+              "import",
+              "observe"
+            ]
+          }
+        }
+      }
+    },
+    "formsResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "forms"
+      ],
+      "properties": {
+        "forms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/formAvailability"
+          }
+        }
+      },
+      "description": "The enumeration answer of GET {api}/forms: every installed exact Form the principal may see, narrowed by whichever filter keys the request carried. A fully-keyed request (group, version, kind, definitionVersion, schemaDigest, space) is the exact-availability probe and answers zero or one entry."
+    },
+    "formDefinitionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "desiredSchema"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/formReference"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "desiredSchema": {
+          "type": "object"
+        }
+      },
+      "x-takoform-validatesAgainst": "the exact retained current Form Definition desiredSchema"
+    },
+    "artifactUploadRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest"
+      ],
+      "properties": {
+        "manifest": {
+          "$ref": "https://forms.takoform.com/schemas/artifacts/v1alpha1/artifact-manifest.schema.json"
+        }
+      }
+    },
+    "artifactUploadStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uploadId",
+        "missingBlobs"
+      ],
+      "properties": {
+        "uploadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^up_[A-Za-z0-9][A-Za-z0-9._-]{0,124}$"
+        },
+        "missingBlobs": {
+          "type": "array",
+          "maxItems": 16384,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/digest"
+          }
+        }
+      }
+    },
+    "artifactCommitResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestDigest"
+      ],
+      "properties": {
+        "manifestDigest": {
+          "$ref": "#/$defs/digest",
+          "description": "RFC 8785 canonical digest of the committed manifest. Committing the same manifest again is idempotent and returns the same digest."
+        }
+      }
+    },
+    "supportProfilesResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profiles"
+      ],
+      "properties": {
+        "profiles": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "$ref": "https://forms.takoform.com/schemas/support/v1alpha2/host-support-profile.schema.json"
+          }
+        }
+      }
+    },
+    "errorBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "requestId",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_argument",
+            "unauthenticated",
+            "permission_denied",
+            "form_unknown",
+            "form_not_installed",
+            "form_unavailable",
+            "resource_not_found",
+            "resource_busy",
+            "import_conflict",
+            "policy_denied",
+            "backend_unavailable",
+            "internal_error",
+            "rate_limited",
+            "deadline_exceeded",
+            "operation_cancelled",
+            "operation_not_found",
+            "dependency_in_use",
+            "artifact_missing",
+            "artifact_invalid",
+            "unsupported_capability",
+            "migration_required",
+            "uid_mismatch",
+            "revision_conflict",
+            "generation_conflict"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "hostCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": true
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "not": {
+                  "enum": [
+                    "resource_busy",
+                    "backend_unavailable",
+                    "rate_limited",
+                    "deadline_exceeded"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "code"
+            ]
+          },
+          "then": {
+            "properties": {
+              "retryable": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "errorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/errorBody"
+        }
+      }
+    }
+  }
+}

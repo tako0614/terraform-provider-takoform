@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forms.takoform.com/schemas/support/v1alpha2/host-support-profile.schema.json",
+  "title": "Takoform Host Support Profile v1alpha2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "support.takoform.com/v1alpha2"
+    },
+    "kind": {
+      "enum": [
+        "FormSupport",
+        "InterfaceSupport",
+        "BindingSupport",
+        "StandardServiceSupport"
+      ]
+    },
+    "formRef": {
+      "$ref": "https://forms.takoform.com/schemas/v1beta1/form-ref.schema.json"
+    },
+    "interfaceRef": {
+      "$ref": "https://forms.takoform.com/schemas/interfaces/v1alpha1/interface-ref.schema.json"
+    },
+    "bindingRef": {
+      "$ref": "https://forms.takoform.com/schemas/bindings/v1alpha1/binding-ref.schema.json"
+    },
+    "operations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "create",
+          "read",
+          "update",
+          "delete",
+          "import",
+          "observe"
+        ]
+      },
+      "description": "The subset of the Form's declared lifecycleCapabilities this host serves. A host MAY narrow (serving no import is lawful and refused unsupported_capability at plan time, decision 0031); it MUST NOT widen: an operation the Definition does not declare never appears here."
+    },
+    "supportedEnums": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^/[^\\u0000]*$",
+        "maxLength": 512,
+        "x-takoform-fieldPolicy": "portable-data-only-v1"
+      },
+      "description": "For each closed-enum desired field, the subset of enum values this host accepts. Keys are RFC 6901 JSON Pointers into the Form's desired document (\"/assets/notFoundHandling\", \"/versions/-/weight\" with - addressing every element), so nested and array-element members are addressable."
+    },
+    "supportedRanges": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minimum": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "maximum": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "description": "Inclusive bounds this host accepts for one desired field; date-valued ranges use ISO 8601 date strings."
+      },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^/[^\\u0000]*$",
+        "maxLength": 512,
+        "x-takoform-fieldPolicy": "portable-data-only-v1"
+      },
+      "description": "Keys are RFC 6901 JSON Pointers into the Form's desired document (\"/assets/notFoundHandling\", \"/versions/-/weight\" with - addressing every element), so nested and array-element members are addressable."
+    },
+    "supportedBindings": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 256,
+      "items": {
+        "type": "string",
+        "maxLength": 256,
+        "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z][a-z0-9]*)*@(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+      },
+      "description": "Binding contracts this host implements, as name@version display refs; the exact digests are resolvable through the binding support endpoint."
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991,
+        "description": "Bounded to 2^53-1 so every limit is exactly representable in the I-JSON documents this lane requires."
+      },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^/[^\\u0000]*$",
+        "maxLength": 512,
+        "x-takoform-fieldPolicy": "portable-data-only-v1"
+      },
+      "description": "Host capability ceilings such as maximumBundleBytes. Price, SKU, region, quota, and commercial policy never appear in a support profile."
+    },
+    "serviceRef": {
+      "$ref": "https://forms.takoform.com/schemas/standards/v1alpha1/standard-service-ref.schema.json",
+      "description": "Present exactly on a StandardServiceSupport profile: the external standard-service protocol this host can satisfy for the tenant the profile answers."
+    },
+    "satisfiable": {
+      "type": "boolean",
+      "description": "Present exactly on a StandardServiceSupport profile: whether this host will satisfy slots of serviceRef's protocol for the requesting tenant. Which endpoint or credential would satisfy them is never stated."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "FormSupport"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "formRef",
+          "operations"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "interfaceRef"
+              ]
+            },
+            {
+              "required": [
+                "bindingRef"
+              ]
+            },
+            {
+              "required": [
+                "serviceRef"
+              ]
+            },
+            {
+              "required": [
+                "satisfiable"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "InterfaceSupport"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "interfaceRef"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "formRef"
+              ]
+            },
+            {
+              "required": [
+                "bindingRef"
+              ]
+            },
+            {
+              "required": [
+                "serviceRef"
+              ]
+            },
+            {
+              "required": [
+                "satisfiable"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "BindingSupport"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "bindingRef"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "formRef"
+              ]
+            },
+            {
+              "required": [
+                "interfaceRef"
+              ]
+            },
+            {
+              "required": [
+                "serviceRef"
+              ]
+            },
+            {
+              "required": [
+                "satisfiable"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "StandardServiceSupport"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "serviceRef",
+          "satisfiable"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "formRef"
+              ]
+            },
+            {
+              "required": [
+                "interfaceRef"
+              ]
+            },
+            {
+              "required": [
+                "bindingRef"
+              ]
+            },
+            {
+              "required": [
+                "operations"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
